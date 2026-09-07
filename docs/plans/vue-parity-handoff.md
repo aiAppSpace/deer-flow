@@ -444,6 +444,29 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
 
+## 九门禁全扫（wave 166，2026-09-08）
+
+距上一次全扫（wave 157）过了 8 轮，按批次规则补一次。**八绿 + `audit` 预期红 14。**
+
+| 门禁 | 读数 | exit |
+| ---- | ---- | ---- |
+| `verify` | **269 文件 / 2224 单测** | 0 |
+| `standalone-sim` | 跑过 15 条 / 未跑 5 条 / 红 0 | 0 |
+| `e2e-parity` | **98 passed**，台账 **90 样本 / 202 行** | 0 |
+| `e2e-mock` | 269 + 22 + 15 + 2 + 6 | 0 |
+| `e2e-visual` | 8 passed | 0 |
+| `asset-budget` | — | 0 |
+| `e2e-backend` | 2+5+2+3+3+5+1+1 | 0 |
+| `icon-parity` | 共 0 处待核、0 条 ⚠ | 0 |
+| `audit` | **预期红 14 条**，分诊写在 Makefile 的 audit 上方 | 2 |
+
+`frontend/` 侧（wave 165 实跑）：`pnpm check` 0、`pnpm test` **1042 passed** 0、
+`pnpm exec playwright test --workers=1` **148/148** 0。
+默认 workers 下 `landing.spec.ts:61` 仍会随负载红——wave 160 量清是主线程饥饿，
+干净树上同样红，与本段任何改动无关。
+
+---
+
 ## 上一轮（wave 165）做了什么：**订正 wave 164——那条路是通的，只是我上一轮找错了卡点**
 
 wave 164 判「`animationName` 这一档三重堵死」，第②条写的是
