@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 162，2026-09-08）
+## 当前状态（截至 wave 163，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,65 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 163）做了什么：**先否掉一个想加的档，再把刚修的四条动画钉住**
+
+### 否定结论：`animationName` 这一档加不了
+
+连着三轮（160/161/162）修的都是**台账根本看不见**的动画差异，
+所以第一反应是给几何档加 `animationName`。按坑 258 的门槛问一句
+「有没有一种变异能让新档响、而现有各档都不响」——**答案是有**
+（revert wave 161 的 ambilight 门控，实测台账零反应：98 条、202 行，改前改后一样）。
+
+**但它仍然加不了**：取样锚点是 `[...scenario.settle, ...state.steps]` 的 target，
+都是 textarea / 侧栏链接 / 对话框 / assistant turn 这类元素，
+**没有一个锚点本身是会动的元素**（ambilight 在子任务卡片的伪元素上，
+shimmer 在一段 `<p>` 上，都不在锚点集合里）。加了也是恒读 `none`，
+正是坑 258 说的「一个几乎永远不会响的东西比没有更糟」。**记成否定结论**（wave 99 先例）。
+要让它有货，得先按方向一给子任务卡片那一屏加取样点——那是另一件事。
+
+### 改做：把「必须表态」变成门禁
+
+wave 160~162 修了四条动画，但**没有任何机器守着**——明天再写一条无限动画、
+照样没人拦。wave 160 当时想的判据是「无限 ⇒ 必须 `motion-safe:`」，
+被自己按坑 180 否掉（`animate-spin`/`animate-pulse` 是状态指示，需要豁免表）。
+
+**这一轮换了判据的形状**：不是「必须门控」，而是
+**「凡是会无限循环的动画，都必须在声明表里有名有姓、写清停不停以及为什么」**。
+零豁免——新加一条不登记就红。这是本仓已经用熟的「两张表恰好划分全集」，
+不是豁免表。
+
+**顺手把全集数对了**（前两轮数了两次都不全）：除了手写的
+`shimmer` / `shine-border` / `aurora-shift` / `ambilight`，
+还有 Tailwind 自带、默认就是无限的 **`animate-spin`（26 处）与 `animate-pulse`（3 处）**。
+后两条声明为 `always` 并写明翻案判据：转圈本身就是「还在等」的全部信息，
+冻住之后用户看到的是「卡住了」——**那是把界面变成撒谎，比不理会偏好更糟**。
+
+`tests/guards/looping-animations.test.ts` 四条用例：扫描面自证 / 全集双向相等 /
+每条都写清 decision+where+why（`why` 有长度下限，挡「因为要动」这种四个字的理由）/
+声明为 `gated` 的源码里确实有减动分支（**粗筛**，真停没停仍由 e2e 的计算样式核）。
+
+### 负向验证 7 次
+
+| # | 变异 | 结果 |
+| - | ---- | ---- |
+| 1 | 新写一条无限动画、不登记 | 红 |
+| 2 | 从声明表里删掉 `ambilight` | 红 |
+| 3 | 声明表里多一条源码里没有的 | 红 |
+| 4 | `why` 写成四个字 | 红 |
+| 5 | 删掉 `shimmer` 的减动分支但仍声明 `gated` | 红 |
+| 6 | 扫描面指向不存在的目录 | 红 **2 条**（自证生效） |
+| 7 | 只在**注释里**写一条无限动画 | **绿**（剥注释生效，正确） |
+
+第 7 条是特意验的：这份守卫**自己的头注释里就写着 `infinite`**，不剥注释它会扫到自己（坑 202）。
+
+### 两条现成守卫按设计响了
+
+- 新 baseline 没登记 → `baseline-keys-consumed` 红两次：
+  先要「进 HAND_MAINTAINED 还是 GENERATED」，再要 `$readers` 与实测引用集逐字相等。
+- lint 抓到我在注释里为了不提前闭合而插的零宽空格（`no-irregular-whitespace`）。
+
+---
 
 ## 上一轮（wave 162）做了什么：**上一轮说「停住会让文字看不见」——那是推断，而且是错的**
 
@@ -7976,7 +8035,10 @@ node scripts/upstream-drift.mjs        # marker 之后上游/本仓有没有改�
   `workspace/browser-view/BrowserPanel.vue`
 - 取数合同在 `frontend-vue/BEHAVIOR_CONTRACTS.md` 的 **S8 / S8a / S8b / S8c**
 - **文件头里写着「实测过、做不到」的结论，也要看它给的机制对不对。已经翻案十一次。**
-- **`tests/guards/` 下已有九条「把散文变门禁」的守卫**（doc-facts / doc-references /
+- **`tests/guards/` 下已有十条「把散文变门禁」的守卫**（wave 163 新增
+  **looping-animations**：凡是会无限循环的动画都必须在
+  `baseline/looping-animations.json` 里表态——注意它**不证明「门控了」，只保证「表过态」**，
+  「门控了」由 `tests/e2e/reduced-motion.spec.ts` 的计算样式去证）（doc-facts / doc-references /
   upstream-citations / upstream-zero-claims / golden-fixture-provenance /
   baseline-keys-consumed / invariant-ownership / e2e-suite-contract /
   **file-header-claims**）。`doc-facts` 里现在有两张表：文档数字、`make verify` 步骤表；

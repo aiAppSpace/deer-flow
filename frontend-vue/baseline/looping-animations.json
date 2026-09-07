@@ -1,0 +1,46 @@
+{
+  "$comment": "会无限循环的动画，逐条声明。**这张表必须与源码里扫出来的全集逐字相等**——tests/guards/looping-animations.test.ts 两个方向都查。",
+  "$readers": [
+    "tests/guards/baseline-keys-consumed.test.ts",
+    "tests/guards/looping-animations.test.ts"
+  ],
+  "$semantics": "**这张表不证明「门控了」，它只保证「表过态」。** 判据是「凡是会无限循环的动画，都必须在这里有名有姓、写清停不停以及为什么」——零豁免：新加一条而不登记，守卫就红。至于「门控了」这件事本身，由行为用例去证：tests/e2e/reduced-motion.spec.ts（ambilight / shimmer 的计算样式）与上游对应的那份。 **为什么不是「无限即必须 motion-safe」**：那条判据需要豁免表——`animate-spin` / `animate-pulse` 是**状态指示**，把转圈冻住会让界面撒谎（用户看到的是「卡住了」而不是「在等」）。需要豁免表就说明判据错了（坑 180）。换成「必须表态」之后零豁免。 **decision 只有两个取值**：`gated` = 减动偏好下停住；`always` = 有意常开，why 里必须写清为什么停住比不停更糟。",
+  "animations": [
+    {
+      "id": "shimmer",
+      "where": "app/components/ui/effects/Shimmer.vue",
+      "decision": "gated",
+      "why": "「还在跑」文字上的高光，纯装饰。wave 162 两边同改：停在 `100% center`——那是这条动画自己的起始帧，高光带在元素左边界之外，文字整段由底下那层实心 `--color-muted-foreground` 画出来，读得清。"
+    },
+    {
+      "id": "shine-border",
+      "where": "app/components/ui/effects/ShineBorder.vue",
+      "decision": "gated",
+      "why": "流光边框，纯装饰。上游写的是 `motion-safe:animate-shine`，本仓照抄同一个开关与同一个静止位置（`background-position` 停在 CSS 初始值）。"
+    },
+    {
+      "id": "aurora-shift",
+      "where": "app/components/ui/effects/AuroraText.vue",
+      "decision": "gated",
+      "why": "欢迎标题的渐变流动，纯装饰。减动时 `animation: none` 且 `background-position: 50% 50%`——**停的位置要写死**，200% 宽的渐变停在初始的 `0% 0%` 与停在中间露出的颜色不是一段。上游 wave 160 补齐了同一处。"
+    },
+    {
+      "id": "ambilight",
+      "where": "app/assets/css/main.css",
+      "decision": "gated",
+      "why": "子任务卡片「正在跑」时垫底的彩色环境光，纯装饰。wave 161 两边同改。keyframes 首尾都是 `background-position: 0 0`（也是 CSS 初始值），所以两个应用停在同一处，谁也不用钉停车位。"
+    },
+    {
+      "id": "animate-spin",
+      "where": "Tailwind 内置工具类（多处使用）",
+      "decision": "always",
+      "why": "**状态指示，不是装饰。** 转圈本身就是「还在等」的全部信息，冻住它之后用户看到的是「卡住了」而不是「在等」——那是把界面变成撒谎，比不理会偏好更糟。WCAG 2.2.2 对「本质性」的动效留了口子，这一条走的是那个口子。**翻案判据**：哪天给它配了一个非动效的等待提示（文字/进度语义），那时才谈得上把动效收住。"
+    },
+    {
+      "id": "animate-pulse",
+      "where": "Tailwind 内置工具类（骨架屏多处使用）",
+      "decision": "always",
+      "why": "骨架屏，与 `animate-spin` 同一条理由：脉动是「内容还没到」的表达本身。**翻案判据**：同上。"
+    }
+  ]
+}

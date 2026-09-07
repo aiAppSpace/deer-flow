@@ -104,6 +104,7 @@ const baselines = readdirSync(baselineDir).filter((name) =>
  * 下面第一条用例校验这张表自己（每一份都得真的在 baseline/ 里）。
  */
 const HAND_MAINTAINED = [
+  "looping-animations.json",
   "parity-scenario-coverage.json",
   "react-parity-scope.json",
   "route-payload-budget.json",
