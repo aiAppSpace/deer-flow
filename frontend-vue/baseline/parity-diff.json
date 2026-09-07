@@ -516,6 +516,59 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "thread-list-pin#mobile-drawer/mobile/light/en-US": {
+      "ariaOnlyReact": [
+        "- dialog \"Sidebar\":",
+        "- heading \"Sidebar\" [level=2]",
+        "- paragraph: Displays the mobile sidebar."
+      ],
+      "ariaOnlyVue": [
+        "- alert",
+        "- button",
+        "- button",
+        "- button \"Add attachments\"",
+        "- button \"Close sidebar\"",
+        "- button \"Collect\"",
+        "- button \"Create\"",
+        "- button \"Dictate with voice\"",
+        "- button \"Learn\"",
+        "- button \"Polish input\" [disabled]",
+        "- button \"Research\"",
+        "- button \"Submit\"",
+        "- button \"Surprise\"",
+        "- button \"Toggle Sidebar\"",
+        "- button \"Write\"",
+        "- dialog \"Workspace navigation\":",
+        "- group:",
+        "- group:",
+        "- log",
+        "- main:",
+        "- main:",
+        "- paragraph: Deerflow is AI and can make mistakes",
+        "- paragraph: Welcome to 🦌 DeerFlow, an open source super agent. With built-in and custom skills, DeerFlow helps you search on the web, analyze data, and generate artifacts like slides, web pages and do almost anything.",
+        "- status \"Context window\"",
+        "- text: 👋 Hello, again!",
+        "- textbox \"How can I assist you today?\""
+      ],
+      "requestsOnlyReact": [
+        "GET /api/features",
+        "POST /api/langgraph/threads/search"
+      ],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [
+        "第 1 个公共节点 React=- region \"Notifications alt+T\" Vue=- text: DeerFlow"
+      ],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "div"
+      ],
+      "tabbablesOnlyVue": [],
+      "tabOrder": [
+        "第 2 个公共可 tab 元素 React=textarea Vue=a"
+      ]
+    },
     "thread-list-infinite-scroll/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],

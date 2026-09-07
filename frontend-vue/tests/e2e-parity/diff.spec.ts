@@ -201,7 +201,8 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
 
   for (const scenario of PARITY_SCENARIOS) {
     for (const state of scenarioStates(scenario))
-      for (const dimension of scenario.dimensions ?? [DEFAULT_DIMENSION]) {
+      for (const dimension of state.dimensions ??
+        scenario.dimensions ?? [DEFAULT_DIMENSION]) {
         /*
         一个场景一个 context，不是一个 page。
 

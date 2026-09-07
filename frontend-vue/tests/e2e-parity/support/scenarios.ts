@@ -90,6 +90,19 @@ export type ParityState = {
     同一条场景里同时取「正常」与「失败」两个终态，**而且不动覆盖率棘轮的场景 id**。
   */
   routes?: ParityRouteOverride[];
+  /*
+    这个终态**自己的**断点/主题/语言，覆盖场景那一层的 `dimensions`。
+
+    **为什么需要**（wave 147）：有些终态**只在某个断点上存在**。会话行的 ⋯ 菜单
+    就是——它在移动端要先点开抽屉才够得到，而同一条场景的默认终态是桌面的，
+    桌面上根本没有抽屉这一步。此前只能二选一：要么把整条场景改成移动端
+    （默认终态的锚点全废），要么这一屏永远不进取样面。
+
+    与 `routes` 是同一条理由（wave 128）：**场景 id 受覆盖率棘轮约束、编不出新的**，
+    所以「同一条场景里换一个维度」只能做成终态自己的一档。
+    不写就沿用场景的 `dimensions`，**没写过这一档的场景键逐字不变**。
+  */
+  dimensions?: ParityDimension[];
 };
 
 export type ParityStep =
@@ -1183,10 +1196,16 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       ],
     },
-    settle: [
-      { kind: "visible", target: { text: "Newest chat" } },
-      { kind: "visible", target: { text: "Older chat" } },
-    ],
+    /*
+      **settle 只等两个断点上都在的东西。**
+
+      原来这里等的是两条会话标题——它们在桌面侧栏里，而移动端侧栏是抽屉、
+      默认关着，于是 `#mobile-drawer` 那个终态还没跑到自己的第一步就在
+      settle 上超时了（wave 147 实测：`getByText('Newest chat')` 等满 30 秒）。
+      两条会话锚点挪进默认终态的 steps——**`steps` 里的 `visible` 同样进取样面**
+      （wave 76），所以一格几何都不少。
+    */
+    settle: [{ kind: "visible", target: { selector: "textarea" } }],
     /*
       侧栏页脚那颗「设置和更多」菜单挂在这个场景上。
 
@@ -1199,17 +1218,65 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       （这个场景目前只有 en-US 一档，但按名字找的锚点该一开始就写成语言无关的，
       免得哪天加了语言维度才发现——wave 86 在 scheduled-tasks 上正好踩过一次）。
     */
-    steps: [
+    /*
+      **第一个终态不取名字，键就逐字不变**（`key()` 只在 `state.id` 非空时加 `#`）。
+      加 `states` 是为了下面那个移动端终态，不该顺带把已有的两条账改名。
+    */
+    states: [
       {
-        kind: "click",
-        target: { role: "button", name: /^(Settings and more|设置和更多)$/ },
+        id: "",
+        steps: [
+          { kind: "visible", target: { text: "Newest chat" } },
+          { kind: "visible", target: { text: "Older chat" } },
+          {
+            kind: "click",
+            target: {
+              role: "button",
+              name: /^(Settings and more|设置和更多)$/,
+            },
+          },
+          {
+            kind: "visible",
+            target: {
+              role: "menuitem",
+              name: /^(About DeerFlow|关于 DeerFlow)$/,
+            },
+          },
+        ],
       },
+      /*
+        **移动端抽屉里的会话行**——这一屏此前从没进过取样面。
+
+        为什么非要一个自己的断点：会话行的 ⋯ 按钮在上游是
+        `SidebarMenuAction`，它的两条关键类**只在 768px 以下才生效**
+        （`md:opacity-0` 与 `after:-inset-2 md:after:hidden`），
+        桌面维度上量到的永远是「都不生效」那一半。wave 147 实测 375px：
+        上游 `opacity=1`、有效点击区 **28×36**；本仓当时 `opacity=0`、
+        点击区 **20×20**——触摸设备上那一整组会话动作**根本够不着**，
+        而八档里没有一档看得见，因为这一屏不在取样面里。
+
+        锚点 `role=button name=/^(More|更多)$/` 在两个应用里都不止一个
+        （每条会话一颗），取的是 `.first()`。按 wave 131 的判据这没问题：
+        这个场景比的就是会话排序，两边顺序一致本身就在台账里守着，
+        所以 `.first()` 两边落在同一条会话上。
+      */
       {
-        kind: "visible",
-        target: {
-          role: "menuitem",
-          name: /^(About DeerFlow|关于 DeerFlow)$/,
-        },
+        id: "mobile-drawer",
+        dimensions: [{ viewport: "mobile", theme: "light", locale: "en-US" }],
+        steps: [
+          {
+            kind: "click",
+            target: {
+              role: "button",
+              name: /^(Toggle Sidebar|Open sidebar)$/,
+            },
+          },
+          { kind: "visible", target: { text: "Newest chat" } },
+          {
+            kind: "visible",
+            target: { role: "button", name: /^(More|更多)$/ },
+          },
+        ],
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],

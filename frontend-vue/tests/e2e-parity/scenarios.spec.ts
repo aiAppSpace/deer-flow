@@ -36,9 +36,10 @@ function label(dimension: ParityDimension) {
 }
 
 for (const scenario of PARITY_SCENARIOS) {
-  const dimensions = scenario.dimensions ?? [DEFAULT_DIMENSION];
   for (const state of scenarioStates(scenario))
-    for (const dimension of dimensions) {
+    // 终态可以自己钉断点（wave 147），不写就沿用场景那一层的。
+    for (const dimension of state.dimensions ??
+      scenario.dimensions ?? [DEFAULT_DIMENSION]) {
       const name = state.id ? `${scenario.id}#${state.id}` : scenario.id;
       test(`${name} · ${label(dimension)} · 两个应用都到得了`, async ({
         page,

@@ -107,11 +107,34 @@ async function exportConversation(format: ThreadExportFormat) {
         （frontend/src/components/ui/sidebar.tsx），行本身用 `pr-8` 给它让位。
         原来它是同一行里的 flex 兄弟，于是链接被挤成 `flex-1`：会话标题量出来是
         「整行减去按钮」而不是文字本身，宽度、高度、颜色三项全落在 React 之外。
+
+        **类串照上游「渲染之后」的结果写**，不是照 `SidebarMenuAction` 的基类：
+        上游调用点（`recent-chat-list.tsx:356`）用 `cn()` 覆盖掉两条
+        （`bg-background/50 hover:bg-background` 顶掉基类的 `hover:bg-sidebar-accent`，
+        `after:left-0!` 顶掉 `-inset-2` 的左边）。本仓这里是普通 class 属性、
+        没有 tailwind-merge，两条冲突的类**谁赢由样式表顺序决定而不是书写顺序**，
+        所以只写赢的那一条。
+
+        **wave 147 修掉的两处，都只在触摸设备上才现形**：
+
+        - `opacity-0` 写成了无条件的，上游是 `md:opacity-0`（768px 以下**始终可见**）。
+          触摸设备没有 hover，`group-hover/menu-item:opacity-100` 永远不触发——
+          实测 375px 打开抽屉后 React `opacity=1`、本仓 `opacity=0`：
+          置顶/重命名/分享/导出/删除这一整组动作在手机上**根本够不着**。
+        - 少了上游那句注释写得明明白白的
+          `after:absolute after:-inset-2 md:after:hidden`（"Increases the hit area
+          of the button on mobile."）。实测同一处：React 有效点击区 **28×36**、
+          本仓 **20×20**——20 低于 WCAG 2.5.8 的 24×24 下限。
+
+        另外补上键盘焦点环（`ring-sidebar-ring focus-visible:ring-2 outline-hidden`），
+        本仓此前一条都没有。**没有跟的**：`peer-data-[size=*]/menu-button:top-*`
+        （本仓的菜单按钮没有 `data-size`）与 `group-data-[collapsible=icon]:hidden`
+        （本仓侧栏没有 icon 收起档）——两条的标记都不存在，跟了就是死类。
       -->
       <button
         type="button"
         :aria-label="$i18n.t.value.common.more"
-        class="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 focus:opacity-100 data-[state=open]:opacity-100"
+        class="text-sidebar-foreground ring-sidebar-ring bg-background/50 hover:bg-background hover:text-sidebar-accent-foreground peer-hover/menu-button:text-sidebar-accent-foreground peer-data-[active=true]/menu-button:text-sidebar-accent-foreground absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 outline-hidden transition-transform group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 after:absolute after:-inset-2 after:left-0! focus-visible:ring-2 data-[state=open]:opacity-100 md:opacity-0 md:after:hidden [&>svg]:size-4 [&>svg]:shrink-0"
       >
         <MoreHorizontal :size="16" />
       </button>
