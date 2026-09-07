@@ -17,23 +17,67 @@ const invariants = readFileSync(
   "utf8",
 );
 
-/** 05 的条目行长这样：`| A1  | …` 或 `| **L9**  | …`（加粗的是后补的条目）。 */
+/*
+  条目行长这样：`| A1  | …` 或 `| **L9**  | …`（加粗的是后补的条目）。
+
+  **正则原来写的是 `/^[A-N]\d+$/`**（wave 150 改）。合同表实际是 **A–S 共 19 组、
+  221 条**——`O` `P` `Q` `R` `S` 五组一共 **45 条从来没被读过**。
+  更要命的是下面那条用例的名字叫「读取到**完整**的合同」，而它断言的是
+  `组数 === 14`：**那个 14 恰恰因为 O–S 看不见才成立**，等于把缺口钉死——
+  再加一组 `T`，没有任何机器会响。同一形状的坑此前踩过（线索 229：
+  「checkout 共有 219 个」由一个看不见 checkout 的数字撑着）。
+*/
 function declaredInvariants(): string[] {
   const found: string[] = [];
   for (const line of invariants.split("\n")) {
     if (!line.startsWith("|")) continue;
     const first = (line.split("|")[1] ?? "").replaceAll("*", "").trim();
-    if (/^[A-N]\d+$/.test(first)) found.push(first);
+    if (/^[A-Z]\d+$/.test(first)) found.push(first);
   }
   return found;
+}
+
+/**
+ * 文档开头那句「全表 **A–S 共 19 组**」里写的字母区间与组数。
+ *
+ * **这句话此前没有任何机器在核。** 它是文档里当规则用的一句话——
+ * 「全表」这个词是判据本身：读的人靠它判断自己有没有漏看整整一组。
+ */
+function claimedGroups(): { last: string; count: number } {
+  const match = invariants.match(
+    /全表\s*\*\*A[–-]([A-Z])\s*共\s*(\d+)\s*组\*\*/,
+  );
+  if (!match)
+    throw new Error("BEHAVIOR_CONTRACTS.md 开头那句「全表 A–X 共 N 组」不见了");
+  return { last: match[1]!, count: Number(match[2]) };
 }
 
 describe("Vue 行为合同结构", () => {
   const declared = declaredInvariants();
 
-  it("读取到完整的 A–N 合同，而不是解析失败后假绿", () => {
-    expect(declared.length).toBeGreaterThanOrEqual(110);
-    expect(new Set(declared.map((id) => id[0])).size).toBe(14);
+  it("读取到完整的合同，而不是解析失败后假绿", () => {
+    // 阈值按实测（wave 150：221 条）留余量；真正的判据是下面那条双向核对。
+    expect(declared.length).toBeGreaterThanOrEqual(200);
+  });
+
+  it("文档开头那句「全表 A–X 共 N 组」与表里实际的组恰好相等（双向）", () => {
+    /*
+      **两个方向都要查**：
+      - 表里出现了文档没声明的组（加了 `T` 却忘了改那句话）；
+      - 文档声明了表里没有的组（删掉一整组却忘了改那句话）。
+      只查一个方向，会在池子变化之后静默留下一句过期的「全表」（坑 186）。
+      而且组必须**从 A 连续**——中间缺一个字母，「A–S 共 19 组」这句话就不成立。
+    */
+    const claimed = claimedGroups();
+    const actual = [...new Set(declared.map((id) => id[0]))].sort();
+    const expectedLetters = Array.from({ length: claimed.count }, (_, index) =>
+      String.fromCharCode("A".charCodeAt(0) + index),
+    );
+    expect(
+      actual,
+      "合同表里的组与文档开头那句「全表 A–X 共 N 组」对不上：改了表就同时改那句话",
+    ).toEqual(expectedLetters);
+    expect(expectedLetters.at(-1)).toBe(claimed.last);
   });
 
   it("条目 id 唯一", () => {
