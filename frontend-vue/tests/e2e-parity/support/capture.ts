@@ -528,7 +528,30 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
       const tag = element.tagName.toLowerCase();
       const type = tag === "input" ? element.getAttribute("type") : null;
       const role = element.getAttribute("role");
-      return `${tag}${type ? `[${type}]` : ""}${role ? `(${role})` : ""}`;
+      /*
+        **认不出是谁的时候，补一个 `data-slot`**（wave 149）。
+
+        起因是一条只有两个字的账：`tabbablesOnlyReact: ["div"]`。查它是谁得
+        单开一个探针——量出来是上游 `Suggestions` 那层 ScrollArea 的 viewport
+        （`data-slot="scroll-area-viewport"`，wave 97 给它补的 `tabIndex={0}`），
+        也就是 wave 98 已经判过「不跟」的那笔账在另一屏上的复现。
+        **一条要靠探针才认得出的账，等于没有账。**
+
+        顺手量了一下范围：`tabbablesOnly*` 与 `tabOrder` 三档共 79 行，
+        **其中 59 行含裸 `div`/`span`**——四分之三认不出。
+
+        判据取最窄的那一种：**只有 generic 标签（div/span）且没有 role 时才补**。
+        有 role 的（`div(dialog)`）本来就认得出，补了只是让 59 行之外的账也跟着
+        改写法。`data-slot` 是两个应用共有的 shadcn 约定（侧栏骨架合同已经在钉它），
+        不像 `data-testid` 那样两边对不上（坑：wave 94 定过同一条）。
+      */
+      const slot =
+        !role && (tag === "div" || tag === "span")
+          ? element.getAttribute("data-slot")
+          : null;
+      return `${tag}${type ? `[${type}]` : ""}${role ? `(${role})` : ""}${
+        slot ? `[${slot}]` : ""
+      }`;
     };
     return [...document.querySelectorAll(selector)]
       .filter((element) => {

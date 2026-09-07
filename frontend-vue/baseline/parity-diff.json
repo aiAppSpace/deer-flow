@@ -11,7 +11,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -26,7 +26,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -41,7 +41,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -56,7 +56,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -71,7 +71,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -86,7 +86,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -101,7 +101,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -116,7 +116,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -131,7 +131,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -146,7 +146,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -161,7 +161,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -176,7 +176,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -217,8 +217,8 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div",
-        "div(menuitem)"
+        "div(menuitem)",
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -233,8 +233,8 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div",
-        "div(menuitem)"
+        "div(menuitem)",
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -249,7 +249,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -264,7 +264,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -496,7 +496,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -511,7 +511,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -529,7 +529,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -570,7 +570,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -585,7 +585,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -628,11 +628,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#default/desktop/light/zh-CN": {
@@ -647,11 +647,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#load-failed/desktop/light/en-US": {
@@ -670,11 +670,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#load-failed/desktop/light/zh-CN": {
@@ -693,11 +693,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-load-failed/desktop/light/en-US": {
@@ -719,11 +719,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-load-failed/desktop/light/zh-CN": {
@@ -745,11 +745,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills/desktop/light/en-US": {
@@ -766,11 +766,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills/desktop/light/zh-CN": {
@@ -787,11 +787,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-loading/desktop/light/en-US": {
@@ -804,11 +804,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-loading/desktop/light/zh-CN": {
@@ -821,11 +821,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#permission-request/desktop/light/en-US": {
@@ -838,11 +838,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#permission-request/desktop/light/zh-CN": {
@@ -855,11 +855,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#change-app/desktop/light/en-US": {
@@ -872,11 +872,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#change-app/desktop/light/zh-CN": {
@@ -889,11 +889,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "branch-thread#default/desktop/light/en-US": {
@@ -1115,11 +1115,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "settings-notification/desktop/light/zh-CN": {
@@ -1134,11 +1134,11 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 13 个公共可 tab 元素 React=div Vue=button"
+        "第 13 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "channels#default/desktop/light/en-US": {
@@ -1151,7 +1151,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -1166,7 +1166,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -1181,7 +1181,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -1196,7 +1196,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -1211,7 +1211,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -1226,7 +1226,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
