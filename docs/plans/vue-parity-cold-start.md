@@ -8,10 +8,10 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **141 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
+你接手一个已经跑了 **142 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 141 的 docs 提交，已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 142 的 docs 提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
@@ -92,7 +92,13 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 6. 提交（fix / chore / docs 分开），更新交接文档 + 一页纸清单 + 记忆。
 7. **直接开下一轮。**
 
-### 收工门禁（逐条真跑，命令与上一轮实测读数）
+### 收工门禁（命令与上一轮实测读数）
+
+> **节奏（用户 2026-09-07 要求改的）**：**不再每轮跑全套**。
+> **每轮仍跑** `e2e-parity`（**它就是「先量再改」那把尺子，不能省**）+ `vitest run tests/unit`
+> + 该场景的定向 e2e；**每 3~4 轮跑一次下面这九条全套**，**批不超过 4 轮**
+> ——批里某一轮引入的回归要到批尾才发现，红了就在批内二分。
+> **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
 make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2212 单测；词典 942 key / 18 unused
