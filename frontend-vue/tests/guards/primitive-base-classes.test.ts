@@ -67,6 +67,19 @@ const DECLARED: Record<string, string> = {
 
 const STRING_LITERAL = /(['"`])([^'"`]*)\1/g;
 
+/*
+  `cva()` 定义的那一类（wave 143）。上一轮的比对只覆盖「基类是字符串字面量」的写法，
+  **`Button` / `Badge` / `Alert` 这三个最高频的组件一个都没比过**——它们的类串在
+  `cva(base, { variants: {...} })` 里。第一跑三个**一字不差**，
+  这条检查是用来**维持**那个 0 的（一个没人维持的 0 会烂掉）。
+
+  **只比同名的三个**：上游有 12 个 `cva`、本仓 4 个，其余九个是本仓没有的组件
+  （`inputGroup*` / `item*` / `sidebarMenuButton` / `buttonGroup` / `emptyMedia`）
+  或本仓没用 variants 表达的（`toggle` / `tabsList`）。**那是另一件事**——
+  「上游用 variants 参数化、本仓写死」不是类串漂移，不在这条判据里判。
+*/
+const CVA_DEFINITION = /const\s+(\w*[Vv]ariants)\s*=\s*cva\(/g;
+
 function walk(dir: string, ext: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
@@ -128,6 +141,39 @@ function reactBases(): Map<string, string[]> {
   return out;
 }
 
+/** 从 `cva(` 开始配平括号，取出它的全部实参文本。 */
+function cvaBodies(root: string): Map<string, Map<string, string[]>> {
+  const out = new Map<string, Map<string, string[]>>();
+  if (!existsSync(root)) return out;
+  for (const file of [
+    ...walk(root, ".ts"),
+    ...walk(root, ".tsx"),
+    ...walk(root, ".vue"),
+  ]) {
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(CVA_DEFINITION)) {
+      let index = match.index + match[0].length;
+      let depth = 1;
+      while (index < source.length && depth > 0) {
+        const char = source[index];
+        if (char === "(") depth += 1;
+        else if (char === ")") depth -= 1;
+        index += 1;
+      }
+      const body = source.slice(match.index + match[0].length, index - 1);
+      const entries = new Map<string, string[]>();
+      const base = body.match(/^\s*(['"`])([\s\S]*?)\1/);
+      if (base) entries.set("(base)", base[2]!.split(/\s+/).filter(Boolean));
+      for (const pair of body.matchAll(/(\w+):\s*(['"`])([^'"`]*)\2/g))
+        entries.set(pair[1]!, pair[3]!.split(/\s+/).filter(Boolean));
+      // 本仓把它叫 `rawButtonVariants`（外面再包一层 cn），去掉前缀再比名字。
+      const raw = match[1]!.replace(/^raw/, "");
+      out.set(raw[0]!.toLowerCase() + raw.slice(1), entries);
+    }
+  }
+  return out;
+}
+
 describe.skipIf(!upstreamPresent)("两个应用的 primitive 基类", () => {
   const vue = vueBases();
   const react = reactBases();
@@ -155,6 +201,39 @@ describe.skipIf(!upstreamPresent)("两个应用的 primitive 基类", () => {
   it("DECLARED 里不许留着已经一致了的条目（过期声明）", () => {
     expect(
       Object.keys(DECLARED).filter((name) => !differing.includes(name)),
+    ).toEqual([]);
+  });
+
+  const vueCva = cvaBodies(vueRoot);
+  const reactCva = cvaBodies(reactRoot);
+  const sharedCva = [...vueCva.keys()]
+    .filter((name) => reactCva.has(name))
+    .sort();
+
+  it("cva 那一类也扫到了，而且同名的不是零", () => {
+    // 同上：正则写坏会让下面那条静默全绿。实测本仓 4 个、上游 12 个、同名 3 个。
+    expect(sharedCva.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("同名的 cva 定义，每一档类串都要一致", () => {
+    const lines: string[] = [];
+    for (const name of sharedCva) {
+      const react = reactCva.get(name)!;
+      const vue = vueCva.get(name)!;
+      for (const key of [...new Set([...react.keys(), ...vue.keys()])].sort()) {
+        const a = new Set(react.get(key) ?? []);
+        const b = new Set(vue.get(key) ?? []);
+        const onlyReact = [...a].filter((token) => !b.has(token));
+        const onlyVue = [...b].filter((token) => !a.has(token));
+        if (!onlyReact.length && !onlyVue.length) continue;
+        lines.push(
+          `${name}.${key} 只在上游[${onlyReact.join(" ")}] 只在本仓[${onlyVue.join(" ")}]`,
+        );
+      }
+    }
+    expect(
+      lines,
+      "cva 的每一档类串都是与上游的合同；第一跑（wave 143）三个组件一字不差",
     ).toEqual([]);
   });
 });
