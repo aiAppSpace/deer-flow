@@ -269,9 +269,20 @@ export async function sampleGeometry(
 
     仍然**不取** click / fill 的目标：那些是「点哪里」，不是「该出现什么」，
     点完之后它可能已经不在了。
+
+    **`hidden` 的目标也取（wave 165）。** 听着别扭——场景刚断言它不可见，为什么还量它？
+    因为「不可见」在这套取样面里有两种：**元素不在**（两边都 `null`，diffGeometry 跳过，
+    等于没取）和**元素在、只是不占位或透明**。后一种正是**装饰层**的常态：
+    子任务卡片底下那层 `.ambilight` 永远在 DOM 里，只有 in_progress 时才加 `.enabled`
+    拿到 opacity，其余时候盒子高度为 0——于是 `visible` 匹配不上，
+    **它连同它的伪元素（那条无限循环的环境光动画就画在 `::before`/`::after` 上）
+    在此之前一格都没被量过**。wave 161 两边同改把那条动画收进减动分支时台账零反应，
+    就是因为这里。
+
+    代价接近零：现有三处 `hidden` 步骤的目标本来就不存在，两边都记 `null`。
   */
   for (const step of [...scenario.settle, ...state.steps]) {
-    if (step.kind !== "visible") continue;
+    if (step.kind !== "visible" && step.kind !== "hidden") continue;
     const label = targetLabel(step.target);
     const locator = locateTarget(page, step.target).first();
     /*
@@ -409,7 +420,11 @@ export async function sampleGeometry(
             return (
               `content=${ps.content} op=${ps.opacity} ` +
               `w=${size(ps.width)} h=${size(ps.height)} ` +
-              `bg=${toRgba(ps.backgroundColor)}`
+              `bg=${toRgba(ps.backgroundColor)} ` +
+              // 装饰层的「动没动」此前一格都没量过：wave 160~162 两边同改了四条
+              // 无限循环动画，台账全程零反应。`animationName` 是唯一能看见它的字段
+              // ——几何、颜色、opacity 在动画停住前后都一样。
+              `anim=${ps.animationName}`
             );
           };
 

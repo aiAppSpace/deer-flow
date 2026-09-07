@@ -221,7 +221,12 @@ onUnmounted(() => {
     :data-task-id="taskId"
     :aria-busy="viewModel.status === 'in_progress' || isLoading"
   >
+    <!--
+      `data-slot` 与上游同加（wave 165）：这一层永远在 DOM 里、只有 in_progress 时
+      才拿到高度，所以除了类名没有别的抓手，而对照工厂恰恰不许拿类名当锚点。
+    -->
     <div
+      data-slot="ambilight"
       class="ambilight z-[-1]"
       :class="viewModel.status === 'in_progress' ? 'enabled' : ''"
     />

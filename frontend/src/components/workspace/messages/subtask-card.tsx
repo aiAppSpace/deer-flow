@@ -123,6 +123,12 @@ export function SubtaskCard({
       open={!collapsed}
     >
       <div
+        // Named so it can be addressed without reaching for the class. The
+        // ambilight layer is always in the DOM and only gets `enabled` (and
+        // with it a height) while the subtask runs, so a class selector is the
+        // only other handle — and class names are exactly what the parity
+        // harness refuses to anchor on.
+        data-slot="ambilight"
         className={cn(
           "ambilight z-[-1]",
           task.status === "in_progress" ? "enabled" : "",

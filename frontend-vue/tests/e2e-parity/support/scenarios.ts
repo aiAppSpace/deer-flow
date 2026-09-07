@@ -1984,6 +1984,23 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           text: /^(Executing 2 subtasks in parallel|并行执行 2 个子任务)$/,
         },
       },
+      /*
+        **卡片底下那层环境光**（wave 165）。两个应用都无条件渲染这个 div，
+        只有 in_progress 才给它加 `.enabled` 拿到 opacity——这个夹具里两张卡片都是
+        终态，所以它盒子高度为 0。用 `hidden` 而不是 `visible`：它确实不可见，
+        而 `hidden` 的目标同样进几何锚点（见 capture.ts 里 sampleGeometry 的说明）。
+
+        取它是为了让那条无限循环的动画**进得了台账**：动画画在 `::before`/`::after`
+        上，wave 161 两边同改把它收进减动分支时台账零反应，就是因为没有任何锚点
+        碰得到这一层。伪元素那一格从这一轮起多取 `animationName`。
+
+        锚点走 `data-slot` 而不是类名：`scenario-coverage` 那条「只用两边共有的定位
+        方式」不许拿 class 当选择器（class 是组件库实现细节），而这一层原本除了类名
+        没有别的抓手——所以 wave 165 **两边同加**了 `data-slot="ambilight"`，
+        与本仓到处在用的那套命名一致。这一屏上它匹配两张卡片各一个，
+        `hidden` 走 `.first()`，两边量的是同一张。
+      */
+      { kind: "hidden", target: { selector: '[data-slot="ambilight"]' } },
     ],
     /*
       展开一张卡片。展开区里的一切——prompt 的 markdown、终态步骤、失败原因——

@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 164，2026-09-08）
+## 当前状态（截至 wave 165，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,63 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
 
+## 上一轮（wave 165）做了什么：**订正 wave 164——那条路是通的，只是我上一轮找错了卡点**
+
+wave 164 判「`animationName` 这一档三重堵死」，第②条写的是
+「子任务卡片：回放 Gateway 跑不出来，只有一份 `write_read_file` cassette」。
+**那是在答一个错的问题。**
+
+`subtask-card` **本来就在对照套件里**，它是 `backend: "mock"` 的场景——
+走的是**静态路由 mock**，根本不经过回放 Gateway。我上一轮查的是回放 fixture，
+而这条场景从来不用它。**（线索 330：查「够不够得着」之前，先确认这一屏是怎么到达的。）**
+
+真正的卡点是另一件事，而且是这一轮量出来的：
+**`sampleGeometry` 只把 `visible` 的 target 当锚点**（`if (step.kind !== "visible") continue`），
+而两个应用底下那层 `.ambilight` 在终态卡片上**盒子高度为 0**，`visible` 匹配不上。
+
+### 三处改动
+
+1. **锚点面扩到 `hidden` 的 target**。听着别扭——场景刚断言它不可见，为什么还量它？
+   因为「不可见」有两种：**元素不在**（两边都 `null`，`diffGeometry` 跳过，等于没取）
+   和**元素在、只是不占位或透明**。后一种正是装饰层的常态。
+   代价接近零：现有三处 `hidden` 步骤的目标本来就不存在。
+2. **伪元素那一格多取 `animationName`**。几何、颜色、opacity 在动画停住前后**完全一样**，
+   `animationName` 是唯一看得见它的字段。
+3. **`subtask-card` 加一个 `hidden` 锚点**指向那一层。
+
+### 守卫按设计拦了我一次，而它是对的
+
+第一版锚点写的是 `{ selector: ".ambilight" }`，`scenario-coverage` 当场红：
+**「每个场景的步骤只用两边共有的定位方式」——不许拿 class 当选择器**
+（class 是组件库实现细节，写进场景等于把 reka/radix 的差异写进取样面）。
+
+`.ambilight` 其实不是库的类、是两边逐字相同的自有类，但**给守卫开一条豁免正是坑 180 禁止的**。
+按仓库自己的约定走：**两边同加 `data-slot="ambilight"`**（本仓到处在用这套命名），
+锚点改成 `[data-slot="ambilight"]`。
+
+### 判据：这一档真的响吗
+
+坑 258 的门槛问题这次有**实测**答案，不是举例：
+
+```
+门控着（当前）  react anim=none        vue anim=none
+把 Vue 的门控还原   react anim=none        vue anim=ambilight   ← 响了
+```
+
+而**同一个变异在现有各档上零反应**——wave 161 两边同改时台账 98 条 202 行一格没动，
+那次的「零反应」正是这一档不存在的证据。
+
+### 读数
+
+- 干净树：**新增 0 行**。两个应用在这一层上一致（都已门控），
+  只有原有两行 `separator ::after` 的样本串多了 ` anim=none`。
+- 台账仍 **90 样本 / 202 行**。
+- 因为那两行文案变了，`parity-accept` 按「集合包含」判成「新增 2 行」而拒写——
+  与 wave 145 同一情形（判据表达不出「同一行、文案变长」），走 `PARITY_ACCEPT_GROW=1`。
+  **那两行不是新差异，是同两行的新写法。**
+
+---
+
 ## 上一轮（wave 164）做了什么：**把「给动画加一档」这条路走到底，三重堵死——零代码改动**
 
 wave 163 把 `animationName` 这一档记成否定结论，理由是「没有一个锚点本身是会动的元素」，
@@ -457,6 +514,10 @@ textarea / 侧栏链接 / 对话框 / assistant turn。
 `ambilight` 在子任务卡片的伪元素上，`shimmer` 在一段 `<p>` 上，都不在里面。
 
 **② 子任务卡片：回放 Gateway 跑不出来。**
+> ⚠ **wave 165 订正：这一条是在答错的问题。** `subtask-card` 是 `backend: "mock"` 的场景，
+> 走静态路由 mock，根本不经过回放 Gateway。真正的卡点是「`sampleGeometry` 只取 `visible`
+> 的 target，而那一层盒子高度为 0」。wave 165 已经做通，见上面那一节。
+
 `backend/tests/fixtures/replay/` 下**只有一份** cassette（`write_read_file.ultra`），
 里面 `subagent` 只出现两次、都是配置开关（`subagent_enabled`），**没有真的子代理运行**。
 要让它出现得先录一份新 cassette——后端活，还要 API key。

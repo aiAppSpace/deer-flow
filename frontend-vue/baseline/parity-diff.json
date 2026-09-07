@@ -462,7 +462,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0)"
+        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) anim=none Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0) anim=none"
       ],
       "focus": [],
       "order": [],
@@ -477,7 +477,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0)"
+        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) anim=none Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0) anim=none"
       ],
       "focus": [],
       "order": [],
