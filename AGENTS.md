@@ -86,8 +86,17 @@ deer-flow/
 ├── contracts/                      # Cross-component JSON contracts (e.g. subagent status, skill review)
 ├── scripts/                        # Root orchestration scripts invoked by the Makefile (check, configure, doctor, support_bundle, serve, nginx, docker, deploy, setup_wizard)
 ├── tests/                          # Root-level tests (currently tests/skills/ — public skill tests)
+├── deploy/                         # Helm chart for the Kubernetes deployment
+├── .github/                        # CI workflows and issue/PR templates
 └── docs/                           # Cross-cutting docs, plans, and design notes
 ```
+
+**Every tracked top-level directory has to appear above or in this line**, because
+this section claims to map the whole repo — `backend/tests/test_agents_md_repository_map.py`
+pins both halves. The ones deliberately left off the map: `.agent/` (agent working
+files, not part of the build) and two strays from past PRs that nothing references —
+`plans/` (one design note whose home is `docs/plans/`) and `pr-build/` (before/after
+screenshots from #1986).
 
 Third-party extensions are loaded from a top-level `plugins:` list in `config.yaml`
 (operator-controlled on purpose — that list causes code to be imported, so it is deliberately
