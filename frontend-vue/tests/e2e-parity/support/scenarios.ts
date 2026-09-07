@@ -1148,6 +1148,19 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           text: /^(Ask a follow-up grounded in the referenced text\.|基于引用内容单独追问。)$/,
         },
       },
+      /*
+        分栏的拖拽把手。**这一屏是它第一次进取样面**（wave 146）。
+
+        挂它的直接理由是伪元素那一档：整套里此前只有技能页那颗 tab 的 `::after`
+        被采到（4 个样本），而 `after:` 在两个应用里总共只有九处，
+        **上游 `ui/resizable.tsx` 那一处正是「把 1px 的分隔线放大成可以抓住的区域」**
+        ——一件纯粹画在伪元素上、其余七档全都看不见的事。
+
+        按 wave 131 的规矩先数过：`[role=separator]`（含 `hr`）在这一屏
+        **两个应用各恰好 1 个**，盒模型也逐字相同（1.0×800.0 @870,0），
+        所以这个锚点不会落到别的东西上。
+      */
+      { kind: "visible", target: { role: "separator" } },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },

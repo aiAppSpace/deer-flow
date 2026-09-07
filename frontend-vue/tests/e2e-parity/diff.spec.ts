@@ -172,6 +172,8 @@ function diffGeometry(
       "fontWeight",
       "opacity",
       "hit",
+      "before",
+      "after",
     ] as const) {
       if (r[field] !== v[field]) {
         lines.push(`${label} ${field} React=${r[field]} Vue=${v[field]}`);
@@ -185,6 +187,17 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
   test.setTimeout(600_000);
 
   const entries: Record<string, DiffEntry> = {};
+  /*
+    伪元素那一档**取到了东西**的锚点数。
+
+    这一档在干净树上是 0 行——而 0 行有两种：**算出来的 0** 和**没算的 0**。
+    `pseudo()` 里但凡写错一句（比如把 `content` 的判断写反、或者
+    `getComputedStyle` 少传第二个参数），它会永远返回 `none`，两边一致，
+    台账 0 行，**而且没有任何一条用例会红**（线索 131 的形状：
+    尺子坏了会让它守的那件事静默全绿）。
+    所以这里数一下真的采到伪元素的锚点，下面断言它不是 0。
+  */
+  let pseudoSamples = 0;
 
   for (const scenario of PARITY_SCENARIOS) {
     for (const state of scenarioStates(scenario))
@@ -218,6 +231,15 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
         await vueContext.close();
         await reactContext.close();
 
+        for (const sample of [
+          ...Object.values(react.geometry),
+          ...Object.values(vue.geometry),
+        ]) {
+          if (!sample) continue;
+          if (sample.before !== "none") pseudoSamples += 1;
+          if (sample.after !== "none") pseudoSamples += 1;
+        }
+
         const aria = diffAriaLines(react.aria, vue.aria);
         const requests = diffMultiset(react.requests, vue.requests);
         entries[key(scenario.id, state, dimension)] = {
@@ -244,6 +266,23 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
         };
       }
   }
+
+  /*
+    **算出来的 0 与没算的 0 不是一回事。**
+
+    实测这一档在整套里只被 **4** 个锚点样本碰到（技能页那颗选中的 tab 的
+    `::after`，两种语言 × 两个应用）——不是取样面漏了，是**整个仓库用伪元素的
+    地方就这么少**：本仓 4 份组件、上游 5 份用到 `before:` / `after:`。
+    数少不等于可以不守：那 4 个样本量的正是 `line` 档选中态的全部视觉主体，
+    而 wave 145 的 N2 证明过，它一塌下来别的档一行都不会报。
+
+    这条断言挡的是「`pseudo()` 写坏了→永远返回 `none`→两边一致→台账 0 行→
+    没有任何用例会红」。数字变了要**看一眼再改**，不要顺手调低。
+  */
+  expect(
+    pseudoSamples,
+    "伪元素这一档一个样本都没采到——先确认 pseudo() 还在工作，再改这个阈值",
+  ).toBeGreaterThanOrEqual(4);
 
   mkdirSync(dirname(REPORT.pathname), { recursive: true });
   writeFileSync(REPORT, JSON.stringify(entries, null, 2));

@@ -461,7 +461,9 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [],
+      "geometry": [
+        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0)"
+      ],
       "focus": [],
       "order": [],
       "depth": [],
@@ -474,7 +476,9 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [],
+      "geometry": [
+        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0)"
+      ],
       "focus": [],
       "order": [],
       "depth": [],

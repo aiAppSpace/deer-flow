@@ -125,6 +125,27 @@ export type GeometrySample = {
    * 判据因此收成：**它是不是一个用户要去点的东西**。
    */
   hit: string;
+  /*
+    `::before` / `::after` 画出来的东西。**这是台账天生看不见的第⑨类**
+    （wave 145 的负向验证 N2 暴露、wave 146 补上）。
+
+    几何档量的一直是**元素**：`getBoundingClientRect` 与不带第二参的
+    `getComputedStyle` 都碰不到伪元素。这不是理论上的缺口——上游 Tabs 的
+    `line` 那一档，**选中态整根下划线就画在 `::after` 上**
+    （`group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100`），
+    也就是说 wave 145 刚搬进来的那套 variant，视觉主体没有任何一档在守。
+    当时的识别信号很干脆：把它依赖的 `group/tabs` 删掉，**台账零反应**。
+
+    坑 258 的门槛（「有没有一种变异能让这一档响、而现有的档都不响」）
+    在这一条上有现成答案：**N2 本身就是**。
+
+    **只记「画没画出来、画多大」，不记位置**：伪元素的 x/y 跟着宿主走，
+    宿主的位置已经是 x/y 两档在报的事，再报一遍就是同一处差异的第二个投影
+    （坑 219）。`content: none` 记成 `none`——那是「这个伪元素不存在」，
+    两边都不存在时不产生任何行。
+  */
+  before: string;
+  after: string;
 };
 
 const UUID_SEGMENT =
@@ -375,6 +396,23 @@ export async function sampleGeometry(
             const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
             return `rgba(${r},${g},${b},${a})`;
           };
+          /*
+            伪元素。`content: none` 表示它压根不存在——两边都不存在时
+            这一档不产生任何行。存在时记：内容、透明度、宽高、底色。
+            **不记位置**，理由见 `GeometrySample.after` 的注释。
+          */
+          const pseudo = (which: string) => {
+            const ps = globalThis.getComputedStyle(element, which);
+            if (ps.content === "none" || ps.content === "normal") return "none";
+            const size = (value: string) =>
+              round(Number.parseFloat(value) || 0);
+            return (
+              `content=${ps.content} op=${ps.opacity} ` +
+              `w=${size(ps.width)} h=${size(ps.height)} ` +
+              `bg=${toRgba(ps.backgroundColor)}`
+            );
+          };
+
           return {
             x: round(box.x),
             y: round(box.y),
@@ -386,6 +424,8 @@ export async function sampleGeometry(
             fontWeight: style.fontWeight,
             opacity: style.opacity,
             hit,
+            before: pseudo("::before"),
+            after: pseudo("::after"),
           };
         },
         undefined,

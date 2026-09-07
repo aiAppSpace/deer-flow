@@ -255,7 +255,16 @@ watch(
   z-index: 20;
   width: 1px;
   min-width: 1px;
-  border-left: 1px solid var(--border);
+  /*
+    这条 1px 线用**背景色**画，不是 `border-left`——上游
+    `ui/resizable.tsx` 的 handle 是 `bg-border w-px`。
+    两种画法在屏幕上分不出来（`box-sizing: border-box`，1px 的左边框正好占满
+    1px 的盒子），但**计算样式分得出来**：wave 146 第一次把这颗分隔条挂进取样面，
+    几何档当场报 `background React=rgba(232,229,222,255) Vue=rgba(0,0,0,0)`。
+    与其在台账里留一条「看着像差异、其实不是」的账（那种账会让人不再相信这份清单），
+    不如把画法对齐——用户看到的东西一个像素都没变。
+  */
+  background: var(--border);
   opacity: 0.33;
   transition: opacity 200ms ease-out;
 }
