@@ -11,7 +11,7 @@
 你接手一个已经跑了 **144 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 144 的 docs 提交，已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 145 的 docs 提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
@@ -19,7 +19,7 @@
 现在最有货的不是「再找一处 UI 差异」，而是
 **「找出一句写下来、当规则用、却没有任何机器在守的话」**——
 wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句，
-到 wave 129 为止已经十二句：
+到 wave 145 为止已经十三句（wave 145 那一句最值得记：**「基类不一致的每一条都要在 DECLARED 里有名有姓」——而 7 个最高频组件根本进不了那个集合**）：
 「A 会自愈」「两边差 18px」「这几份是手工维护的」「仍然在外面的两类」
 「pending 只能变短」「凡是能机械算出来的都在这里对一遍」
 「tests/ 有意不在范围里」「顺序天然测不出来，只能靠人盯着两边看」
@@ -58,7 +58,8 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 - **每轮收工写交接文档 + 一页纸清单 + 记忆，然后自动开下一轮**，
   推到我喊停为止；**不要停下来问「要不要继续」**。
 - **台账的规则现在是「新出现、还没定过的行只能减不能增」**，不再是「保持 0」。
-  `frontend-vue/baseline/parity-diff.json` 当前 **219 行 / 89 样本**
+  `frontend-vue/baseline/parity-diff.json` 当前 **197 行 / 89 样本**
+  （wave 145 把 Tabs 的 variant 体系搬过来，219 → 197）
   （wave 128 / 129 / 132 各接一个后端失败终态，+12 / +6 / +8，逐条有名有姓；
   其中 wave 129 的 6 行与 wave 132 的 6 行都是 wave 128 已判过的 `retry: 3` 在别的屏上
   复现，不需要新决定；**wave 132 那 2 行 `order` 是新决定**——预览失败时本仓选中「代码」、
@@ -96,14 +97,15 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 
 > **节奏（用户 2026-09-07 要求改的）**：**不再每轮跑全套**。
 > **每轮仍跑** `e2e-parity`（**它就是「先量再改」那把尺子，不能省**）+ `vitest run tests/unit`
-> + 该场景的定向 e2e；**每 3~4 轮跑一次下面这九条全套**，**批不超过 4 轮**
-> ——批里某一轮引入的回归要到批尾才发现，红了就在批内二分。
-> **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
+>
+> - 该场景的定向 e2e；**每 3~4 轮跑一次下面这九条全套**，**批不超过 4 轮**
+>   ——批里某一轮引入的回归要到批尾才发现，红了就在批内二分。
+>   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2212 单测；词典 942 key / 18 unused
+make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2214 单测；词典 942 key / 18 unused
 make -C <abs>/frontend-vue standalone-sim  # exit 0；跑过 15 / 未跑 5 / 红 0（wave 116 起跑整套 vitest）
-make -C <abs>/frontend-vue e2e-parity      # 96 passed；台账 219 行 / 89 样本
+make -C <abs>/frontend-vue e2e-parity      # 97 passed（--list 报 97 tests in 3 files；旧读数记的 96 漏了 topology.spec.ts 一条）；台账 197 行 / 89 样本
 make -C <abs>/frontend-vue e2e-mock        # 265 + 22 + 15 + 2 + 6
 make -C <abs>/frontend-vue e2e-visual      # 8 passed（只有 -darwin 基线，本机门禁）
 make -C <abs>/frontend-vue asset-budget    # exit 0
@@ -155,7 +157,7 @@ make -C <abs>/frontend-vue e2e-external   # 3 passed（它**不在任何聚合�
 - **按前缀找行要断言只命中一处**：`"chat-thread-init-ordering"` 在 `pending` 数组里也出现，
   按前缀找会先命中它，插错位置（线索 261 同一轮）。
 - **传位置参数之前先把签名读出来**（线索 260）：`captureScenario(page, base, scenario,
-  dimension, state, settleMs = 700)` 的**第 6 个参数是 `settleMs` 不是 timeout**；
+dimension, state, settleMs = 700)` 的**第 6 个参数是 `settleMs` 不是 timeout**；
   传错不会报错，只会让实验安静地测别的东西。**一个「恰好等于你填的那个数」的输出，
   永远值得停一下。**
 - **给失败接一个兜底子句，等于把失败改写成成功**（线索 270，wave 107 踩的）：
@@ -179,7 +181,7 @@ make -C <abs>/frontend-vue e2e-external   # 3 passed（它**不在任何聚合�
 - **复现「偶尔红」有两把旋钮，先便宜的后贵的**（wave 108 + 114）：
   ① **CPU 节流**（便宜，只压浏览器）——`newCDPSession` + `setCPUThrottlingRate`；
   ② **真负载**（贵，压整台机器）——`for i in $(seq 1 8); do (sh -c 'end=$((SECONDS+260));
-  while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep` 确认为 0**。
+while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep` 确认为 0**。
   **wave 114 实测：节流复现不了的，真负载能**（第六条抖动 70x 节流全绿，
   真负载 load~13 就 1/10 红）。负载会滞后，两组对照之间要等 `uptime` 落下来，
   否则又是一次被混淆的比较（wave 112 的教训）。
@@ -278,6 +280,7 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 （根 Makefile 几十个目标、文档只提 5 个），给它加反向校验反而是错的。
 
 **已经做掉的**：
+
 - wave 104：`baseline` 的 `HAND_MAINTAINED` 只查一半 → 补 `GENERATED`，
   两张表恰好划分 `baseline/*.json`，且「这份是生成的」也要能被撞
   （生成器真的存在、真的提到它、真的有写调用）。
@@ -301,6 +304,7 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > **加锚点时问两句：它在每个维度上都成立吗、它在这一屏上只有一份吗。**
 
 **wave 130 现成的两件活（都已量到读数，直接接着做）**：
+
 - ~~给 artifact 造一份「产物来自 artifacts 列表」的夹具~~ —— **wave 132 做完了**，
   而且**不需要新夹具**：`artifact-batched-stream` 本来就是那条分支
   （「会第一次让 Select 分支进取样面」那句话是错的，已订正）。
@@ -314,6 +318,7 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
   如果不止一份那几份是不是同一个东西。**
 
 **还没筛的（下一轮可以从这里挑）**：
+
 - **以「后端」为全集的两张表**：`app/core/agent-deerflow/run-protocol.ts` 的
   `DEERFLOW_DURABLE_STATUS`（头里写着「Gateway 的 durable run status 全集」）与
   `event-map.ts` 的 `DEERFLOW_WIRE_EVENTS`（「当前 Gateway 会发出的 wire 事件名全集」）。

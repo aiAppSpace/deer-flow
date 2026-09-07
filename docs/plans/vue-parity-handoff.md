@@ -8,13 +8,13 @@
 
 ---
 
-## 当前状态（截至 wave 144，2026-09-07）
+## 当前状态（截至 wave 145，2026-09-07）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
   `54454b7c` = wave 43，`46f62dea` = wave 44，`f15c7181` = wave 45，`ca1c7f1d` = wave 46，
   `c12c4d37` = wave 47，`3f152764` = wave 48，`5978d533` = wave 49，`80ef4d15` = wave 50，
-  `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）。
+  `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉）。
 - **动过 `frontend/` 的是二十三轮**（wave 138 新增一轮：模型设置对话框的可访问名）（wave 52 实测订正，wave 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97 各加一轮）：
   wave **3 / 4 / 6 / 11 / 17 / 20 / 21 / 22 / 23 / 27 / 28 / 36 / 39 / 40 / 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97**。
   此前这里只列了 36/39/40（那三行本身没说错，它们的范围是「wave 30 以来」），
@@ -36,7 +36,7 @@
   wave 74 两处 `<Toaster />` 用的不是 shadcn wrapper；wave 73 五条「本仓修掉了上游缺陷」；
   wave 62 `/auth/callback` 吞掉 `?next=` 深链。wave 41~~59、75~~81 都没动过。
 
-- **对照台账 219 行**，**89** 个样本，`make -C frontend-vue e2e-parity` **96** 条全绿（wave 130/131 换了三处锚点，**台账一行都没动**——加的是覆盖面不是账；wave 132 接上 `artifact-batched-stream#preview-failed`，113/77/85 → **121/79/87**，新增 8 行里 6 行是已判过的重试差异、2 行是新决定）（wave 128：95/73/81 → 107/75/83；wave 129：107/75/83 → **113/77/85**，新增 6 行全部是 wave 128 已判过的 `retry: 3` 那一条在另一屏上的复现）。
+- **对照台账 197 行**，**89** 个样本，`make -C frontend-vue e2e-parity` **96** 条全绿（wave 145 把 Tabs 的 variant 体系搬过来，219 → **197**：每语言 11 行归零，另有 2 行是同一笔账的读数变好——`switch[review] y` Δ41.9 → Δ-4.1，集合包含判据表达不出「同一个键、更小的值」，所以走了 `PARITY_ACCEPT_GROW=1`）（wave 130/131 换了三处锚点，**台账一行都没动**——加的是覆盖面不是账；wave 132 接上 `artifact-batched-stream#preview-failed`，113/77/85 → **121/79/87**，新增 8 行里 6 行是已判过的重试差异、2 行是新决定）（wave 128：95/73/81 → 107/75/83；wave 129：107/75/83 → **113/77/85**，新增 6 行全部是 wave 128 已判过的 `retry: 3` 那一条在另一屏上的复现）。
   wave 96 用 tab 序那一档量出 64 行、四处根因，**wave 97 逐条结清**：
   分隔条那 48 行与 browser 标签那 4 行**修掉了**，菜单 roving 那 2 行**决定接受**，
   滚动区那一处两边同改之后变成了另一处此前完全看不见的结构差异，
@@ -338,7 +338,7 @@ ls frontend/.next/BUILD_ID frontend-vue/.output/server/index.mjs frontend-vue/.o
 > 那两处同形的表单错误（`account-settings-page.tsx:133`、`human-input-card.tsx:339`）
 > 都写着 `role="alert"`。
 
-### 台账天生看不见的八类差异
+### 台账天生看不见的八类差异（wave 145 加了第⑨类）
 
 ① 需要交互才看得见的；② 藏在请求 body 里的；③ portal 出去还会遮蔽页面的浮层；
 ④ ~~顺序与层级~~ —— **顺序那一半 wave 95 补上了**（`diffAriaOrder`：先取公共多重集
@@ -358,6 +358,14 @@ wave 99 的 0 是数据被塌平造成的，不是「层级差异不存在」。
 ⑤ primitive 的默认值——**wave 127 量过了**：按 `data-slot` 比语义属性，73 个样本 **2519 行**（只在一边出现的 slot 名就有 62 个，两套 primitive 词汇表本来就不同），**信噪比太低，不做**，翻案判据见那一节；
 ⑥ 只在某种后端状态下才分叉的渲染路径——**wave 128 第一次接上**（`ParityState.routes` + `integrations#load-failed`），第一跑就量出上游重试 3 次而本仓 1 次；**wave 129 接上第二处**（`scheduled-tasks#load-failed`，同一条结论独立复现），并订正了 wave 128 写下的判据——**「上游词典里有没有这条 key」是错的判据，要看的是「上游有没有一段代码在这个分支上渲染出东西」**（`artifacts.loadFailed` 就是被它误判的那一条）；⑦ **这一屏压根没被取样**；
 ⑧ **焦点**（`document.activeElement`，见下）。
+
+⑨ **伪元素**（wave 145 新增）：几何档取的是**元素**的 `getBoundingClientRect` 与
+`getComputedStyle`，`::before` / `::after` 一律不在量程里。这不是理论问题——
+上游 Tabs 的 `line` 档，**选中态整根下划线就画在 `::after` 上**
+（`group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100`），
+也就是说 wave 145 刚搬进来的那套 variant，**视觉主体没有任何一档在守**。
+识别信号很干脆：负向验证时把它依赖的那个标记删掉（`group/tabs`），
+**台账零反应**。做法与撤销判据写在下一轮那一节。
 
 wave 20/21 连着两轮正面打了 ① 和 ⑦。**判据：一个域收工前，把它所有「点一下才出现」
 的东西列出来，逐个问「这一屏进过取样面没有」。** 挂展开态很便宜：场景 id 受
@@ -427,6 +435,139 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
 
+## 上一轮（wave 145）做了什么：**把 Tabs 的 variant 体系搬过来——顺带发现基类守卫看不见 7 个最高频组件**
+
+**这一轮是批尾**（143、144、145 一批），九条全套跑过，读数在本节末。
+
+### 一、说好要做的：Tabs
+
+wave 144 量出的 14 行 × 两种语言，根因是**上游的 Tabs 有一套 variant 体系，本仓整套没有**。
+搬过来分三处，**缺一处就等于没搬**：
+
+| 处            | 上游                                                                                            | 本仓 wave 145 之前                                                        |
+| ------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `Tabs`（根）  | `group/tabs flex gap-2 data-[orientation=horizontal]:flex-col`                                  | **一个类都没有**                                                          |
+| `TabsList`    | `tabsListVariants` 两档（`default`=`bg-muted` / `line`=`gap-1 bg-transparent`）+ `data-variant` | 写死 `inline-flex w-fit items-center gap-2`，**连 `variant` prop 都没有** |
+| `TabsTrigger` | 四段类串（基础 / line 档去底色 / default 档选中底色 / `after:` 下划线）                         | 另写的一套带边框胶囊 + `data-[state=active]:bg-accent`                    |
+
+三处靠 `group/tabs` 与 `group/tabs-list` 两个标记 + `data-variant` 联动。
+类串**逐字照抄**，抄完用脚本按字符串比对确认五段全部一致（不是肉眼看）。
+
+调用点（`SkillSettings.vue`）两件事：传 `variant="line"`；把「创建技能」按钮从
+**自己一行**挪进与标签**同一行**的 `<header class="flex justify-between">`
+（上游 `skill-settings-page.tsx:82` 就是这个结构）。标签顺带挪到权限分支**外面**——
+上游根本没有权限查询，这一整个 header 只由技能清单的 loading/error 决定，
+放在里面等于让 header 多等一个上游没有的 gate。
+
+**结果**：台账 **219 → 197 行**（89 个样本不变）。每种语言 11 行归零
+（7 行 tab 几何 + 3 行 tablist 几何 + 1 行 order），
+`switch[review] y` 从 Δ41.9 收到 **Δ-4.1**。
+
+### 二、没说好、但更值钱的：**基类守卫看不见 7 个最高频组件**
+
+搬完 Tabs 我去跑 wave 141/143 那条「基类不一致的，每一条都要在 DECLARED 里有名有姓」，
+**它绿了**。差一点就把这个绿当成「Tabs 抄对了」。
+
+它绿是因为**它根本没看**。`literalTokens` 用的
+`STRING_LITERAL = /(['"`])([^'"`]*)\1/g` **不许字面量里面出现另外两种引号**，
+而 `[&_svg:not([class*='size-'])]:size-4` 是 shadcn 最常见的写法之一。命中这一条的：
+
+- 本仓 21 份读不出、上游 34 处读不出；
+- **两边同名、都因此被跳过的有 7 个**：`CommandItem`、`DropdownMenuItem`、
+  `DropdownMenuRadioItem`、`DropdownMenuSubTrigger`、`SelectItem`、`SelectTrigger`、
+  `TabsTrigger`。
+
+菜单、选择器、标签这三类最高频的交互组件**一个都没进过 `shared`**，
+于是那句成文判据在它们身上是空的——**不进集合就不会不一致**。
+
+改成三支分写的字面量正则（各自只禁自己那种引号），当场露出 **4 处此前完全看不见的漂移**。
+
+### 三、那 4 处顺出来的东西：`w-full` 补偿写错了层
+
+- `CommandItem`：`data-[highlighted]` vs `data-[selected=true]`、`data-[disabled]` vs
+  `data-[disabled=true]`——框架属性名，同 `--reka-*` 那一类，**声明**。
+- 三个 DropdownMenu 项：只差 `hover:bg-accent`（reka 悬停不 focus，文件头早有理由）——**声明**。
+- 四个组件都多 `w-full text-left`，**没有任何人给过理由**。删掉 → 复量 → **线程历史菜单当场红**：
+  「删除」项 React=182 / Vue=**81.8**（中文 68），而菜单本身两边都是 192。
+
+不急着塞回去，先量祖先链，根因是**元素本身**：
+
+```
+React  0 <div    role=menuitem> w=182.0
+Vue    0 <button role=menuitem> w=81.8
+两边   1 <div role=menu> w=192.0   2 <div> w=192.0 min-width:max-content
+```
+
+`<button>` 的 `width: auto` 解析成 fit-content（表单控件的固有尺寸规则，`display:flex` 也改不了），
+**所以它不会撑满菜单**。而 `as="button"` 是**七个调用点**各自传的，
+reka 的 `Primitive` 默认就是 `div`、与上游一致。
+
+**补偿写在了错的那一层**：primitive 的基类为一个调用点的选择买单。
+七处 `as="button"` 全部删掉，`w-full text-left` 一起删，复量菜单宽度回到 182。
+
+### 四、负向验证
+
+| #   | 变异                                                 | 期望           | 实测                                                                          |
+| --- | ---------------------------------------------------- | -------------- | ----------------------------------------------------------------------------- |
+| N1  | `TabsList` 退回无 variant 的基类                     | skills 几何红  | **真红**，每语言 6 行（tablist height 36/30、tab background、tablist color…） |
+| N2  | `Tabs` 根去掉 `group/tabs`                           | 应当红         | **假绿**——台账零反应（见下）                                                  |
+| N3  | header 内「标签块 / 按钮块」前后对调                 | `order` 行回来 | **真红**，那一行逐字回来 + tab/tablist x 各偏 678 / 700                       |
+| N4  | 给 `TabsTrigger` 注入 `w-full`，用 **HEAD 那份**守卫 | 应当红         | **HEAD 5/5 全绿**（假绿证实）；修好的守卫当场红                               |
+| N5  | 删除项退回 `as="button"`                             | 菜单项宽度红   | **真红**：182 vs 81.8 / 68                                                    |
+
+**N2 是本轮唯一的假绿，两条原因都值得记住**：
+
+1. 横向 tablist 去掉 `h-9` 之后的自然高度**恰好也是 36px**（`p-[3px]` + 触发器 30px）；
+2. `line` 档的选中态**全靠 `::after` 那根下划线**，而**取样面看不见伪元素**。
+
+第 2 条是新的盲区：整个 `line` variant 的视觉主体不在任何一档的量程里。
+已挂进一页纸清单。
+
+### 五、还撞到一条
+
+`app/components/ui/tabs/variants.ts` 头里写着 `【架构位置】 L2`，
+但没登记进 `tests/architecture.test.ts` 的 `l2Files`——`verify` 与 `standalone-sim`
+双双当场红（wave 105 那条双向校验在守）。补登记后绿。**这条守卫是活的，不是摆设。**
+
+### 六、批尾九条全套（逐条真跑，2026-09-07）
+
+| 门禁             | 读数                                                         |
+| ---------------- | ------------------------------------------------------------ |
+| `verify`         | exit 0；**267 文件 / 2214 单测**；词典两个 locale 各 942 key |
+| `standalone-sim` | exit 0；跑过 **15** / 未跑 5 / **红 0**                      |
+| `e2e-parity`     | **97 passed**；台账 **197 行 / 89 样本**                     |
+| `e2e-mock`       | 265 + 22 + 15 + 2 + 6，全绿                                  |
+| `e2e-visual`     | 8 passed                                                     |
+| `asset-budget`   | exit 0                                                       |
+| `e2e-backend`    | 2 + 5 + 2 + 3 + 3 + 5 + 1 + 1，全绿                          |
+| `icon-parity`    | **0 处待核**、0 条 ⚠                                         |
+| `audit`          | **红 14**（与预期一致，分诊在 Makefile 的 audit 上方）       |
+
+**顺手订正一个数**：`e2e-parity` 此前一路记的是「96 条」，实测是
+**97**（`playwright test --list` 报 `Total: 97 tests in 3 files`——
+`diff.spec.ts` 3 条 + `scenarios.spec.ts` 92 条 + **`topology.spec.ts` 2 条**）。
+本轮没有动过场景表，所以少的那一条是旧读数漏了 `topology.spec.ts` 里的一条，
+不是这一轮新增的。
+
+**批到此结束**（143 / 144 / 145）。下一批从 wave 146 起算。
+
+### 七、下一轮：**把伪元素接进取样面**
+
+本轮的 N2 假绿指的很明确：`line` 档的选中态**全部画在 `::after` 上**，
+而八档里没有一档量伪元素——也就是说**刚搬进来的这套 variant，视觉主体没有人在守**。
+
+1. 先过线索 258 那道门槛：「有没有一种变异能让新档响、而现有各档都不响」——
+   **N2 本身就是答案**（去掉 `group/tabs`，下划线整根消失，台账零反应）。举得出来，可以做。
+2. 做法：在 `sampleGeometry` 里对**已有的锚点**顺带取
+   `getComputedStyle(el, "::after")` 的 `content` / `opacity` / `height` / `background-color`
+   （`::before` 同理）。**只取锚点、不扩面**（线索 214：每加一个锚点就多 30 秒 auto-wait；
+   线索 255：先问其中几行是别的档已经报过的）。
+3. 量完先看重复率。**如果新档报出来的行几乎都是别的档已经报过的，就撤掉**——
+   wave 99 的「层级」那一档就是这么撤的，代码改动为零也是合格的一轮。
+4. 撤不撤都要把 N2 这个变异**留成用例**：它是这一档存在与否的判据本身。
+
+---
+
 ## 上一轮（wave 144）做了什么：**技能设置页那一屏第一次进取样面——Tabs 的 variant 体系本仓整套没有**
 
 wave 143 顺出来的问题：上游 12 个 `cva`、本仓 4 个，其中 `toggle` / `tabsList` 是
@@ -451,12 +592,12 @@ wave 133/134 只取了技能页的「失败」与「加载中」两支（那两�
 本仓两个组件是另写的一套（带边框的胶囊 + `data-[state=active]:bg-accent`），
 **连 `variant` 这个 prop 都没有**。逐条对得上：
 
-| | 上游 | 本仓 |
-| --- | --- | --- |
-| `tablist` color | 115,115,115（`text-muted-foreground`） | 10,10,10 |
-| `tab` background | 透明 | 238,235,228 |
-| `tab` fontWeight | **500** | **400** |
-| `tab` height | 29 | 34 |
+|                  | 上游                                   | 本仓        |
+| ---------------- | -------------------------------------- | ----------- |
+| `tablist` color  | 115,115,115（`text-muted-foreground`） | 10,10,10    |
+| `tab` background | 透明                                   | 238,235,228 |
+| `tab` fontWeight | **500**                                | **400**     |
+| `tab` height     | 29                                     | 34          |
 
 **根因二：头部顺序不同。** 上游那一行是「标签在左、创建键在右」
 （`skill-settings-page.tsx:81` 的 `<header>`），本仓是创建键单独一行排在标签**上面**
@@ -514,6 +655,7 @@ wave 141/142 的比对只覆盖「基类是字符串字面量」的写法，
 
 批里已经跑了 wave 143 一轮（142 收尾时刚跑过全套）。**再做两轮就到批尾，届时跑全套九条。**
 候选：
+
 1. `/workspace/chats/[thread_id]` 上还没取样的终态（第⑦类还剩的几屏）；
 2. 「上游用 variants 参数化、本仓写死」那一类——先回答判据问题，再决定要不要立。
 
@@ -523,11 +665,11 @@ wave 141/142 的比对只覆盖「基类是字符串字面量」的写法，
 
 ### 一、两个 DropdownMenu content：三处，三个不同的理由
 
-| 类 | 为什么去掉 / 改掉 |
-| --- | --- |
+| 类              | 为什么去掉 / 改掉                                                                                                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `border-border` | **与 base layer 重复**——两个应用的基础层都给 `*` 设了边框色（上游 `globals.css:323`、本仓 `main.css:137`）。这是 wave 140 那条「调用点重复」的同族，只不过这次重复的是 base layer。 |
-| `text-sm` | **上游不在容器上设字号**：`DropdownMenuItem` 两边都各自写着 `text-sm`；容器上再设一次会把菜单里**不是菜单项**的东西（标题、分隔、自定义内容）一起改掉。 |
-| `shadow-lg` | 上游 `dropdown-menu.tsx:45` 的 Content 是 **`shadow-md`**，233 行的 SubContent 才是 `shadow-lg`。本仓两个都写成了 `shadow-lg`——**Content 这一个是错的**。 |
+| `text-sm`       | **上游不在容器上设字号**：`DropdownMenuItem` 两边都各自写着 `text-sm`；容器上再设一次会把菜单里**不是菜单项**的东西（标题、分隔、自定义内容）一起改掉。                             |
+| `shadow-lg`     | 上游 `dropdown-menu.tsx:45` 的 Content 是 **`shadow-md`**，233 行的 SubContent 才是 `shadow-lg`。本仓两个都写成了 `shadow-lg`——**Content 这一个是错的**。                           |
 
 ### 二、HoverCardContent
 
@@ -553,7 +695,7 @@ forced-colors 下的轮廓）——**别当成等价写法**。
 原来是「每轮跑九条全套」，实测单轮固定成本二十多分钟。改成：
 
 - **每轮仍跑**：`e2e-parity`（**它就是「先量再改」的那把尺子，不能省**）+ `vitest run tests/unit`
-  + 该场景的定向 e2e；
+  - 该场景的定向 e2e；
 - **每 3~4 轮跑一次**九条全套清扫；
 - **批不超过 4 轮**——批里某一轮引入的回归要到批尾才发现，红了就在批内二分。
 
@@ -570,12 +712,12 @@ wave 140 的负向验证 N2 是一条**否定结果**：那一轮的 `primitive-
 
 ### 一、第一跑 10 条不一致；四处是漏抄，已修
 
-| 组件 | 少了什么 |
-| --- | --- |
-| `CommandShortcut` | `tracking-widest` |
-| `DropdownMenuSeparator` | `-mx-1`（分隔线的负外边距） |
-| `TabsContent` | `flex-1` |
-| `TooltipContent` | `data-[state=closed]:zoom-out-95`、四条 `data-[side=*]:slide-in-from-*`、`dark:bg-[#050504]`、transform-origin——**整组进出动画都没有** |
+| 组件                    | 少了什么                                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `CommandShortcut`       | `tracking-widest`                                                                                                                      |
+| `DropdownMenuSeparator` | `-mx-1`（分隔线的负外边距）                                                                                                            |
+| `TabsContent`           | `flex-1`                                                                                                                               |
+| `TooltipContent`        | `data-[state=closed]:zoom-out-95`、四条 `data-[side=*]:slide-in-from-*`、`dark:bg-[#050504]`、transform-origin——**整组进出动画都没有** |
 
 TooltipContent 那条 origin 用 `--reka-tooltip-content-transform-origin`
 （实测 reka 确实导出它：`node_modules/reka-ui/dist/Tooltip/TooltipContentImpl.js:128`），
@@ -603,11 +745,11 @@ tooltip 那组动画是 `animate-in` / `data-[state=closed]:*`，取样时早已
 
 ### 四、负向验证（一条对一条打在三条用例上）
 
-| # | 变异 | 实测 |
-| --- | --- | --- |
-| N1 | 把 `tracking-widest` 拿掉 | **红** `['CommandShortcut']`（不一致且没声明） |
-| N2 | 删掉 `ScrollArea` 那条声明 | **红** `['ScrollArea']` |
-| N3 | 给一个本来就一致的组件加一条声明 | **红** `['Badge']`（过期声明） |
+| #   | 变异                             | 实测                                           |
+| --- | -------------------------------- | ---------------------------------------------- |
+| N1  | 把 `tracking-widest` 拿掉        | **红** `['CommandShortcut']`（不一致且没声明） |
+| N2  | 删掉 `ScrollArea` 那条声明       | **红** `['ScrollArea']`                        |
+| N3  | 给一个本来就一致的组件加一条声明 | **红** `['Badge']`（过期声明）                 |
 
 ### 五、顺带避开的一处旧坑
 
@@ -632,10 +774,10 @@ wave 139 那句「调用点重复传 `text-lg`，把基类的 `leading-none` 顶
 
 ### 一、primitive 的基类被改过
 
-| | `DropdownMenuLabel` 的基类 |
-| --- | --- |
+|      | `DropdownMenuLabel` 的基类                                  |
+| ---- | ----------------------------------------------------------- |
 | 上游 | `px-2 py-1.5 `**`text-sm font-medium`**` data-[inset]:pl-8` |
-| 本仓 | **`text-muted-foreground`**` px-2 py-1.5 `**`text-xs`** |
+| 本仓 | **`text-muted-foreground`**`px-2 py-1.5`**`text-xs`**       |
 
 本仓**把调用点的覆盖烤进了 primitive**，同时丢掉了 `font-medium` 与 `data-[inset]:pl-8`。
 连锁后果是本仓自己的调用点再去补偿：`TokenUsageIndicator.vue` 那两处写着
@@ -669,11 +811,11 @@ selector:textarea fontWeight React=300 Vue=400   ×6（全部落在 dark 样本�
 
 ### 四、负向验证：**其中一条是否定结果**
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| N1 | 把 wave 139 那处 `class="text-lg"` 写回去 | 新门禁红 | **红**：`重复传 [text-lg] → 基类被顶掉 [leading-none]` |
-| N2 | 把 `DropdownMenuLabel` 的基类改回原样 | 新门禁红 | **绿（4 passed）** |
-| N3 | 去掉 `main.css` 那行 `font-weight: 300` | 几何档红 | **红 6 行** |
+| #   | 变异                                      | 预期     | 实测                                                   |
+| --- | ----------------------------------------- | -------- | ------------------------------------------------------ |
+| N1  | 把 wave 139 那处 `class="text-lg"` 写回去 | 新门禁红 | **红**：`重复传 [text-lg] → 基类被顶掉 [leading-none]` |
+| N2  | 把 `DropdownMenuLabel` 的基类改回原样     | 新门禁红 | **绿（4 passed）**                                     |
+| N3  | 去掉 `main.css` 那行 `font-weight: 300`   | 几何档红 | **红 6 行**                                            |
 
 **N2 是这一轮最该记的**：**新门禁抓不到本轮的主要发现**。那处不是「调用点重复」，
 而是「**两个应用的 primitive 基类本身不一样**」——需要另一条判据。
@@ -703,10 +845,10 @@ wave 138 把可访问名整个改完之后**它一点没变**。这一轮用探�
 
 ### 一、真正的出处
 
-| 应用 | 元素 | 高 | line-height |
-| --- | --- | --- | --- |
-| Vue | `H2.font-semibold `**`text-lg`** | **28.0** | **28.0001px** |
-| React | `H2.text-lg `**`leading-none`**` font-semibold` | 18.0 | 18px |
+| 应用  | 元素                                            | 高       | line-height   |
+| ----- | ----------------------------------------------- | -------- | ------------- |
+| Vue   | `H2.font-semibold `**`text-lg`**                | **28.0** | **28.0001px** |
+| React | `H2.text-lg `**`leading-none`**` font-semibold` | 18.0     | 18px          |
 
 `DialogTitle` 这颗 primitive 的基类两边都是 `text-lg leading-none font-semibold`，
 而本仓**在调用点又传了一次** `class="text-lg"`。`cn`/tailwind-merge 把它当成同一组的
@@ -781,11 +923,11 @@ wave 106 以来第一次动 `frontend/`（**动过上游的从此是二十三轮
 
 ### 三、读数
 
-| 阶段 | 台账 |
-| --- | --- |
-| 改动前（= wave 137 收工那一跑，`e2e-parity` 95 passed） | **199 行 / 87 样本** |
-| 改可访问名之后 | **191 行**（−10 +2） |
-| 再对齐 `<p>` 之后 | **185 行 / 87 样本**（−6 +0，**纯缩短、不用 GROW**） |
+| 阶段                                                    | 台账                                                 |
+| ------------------------------------------------------- | ---------------------------------------------------- |
+| 改动前（= wave 137 收工那一跑，`e2e-parity` 95 passed） | **199 行 / 87 样本**                                 |
+| 改可访问名之后                                          | **191 行**（−10 +2）                                 |
+| 再对齐 `<p>` 之后                                       | **185 行 / 87 样本**（−6 +0，**纯缩短、不用 GROW**） |
 
 **净减 14 行。还剩一行有意留着**：`- combobox "Default model"`（上游）vs
 `- combobox "Default model": parity-basic · Unavailable`（本仓）——
@@ -810,6 +952,7 @@ pnpm test:e2e  第一跑 145 passed / 1 failed；第二跑 146 passed exit 0
 ### 五、下一轮
 
 `agents-feature-disabled#gallery` 上还剩 **18 行 / 语言**，全部已决定：
+
 - 1 行下拉的值（上面第三节，保留本仓）；
 - 2 行对话框标题带不带 agent 名（保留本仓）；
 - 7 行卡片动作控件 `<Button onClick>` vs `<NuxtLink>`（同 wave 135 那一条）；
@@ -835,13 +978,13 @@ wave 135 只接了画廊的**加载态**（那一屏一张卡都没有）。这�
 
 ### 二、量出 22 行 × 两种语言，逐类交代
 
-| # | 类 | 行数/语言 | 处置 |
-| --- | --- | --- | --- |
-| ① | **上游那五个表单控件对读屏器都是无名的** | 13 | **已归因、待修**（下一轮两边同改） |
-| ② | 对话框标题带不带 agent 名 | 2 | **保留本仓** |
-| ③ | 卡片动作控件：上游 `<Button onClick>` / 本仓 `<NuxtLink>` | 7 | **保留本仓**（同 wave 135 那一条） |
-| ④ | 初始焦点 `React=button Vue=input[number]` | 1 | incidental（wave 94 那一类） |
-| ⑤ | 对话框高度还差 3.9px | 1 | ① 修完再复量 |
+| #   | 类                                                        | 行数/语言 | 处置                               |
+| --- | --------------------------------------------------------- | --------- | ---------------------------------- |
+| ①   | **上游那五个表单控件对读屏器都是无名的**                  | 13        | **已归因、待修**（下一轮两边同改） |
+| ②   | 对话框标题带不带 agent 名                                 | 2         | **保留本仓**                       |
+| ③   | 卡片动作控件：上游 `<Button onClick>` / 本仓 `<NuxtLink>` | 7         | **保留本仓**（同 wave 135 那一条） |
+| ④   | 初始焦点 `React=button Vue=input[number]`                 | 1         | incidental（wave 94 那一类）       |
+| ⑤   | 对话框高度还差 3.9px                                      | 1         | ① 修完再复量                       |
 
 **①的证据**：上游 `agent-settings-dialog.tsx:137/158/178` 把标签写成
 `<span className="text-sm font-medium">`——**不是 `<label>`、没有 `htmlFor`、
@@ -867,10 +1010,10 @@ wave 135 只接了画廊的**加载态**（那一屏一张卡都没有）。这�
 - 接上取样面、改宽度之前：该终态 **24 行 / 语言**
 - 改动后：**22 行 / 语言**，`e2e-parity` **95 passed (9.2m)**，台账 **199 行 / 87 样本**
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 6 条全绿 | **6 passed (1.6m)**，exit 0 |
-| N1 | 夹具换回缺字段的 `MOCK_AGENTS` | 该终态两条红 | **2 failed**（30.9 / 31.5s，两个应用都白屏） |
+| #    | 变异                           | 预期         | 实测                                         |
+| ---- | ------------------------------ | ------------ | -------------------------------------------- |
+| 对照 | 无                             | 6 条全绿     | **6 passed (1.6m)**，exit 0                  |
+| N1   | 夹具换回缺字段的 `MOCK_AGENTS` | 该终态两条红 | **2 failed**（30.9 / 31.5s，两个应用都白屏） |
 
 N1 不是特意设计的，是第一版就踩到的真事。
 
@@ -923,6 +1066,7 @@ wave 135 挂的那行账：`requestsOnlyVue: GET /api/models`。上游把 `useMo
 **一个 `enabled: false` 的查询照样读缓存**。
 
 **所以这一轮的验证只有一半**：
+
 - 有验证的：请求确实不再发（台账那两行掉了）。
 - **没有自动化守着的**：「冷开画廊、打开对话框、模型清单仍然到得了」。
 
@@ -932,6 +1076,7 @@ wave 135 挂的那行账：`requestsOnlyVue: GET /api/models`。上游把 `useMo
 `agents-feature-disabled` 再加一个 state——feature 开着、`/api/agents` 返回两个 agent
 （不延迟）、步骤点开 `agent-card-*` 上的「Model settings」按钮。
 它一次做两件事：
+
 1. **第一次把 `AgentCard` 与设置对话框接进对照取样面**（预计还会露出一批，
    按线索 278 先去现有样本 grep 已决定类，别重复计价）；
 2. **正好补上第三节缺的那一半**——两个应用都要在冷开的画廊里把模型清单取回来才画得出
@@ -953,12 +1098,12 @@ wave 134 的 `delayMs` 只在设置对话框里用过一次。这一轮拿它去
 
 ### 二、量出四处
 
-| # | 差异 | 处置 |
-| --- | --- | --- |
-| 1 | 新建入口样式是手写的（上游 `<Button>` + 加号图标、h-9、`text-sm`；本仓 `px-3 py-2`、**没图标**）：`width Δ-22.6 / height Δ4 / fontSize 16 vs 14` | **已修**（`buttonVariants()` + `<Plus>`） |
-| 2 | 加载占位不是同一个东西（上游是**居中的 h-40 盒子**、`text-sm`；本仓左上角一行 16px 字）：`height React=160 Vue=24 Δ-136` | **已修** |
-| 3 | 元素类型不同（上游 `<Button onClick>`、本仓 `<NuxtLink>`） | **保留本仓**（4 行） |
-| 4 | 加载文案不是同一条（上游 `t.common.loading`；本仓自有的 `agents.loading` + `role="status"`） | **保留本仓**（2 行） |
+| #   | 差异                                                                                                                                             | 处置                                      |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| 1   | 新建入口样式是手写的（上游 `<Button>` + 加号图标、h-9、`text-sm`；本仓 `px-3 py-2`、**没图标**）：`width Δ-22.6 / height Δ4 / fontSize 16 vs 14` | **已修**（`buttonVariants()` + `<Plus>`） |
+| 2   | 加载占位不是同一个东西（上游是**居中的 h-40 盒子**、`text-sm`；本仓左上角一行 16px 字）：`height React=160 Vue=24 Δ-136`                         | **已修**                                  |
+| 3   | 元素类型不同（上游 `<Button onClick>`、本仓 `<NuxtLink>`）                                                                                       | **保留本仓**（4 行）                      |
+| 4   | 加载文案不是同一条（上游 `t.common.loading`；本仓自有的 `agents.loading` + `role="status"`）                                                     | **保留本仓**（2 行）                      |
 
 第 3 条的理由：「点了就跳到某个 URL」的控件，业界主流是链接——中键新标签页、复制链接、
 读屏器念成链接，上游那颗三样都做不到。**不做两边同改**：改上游要 `Button asChild`，
@@ -980,11 +1125,11 @@ wave 134 的 `delayMs` 只在设置对话框里用过一次。这一轮拿它去
 
 ### 四、负向验证：第一版锚点被当场抓到太松
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 4 条全绿 | **4 passed (1.2m)**，exit 0 |
-| N1 | 去掉「把 feature 覆盖回开着」那条 | 该终态两条红 | **zh-CN 红、en-US 绿（395ms）** ← 假绿 |
-| N1c | 同一个变异，锚点收紧之后 | 该终态两条红 | **两条都红**（31.0 / 31.1s） |
+| #    | 变异                              | 预期         | 实测                                   |
+| ---- | --------------------------------- | ------------ | -------------------------------------- |
+| 对照 | 无                                | 4 条全绿     | **4 passed (1.2m)**，exit 0            |
+| N1   | 去掉「把 feature 覆盖回开着」那条 | 该终态两条红 | **zh-CN 红、en-US 绿（395ms）** ← 假绿 |
+| N1c  | 同一个变异，锚点收紧之后          | 该终态两条红 | **两条都红**（31.0 / 31.1s）           |
 
 N1 那次假绿是真信号：第一版只钉那句加载文案，而本仓那句的条件是
 `!features.loaded.value || agentCatalog.loading.value`——`/api/features` 还没回来的
@@ -1053,10 +1198,10 @@ tabOrder / tabbablesOnly*   共 4 条
 
 ### 四、负向验证
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 2 条全绿 | **2 passed (57.7s)**，exit 0 |
-| N1 | 去掉 `delayMs` | 该终态两条红 | **2 failed**（31.4/31.5s） |
+| #    | 变异           | 预期         | 实测                         |
+| ---- | -------------- | ------------ | ---------------------------- |
+| 对照 | 无             | 2 条全绿     | **2 passed (57.7s)**，exit 0 |
+| N1   | 去掉 `delayMs` | 该终态两条红 | **2 failed**（31.4/31.5s）   |
 
 两处改动的因果分得开：`- paragraph: Loading...` **只可能由 `<p>` → `<div>` 消掉**，
 其余几行只可能由三处 `v-if` 消掉。
@@ -1066,11 +1211,11 @@ tabOrder / tabbablesOnly*   共 4 条
 `fbed3dde` 写着「红色小字是这份代码库里错误行的既定写法（`actionError`、
 **`settings-session-unavailable`** 都是这个样式）」——**后一个例子是错的**。实测分布：
 
-| 样式 | 处数 |
-| --- | --- |
-| `text-sm text-red-600` | **9** |
+| 样式                                            | 处数                                         |
+| ----------------------------------------------- | -------------------------------------------- |
+| `text-sm text-red-600`                          | **9**                                        |
 | `rounded-md bg-red-50 p-3 text-sm text-red-700` | 4（`settings-session-unavailable` 在这一组） |
-| `text-sm text-red-500` | 1 |
+| `text-sm text-red-500`                          | 1                                            |
 
 **结论不变**（多数写法就是红色小字，上游那一条连颜色都没有），**引的例子举错了**。
 顺带记下：这份代码库里错误行有**两套**样式，本身是一处不一致，**但那不是对照的事**
@@ -1087,6 +1232,7 @@ tabOrder / tabbablesOnly*   共 4 条
 ### 七、下一轮
 
 `delayMs` 现在是一把新尺子，**第一次量的应该是它自己够不够用**：
+
 - 还有哪些屏的「加载中」值得接？判据仍是**上游有没有一段代码在这一支上渲染出东西**，
   外加**线索 278**（新样本里有几行是已决定类的复制品，先 grep 再记账）。
 - 候选：`agents` 列表页、`scheduled-tasks` 列表、`thread-history`——
@@ -1146,10 +1292,10 @@ error 那一支整个不渲染它；本仓把创建键与标签放在状态分�
 
 ### 五、负向验证
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 2 条全绿 | **2 passed (58.5s)**，exit 0 |
-| N1 | 终态的路由 pattern 改成打不中的 | 该终态两条红 | **2 failed**（31.4/31.5s） |
+| #    | 变异                            | 预期         | 实测                         |
+| ---- | ------------------------------- | ------------ | ---------------------------- |
+| 对照 | 无                              | 2 条全绿     | **2 passed (58.5s)**，exit 0 |
+| N1   | 终态的路由 pattern 改成打不中的 | 该终态两条红 | **2 failed**（31.4/31.5s）   |
 
 第三节那处改动的因果**不是靠推的**：同一棵树上跑了两次完整台账，中间只差这一处 `v-if`，
 该终态从 **15 行**掉到 **8 行**，掉掉的正好是 `tablist` / 两个 `tab` /
@@ -1199,10 +1345,10 @@ order             ×1   第 51 个公共节点 React=- radio Vue=- radio [checke
 
 ### 三、那 2 行是什么：探针量到的，不是推的
 
-| 应用 | #0（代码档） | #1（预览档） |
-| --- | --- | --- |
-| Vue | `aria-checked=`**`true`** `state=on` | `aria-checked=false state=off` |
-| React | `aria-checked=false state=off` | `aria-checked=`**`true`** `state=on` |
+| 应用  | #0（代码档）                         | #1（预览档）                         |
+| ----- | ------------------------------------ | ------------------------------------ |
+| Vue   | `aria-checked=`**`true`** `state=on` | `aria-checked=false state=off`       |
+| React | `aria-checked=false state=off`       | `aria-checked=`**`true`** `state=on` |
 
 **预览失败时，本仓选中「代码」，上游仍然选中「预览」。** 机制两边都读过：
 
@@ -1223,10 +1369,10 @@ order             ×1   第 51 个公共节点 React=- radio Vue=- radio [checke
 - 改动前（= wave 131 收工那一跑，同一份代码）：`e2e-parity` **85 passed**，台账 **113 / 77**
 - 改动后：**87 passed (8.1m)**，台账 **121 行 / 79 样本**（`PARITY_ACCEPT_GROW=1`，8 行逐条有名有姓）
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 4 条全绿 | **4 passed (1.4m)**，exit 0 |
-| N1 | 终态的路由 pattern 改成打不中的 | `#preview-failed` 两条红 | **2 failed**（31.4/31.5s），`#default` 两条仍绿 |
+| #    | 变异                            | 预期                     | 实测                                            |
+| ---- | ------------------------------- | ------------------------ | ----------------------------------------------- |
+| 对照 | 无                              | 4 条全绿                 | **4 passed (1.4m)**，exit 0                     |
+| N1   | 终态的路由 pattern 改成打不中的 | `#preview-failed` 两条红 | **2 failed**（31.4/31.5s），`#default` 两条仍绿 |
 
 ### 五、一条新踩坑
 
@@ -1252,15 +1398,15 @@ order             ×1   第 51 个公共节点 React=- radio Vue=- radio [checke
 判据用的是 wave 130 定下的那条：**匹配到的那几份是同一个东西的多份，还是不同的东西。**
 探针把每一份的标签 / testid / 文本 / 祖先链 / 坐标都打了出来，**两个应用逐条相同**。
 
-| 场景 / 终态 | 锚点 | 两份分别是什么 | 判定 |
-| --- | --- | --- | --- |
-| `branch-thread#turn-actions` | `role:button[Branch…]` | 两个回合各一颗图标键（文本都是空） | **正常**，`.first()` 正是被 hover 的那回合 |
-| `branch-thread#turn-actions` | `[data-assistant-turn]` | DIV"First answer" / DIV"Intermediate answer" | **正常**，同上 |
-| `channels#runtime-config-edit` | `text:DingTalk` | SPAN"DingTalk"（侧栏行）/ H2"Modify DingTalk"（对话框标题） | **正常**：这是**场景的 settle 锚点**，钉的就是侧栏那行；终态自己的步骤用的是 `[role=dialog] [data-slot=dialog-title]` |
-| `sidecar-chat` | `text:/^1 (selected text fragment\|个已选文本片段)$/` | DIV / SPAN，**同一段文字的外层与内层** | **正常**：整串正则会同时匹配祖先与后代，两边取的都是外层 |
-| `scheduled-tasks#default` | `schedule-preset` / `schedule-timezone` | 创建表单 / 编辑表单各一份 | **wave 129 已说清并修好** |
-| `artifact-preview` | `text:report.html` | 消息卡 / 面板标题 | **缺陷，wave 130 修好** |
-| `thread-list-infinite-scroll` | `text:Conversation 001` | **侧栏的会话行 / 页面里那张列表的行** | **缺陷** ← 这一轮修 |
+| 场景 / 终态                    | 锚点                                                  | 两份分别是什么                                              | 判定                                                                                                                  |
+| ------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `branch-thread#turn-actions`   | `role:button[Branch…]`                                | 两个回合各一颗图标键（文本都是空）                          | **正常**，`.first()` 正是被 hover 的那回合                                                                            |
+| `branch-thread#turn-actions`   | `[data-assistant-turn]`                               | DIV"First answer" / DIV"Intermediate answer"                | **正常**，同上                                                                                                        |
+| `channels#runtime-config-edit` | `text:DingTalk`                                       | SPAN"DingTalk"（侧栏行）/ H2"Modify DingTalk"（对话框标题） | **正常**：这是**场景的 settle 锚点**，钉的就是侧栏那行；终态自己的步骤用的是 `[role=dialog] [data-slot=dialog-title]` |
+| `sidecar-chat`                 | `text:/^1 (selected text fragment\|个已选文本片段)$/` | DIV / SPAN，**同一段文字的外层与内层**                      | **正常**：整串正则会同时匹配祖先与后代，两边取的都是外层                                                              |
+| `scheduled-tasks#default`      | `schedule-preset` / `schedule-timezone`               | 创建表单 / 编辑表单各一份                                   | **wave 129 已说清并修好**                                                                                             |
+| `artifact-preview`             | `text:report.html`                                    | 消息卡 / 面板标题                                           | **缺陷，wave 130 修好**                                                                                               |
+| `thread-list-infinite-scroll`  | `text:Conversation 001`                               | **侧栏的会话行 / 页面里那张列表的行**                       | **缺陷** ← 这一轮修                                                                                                   |
 
 ### `thread-list-infinite-scroll`：这一屏真正的主角从来没被量过
 
@@ -1282,11 +1428,11 @@ order             ×1   第 51 个公共节点 React=- radio Vue=- radio [checke
 - 改动前（= wave 130 收工那一跑，同一份代码）：`e2e-parity` **85 passed**，台账 **113 / 77**
 - 改动后：**85 passed**，台账 **113 / 77，一行没动** —— 又是一次**加覆盖面不加账**
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 2 条全绿 | **2 passed (57.9s)**，exit 0 |
-| M1 | Vue 页面列表行显示 `thread_id` 而不是标题 | 新锚点红 | **2 failed**（两个维度，31.0~31.2s） |
-| M1b | **同一个变异**，锚点换回旧写法 | 旧锚点不响 | **2 passed，exit 0** ← 决定性 |
+| #    | 变异                                      | 预期       | 实测                                 |
+| ---- | ----------------------------------------- | ---------- | ------------------------------------ |
+| 对照 | 无                                        | 2 条全绿   | **2 passed (57.9s)**，exit 0         |
+| M1   | Vue 页面列表行显示 `thread_id` 而不是标题 | 新锚点红   | **2 failed**（两个维度，31.0~31.2s） |
+| M1b  | **同一个变异**，锚点换回旧写法            | 旧锚点不响 | **2 passed，exit 0** ← 决定性        |
 
 ### 这一类到此结束
 
@@ -1314,12 +1460,12 @@ Select 那条分支进取样面。
 后面，本意是「面板打开了」。但 `getByText` 的**字符串**是子串匹配，消息列表里那张
 文件卡的文字就是整条路径。实测（两个应用逐条相同）：
 
-| 时机 | 锚点 | 匹配数 | `.first()` 的文本 |
-| --- | --- | --- | --- |
-| 点击前 | `text:report.html` | **1** | （那张卡，visible） |
-| 点击后 | `text:report.html` | **2** | `"/artifact-fixtures/report.html"` ← 还是那张卡 |
-| 点击前 | `text:/^report\.html$/` | **0** | — |
-| 点击后 | `text:/^report\.html$/` | **1** | `"report.html"` ← 面板标题 |
+| 时机   | 锚点                    | 匹配数 | `.first()` 的文本                               |
+| ------ | ----------------------- | ------ | ----------------------------------------------- |
+| 点击前 | `text:report.html`      | **1**  | （那张卡，visible）                             |
+| 点击后 | `text:report.html`      | **2**  | `"/artifact-fixtures/report.html"` ← 还是那张卡 |
+| 点击前 | `text:/^report\.html$/` | **0**  | —                                               |
+| 点击后 | `text:/^report\.html$/` | **1**  | `"report.html"` ← 面板标题                      |
 
 这一步既没等到面板，几何档那一行量的也是消息卡——**而那张卡 `settle` 已经量过一次**。
 改成整串匹配的正则。
@@ -1362,11 +1508,11 @@ REACT  previewFailed en=0 zh=0   iframe=1   pre=0   /artifacts 响应 0 条
 **台账没变，但那两个 0 的含义变了**：几何档从「量消息卡」换成「量面板标题」，
 `artifact-panel-resize` 多了一个此前根本不存在的取样点。**加了覆盖面而没有加账。**
 
-| # | 变异 | 预期 | 实测 |
-| --- | --- | --- | --- |
-| 对照 | 无 | 5 条全绿 | **5 passed (1.1m)**，exit 0 |
-| M1 | Vue 面板标题渲染整条路径（`{{ filename }}` → `{{ filepath }}`） | 新锚点红 | **5 failed**（三个维度 + 另一个场景，31.2~31.4s 超时） |
-| M1b | **同一个变异**，锚点换回旧写法 | 旧锚点不响 | **5 passed，exit 0** ← 决定性 |
+| #    | 变异                                                            | 预期       | 实测                                                   |
+| ---- | --------------------------------------------------------------- | ---------- | ------------------------------------------------------ |
+| 对照 | 无                                                              | 5 条全绿   | **5 passed (1.1m)**，exit 0                            |
+| M1   | Vue 面板标题渲染整条路径（`{{ filename }}` → `{{ filepath }}`） | 新锚点红   | **5 failed**（三个维度 + 另一个场景，31.2~31.4s 超时） |
+| M1b  | **同一个变异**，锚点换回旧写法                                  | 旧锚点不响 | **5 passed，exit 0** ← 决定性                          |
 
 ### 六、下一轮
 
@@ -1399,12 +1545,12 @@ REACT  previewFailed en=0 zh=0   iframe=1   pre=0   /artifacts 响应 0 条
 
 **读数（临时探针，两个应用各打一遍匹配数）**：
 
-| 应用 | 场景/终态 | 锚点 | 匹配数 |
-| --- | --- | --- | --- |
-| Vue / React | `scheduled-tasks#default` | `testId:schedule-preset` | **2 / 2** |
-| Vue / React | `scheduled-tasks#default` | `testId:schedule-timezone` | **2 / 2** |
-| Vue / React | 同上，改成 `>> nth=1` | | 1 / 1 |
-| Vue / React | `scheduled-tasks#load-failed`（没开编辑表单） | 两个 testId | 1 / 1 |
+| 应用        | 场景/终态                                     | 锚点                       | 匹配数    |
+| ----------- | --------------------------------------------- | -------------------------- | --------- |
+| Vue / React | `scheduled-tasks#default`                     | `testId:schedule-preset`   | **2 / 2** |
+| Vue / React | `scheduled-tasks#default`                     | `testId:schedule-timezone` | **2 / 2** |
+| Vue / React | 同上，改成 `>> nth=1`                         |                            | 1 / 1     |
+| Vue / React | `scheduled-tasks#load-failed`（没开编辑表单） | 两个 testId                | 1 / 1     |
 
 **改法**：创建表单那两份挪去 `settle`（它们本来就是页面加载态的控件），
 编辑表单那两份用 `>> nth=1` 显式取第二份——**编辑表单的 schedule 块这才第一次
@@ -1417,12 +1563,12 @@ REACT  previewFailed en=0 zh=0   iframe=1   pre=0   /artifacts 响应 0 条
 （grep 一下就知道），否则就是本仓独有的分支」。四个候选逐条查完，
 **判据在其中一条上给出相反的结论**：
 
-| 候选 | 上游词典有这条 key？ | 上游真的渲染这一支？ | 结论 |
-| --- | --- | --- | --- |
-| `scheduledTasks.loadFailed` | 有（`en-US.ts:381`） | 有（`page.tsx:339`），**两边同一个 testid** | 共有 ✅ |
-| `agents.loadFailed` | 没有 | **没有**——上游 `agent-gallery.tsx:14` 只解构 `{agents,isLoading}`，error 整个丢掉 | 本仓独有 |
-| `settings.account.loadFailed` | 没有 | **没有**——上游账户面板从 `useAuth()` 拿 user，没有独立的账户请求 | 本仓独有 |
-| `artifacts.loadFailed` | 没有 | **有！**`ArtifactPreviewError`（`artifact-file-detail.tsx:656/731`），用的 key 是 `artifactPreview.previewFailed`，**两边词典都有** | 共有 ❌**被判据误判** |
+| 候选                          | 上游词典有这条 key？ | 上游真的渲染这一支？                                                                                                                | 结论                  |
+| ----------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `scheduledTasks.loadFailed`   | 有（`en-US.ts:381`） | 有（`page.tsx:339`），**两边同一个 testid**                                                                                         | 共有 ✅               |
+| `agents.loadFailed`           | 没有                 | **没有**——上游 `agent-gallery.tsx:14` 只解构 `{agents,isLoading}`，error 整个丢掉                                                   | 本仓独有              |
+| `settings.account.loadFailed` | 没有                 | **没有**——上游账户面板从 `useAuth()` 拿 user，没有独立的账户请求                                                                    | 本仓独有              |
+| `artifacts.loadFailed`        | 没有                 | **有！**`ArtifactPreviewError`（`artifact-file-detail.tsx:656/731`），用的 key 是 `artifactPreview.previewFailed`，**两边词典都有** | 共有 ❌**被判据误判** |
 
 **正确的判据：上游有没有一段代码在这个失败分支上渲染出东西——grep 的对象是渲染点，不是词典。**
 两边的 `ArtifactPreviewError` 结构逐行同形，唯一差别是本仓多一个
@@ -1498,11 +1644,11 @@ REACT  previewFailed en=0 zh=0   iframe=1   pre=0   /artifacts 响应 0 条
 
 ### 二、量出来的 12 行
 
-| 行 | 定性 |
-| --- | --- |
-| `focus` × 2 | 已知类（wave 94 的 settings 深链焦点，清单第 5 条） |
-| `tabOrder` × 2 + `tabbablesOnlyReact` × 2 | 已知类（ScrollArea，清单第 6 条） |
-| **`requestsOnlyReact` × 6** | **新的**：同一次 500，**上游发 3 次请求、本仓发 1 次** |
+| 行                                        | 定性                                                   |
+| ----------------------------------------- | ------------------------------------------------------ |
+| `focus` × 2                               | 已知类（wave 94 的 settings 深链焦点，清单第 5 条）    |
+| `tabOrder` × 2 + `tabbablesOnlyReact` × 2 | 已知类（ScrollArea，清单第 6 条）                      |
+| **`requestsOnlyReact` × 6**               | **新的**：同一次 500，**上游发 3 次请求、本仓发 1 次** |
 
 ### 三、顺着那 6 行查到一句假话
 
@@ -1598,10 +1744,10 @@ REACT  previewFailed en=0 zh=0   iframe=1   pre=0   /artifacts 响应 0 条
 
 同一份快照，行归一化的每一行 `trimStart()` 之后必须与树归一化的 `body` 逐个相等。
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | 改共享规则（`-v-…` → `«idx»`） | 规则自己的用例红、**同源用例绿** | 正是如此（两边一起变了） |
-| 2 | 让树归一化跳过共享规则 | 同源用例红 | **红** |
+| #   | 变异                           | 期望                             | 实测                     |
+| --- | ------------------------------ | -------------------------------- | ------------------------ |
+| 1   | 改共享规则（`-v-…` → `«idx»`） | 规则自己的用例红、**同源用例绿** | 正是如此（两边一起变了） |
+| 2   | 让树归一化跳过共享规则         | 同源用例红                       | **红**                   |
 
 ### 三、读数
 
@@ -1616,11 +1762,11 @@ verify 0 / 265 文件 / **2205** 单测；e2e-parity 81，**台账 95 行 / 73 �
 
 ### 一、三步读数
 
-| wave | 读数 |
-| --- | --- |
-| 122 | `normalizeAriaSnapshot` 的 `\s{2,}` → 一个空格，**把每层缩进都塌掉**（7692 行里 6698） |
-| 123 | 在**保住缩进**的数据上重量：**6 行**——wave 99 的 0 是数据造成的 |
-| 124 | 6 行的根因：工具条被渲染在 `role="log"` 里；**其余六档全是 0** |
+| wave | 读数                                                                                   |
+| ---- | -------------------------------------------------------------------------------------- |
+| 122  | `normalizeAriaSnapshot` 的 `\s{2,}` → 一个空格，**把每层缩进都塌掉**（7692 行里 6698） |
+| 123  | 在**保住缩进**的数据上重量：**6 行**——wave 99 的 0 是数据造成的                        |
+| 124  | 6 行的根因：工具条被渲染在 `role="log"` 里；**其余六档全是 0**                         |
 
 ### 二、改动
 
@@ -1681,11 +1827,11 @@ Expected -2 / Received +10
 
 ### 三、改前 / 改后（同一把尺子）
 
-| 量 | 改前 | 改后 |
-| --- | --- | --- |
-| 深度差异（wave 123 那把探针） | **6 行** | **0 行** |
-| 台账 | 95 行 / 73 样本 | **一行没动** |
-| e2e-visual | 8 张 | 8 张，**一张没重录**（fixed + 显式 left/top，挪 DOM 不动布局） |
+| 量                            | 改前            | 改后                                                           |
+| ----------------------------- | --------------- | -------------------------------------------------------------- |
+| 深度差异（wave 123 那把探针） | **6 行**        | **0 行**                                                       |
+| 台账                          | 95 行 / 73 样本 | **一行没动**                                                   |
+| e2e-visual                    | 8 张            | 8 张，**一张没重录**（fixed + 显式 left/top，挪 DOM 不动布局） |
 
 ### 四、这条线索（122 → 124）的完整形状，值得记
 
@@ -1755,14 +1901,14 @@ Expected -2 / Received +10
 
 ### 一、实测（探针 + 控制组，7692 行）
 
-| 规则 | 命中 |
-| --- | --- |
+| 规则                                    | 命中               |
+| --------------------------------------- | ------------------ |
 | `collapse-space`（`\s{2,}` → 一个空格） | **6698 次（87%）** |
-| `trailing-space` | 0 |
-| `reka-radix-id`（**有注释**） | 0 |
-| `v-index`（**有注释**） | 0 |
-| `blank-line` | 0 |
-| `generic-line`（`- generic` 过滤） | 0 |
+| `trailing-space`                        | 0                  |
+| `reka-radix-id`（**有注释**）           | 0                  |
+| `v-index`（**有注释**）                 | 0                  |
+| `blank-line`                            | 0                  |
+| `generic-line`（`- generic` 过滤）      | 0                  |
 
 **有注释的那几条一次都没响过；真正在抹信息的那一条此前没有注释。**
 控制组的 7692 行证明探针在跑（线索 195）。
@@ -1865,11 +2011,11 @@ include_files 48 / include_diff 48 / limit 8 / task_id 4 / offset 4 / event_type
 
 ### 三、负向验证
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | 从 `KNOWN_IDS` 拿掉一个 | 红 | 红（点名那一个） |
-| 2 | `KNOWN_IDS` 放一个源码里没有的 | 红 | 红（死配置） |
-| 3 | 看 HEAD 的 `KNOWN_IDS` 成员清单 | — | 实测只有 4 个，三个确实漏着 |
+| #   | 变异                            | 期望 | 实测                        |
+| --- | ------------------------------- | ---- | --------------------------- |
+| 1   | 从 `KNOWN_IDS` 拿掉一个         | 红   | 红（点名那一个）            |
+| 2   | `KNOWN_IDS` 放一个源码里没有的  | 红   | 红（死配置）                |
+| 3   | 看 HEAD 的 `KNOWN_IDS` 成员清单 | —    | 实测只有 4 个，三个确实漏着 |
 
 ### 四、一条值得记的读数
 
@@ -1910,20 +2056,20 @@ pnpm-workspace.yaml     - "../frontend"                  → BLOCKING 0
 
 ### 四、负向验证（3 条）
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | `package.json` 放不带斜杠的 `file:` 依赖（新脚本） | 红 | 红，点名到行 |
-| 2 | 同上（**HEAD 的脚本**） | **绿** | **绿（洞）** |
-| 3 | `pnpm-workspace.yaml` 指向兄弟应用（新脚本） | 红 | 红 |
+| #   | 变异                                               | 期望   | 实测         |
+| --- | -------------------------------------------------- | ------ | ------------ |
+| 1   | `package.json` 放不带斜杠的 `file:` 依赖（新脚本） | 红     | 红，点名到行 |
+| 2   | 同上（**HEAD 的脚本**）                            | **绿** | **绿（洞）** |
+| 3   | `pnpm-workspace.yaml` 指向兄弟应用（新脚本）       | 红     | 红           |
 
 ### 五、判据四步的覆盖，到这一轮为止
 
-| 步 | 谁在验 | 状态 |
-| --- | --- | --- |
-| install | `standalone-check` 的**安装期清单**那一档（wave 119 起） | ✅ |
-| build | 有意不加（wave 117 量过：配置级依赖已被 test 接住） | 已决定 |
-| test | `standalone-sim` 默认跑**整套** vitest（wave 116 起） | ✅ |
-| e2e | `standalone-sim --with-e2e` 跑 mock + backend + parity（wave 118 起） | ✅ |
+| 步      | 谁在验                                                                | 状态   |
+| ------- | --------------------------------------------------------------------- | ------ |
+| install | `standalone-check` 的**安装期清单**那一档（wave 119 起）              | ✅     |
+| build   | 有意不加（wave 117 量过：配置级依赖已被 test 接住）                   | 已决定 |
+| test    | `standalone-sim` 默认跑**整套** vitest（wave 116 起）                 | ✅     |
+| e2e     | `standalone-sim --with-e2e` 跑 mock + backend + parity（wave 118 起） | ✅     |
 
 **这张表第一次四格都有着落。** 下一轮要接着挖，得换一条线索——
 这一条（判据自己有没有被验）到此为止。
@@ -1963,12 +2109,12 @@ make e2e-backend  2+5+2+3+3+5+1+1           exit 0
 
 ### 四、判据现在的覆盖情况（一次说清）
 
-| 判据里的四步 | 谁在验 | 状态 |
-| --- | --- | --- |
-| install | 无（`pnpm install` 不读兄弟应用） | 没有专门的检查 |
-| build | 无（wave 117 量过：**配置级依赖已被 test 接住**，只有 build 才看得见的举不出例子） | 有意不加 |
-| test | `standalone-sim` 默认就跑**整套** vitest（wave 116 起） | ✅ |
-| e2e | `standalone-sim --with-e2e` 跑 e2e-mock + e2e-backend + e2e-parity（wave 118 起） | ✅ |
+| 判据里的四步 | 谁在验                                                                             | 状态           |
+| ------------ | ---------------------------------------------------------------------------------- | -------------- |
+| install      | 无（`pnpm install` 不读兄弟应用）                                                  | 没有专门的检查 |
+| build        | 无（wave 117 量过：**配置级依赖已被 test 接住**，只有 build 才看得见的举不出例子） | 有意不加       |
+| test         | `standalone-sim` 默认就跑**整套** vitest（wave 116 起）                            | ✅             |
+| e2e          | `standalone-sim --with-e2e` 跑 e2e-mock + e2e-backend + e2e-parity（wave 118 起）  | ✅             |
 
 **install 那一档是这张表上唯一没人碰过的**——下一轮要接着做，先问 wave 117 那条判据：
 「有没有一种失效，是它能看见而现有检查看不见的」。
@@ -2061,13 +2207,13 @@ test 那一步改成**跑整套**，并把整套的结论单独记一行（表�
 
 ### 一、读数（负载 20~115，全部用 `--repeat-each`）
 
-| # | 抖动 | 跑法 | 结果 |
-| --- | --- | --- | --- |
-| 2 | `channels.spec.ts` 的 401 → `/login?next=` | ×8 | **8 / 8 绿** |
-| 3 | `thread-list-infinite-scroll.spec.ts`（整份，3 条用例） | ×5 | **15 / 15 绿** |
-| 4 | `i18n-theme.spec.ts` 的 locale 切换 | ×6 | **6 / 6 绿** |
-| 5 | `thread-history.spec.ts` 的乐观消息 | ×8 | **8 / 8 绿** |
-| 6 | `ui-primitives-a11y.spec.ts` 的 hover tooltip | — | **wave 113 已修**（修前同一旋钮 1/10 红） |
+| #   | 抖动                                                    | 跑法 | 结果                                      |
+| --- | ------------------------------------------------------- | ---- | ----------------------------------------- |
+| 2   | `channels.spec.ts` 的 401 → `/login?next=`              | ×8   | **8 / 8 绿**                              |
+| 3   | `thread-list-infinite-scroll.spec.ts`（整份，3 条用例） | ×5   | **15 / 15 绿**                            |
+| 4   | `i18n-theme.spec.ts` 的 locale 切换                     | ×6   | **6 / 6 绿**                              |
+| 5   | `thread-history.spec.ts` 的乐观消息                     | ×8   | **8 / 8 绿**                              |
+| 6   | `ui-primitives-a11y.spec.ts` 的 hover tooltip           | —    | **wave 113 已修**（修前同一旋钮 1/10 红） |
 
 **37 次跑，一次没红。** 而同一把旋钮在 wave 113 修之前的第六条上 10 次红 1 次
 ——**旋钮是有效的，这四条就是复现不出来**。
@@ -2113,10 +2259,10 @@ for i in $(seq 1 8); do (sh -c 'end=$((SECONDS+260)); while [ $SECONDS -lt $end 
 
 ### 二、wave 113 那个修法的受控前后对照（这才是它欠的证据）
 
-| 版本 | load | `--repeat-each=10` |
-| --- | --- | --- |
-| wave 113 之前（一次 `hover()`） | ~13 | **1 失败 / 9 通过** |
-| wave 113 之后（`toPass` 里重新 hover） | 20 → 107 | **10 通过** |
+| 版本                                   | load     | `--repeat-each=10`  |
+| -------------------------------------- | -------- | ------------------- |
+| wave 113 之前（一次 `hover()`）        | ~13      | **1 失败 / 9 通过** |
+| wave 113 之后（`toPass` 里重新 hover） | 20 → 107 | **10 通过**         |
 
 wave 113 当时用的是「跑完套件之后碰运气」的负载，这一轮是**按需造出来的**，
 而且后一组的负载还高得多。
@@ -2154,6 +2300,7 @@ W113_PROBE moved dx=0.0 dy=0.0 | 600ms top=BUTTON… closestTrigger=yes openTrig
 ```
 
 三件事：
+
 - 按钮**没有移动**（dx=dy=0），命中测试干净——**不是**「点歪了」或「被盖住」；
 - tooltip 是**延时开**的，安静时也要**约 600ms 的持续悬停**（Reka 的 `delayDuration`）；
 - 失败时的症状是 `element(s) not found` 一直到超时，**而 `hover()` 那一步本身不报错**。
@@ -2171,10 +2318,10 @@ W113_PROBE moved dx=0.0 dy=0.0 | 600ms top=BUTTON… closestTrigger=yes openTrig
 .toPass({ timeout: 20_000 })`——每一轮**重新 hover 一次**。
 **断言一个字没松**：tooltip 仍必须出现、仍必须念出同一条 label。
 
-| 条件 | 改动前 | 改动后 |
-| --- | --- | --- |
+| 条件                                             | 改动前              | 改动后                   |
+| ------------------------------------------------ | ------------------- | ------------------------ |
 | 跑完四个套件之后（load 7~9），`--repeat-each=10` | **3 失败 / 7 通过** | **10 通过**（load 7.26） |
-| 机器安静时 | 10/10 | 10/10 |
+| 机器安静时                                       | 10/10               | 10/10                    |
 
 **只有第一行算数**——安静时两边都绿，那组比不出东西（wave 112 差点把另一组
 被负载混淆的对照读成因果，教训在那一节）。
@@ -2232,13 +2379,13 @@ devDependencies 里」）、`SKIPPED_DIRS`（构建产物，死条目无害）�
 
 ### 五、负向验证（5 条）
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | `SUITE_INFRASTRUCTURE` 放一个改名的入口 | 红 | 红 |
-| 2 | `SKIPPED_PREFIXES` 放一个不存在的目录 | 红 | 红 |
-| 3 | `WATCHED` 放一个不存在的路径（新脚本） | 红 | 红 exit 1 |
-| 4 | 同上（**HEAD 的脚本**） | **绿** | **绿（洞）**，还打印「无漂移」 |
-| 5 | `PRODUCT_ROOTS` 放一个改名的目录 | 红 | 红（抛错） |
+| #   | 变异                                    | 期望   | 实测                           |
+| --- | --------------------------------------- | ------ | ------------------------------ |
+| 1   | `SUITE_INFRASTRUCTURE` 放一个改名的入口 | 红     | 红                             |
+| 2   | `SKIPPED_PREFIXES` 放一个不存在的目录   | 红     | 红                             |
+| 3   | `WATCHED` 放一个不存在的路径（新脚本）  | 红     | 红 exit 1                      |
+| 4   | 同上（**HEAD 的脚本**）                 | **绿** | **绿（洞）**，还打印「无漂移」 |
+| 5   | `PRODUCT_ROOTS` 放一个改名的目录        | 红     | 红（抛错）                     |
 
 ### 六、`e2e-mock` 第一次跑红了一条，如实记
 
@@ -2299,12 +2446,12 @@ wave 69 记的理由是「改动面板双视图，本仓那一屏结构不同」
 
 ### 五、负向验证（4 条，其中一条是历史证据）
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | EXEMPT 里放回 `magicui` | 红 | 红 exit 1 + ⚠ |
-| 2 | VERIFIED 里放回 `FileMinus` | 红 | 红 exit 1 + ⚠ |
-| 3 | standalone 里加一个不存在的 id | 红 | 红「standalone 里点名的套件已经不存在了」 |
-| 4 | **历史证据**：wave 106/109/110 的 icon-parity 日志 | 绿 | **绿（洞）**——⚠ 一直在，`EXIT=0` |
+| #   | 变异                                               | 期望 | 实测                                      |
+| --- | -------------------------------------------------- | ---- | ----------------------------------------- |
+| 1   | EXEMPT 里放回 `magicui`                            | 红   | 红 exit 1 + ⚠                             |
+| 2   | VERIFIED 里放回 `FileMinus`                        | 红   | 红 exit 1 + ⚠                             |
+| 3   | standalone 里加一个不存在的 id                     | 红   | 红「standalone 里点名的套件已经不存在了」 |
+| 4   | **历史证据**：wave 106/109/110 的 icon-parity 日志 | 绿   | **绿（洞）**——⚠ 一直在，`EXIT=0`          |
 
 ## 上一轮（wave 110）做了什么：**独立性判据自己身上的两处「登记了就不再检查」**
 
@@ -2317,7 +2464,13 @@ wave 69 记的理由是「改动面板双视图，本仓那一屏结构不同」
 
 ```js
 for (const file of data) {
-  results.push({ file, kind: "data", ok: true, skipped: true, detail: "纯数据，没有可执行行为" });
+  results.push({
+    file,
+    kind: "data",
+    ok: true,
+    skipped: true,
+    detail: "纯数据，没有可执行行为",
+  });
 }
 ```
 
@@ -2351,12 +2504,12 @@ for (const file of data) {
 
 ### 三、负向验证（4 条，一条变异同时验两处）
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | 表里加一条既过期、又标成 `data` 的 `.ts`（新 `standalone-check`） | 红 | 红「过期的登记」exit 1 |
-| 2 | 同上（**HEAD 的 `standalone-check`**） | **绿** | **绿（洞）** |
-| 3 | 同上（新 `standalone-sim`） | 红 | 红 `✗ [data]`，红 1 条 exit 2 |
-| 4 | 同上（**HEAD 的 `standalone-sim`**） | **绿** | **绿（洞）**「跑过 13 / 未跑 6 / 红 0」 |
+| #   | 变异                                                              | 期望   | 实测                                    |
+| --- | ----------------------------------------------------------------- | ------ | --------------------------------------- |
+| 1   | 表里加一条既过期、又标成 `data` 的 `.ts`（新 `standalone-check`） | 红     | 红「过期的登记」exit 1                  |
+| 2   | 同上（**HEAD 的 `standalone-check`**）                            | **绿** | **绿（洞）**                            |
+| 3   | 同上（新 `standalone-sim`）                                       | 红     | 红 `✗ [data]`，红 1 条 exit 2           |
+| 4   | 同上（**HEAD 的 `standalone-sim`**）                              | **绿** | **绿（洞）**「跑过 13 / 未跑 6 / 红 0」 |
 
 还原后 `diff -q` 逐字节一致，探针脚本已删。
 
@@ -2367,10 +2520,10 @@ for (const file of data) {
 
 ### 一、订正：CPU 节流复现不了第五、第六条
 
-| 抖动 | 30x | 更高 |
-| --- | --- | --- |
+| 抖动                                                           | 30x      | 更高               |
+| -------------------------------------------------------------- | -------- | ------------------ |
 | #5 `thread-history.spec.ts`（wave 66，`element(s) not found`） | 绿 43.4s | **60x 仍绿** 51.8s |
-| #6 `ui-primitives-a11y.spec.ts`（wave 33，hover tooltip） | 绿 42.8s | **70x 仍绿** 55.1s |
+| #6 `ui-primitives-a11y.spec.ts`（wave 33，hover tooltip）      | 绿 42.8s | **70x 仍绿** 55.1s |
 
 **原因**：节流只模拟「页面脚本执行慢」，模拟不了真实负载下「服务端也慢 /
 进程被抢占 / 磁盘被占」。第四条能复现，是因为它的瓶颈恰好在页内（水合 + 对话框渲染）。
@@ -2429,11 +2582,11 @@ await cdp.send("Emulation.setCPUThrottlingRate", { rate: 30 });
 拿**第四条**（`tests/e2e/i18n-theme.spec.ts`，wave 54 新增，症状
 `element is not visible / not stable`）做实验：
 
-| 节流 | 结果 |
-| --- | --- |
-| 20x | 绿（45.8s） |
-| 30x | 绿，但**第一条 `expect(dialog).toBeVisible()` 实测 3832ms** |
-| 50x | **红**——红在第 54 行那条 dialog 断言上，`Timeout: 5000ms` |
+| 节流 | 结果                                                        |
+| ---- | ----------------------------------------------------------- |
+| 20x  | 绿（45.8s）                                                 |
+| 30x  | 绿，但**第一条 `expect(dialog).toBeVisible()` 实测 3832ms** |
+| 50x  | **红**——红在第 54 行那条 dialog 断言上，`Timeout: 5000ms`   |
 
 ### 二、机制：不是「断言钉错对象」，是预算给小了
 
@@ -2508,7 +2661,11 @@ BEHAVIOR_CONTRACTS 的组数、`516 条消息` **都已经有机器钉着**；
 
 ```ts
 let app: string;
-try { app = read("../backend/app/gateway/app.py"); } catch { return; }
+try {
+  app = read("../backend/app/gateway/app.py");
+} catch {
+  return;
+}
 ```
 
 它想表达的是「后端不在 checkout 里就跳过」，实际吃掉的是**任何**读取失败——
@@ -2575,16 +2732,16 @@ validated next path」——期望 `/workspace/chats/safe?view=1`，实际 `/wor
 
 ### 七、负向验证（8 条；7 条期望红、1 条期望绿）
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | 后端 `RunStatus` 多一个 `paused` | 红 | 红 |
-| 2 | 本仓表删掉 `timeout` | 红 | 红 |
-| 3a | 后端 `app/gateway/app.py` 挪走（**HEAD 的 doc-facts**） | **绿** | **绿（洞）** |
-| 3b | 同上（改动后的 doc-facts） | 红 | 红「后端挪了文件」 |
-| 4 | `pending` 映射成 `failed` | 红 | 红 |
-| 5 | 后端 `class RunStatus` 改名 | 红 | 红（形状断言，不是静默跳过） |
-| 6 | **`backend/` 整个移走** | 绿且明确跳过 | 绿，**3 skipped**（不是假绿） |
-| 7 | login 把 `navigateTo(redirectPath)` 写死成 `/workspace` | 红 | 红（收到 `/workspace/chats/new`） |
+| #   | 变异                                                    | 期望         | 实测                              |
+| --- | ------------------------------------------------------- | ------------ | --------------------------------- |
+| 1   | 后端 `RunStatus` 多一个 `paused`                        | 红           | 红                                |
+| 2   | 本仓表删掉 `timeout`                                    | 红           | 红                                |
+| 3a  | 后端 `app/gateway/app.py` 挪走（**HEAD 的 doc-facts**） | **绿**       | **绿（洞）**                      |
+| 3b  | 同上（改动后的 doc-facts）                              | 红           | 红「后端挪了文件」                |
+| 4   | `pending` 映射成 `failed`                               | 红           | 红                                |
+| 5   | 后端 `class RunStatus` 改名                             | 红           | 红（形状断言，不是静默跳过）      |
+| 6   | **`backend/` 整个移走**                                 | 绿且明确跳过 | 绿，**3 skipped**（不是假绿）     |
+| 7   | login 把 `navigateTo(redirectPath)` 写死成 `/workspace` | 红           | 红（收到 `/workspace/chats/new`） |
 
 后端文件逐个 `diff -q` 还原确认；`backend/` 已移回原位。
 
@@ -2614,13 +2771,13 @@ validated next path」——期望 `/workspace/chats/safe?view=1`，实际 `/wor
 按「数量词 + 量词 + `：` + **两个以上**反引号项」把 ARCHITECTURE.md 扫一遍，
 恰好五句：
 
-| 文档那句 | 源码那侧 | wave 106 之前 |
-| --- | --- | --- |
-| `AgentErrorKind` 九种 | `unionMembers(errors.ts)` | 双向 ✅ |
-| 角色四种 | `unionMembers(message.ts)` | **只查一半** |
-| 四个文件各管一段 | `readdirSync(src/transport/)` | **没人钉** |
-| 九个状态 | `RunSessionState` 的 `status:` | **只查一半** |
-| 会话向外只发三种输出 | `SessionOutput` 的 `kind:` | **没人钉** |
+| 文档那句              | 源码那侧                       | wave 106 之前 |
+| --------------------- | ------------------------------ | ------------- |
+| `AgentErrorKind` 九种 | `unionMembers(errors.ts)`      | 双向 ✅       |
+| 角色四种              | `unionMembers(message.ts)`     | **只查一半**  |
+| 四个文件各管一段      | `readdirSync(src/transport/)`  | **没人钉**    |
+| 九个状态              | `RunSessionState` 的 `status:` | **只查一半**  |
+| 会话向外只发三种输出  | `SessionOutput` 的 `kind:`     | **没人钉**    |
 
 「只查一半」是什么样：数量那条比的是**数量词**与源码条数、列表本身不参与计数，
 「每个成员都被点名」又只从源码一侧看——于是**文档里躺一个源码没有的成员，
@@ -2709,28 +2866,28 @@ MISMATCH 8 → 实际 9   app/core/threads/utils.ts
 期望绿的那四条不是漏网，它们是**证明洞是真的**的实验：同一个变异在改动前后
 一绿一红。
 
-| # | 变异 | 期望 | 实测 |
-| --- | --- | --- | --- |
-| 1 | 「九个状态」多列一个源码没有的 `paused`、数量词不动（HEAD 守卫） | **绿** | **绿（洞）** |
-| 2 | 同上（新守卫） | 红 | 红 |
-| 3 | 源码 `SessionOutput` 加一个 kind | 红 | 红 |
-| 4 | 文档新增一句没登记的枚举 | 红 | 红 |
-| 5 | 登记表删掉 transport 那条 | 红 | 红 |
-| 6 | 文档把「会话向外只发…」整句改写 | 红 | 红 |
-| 7 | 文档整句删掉（登记了、文档找不到） | 红 | 红（「没有恰好命中一句」）|
-| 8 | 文档点名一个源码没有的 controller | 红 | 红 |
-| 9 | `SECTION_ICONS` 多一个键（新写法） | 红 | 红 TS2353 |
-| 10 | 同上，退回 `as const`（老写法） | **绿** | **绿（洞）** |
-| 11 | `SETTINGS_SECTIONS` 删掉 `tools` | 红 | 红 TS2353 + TS2367 |
-| 12 | `contracts/` 多一份契约（改动前的脚本） | **绿** | **绿（洞）** |
-| 13 | 同上（改动后） | 红 | 红 |
-| 14 | `CONSUMED` 少一份 | 红 | 红 |
-| 15 | `NOT_CONSUMED` 里有盘上没有的 | 红 | 红 |
-| 16 | `threads/utils.ts` 头写「等 8 个」（HEAD 守卫） | **绿** | **绿（洞）** |
-| 17 | 同上（新守卫） | 红 | 红 |
-| 18 | 另一份写数量的文件加一个导出、数字不动 | 红 | 红 |
-| 19 | 全仓「等 N 个」都拿掉 | 红（形状断言）| 红 |
-| 20 | settings 分区顺序对调 → `make e2e-parity` | 红 | 红（`order` 档 8 行）|
+| #   | 变异                                                             | 期望           | 实测                       |
+| --- | ---------------------------------------------------------------- | -------------- | -------------------------- |
+| 1   | 「九个状态」多列一个源码没有的 `paused`、数量词不动（HEAD 守卫） | **绿**         | **绿（洞）**               |
+| 2   | 同上（新守卫）                                                   | 红             | 红                         |
+| 3   | 源码 `SessionOutput` 加一个 kind                                 | 红             | 红                         |
+| 4   | 文档新增一句没登记的枚举                                         | 红             | 红                         |
+| 5   | 登记表删掉 transport 那条                                        | 红             | 红                         |
+| 6   | 文档把「会话向外只发…」整句改写                                  | 红             | 红                         |
+| 7   | 文档整句删掉（登记了、文档找不到）                               | 红             | 红（「没有恰好命中一句」） |
+| 8   | 文档点名一个源码没有的 controller                                | 红             | 红                         |
+| 9   | `SECTION_ICONS` 多一个键（新写法）                               | 红             | 红 TS2353                  |
+| 10  | 同上，退回 `as const`（老写法）                                  | **绿**         | **绿（洞）**               |
+| 11  | `SETTINGS_SECTIONS` 删掉 `tools`                                 | 红             | 红 TS2353 + TS2367         |
+| 12  | `contracts/` 多一份契约（改动前的脚本）                          | **绿**         | **绿（洞）**               |
+| 13  | 同上（改动后）                                                   | 红             | 红                         |
+| 14  | `CONSUMED` 少一份                                                | 红             | 红                         |
+| 15  | `NOT_CONSUMED` 里有盘上没有的                                    | 红             | 红                         |
+| 16  | `threads/utils.ts` 头写「等 8 个」（HEAD 守卫）                  | **绿**         | **绿（洞）**               |
+| 17  | 同上（新守卫）                                                   | 红             | 红                         |
+| 18  | 另一份写数量的文件加一个导出、数字不动                           | 红             | 红                         |
+| 19  | 全仓「等 N 个」都拿掉                                            | 红（形状断言） | 红                         |
+| 20  | settings 分区顺序对调 → `make e2e-parity`                        | 红             | 红（`order` 档 8 行）      |
 
 还原后逐个 `diff -q` 逐字节一致；临时契约文件已删，`contracts/` 干净。
 
@@ -2796,13 +2953,13 @@ tests/e2e/utils/mock-api.ts                  ：【主要导出】点名了 MOCK
 
 ### 四、负向验证（5 条，全部真红）
 
-| 变异 | 期望 | 实测 |
-| --- | --- | --- |
-| 从 SCAN_ROOTS 删掉 tests | 红 | **红** |
-| 从 EXCLUDED_ROOTS 删掉 baseline | 红 | **红** |
-| 新增一个没表态的顶层目录 | 红 | **红** |
-| 把某份 spec 的【主要导出】改回被测符号 | 红 | **红**（证明扩面真生效） |
-| EXCLUDED_ROOTS 的理由写成空话 | 红 | **红** |
+| 变异                                   | 期望 | 实测                     |
+| -------------------------------------- | ---- | ------------------------ |
+| 从 SCAN_ROOTS 删掉 tests               | 红   | **红**                   |
+| 从 EXCLUDED_ROOTS 删掉 baseline        | 红   | **红**                   |
+| 新增一个没表态的顶层目录               | 红   | **红**                   |
+| 把某份 spec 的【主要导出】改回被测符号 | 红   | **红**（证明扩面真生效） |
+| EXCLUDED_ROOTS 的理由写成空话          | 红   | **红**                   |
 
 还原后 `diff -q` 逐字节一致，临时目录已清理。
 
@@ -2857,13 +3014,13 @@ if (!/writeFileSync|writeFile\(/.test(text)) { … }
 
 ### 四、负向验证（5 条，全部真红；其中一条第一次是假绿）
 
-| 变异 | 期望 | 实测 |
-| --- | --- | --- |
-| 新增一份没登记的 baseline | 红 | **红** |
-| 从 HAND_MAINTAINED 删掉一份 | 红 | **红** |
-| 生成器文件不存在 | 红 | **红** |
-| 生成器存在但不提这份 baseline | 红 | **红** |
-| 生成器提到了它但没有写调用 | 红 | **第一次假绿 → 修好后红** |
+| 变异                          | 期望 | 实测                      |
+| ----------------------------- | ---- | ------------------------- |
+| 新增一份没登记的 baseline     | 红   | **红**                    |
+| 从 HAND_MAINTAINED 删掉一份   | 红   | **红**                    |
+| 生成器文件不存在              | 红   | **红**                    |
+| 生成器存在但不提这份 baseline | 红   | **红**                    |
+| 生成器提到了它但没有写调用    | 红   | **第一次假绿 → 修好后红** |
 
 还原后 `diff -q` 逐字节一致，临时探针文件已清理。
 
@@ -2875,11 +3032,11 @@ if (!/writeFileSync|writeFile\(/.test(text)) { … }
 
 1280 宽视口、61 字符的 basename、走 **Select 分支**：
 
-| | 上游 | 本仓 |
-| --- | --- | --- |
-| 标题 `span` | 文本 61 字 · 盒 `407/407` **被裁 0px** · `line-clamp:1` | **完全相同** |
-| `SelectTrigger` | 宽 **455**，右边缘 1267 | 宽 **455**，右边缘 1266 |
-| 四颗动作键 | `@1115/1151/1187/1223`，**无越界** | `@1116/1152/1188/1224`，**无越界** |
+|                 | 上游                                                    | 本仓                               |
+| --------------- | ------------------------------------------------------- | ---------------------------------- |
+| 标题 `span`     | 文本 61 字 · 盒 `407/407` **被裁 0px** · `line-clamp:1` | **完全相同**                       |
+| `SelectTrigger` | 宽 **455**，右边缘 1267                                 | 宽 **455**，右边缘 1266            |
+| 四颗动作键      | `@1115/1151/1187/1223`，**无越界**                      | `@1116/1152/1188/1224`，**无越界** |
 
 wave 82 修的那件事（长文件名把整排动作键推出可视区）**仍然是好的**：一颗都没越界。
 
@@ -2993,10 +3150,10 @@ wave 101 量的「5/5 未收敛」量的是**播报器那一行**，它永远不
 wave 63 把判据收紧成「**同一次构建连取 20 次，React 只出现一个终态**」。
 照登记的复现方法跑（settle 仍是默认 700ms、每次取样换 fresh context、`--workers=1`）：
 
-| | 终态数 | 分布 |
-| --- | --- | --- |
-| React | **2** | B `62554acd79/d2326c6393` ×15 · **A `4080b1f763/45e907c1a3` ×5（25%）** |
-| Vue | **1** | `5c9e8360de/e2083d5866` ×20 |
+|       | 终态数 | 分布                                                                    |
+| ----- | ------ | ----------------------------------------------------------------------- |
+| React | **2**  | B `62554acd79/d2326c6393` ×15 · **A `4080b1f763/45e907c1a3` ×5（25%）** |
+| Vue   | **1**  | `5c9e8360de/e2083d5866` ×20                                             |
 
 **判据未满足，`pending` 保留。** 这正是事先写下判据的意义——
 wave 63 当时就估过「20 次全干净约 2.4%」，这次没撞上，**不许改判据凑绿**（硬规则 3）。
@@ -3056,12 +3213,12 @@ wave 63 是 4/23（17%），这一轮探索跑是 9/20（45%）、判据跑是 5
 
 ### 六、负向验证（4 条，全部真红）
 
-| 变异 | 期望 | 实测 |
-| --- | --- | --- |
-| 把理由缩到 2 字 | 红 | **红** |
-| 多挂一条无主的理由 | 红 | **红** |
-| 删掉理由 | 红 | **红** |
-| 偷偷把 pending 挪进 covered | 红 | **红** |
+| 变异                        | 期望 | 实测   |
+| --------------------------- | ---- | ------ |
+| 把理由缩到 2 字             | 红   | **红** |
+| 多挂一条无主的理由          | 红   | **红** |
+| 删掉理由                    | 红   | **红** |
+| 偷偷把 pending 挪进 covered | 红   | **红** |
 
 还原后 `diff -q` 与备份逐字节一致，**没有假绿**。
 
@@ -3321,10 +3478,10 @@ thread-history/en-US 与 /zh-CN：第 7 个公共节点 React=menu "Export" Vue=
 
 ### 负向验证 2 条，全红
 
-| #   | 变异                          | 结果                                    |
-| --- | ----------------------------- | ---------------------------------------- |
-| N1  | Portal 装回去，跑对照         | 两行顺序差异回来 → 台账红                |
-| N2  | Portal 装回去，只跑单测       | 新加的那条当场红                          |
+| #   | 变异                    | 结果                      |
+| --- | ----------------------- | ------------------------- |
+| N1  | Portal 装回去，跑对照   | 两行顺序差异回来 → 台账红 |
+| N2  | Portal 装回去，只跑单测 | 新加的那条当场红          |
 
 ### 门禁（逐条真跑）
 
@@ -3371,10 +3528,10 @@ icon-parity 0 处待核 · e2e-backend 2+5+2+3+3+5+1+1 · audit 预期红 **14**
 
 ### 负向验证 2 条，全红
 
-| #   | 变异                          | 结果                                                |
-| --- | ----------------------------- | ---------------------------------------------------- |
-| N1  | 拿掉 Vue 的 `focusInitial`    | 四行变成「Vue=textarea 背后的输入框」→ 台账红        |
-| N2  | 描述器退回宽松版              | 噪声行回来 13 处 → 台账红                            |
+| #   | 变异                       | 结果                                          |
+| --- | -------------------------- | --------------------------------------------- |
+| N1  | 拿掉 Vue 的 `focusInitial` | 四行变成「Vue=textarea 背后的输入框」→ 台账红 |
+| N2  | 描述器退回宽松版           | 噪声行回来 13 处 → 台账红                     |
 
 ### 门禁（逐条真跑）
 
@@ -3426,10 +3583,10 @@ composer 上四个能展开的控件**都已经在取样面里**，只是挂在�
 
 ### 负向验证 2 条，全红
 
-| #   | 变异                                | 结果                                   |
-| --- | ----------------------------------- | -------------------------------------- |
-| N1  | 菜单项 `PNG` → 「PNG 图片」         | 锚点 `/^PNG$/` 先不匹配 → 到不了 → 红  |
-| N2  | 多加一项 `JPG`（锚点全匹配）        | en-US 那个键多出一行 → 台账红          |
+| #   | 变异                         | 结果                                  |
+| --- | ---------------------------- | ------------------------------------- |
+| N1  | 菜单项 `PNG` → 「PNG 图片」  | 锚点 `/^PNG$/` 先不匹配 → 到不了 → 红 |
+| N2  | 多加一项 `JPG`（锚点全匹配） | en-US 那个键多出一行 → 台账红         |
 
 N1 与 wave 92 的 N3 同形（锚点同时也是文案守卫，比台账更早撞停）；
 **N2 才是证明「那个 0 是算出来的」那一条**——它专挑「不碰锚点、只改内容」的改法。
@@ -3486,11 +3643,11 @@ artifact-stream-state/zh     2 行  「Text file」vs「Text 文件」
 
 ### 负向验证 3 条，全红
 
-| #   | 变异                              | 结果                                          |
-| --- | --------------------------------- | --------------------------------------------- |
-| N1  | Rename 锚点还原成只认英文         | thread-history zh 当场「到不了」→ 红          |
-| N2  | 拿掉 thread-list-pin 的 zh 维度   | 台账深比少一个键 → diff 用例红                |
-| N3  | `browser.back` 中文改一个字       | 锚点先不匹配 → 红（**来自可达性层，不是台账行**） |
+| #   | 变异                            | 结果                                              |
+| --- | ------------------------------- | ------------------------------------------------- |
+| N1  | Rename 锚点还原成只认英文       | thread-history zh 当场「到不了」→ 红              |
+| N2  | 拿掉 thread-list-pin 的 zh 维度 | 台账深比少一个键 → diff 用例红                    |
+| N3  | `browser.back` 中文改一个字     | 锚点先不匹配 → 红（**来自可达性层，不是台账行**） |
 
 **N3 如实记**：跨语言正则**同时也是一道译文守卫**，改译文会先在锚点上撞停，
 比台账更早。
@@ -3554,12 +3711,12 @@ React 没到；场景里「hover 一次 + 30 秒轮询」**两边都到不了**�
 
 ### 负向验证 4 条：3 红 + **1 条假绿**
 
-| #   | 变异                            | 结果                                          |
-| --- | ------------------------------- | --------------------------------------------- |
-| N1  | 还原 zh 分支文案                | zh-CN 那把从 1 行涨到 4R+3V 行 → 红          |
-| N2  | hover 只移一次                  | **四个 capture 全部「到不了」** → 红          |
-| N3  | 锚点换回 portal 出去的浮层      | **geometry 0 行，没复现** → **假绿**          |
-| N4  | Vue 分支键自己 opacity 0.5      | 台账报 `opacity R=1 V=0.5` 两行 → 红          |
+| #   | 变异                       | 结果                                 |
+| --- | -------------------------- | ------------------------------------ |
+| N1  | 还原 zh 分支文案           | zh-CN 那把从 1 行涨到 4R+3V 行 → 红  |
+| N2  | hover 只移一次             | **四个 capture 全部「到不了」** → 红 |
+| N3  | 锚点换回 portal 出去的浮层 | **geometry 0 行，没复现** → **假绿** |
+| N4  | Vue 分支键自己 opacity 0.5 | 台账报 `opacity R=1 V=0.5` 两行 → 红 |
 
 **N3 的假绿本身就是结论**：同一棵树、同一个锚点，一次跑出 `Δ44/Δ48`、另一次
 跑出 0——那个锚点**不是稳定地量错，是间歇地量错**，而间歇变红的门禁比恒错的
@@ -3620,10 +3777,10 @@ zh-CN 下对话框高度变成 224、提交键宽度 149.3 → 102（文案变�
 
 ### 负向验证 2 条，全红
 
-| #   | 变异                                | 结果                                                       |
-| --- | ----------------------------------- | ---------------------------------------------------------- |
-| M1  | Vue 的 `<label>` 去掉 `:for`        | **两个新终态 Vue 双双「没能到达场景」**，`default` 不受影响 |
-| M2  | Vue 的 `isEditing` 恒为 false       | **只有 `runtime-config-edit` 到不了**，另两个仍是 0        |
+| #   | 变异                          | 结果                                                        |
+| --- | ----------------------------- | ----------------------------------------------------------- |
+| M1  | Vue 的 `<label>` 去掉 `:for`  | **两个新终态 Vue 双双「没能到达场景」**，`default` 不受影响 |
+| M2  | Vue 的 `isEditing` 恒为 false | **只有 `runtime-config-edit` 到不了**，另两个仍是 0         |
 
 M1 证这两个新键**是承重的**——一处单边的可访问名回归，门禁当场红在**可达性**
 那一层（比台账多一行还早）。M2 证锚点选得准：`Save changes` 真的在区分分支。
@@ -3701,14 +3858,14 @@ browser）状态在**可访问名**里（`open ? close : open`），`outline`/`s
 
 ### 负向验证 6 条，全红，无假绿
 
-| #   | 变异                                    | 跑什么                    | 结果                                    |
-| --- | --------------------------------------- | ------------------------- | --------------------------------------- |
-| N1  | 删掉 Vue 一处 `:aria-pressed`           | 守卫 Vue 那条             | 1 failed / 1 passed                     |
-| N2  | 删掉 React 一处 `aria-pressed`          | 守卫 React 那条           | 1 failed / 1 passed                     |
-| N3  | 往白名单外塞一个 `app/dodge-probe.vue`  | 守卫 Vue 那条             | 红在 `unscanned` 上，**不是**静默放过   |
-| N4  | 标签扫描器换成 `/<Button\b[^>]*>/`      | 守卫 React 那条           | **12 条假报**                           |
-| N5  | 值写死成 `:aria-pressed="false"`        | 守卫 vs DOM 用例          | **守卫照样绿**，DOM 用例 2 failed       |
-| N6  | 删掉 React 筛选那颗 `aria-pressed`      | `frontend` scheduled-tasks e2e | 1 failed / 7 passed                |
+| #   | 变异                                   | 跑什么                         | 结果                                  |
+| --- | -------------------------------------- | ------------------------------ | ------------------------------------- |
+| N1  | 删掉 Vue 一处 `:aria-pressed`          | 守卫 Vue 那条                  | 1 failed / 1 passed                   |
+| N2  | 删掉 React 一处 `aria-pressed`         | 守卫 React 那条                | 1 failed / 1 passed                   |
+| N3  | 往白名单外塞一个 `app/dodge-probe.vue` | 守卫 Vue 那条                  | 红在 `unscanned` 上，**不是**静默放过 |
+| N4  | 标签扫描器换成 `/<Button\b[^>]*>/`     | 守卫 React 那条                | **12 条假报**                         |
+| N5  | 值写死成 `:aria-pressed="false"`       | 守卫 vs DOM 用例               | **守卫照样绿**，DOM 用例 2 failed     |
+| N6  | 删掉 React 筛选那颗 `aria-pressed`     | `frontend` scheduled-tasks e2e | 1 failed / 7 passed                   |
 
 **N4 是这一轮最值钱的一条**（线索 241）：朴素正则在
 `onClick={() => setStatusFilter("all")}` 的那个 `>` 上把标签截断，写在后面的
@@ -3811,13 +3968,13 @@ React 那一侧 `frontend/tests/e2e/integrations.spec.ts` 的同一处交互上�
 
 ### 负向验证 5 条，全红，无假绿
 
-| #   | 变异                            | 跑什么                              | 结果                  |
-| --- | ------------------------------- | ----------------------------------- | --------------------- |
-| M1  | 删掉 Vue 域按钮的 aria-pressed  | `integrations-settings.dom.test.ts` | 1 failed / 5 passed   |
-| M2  | 删掉 Vue 品牌按钮的 aria-pressed| 同上                                | 1 failed / 5 passed   |
-| M3  | 删掉 React 域按钮的 aria-pressed| `frontend` `tests/e2e/integrations` | 1 failed / 5 passed   |
-| M4  | 删掉 React 品牌按钮的 aria-pressed | 同上                             | 1 failed / 5 passed   |
-| M5  | **只删 Vue 两处**，跑对照探针   | integrations 的两个新终态           | aria 差异 0 → **3 行** |
+| #   | 变异                               | 跑什么                              | 结果                   |
+| --- | ---------------------------------- | ----------------------------------- | ---------------------- |
+| M1  | 删掉 Vue 域按钮的 aria-pressed     | `integrations-settings.dom.test.ts` | 1 failed / 5 passed    |
+| M2  | 删掉 Vue 品牌按钮的 aria-pressed   | 同上                                | 1 failed / 5 passed    |
+| M3  | 删掉 React 域按钮的 aria-pressed   | `frontend` `tests/e2e/integrations` | 1 failed / 5 passed    |
+| M4  | 删掉 React 品牌按钮的 aria-pressed | 同上                                | 1 failed / 5 passed    |
+| M5  | **只删 Vue 两处**，跑对照探针      | integrations 的两个新终态           | aria 差异 0 → **3 行** |
 
 M5 一次证了三件事：新取样面**真的抓得到单边回归**（`button "Calendar" [pressed]` /
 `"Docs" [pressed]` / `"Lark" [pressed]` 只在 React 侧出现）；`/^Lark$/` 那一步
@@ -3988,9 +4145,9 @@ spec 清单 / 每条 pending 有不短于 20 字的理由且无多余理由 / ex
 
 ### 负向验证
 
-| 变异                                | 期望   | 实测                                             |
-| ----------------------------------- | ------ | ------------------------------------------------ |
-| `addedRows` 改成按**行数**判        | 单测红 | 3 failed / 6 passed——正好是区分两种判据的那三条 |
+| 变异                         | 期望   | 实测                                            |
+| ---------------------------- | ------ | ----------------------------------------------- |
+| `addedRows` 改成按**行数**判 | 单测红 | 3 failed / 6 passed——正好是区分两种判据的那三条 |
 
 配套：`make parity-accept` **实跑了一次**（台账 0 行，`added` 为空所以放行）。
 它确实改写了基线——逐行 diff **只有 `$comment` 那一行**，正是 accept 分支里
@@ -4052,11 +4209,11 @@ config/routes.ts：【主要导出】点名了 buildProxyRules，文件没有导
 
 ### 负向验证（3 条全过）
 
-| 变异                                        | 期望       | 实测                                                          |
-| ------------------------------------------- | ---------- | ------------------------------------------------------------- |
-| 放回带硬编码英文的 `app/error.vue`          | 三条路径红 | i18n-source-check exit 2；source-guard 点名；doc-facts 要 220 |
-| 剥注释换回正则版                            | 守卫红     | 1 failed / 5 passed，点名 `config/routes.ts`                  |
-| 未提交的违规 L2 文件 + 退回「只看已跟踪」   | 抓不到     | **15 passed（漏掉）**；带 `--others` 时 1 failed（抓住）      |
+| 变异                                      | 期望       | 实测                                                          |
+| ----------------------------------------- | ---------- | ------------------------------------------------------------- |
+| 放回带硬编码英文的 `app/error.vue`        | 三条路径红 | i18n-source-check exit 2；source-guard 点名；doc-facts 要 220 |
+| 剥注释换回正则版                          | 守卫红     | 1 failed / 5 passed，点名 `config/routes.ts`                  |
+| 未提交的违规 L2 文件 + 退回「只看已跟踪」 | 抓不到     | **15 passed（漏掉）**；带 `--others` 时 1 failed（抓住）      |
 
 ## 上一轮（wave 83）做了什么：**第一次真做验收实验——判据自己是假的**
 
@@ -5866,7 +6023,6 @@ node scripts/upstream-drift.mjs        # marker 之后上游/本仓有没有改�
   先用探针量一遍它到底停不停得住**（`page.on("framenavigated")` + 定时采样，
   打印整条轨迹）；停不住就换一个停得住的落点，别把它加进抖动名单。
 
-
 - **变异实验的还原，一律用备份文件逐个 `cp` 回去，不要用 `git checkout -- <目录>`**
   （线索 269，wave 106）。第 19 条变异要把全仓 9 份文件的「等 N 个」都拿掉，还原时
   图省事写了 `git checkout -- frontend-vue/app/core`——**它按 HEAD 还原，把本轮尚未
@@ -5878,7 +6034,6 @@ node scripts/upstream-drift.mjs        # marker 之后上游/本仓有没有改�
   wave 105 筛 `scripts/` 时漏了 `gen-contract-constants.mjs`——那里没有
   `const CONTRACTS = [...]`，只有三行 `readContract("…")` 调用。
   **按形状找缺口不能只 grep 常量声明**，要问的是「这段代码凭什么认为自己盖全了」。
-
 
 - **写文件的命令不要和长任务一起丢后台**（线索 259，wave 100）。
   改 `capture.ts` 的 python 块断言没匹配上，而整条命令（改文件 + 跑 6 分钟的对照）
