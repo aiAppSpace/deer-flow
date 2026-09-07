@@ -17,7 +17,9 @@ const props = defineProps<{ class?: HTMLAttributes["class"] }>();
 <template>
   <kbd
     data-slot="command-shortcut"
-    :class="cn('text-muted-foreground ml-auto text-xs', props.class)"
+    :class="
+      cn('text-muted-foreground ml-auto text-xs tracking-widest', props.class)
+    "
   >
     <slot />
   </kbd>

@@ -27,7 +27,7 @@ const delegated = computed(() => {
   <TabsContent
     data-slot="tabs-content"
     v-bind="delegated"
-    :class="cn('outline-none', props.class)"
+    :class="cn('flex-1 outline-none', props.class)"
   >
     <slot />
   </TabsContent>

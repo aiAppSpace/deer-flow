@@ -62,6 +62,10 @@ export const CROSS_APP_BY_DESIGN = {
     kind: "test",
     note: "「选中态只靠换色」的守卫，两个应用一起扫（对照台账看不见两边一起漏，线索 238）；缺席时**上游那一条** it.skipIf 跳过，Vue 那一条照常跑。",
   },
+  "tests/guards/primitive-base-classes.test.ts": {
+    kind: "test",
+    note: "逐个对比两个应用同名 primitive 的基类字符串；坐标系是上游的 `components/ui/**`，缺席时整组 describe.skipIf 跳过（并且 reactBases() 在缺席时直接返回空表，因为 skipIf 跳过的是用例不是收集，见 wave 83）。",
+  },
   "tests/guards/upstream-zero-claims.test.ts": {
     kind: "test",
     note: "把「上游这东西没人用」这类散文断言变成门禁；缺席时整组 describe.skipIf 跳过。",
