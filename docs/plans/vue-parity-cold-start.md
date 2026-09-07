@@ -11,7 +11,7 @@
 你接手一个已经跑了 **144 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 149 的 docs 提交，已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 150 的 docs 提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
@@ -107,7 +107,7 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2213 单测；词典 942 key / 18 unused
+make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2214 单测；词典 942 key / 18 unused
 make -C <abs>/frontend-vue standalone-sim  # exit 0；跑过 15 / 未跑 5 / 红 0（wave 116 起跑整套 vitest）
 make -C <abs>/frontend-vue e2e-parity      # 98 passed（--list 报 97 tests in 3 files；旧读数记的 96 漏了 topology.spec.ts 一条）；台账 202 行 / 90 样本
 make -C <abs>/frontend-vue e2e-mock        # 265 + 22 + 15 + 2 + 6
