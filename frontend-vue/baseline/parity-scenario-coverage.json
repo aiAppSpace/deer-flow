@@ -37,6 +37,11 @@
   ],
   "exempt": [
     {
+      "id": "ambilight-reduced-motion",
+      "route": "/",
+      "note": "这份 spec 与路由无关：它往页面里注入一个 .ambilight 元素，核的是 globals.css 里那条全局规则在 prefers-reduced-motion 下解析成什么。落在 / 上只是因为随便哪一页都会加载那份样式表，而 / 已经在 exemptRoutes 里。对照工厂不覆盖它，本仓自己带了一份镜像 spec （tests/e2e/ambilight-reduced-motion.spec.ts，wave 161 两边同改时一起加的），所以两侧都有机器在守。"
+    },
+    {
       "id": "docs-localized-links",
       "route": "/[lang]/docs/[[...mdxPath]]"
     },

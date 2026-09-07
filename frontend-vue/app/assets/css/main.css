@@ -162,8 +162,13 @@
   opacity 是 0，所以它在终态卡片上既看不见也不占位（高度 0）——但它在 DOM 里，
   少了它卡片的子节点数就和上游对不上。
 
-  这里刻意**不加** prefers-reduced-motion 分支：上游没有，而对照要求两边在同一组
-  环境条件下长得一样。要改的话得两边同改。
+  **wave 161 两边同改了**：这是一条自动播放、无限循环、纯装饰的动画
+  （WCAG 2.2.2，A 级），此前两个应用都不理会 `prefers-reduced-motion`。
+  现在两边都把 `animation` 挪进 `@media (prefers-reduced-motion: no-preference)`——
+  发光本身照旧，只是不再游走。keyframes 的首尾都是 `background-position: 0 0`，
+  正好也是 CSS 初始值，所以**两边停住的位置天生一致**，不需要谁去钉一个停车位
+  （ShineBorder 那处就是栽在「停的位置不一样」上）。
+  上一版注释写的是「刻意不加：上游没有，要改得两边同改」——那个条件这一轮满足了。
 */
 @layer base {
   .ambilight {
@@ -197,7 +202,19 @@
     height: 100%;
     border-radius: 10px;
     z-index: -1;
-    animation: ambilight 40s ease-in-out infinite;
+  }
+
+  /*
+    The glow itself stays; only its travel is withheld. The keyframes open and
+    close on `background-position: 0 0`, which is also the CSS initial value, so
+    the stopped state is the same in both apps without either side naming a
+    parking position.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    .ambilight:before,
+    .ambilight:after {
+      animation: ambilight 40s ease-in-out infinite;
+    }
   }
 
   .ambilight.enabled {

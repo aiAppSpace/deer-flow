@@ -374,7 +374,19 @@ html.dark .shiki span {
     height: 100%;
     border-radius: 10px;
     z-index: -1;
-    animation: ambilight 40s ease-in-out infinite;
+  }
+
+  /*
+    The glow itself stays; only its travel is withheld. The keyframes open and
+    close on `background-position: 0 0`, which is also the CSS initial value, so
+    the stopped state is the same in both apps without either side naming a
+    parking position.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    .ambilight:before,
+    .ambilight:after {
+      animation: ambilight 40s ease-in-out infinite;
+    }
   }
 
   .ambilight.enabled {
