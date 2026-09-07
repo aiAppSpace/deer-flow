@@ -8,10 +8,10 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **136 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
+你接手一个已经跑了 **137 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 136 的 docs 提交，已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 137 的 docs 提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
@@ -52,13 +52,13 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 - **默认只改 `frontend-vue/`。** 例外只有一种：**上游自己是坏的**——
   那时按「业界主流做法两边同改」，`frontend/` 与 `frontend-vue/` 同一条提交里改，
   再单独一条 chore 提交把 `frontend-vue/baseline/upstream-marker.json` 推到那条 fix
-  （`make -C frontend-vue upstream-accept`）。**动过 `frontend/` 的至今是二十二轮**（wave 106~136 都没动），
+  （`make -C frontend-vue upstream-accept`）。**动过 `frontend/` 的至今是二十二轮**（wave 106~137 都没动；**wave 138 会动**），
   别传这个数字，用 `git log --format='%h %ci %s' --since=2026-08-25 -- frontend/src frontend/tests` 量。
 - **不要中途提问。** 取舍自己定，写进提交说明。分歧的兜底判据是**按业界主流做法**。
 - **每轮收工写交接文档 + 一页纸清单 + 记忆，然后自动开下一轮**，
   推到我喊停为止；**不要停下来问「要不要继续」**。
 - **台账的规则现在是「新出现、还没定过的行只能减不能增」**，不再是「保持 0」。
-  `frontend-vue/baseline/parity-diff.json` 当前 **155 行 / 85 样本**
+  `frontend-vue/baseline/parity-diff.json` 当前 **199 行 / 87 样本**
   （wave 128 / 129 / 132 各接一个后端失败终态，+12 / +6 / +8，逐条有名有姓；
   其中 wave 129 的 6 行与 wave 132 的 6 行都是 wave 128 已判过的 `retry: 3` 在别的屏上
   复现，不需要新决定；**wave 132 那 2 行 `order` 是新决定**——预览失败时本仓选中「代码」、
@@ -97,7 +97,7 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 ```bash
 make -C <abs>/frontend-vue verify          # exit 0；265 文件 / 2205 单测；词典 942 key / 18 unused
 make -C <abs>/frontend-vue standalone-sim  # exit 0；跑过 14 / 未跑 5 / 红 0（wave 116 起跑整套 vitest）
-make -C <abs>/frontend-vue e2e-parity      # 93 passed；台账 155 行 / 85 样本
+make -C <abs>/frontend-vue e2e-parity      # 95 passed；台账 199 行 / 87 样本
 make -C <abs>/frontend-vue e2e-mock        # 265 + 22 + 15 + 2 + 6
 make -C <abs>/frontend-vue e2e-visual      # 8 passed（只有 -darwin 基线，本机门禁）
 make -C <abs>/frontend-vue asset-budget    # exit 0
