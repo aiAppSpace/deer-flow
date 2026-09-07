@@ -230,6 +230,7 @@ real skill artifacts when the current user has admin permission.
 
 ## Scheduled tasks
 
+The workspace page lives at `/workspace/scheduled-tasks`.
 The workspace scheduled-task page supports the Gateway's actual `once` and
 `cron` types, hourly/daily/weekly/monthly/custom cron input, editable IANA
 timezones, DST-aware one-time conversion, fresh or reused thread context, and
@@ -325,6 +326,13 @@ external MCP process, production SkillScan/LLM/IdP/credentials, DNS/TLS, an
 outer proxy or deployment.
 
 ## Workspace shell and workspace changes
+
+Memory, Skills & MCP retain Query owners and auth boundaries; `make e2e-settings`
+covers the production path. The workspace layout owns one palette, settings host and
+toaster; the route owns settings-open state, and Query owns workspace changes and
+propagates aborts. `make e2e-shell` keeps production Auth, owner checks, event reads,
+filtering and Nuxt; only its isolated seed event and recovery 503 are controlled
+fixtures.
 
 The workspace layout owns one command palette, settings host and toast store.
 The palette implements the current cross-platform React shortcut set while

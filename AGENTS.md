@@ -47,6 +47,11 @@ A single `make dev` / Docker stack runs four cooperating services:
 | **Vue frontend**   | `3000` | Nuxt on the Vue hostname; `make dev-vue` runs it on `3100` outside Docker |
 | **Provisioner**    | `8002` | Optional — only when sandbox is configured for provisioner/K8s mode |
 
+The provisioner sits behind the `provisioner` Compose profile, so a bare `docker
+compose up` does not start it (without a cluster it crash-loops); `scripts/docker.sh`
+and `scripts/deploy.sh` enable the profile themselves.
+`backend/tests/test_compose_optional_services_are_profiled.py` pins both halves.
+
 Nginx is the single public entry: it serves the frontend and proxies `/api/langgraph/*`
 to the Gateway's LangGraph runtime, rewriting it to Gateway's native `/api/*` routes; all
 other `/api/*` go straight to the Gateway REST routers. See
@@ -111,17 +116,6 @@ Schema and resolution order live in [backend/AGENTS.md](backend/AGENTS.md).
 `skills/public/skill-reviewer/` is the built-in read-only reviewer. It uses the harness
 `review_skill_package` tool and `contracts/skill_review/`; full ownership and safety
 boundaries live in [backend/AGENTS.md](backend/AGENTS.md).
-
-Scheduled-task note:
-
-- The scheduled-task MVP adds a workspace page at `/workspace/scheduled-tasks` plus a background scheduler service gated by `config.yaml -> scheduler.enabled`.
-- Scheduled background runs are intentionally non-interactive: they execute through the normal run lifecycle, but the lead-agent toolset excludes `ask_clarification` when `context.non_interactive=true`. The key is honored only for internally-authenticated callers (the scheduler launch path); client-supplied `context.non_interactive` is dropped.
-
-Vue parity notes:
-
-- Memory, Skills & MCP retain Query owners and auth boundaries; `make e2e-settings` covers the production path.
-- The workspace layout owns one palette, settings host and toaster. The route owns settings-open state; Query owns workspace changes and propagates aborts.
-- `make e2e-shell` keeps production Auth, owner checks, event reads, filtering and Nuxt; only its isolated seed event and recovery 503 are controlled fixtures.
 
 ## Commands: Root vs. Module
 

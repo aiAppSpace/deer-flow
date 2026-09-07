@@ -7,7 +7,8 @@
 #   - frontend-vue: Nuxt production server (secondary hostname)
 #   - gateway:     FastAPI Gateway API + agent runtime
 #   - redis:       Redis Streams backend for cross-worker SSE stream bridge
-#   - provisioner: (optional) Sandbox provisioner for Kubernetes mode
+#   - provisioner: (optional) Sandbox provisioner for Kubernetes mode — behind the
+#                  `provisioner` Compose profile; scripts/deploy.sh enables it
 #
 # Key environment variables (set via environment/.env or scripts/deploy.sh):
 #   DEER_FLOW_PROJECT_ROOT           — project root for relative runtime paths
@@ -175,7 +176,11 @@ services:
     restart: unless-stopped
 
   # ── Sandbox Provisioner (optional, Kubernetes mode) ────────────────────────
+  # 与 docker-compose-dev.yaml 同一条理由：这一项只在 K8s 模式下可用，
+  # 没有集群时它会在 lifespan 里因 `Invalid kube-config file` 反复重启。
+  # 放在 profile 后面，`scripts/docker.sh` 显式点名时 Compose v2 会自动启用它。
   provisioner:
+    profiles: ["provisioner"]
     build:
       context: ./provisioner
       dockerfile: Dockerfile

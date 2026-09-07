@@ -1,5 +1,7 @@
 # DeerFlow Development Environment
 # Usage: docker compose -f docker-compose-dev.yaml up --build --watch
+#        (K8s/provisioner mode: add --profile provisioner, or use scripts/docker.sh,
+#         which detects the mode from config.yaml and does it for you)
 #
 # Services:
 #   - nginx: Reverse proxy (port 2026)
@@ -37,7 +39,24 @@ services:
   # Manages per-sandbox Pod + Service lifecycle in the host Kubernetes
   # cluster via the K8s API.
   # Backend accesses sandboxes directly via host.docker.internal:{NodePort}.
+  #
+  # **Behind a profile on purpose.** It only works when `sandbox.provisioner_url`
+  # is configured (K8s mode) — `AGENTS.md` calls it "Optional — only when sandbox
+  # is configured for provisioner/K8s mode", and `scripts/docker.sh` leaves it out
+  # of the service list for every other mode.
+  #
+  # Without the profile, the usage line at the top of this file
+  # (`docker compose -f docker-compose-dev.yaml up --build --watch`) starts it
+  # too, and with no cluster configured it dies in `lifespan` on
+  # `Invalid kube-config file. Expected key current-context` and then restarts
+  # forever under `restart: unless-stopped` — measured 2026-09-07 on a developer
+  # machine: **RestartCount 4363** over three days, silently.
+  #
+  # `docker.sh` names services explicitly on `up`, and Compose v2 enables a
+  # named service's profiles automatically, so the K8s path is unaffected.
+  # Ad-hoc use: `docker compose --profile provisioner -f … up`.
   provisioner:
+    profiles: ["provisioner"]
     build:
       context: ./provisioner
       dockerfile: Dockerfile

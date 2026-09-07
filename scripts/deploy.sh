@@ -44,10 +44,16 @@ cd "$REPO_ROOT"
 
 ENV_FILE="$REPO_ROOT/.env"
 DOCKER_DIR="$REPO_ROOT/docker"
+# `--profile provisioner` does not start the provisioner — the explicit service
+# list passed to `up` does that, and it only contains `provisioner` in K8s mode.
+# The flag is what keeps the service-list-less subcommands whole: `build` must
+# stay mode-agnostic (see its banner below), and `down`/`stop` must still tear
+# down a provisioner-mode stack. The profile itself lives on the service in
+# docker-compose.yaml so a bare `docker compose up` does not start it.
 if [ -f "$ENV_FILE" ]; then
-    COMPOSE_CMD=(docker compose --env-file "$ENV_FILE" -p deer-flow -f "$DOCKER_DIR/docker-compose.yaml")
+    COMPOSE_CMD=(docker compose --env-file "$ENV_FILE" -p deer-flow --profile provisioner -f "$DOCKER_DIR/docker-compose.yaml")
 else
-    COMPOSE_CMD=(docker compose -p deer-flow -f "$DOCKER_DIR/docker-compose.yaml")
+    COMPOSE_CMD=(docker compose -p deer-flow --profile provisioner -f "$DOCKER_DIR/docker-compose.yaml")
 fi
 
 load_uv_extras_from_dotenv() {

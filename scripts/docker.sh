@@ -12,8 +12,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DOCKER_DIR="$PROJECT_ROOT/docker"
 
-# Docker Compose command with project name
-COMPOSE_CMD="docker compose -p deer-flow-dev -f docker-compose-dev.yaml"
+# Docker Compose command with project name.
+#
+# `--profile provisioner` is declared here on purpose and does NOT start the
+# provisioner: what starts is the explicit service list passed to `up` below
+# (measured — `--profile provisioner … up redis frontend frontend-vue gateway
+# nginx` starts exactly those five). What the flag buys is the *other*
+# subcommands: `build`, `down`, `restart` and `logs` take no service list, and
+# without the profile Compose would silently skip a profiled service — leaving a
+# provisioner-mode stack half-torn-down by `docker.sh stop` and its image out of
+# `build`. The profile lives on the service in docker-compose-dev.yaml so that a
+# bare `docker compose up` (the usage line at the top of that file) does not
+# start it; see the comment there for the incident that motivated it.
+COMPOSE_CMD="docker compose -p deer-flow-dev --profile provisioner -f docker-compose-dev.yaml"
 
 load_proxy_env_from_dotenv() {
     local env_file="$PROJECT_ROOT/.env"
