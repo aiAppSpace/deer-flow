@@ -8,13 +8,13 @@
 
 ---
 
-## 当前状态（截至 wave 147，2026-09-07）
+## 当前状态（截至 wave 148，2026-09-07）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
   `54454b7c` = wave 43，`46f62dea` = wave 44，`f15c7181` = wave 45，`ca1c7f1d` = wave 46，
   `c12c4d37` = wave 47，`3f152764` = wave 48，`5978d533` = wave 49，`80ef4d15` = wave 50，
-  `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉；`d468c4bf` = wave 146（**伪元素进取样面**，分栏拖拽把手第一次挂成锚点）；`ab4dea2c` = wave 147（**会话行的 ⋯ 在手机上够不着**；并推翻了我自己 wave 146 那张表的两行；`ParityState.dimensions` 让终态自己钉断点）。
+  `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉；`d468c4bf` = wave 146（**伪元素进取样面**，分栏拖拽把手第一次挂成锚点）；`ab4dea2c` = wave 147（**会话行的 ⋯ 在手机上够不着**；并推翻了我自己 wave 146 那张表的两行；`ParityState.dimensions` 让终态自己钉断点；`b60966bf` = wave 148（**手搓的模态语义全仓扫一遍，三处一起换成 primitive**，并配上零豁免守卫）。
 - **动过 `frontend/` 的是二十三轮**（wave 138 新增一轮：模型设置对话框的可访问名）（wave 52 实测订正，wave 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97 各加一轮）：
   wave **3 / 4 / 6 / 11 / 17 / 20 / 21 / 22 / 23 / 27 / 28 / 36 / 39 / 40 / 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97**。
   此前这里只列了 36/39/40（那三行本身没说错，它们的范围是「wave 30 以来」），
@@ -36,7 +36,7 @@
   wave 74 两处 `<Toaster />` 用的不是 shadcn wrapper；wave 73 五条「本仓修掉了上游缺陷」；
   wave 62 `/auth/callback` 吞掉 `?next=` 深链。wave 41~~59、75~~81 都没动过。
 
-- **对照台账 233 行**，**90** 个样本，`make -C frontend-vue e2e-parity` **98** 条全绿（wave 145 把 Tabs 的 variant 体系搬过来，219 → **197**：每语言 11 行归零，另有 2 行是同一笔账的读数变好——`switch[review] y` Δ41.9 → Δ-4.1，集合包含判据表达不出「同一个键、更小的值」，所以走了 `PARITY_ACCEPT_GROW=1`）（wave 130/131 换了三处锚点，**台账一行都没动**——加的是覆盖面不是账；wave 132 接上 `artifact-batched-stream#preview-failed`，113/77/85 → **121/79/87**，新增 8 行里 6 行是已判过的重试差异、2 行是新决定）（wave 128：95/73/81 → 107/75/83；wave 129：107/75/83 → **113/77/85**，新增 6 行全部是 wave 128 已判过的 `retry: 3` 那一条在另一屏上的复现）。
+- **对照台账 202 行**，**90** 个样本，`make -C frontend-vue e2e-parity` **98** 条全绿（wave 145 把 Tabs 的 variant 体系搬过来，219 → **197**：每语言 11 行归零，另有 2 行是同一笔账的读数变好——`switch[review] y` Δ41.9 → Δ-4.1，集合包含判据表达不出「同一个键、更小的值」，所以走了 `PARITY_ACCEPT_GROW=1`）（wave 130/131 换了三处锚点，**台账一行都没动**——加的是覆盖面不是账；wave 132 接上 `artifact-batched-stream#preview-failed`，113/77/85 → **121/79/87**，新增 8 行里 6 行是已判过的重试差异、2 行是新决定）（wave 128：95/73/81 → 107/75/83；wave 129：107/75/83 → **113/77/85**，新增 6 行全部是 wave 128 已判过的 `retry: 3` 那一条在另一屏上的复现）。
   wave 96 用 tab 序那一档量出 64 行、四处根因，**wave 97 逐条结清**：
   分隔条那 48 行与 browser 标签那 4 行**修掉了**，菜单 roving 那 2 行**决定接受**，
   滚动区那一处两边同改之后变成了另一处此前完全看不见的结构差异，
@@ -442,6 +442,113 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 148）做了什么：**手搓的模态语义全仓扫一遍，三处一起换成 primitive，并配上守卫**
+
+用户在这一轮中途给了两条指令：**「从根因彻底修复」**、**「不要打补丁或绕过」**，
+以及**「这个问题处理了之后，还要系统扫描下，其它地方是不是也有类似的问题」**。
+所以这一轮不是「修好那 30 行」，是**把这一类修干净**。
+
+### 一、根因
+
+wave 147 量出移动端抽屉那 34 行差异时，我把它归成「两种都正确的模态做法」。
+再往下走一层，两者并不对等：
+
+- `aria-modal="true"` 是一句**声明**，靠 AT 自己认；
+- 上游（Radix Dialog）打的 `aria-hidden` 是**事实**，谁都绕不过去。
+
+本仓那一套是手写的四件套——`aria-modal` 一句、一个 `keydown` 里的 Tab 陷阱、
+一个 window 上的 Escape 分支、一颗 `fixed inset-0` 的背景按钮。**第三件事它压根没做。**
+
+### 二、系统扫描：全仓还有几处同根因
+
+扫描面是整个 `app/`（`.vue` + `.ts`），**先剥注释**再匹配（否则守卫会把自己的说明
+文字报成违规，坑 202 踩过三次）：
+
+| 类别                                                                       | 处数        | 结论                                                                                                         |
+| -------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| 手搓模态/浮层                                                              | **3**       | 全部换成 primitive（见下）                                                                                   |
+| `role="listbox"` / `role="option"`                                         | 1 份        | 上游 `input-box.tsx:2160/2177` **一模一样是手写的** → 照抄不动                                               |
+| `aria-expanded`                                                            | 4 处 / 3 份 | 上游 `todo-list.tsx:56`、`subtask-card.tsx:143` 同样写在普通 `<button>` 上 → disclosure 本就不需要 primitive |
+| `role="menu*"` / `role="tooltip"` / `aria-haspopup` / `Teleport to="body"` | **0**       | —                                                                                                            |
+
+三处手搓的是：
+
+1. **移动端侧栏抽屉**（`ThreadSidebar.vue`）——与桌面侧栏**共用一个元素**，
+   靠 `:role="mobileOpen ? 'dialog' : undefined"` 这类三元在两种形态之间切。
+2. **外链确认弹窗**（`MarkdownLinkSafetyModal.vue`）——`role="button" tabindex="0"`
+   的裸遮罩 + `role="presentation"` 的卡片 + document 上的 Escape + 手写引用计数滚动锁。
+3. **mermaid 全屏**（`MermaidFullscreen.vue`）——同上形状。
+
+### 三、怎么改的
+
+**没有拆 570 行模板**：新增 `ThreadSidebarShell.vue`，形状照上游 `ui/sidebar.tsx`
+的 `Sidebar`——窄屏返回 `<Sheet><SheetContent>`，宽屏返回版面里的一块，
+主体作为 slot 内容原地不动。宽屏那一支的类串与改动前**逐字相同**。
+
+另外两处直接换成 `ui/dialog`。**`MermaidFullscreen` 的文件头原来写着「不能换成
+Dialog，因为两边引的是同一个 npm 包，改了就是纯粹制造差异」**——这一轮把它推翻了：
+**wave 92 在同一个包（streamdown）上做过相反的决定并且沿用至今**（工具条文案上游
+写死英文、改不了，本仓保留翻译，台账为此记着 14 行），判据是 fork-boundary 那条
+已授权的例外「vue 有更好的可以保留」。一个全屏浮层对读屏器不是对话框、Tab 能走到
+它背后去，比文案更硬。
+
+### 四、连带清掉的东西（这一半是「不要打补丁」的直接后果）
+
+- 手写焦点陷阱删掉之后，`app/lib/focusable.ts` **归零消费者**——而
+  `ARCHITECTURE.md` 还写着「这一份判据抽屉与 primitive 共用」，**primitive 那一半
+  本来就是假的**（全仓没有一个 `ui/` 组件引它）。模块 + 单测 + 三处引用一并删。
+- `navigation.workspace`（抽屉的 `aria-label`）随之死掉，从 types 与两个 locale 删掉。
+- 三份手写 `<button>` 的清单跟着缩（关闭键与遮罩现在归 primitive）。
+- 两份 DOM 测试**换掉了钉的东西**：不再钉「我自己实现得对不对」，
+  改钉「我确实把它交给了 primitive」——真的是 dialog、真的有 `aria-labelledby` /
+  `aria-describedby`、Escape 真的关得掉。滚动锁那条用例随实现一起删。
+- 侧栏骨架合同现在**同时读两份文件**（外壳与主体），否则 `sidebar-inner`
+  那一条会静默失守。
+
+### 五、防复发：新守卫
+
+`tests/guards/hand-rolled-overlays.test.ts`。判据取**零豁免**那一种（坑 180：
+放宽判据 → 需要豁免表 → 判据选错了）：模态语义的三个标志（`role="dialog"` /
+`role="alertdialog"`、`aria-modal`、`fixed inset-0` 全屏遮罩）**只允许出现在
+`app/components/ui/`**。四条用例：
+
+1. 扫描面不是空的，而且两半加起来等于全集（尺子先量自己）；
+2. 产品层零违规；
+3. **反方向**：primitive 那一半必须**真的**有这些标志——否则第 2 条是在数空气；
+4. **自证**：重放这三处修掉之前的原文，检测器必须响。
+
+模式串是**拼出来**的不是字面量（坑 267：写进源码的模式串会把守卫自己算进扫描结果）。
+
+### 六、负向验证
+
+| #   | 变异                                                                  | 期望                      | 实测                                                             |
+| --- | --------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| N1  | `<Sheet :modal="false">`（reka 改走 non-modal，不再 `useHideOthers`） | 抽屉背后整页回到树里      | **真红**：`ariaOnlyVue` 那一整块 + `order` + `tabOrder` 全部回来 |
+| N2  | 拿掉 `SheetHeader` 的 sr-only 标题与说明                              | 3 行 `ariaOnlyReact` 回来 | **真红**，逐字回来                                               |
+| N3  | 在 `TodoList.vue` 塞回 `role="dialog" aria-modal="true"`              | 新守卫红                  | **真红**，报出两处违规                                           |
+| N4  | 外链弹窗拿掉 `DialogDescription`                                      | DOM 测试红                | **第一版假绿** → 改断言后真红（见下）                            |
+| N5  | mermaid 全屏拿掉 `DialogHeader`                                       | DOM 测试红                | **第一版假绿** → 改断言后真红                                    |
+
+**线索：`aria-labelledby` / `aria-describedby` 存在 ≠ 它指得到东西。**
+我给两处新写的 DOM 测试断言的是「这两个属性是 truthy 的」——而
+**reka 的 `DialogContent` 无论有没有标题/说明元素都会写上生成的 id**。
+N4/N5 把元素整个删掉，那两条断言照样全绿。改成**顺着 id 解析到元素、比它的文字**
+之后才真红。**凡是断言「某个 aria 引用属性存在」的地方，都要往下再走一步。**
+
+### 七、门禁
+
+| 门禁                               | 读数                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| `verify`                           | exit 0；**267 文件 / 2213 单测**                                               |
+| `e2e-parity`                       | **97 passed**；台账 **233 → 202 行 / 90 样本**（只减不增，accept 不需要 GROW） |
+| 定向 `make e2e` / `make e2e-shell` | 见提交说明                                                                     |
+
+**顺带修了一条负载抖动**：`source-guard` 那条「219 份产品 SFC 全过一遍 AST」的用例
+在整套并发跑时实测 6689ms、撞上 vitest 默认的 5 秒上限，**单独跑是 2.2~5.3 秒**
+（连测三次）。给它显式配 15 秒并写明理由——与 wave 108 把 expect 预算 5s 抬到 10s 同一类。
+
+---
 
 ## 上一轮（wave 147）做了什么：**先推翻我自己上一轮写的一张表，再顺着它修掉一处手机上够不着的按钮**
 
@@ -5710,14 +5817,14 @@ wave 60 提的新判据 C2 是「不数写错的记录，改数**还没有机器
 而它 import `@/core/auth/client-state`，正好命中 `l2ForbiddenImports` 第一条。
 它本来就不该是 L2——ARCHITECTURE.md 的分层表把 L2 圈定在 `app/core/markdown/`、
 `app/core/code-editor/`、`app/components/markdown/`、`app/components/ui/`、
-`app/lib/{utils,focusable}.ts`，并明写 L2 **不得依赖**「DeerFlow API、线程、认证、
+`app/lib/utils.ts` 与当时还在的 focusable 模块（wave 148 删），并明写 L2 **不得依赖**「DeerFlow API、线程、认证、
 产物和业务 store」。**已改成 L3，理由写进它自己的文件头。**
 
 **门禁**：`architecture.test.ts` 的 L2 段补三条——① 形状先断言（扫到的数不是零）；
 ② **自称 L2 的集合逐个等于 `l2Files`**（双向：多出来的会绕过进口边界，少掉的说明
 名单里有份文件改了头）；③ 名单按字母序（插入位置唯一）。
 名单同时从 132 → **161**（新增 29 + logout 改判 L3），并**排序**——它此前是
-「按冻结时间追加」（`app/lib/focusable.ts` 卡在第 30 位、`app/core/code-editor/*`
+「按冻结时间追加」（那份 focusable 模块卡在第 30 位、`app/core/code-editor/*`
 在第 41 位），而本文件一直写着「按字母序」，**那句话也是错的**。
 
 ### 另一条 C2 类别：`【依赖关系】`

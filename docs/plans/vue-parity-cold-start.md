@@ -11,7 +11,7 @@
 你接手一个已经跑了 **144 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 147 的 docs 提交，已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 148 的 docs 提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
@@ -58,7 +58,8 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 - **每轮收工写交接文档 + 一页纸清单 + 记忆，然后自动开下一轮**，
   推到我喊停为止；**不要停下来问「要不要继续」**。
 - **台账的规则现在是「新出现、还没定过的行只能减不能增」**，不再是「保持 0」。
-  `frontend-vue/baseline/parity-diff.json` 当前 **233 行 / 90 样本**
+  `frontend-vue/baseline/parity-diff.json` 当前 **202 行 / 90 样本**
+  （wave 148 把三处手搓的模态换成 primitive，233 → 202）
   （wave 147 把移动端侧栏抽屉挂进取样面，+34 行，其中 30 行是同一处模态做法差异）
   （wave 145 把 Tabs 的 variant 体系搬过来，219 → 197；wave 146 伪元素进取样面，
   分栏把手第一次挂成锚点，+2 行——点击区上游 4px / 本仓 16px，本仓更好，已接受）
@@ -105,9 +106,9 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2214 单测；词典 942 key / 18 unused
+make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2213 单测；词典 942 key / 18 unused
 make -C <abs>/frontend-vue standalone-sim  # exit 0；跑过 15 / 未跑 5 / 红 0（wave 116 起跑整套 vitest）
-make -C <abs>/frontend-vue e2e-parity      # 98 passed（--list 报 97 tests in 3 files；旧读数记的 96 漏了 topology.spec.ts 一条）；台账 233 行 / 90 样本
+make -C <abs>/frontend-vue e2e-parity      # 98 passed（--list 报 97 tests in 3 files；旧读数记的 96 漏了 topology.spec.ts 一条）；台账 202 行 / 90 样本
 make -C <abs>/frontend-vue e2e-mock        # 265 + 22 + 15 + 2 + 6
 make -C <abs>/frontend-vue e2e-visual      # 8 passed（只有 -darwin 基线，本机门禁）
 make -C <abs>/frontend-vue asset-budget    # exit 0
