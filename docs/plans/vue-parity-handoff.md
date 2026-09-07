@@ -8,13 +8,13 @@
 
 ---
 
-## 当前状态（截至 wave 146，2026-09-07）
+## 当前状态（截至 wave 147，2026-09-07）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
   `54454b7c` = wave 43，`46f62dea` = wave 44，`f15c7181` = wave 45，`ca1c7f1d` = wave 46，
   `c12c4d37` = wave 47，`3f152764` = wave 48，`5978d533` = wave 49，`80ef4d15` = wave 50，
-  `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉；`d468c4bf` = wave 146（**伪元素进取样面**，分栏拖拽把手第一次挂成锚点）。
+  `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉；`d468c4bf` = wave 146（**伪元素进取样面**，分栏拖拽把手第一次挂成锚点）；`ab4dea2c` = wave 147（**会话行的 ⋯ 在手机上够不着**；并推翻了我自己 wave 146 那张表的两行；`ParityState.dimensions` 让终态自己钉断点）。
 - **动过 `frontend/` 的是二十三轮**（wave 138 新增一轮：模型设置对话框的可访问名）（wave 52 实测订正，wave 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97 各加一轮）：
   wave **3 / 4 / 6 / 11 / 17 / 20 / 21 / 22 / 23 / 27 / 28 / 36 / 39 / 40 / 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97**。
   此前这里只列了 36/39/40（那三行本身没说错，它们的范围是「wave 30 以来」），
@@ -36,7 +36,7 @@
   wave 74 两处 `<Toaster />` 用的不是 shadcn wrapper；wave 73 五条「本仓修掉了上游缺陷」；
   wave 62 `/auth/callback` 吞掉 `?next=` 深链。wave 41~~59、75~~81 都没动过。
 
-- **对照台账 199 行**，**89** 个样本，`make -C frontend-vue e2e-parity` **97** 条全绿（wave 145 把 Tabs 的 variant 体系搬过来，219 → **197**：每语言 11 行归零，另有 2 行是同一笔账的读数变好——`switch[review] y` Δ41.9 → Δ-4.1，集合包含判据表达不出「同一个键、更小的值」，所以走了 `PARITY_ACCEPT_GROW=1`）（wave 130/131 换了三处锚点，**台账一行都没动**——加的是覆盖面不是账；wave 132 接上 `artifact-batched-stream#preview-failed`，113/77/85 → **121/79/87**，新增 8 行里 6 行是已判过的重试差异、2 行是新决定）（wave 128：95/73/81 → 107/75/83；wave 129：107/75/83 → **113/77/85**，新增 6 行全部是 wave 128 已判过的 `retry: 3` 那一条在另一屏上的复现）。
+- **对照台账 233 行**，**90** 个样本，`make -C frontend-vue e2e-parity` **98** 条全绿（wave 145 把 Tabs 的 variant 体系搬过来，219 → **197**：每语言 11 行归零，另有 2 行是同一笔账的读数变好——`switch[review] y` Δ41.9 → Δ-4.1，集合包含判据表达不出「同一个键、更小的值」，所以走了 `PARITY_ACCEPT_GROW=1`）（wave 130/131 换了三处锚点，**台账一行都没动**——加的是覆盖面不是账；wave 132 接上 `artifact-batched-stream#preview-failed`，113/77/85 → **121/79/87**，新增 8 行里 6 行是已判过的重试差异、2 行是新决定）（wave 128：95/73/81 → 107/75/83；wave 129：107/75/83 → **113/77/85**，新增 6 行全部是 wave 128 已判过的 `retry: 3` 那一条在另一屏上的复现）。
   wave 96 用 tab 序那一档量出 64 行、四处根因，**wave 97 逐条结清**：
   分隔条那 48 行与 browser 标签那 4 行**修掉了**，菜单 roving 那 2 行**决定接受**，
   滚动区那一处两边同改之后变成了另一处此前完全看不见的结构差异，
@@ -443,6 +443,133 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
 
+## 上一轮（wave 147）做了什么：**先推翻我自己上一轮写的一张表，再顺着它修掉一处手机上够不着的按钮**
+
+### 一、上一轮那张表，两行是错的
+
+wave 146 末尾我列了一张「两个应用的伪元素用在哪儿」的对照表，并把其中两行当成
+下一轮的线索写进了交接文档、记忆和提交说明。这一轮头一件事就是把它推翻：
+
+| wave 146 写的                                          | 实际                                                                                                                       |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `ui/sidebar.tsx` → **无对应**                          | **有**：`ThreadSidebar.vue` 里那颗 rail，类串与上游逐字一致（只有 `-right-4` 写死、上游是 side 感知的两条）                |
+| `workspace/recent-chat-list.tsx` → `ThreadSidebar.vue` | 错配。`ThreadSidebar.vue` 对应的是 `ui/sidebar.tsx` 的 rail；`recent-chat-list.tsx` 那条 `after:left-0` **本仓没有对应物** |
+
+**错在哪**：我拿「哪些文件出现过 `after:`/`before:`」的**文件级**清单去配对，
+而一份文件里可以有好几处伪元素、分别对应上游的不同文件。
+判据应该是**逐条类串**去配，不是文件名。改法很便宜——把每份文件用到的
+`after:`/`before:` **逐条列出来**再配对，一眼就看出 `ThreadSidebar.vue` 那四条
+（`after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border`）
+逐字就是 rail。
+
+### 二、真正没有对应物的那一条，是一个手机上够不着的按钮
+
+`recent-chat-list.tsx:356` 的 `after:left-0!` 挂在 `SidebarMenuAction` 上，而那个
+primitive 的基类里有一句**上游自己写了注释**的话：
+
+```
+// Increases the hit area of the button on mobile.
+"after:absolute after:-inset-2 md:after:hidden",
+```
+
+再加上 `showOnHover` 那一支的 `md:opacity-0`——**两条都只在 768px 以下才生效**。
+本仓那颗按钮（会话行的 ⋯）少了前者，并且把后者写成了**无条件的 `opacity-0`**。
+
+**实测（375px，打开抽屉）**：
+
+|             | opacity | 盒子  | `::after`                                   | 有效点击区 |
+| ----------- | ------- | ----- | ------------------------------------------- | ---------- |
+| React       | **1**   | 20×20 | `content="" display=block inset=-8/-8/-8/0` | **28×36**  |
+| Vue（改前） | **0**   | 20×20 | `content=none`                              | **20×20**  |
+
+两条后果都只在触摸设备上出现：触摸没有 hover，`group-hover/menu-item:opacity-100`
+永远不触发，于是**置顶 / 重命名 / 分享 / 导出 / 删除这一整组动作在手机上根本够不着**；
+就算够得着，20×20 也低于 WCAG 2.5.8 的 24×24 下限。
+
+改法是照上游**渲染之后**的结果写类串（不是照 primitive 的基类——上游调用点用
+`cn()` 顶掉了两条，本仓这里是普通 class 属性、没有 tailwind-merge，
+**冲突类谁赢由样式表顺序决定而不是书写顺序**，所以只写赢的那一条）。
+顺带补上键盘焦点环（本仓此前一条都没有）。**没有跟的**两组：
+`peer-data-[size=*]/menu-button:top-*` 与 `group-data-[collapsible=icon]:hidden`
+——标记在本仓不存在，跟了就是死类。
+
+**改后两个断点逐字一致**：375px 都是 `opacity=1` / 点击区 28×36，1280px 都是
+`opacity=0` / `::after` `display:none` / 20×20。
+
+### 三、为了守住它，给取样面加了一档：**终态可以自己钉断点**
+
+这一处此前没有任何机器看得见，因为**这一屏不在取样面里**（第⑦类）。要挂上去有个
+结构问题：会话行的 ⋯ 在移动端要先点开抽屉，而同一条场景的默认终态是桌面的。
+
+`ParityState` 因此多一个 `dimensions?`（与 wave 128 的 `routes?` 同一条理由：
+**场景 id 受覆盖率棘轮约束、编不出新的**，所以「同一条场景里换一个维度」只能做成
+终态自己的一档）。不写就沿用场景那一层，**没写过的场景键逐字不变**。
+
+两处细节是为了**不动已有的账**：
+
+1. 新终态的第一个兄弟**不取名字**（`id: ""`）——`key()` 只在 `state.id` 非空时加
+   `#`，所以 `thread-list-pin` 原来那两个键逐字不变。
+2. `settle` 只等两个断点上都在的东西。原来它等两条会话标题，而移动端侧栏是抽屉、
+   默认关着，于是新终态**还没跑到自己的第一步就在 settle 上超时**（实测等满 30 秒）。
+   两条会话锚点挪进默认终态的 `steps`——**`steps` 里的 `visible` 同样进取样面**
+   （wave 76），一格几何都不少。
+
+实测结果证明这两处生效：**只新增了一个键，已有的 89 个键内容一字未变。**
+
+### 四、新键第一跑：34 行，一处根因
+
+`thread-list-pin#mobile-drawer/mobile/light/en-US` 报 **34 行**，绝大多数是同一件事：
+
+- **27 行 `ariaOnlyVue`**（抽屉背后的整页：composer、欢迎语、各种按钮）+
+  1 行 `order` + 1 行 `tabOrder` + 1 行 `tabbablesOnlyReact` ——
+  **两个应用用了两种都正确的模态做法**：上游是 Radix `Sheet`，它给兄弟节点打
+  `aria-hidden`；本仓是手写的 `role="dialog" aria-modal="true"` + 手写焦点陷阱。
+  **快照工具认 `aria-hidden`、不认 `aria-modal`**，所以背后那一页只在本仓这边露出来。
+  **键盘那一半两边是等价的，这一点是量出来的**：`tabbablesOnlyVue` 是**空的**
+  ——本仓的焦点陷阱确实把 Tab 关在抽屉里了。
+  **翻案判据**：把这个抽屉改成 reka 的 Dialog primitive（`modal` 那一档会自己给
+  兄弟节点打 `aria-hidden`），这 30 行应当一起消失。**下一轮做。**
+- **3 行 `ariaOnlyReact`**：`Sheet` 自带的 sr-only 标题「Sidebar」与说明
+  「Displays the mobile sidebar.」。同一笔账，随上一条一起翻。
+- **2 行 `requestsOnlyReact`**（`GET /api/features`、`POST /api/langgraph/threads/search`）：
+  **成因未查明**。只记读数，不写猜测（wave 101/102 在这上面栽过一次）。
+  可能与「上游的抽屉是新挂载的模态」同源，下一轮连模态一起查。
+
+台账 **199 → 233 行 / 89 → 90 样本**（走 GROW）。
+
+### 五、负向验证
+
+| #   | 变异                                                   | 期望                 | 实测                                                                                                       |
+| --- | ------------------------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------- |
+| N1  | `md:opacity-0` 退回无条件 `opacity-0`                  | 移动端可见性差异现形 | **真红**：`role:button[More] opacity React=1 Vue=0`                                                        |
+| N2  | 拿掉 `after:absolute -inset-2 left-0! md:after:hidden` | 点击区差异现形       | **真红**：`after React=w=28 h=36 Vue=none`——**wave 146 那一档在第二个组件上抓到了东西**                    |
+| N3  | 把 `state.dimensions` 的支持撤掉                       | 该终态跑回桌面       | **真红**：用例从 `#mobile-drawer · mobile/light/en-US`（1 条）变成 `desktop/light/en-US` + `zh-CN`（2 条） |
+
+**踩到一次自己的坑**：第一版变异脚本按 token 去改，`after:-inset-2` 与
+`md:after:hidden` 在**我刚写的注释里也各出现一次**，`count == 1` 的断言当场失败、
+脚本在写盘前中止——那一跑测的是干净树。**变异要限定在代码行上，别在整份文件里做替换。**
+
+### 六、本轮门禁（wave 147 在批内，跑每轮那三条）
+
+| 门禁                    | 读数                                                     |
+| ----------------------- | -------------------------------------------------------- |
+| `vitest run tests/unit` | **229 文件 / 1924 用例**                                 |
+| `e2e-parity`            | **98 passed**（新终态 +1 条）；台账 **233 行 / 90 样本** |
+| 定向 `make e2e`         | **265 passed**                                           |
+
+### 七、下一轮：**把移动端抽屉换成 Dialog primitive**
+
+1. 本仓 `ThreadSidebar.vue` 的抽屉是手写的：`role="dialog"` + `aria-modal="true"`
+   - 一个 `keydown` 里的 Tab 陷阱 + 一个 Escape 分支 + 一颗 `fixed inset-0` 的背景按钮。
+     上游用的是 `Sheet`（Radix Dialog）。reka 有对等的 `DialogRoot modal`。
+2. 换过去应当一次清掉台账里那 30 行（背后整页 + order + tabOrder + tabbable），
+   剩 3 行标题/说明按上游补或声明。
+3. **别顺手把 `aria-modal` 删掉**：两种做法都是对的，换 primitive 是为了**同时**
+   得到 `aria-hidden`，不是因为 `aria-modal` 错。
+4. 顺带查那两条 `requestsOnlyReact`。
+
+---
+
 ## 上一轮（wave 146）做了什么：**伪元素进取样面——上一轮那个假绿现在有人守了**
 
 ### 一、先过门槛，再动手
@@ -483,14 +610,14 @@ role:tab[Public] after React=content="" op=1 w=56.7 h=2 bg=rgba(10,10,10,255)
 
 ### 四、顺着这一档看出去：两个应用的伪元素用在哪儿
 
-| 上游                             | 本仓                            | 说明                                        |
-| -------------------------------- | ------------------------------- | ------------------------------------------- |
-| `ui/tabs.tsx`                    | `ui/tabs/TabsTrigger.vue`       | wave 145 刚对齐                             |
-| `workspace/input-box.tsx`        | `chat/ChatComposer.vue`         | placeholder                                 |
-| `workspace/recent-chat-list.tsx` | `workspace/ThreadSidebar.vue`   | `after:left-0`                              |
-| `ui/resizable.tsx`               | `workspace/WorkspacePanels.vue` | **分栏把手：把 1px 的线放大成抓得住的区域** |
-| `ui/sidebar.tsx`                 | 无对应                          | 侧栏 rail，本仓没有这个部件                 |
-| 无                               | `markdown/CodeBlock.vue`        | 本仓独有                                    |
+| 上游                             | 本仓                                           | 说明                                                                                                                                              |
+| -------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ui/tabs.tsx`                    | `ui/tabs/TabsTrigger.vue`                      | wave 145 刚对齐                                                                                                                                   |
+| `workspace/input-box.tsx`        | `chat/ChatComposer.vue`                        | placeholder                                                                                                                                       |
+| `workspace/recent-chat-list.tsx` | ~~`workspace/ThreadSidebar.vue`~~ → **无对应** | **⚠ wave 147 推翻了这一行**：`after:left-0!` 挂在 `SidebarMenuAction` 上，本仓那颗按钮当时既没有它也没有 `after:-inset-2`——手机上点击区只有 20×20 |
+| `ui/resizable.tsx`               | `workspace/WorkspacePanels.vue`                | **分栏把手：把 1px 的线放大成抓得住的区域**                                                                                                       |
+| `ui/sidebar.tsx`                 | ~~无对应~~ → `workspace/ThreadSidebar.vue`     | **⚠ wave 147 推翻了这一行**：本仓**有**这颗 rail，类串逐字一致（见 wave 147 第一节）。真正没有对应物的是下面 `recent-chat-list.tsx` 那一条        |
+| 无                               | `markdown/CodeBlock.vue`                       | 本仓独有                                                                                                                                          |
 
 第四行是唯一一处「两边都有、却从没量过」的。按 wave 131 的规矩先数锚点：
 `[role=separator]`（含 `hr`）在 `sidecar-chat` 那一屏**两个应用各恰好 1 个**，
@@ -532,7 +659,7 @@ role:tab[Public] after React=content="" op=1 w=56.7 h=2 bg=rgba(10,10,10,255)
 **第⑨类到此补完，别再做第三次。** 下一轮回到方向 C 本身——
 「找出一句写下来、当规则用、却没有任何机器在守的话」。手上有两条现成的线索：
 
-1. **`ui/sidebar.tsx` 的 rail 在本仓没有对应部件**（上表第五行）。先量「本仓有没有
+1. ~~**`ui/sidebar.tsx` 的 rail 在本仓没有对应部件**（上表第五行）。~~ **⚠ wave 147 查明这条线索本身是错的**——rail 在本仓有、且逐字一致；错的是我按「文件名」而不是「逐条类串」去配对。真正的缺口在 `recent-chat-list.tsx` 那一条，已在 wave 147 修掉。
    别的东西承担同一件事」，再决定是补还是登记成有意不做——**别直接补**，
    wave 98 的 ScrollArea 就是「上游那一层永远不会真的滚动」的先例。
 2. **上游那个 4px 的拖拽把手**：本仓 16px 已经接受进台账，但上游那一侧
