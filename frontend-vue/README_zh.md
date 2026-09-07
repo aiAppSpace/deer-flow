@@ -71,7 +71,21 @@ make e2e-visual         # 产品截图；只在本机，基线是 `-darwin`
 make e2e-list           # 收集全部套件并打印各自 test 数
 make consumer-check     # 修改 packages/agent-core 时运行
 make container-smoke    # 生产镜像、health、SIGTERM 与拒绝策略
+make coverage           # 单测行覆盖率——诊断用，刻意不作为门禁
 ```
+
+`make audit` **今天预期就是红的**，分诊记在 `Makefile` 里那个 target 旁边：四个 high
+里有三个够不着（`js-yaml` 进不到任何客户端 chunk；`nanoid` 那条要自定义生成器，本仓
+没传；`lodash-es` 是经 mermaid 的 parser 进来的，而该 advisory 说的是 `_.template`）。
+第四个——mermaid 的雷达图 DoS——**刻意不在这里修**：本应用把 `mermaid` 钉在 React 经
+`@streamdown/mermaid` 解析出的同一个版本上，因为 mermaid 的产出要在两个应用之间对照
+（`thread-history-mermaid` 是台账场景）。单边升会把台账劈开，两边一起升等于覆盖一个
+vendored 库的依赖树。那次升级属于上游。
+
+`make coverage` **不在** `verify` 里，也没有阈值。两个理由：覆盖率下限买到的是凑数的
+测试；而且这个数字只看得见单测进程里执行过的代码——`app/layouts/`、`server/routes/`
+与 `app.vue` 由 E2E 套件覆盖，在这里读作 0%。拿它去找**哪个模块没人测**，不要当及格线。
+当前读数：语句 73%、行 75%，其中 `app/components/`（66%）是最大的缺口。
 
 一个套件 = 一种后端拓扑，名字说的是**测什么**。迭代时挑最窄的那个：
 
@@ -98,7 +112,8 @@ make e2e-parity         # React 与 Vue 架在同一个 replay Gateway 上；需
 `e2e-channels`、`e2e-agents`、`e2e-settings`、`e2e-shell` 与 `e2e-browser`。
 `make e2e-parity` 同样两边都不进，但理由不同：它是唯一需要兄弟 React 应用的套件，
 而本工作区的 install、build、test 与 e2e 都必须在没有它的情况下跑通
-（`make standalone-check`）。`../frontend` 缺席时它不启动 React，用例整组跳过。
+（`make standalone-check` 静态证明，`make standalone-sim` 真做一遍）。
+`../frontend` 缺席时它不启动 React，用例整组跳过。
 
 `make e2e-visual` 刻意两边都不进：截图基线只有 `-darwin` 一份，在生成并签入
 `-linux` 基线之前，它是本机门禁。这两件事由
@@ -112,7 +127,8 @@ make e2e-parity         # React 与 Vue 架在同一个 replay Gateway 上；需
 make parity-accept      # 对照差异变了之后重新记录 baseline/parity-diff.json
 make proxy-security     # Nitro body 限制、无 body/chunked DELETE、SSE 与 traversal
 make i18n-source-check  # 全部产品 Vue SFC 的 AST 文案门禁
-make standalone-check   # 不允许任何指向 ../frontend 的跨应用引用
+make standalone-check   # 不允许任何指向 ../frontend 的跨应用引用（静态证明）
+make standalone-sim     # 真把 ../frontend 移走，跑一遍声称能扛的东西，再移回来
 make typecheck-core     # packages/agent-core 的独立 tsc
 make upstream-drift     # 报告 ../frontend 自 marker 以来改了什么
 ```

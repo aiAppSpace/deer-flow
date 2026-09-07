@@ -483,6 +483,42 @@ describe("套件表和 Makefile 不许分叉", () => {
     expect(undocumented).toEqual([]);
   });
 
+  /*
+    **两份 README 必须记着同一套 `make` 目标。**
+
+    上面那条只管**套件**，而 README 里还有一半是非套件的门禁目标
+    （`standalone-sim` / `audit` / `coverage` / `typecheck-core` …），
+    那一半此前没有任何机器在核。wave 152 实测：中文 README **少三个**——
+    `audit`、`coverage`，以及 `standalone-sim`。
+
+    最后那个不是随便一条：它是**验收判据的动态那一半**
+    （「移走 `frontend/` 之后 Vue 仍能自足」，wave 83 做的，静态那一半是
+    `standalone-check`）。中文 README 里那句话当时只提了静态的一半，
+    照它走的人根本不会跑那个实验。
+
+    判据取**对称差为空**，零豁免（坑 180：要豁免表就说明判据选错了）。
+    理由与上面那条逐字相同：一份 README 记着、另一份没有，下一个人只能靠读
+    Makefile 才知道它存在。
+  */
+  it("两份 README 记着同一套 make 目标", () => {
+    const targetsOf = (rel: string) =>
+      new Set(
+        [
+          ...readFileSync(join(ROOT, rel), "utf8").matchAll(
+            /make ([a-z][a-z0-9-]*)/g,
+          ),
+        ].map((match) => match[1]!),
+      );
+    const en = targetsOf("README.md");
+    const zh = targetsOf("README_zh.md");
+    // 正则写坏会让下面两条静默全绿（坑 131）。阈值按实测留余量。
+    expect(en.size).toBeGreaterThan(30);
+    expect({
+      只在英文: [...en].filter((name) => !zh.has(name)).sort(),
+      只在中文: [...zh].filter((name) => !en.has(name)).sort(),
+    }).toEqual({ 只在英文: [], 只在中文: [] });
+  });
+
   it("聚合入口的成员和文档一致", () => {
     const makefile = readFileSync(join(ROOT, "Makefile"), "utf8");
     for (const aggregate of ["e2e-mock", "e2e-backend"]) {
