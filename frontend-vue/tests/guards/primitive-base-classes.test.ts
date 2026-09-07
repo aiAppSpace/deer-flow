@@ -10,11 +10,18 @@
                    负向验证 N2 把基类改回原样，那条门禁 4 条全绿。
                    **别把「我加了个门禁」当成「这一类以后有人守了」**（线索 286）。
 
-                   第一跑：37 个同名且两边都读得出基类的组件，**10 个不一致**。
-                   其中四处是漏抄，已在同一轮修掉（`CommandShortcut` 的 `tracking-widest`、
+                   第一跑（wave 141）：37 个同名且两边都读得出基类的组件，**10 个不一致**。
+                   四处是漏抄，wave 141 修掉（`CommandShortcut` 的 `tracking-widest`、
                    `DropdownMenuSeparator` 的 `-mx-1`、`TabsContent` 的 `flex-1`、
-                   `TooltipContent` 整组进出动画 + `dark:bg-[#050504]` + transform-origin）。
-                   剩下 7 个逐条写在 `DECLARED` 里。
+                   `TooltipContent` 整组进出动画 + `dark:bg-[#050504]` + transform-origin）；
+                   另三处 wave 142 修掉（两个 DropdownMenu content 的 `border-border`
+                   `text-sm` 与 `shadow-lg`、`HoverCardContent` 的尺寸内距与整组动画）。
+
+                   **现在 `DECLARED` 里剩下的 7 条全部只差三类东西**：z-index（本仓统一的
+                   那一层）、`--reka-*` 对 `--radix-*` 的变量名、以及 Tailwind 的等价写法
+                   （`min-w-32` ≡ `min-w-[8rem]`、`top-1/2 -translate-x-1/2` ≡
+                   `top-[50%] translate-x-[-50%]`），外加 ScrollArea 那笔已决定的账。
+                   **一条「待修」都不剩了**；再有新条目进来就是新的漂移。
 
                    **判据形状**：不是「必须一字不差」——两个应用用的是不同的组件库
                    （Radix vs Reka），CSS 变量名天生不同；Tailwind 也有等价的两种写法。
@@ -47,11 +54,11 @@ const DECLARED: Record<string, string> = {
     "① z-index：本仓统一到 80 那一层（已决定，见一页纸清单）；② `top-1/2 -translate-x-1/2` 与上游 `top-[50%] translate-x-[-50%]` 是同一条 CSS 的两种写法。",
   DialogOverlay: "z-index：本仓统一到 80 那一层（已决定）。",
   DropdownMenuContent:
-    "① z-index（已决定）；② `--reka-*` 与 `--radix-*` 是两个组件库各自的变量名，天生不同；③ `min-w-32` ≡ `min-w-[8rem]`；④ **本仓多 `border-border` `text-sm`、`shadow-lg` 对上游 `shadow-md`——这三条是真差异，待修**。",
+    "① z-index（已决定）；② `--reka-*` 与 `--radix-*` 是两个组件库各自的变量名，天生不同；③ `min-w-32` ≡ `min-w-[8rem]`。wave 142 已把 `border-border`（与 base layer 的 `* { border-color: var(--border) }` 重复）、`text-sm`（上游不在容器上设，菜单项自己设）与 `shadow-lg`→`shadow-md` 三处对齐。",
   DropdownMenuSubContent:
-    "同 DropdownMenuContent 的 ①②③；**本仓多 `border-border` `text-sm` 是真差异，待修**。",
+    "同 DropdownMenuContent 的 ①②③；wave 142 已去掉重复的 `border-border` 与容器上的 `text-sm`（`shadow-lg` 与上游一致，保留）。",
   HoverCardContent:
-    "① z-index（已决定）；② `--radix-*` 变量名；③ **`w-80` 对上游 `w-64`、`p-3` 对 `p-4`、`outline-none` 对 `outline-hidden`，还缺整组进出动画——都是真差异，待修**。",
+    "① z-index（已决定）；② `--reka-*` 变量名。wave 142 已把 `w-64` / `p-4` / `outline-hidden` 与整组进出动画、transform-origin 补齐。",
   ScrollArea:
     "本仓多一个 `overflow-hidden`。ScrollArea 这一整类差异 wave 98 已判过（上游那层 `Suggestions` 永远不会真的滚动，决定不跟）；这一条随那笔账。",
   TooltipContent:
