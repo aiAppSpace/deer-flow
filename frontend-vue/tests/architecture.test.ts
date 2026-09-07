@@ -501,6 +501,44 @@ describe("L2 reusable UI boundary", () => {
     expect(violations).toEqual([]);
   });
 
+  /*
+    **`ARCHITECTURE.md:84`：「`app/components/ui/` 是唯一的交互控件底座，建在 Reka UI
+    之上」——这句话此前没有任何机器在守**（wave 153 逐句盘点 `ARCHITECTURE.md` 里
+    43 句规范性断言时量到的；`grep -rn reka-ui tests/ scripts/` 只找到三处，
+    都是 chunk 分桶与体积预算在用它当**打包种子**，没有一处在守这条边界）。
+
+    实测当时它是**真的**：`app/` 与 `packages/` 里 `ui/` 之外 **0 处** import `reka-ui`，
+    `ui/` 之内 **69 份**。**一条正确但没人守的边界，和一条错的边界只差一次改动**——
+    产品组件直接建在 reka 上，就绕开了这一层统一补的东西：`aria-modal`、z-index 分层、
+    可访问名走 `primitives.*`、以及 wave 148 那三处刚收拢回来的模态语义。
+
+    判据零豁免（坑 180）：**`app/components/ui/` 之外，任何文件都不许 import `reka-ui`**。
+    需要 primitive 就去 `ui/` 里加一个，而不是在产品层直接拿 reka 拼一个。
+    反方向也查：`ui/` 那一半必须**真的**在用 reka——否则上面那个 0 是在数空气。
+  */
+  it("keeps Reka behind app/components/ui/", () => {
+    const inside: string[] = [];
+    const outside: string[] = [];
+    for (const file of checkoutFiles(["app", "packages"], {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+    })) {
+      if (!/\.(vue|ts)$/.test(file)) continue;
+      const source = stripJsComments(
+        readFileSync(new URL(`../${file}`, import.meta.url), "utf8"),
+        file.endsWith(".vue") ? ["line", "block", "html"] : ["line", "block"],
+      );
+      if (!/["']reka-ui["']/.test(source)) continue;
+      (file.startsWith("app/components/ui/") ? inside : outside).push(file);
+    }
+    // 尺子先量自己：路径或正则写坏会让下面那条静默全绿（坑 131）。
+    expect(inside.length).toBeGreaterThan(50);
+    expect(
+      outside,
+      "Reka 只能出现在 app/components/ui/ 里——产品层需要 primitive 就去那一层加一个，" +
+        "直接建在 reka 上会绕开这一层统一补的 aria-modal、z-index 分层与可访问名约定。",
+    ).toEqual([]);
+  });
+
   it("uses artifacts as a one-way extension consumer", () => {
     const artifactPanel = readFileSync(
       new URL(
