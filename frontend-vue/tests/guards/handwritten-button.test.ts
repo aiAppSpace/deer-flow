@@ -77,8 +77,9 @@ const ALLOWED: Record<string, [number, string]> = {
   "components/markdown/MarkdownCopyButton.vue": [1, "streamdown 复制键"],
   "components/markdown/MarkdownImage.vue": [1, "streamdown 图片下载键"],
   "components/markdown/MarkdownLinkSafetyModal.vue": [
-    3,
-    "streamdown link-safety modal：关闭 + 复制链接 + 打开链接",
+    2,
+    "streamdown link-safety modal 的复制链接 + 打开链接。**关闭那颗 wave 148 " +
+      "没了**：壳子换成 ui/dialog 之后由 DialogContent 自带的关闭键承担",
   ],
   "components/markdown/MarkdownSafeLink.vue": [1, "streamdown 外链按钮"],
   "components/markdown/MarkdownTable.vue": [
@@ -90,8 +91,9 @@ const ALLOWED: Record<string, [number, string]> = {
     "streamdown MermaidDownloadButton：触发器 + 三个格式项",
   ],
   "components/markdown/MermaidFullscreen.vue": [
-    2,
-    "streamdown 全屏触发器 + 退出键",
+    1,
+    "streamdown 全屏触发器。**退出键 wave 148 没了**：壳子换成 ui/dialog " +
+      "之后由 DialogContent 自带的关闭键承担",
   ],
   "components/markdown/MermaidZoomPan.vue": [
     3,
@@ -107,9 +109,10 @@ const ALLOWED: Record<string, [number, string]> = {
     "ui/sidebar.tsx 的 SidebarMenuAction，上游也手写",
   ],
   "components/workspace/ThreadSidebar.vue": [
-    5,
-    "ui/sidebar.tsx 的 SidebarMenuButton ×2 / SidebarRail / 窄屏遮罩；" +
-      "删除失败的重试链接同 recent-chat-list.tsx:468",
+    4,
+    "ui/sidebar.tsx 的 SidebarMenuButton ×2 / SidebarRail；" +
+      "删除失败的重试链接同 recent-chat-list.tsx:468。**窄屏遮罩那颗 wave 148 " +
+      "没了**：抽屉换成 ui/sheet 之后遮罩由 DialogOverlay 承担",
   ],
   "components/workspace/TodoList.vue": [
     1,

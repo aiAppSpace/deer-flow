@@ -390,7 +390,6 @@ const l2Files = [
   "app/core/markdown/render.ts",
   "app/core/markdown/rendering-context.ts",
   "app/core/markdown/safe-markdown.ts",
-  "app/lib/focusable.ts",
   "app/lib/utils.ts",
 ] as const;
 
@@ -414,8 +413,8 @@ const l2ForbiddenImports = [
   而没有任何门禁变红**。其中 `app/core/auth/logout.ts` 拿这条边界一跑就违规
   （import `@/core/auth/client-state`），它本来就不该是 L2，已改成 L3。
 
-  名单同时**改成全表字母序**：它此前是「按冻结时间追加」（`app/lib/focusable.ts`
-  卡在第 30 位、`app/core/code-editor/*` 在第 41 位），而交接文档一直写着「按字母序」。
+  名单同时**改成全表字母序**：它此前是「按冻结时间追加」（当时那份 focusable
+  模块卡在第 30 位、`app/core/code-editor/*` 在第 41 位；那份文件 wave 148 已删），而交接文档一直写着「按字母序」。
   顺序对这份名单没有任何语义（只被两个 for...of 消费），排序之后插入位置唯一，
   下面那条断言把它钉住。
 */

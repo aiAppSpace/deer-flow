@@ -12,10 +12,17 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(
-  resolve(process.cwd(), "app/components/workspace/ThreadSidebar.vue"),
-  "utf8",
-);
+/*
+  侧栏自 wave 148 起是**两份文件**：外壳（窄屏是 Sheet、宽屏是版面里的一块）
+  与主体。`data-slot="sidebar-inner"` 跟着外壳走，其余骨架 slot 仍在主体里，
+  所以这份合同要同时读两份——只读主体会让 `sidebar-inner` 那一条静默失守。
+*/
+const source = [
+  "app/components/workspace/ThreadSidebarShell.vue",
+  "app/components/workspace/ThreadSidebar.vue",
+]
+  .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
+  .join("\n");
 
 /** 坑 59：锚点串往往也躺在解释它的注释里，不剥注释会把守卫钉成假绿。 */
 const template = source

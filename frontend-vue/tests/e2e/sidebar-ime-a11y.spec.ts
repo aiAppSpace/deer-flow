@@ -110,7 +110,12 @@ test("mobile drawer is modal, traps focus, closes by Escape/backdrop and restore
     .getByRole("button", { name: "Toggle sidebar" });
   await trigger.click();
 
-  const dialog = page.getByRole("dialog", { name: "Workspace navigation" });
+  /*
+    **名字来自 `SheetTitle`，不是手写的 `aria-label`**（wave 148）：抽屉换成
+    `ui/sheet` 之后，可访问名由 sr-only 的 `<SheetTitle>Sidebar</SheetTitle>`
+    经 `aria-labelledby` 提供——与上游 `ui/sidebar.tsx` 的移动端分支逐字一致。
+  */
+  const dialog = page.getByRole("dialog", { name: "Sidebar" });
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   // 触发器不带 aria-expanded（与 React 的 SidebarTrigger 一致），抽屉开合看抽屉本身：
   // 关着的时候它整棵子树都不在 DOM 里。
@@ -137,8 +142,14 @@ test("mobile drawer is modal, traps focus, closes by Escape/backdrop and restore
   await expect(dialog).toHaveCount(0);
   await expect(trigger).toBeFocused();
 
+  /*
+    **遮罩不再是一颗按钮**：wave 148 之前本仓自己画了一颗 `fixed inset-0` 的
+    `<button aria-label="Close sidebar">`；现在是 reka 的 `DialogOverlay`，
+    点它由 `DismissableLayer` 的 pointer-down-outside 关闭——与上游同一条路径。
+  */
   await trigger.click();
-  await page.getByRole("button", { name: "Close sidebar" }).click({
+  await expect(dialog).toHaveCount(1);
+  await page.locator('[data-slot="sheet-overlay"]').click({
     position: { x: 380, y: 820 },
   });
   await expect(dialog).toHaveCount(0);
@@ -156,7 +167,7 @@ test("mobile ignores the desktop collapsed cookie and closes after route navigat
   await openWorkspace(page);
   const trigger = page.getByRole("button", { name: "Toggle sidebar" });
   await trigger.click();
-  const dialog = page.getByRole("dialog", { name: "Workspace navigation" });
+  const dialog = page.getByRole("dialog", { name: "Sidebar" });
   await expect(dialog.getByText("New chat", { exact: true })).toBeVisible();
 
   await dialog.getByRole("link", { name: "Scheduled tasks" }).click();

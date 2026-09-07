@@ -42,6 +42,8 @@ export const zhCN: Translations = {
   primitives: {
     close: "Close",
     toggleSidebar: "Toggle Sidebar",
+    sidebar: "Sidebar",
+    sidebarDescription: "Displays the mobile sidebar.",
     submit: "Submit",
     stop: "Stop",
     skillSuggestions: "Skill suggestions",
@@ -1245,7 +1247,6 @@ export const zhCN: Translations = {
     },
   },
   navigation: {
-    workspace: "工作区导航",
     closeSidebar: "关闭侧栏",
     deleteConversationFailed: "删除对话失败。",
     tryAgain: "重试",

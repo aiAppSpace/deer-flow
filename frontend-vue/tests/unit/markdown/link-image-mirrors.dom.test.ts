@@ -67,22 +67,31 @@ describe("MarkdownSafeLink", () => {
     );
 
     await wrapper.get("button").trigger("click");
-    const modal = wrapper.get('[data-streamdown="link-safety-modal"]');
-    expect(modal.text()).toContain("https://example.com/a");
+    await flushPromises();
+    /*
+      **弹窗 portal 到 body**（wave 148 换成 ui/dialog 之后），
+      所以要去 document 上找，不是在 wrapper 的子树里找。
+    */
+    const modal = document.querySelector<HTMLElement>(
+      '[data-streamdown="link-safety-modal"]',
+    )!;
+    expect(modal).not.toBeNull();
+    expect(modal.textContent).toContain("https://example.com/a");
     expect(openSpy).not.toHaveBeenCalled();
 
-    const openButton = modal
-      .findAll("button")
-      .find((button) => button.text() === "Open link")!;
-    await openButton.trigger("click");
+    const openButton = [...modal.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Open link",
+    )!;
+    openButton.click();
+    await flushPromises();
     expect(openSpy).toHaveBeenCalledWith(
       "https://example.com/a",
       "_blank",
       "noreferrer",
     );
-    expect(wrapper.find('[data-streamdown="link-safety-modal"]').exists()).toBe(
-      false,
-    );
+    expect(
+      document.querySelector('[data-streamdown="link-safety-modal"]'),
+    ).toBeNull();
     wrapper.unmount();
   });
 
@@ -97,51 +106,76 @@ describe("MarkdownSafeLink", () => {
     });
     expect(wrapper.get("button").attributes("data-incomplete")).toBe("true");
     await wrapper.get("button").trigger("click");
-    expect(wrapper.find('[data-streamdown="link-safety-modal"]').exists()).toBe(
-      false,
-    );
+    await flushPromises();
+    expect(
+      document.querySelector('[data-streamdown="link-safety-modal"]'),
+    ).toBeNull();
     wrapper.unmount();
   });
 });
 
 describe("MarkdownLinkSafetyModal", () => {
-  it("closes on Escape and on the backdrop, but not on the card itself", async () => {
+  /*
+    **wave 148 之前这里钉的是一套手搓合同**：一个 `role="button"` 的裸遮罩、
+    一个 document 上的 Escape 监听、一份手写的引用计数滚动锁。那一套没有 dialog
+    语义、没有焦点陷阱、不给兄弟节点打 `aria-hidden`——一个「要不要跳到这个 URL」
+    的确认框，读屏器听不出它是对话框。
+
+    现在壳子是 `ui/dialog`，上面那四件事全部由 reka 的 `DialogContentModal`
+    承担。**所以这里钉的东西也要跟着换**：不再钉「我自己实现得对不对」，
+    而是钉「我确实把它交给了 primitive」——真的是一个 dialog、真的带标题与说明、
+    Escape 真的关得掉。滚动锁那一条不再由本组件负责，它的用例随实现一起删掉了。
+  */
+  it("is a real dialog with a title and a description", async () => {
     const wrapper = mount(MarkdownLinkSafetyModal, {
       props: { url: "https://example.com/a", open: true },
       attachTo: document.body,
     });
-
-    await wrapper.get('[role="presentation"]').trigger("click");
-    expect(wrapper.emitted("close")).toBeUndefined();
-
-    await wrapper.get('[data-streamdown="link-safety-modal"]').trigger("click");
-    expect(wrapper.emitted("close")).toHaveLength(1);
-
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     await flushPromises();
-    expect(wrapper.emitted("close")).toHaveLength(2);
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog).not.toBeNull();
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    /*
+      **顺着 id 解析到元素再比文字，不是只看属性在不在。**
+      reka 的 DialogContent **无论有没有标题元素都会写上生成的 id**——
+      wave 148 的负向验证 N4 当场证明了这一点：把 `DialogDescription` 整个删掉，
+      只查属性的那版断言照样全绿（假绿）。
+    */
+    const labelled = document.getElementById(
+      dialog.getAttribute("aria-labelledby")!,
+    );
+    const described = document.getElementById(
+      dialog.getAttribute("aria-describedby")!,
+    );
+    expect(labelled?.textContent?.trim()).toBe("Open external link?");
+    expect(described?.textContent?.trim()).toBe(
+      "You're about to visit an external website.",
+    );
+    expect(dialog.dataset.streamdown).toBe("link-safety-modal");
+    expect(dialog.textContent).toContain("https://example.com/a");
     wrapper.unmount();
   });
 
-  /*
-    滚动锁是**引用计数**的，不是一个布尔：同时开两层时，先关的那个不能把滚动还回去。
-  */
-  it("reference-counts the body scroll lock", async () => {
-    const first = mount(MarkdownLinkSafetyModal, {
+  it("closes on Escape through the primitive", async () => {
+    const wrapper = mount(MarkdownLinkSafetyModal, {
       props: { url: "https://example.com/a", open: true },
       attachTo: document.body,
     });
-    const second = mount(MarkdownLinkSafetyModal, {
-      props: { url: "https://example.com/b", open: true },
-      attachTo: document.body,
-    });
-    expect(document.body.style.overflow).toBe("hidden");
+    await flushPromises();
 
-    first.unmount();
-    expect(document.body.style.overflow).toBe("hidden");
-
-    second.unmount();
-    expect(document.body.style.overflow).toBe("");
+    /*
+      事件打在内容节点上并冒泡：reka 的 `DismissableLayer` 听的是 layer 自己，
+      直接往 document 上打在 jsdom 里到不了它。
+    */
+    document
+      .querySelector('[role="dialog"]')!
+      .dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    await flushPromises();
+    expect(wrapper.emitted("close")).toHaveLength(1);
+    wrapper.unmount();
   });
 
   it("confirms through both events so the caller can navigate then close", async () => {
@@ -149,10 +183,13 @@ describe("MarkdownLinkSafetyModal", () => {
       props: { url: "https://example.com/a", open: true },
       attachTo: document.body,
     });
-    const openButton = wrapper
-      .findAll("button")
-      .find((button) => button.text() === "Open link")!;
-    await openButton.trigger("click");
+    await flushPromises();
+
+    const openButton = [
+      ...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
+    ].find((button) => button.textContent?.trim() === "Open link")!;
+    openButton.click();
+    await flushPromises();
     expect(wrapper.emitted("confirm")).toHaveLength(1);
     expect(wrapper.emitted("close")).toHaveLength(1);
     wrapper.unmount();

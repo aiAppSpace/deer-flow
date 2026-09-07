@@ -6,7 +6,7 @@
   【依赖关系】     threads store/API · workspace routes · ui/dialog · ui/dropdown-menu
   【边界与注意】   业务导航壳，不属于通用 agent UI 契约。
 */
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   Bot,
   Bug,
@@ -25,6 +25,7 @@ import {
 
 import WorkspaceChannelsList from "@/components/workspace/channels/WorkspaceChannelsList.vue";
 import ThreadActionsMenu from "@/components/workspace/ThreadActionsMenu.vue";
+import ThreadSidebarShell from "@/components/workspace/ThreadSidebarShell.vue";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
 import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
 import VirtualThreadList from "@/components/workspace/VirtualThreadList.vue";
@@ -59,7 +60,6 @@ import {
   titleOfThread,
 } from "@/core/threads/utils";
 import type { AgentThread } from "@/core/threads/types";
-import { visibleFocusableWithin } from "@/lib/focusable";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 
 const route = useRoute();
@@ -70,7 +70,6 @@ const features = useAgentsApiEnabled();
 const settingsDialog = useSettingsDialog();
 const toast = useWorkspaceToast();
 const sentinel = ref<HTMLElement | null>(null);
-const sidebarElement = ref<HTMLElement | null>(null);
 /*
   窄屏由 JS 判定而不是只靠 CSS：React 在移动端把侧栏换成 Sheet，关着时**整棵子树
   都不在 DOM 里**。只用 translate 推出屏幕的话，元素仍然可聚焦、仍然被读屏器遍历——
@@ -101,44 +100,21 @@ const deleteError = ref<string | null>(null);
 const failedDeleteThread = ref<AgentThread | null>(null);
 const deletingThreadId = ref<string | null>(null);
 let observer: IntersectionObserver | null = null;
-let focusBeforeMobileOpen: HTMLElement | null = null;
 
 const displayThreadTitle = (thread: Parameters<typeof titleOfThread>[0]) =>
   titleOfThread(thread, $i18n.t.value.pages.untitled);
 
-function onWindowKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape" && mobileOpen.value) {
-    event.preventDefault();
-    closeMobileSidebar();
-  }
-}
+/*
+  **窄屏抽屉的模态语义全部由 `ThreadSidebarShell` 里的 Sheet（reka Dialog）承担**
+  （wave 148）。这里原来手写着四件套：window 上的 Escape 分支、`keydown` 里的
+  Tab 陷阱、开合时的焦点保存/归还、以及一颗 `fixed inset-0` 的背景按钮。
 
-/**
- * 抽屉里当前**可见且可聚焦**的元素，按文档序。
- *
- * 判据本身住在 `@/lib/focusable`，和 UI primitive 共用同一份定义——
- * 抽屉自己再写一遍，就会出现「primitive 认为第一个可聚焦元素是 A、
- * 抽屉认为是 B」这种只在窄屏才暴露的分叉。为什么必须过滤可见性，
- * 见那个文件里的说明。
- */
-function focusableInDrawer(): HTMLElement[] {
-  return visibleFocusableWithin(sidebarElement.value);
-}
-
-function keepMobileFocus(event: KeyboardEvent) {
-  if (event.key !== "Tab" || !mobileOpen.value) return;
-  const focusable = focusableInDrawer();
-  if (!focusable.length) return;
-  const first = focusable[0]!;
-  const last = focusable.at(-1)!;
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault();
-    first.focus();
-  }
-}
+  换掉它们不是为了少写代码——wave 147 把这一屏挂进对照取样面时量出 30 行差异，
+  同一处根因：**上游的抽屉是 Radix Dialog，它给兄弟节点打 `aria-hidden`**，
+  而手写这一套只声明了 `aria-modal="true"`。声明靠 AT 自己认，`aria-hidden`
+  是事实。reka 的 `DialogContentModal` 内部就是 `useHideOthers` + `FocusScope`
+  + `DismissableLayer`，四件事一次全给。
+*/
 
 onMounted(() => {
   narrowMedia = globalThis.matchMedia?.(SIDEBAR_NARROW_QUERY) ?? null;
@@ -149,7 +125,6 @@ onMounted(() => {
   restoreFromCookie();
   globalThis.addEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.addEventListener("deerflow:collapse-sidebar", collapseSidebar);
-  globalThis.addEventListener("keydown", onWindowKeydown);
   void threads.loadInitial();
   observer = new IntersectionObserver(
     (entries) => {
@@ -165,26 +140,11 @@ onUnmounted(() => {
   observer?.disconnect();
   globalThis.removeEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.removeEventListener("deerflow:collapse-sidebar", collapseSidebar);
-  globalThis.removeEventListener("keydown", onWindowKeydown);
 });
 
 watch(sentinel, (element, previous) => {
   if (previous) observer?.unobserve(previous);
   if (element) observer?.observe(element);
-});
-
-watch(mobileOpen, async (open) => {
-  if (open) {
-    focusBeforeMobileOpen =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    await nextTick();
-    focusableInDrawer()[0]?.focus();
-  } else {
-    focusBeforeMobileOpen?.focus({ preventScroll: true });
-    focusBeforeMobileOpen = null;
-  }
 });
 
 watch(() => route.fullPath, closeMobileSidebar);
@@ -339,22 +299,14 @@ function openSettingsDialog(section: "appearance" | "about") {
     都没有。Vue 原来只是把它 translate 出屏幕——看不见，但 Tab 一路按下去仍然会走
     进这 5 个入口，读屏器也照念不误。
   -->
-  <div
-    v-if="mobileOpen || !isNarrow"
-    id="workspace-sidebar"
-    ref="sidebarElement"
-    data-slot="sidebar-inner"
-    data-sidebar="sidebar"
-    :data-mobile="mobileOpen ? 'true' : undefined"
-    :role="mobileOpen ? 'dialog' : undefined"
-    :aria-modal="mobileOpen ? 'true' : undefined"
-    :aria-label="mobileOpen ? $i18n.t.value.navigation.workspace : undefined"
-    class="border-sidebar-border bg-sidebar text-sidebar-foreground fixed inset-y-0 left-0 z-50 flex h-screen shrink-0 flex-col border-r transition-[width,transform] duration-200 md:static md:translate-x-0"
-    :class="[
-      mobileOpen ? 'w-72' : collapsed ? 'w-12' : 'w-64',
-      mobileOpen ? 'translate-x-0' : '-translate-x-full',
-    ]"
-    @keydown="keepMobileFocus"
+  <ThreadSidebarShell
+    :narrow="isNarrow"
+    :open="mobileOpen"
+    :collapsed="collapsed"
+    :title="$i18n.t.value.primitives.sidebar"
+    :description="$i18n.t.value.primitives.sidebarDescription"
+    :close-label="$i18n.t.value.navigation.closeSidebar"
+    @update:open="mobileOpen = $event"
   >
     <!--
       收起态换的是**整块**头部，不是给同一块加几个 class：React 的 WorkspaceHeader
@@ -913,15 +865,7 @@ function openSettingsDialog(section: "appearance" | "about") {
       :class="collapsed ? 'cursor-e-resize' : 'cursor-w-resize'"
       @click="toggleSidebar"
     />
-  </div>
-  <button
-    v-if="mobileOpen"
-    type="button"
-    :aria-label="$i18n.t.value.navigation.closeSidebar"
-    aria-controls="workspace-sidebar"
-    class="fixed inset-0 z-40 bg-black/30 md:hidden"
-    @click="closeMobileSidebar"
-  />
+  </ThreadSidebarShell>
   <Dialog
     :open="renameThreadId !== null"
     @update:open="!$event && (renameThreadId = null)"

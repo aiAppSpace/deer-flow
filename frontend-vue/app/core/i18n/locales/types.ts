@@ -18,6 +18,8 @@ export interface Translations {
   primitives: {
     close: string;
     toggleSidebar: string;
+    sidebar: string;
+    sidebarDescription: string;
     submit: string;
     stop: string;
     skillSuggestions: string;
@@ -1034,7 +1036,6 @@ export interface Translations {
   };
 
   navigation: {
-    workspace: string;
     closeSidebar: string;
     deleteConversationFailed: string;
     tryAgain: string;

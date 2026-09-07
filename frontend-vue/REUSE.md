@@ -124,8 +124,7 @@ The independently reusable source set is intentionally small:
 - `app/components/ui/**`, the Reka-based primitive layer (Dialog, AlertDialog,
   Sheet, Popover, DropdownMenu, Select, Tabs, Switch, Tooltip, HoverCard,
   ScrollArea, Command, Button);
-- `app/lib/utils.ts`, which the variants use, and `app/lib/focusable.ts`, the one
-  definition of "currently visible and focusable".
+- `app/lib/utils.ts`, which the variants use.
 
 `tests/architecture.test.ts` freezes this exact set, requires final `L2` file
 headers and rejects imports from DeerFlow protocol, API, artifact, auth, channel,

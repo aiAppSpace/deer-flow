@@ -2,28 +2,45 @@
   【文件职责】     外部链接的确认弹窗：念出目标 URL，给复制与打开两个出口。
   【架构位置】     L2 —— 通用渲染层组件
   【主要导出】     默认组件
-  【依赖关系】     ./MarkdownIcon.vue · @/lib/utils · $i18n（globalProperties）
-  【边界与注意】   逐字对着 streamdown `dist/chunk-BO2N2NFS.js` 的 link-safety modal 写
-                   （streamdown 2.5.0）。它不是装饰：markdown 正文是**模型产出**的，
+  【依赖关系】     ui/dialog · ./MarkdownIcon.vue · @/lib/utils · $i18n（globalProperties）
+  【边界与注意】   内容与文案逐字对着 streamdown `dist/chunk-BO2N2NFS.js` 的 link-safety
+                   modal（streamdown 2.5.0）。它不是装饰：markdown 正文是**模型产出**的，
                    直接给一个可点的外链等于把跳转决定权交给模型。上游默认开着这一层
                    （`linkSafety: { enabled: true }` 是它的内建默认值），本仓此前整个缺失
                    ——渲染的是直接跳转的 `<a>`（线索 112）。
 
-                   三处照抄，不要"优化"：
-                   ① **body 滚动锁是引用计数的**，不是一个布尔。同时开两层（例如
-                      artifact 面板里再弹一个）时，先关的那个不能把滚动还回去。
-                   ② 遮罩自己也接 Escape 与点击关闭，并且内层卡片要 `stopPropagation`
-                      ——否则点卡片里任何地方都会连带关掉。
-                   ③ 复制成功后 2 秒回落成"复制链接"。计时器要在卸载时清掉，
-                      否则弹窗关掉之后那个回调还会写一个已经没人看的 ref。
+                   **壳子走 `ui/dialog`，不再手搓遮罩**（wave 148）。原来这里是照抄
+                   streamdown 的裸实现：一个 `role="button" tabindex="0"` 的
+                   `fixed inset-0` 遮罩 + 一个 `role="presentation"` 的卡片 +
+                   一个 document 上的 Escape 监听 + 一份手写的引用计数滚动锁。
+                   那一套**没有 dialog 语义、没有焦点陷阱、不给兄弟节点打
+                   `aria-hidden`、关闭后也不归还焦点**——一个「要不要跳转到这个 URL」
+                   的确认框，读屏器听不出它是个对话框，Tab 一路走出去还能点到正文里
+                   的其它链接。这是本轮系统扫描出的第三处同根因（另两处是移动端侧栏
+                   抽屉与 mermaid 全屏）。
+
+                   换成 primitive 之后，reka 的 `DialogContentModal` 一次给齐四件事
+                   （`useHideOthers` / `FocusScope` / `DismissableLayer` / 滚动锁），
+                   **本仓不再自己写一份**——手写的那份滚动锁连同 `data-markdown-modal-depth`
+                   一起删掉了。
+
+                   仍然照抄的一处：复制成功后 2 秒回落成「复制链接」，计时器在卸载时
+                   清掉，否则弹窗关掉之后那个回调还会写一个已经没人看的 ref。
 
                    关闭按钮的名字取 `primitives.close`——上游那一句同样是 streamdown
                    写死的 "Close"，本仓这一串已经在 primitives 里了，不再重复一份。
 -->
 
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 import MarkdownIcon from "./MarkdownIcon.vue";
@@ -34,47 +51,7 @@ const emit = defineEmits<{ close: []; confirm: [] }>();
 const copied = ref(false);
 let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 见文件头 ①：同时开几层时，滚动锁要按引用计数还回去。 */
-let locked = false;
-function lockScroll() {
-  if (locked) return;
-  locked = true;
-  const depth = Number(document.body.dataset.markdownModalDepth ?? "0") + 1;
-  document.body.dataset.markdownModalDepth = String(depth);
-  if (depth === 1) document.body.style.overflow = "hidden";
-}
-function unlockScroll() {
-  if (!locked) return;
-  locked = false;
-  const depth = Math.max(
-    0,
-    Number(document.body.dataset.markdownModalDepth ?? "0") - 1,
-  );
-  document.body.dataset.markdownModalDepth = String(depth);
-  if (depth === 0) document.body.style.overflow = "";
-}
-
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === "Escape") emit("close");
-}
-
-watch(
-  () => props.open,
-  (open) => {
-    if (open) {
-      lockScroll();
-      document.addEventListener("keydown", onKeydown);
-    } else {
-      document.removeEventListener("keydown", onKeydown);
-      unlockScroll();
-    }
-  },
-  { immediate: true },
-);
-
 onBeforeUnmount(() => {
-  document.removeEventListener("keydown", onKeydown);
-  unlockScroll();
   if (copyTimer !== null) clearTimeout(copyTimer);
 });
 
@@ -98,38 +75,21 @@ function confirm() {
 </script>
 
 <template>
-  <div
-    v-if="props.open"
-    class="bg-background/50 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
-    data-streamdown="link-safety-modal"
-    role="button"
-    :tabindex="0"
-    @click="emit('close')"
-    @keydown.escape="emit('close')"
-  >
-    <div
-      class="bg-background relative mx-4 flex w-full max-w-md flex-col gap-4 rounded-xl border p-6 shadow-lg"
-      role="presentation"
-      @click.stop
-      @keydown.stop
+  <Dialog :open="props.open" @update:open="!$event && emit('close')">
+    <DialogContent
+      data-streamdown="link-safety-modal"
+      :close-label="$i18n.t.value.primitives.close"
+      class="sm:max-w-md"
     >
-      <button
-        class="text-muted-foreground hover:bg-muted hover:text-foreground absolute top-4 right-4 rounded-md p-1 transition-all"
-        :title="$i18n.t.value.primitives.close"
-        type="button"
-        @click="emit('close')"
-      >
-        <MarkdownIcon name="XIcon" :size="16" />
-      </button>
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center gap-2 text-lg font-semibold">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
           <MarkdownIcon name="ExternalLinkIcon" :size="20" />
           <span>{{ $i18n.t.value.markdown.openExternalLink }}</span>
-        </div>
-        <p class="text-muted-foreground text-sm">
+        </DialogTitle>
+        <DialogDescription>
           {{ $i18n.t.value.markdown.externalLinkWarning }}
-        </p>
-      </div>
+        </DialogDescription>
+      </DialogHeader>
       <div
         :class="
           cn(
@@ -162,6 +122,6 @@ function confirm() {
           <span>{{ $i18n.t.value.markdown.openLink }}</span>
         </button>
       </div>
-    </div>
-  </div>
+    </DialogContent>
+  </Dialog>
 </template>

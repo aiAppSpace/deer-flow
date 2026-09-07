@@ -74,7 +74,7 @@ const errorCode = "permission_denied"
 
   it("keeps the full product Vue surface free of untranslated core English", () => {
     const inventory = productVueInventory();
-    expect(inventory.checked).toHaveLength(218);
+    expect(inventory.checked).toHaveLength(219);
     expect(inventory.checked).toContain("app/app.vue");
     expect(inventory.checked).toContain(
       "app/components/chat/AssistantTurnActions.vue",
@@ -118,11 +118,18 @@ const errorCode = "permission_denied"
       "app/pages/__m0/visual.vue",
     ]);
     expect(scanProductVueFiles()).toEqual([]);
-  });
+    /*
+      **显式超时，不吃 5 秒的默认值。** 这一条要把 219 份产品 SFC 全部过一遍
+      AST，成本随 SFC 数线性涨；wave 148 加了一份外壳组件之后，它在整套并发
+      跑的时候实测 6689ms 撞上默认上限，而**单独跑是 2.2~5.3 秒**（连测三次）。
+      也就是说红的是负载不是断言——与 wave 108 把 expect 预算 5s 抬到 10s 同一类。
+      留三倍余量；哪天它真的慢到 15 秒，那是扫描面出了问题，值得当成信号去查。
+    */
+  }, 15_000);
 
   /*
     `PRODUCT_ROOTS` 是白名单，而只从白名单出发的门禁看不见「不在名单目录下」
-    的那些（线索 186）。**上面那条 `toHaveLength(218)` 挡不住它**：一个
+    的那些（线索 186）。**上面那条 `toHaveLength(219)` 挡不住它**：一个
     `app/error.vue` 不进 `checked`，217 一动不动。wave 84 实测过——四道门禁
     （i18n-source-check / i18n-check / 本文件 / doc-facts）**全绿**，
     而那份 SFC 里四条硬编码英文会照常发给用户。

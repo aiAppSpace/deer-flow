@@ -42,6 +42,8 @@ export const enUS: Translations = {
   primitives: {
     close: "Close",
     toggleSidebar: "Toggle Sidebar",
+    sidebar: "Sidebar",
+    sidebarDescription: "Displays the mobile sidebar.",
     submit: "Submit",
     stop: "Stop",
     skillSuggestions: "Skill suggestions",
@@ -1300,7 +1302,6 @@ export const enUS: Translations = {
     },
   },
   navigation: {
-    workspace: "Workspace navigation",
     closeSidebar: "Close sidebar",
     deleteConversationFailed: "Failed to delete conversation.",
     tryAgain: "Try again",

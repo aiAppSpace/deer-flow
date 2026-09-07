@@ -282,7 +282,17 @@ describe("mermaid 图块 · 上游形状（判据来源见文件头）", () => {
     vi.unstubAllGlobals();
   });
 
-  it("全屏：portal 到 body、锁滚动，Escape 关闭并还原", async () => {
+  /*
+    **wave 148 之前这里钉的是一套手搓合同**：一个 `role="button" tabindex="0"` 的
+    裸遮罩、一个 document 上的 Escape 监听、一份手写的模块级引用计数滚动锁。
+    那一套没有 dialog 语义、没有焦点陷阱、不给兄弟节点打 `aria-hidden`。
+
+    现在壳子是 `ui/dialog`，这四件事由 reka 的 `DialogContentModal` 承担。
+    钉的东西跟着换：不再钉「我自己实现得对不对」，而是钉「我确实把它交给了
+    primitive」——真的是一个带名字的 dialog、里面确实是同一个图的 fullscreen 形态、
+    Escape 真的关得掉。
+  */
+  it("全屏：是一个真正的 dialog，Escape 关得掉", async () => {
     const wrapper = await mountDiagram();
     const fullscreen = wrapper
       .find(ACTIONS)
@@ -292,24 +302,29 @@ describe("mermaid 图块 · 上游形状（判据来源见文件头）", () => {
     await fullscreen.trigger("click");
     await flushPromises();
 
-    const overlay = document.body.querySelector(".fixed.inset-0");
-    expect(overlay).not.toBeNull();
-    expect(overlay?.getAttribute("role")).toBe("button");
-    expect(overlay?.getAttribute("tabindex")).toBe("0");
-    expect(overlay?.querySelector("button")?.getAttribute("title")).toBe(
-      "Exit fullscreen",
-    );
+    const dialog = document.body.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    /*
+      **顺着 id 解析到元素再比文字**：reka 无论有没有标题元素都会写上生成的 id，
+      只查属性在不在是假绿（wave 148 的负向验证 N5 当场证明过）。
+    */
+    expect(
+      document
+        .getElementById(dialog!.getAttribute("aria-labelledby")!)
+        ?.textContent?.trim(),
+    ).toBe("View fullscreen");
     // 全屏里的图是同一个组件的 fullscreen 形态：控件贴到 bottom-4 left-4。
     expect(
-      overlay?.querySelector('[title="Zoom in"]')?.parentElement?.className,
+      dialog?.querySelector('[title="Zoom in"]')?.parentElement?.className,
     ).toContain("bottom-4 left-4");
-    expect(document.body.style.overflow).toBe("hidden");
 
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    dialog?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
     await flushPromises();
 
-    expect(document.body.querySelector(".fixed.inset-0")).toBeNull();
-    expect(document.body.style.overflow).toBe("");
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
     wrapper.unmount();
   });
 });

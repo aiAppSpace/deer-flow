@@ -73,11 +73,11 @@ Compose Watch 同步源码并在依赖清单变化时重建对应镜像；Nginx 
 
 ## 三层边界
 
-| 层                 | 当前目录                                                                                                                                    | 职责                                                                   | 禁止依赖                                             |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| L1 通用 Agent 内核 | `packages/agent-core/`                                                                                                                      | SSE 分帧、session 状态机、退避、watchdog、external store、通用消息合同 | Vue/Nuxt、Pinia、TanStack Query、DeerFlow URL/事件名 |
-| L2 可复用 UI       | `app/core/markdown/`、`app/core/code-editor/`、`app/components/markdown/`、`app/components/ui/`、`app/lib/utils.ts`、`app/lib/focusable.ts` | Markdown 流式渲染、代码块、Mermaid、代码编辑器、UI primitive 层        | DeerFlow API、线程、认证、产物和业务 store           |
-| L3 DeerFlow 应用   | `app/core/agent-deerflow/`、`app/core/api/`、`app/composables/`、页面和业务组件                                                             | Gateway 协议适配、缓存、线程生命周期、认证和产品功能                   | 不得把协议专有知识反向写入 L1/L2                     |
+| 层                 | 当前目录                                                                                                            | 职责                                                                   | 禁止依赖                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| L1 通用 Agent 内核 | `packages/agent-core/`                                                                                              | SSE 分帧、session 状态机、退避、watchdog、external store、通用消息合同 | Vue/Nuxt、Pinia、TanStack Query、DeerFlow URL/事件名 |
+| L2 可复用 UI       | `app/core/markdown/`、`app/core/code-editor/`、`app/components/markdown/`、`app/components/ui/`、`app/lib/utils.ts` | Markdown 流式渲染、代码块、Mermaid、代码编辑器、UI primitive 层        | DeerFlow API、线程、认证、产物和业务 store           |
+| L3 DeerFlow 应用   | `app/core/agent-deerflow/`、`app/core/api/`、`app/composables/`、页面和业务组件                                     | Gateway 协议适配、缓存、线程生命周期、认证和产品功能                   | 不得把协议专有知识反向写入 L1/L2                     |
 
 ## UI primitive 层
 
@@ -100,7 +100,6 @@ Command、Button，以及建在 CodeMirror 6 之上的 CodeEditor。产品组件
 
 模态语义与层级：Reka 不写 `aria-modal`，本层显式补上（Popover 这类非模态浮层绝不加）。
 所有 portal 浮层共用 `z-80` 一层，谁后打开谁在上；只有 tooltip 用 `z-90`。
-「当前可见且可聚焦」的判据只有一份，住在 `app/lib/focusable.ts`，抽屉与 primitive 共用。
 tooltip 与 dropdown 套在同一个按钮上时 tooltip 必须在里层——两者各渲染一个
 `PopperAnchor`，顺序反了下拉就会失去自己的 anchor（见 `BEHAVIOR_CONTRACTS.md` 的
 M7/M8——那是合同编号，不是迁移阶段）。

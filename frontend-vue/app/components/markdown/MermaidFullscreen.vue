@@ -2,57 +2,48 @@
   【文件职责】     mermaid 图的全屏查看（上游 streamdown 的 `MermaidFullscreenButton`）。
   【架构位置】     L2 —— 通用渲染层组件
   【主要导出】     默认组件
-  【依赖关系】     ./MarkdownIcon.vue · ./MermaidChart.vue · @/core/markdown/rendering-context
-  【边界与注意】   ① **不是 shadcn 的 Dialog。** 上游是一个 `createPortal` 到 body 的
-                   裸遮罩，带 `role="button"` + `tabIndex=0`（点它任意处关闭），
-                   没有 dialog 语义、没有焦点陷阱、没有 aria-modal。换成 Dialog
-                   会多出 dialog/title/description 三层节点与一层 portal 容器，
-                   两边的可访问性树对不上。这是**照抄上游**而不是本仓的偏好。
+  【依赖关系】     ui/dialog · ./MarkdownIcon.vue · ./MermaidChart.vue · @/core/markdown/rendering-context
+  【边界与注意】   **壳子走 `ui/dialog`，不再手搓遮罩**（wave 148 系统扫描后统一改的
+                   三处之一，另两处是移动端侧栏抽屉与外链确认弹窗）。
 
-                   **「上游哪天改成真正的 dialog，这里跟着改」这句话原来在这里，
-                   wave 42 删掉了——它会把人引去 `frontend/src` 找一个不在那里的东西。**
-                   这里的「上游」是第三方 npm 包 `@streamdown/mermaid`，**不在 fork
-                   边界内**：两边同改那条规矩的对象是 `frontend/`，而这块代码在
-                   `node_modules` 里，两个应用引的是同一个包。所以它与 `/auth/callback`
-                   同一档——**能改的只有本仓一侧，改了就是纯粹制造差异，对齐价值为零**。
-                   要动它得先换包或提上游 issue，那不是一轮平替能装下的事。
+                   原来这里逐字照抄 streamdown：一个 `createPortal` 到 body 的裸遮罩，
+                   带 `role="button"` + `tabindex="0"`（点它任意处关闭），
+                   **没有 dialog 语义、没有焦点陷阱、不给兄弟节点打 `aria-hidden`、
+                   关闭后不归还焦点**，外加一份手写的模块级引用计数滚动锁。
 
-                   ② 遮罩层同时听 click 与 Escape 关闭；内容层 `role="presentation"`
-                   并把 click / keydown 挡住，否则点图上任何一处都会关掉全屏——
-                   而全屏的用途正是在图上拖拽和缩放。
+                   **为什么这一次不再「照抄第三方包」**：这块代码来自 npm 包
+                   `streamdown`，两个应用引的是同一个包，所以它与 `/auth/callback`
+                   同一档——能改的只有本仓一侧。此前的结论是「改了就是纯粹制造差异，
+                   对齐价值为零」。**wave 92 在同一个包上做过相反的决定并且沿用至今**：
+                   mermaid 工具条的文案上游写死英文、改不了，本仓保留了翻译，
+                   台账为此记着 14 行。判据是 fork-boundary 那条已授权的例外
+                   ——**「vue 有更好的可以保留」**。一个全屏浮层对读屏器来说不是对话框、
+                   Tab 能走到它背后去，属于同一档，而且比文案更硬。
 
-                   ③ 打开期间锁 `document.body` 的滚动，且是**引用计数**的：
-                   直接置空还原会在两层遮罩嵌套时把外层的锁一起解掉。计数放在模块级
-                   （上游同样是模块级 `ke`），组件卸载时也要还原，否则一次异常关闭
-                   会让整页永久不能滚。
+                   代价是明的：可访问性树上本仓会多出 dialog / title / description
+                   三层节点与一层 portal 容器，**台账为此记账**（逐条见一页纸清单）。
+                   **翻案判据**：streamdown 哪天自己换成真正的 dialog，这里跟着回退。
+
+                   仍然照抄的一处：内容层挡住 click，否则点图上任何一处都会关掉全屏
+                   ——而全屏的用途正是在图上拖拽和缩放。滚动锁、Escape、焦点归还
+                   现在都由 reka 的 `DialogContentModal` 承担，本仓不再自己写一份。
 -->
 
-<script lang="ts">
-import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
+<script setup lang="ts">
+import { computed, inject, ref } from "vue";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { markdownStreamingKey } from "@/core/markdown/rendering-context";
 
 import MarkdownIcon from "./MarkdownIcon.vue";
 import MermaidChart from "./MermaidChart.vue";
 
-/** 见文件头 ③：模块级引用计数，与上游 `ke` 同义。 */
-const scrollLock = { depth: 0 };
-
-function lockBodyScroll() {
-  scrollLock.depth += 1;
-  if (scrollLock.depth === 1) document.body.style.overflow = "hidden";
-}
-
-function unlockBodyScroll() {
-  scrollLock.depth = Math.max(0, scrollLock.depth - 1);
-  if (scrollLock.depth === 0) document.body.style.overflow = "";
-}
-</script>
-
-<script setup lang="ts">
-/* ⚠️ import 全部写在上面那个普通 `<script>` 块里：两个块会被合成同一个模块，
-   `import/first` 看的是合并后的顺序，setup 块里的 import 会排在模块级
-   `scrollLock` 之后而报错。模块级绑定在 setup 里可以直接用。 */
 const props = defineProps<{ svg: string }>();
 
 const open = ref(false);
@@ -60,26 +51,6 @@ const streaming = inject(
   markdownStreamingKey,
   computed(() => false),
 );
-
-function onDocumentKeyDown(event: KeyboardEvent) {
-  if (event.key === "Escape") open.value = false;
-}
-
-watch(open, (active, _previous, onCleanup) => {
-  if (!active) return;
-  lockBodyScroll();
-  document.addEventListener("keydown", onDocumentKeyDown);
-  onCleanup(() => {
-    document.removeEventListener("keydown", onDocumentKeyDown);
-    unlockBodyScroll();
-  });
-});
-
-onBeforeUnmount(() => {
-  if (!open.value) return;
-  document.removeEventListener("keydown", onDocumentKeyDown);
-  unlockBodyScroll();
-});
 </script>
 
 <template>
@@ -92,28 +63,23 @@ onBeforeUnmount(() => {
   >
     <MarkdownIcon name="Maximize2Icon" :size="14" />
   </button>
-  <Teleport v-if="open" to="body">
-    <div
-      class="bg-background/95 fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm"
-      role="button"
-      :tabindex="0"
-      @click="open = false"
-      @keydown.escape="open = false"
+  <Dialog v-model:open="open">
+    <DialogContent
+      :close-label="$i18n.t.value.markdown.exitFullscreen"
+      class="bg-background/95 flex size-full max-w-none translate-x-0 translate-y-0 items-center justify-center rounded-none border-0 p-4 backdrop-blur-sm sm:max-w-none"
+      overlay-class="bg-transparent"
     >
-      <button
-        class="text-muted-foreground hover:bg-muted hover:text-foreground absolute top-4 right-4 z-10 rounded-md p-2 transition-all"
-        :title="$i18n.t.value.markdown.exitFullscreen"
-        type="button"
-        @click="open = false"
-      >
-        <MarkdownIcon name="XIcon" :size="20" />
-      </button>
-      <!-- 见文件头 ②。 -->
+      <DialogHeader class="sr-only">
+        <DialogTitle>{{ $i18n.t.value.markdown.viewFullscreen }}</DialogTitle>
+        <DialogDescription>
+          {{ $i18n.t.value.markdown.viewFullscreen }}
+        </DialogDescription>
+      </DialogHeader>
+      <!-- 内容层挡住 click：见文件头。 -->
       <div
-        class="flex size-full items-center justify-center p-4"
+        class="flex size-full items-center justify-center"
         role="presentation"
         @click.stop
-        @keydown.stop
       >
         <MermaidChart
           class="size-full [&_svg]:h-auto [&_svg]:w-auto"
@@ -121,6 +87,6 @@ onBeforeUnmount(() => {
           :svg="props.svg"
         />
       </div>
-    </div>
-  </Teleport>
+    </DialogContent>
+  </Dialog>
 </template>
