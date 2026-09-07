@@ -78,9 +78,17 @@ export function titleOfThread(thread: AgentThread, fallback = "Untitled") {
  * 会话页的浏览器标签标题。
  *
  * 与上游 ThreadTitle 的 useEffect 同一条链
- * （frontend/src/components/workspace/thread-title.tsx）：有标题就用标题，
- * 没有标题时新会话落「新对话」、已有会话落「未命名」，加载中整条换成
- * `Loading…`。上游那句 `Loading...` 是写死的英文，和 primitive 的可访问名
+ * （frontend/src/components/workspace/thread-title.tsx）：**按「知道得最确切
+ * 的优先」取名**——有标题就用标题，没有就看是不是新会话（「新对话」），
+ * 再没有才在加载中落 `Loading…`，最后才是「未命名」。
+ *
+ * **两边同改（wave 158）**：此前 `isLoading` 排在最前面、无条件盖掉已知的名字，
+ * 于是新会话交接那一刻标签页会闪一下 `Loading... - DeerFlow`。React 那侧 Next 的
+ * 路由播报器（`aria-live="assertive"`）在导航时读 `document.title`，把这一闪
+ * **播了出去而且再不更正**，读屏器用户听到的是「Loading...」（WCAG 4.1.3）。
+ * 对照实测：它是这个场景里最后一处非确定性。
+ *
+ * 上游那句 `Loading...` 是写死的英文，和 primitive 的可访问名
  * 同一类，所以照抄而不进词典；放在这个 .ts 里也就不会被 i18n source guard
  * 当成漏翻的模板文案。
  *
@@ -96,12 +104,13 @@ export function documentTitleOfThread(options: {
   newChatLabel: string;
   untitledLabel: string;
 }) {
-  if (options.isLoading) return `Loading... - ${options.appName}`;
   const name = options.title?.trim()
     ? options.title
     : options.isNewThread
       ? options.newChatLabel
-      : options.untitledLabel;
+      : options.isLoading
+        ? "Loading..."
+        : options.untitledLabel;
   return `${name} - ${options.appName}`;
 }
 

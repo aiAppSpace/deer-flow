@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 157，2026-09-07）
+## 当前状态（截至 wave 158，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -442,6 +442,135 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 158）做了什么：**挂了 129 轮的那条 pending 查清并修掉——两边同改**
+
+`chat-thread-init-ordering` 从 wave 29 起就挂着，卡点是
+**「上游这一屏在取样点上有两个终态，而 Vue 只有一个」**。
+判据是 **「同一次构建连取 20 次，React 只出现一个终态」**，从没满足过：
+wave 63 量到 19/4、wave 101 量到 15/5、wave 102 又取了 22 个。
+
+**这一轮做到了一半，判据一个字没改：`aria` 那一档 20/20 单一，`requests` 那一档还是 2 个。**
+所以 **`pending` 保留**——按判据它覆盖两档，我没有把它改成「只看 aria」。
+但账的性质变了：从「两个终态，病因不明」变成
+**「两处产品缺陷已从根因修掉，只剩请求档一处已定位的时序」**。
+
+### 先量：两个终态到底差哪几行（今天重量，不引用旧读数）
+
+| 只在多数态（16/20，坏）              | 只在少数态（4/20，好）  |
+| ------------------------------------ | ----------------------- |
+| `text: Completed in <1s Hello`       | `text: Completed in <1s`|
+| `button "Copy to clipboard"`         | —                       |
+| `alert: Loading... - DeerFlow`       | `alert`                 |
+
+也就是 **AI 回复之后多出一整条重复的「Hello」人类消息**（连带它自己的复制键），
+外加播报器里压着一句 `Loading...`。**两件事，各有各的根因。**
+
+### 根因一：那个「切会话就重置」的 effect，也会在**这次发送自己的 id 交接**时触发
+
+**是量出来的，不是读出来的。** 往 `hooks.ts` 里塞了四处临时探针
+（`globalThis.__w158` 记事件），两个终态各 dump 一条 trace——**只差一个数**：
+
+```
+坏  … {"e":"send","base":0} … {"e":"reset","view":"0000…0001","to":1} … {"e":"clearFx","hmc":1,"prev":1}  → 1>1 假，永不清
+好  … {"e":"send","base":0} … {"e":"reset","view":"0000…0001","to":0} … {"e":"clearFx","hmc":1,"prev":0}  → 1>0 真，清掉
+```
+
+`/chats/new` 用**客户端生成的 uuid** 渲染，而 `onStart` 报回来的是**后端另给的 id**
+（trace 里那个 `0000…0001`）。于是 `[threadId]` 那个重置 effect 在**发送进行中**触发，
+把 `sendMessage` 刚捕好的 `prevHumanMsgCountRef` 基线覆盖成「交接那一刻的计数」——
+服务器那条人类消息若已经先到，边沿就被吞掉，乐观消息永远留在屏幕上。
+
+**修法**：那个 effect 的注释自己写着「switching between threads … across chat views」，
+所以让它只在**真的换了会话视图**时跑：
+
+```ts
+if (optimisticThreadIdRef.current === currentViewThreadIdRef.current) return;
+```
+
+手上的乐观消息属于我刚切过去的那个视图 → 这是发送自己的 id 交接，不是用户换会话。
+真属于别的视图的乐观消息，本来就有下面那个
+`optimisticThreadId !== currentViewThreadId` 的 effect 在丢，不会泄漏。
+
+**顺带修掉的**：这个 effect 一并重置 `sendInFlightRef`、`pendingUsageBaselineMessageIdsRef`、
+`localTurnOrderBaselineIdentitiesRef` 等**十一处**发送自己拥有的状态——台账只看得见其中一处。
+
+### 根因二：`Loading...` 盖掉了已经知道的名字，而 assertive 播报器把它播出去且再不更正
+
+`thread-title.tsx` 原来把 `isLoading` 排在优先级**最前面**：
+
+```ts
+if (thread.isThreadLoading) { document.title = `Loading... - ${appName}`; }
+else { document.title = `${_title} - ${appName}`; }
+```
+
+新会话交接那一刻 SDK 开始拉 `/history` → 标签页闪一下 `Loading... - DeerFlow`；
+Next 的路由播报器（`aria-live="assertive"`）在导航时读 `document.title`，
+**把这一闪播了出去，然后再不更正**——读屏器用户听到「Loading...」，
+而那一刻真正的标题已经是 `New Chat - DeerFlow`（探针实测过）。这是 WCAG 4.1.3。
+
+**修法（两边同改）**：`Loading...` 是「还不知道叫什么」的**占位**，
+不许盖掉已经知道的名字。改成按「知道得最确切的优先」排：
+有标题 → 新会话 → 加载中 → 未命名。
+Vue 的 `core/threads/utils.ts` 里 `documentTitleOfThread` **同形同病**，一起改，
+并把它的单测从「加载中就说 Loading」改成两条：
+「只在没有更好的名字时才说」+「不许盖掉已经知道的名字」。
+
+### 读数
+
+| 阶段                       | 20 样本终态数 | 含重复消息的样本 |
+| -------------------------- | ------------- | ---------------- |
+| 基线（未改）               | **2**（16/4） | 16               |
+| 只改根因一                 | **2**（10/10）| **0**            |
+| 只改根因一（拆掉探针复测） | **2**（13/7） | **0**            |
+| 根因一 + 根因二            | **1**（20/20）| **0**            |
+
+**中间那两跑是关键**：根因一修完，重复消息 20/20 全消失，但终态仍是 2 个——
+剩下的**整整一行**就是播报器。不把根因二一起修，aria 那一档就差这一行不满足。
+
+### 但判据还没满足：请求档仍是两个终态
+
+**差点漏掉这一档**——我的第一个探针只哈希了 `aria`。补上 `requests` 之后：
+
+```
+react aria 终态 1: ab789dcf x20      ← 达标
+react req  终态 2: ec80f1c4 x14  2bf7296b x6   ← 不达标
+vue   aria 终态 1: 459b6ce2 x20
+vue   req  终态 1: 0c4eb3dc x20
+```
+
+两个请求终态**只差三条交接后的后续 GET**：`GET /api/langgraph/threads/{id}`、
+`GET /api/threads/{id}/messages/page`、`GET /api/threads/{id}/token-usage`。
+多数态（17/20，19 条）里**没有**它们，少数态（3/20，22 条）里有——
+也就是**「这三条在 700ms 取样窗内发没发出去」的时序**，不是集合差。
+
+**没有用「给场景加一个等这三条的步骤」凑绿**：判据原文写着那算换取样点、不算翻案。
+**`pending` 保留**，理由整段改写进 `baseline/parity-scenario-coverage.json`。
+
+**顺带订正 wave 102 的一句话**：它说这三条「在 A 里同样发了、也都 200 回来了」。
+今天 20 个样本里 **17 个在取样窗内根本没有它们**。是当时只看了一个样本，
+还是这一轮的改动改了它们的时机——**没查清，只记读数**。
+
+### 试注册过一次，带出 12 行台账（已回滚，留作下一轮的清单）
+
+场景一旦进 `scenarios.ts`，`make e2e-parity` 当场多出 12 行，其中**三行 aria 是
+此前从没量过的真差异**：Vue 的人类消息上有 `button "Edit and rerun"` 而 React 那一刻没有
+（两边都有这个功能，条件不同——React 多要求 `!replayActionBusy` 与 `canEdit`）；
+React 有 `text: Completed in <1s` 而 Vue 那一刻没有；播报器 React 空、
+Vue 是 `New chat - DeerFlow`。**这三行这一轮没有判**——场景还进不来，
+判了也是空判。清单写在 `$pendingReasons` 里。
+
+### 走过的弯路（都记下来）
+
+- **第一版诊断错了一半。** 我先按「`threadId` 是 SDK 闸门（`undefined` → id）」写了修法，
+  改完 20 样本读数**逐字节不变**（连哈希都一样）。
+- 接着我判「构建没吃到改动」——**也错**。`.next/BUILD_ID` 就是那一分钟写的。
+  我做的破坏性变异（把清除分支改成 `if (false && …)`）零反应，是因为
+  **清除路径有六条，我只堵了一条**。
+- 真正有用的一步是**停止推理、上探针**：把决策变量打进 `globalThis`，
+  两个终态各 dump 一条 trace，差异当场收敛到一个数字。
+
+---
 
 ## 上一轮（wave 157）做了什么：**一个被文档标成 optional 的服务，裸 `up` 会无条件启动它——崩溃重启了 4363 次没人知道**
 

@@ -1,52 +1,51 @@
 {
- "$comment": "对照场景的覆盖率棘轮。id 是 frontend/tests/e2e/*.spec.ts 的文件名（去掉 .spec.ts）——拿 React 自己的用例清单当坐标系，是因为它是唯一一份「React 认为哪些行为值得守住」的机器可读事实。三个桶必须恰好划分这份清单：上游新增一个 spec 而三个桶都没有它，门禁立刻红。",
- "$readers": [
-  "scripts/lib/cross-app-by-design.mjs",
-  "tests/guards/baseline-keys-consumed.test.ts",
-  "tests/parity/scenario-coverage.test.ts"
- ],
- "$semantics": "covered 由 tests/e2e-parity/support/scenarios.ts 的目录反查，必须逐字相等（门禁）；三个桶必须恰好划分上游的 spec 清单（门禁）；每条 pending 都要有一条不短于 20 字的理由、且不许有多余的理由（门禁）；exempt 不是「太难所以不做」的垃圾桶，每一条都必须写出它所在的路由，而那条路由必须已经在 baseline/react-parity-scope.json 里被豁免（门禁）。**「pending 只能变短」不是门禁，是评审政策**——没有历史参照就判不了单调性，wave 85 逐条查过：没有任何检查在守这个方向。它靠的是「把一个场景从目录里删掉、并给它补一条理由」这两件事都会出现在 diff 里。真要机器守，可行的判据是「不许有 id 从 covered/exempt 退回 pending」，而那需要一份只增不减的 covered 底线。对照台账 baseline/parity-diff.json 的同一句话已经有机器守了（accept 时逐行比对，见 tests/e2e-parity/support/ledger.ts）。",
- "covered": [
-  "agent-chat",
-  "agents-feature-disabled",
-  "artifact-batched-stream",
-  "artifact-panel-resize",
-  "artifact-preview",
-  "artifact-stream-state",
-  "branch-thread",
-  "browser-feature",
-  "channels",
-  "chat",
-  "integrations",
-  "scheduled-tasks",
-  "settings-notification",
-  "sidebar",
-  "sidecar-chat",
-  "streaming-reasoning-order",
-  "subtask-card",
-  "thread-history",
-  "thread-history-mermaid",
-  "thread-list-infinite-scroll",
-  "thread-list-pin",
-  "ui-polish-mobile",
-  "user-message-plain-text",
-  "workspace-changes"
- ],
- "pending": [
-  "chat-thread-init-ordering"
- ],
- "exempt": [
-  {
-   "id": "docs-localized-links",
-   "route": "/[lang]/docs/[[...mdxPath]]"
-  },
-  {
-   "id": "landing",
-   "route": "/"
+  "$comment": "对照场景的覆盖率棘轮。id 是 frontend/tests/e2e/*.spec.ts 的文件名（去掉 .spec.ts）——拿 React 自己的用例清单当坐标系，是因为它是唯一一份「React 认为哪些行为值得守住」的机器可读事实。三个桶必须恰好划分这份清单：上游新增一个 spec 而三个桶都没有它，门禁立刻红。",
+  "$readers": [
+    "scripts/lib/cross-app-by-design.mjs",
+    "tests/guards/baseline-keys-consumed.test.ts",
+    "tests/parity/scenario-coverage.test.ts"
+  ],
+  "$semantics": "covered 由 tests/e2e-parity/support/scenarios.ts 的目录反查，必须逐字相等（门禁）；三个桶必须恰好划分上游的 spec 清单（门禁）；每条 pending 都要有一条不短于 20 字的理由、且不许有多余的理由（门禁）；exempt 不是「太难所以不做」的垃圾桶，每一条都必须写出它所在的路由，而那条路由必须已经在 baseline/react-parity-scope.json 里被豁免（门禁）。**「pending 只能变短」不是门禁，是评审政策**——没有历史参照就判不了单调性，wave 85 逐条查过：没有任何检查在守这个方向。它靠的是「把一个场景从目录里删掉、并给它补一条理由」这两件事都会出现在 diff 里。真要机器守，可行的判据是「不许有 id 从 covered/exempt 退回 pending」，而那需要一份只增不减的 covered 底线。对照台账 baseline/parity-diff.json 的同一句话已经有机器守了（accept 时逐行比对，见 tests/e2e-parity/support/ledger.ts）。",
+  "covered": [
+    "agent-chat",
+    "agents-feature-disabled",
+    "artifact-batched-stream",
+    "artifact-panel-resize",
+    "artifact-preview",
+    "artifact-stream-state",
+    "branch-thread",
+    "browser-feature",
+    "channels",
+    "chat",
+    "integrations",
+    "scheduled-tasks",
+    "settings-notification",
+    "sidebar",
+    "sidecar-chat",
+    "streaming-reasoning-order",
+    "subtask-card",
+    "thread-history",
+    "thread-history-mermaid",
+    "thread-list-infinite-scroll",
+    "thread-list-pin",
+    "ui-polish-mobile",
+    "user-message-plain-text",
+    "workspace-changes"
+  ],
+  "pending": [
+    "chat-thread-init-ordering"
+  ],
+  "exempt": [
+    {
+      "id": "docs-localized-links",
+      "route": "/[lang]/docs/[[...mdxPath]]"
+    },
+    {
+      "id": "landing",
+      "route": "/"
+    }
+  ],
+  "$pendingReasons": {
+    "chat-thread-init-ordering": "步骤词汇够用（`fill` + `press \"Enter\"` 走得完一次真实提交，wave 29 实测）。挡住它的是**上游这一屏在取样点上有两个终态，而 Vue 只有一个**。判据：**同一次构建连取 20 次，React 只出现一个终态**——`aria` 与 `requests` 两档都算，**判据不许放松**（硬规则 3）。 **wave 158：`aria` 那一半做到了，`requests` 那一半没有。**今天的读数（settle 恒为默认、每次取样换 fresh context）：**react aria 终态 1 个 ×20**（两跑复现，另一跑 20/20 也是 1 个）；**react requests 终态 2 个（17/3，另一跑 14/6）**；**vue aria 1 个 ×20、vue requests 1 个 ×20**。 **`aria` 那一半是怎么做到的（两处根因，两边同改，改的是代码不是判据）**：①**AI 回复之后多出一整条重复的「Hello」**（连带多一颗复制键）——`frontend/src/core/threads/hooks.ts` 里那个「切会话就重置」的 effect **也会在这次发送自己的 id 交接时触发**：`/chats/new` 用客户端生成的 uuid 渲染，而 `onStart` 报回来的是后端另给的 id。它把 `sendMessage` 刚捕好的 `prevHumanMsgCountRef` 基线覆盖成「交接那一刻的计数」，于是「服务器那条人类消息到了」这个边沿被吞掉。**探针实测**：两个终态的 trace 只差一个数——那一行写进去的是 1（坏）还是 0（好）。修法是让它只在真的换了会话视图时跑。②**播报器里压着 `Loading... - DeerFlow`**——`thread-title.tsx` 把 `isLoading` 排在优先级最前面、无条件盖掉已经知道的名字，标签页闪一下 `Loading...`，Next 的 `aria-live=\"assertive\"` 路由播报器在导航时读到它、播出去、再不更正（WCAG 4.1.3）。Vue 的 `app/core/threads/utils.ts:documentTitleOfThread` **同形同病，一起改**。**中间读数很关键**：只修①时重复消息 20/20 归零、但终态仍是 2 个，剩下的整整一行就是播报器。 **`requests` 那一半还差什么（wave 158 已定位，下一轮从这里接）**：两个请求终态只差**三条交接后的后续 GET**——`GET /api/langgraph/threads/{id}`、`GET /api/threads/{id}/messages/page`、`GET /api/threads/{id}/token-usage`。多数态（17/20，19 条请求）里**没有**它们，少数态（3/20，22 条）里有。也就是**「这三条在 700ms 取样窗内发没发出去」的时序**，不是集合差。**不许用「给场景加一个等这三条的步骤」来凑绿**——那是换取样点，不算翻案（本条判据原文）。要做就查清为什么它们的发起时机会飘：怀疑对象是 wave 158 那处修改带来的连带效果（重置不再在交接时跑 → `pendingUsageBaselineMessageIdsRef` 等不再被清 → 少了一轮重取），**这只是假设，下一轮当假设重新验**。 **订正 wave 102 写在这里的一句话**：它说这三条「在 A 里同样发了、也都 200 回来了」。今天 20 个样本里 **17 个在取样窗内根本没有它们**。要么是当时的读数只看了一个样本，要么是 wave 158 的改动改变了它们的时机——**没查清，只记读数**。 **复现方法**：在 `tests/e2e-parity/` 下写一次性 probe（**跑完记得删**），场景 `backend: \"mock\"`、`path: /workspace/chats/new`、settle 只等 textarea 可见，steps 是 fill textarea `Hello` → press Enter → 等 `Hello from DeerFlow!`；调 `captureScenario(page, base, scenario, DEFAULT_DIMENSION, state)`——**第 6 个位置参数是 `settleMs` 不是 timeout，别传**（wave 101 踩过）。`aria` 与 `requests` **分别**哈希（wave 158 踩过：只哈希 aria 会漏掉请求档那一半）。20 个样本约 2 分钟（含 React 构建约 1.5 分钟）。 **满足之后**：把这条挪进 `covered`、在 `scenarios.ts` 里注册场景，然后跑 `make e2e-parity` 看它带出多少行台账。**wave 158 试过一次，带出 12 行**——其中三行 aria 是此前从没量过的真差异，要逐条判：Vue 的人类消息上有 `button \"Edit and rerun\"` 而 React 那一刻没有（两边都有这个功能，条件不同：React 多要求 `!replayActionBusy` 与 `canEdit`）；React 有 `text: Completed in <1s` 而 Vue 那一刻没有；播报器 React 空、Vue 是 `New chat - DeerFlow`（框架管道差异，Next 认为标题没变就不播）。**这三行 wave 158 没有判**，因为场景还进不来。"
   }
- ],
- "$pendingReasons": {
-  "chat-thread-init-ordering": "步骤词汇已经够用了——`fill` + `press \"Enter\"` 走得完一次真实提交（wave 29 实测）。挡住它的是**上游这一屏在取样点上有两个终态，而 Vue 只有一个**。 **读数**（settle 恒为默认 700ms、每次取样换 fresh context、`--workers=1`）：wave 63（23 样本）**19 B / 4 A（17%）**；wave 101（20 样本）**15 B / 5 A（25%）**；wave 102 另取 22 个样本仍是两个终态。**Vue 至今 28/28 单一。****判据「同一次构建连取 20 次，React 只出现一个终态」未满足，`pending` 保留**，不许改判据凑绿（硬规则 3）。A 率在 17%~62% 之间摆，但**各次之差不显著**（wave 63 与 wave 101：Fisher 双侧 p=0.094），别当回归。 **A / B 到底差哪几行（wave 102 逐行量出；此前只有行数与请求数的推断）**：B = `62554acd79`（55 行）、A = `4080b1f763`（56 行）。只在 A：`text: Completed in <1s Hello`、`button \"Copy to clipboard\"`、`alert: Loading... - DeerFlow`；只在 B：`text: Completed in <1s`、`alert`。也就是**两件产品层面的事加一件框架层面的事**——①乐观的用户消息「Hello」在 A 里还没去重，连带②多一颗复制键；③`alert` 那一行是 **Next 自带的路由播报器**：`<next-route-announcer>` 的 shadow root 里那个 `#__next-route-announcer__`（`aria-live=\"assertive\"`、`role=\"alert\"`、1×1 裁剪），A 里它还留着上一拍的 `document.title`（`\"Loading... - DeerFlow\"`），而那一刻真正的 `document.title` 已经是 `\"New Chat - DeerFlow\"`。**它是框架管道、不是产品 UI**，Nuxt 没有对应物——这正是 Vue 恒定单一终态的一部分原因。 **wave 102 订正了三条写在这里或写在交接文档里的话**：（a）**「A 里那三条后续请求还没发」按集合比是假的**——`token-usage` / `messages/page` / `langgraph/threads/{id}` 在 A 里同样发了、也都 200 回来了（实测时间线上 +588ms 之前全部完成），两个终态的请求**集合完全相同**，差的只是重复次数（20 vs 23）。（b）**wave 101 说那颗一直转的「Loading...」是 `LoadMoreHistoryIndicator`——错的。**实测命中的元素在 shadow root 里、没有 `button` 祖先、`document.querySelectorAll` 也找不到它（Playwright 的文本引擎会穿开放 shadow root，`querySelectorAll` 不会）。它就是上面第③条那个播报器，**屏幕上并没有一个转着的加载指示器**；wave 101 那句描述连同它挂出去的那笔账一并作废。（c）原文说翻案后要「加一条五个数组全空的记录」——`DiffEntry` 现在是**十个**字段。 **「A 会不会自愈」目前仍无解**：wave 101 量的是播报器那一行，它永远不清（Next 不会回头改它），**产品层面①②那两行会不会收敛没有量过**。要接着追，就直接盯 `text: Completed in <1s Hello` 这一行消不消失，别再盯 `Loading...`。 **复现方法**：在 `tests/e2e-parity/` 下写一次性 probe（**跑完记得删**），候选场景 `backend: \"mock\"`、`path: /workspace/chats/new`，steps 是 fill textarea `Hello` → press Enter → 等 `Hello from DeerFlow!`；调 `captureScenario(page, base, CANDIDATE, DEFAULT_DIMENSION, STATE)`——**第 6 个位置参数是 `settleMs` 不是 timeout，别传**（wave 101 踩过：传 `90_000` 等于把 settle 改成 90 秒，硬规则 2 不许动它，症状是每个样本耗时恰好等于你填的那个数）；每次取样换 fresh context，比较 `aria` 与 `requests`。要看两个终态差哪几行，就把 aria 按行做多重集差——20 个样本约 9 分钟。 **为什么不给播报器加一条归一化**：它在今天 73 个已采纳取样点上**一行都没出现**（台账里 0 处），按坑 258「一个几乎永远不会响的东西比没有更糟」，**先不加**；哪天某个已采纳场景被它污染了再加，先例是请求档早就在丢 `_next/*` 与 `_nuxt/*`。**而且就算加了也不解锁这条 pending**——真正的不确定性是①②那两行产品差异。 **翻案判据不变**：**同一次构建连取 20 次，React 只出现一个终态**。**判据不许放松**——「把等收敛的步骤加进场景就单一了」不算翻案，那是换了取样点。满足之后再把这条挪进 covered，并在 baseline 里加一条**十个数组全空**的记录（`DiffEntry` 见 `tests/e2e-parity/support/ledger.ts`）。"
-
- }
 }

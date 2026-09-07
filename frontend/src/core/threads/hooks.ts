@@ -1542,6 +1542,10 @@ export function useThreadStream({
   const [optimisticThreadId, setOptimisticThreadId] = useState<string | null>(
     null,
   );
+  // Read inside the thread-switch reset below, which must not re-run when this
+  // changes — hence a render-assigned ref rather than a dependency.
+  const optimisticThreadIdRef = useRef(optimisticThreadId);
+  optimisticThreadIdRef.current = optimisticThreadId;
   const [liveMessagesThreadId, setLiveMessagesThreadId] = useState<
     string | null
   >(null);
@@ -1958,7 +1962,32 @@ export function useThreadStream({
 
   // Reset thread-local pending UI state when switching between threads so
   // optimistic messages and in-flight guards do not leak across chat views.
+  //
+  //
+  // It also fires on the send's *own* id handoff, which is not a switch:
+  // `/chats/new` renders under a client-generated id, and `onStart` reports
+  // whatever id the backend assigned — usually a different one. Everything
+  // below is per-conversation teardown, and running it mid-send tears down
+  // state that the in-flight send owns: its optimistic baseline, its
+  // in-flight guard, its usage and turn-order baselines.
+  //
+  // The visible symptom was non-deterministic. `sendMessage` captures
+  // `prevHumanMsgCountRef` before showing the optimistic message so the
+  // "server's copy of the user input arrived" edge can be detected; this
+  // reset overwrote it with the count *at handoff time*, which swallowed the
+  // edge whenever the server's copy had already landed. The optimistic human
+  // message then stayed on screen forever — a duplicate turn after the AI
+  // reply, with its own copy button. Measured on the parity harness: 20 runs
+  // of one build gave two terminal states 16/4, and the traces of the two
+  // differed in exactly one number — the count this line wrote (1 vs 0).
+  //
+  // Optimistic messages that really do belong to another view are discarded
+  // by the `optimisticThreadId !== currentViewThreadId` effect below, so
+  // skipping the teardown here does not let them leak across chat views.
   useEffect(() => {
+    if (optimisticThreadIdRef.current === currentViewThreadIdRef.current) {
+      return;
+    }
     startedRef.current = false;
     sendInFlightRef.current = false;
     messagesRef.current = [];

@@ -235,7 +235,23 @@ test("falls back by whether the thread is new", () => {
   ).toBe("Untitled - DeerFlow");
 });
 
-test("says it is loading before the thread arrives", () => {
+test("says it is loading only when no better name is known", () => {
+  // 加载中、且既没有标题也不是新会话——这时才该说 Loading。
+  expect(
+    documentTitleOfThread({
+      ...LABELS,
+      title: null,
+      isNewThread: false,
+      isLoading: true,
+    }),
+  ).toBe("Loading... - DeerFlow");
+});
+
+// wave 158 两边同改：`Loading...` 是「还不知道叫什么」的占位，不许盖掉已经
+// 知道的名字。此前它排在最前面，于是新会话交接那一刻标签页闪一下
+// `Loading... - DeerFlow`，而 React 那侧 Next 的 aria-live=assertive 路由播报器
+// 把这一闪播出去且再不更正（WCAG 4.1.3）。对照实测它是那个场景最后一处非确定性。
+test("loading does not overwrite a name we already have", () => {
   expect(
     documentTitleOfThread({
       ...LABELS,
@@ -243,5 +259,13 @@ test("says it is loading before the thread arrives", () => {
       isNewThread: false,
       isLoading: true,
     }),
-  ).toBe("Loading... - DeerFlow");
+  ).toBe("Browser Enabled - DeerFlow");
+  expect(
+    documentTitleOfThread({
+      ...LABELS,
+      title: null,
+      isNewThread: true,
+      isLoading: true,
+    }),
+  ).toBe("New chat - DeerFlow");
 });
