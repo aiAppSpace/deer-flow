@@ -485,6 +485,34 @@ const MOCK_AGENTS = [
   },
 ];
 
+/*
+  画廊那一屏用的 agent 夹具。**不能用上面那份 `MOCK_AGENTS`**：它只有
+  name/description/system_prompt，而 `Agent` 类型里 `model` / `tool_groups` / `skills`
+  是必填的，卡片直接对它们取 `.length`——喂上面那份，两个应用都会在渲染里抛错，
+  整屏只剩页头（wave 137 第一版实测：快照里一张卡都没有）。
+
+  两个 agent 刻意走**不同分支**：第一个有模型、两个工具组、一个技能；
+  第二个三项全 `null`，走「继承默认 / 全部工具组 / 没有技能」那一侧。
+*/
+const GALLERY_AGENTS = [
+  {
+    name: "test-agent",
+    description: "A test agent for E2E tests",
+    system_prompt: "You are a test agent.",
+    model: "parity-basic",
+    tool_groups: ["search", "code"],
+    skills: ["review"],
+  },
+  {
+    name: "second-agent",
+    description: "Another test agent for E2E tests",
+    system_prompt: "You are another test agent.",
+    model: null,
+    tool_groups: null,
+    skills: null,
+  },
+];
+
 /** 与 frontend/tests/e2e/thread-list-infinite-scroll.spec.ts 同一份构造。 */
 const MANY_THREADS = Array.from({ length: 120 }, (_, index) => {
   const padded = String(index + 1).padStart(3, "0");
@@ -943,6 +971,44 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
               text: /^(Loading\.\.\.|加载中\.\.\.|Loading agents…|正在加载智能体…)$/,
             },
           },
+        ],
+      },
+      /*
+        **画廊有数据、并且把设置对话框打开**（wave 137）。
+
+        这个终态一次做两件事：
+        ① `AgentCard` 与模型设置对话框**第一次进对照取样面**（wave 135 只接了加载态，
+           那一屏上一个 card 都没有）；
+        ② 补上 wave 136 缺的那一半——把模型清单改成「打开对话框才取」之后，
+           **没有任何自动化在守「冷开画廊、打开对话框、清单仍然到得了」**
+           （那一轮想用 `e2e-agents` 当安全网，实测是一次无效变异：
+           它回画廊之前已经把 `MODELS_QUERY_KEY` 填热了）。这里是冷开的，
+           取不回来两个应用就画得不一样，台账上立刻现形。
+
+        **按钮的可访问名两边不是同一条**：上游用 `title={t.agents.settings}`
+        （`agent-card.tsx:199`，名字就是「模型设置」），本仓用
+        `aria-label="模型设置: <agent 名>"`。正则只钉前缀，两边都匹配得到；
+        **那处差异本身会如实出现在台账里**。
+      */
+      {
+        id: "gallery",
+        routes: [
+          {
+            pattern: "**/api/features",
+            json: { agents_api: { enabled: true } },
+          },
+          { pattern: "**/api/agents", json: { agents: GALLERY_AGENTS } },
+        ],
+        steps: [
+          {
+            kind: "visible",
+            target: { role: "heading", name: /^(Agents|智能体)$/ },
+          },
+          {
+            kind: "click",
+            target: { role: "button", name: /^(Model settings|模型设置)/ },
+          },
+          { kind: "visible", target: { selector: "[role=dialog]" } },
         ],
       },
     ],

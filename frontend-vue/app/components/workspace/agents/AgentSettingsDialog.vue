@@ -110,8 +110,14 @@ function save() {
 
 <template>
   <Dialog :open="true" @update:open="!$event && !pending && emit('cancel')">
+    <!--
+      **不覆盖 `DialogContent` 的宽度**（wave 137）。两边这颗 primitive 的基类都是
+      `sm:max-w-lg`（512px），而本仓在这一处单独写了 `sm:max-w-md`（448px）——
+      上游那一处什么都没传。wave 137 第一次给这个对话框做对照，几何档当场报出
+      `width React=512 Vue=448 Δ-64`。没有任何理由让这一个对话框比别处窄一档，
+      去掉覆盖、回到共用的默认值（「primitive 的默认值」正是天生看不见的第⑤类）。
+    -->
     <DialogContent
-      class="sm:max-w-md"
       :close-label="$i18n.t.value.primitives.close"
       @escape-key-down="pending && $event.preventDefault()"
       @pointer-down-outside="$event.preventDefault()"

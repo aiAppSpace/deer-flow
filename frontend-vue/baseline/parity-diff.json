@@ -343,6 +343,90 @@
       ],
       "tabOrder": []
     },
+    "agents-feature-disabled#gallery/desktop/light/en-US": {
+      "ariaOnlyReact": [
+        "- combobox",
+        "- dialog \"Model settings\":",
+        "- heading \"Model settings\" [level=2]",
+        "- paragraph: 0 = deterministic, higher = more creative (0–2).",
+        "- spinbutton",
+        "- spinbutton",
+        "- text: Max output tokens"
+      ],
+      "ariaOnlyVue": [
+        "- combobox \"Default model\": parity-basic · Unavailable",
+        "- dialog \"Model settings · test-agent\":",
+        "- heading \"Model settings · test-agent\" [level=2]",
+        "- spinbutton \"Max output tokens\"",
+        "- spinbutton \"Temperature 0 = deterministic, higher = more creative (0–2).\"",
+        "- text: 0 = deterministic, higher = more creative (0–2). Max output tokens"
+      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "selector:[role=dialog] height React=426 Vue=429.9 Δ3.9"
+      ],
+      "focus": [
+        "React=button Vue=input[number]"
+      ],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "button",
+        "button",
+        "button"
+      ],
+      "tabbablesOnlyVue": [
+        "a",
+        "a",
+        "a"
+      ],
+      "tabOrder": [
+        "第 11 个公共可 tab 元素 React=button Vue=button(combobox)"
+      ]
+    },
+    "agents-feature-disabled#gallery/desktop/light/zh-CN": {
+      "ariaOnlyReact": [
+        "- combobox",
+        "- dialog \"模型设置\":",
+        "- heading \"模型设置\" [level=2]",
+        "- paragraph: 0 = 确定性输出，越高越发散（0–2）。",
+        "- spinbutton",
+        "- spinbutton",
+        "- text: 最大输出 token"
+      ],
+      "ariaOnlyVue": [
+        "- combobox \"默认模型\": parity-basic · 不可用",
+        "- dialog \"模型设置 · test-agent\":",
+        "- heading \"模型设置 · test-agent\" [level=2]",
+        "- spinbutton \"最大输出 token\"",
+        "- spinbutton \"温度 0 = 确定性输出，越高越发散（0–2）。\"",
+        "- text: 0 = 确定性输出，越高越发散（0–2）。 最大输出 token"
+      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "selector:[role=dialog] height React=406 Vue=409.9 Δ3.9"
+      ],
+      "focus": [
+        "React=button Vue=input[number]"
+      ],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "button",
+        "button",
+        "button"
+      ],
+      "tabbablesOnlyVue": [
+        "a",
+        "a",
+        "a"
+      ],
+      "tabOrder": [
+        "第 11 个公共可 tab 元素 React=button Vue=button(combobox)"
+      ]
+    },
     "browser-feature/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
