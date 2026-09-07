@@ -135,11 +135,25 @@ export function AgentSettingsDialog({
         <div className="space-y-4 py-1">
           {/* Default model */}
           <div className="space-y-1.5">
-            <span className="text-sm font-medium">
+            {/*
+              Every control in this dialog needs an accessible name. The label
+              text was a bare <span>: no <label htmlFor>, no aria-label — so the
+              model select and both number inputs were announced as unnamed
+              (WCAG 3.3.2 / 4.1.2). Point each control at its own label with
+              aria-labelledby; the temperature hint becomes a description
+              instead of leaking into the name.
+            */}
+            <span
+              id="agent-settings-model-label"
+              className="text-sm font-medium"
+            >
               {t.agents.settingsModel}
             </span>
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger
+                className="w-full"
+                aria-labelledby="agent-settings-model-label"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -157,7 +171,10 @@ export function AgentSettingsDialog({
 
           {/* Temperature */}
           <div className="space-y-1.5">
-            <span className="text-sm font-medium">
+            <span
+              id="agent-settings-temperature-label"
+              className="text-sm font-medium"
+            >
               {t.agents.settingsTemperature}
             </span>
             <Input
@@ -168,15 +185,23 @@ export function AgentSettingsDialog({
               value={temperature}
               placeholder={t.agents.settingsInherit}
               onChange={(e) => setTemperature(e.target.value)}
+              aria-labelledby="agent-settings-temperature-label"
+              aria-describedby="agent-settings-temperature-hint"
             />
-            <p className="text-muted-foreground text-xs">
+            <p
+              id="agent-settings-temperature-hint"
+              className="text-muted-foreground text-xs"
+            >
               {t.agents.settingsTemperatureHint}
             </p>
           </div>
 
           {/* Max output tokens */}
           <div className="space-y-1.5">
-            <span className="text-sm font-medium">
+            <span
+              id="agent-settings-max-tokens-label"
+              className="text-sm font-medium"
+            >
               {t.agents.settingsMaxTokens}
             </span>
             <Input
@@ -187,20 +212,27 @@ export function AgentSettingsDialog({
               value={maxTokens}
               placeholder={t.agents.settingsMaxTokensPlaceholder}
               onChange={(e) => setMaxTokens(e.target.value)}
+              aria-labelledby="agent-settings-max-tokens-label"
             />
           </div>
 
           {/* Thinking mode (only when the selected model supports it) */}
           {supportsThinking && (
             <div className="space-y-1.5">
-              <span className="text-sm font-medium">
+              <span
+                id="agent-settings-thinking-label"
+                className="text-sm font-medium"
+              >
                 {t.agents.settingsThinking}
               </span>
               <Select
                 value={thinking}
                 onValueChange={(value) => setThinking(value as typeof thinking)}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger
+                  className="w-full"
+                  aria-labelledby="agent-settings-thinking-label"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -221,14 +253,20 @@ export function AgentSettingsDialog({
           {/* Reasoning effort (only when supported) */}
           {supportsReasoningEffort && (
             <div className="space-y-1.5">
-              <span className="text-sm font-medium">
+              <span
+                id="agent-settings-reasoning-label"
+                className="text-sm font-medium"
+              >
                 {t.agents.settingsReasoningEffort}
               </span>
               <Select
                 value={reasoningEffort}
                 onValueChange={setReasoningEffort}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger
+                  className="w-full"
+                  aria-labelledby="agent-settings-reasoning-label"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

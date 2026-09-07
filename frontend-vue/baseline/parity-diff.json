@@ -345,21 +345,14 @@
     },
     "agents-feature-disabled#gallery/desktop/light/en-US": {
       "ariaOnlyReact": [
-        "- combobox",
+        "- combobox \"Default model\"",
         "- dialog \"Model settings\":",
-        "- heading \"Model settings\" [level=2]",
-        "- paragraph: 0 = deterministic, higher = more creative (0–2).",
-        "- spinbutton",
-        "- spinbutton",
-        "- text: Max output tokens"
+        "- heading \"Model settings\" [level=2]"
       ],
       "ariaOnlyVue": [
         "- combobox \"Default model\": parity-basic · Unavailable",
         "- dialog \"Model settings · test-agent\":",
-        "- heading \"Model settings · test-agent\" [level=2]",
-        "- spinbutton \"Max output tokens\"",
-        "- spinbutton \"Temperature 0 = deterministic, higher = more creative (0–2).\"",
-        "- text: 0 = deterministic, higher = more creative (0–2). Max output tokens"
+        "- heading \"Model settings · test-agent\" [level=2]"
       ],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
@@ -387,21 +380,14 @@
     },
     "agents-feature-disabled#gallery/desktop/light/zh-CN": {
       "ariaOnlyReact": [
-        "- combobox",
+        "- combobox \"默认模型\"",
         "- dialog \"模型设置\":",
-        "- heading \"模型设置\" [level=2]",
-        "- paragraph: 0 = 确定性输出，越高越发散（0–2）。",
-        "- spinbutton",
-        "- spinbutton",
-        "- text: 最大输出 token"
+        "- heading \"模型设置\" [level=2]"
       ],
       "ariaOnlyVue": [
         "- combobox \"默认模型\": parity-basic · 不可用",
         "- dialog \"模型设置 · test-agent\":",
-        "- heading \"模型设置 · test-agent\" [level=2]",
-        "- spinbutton \"最大输出 token\"",
-        "- spinbutton \"温度 0 = 确定性输出，越高越发散（0–2）。\"",
-        "- text: 0 = 确定性输出，越高越发散（0–2）。 最大输出 token"
+        "- heading \"模型设置 · test-agent\" [level=2]"
       ],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],

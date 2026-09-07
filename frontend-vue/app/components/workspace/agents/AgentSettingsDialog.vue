@@ -178,8 +178,20 @@ function save() {
           </Select>
         </div>
 
-        <label class="block text-sm">
-          {{ $i18n.t.value.agents.settingsTemperature }}
+        <!--
+          **提示文字不能包在 `<label>` 里**（wave 138）。这两个数字输入原来是
+          「`<label>` 整个包住输入框」的隐式关联，而温度那条提示 `<span>` 也在
+          `<label>` 内部——于是读屏器把它念成控件名字的一部分：对照台账量到的是
+          `spinbutton "Temperature 0 = deterministic, higher = more creative (0–2)."`。
+          名字应该只是「温度」，提示是**描述**（`aria-describedby`）。
+
+          改成与同一个对话框里那三个 Select 一样的写法（`id` + `aria-labelledby`），
+          这份文件内部也就只剩一种命名方式了。
+        -->
+        <div class="block text-sm">
+          <span id="agent-settings-temperature-label" class="block">
+            {{ $i18n.t.value.agents.settingsTemperature }}
+          </span>
           <input
             v-model="temperature"
             data-testid="agent-settings-temperature"
@@ -189,13 +201,27 @@ function save() {
             step="0.1"
             class="border-input mt-1 w-full rounded-md border px-3 py-2"
             :disabled="pending"
+            aria-labelledby="agent-settings-temperature-label"
+            aria-describedby="agent-settings-temperature-hint"
           />
-          <span class="text-muted-foreground mt-1 block text-xs">
+          <!--
+            `<p>` 不是 `<span>`：上游那条提示是
+            `<p className="text-muted-foreground text-xs">`（同上文件），
+            在可访问性树里是一个 `paragraph` 节点；`<span>` 不产生节点，
+            于是它和下一段的标签文字在树里粘成同一段
+            （对照台账量到 `ariaOnlyVue: - text: 0 = deterministic… Max output tokens`）。
+          -->
+          <p
+            id="agent-settings-temperature-hint"
+            class="text-muted-foreground mt-1 text-xs"
+          >
             {{ $i18n.t.value.agents.settingsTemperatureHint }}
+          </p>
+        </div>
+        <div class="block text-sm">
+          <span id="agent-settings-max-tokens-label" class="block">
+            {{ $i18n.t.value.agents.settingsMaxTokens }}
           </span>
-        </label>
-        <label class="block text-sm">
-          {{ $i18n.t.value.agents.settingsMaxTokens }}
           <input
             v-model="maxTokens"
             data-testid="agent-settings-max-tokens"
@@ -205,8 +231,9 @@ function save() {
             class="border-input mt-1 w-full rounded-md border px-3 py-2"
             :placeholder="$i18n.t.value.agents.settingsMaxTokensPlaceholder"
             :disabled="pending"
+            aria-labelledby="agent-settings-max-tokens-label"
           />
-        </label>
+        </div>
 
         <div v-if="supportsThinking" class="space-y-1 text-sm">
           <span id="agent-settings-thinking-label" class="block">
