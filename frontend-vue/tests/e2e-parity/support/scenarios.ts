@@ -1456,6 +1456,59 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
       },
       /*
+        **技能清单画出来的那一屏**（wave 144）。
+
+        wave 133/134 只取了这一页的「失败」与「加载中」两支，那两支里筛选标签是被
+        挡掉的；`integrations#default` 又停在集成面板上。**结果是这一页真正长东西的
+        那一屏——两个筛选标签 + 技能行——一个样本都没有**（第⑦类）。
+
+        接它的直接理由：上游用的是 `<TabsList variant="line">`，而本仓的
+        `TabsList` / `TabsTrigger` 是另写的一套、**连 variant 这个 prop 都没有**
+        （上游那套靠 `group/tabs-list` 标记 + `group-data-[variant=*]/tabs-list:`
+        选择器联动）。**这一处两边长得不一样，而台账此前看不见。**
+      */
+      {
+        id: "skills",
+        routes: [
+          {
+            pattern: "**/api/skills",
+            json: {
+              skills: [
+                {
+                  name: "review",
+                  description: "Review a skill package",
+                  category: "public",
+                  enabled: true,
+                },
+                {
+                  name: "draft",
+                  description: "Draft a document",
+                  category: "custom",
+                  enabled: false,
+                },
+              ],
+            },
+          },
+        ],
+        steps: [
+          {
+            kind: "click",
+            target: { role: "button", name: /^(Skills|技能)$/ },
+          },
+          { kind: "visible", target: { role: "tablist" } },
+          {
+            kind: "visible",
+            target: { role: "tab", name: /^(Public|公共)$/ },
+          },
+          /*
+            **锚点用开关的可访问名，不是 `skill-review` 这个 testid**：那是本仓独有的
+            （上游的技能行一个 testid 都没有），第一版就用它，**React 侧当场等不到**
+            ——wave 131 立的那条规矩（锚点必须两边都有）第一次被自己违反。
+          */
+          { kind: "visible", target: { role: "switch", name: "review" } },
+        ],
+      },
+      /*
         **「还在转」那一档**（wave 134）——取样面此前一个这样的样本都没有。
 
         与 `skills-load-failed` 同一处代码的另一支：上游
