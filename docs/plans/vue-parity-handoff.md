@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 161，2026-09-08）
+## 当前状态（截至 wave 162，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,80 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 162）做了什么：**上一轮说「停住会让文字看不见」——那是推断，而且是错的**
+
+wave 160 / 161 两次把 `shimmer` 留在门外，理由都写着
+「它是『还在跑』的状态文字，而且用 `bg-clip-text`，**停错位置会让文字看不见**」。
+**这一轮先验这句话。**
+
+### 证伪
+
+Shimmer 的背景是**两层**：
+
+```
+背景层 1（--bg）  linear-gradient(90deg, #0000 …, var(--color-background), #0000 …)   ← 会动的高光带，两端透明
+背景层 2          linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground))  ← 实心底色
+```
+
+底下那层是**实心**的，文字任何时候都由它画出来。而两边停住的位置都是
+`background-position: 100% center`——**那正是这条动画自己的起始帧**
+（React 的 `initial`、Vue `.shimmer` 的基础规则），
+也就是说**这一帧今天每个周期都会在屏幕上出现一次**。它要是会让文字消失，
+现在每两秒就该闪一次白。**所以停住是安全的，那句话是错的。**
+
+### 两边同改
+
+- **Vue**：`animation` 挪进 `@media (prefers-reduced-motion: no-preference)`，
+  基础规则里的 `background-position: 100% center` 留着当停车位。
+- **React**：`motion/react` **默认不理会这个媒体特性**（FlipDisplay 那处的注释早写过），
+  所以显式问 `usePrefersReducedMotion()`；减动时 `animate` 落到 `initial` 同一处、
+  `transition` 换成 `{ duration: 0 }`。
+
+两边停车位都是 `100% center`。
+
+### 用例：一边单测一边 e2e，因为两边的机制不是一回事
+
+- **React 的 Shimmer 由 motion/react 驱动**，实测 **jsdom 里真的会动**
+  （250ms 后 `100% center` → `75% center`，1s 线性）。所以钉在单测里，
+  断言「减动时 250ms 后仍在 `100% center`」+「无偏好时已经不在」。
+- **Vue 的是 scoped CSS**，jsdom 不套用 scoped 样式，只能在真浏览器里核。
+  做法：从**浏览器解析好的 CSSOM** 里把 `.shimmer[data-v-xxxxxxxx]` 的 scope 属性名捞出来，
+  再造一个带同样属性的元素读 `getComputedStyle`。核的仍是计算值，不是 CSS 源文本。
+
+**两个坑**（都靠形状断言当场现形）：
+
+1. 造的元素没有 `--shimmer-duration`，`animation: shimmer var(--shimmer-duration) …`
+   **整条声明作废**，computed 读回 `none`——**和「被减动收住」长得一模一样**。
+   补上变量才分得开。
+2. scoped 样式里的 `@keyframes` **会被改名**（实测 `shimmer-b57f278c`），
+   按前缀匹配而不是钉死那串哈希。
+
+负向验证 5 次（React 2 + Vue 3），各红一条，还原全绿。
+其中 Vue 的第三次第一版**没打上**（字符串对不上，脚本 assert 直接抛），
+那次「4 passed」是**无效变异不是假绿**——改对字符串后转红。
+
+### 两条守卫按设计响了
+
+- 改名 spec 之后 `doc-references` 当场红：Vue spec 头注释里还写着旧路径。
+- 之前 `scenario-coverage` 也响过一次（新增 React spec 没在棘轮里表态）。
+  这一轮把 `exempt` 那条的 id 改成 `reduced-motion`，并写清两边覆盖面为什么不对称。
+
+### 无限动画那张表现在的样子
+
+| 动画 | React | Vue |
+| ---- | ----- | --- |
+| `aurora` | 门控（wave 160） | 门控 |
+| `shine` / `shine-border` | 门控 | 门控 |
+| `ambilight` | 门控（wave 161） | 门控（wave 161） |
+| **`shimmer`** | **门控（wave 162）** | **门控（wave 162）** |
+| `loading-bar` / `bouncing` | 未门控（状态指示，冻住会让界面撒谎） | 无对应物 |
+
+**剩下两条是有意留的**，判据写在这里：它们是**状态指示**，
+正确做法是换一种更轻的动效而不是停住；而「换成什么」没有现成答案，
+所以不动，也**不要**给它们配「必须 motion-safe」的守卫（坑 180）。
+
+---
 
 ## 上一轮（wave 161）做了什么：**上一轮写下的「全集只有四条」是错的，第五条两个应用都没门控**
 

@@ -1,6 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /*
+  Decorative motion that ignores `prefers-reduced-motion`. The Vue app carries a
+  mirror of this file (`frontend-vue/tests/e2e/reduced-motion.spec.ts`), which
+  also covers the Shimmer: over there it is scoped CSS and only a browser can
+  resolve it, while here it is driven by `motion/react` and jsdom can watch it
+  move — so this app pins the Shimmer half in
+  `tests/unit/components/ui/reduced-motion.dom.test.tsx` instead.
+
   The subtask card's ambilight is a decorative glow that travels forever while a
   subagent runs — auto-playing, infinite, purely decorative (WCAG 2.2.2, level
   A). Both this app and the Vue one ignored `prefers-reduced-motion` on it until
@@ -14,7 +21,7 @@ import { expect, test } from "@playwright/test";
   test is the rule, not the card.
 */
 const probe = async (
-  page: import("@playwright/test").Page,
+  page: Page,
   reducedMotion: "reduce" | "no-preference",
 ) => {
   // Set explicitly rather than through `test.use({ reducedMotion })`: the

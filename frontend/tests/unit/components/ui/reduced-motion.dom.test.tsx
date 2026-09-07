@@ -8,6 +8,7 @@ rs.mock("canvas-confetti", () => ({
   },
 }));
 
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { AuroraText } from "@/components/ui/aurora-text";
 import { ConfettiButton } from "@/components/ui/confetti-button";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
@@ -167,5 +168,55 @@ describe("FlickeringGrid", () => {
     render(<FlickeringGrid width={40} height={40} />);
     // Shape assert: the 0 above has to mean "withheld", not "never reached".
     expect(frames.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Shimmer", () => {
+  /*
+    `motion/react` does not consult the media query on its own, so this one had
+    to ask. It parks on the animation's own `initial` frame rather than dropping
+    the gradient: the background is two layers, and the solid
+    `--color-muted-foreground` one underneath paints the text on every frame.
+    At `100% center` the moving highlight sits off the left edge, so that frame
+    — which already appears once per cycle today — shows the words in a plain
+    muted color. The status lives in the words; only the sweep is withheld.
+
+    motion does drive its animation under jsdom (measured: 100% -> 75% center
+    over 250ms of a 1s linear cycle), so this asserts movement rather than
+    configuration.
+  */
+  const setPreference = (reduce: boolean) => {
+    Object.defineProperty(globalThis, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: reduce && query.includes("prefers-reduced-motion: reduce"),
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    });
+  };
+
+  const positionAfterAWhile = async (reduce: boolean) => {
+    setPreference(reduce);
+    const { container } = render(<Shimmer duration={1}>Working</Shimmer>);
+    const element = container.firstElementChild as HTMLElement;
+    const started = element.style.backgroundPosition;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return { started, settled: element.style.backgroundPosition };
+  };
+
+  it("stays parked on the readable frame when motion is reduced", async () => {
+    const seen = await positionAfterAWhile(true);
+    expect(seen.started).toBe("100% center");
+    expect(seen.settled).toBe("100% center");
+  });
+
+  it("sweeps when the user has expressed no preference", async () => {
+    const seen = await positionAfterAWhile(false);
+    // Shape assert: the pair above has to mean "held still", not "never ran".
+    expect(seen.started).toBe("100% center");
+    expect(seen.settled).not.toBe("100% center");
   });
 });

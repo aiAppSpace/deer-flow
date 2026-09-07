@@ -56,7 +56,19 @@ const style = computed(() => ({
 <style scoped>
 .shimmer {
   background-position: 100% center;
-  animation: shimmer var(--shimmer-duration) infinite linear;
+}
+
+/*
+  高光带只在无偏好时扫。停住的位置就是基础规则里那个 `100% center`——**也正是这条
+  动画自己的起始帧**，每个周期本来都会在屏幕上出现一次：那一帧里高光带在元素左边界
+  之外，文字整段由底下那层实心 `--color-muted-foreground` 画出来，读得清。
+  所以「停住」不会让「还在跑」这几个字消失，只是不再有光扫过。
+  上游 `ai-elements/shimmer.tsx` 用 motion/react，wave 162 两边同改成同一个停车位。
+*/
+@media (prefers-reduced-motion: no-preference) {
+  .shimmer {
+    animation: shimmer var(--shimmer-duration) infinite linear;
+  }
 }
 
 @keyframes shimmer {

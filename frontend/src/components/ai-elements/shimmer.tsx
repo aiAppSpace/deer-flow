@@ -1,5 +1,6 @@
 "use client";
 
+import { usePrefersReducedMotion } from "@/core/dom/render-activity";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import {
@@ -34,15 +35,24 @@ const ShimmerComponent = ({
     [children, spread],
   );
 
+  // `motion/react` does not consult `prefers-reduced-motion` on its own, so it
+  // has to be asked. Parking on `initial` rather than dropping the gradient:
+  // that frame already appears once per cycle today — the highlight band sits
+  // off the left edge there, so the text is painted entirely by the solid
+  // `--color-muted-foreground` layer underneath and stays readable. The words
+  // carry the status; only the sweep is withheld.
+  const reducedMotion = usePrefersReducedMotion();
+  const parked = { backgroundPosition: "100% center" };
+
   return (
     <MotionComponent
-      animate={{ backgroundPosition: "0% center" }}
+      animate={reducedMotion ? parked : { backgroundPosition: "0% center" }}
       className={cn(
         "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
         "[background-repeat:no-repeat,padding-box] [--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))]",
         className,
       )}
-      initial={{ backgroundPosition: "100% center" }}
+      initial={parked}
       style={
         {
           "--spread": `${dynamicSpread}px`,
@@ -50,11 +60,15 @@ const ShimmerComponent = ({
             "var(--bg), linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground))",
         } as CSSProperties
       }
-      transition={{
-        repeat: Number.POSITIVE_INFINITY,
-        duration,
-        ease: "linear",
-      }}
+      transition={
+        reducedMotion
+          ? { duration: 0 }
+          : {
+              repeat: Number.POSITIVE_INFINITY,
+              duration,
+              ease: "linear",
+            }
+      }
     >
       {children}
     </MotionComponent>
