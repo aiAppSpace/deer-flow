@@ -357,7 +357,8 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "selector:[role=dialog] height React=426 Vue=429.9 Δ3.9"
+        "selector:[role=dialog] y React=187 Vue=190.1 Δ3.1",
+        "selector:[role=dialog] height React=426 Vue=419.9 Δ-6.1"
       ],
       "focus": [
         "React=button Vue=input[number]"
@@ -392,7 +393,8 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "selector:[role=dialog] height React=406 Vue=409.9 Δ3.9"
+        "selector:[role=dialog] y React=197 Vue=200.1 Δ3.1",
+        "selector:[role=dialog] height React=406 Vue=399.9 Δ-6.1"
       ],
       "focus": [
         "React=button Vue=input[number]"

@@ -124,7 +124,18 @@ function save() {
     >
       <form novalidate class="grid gap-4" @submit.prevent="save">
         <DialogHeader>
-          <DialogTitle class="text-lg">
+          <!--
+            **不要在这里再写一次 `text-lg`**（wave 139）。`DialogTitle` 这颗 primitive
+            的基类就是 `text-lg leading-none font-semibold`；在调用点重复传 `text-lg`，
+            `cn`/tailwind-merge 会把它当成同一组的后来者，**连带把 `leading-none` 顶掉**
+            ——Tailwind v4 的 `text-lg` 自带 line-height。实测标题因此从 18px 变成 28px
+            （`lh=28.0001px`，上游那颗是 `lh=18px`），对话框整体高出 10px。
+
+            **这处差异此前被误判过**：wave 137 把对话框那 3.9px 高度差记成
+            「可访问名那处布局差异的投影」，wave 138 把可访问名整个改完之后**它一点没变**
+            ——探针逐层量下来才找到真正的出处（线索 284）。
+          -->
+          <DialogTitle>
             {{ $i18n.t.value.agents.settingsTitle }} · {{ agent.name }}
           </DialogTitle>
           <DialogDescription>
