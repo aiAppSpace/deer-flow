@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 159，2026-09-08）
+## 当前状态（截至 wave 160，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,83 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 160）做了什么：**React 有那个 hook、用过两次，却在三处产品动画上漏掉了减动偏好**
+
+### 起点是一条「默认就红」的门禁
+
+wave 158 记下 `pnpm test:e2e` 在这台机器上默认 workers 会红一条
+（`landing.spec.ts:61`，3930×1650 下 `scrollIntoView` 超时 30s），
+`--workers=1` 则 146/146。这一轮先把它量清楚：
+
+- `playwright.config.ts` 是 **`workers: CI ? 1 : undefined`、`retries: CI ? 2 : 0`**——
+  **CI 串行且重试两次，开发机并行且零重试**。所以 CI 永远绿，开发机上的红没有信息量。
+- 但这一轮复跑，默认 workers **146 passed / 1.1m**，零重试就绿了。**跟机器负载相关，此刻复现不出来。**
+  不停在「flaky」这个词上，直接量那一屏（**生产构建**，`next build && next start`）：
+
+  | 视口 | 空 `evaluate` 往返中位 | 2 秒窗口内长任务 | 最长单个任务 |
+  | ---- | ---------------------- | ---------------- | ------------ |
+  | 1366×768   | **124ms** | 18 次 / 累计 2164ms | 122ms |
+  | 3930×1650  | **749ms** | 4 次 / 累计 3032ms  | **786ms** |
+
+  也就是**首屏动画把主线程占满了**，而且随视口面积恶化。这是真问题，但它在落地页
+  （对齐范围双向豁免），要修得先分清是哪一段动画、逐个 profile——**这一轮没做，读数记在这里**。
+
+### 顺着「动画」查下去，撞到一条真的
+
+React 里 honor `prefers-reduced-motion` 的文件只有 4 个，Vue 有 8 个。
+**第一次数是错的**：我只 grep 了 `prefers-reduced-motion|motion-reduce`，
+漏掉 Tailwind 的 **`motion-safe:`** 写法，差点写出一条不存在的缺陷。补齐拼法重数之后，
+逐个配对，**三处 React 真的漏了，而且都在产品面**：
+
+| 组件 | React 用在哪 | 此前 | Vue |
+| ---- | ------------ | ---- | --- |
+| `AuroraText` | `workspace/welcome.tsx` 的欢迎标题 | `animate-aurora` 无限跑 | `@media (reduce)` 停在 `50% 50%` |
+| `ConfettiButton` | `workspace/input-box.tsx` | 无条件发射 | `shouldEmitConfetti()` |
+| `FlickeringGrid` | `(auth)/login` 与 `(auth)/setup` | rAF 循环常开 | `prefersReducedMotion()` |
+
+前两个是**自动播放的无限动画**（WCAG 2.2.2，A 级），第三个是登录/初始化页的整片背景。
+`globals.css` 里**一条 `prefers-reduced-motion` 都没有**。
+
+**最关键的一点**：React **早就有** `usePrefersReducedMotion()`，而且 `chat-box`、
+`markdown-content` 两处已经在用——**这三处只是没调它**。
+「本仓的动画尊重减动偏好」是一条已经在执行、却没有任何机器在守的规则。
+
+### 修法（React 单侧；Vue 三处本来就是对的，属 wave 73 那一类）
+
+- `aurora-text.tsx`：`animate-aurora` → **`motion-safe:animate-aurora`**（与本仓 `shine` 同一写法），
+  并把停住的位置显式写成 `backgroundPosition: "50% 50%"`。
+  **停在哪和停不停一样重要**——ShineBorder 那处的注释记着同一条教训：
+  200% 宽的渐变停在初始的 `0% 0%` 与停在中间，露出的颜色不是一段。
+- `confetti-button.tsx`：减动时不发射，**`onClick` 照常执行**（没有功能挂在动画上）。
+- `flickering-grid.tsx`：减动时**画一帧就停**，不起 rAF 循环。
+  只 `return` 不重绘会让登录页背景整块空掉——那是「消失」不是「静止」。
+
+### 负向验证 6 次，其中一次假绿
+
+| # | 变异 | 结果 |
+| - | ---- | ---- |
+| 1 | 还原 confetti 的减动判断 | 红 |
+| 2 | 还原 aurora 的 `motion-safe:` | 红 |
+| 3 | 拿掉 aurora 的静止位置 | 红 |
+| 4 | 让 confetti 永远不发 | 红（形状断言） |
+| 5 | 让 grid 永远起 rAF | 红 |
+| 6 | 让 grid 的减动分支不重绘 | ⚠ **绿 → 假绿**，改尺子后红 |
+
+**6 为什么假绿**：我拿 `fillRect` 次数当「画了没有」，而组件里的 `toRGBA` 自己
+建了一个 1×1 canvas 解析 CSS 颜色、也调了一次 `fillRect`——于是计数**恒 ≥ 1**。
+换成 `clearRect`（只有 `drawGrid` 调）之后转红。**（线索 323）**
+
+### 为什么没有配守卫
+
+想过一条「`globals.css` 里 `--animate-*` 带 `infinite` 的，用的时候必须走 `motion-safe:`」。
+全集只有四条：`aurora`、`shine`（都已合规）、**`loading-bar`、`bouncing`**。
+后两个是**状态指示**——把加载条冻住会让界面撒谎，正确做法是换一种更轻的动效而不是停住。
+也就是说这条判据需要豁免表，**按坑 180「需要豁免表就说明判据错了」，不做**。
+**可做的变体**：两个应用对同一条动画的取舍必须一致——那是一张双向表、零豁免，
+但要跨应用读 `../frontend`，得做成 `icon-parity` 那样的 opt-in 工具。**留给下一轮。**
+
+---
 
 ## 上一轮（wave 159）做了什么：**把 #2 剩下的那一半查到根因——这一轮零代码改动，只有度量**
 

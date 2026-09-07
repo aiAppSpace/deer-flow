@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 
+import { usePrefersReducedMotion } from "@/core/dom/render-activity";
 import { cn } from "@/lib/utils";
 
 interface FlickeringGridProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -35,6 +36,7 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isInView, setIsInView] = useState(false);
+  const reducedMotion = usePrefersReducedMotion();
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   const memoizedColor = useMemo(() => {
@@ -131,9 +133,10 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
       const newHeight = height || container.clientHeight;
       setCanvasSize({ width: newWidth, height: newHeight });
       gridParams = setupCanvas(canvas, newWidth, newHeight);
+      return gridParams;
     };
 
-    updateCanvasSize();
+    const initialGridParams = updateCanvasSize();
 
     let lastTime = 0;
     const animate = (time: number) => {
@@ -173,7 +176,23 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
     intersectionObserver.observe(canvas);
 
     if (isInView) {
-      animationFrameId = requestAnimationFrame(animate);
+      if (reducedMotion) {
+        // Paint the grid once and stop. The flicker is the whole animation, so
+        // under `prefers-reduced-motion: reduce` there is nothing to keep a
+        // frame loop alive for — and leaving the canvas unpainted would drop
+        // the backdrop entirely rather than merely holding it still.
+        drawGrid(
+          ctx,
+          canvas.width,
+          canvas.height,
+          initialGridParams.cols,
+          initialGridParams.rows,
+          initialGridParams.squares,
+          initialGridParams.dpr,
+        );
+      } else {
+        animationFrameId = requestAnimationFrame(animate);
+      }
     }
 
     return () => {
@@ -181,7 +200,15 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
     };
-  }, [setupCanvas, updateSquares, drawGrid, width, height, isInView]);
+  }, [
+    setupCanvas,
+    updateSquares,
+    drawGrid,
+    width,
+    height,
+    isInView,
+    reducedMotion,
+  ]);
 
   return (
     <div

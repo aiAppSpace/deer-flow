@@ -4,6 +4,7 @@ import React, { type MouseEventHandler } from "react";
 import confetti from "canvas-confetti";
 
 import { Button } from "@/components/ui/button";
+import { usePrefersReducedMotion } from "@/core/dom/render-activity";
 
 interface ConfettiButtonProps extends React.ComponentProps<typeof Button> {
   angle?: number;
@@ -23,9 +24,14 @@ export function ConfettiButton({
   onClick,
   ...props
 }: ConfettiButtonProps) {
+  // Confetti is decorative motion the user did not ask for. Honor the
+  // preference and skip it; `onClick` still runs, so nothing functional is
+  // gated on the animation.
+  const reducedMotion = usePrefersReducedMotion();
+
   const handleClick: MouseEventHandler<HTMLButtonElement> = (event) => {
     const target = event.currentTarget;
-    if (target) {
+    if (target && !reducedMotion) {
       const rect = target.getBoundingClientRect();
       confetti({
         particleCount,
