@@ -44,7 +44,7 @@ A single `make dev` / Docker stack runs four cooperating services:
 | **Nginx**          | `2026` | Unified reverse-proxy entry point — open this in the browser        |
 | **Gateway API**    | `8001` | FastAPI REST API + embedded LangGraph-compatible agent runtime      |
 | **React frontend** | `3000` | Default Next.js web interface                                       |
-| **Vue frontend**   | `3100` | Nuxt development port; production uses a secondary hostname         |
+| **Vue frontend**   | `3000` | Nuxt on the Vue hostname; `make dev-vue` runs it on `3100` outside Docker |
 | **Provisioner**    | `8002` | Optional — only when sandbox is configured for provisioner/K8s mode |
 
 Nginx is the single public entry: it serves the frontend and proxies `/api/langgraph/*`
