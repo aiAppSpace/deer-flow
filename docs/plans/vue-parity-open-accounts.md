@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 152，2026-09-07）
+# React → Vue 平替：挂账总清单（截至 wave 153，2026-09-07）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -99,6 +99,12 @@
 
 ## 三、这一轮（wave 78~128）清掉的
 
+- **一条正确、但没人守的边界**（wave 153）：`ARCHITECTURE.md:84` 写着
+  「`app/components/ui/` 是唯一的交互控件底座，建在 Reka UI 之上」——实测**当前是真的**
+  （`ui/` 之外 0 处 import、`ui/` 之内 69 份），而**守着它的机器是 0 台**。
+  一条正确但没人守的边界和一条错的边界只差一次改动：产品组件直接建在 reka 上，
+  就绕开了这一层统一补的 `aria-modal`、z-index 分层与可访问名约定
+  （wave 148 那三处就是同一件事的另一半入口）。判据零豁免，另配反向断言。
 - **两份 README 记的门禁不是同一套**（wave 152）：中文版少 `audit`、`coverage`、
   **`standalone-sim`**——最后那个是**验收判据的动态那一半**（静态那半是 `standalone-check`），
   中文 README 那句话当时只写了静态的一半，照它走的人根本不会跑那个实验。三处一起补齐，
