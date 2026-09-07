@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 154，2026-09-07）
+## 当前状态（截至 wave 155，2026-09-07）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -442,6 +442,82 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 155）做了什么：**判据走出 frontend-vue——AGENTS.md 的拓扑表写错了一个端口**
+
+这一轮的起点不是台账，是上一条 Docker 事故（容器里跑着一份 macOS venv）留下的方向：
+**运行期的环境不变量同样存在「写下来当规则、却没人守」的缺口**。
+
+### 一、先扫同形状的坑：一个都没剩
+
+具名卷覆盖构建产物、且**一次性写入**——两份 compose 里只有 `gateway-venv` 一处
+（已在 `3ec1f496` 修好并配上启动自愈 + 5 条单测）。`gateway-uv-cache` 是内容寻址的缓存、
+`redis-data` 是数据，都不是这个形状。两个前端走 Compose Watch 且
+**`ignore: node_modules/`**——`node_modules` 不从宿主机同步、留镜像里那份，
+**天然避开了同一个坑**。这是个干净的负结果。
+
+### 二、换到同一形状的另一处：文档里的数字
+
+`AGENTS.md` 的 Service Topology 表，表头写着
+「A single `make dev` / **Docker stack** runs four cooperating services」：
+
+| 服务             | 表里写的 | Docker 里实际的 |
+| ---------------- | -------- | --------------- |
+| Nginx            | 2026     | 2026 ✅         |
+| Gateway API      | 8001     | 8001 ✅         |
+| React frontend   | 3000     | 3000 ✅         |
+| **Vue frontend** | **3100** | **3000** ❌     |
+| Provisioner      | 8002     | 8002 ✅         |
+
+Docker 里 Vue 跑的是 `nuxt dev --host 0.0.0.0 --port 3000`，nginx 也是按 hostname
+代理到 `frontend-vue:3000`。**3100 是本机 `make dev-vue` 那条路径的端口**
+（`frontend-vue/nuxt.config.ts` 的 `devServer.port`）。
+
+代价不是「文档不好看」：**AGENTS.md 是这个仓库的入门层，是每个 agent 进来读的第一份
+文件**。照着它去 Docker 栈里找 3100 上的 Vue，什么都找不到。
+
+### 三、判据为什么只钉这一张表
+
+先量了范围：**全仓其余写 `3100` 的地方都是对的**——`make dev-vue` / `make dev-dual` /
+`make -C frontend-vue dev`，`ENTRY.md` 甚至明标「本地开发端口」。
+所以判据不能写成「文档里不许出现 3100」，那会把正确的十几处一起打红（又是坑 180 的形状）。
+判据只钉这一张表，**逐行对上它各自的真实来源**：
+
+| 行             | 来源                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------- |
+| Nginx          | 两份 compose 的 `ports:` 那一行                                                       |
+| Gateway API    | `docker/dev-entrypoint.sh` 里 uvicorn 的 `--port`                                     |
+| React frontend | `nginx.conf` 的 `default frontend:PORT`                                               |
+| Vue frontend   | `nginx.conf` 的 `frontend-vue:PORT`，**再从 dev compose 的 `nuxt dev --port` 核一次** |
+| Provisioner    | `docker/provisioner/Dockerfile` 的 `EXPOSE`                                           |
+
+外加一条**尺子先量自己**：表必须解析出恰好那五个服务，否则锚点写坏会让上面每条静默全绿。
+
+与既有 `test_compose_default_bind_host.py` 的分工写清楚了：那边钉那行 `ports` 的
+**绑定地址**那一半（默认 loopback、不许 0.0.0.0、仍可覆盖），这里钉**端口**那一半
+以及它与文档的对应。
+
+### 四、负向验证
+
+| #   | 变异                          | 实测                                                    |
+| --- | ----------------------------- | ------------------------------------------------------- |
+| N1  | 把 Vue 那行改回 `3100`        | **真红两条**（nginx 上游 + dev compose 命令两头都抓到） |
+| N2  | 把 nginx 的 Vue 上游改成 3100 | **真红**（反方向成立）                                  |
+| N3  | 把 gateway 的 `--port` 改掉   | **真红**                                                |
+| N4  | 把表格解析锚点弄坏            | **6 条全红**（尺子先量自己那条挡住）                    |
+
+**踩到一次自己的坑**：N4 之后 `git checkout --` 恢复不了那份测试——**它是新建的、
+未跟踪的文件**。变异脚本备份要按「文件是否已跟踪」分开处理，不能一律指望 git。
+
+### 五、下一轮
+
+同一条判据在仓库根部还没走完。`AGENTS.md` 里还有几处**说的是集合关系**的话没有逐条问过：
+「Repository Map」那棵目录树（列出的每个目录都还在吗？没列的有没有该列的？）、
+「Commands: Root vs. Module」那张表（列的 target 都还在吗？）。
+**先量再改**，并且注意 wave 105 已经判过一次同类：`ROOT_MAKE_TARGETS` 不声称覆盖全集，
+**给它加反向校验反而是错的**——同一张表在不同文档里的语气不同，判据要跟着语气走。
+
+---
 
 ## 上一轮（wave 154）做了什么：**又一条正确、但没人守的规则——浮层层级**
 
