@@ -1,9 +1,13 @@
-# React → Vue 平替：挂账总清单（截至 wave 148，2026-09-07）
+# React → Vue 平替：挂账总清单（截至 wave 149，2026-09-07）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> **判据提醒**：台账现在是 **202 行 / 90 个取样点**（wave 148）。
+> **判据提醒**：台账现在是 **202 行 / 90 个取样点**（wave 149）。
+>
+> **wave 149 结清了上一轮新挂的第 8 条，代码改动为零**：那个 `tabbablesOnlyReact: div` 是 ScrollArea 的 viewport（wave 98 判过「不跟」那笔账在另一屏上的复现）；两条请求是**次数差不是集合差**，而且**只在抽屉打开那一刻**上游多发一轮（桌面态两边完全一致）。
+>
+> **顺手修了尺子**：`tabbablesOnly*` / `tabOrder` 三档共 79 行，**其中 59 行是裸 `div`/`span`、认不出是谁**。描述器给 generic 标签补上 `data-slot`（判据窄到「只在认不出时补」）之后，**59 行进 59 行出、台账行数一格没动**，而且全部解析成同一个 `div[scroll-area-viewport]`——那 59 行原来是同一笔账。现在认不出的行是 **0**。
 >
 > **wave 148 结清了上一轮新挂的第 6b 条**：移动端抽屉换成 `ui/sheet`（reka Dialog），34 行里 **32 行归零**——抽屉背后那一整页不再留在可访问性树里。顺着这个根因**系统扫了全仓**，同类另有两处（外链确认弹窗、mermaid 全屏），一并换成 `ui/dialog`；并配上零豁免守卫 `tests/guards/hand-rolled-overlays.test.ts`。
 >
@@ -40,7 +44,7 @@
 
 ---
 
-## 一、真正还开着的（6 条）
+## 一、真正还开着的（5 条）
 
 > ~~**wave 137 新挂一条**：~~ **wave 138 已修（两边同改，marker 推到 `7f97efd1`）。**
 > 原文如下——
@@ -58,7 +62,7 @@
 | ~~7~~  | ~~**划词工具条的 6 行层级差异**~~  | **wave 124 结清：根因是 `role="log"`，已修** | wave 122 发现归一化把每层缩进都塌成一个空格，wave 123 在**保住缩进**的数据上重做层级比对，量到 **6 行**：`Add to conversation` / `Ask in side chat` / `Close` 三颗按钮 × 两种语言，**React 深度 2、Vue 深度 3**。两边行数相同（60/60）、工具条标记逐行相同，所以多出来的是**祖先里的一个 generic 容器**——而 `- generic` 正好被归一化过滤掉，于是它在行比对里看不见、只在深度上现形。**下一步**：把那一层揪出来（探针打印祖先链），再决定修掉还是接受，以及要不要把「深度」这一档常驻台账（要走 `PARITY_ACCEPT_GROW=1`）。**判据参考**：工具条是 `position: fixed` + 显式 left/top，多一层 generic **没有布局后果**，按 wave 34「欢迎区在树里的位置」的先例多半是「保留」——但**先揪出来再决定**。                                                                                                                                                                                                                                                      |
 | ~~7~~  | ~~**取样面看不见伪元素**~~         | **wave 146 已做，账结清**                    | wave 145 的负向验证 N2 暴露的：把 `Tabs` 根上的 `group/tabs` 删掉——`TabsList` 的 `group-data-[orientation=horizontal]/tabs:h-9` 与 `TabsTrigger` 里那一串 `group-data-[orientation=*]/tabs:after:*` 全部失效——**台账零反应**。两条原因：①横向 tablist 去掉 `h-9` 之后的自然高度**恰好也是 36px**（`p-[3px]` + 触发器 30px），属于巧合；②**几何档量的是元素，不量伪元素**，而 `line` 档的选中态（`group-data-[variant=line]/tabs-list:data-[state=active]:after:opacity-100`）**全部画在 `::after` 上**。也就是说：整个 `line` variant 的视觉主体，现有八档一档都够不着。**下一步**：先按线索 258 的门槛问一句——「有没有一种变异能让新档响、而现有各档都不响」，N2 本身就是答案（举得出来）；做法是给 `sampleGeometry` 的锚点顺带取 `getComputedStyle(el, '::after')` 的 `content`/`opacity`/`height`/`background-color`，**只取锚点、不扩面**（线索 214/255）。**翻案判据**：如果那一档量出来的行几乎全是别的档已经报过的，就撤掉（wave 99 的先例）。 | **wave 146 结果**：只对已有锚点顺带取伪元素样式，干净树 **0 行**，而那个 0 是算出来的（N2 当场报 `w=56.7 h=2` vs `w=0 h=0`，其余七档零反应，重复率 0%）。整套只有 4 个锚点样本碰得到它——两个应用加起来用伪元素的地方只有九处——所以另配形状断言 `pseudoSamples >= 4` 挡住「尺子坏了→静默 0 行」。**没有撤掉。** |
 | ~~6b~~ | ~~**移动端抽屉的模态做法不同**~~   | **wave 148 已修，账结清**                    | 抽屉换成 `ui/sheet`（reka `DialogContentModal` = `useHideOthers` + `FocusScope` + `DismissableLayer`），**34 行里 32 行归零**（背后整页 27 行 + `order` + `tabOrder` + 上游 Sheet 的 3 行 sr-only 标题说明——本仓照上游补了同样的 `SheetTitle`/`SheetDescription`）。**剩 2 行 `requestsOnlyReact`**（`GET /api/features`、`POST /api/langgraph/threads/search`）**与 1 行 `tabbablesOnlyReact: div`**，成因仍未查明、只记读数，另挂在下面第 8 条。订正一句上一轮写下的话：当时判成「两种都正确的模态做法」——不对等，`aria-modal` 是声明、`aria-hidden` 是事实，上游两样都有，本仓当时只有前者。                                                                                                                                                                                                                                                                                                                                                       |
-| 8      | **移动端抽屉那 3 行剩账**          | **wave 148 新挂，成因未查明**                | `thread-list-pin#mobile-drawer` 上换成 primitive 之后仍剩：2 行只在上游发的请求（`GET /api/features`、`POST /api/langgraph/threads/search`）+ 1 行 `tabbablesOnlyReact: div`。**只记读数，不写猜测**（wave 101/102 在这上面栽过一次）。**下一步**：先查那个 `div` 是谁（探针打印身份，线索 264），再查两条请求是不是抽屉挂载时机造成的。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ~~8~~  | ~~**移动端抽屉那 3 行剩账**~~      | **wave 149 已查清，账结清（代码改动为零）**  | ① `tabbablesOnlyReact: div` → 探针查明是 `data-slot="scroll-area-viewport"`，即上游给建议行套的那层 `Suggestions`（`tabIndex={0}` 是 wave 97 两边同改补的）——**wave 98 判过「不跟」的那笔 ScrollArea 账在另一屏上的复现**，不是新缺陷。② 两条 `requestsOnlyReact` **不是集合差是次数差**（同 wave 102 的订正）：逐条量时间戳，桌面态两边都是 features ×2 / search ×2，**只有抽屉打开那一刻上游多发一轮**（+50ms 那一对）——上游抽屉挂载时重取、本仓走缓存，与 wave 128 的 `retry: 3` 同族，判据同样是「vue 有更好的可以保留」。**翻案判据**：哪天本仓需要「打开抽屉就刷新列表」，那要靠显式 invalidate，不是改回默认。                                                                                                                                                                                                                                                                                                                                 |
 | 6      | **台账里那 42 行 ScrollArea 差异** | **wave 98 核完：接受**                       | 逐屏量过：`/workspace/chats`（会话列表页）两边**都**有一个 viewport，对得上；差异全部来自 `/workspace/chats/new` 那一屏——**上游的建议行套了一层 `ai-elements/suggestion` 的 `Suggestions`，而它就是一个 `ScrollArea`**。看它的实现：里面是 `flex w-full flex-wrap`（内容本来就换行）、外面那条横向 `ScrollBar` 还写着 `className="hidden"`——**这一层永远不会真的滚动**。本仓 `WelcomeSuggestionList.vue` 用的是一个普通的 `flex flex-wrap` 容器，**什么都没少**。**决定：不跟。** 补一层不产生滚动的 ScrollArea，只会多一个键盘停靠点（正是第 6 条上一轮刚修掉的那类噪声）。**翻案判据**：上游哪天把那条 `hidden` 去掉、让建议行真的横向滚动。                                                                                                                                                                                                                                                                                                        |
 | 5      | **台账里那 7 行焦点差异**          | **已决定 / 已钉住**                          | wave 94 把「焦点」这一档接进取样面之后量出来的。**4 行**：settings 深链之后上游焦点落在导航第一项「账号」，而屏幕上显示的是另一个面板；本仓 `SettingsDialog.vue` 的 `focusInitial` 把焦点送到当前分区——**拿掉它之后本仓焦点会落到对话框背后的 composer textarea 上**，也就是模态开着而焦点在模态外面，所以那段代码挡的是真缺陷，**保留本仓这一侧**。**1 行**：mermaid 下载键的名字，是第 4 条那一类（译文）的重复。**2 行**：改动面板打开后的初始焦点（上游落在关闭键、本仓落在第一行文件）——**incidental，不是设计**（两边 `SheetContent` 的 DOM 顺序一致，本仓也没有显式焦点代码），最可能是文件列表到位的时机不同。**翻案判据**：这 2 行哪天翻过来，本身就是一个时序信号，值得去查。                                                                                                                                                                                                                                                               |
 | 4      | **台账里那 42 行「上游写死英文」** | **已决定：保留本仓的翻译**                   | wave 92 给 19 个只跑 en-US 的场景补上 zh-CN 之后量出来的，**同一类**：`browser-feature`（Back / Forward / 地址栏 placeholder /「Connecting to live browser…」/「Waiting for the first live frame.」）12 行、`thread-history-mermaid`（工具条六颗键 + 图片 alt）14 行、`artifact-stream-state`（`fileTypeLabel`）2 行。出处逐条查过：`browser-view-panel.tsx:401/462` 是**内联英文字面量**（词典里没有对应 key）；mermaid 工具条来自 **`streamdown` npm 包**，上游连改都改不了；`fileTypeLabel` 是本仓独有的 key。**判据是 fork-boundary 里那条已授权的例外「vue 有更好的可以保留」**——把 13 处译文改回英文，是在这个要留下来的应用上做一次用户可见的退化。**翻案判据**：上游哪天给这些字加了词典，或者 streamdown 支持了 i18n。                                                                                                                                                                                                                       |
@@ -93,6 +97,11 @@
 
 ## 三、这一轮（wave 78~128）清掉的
 
+- **台账里认不出是谁的行清零**（wave 149）：`tabbablesOnly*` / `tabOrder` 三档 79 行里
+  **59 行是裸 `div`/`span`**——查一条得单开探针，等于没有账。描述器给 generic 标签补
+  `data-slot`（**只在认不出时补**：有 role 的本来就认得出，补了反而会凭空造差异——
+  负向验证 N2 实测去掉这个条件后 30 行变 86 行，因为本仓 splitpanes 分隔条没有
+  `data-slot` 而上游 `ResizableHandle` 有）。行数一格没动，认不出的行 59 → **0**。
 - **手搓的模态语义全仓清零**（wave 148）：三处一起换成 primitive——移动端侧栏抽屉
   → `ui/sheet`、外链确认弹窗与 mermaid 全屏 → `ui/dialog`。根因是
   **`aria-modal` 只是声明、`aria-hidden` 才是事实**，手写那套缺的正是后者。

@@ -11,7 +11,7 @@
 你接手一个已经跑了 **144 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 148 的 docs 提交，已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 149 的 docs 提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
@@ -59,6 +59,7 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
   推到我喊停为止；**不要停下来问「要不要继续」**。
 - **台账的规则现在是「新出现、还没定过的行只能减不能增」**，不再是「保持 0」。
   `frontend-vue/baseline/parity-diff.json` 当前 **202 行 / 90 样本**
+  （wave 149 把三档里 59/79 行「认不出是谁」的问题修掉，行数没动、可读性归零缺口）
   （wave 148 把三处手搓的模态换成 primitive，233 → 202）
   （wave 147 把移动端侧栏抽屉挂进取样面，+34 行，其中 30 行是同一处模态做法差异）
   （wave 145 把 Tabs 的 variant 体系搬过来，219 → 197；wave 146 伪元素进取样面，
