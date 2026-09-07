@@ -82,7 +82,6 @@ const suggestionClass =
           <DropdownMenuSeparator v-if="'type' in suggestion" />
           <DropdownMenuItem
             v-else
-            as="button"
             :data-testid="index === 0 ? 'welcome-create-webpage' : undefined"
             @select="emit('select', suggestion.prompt)"
           >

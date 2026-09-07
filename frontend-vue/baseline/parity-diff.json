@@ -737,23 +737,11 @@
       "requestsOnlyVue": [],
       "geometry": [
         "role:switch[review] x React=1117 Vue=1121 Δ4",
-        "role:switch[review] y React=361.9 Vue=403.8 Δ41.9",
-        "role:switch[review] fontSize React=14px Vue=16px",
-        "role:tab[/^(Public|公共)$/] x React=353 Vue=350 Δ-3",
-        "role:tab[/^(Public|公共)$/] y React=283.5 Vue=328 Δ44.5",
-        "role:tab[/^(Public|公共)$/] width React=58.7 Vue=65.6 Δ6.9",
-        "role:tab[/^(Public|公共)$/] height React=29 Vue=34 Δ5",
-        "role:tab[/^(Public|公共)$/] color React=rgba(10,10,10,255) Vue=rgba(23,23,23,255)",
-        "role:tab[/^(Public|公共)$/] background React=rgba(0,0,0,0) Vue=rgba(238,235,228,255)",
-        "role:tab[/^(Public|公共)$/] fontWeight React=500 Vue=400",
-        "role:tablist[undefined] y React=280 Vue=328 Δ48",
-        "role:tablist[undefined] width React=137.9 Vue=149.6 Δ11.7",
-        "role:tablist[undefined] color React=rgba(115,115,115,255) Vue=rgba(10,10,10,255)"
+        "role:switch[review] y React=361.9 Vue=357.8 Δ-4.1",
+        "role:switch[review] fontSize React=14px Vue=16px"
       ],
       "focus": [],
-      "order": [
-        "第 27 个公共节点 React=- tablist \"Agent Skills\": Vue=- button \"Create skill\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
         "div"
@@ -770,23 +758,11 @@
       "requestsOnlyVue": [],
       "geometry": [
         "role:switch[review] x React=1117 Vue=1121 Δ4",
-        "role:switch[review] y React=361.9 Vue=403.8 Δ41.9",
-        "role:switch[review] fontSize React=14px Vue=16px",
-        "role:tab[/^(Public|公共)$/] x React=353 Vue=350 Δ-3",
-        "role:tab[/^(Public|公共)$/] y React=283.5 Vue=328 Δ44.5",
-        "role:tab[/^(Public|公共)$/] width React=46 Vue=54 Δ8",
-        "role:tab[/^(Public|公共)$/] height React=29 Vue=34 Δ5",
-        "role:tab[/^(Public|公共)$/] color React=rgba(10,10,10,255) Vue=rgba(23,23,23,255)",
-        "role:tab[/^(Public|公共)$/] background React=rgba(0,0,0,0) Vue=rgba(238,235,228,255)",
-        "role:tab[/^(Public|公共)$/] fontWeight React=500 Vue=400",
-        "role:tablist[undefined] y React=280 Vue=328 Δ48",
-        "role:tablist[undefined] width React=116 Vue=130 Δ14",
-        "role:tablist[undefined] color React=rgba(115,115,115,255) Vue=rgba(10,10,10,255)"
+        "role:switch[review] y React=361.9 Vue=357.8 Δ-4.1",
+        "role:switch[review] fontSize React=14px Vue=16px"
       ],
       "focus": [],
-      "order": [
-        "第 27 个公共节点 React=- tablist \"技能\": Vue=- button \"新建技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
         "div"

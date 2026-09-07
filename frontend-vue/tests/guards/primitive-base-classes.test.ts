@@ -59,13 +59,39 @@ const DECLARED: Record<string, string> = {
     "同 DropdownMenuContent 的 ①②③；wave 142 已去掉重复的 `border-border` 与容器上的 `text-sm`（`shadow-lg` 与上游一致，保留）。",
   HoverCardContent:
     "① z-index（已决定）；② `--reka-*` 变量名。wave 142 已把 `w-64` / `p-4` / `outline-hidden` 与整组进出动画、transform-origin 补齐。",
+  CommandItem:
+    '框架属性名：reka 的高亮/禁用是 `data-highlighted` / `data-disabled`，cmdk 是 `data-selected="true"` / `data-disabled="true"`。同 `--reka-*` 那一类，本仓够不着。',
+  DropdownMenuItem:
+    "本仓多一条 `hover:bg-accent`：reka 只在 `data-highlighted` 时才 focus，鼠标悬停不触发 focus，而 Radix 给高亮项打的就是 focus，上游的 `focus:bg-accent` 在悬停时已经成立（理由写在 DropdownMenuItem.vue 的文件头）。",
+  DropdownMenuRadioItem:
+    "同 `DropdownMenuItem`：多一条 `hover:bg-accent`，理由同上。",
+  DropdownMenuSubTrigger:
+    "① 同 `DropdownMenuItem` 的 `hover:bg-accent`，理由同上；② 多一组 `data-[disabled]:pointer-events-none data-[disabled]:opacity-50`——上游这一颗**没有**禁用态样式（兄弟组件 `DropdownMenuItem` 有），禁用的子菜单看上去与可用的一样。保留本仓的（翻案判据：上游哪天补上这两条，这一条就该整个删掉）。",
   ScrollArea:
     "本仓多一个 `overflow-hidden`。ScrollArea 这一整类差异 wave 98 已判过（上游那层 `Suggestions` 永远不会真的滚动，决定不跟）；这一条随那笔账。",
   TooltipContent:
     "① z-index：本仓是 90（tooltip 要压过 80 那一层）；② `--reka-*` 变量名。wave 141 已把整组进出动画与 `dark:bg-[#050504]` 补齐。",
 };
 
-const STRING_LITERAL = /(['"`])([^'"`]*)\1/g;
+/*
+  字符串字面量。**三种引号各写一支，而不是一支 `(['"`])([^'"`]*)\1`**——后者
+  不许字面量**里面**出现另外两种引号，于是 `[&_svg:not([class*='size-'])]:size-4`
+  这一个 shadcn 惯用写法就能让整条读不出来。
+
+  wave 145 实测：那种写法下本仓 21 份读不出、上游 34 处读不出，其中
+  **两边同名、都因为嵌套引号被跳过的有 7 个**——`CommandItem`、
+  `DropdownMenuItem`、`DropdownMenuRadioItem`、`DropdownMenuSubTrigger`、
+  `SelectItem`、`SelectTrigger`、`TabsTrigger`。菜单、选择器、标签这三类最高频的
+  交互组件**一个都没进过 `shared`**，于是「基类不一致的每一条都要在 DECLARED 里
+  有名有姓」那句话在它们身上是空的：不进集合就不会不一致（线索 289）。
+*/
+const STRING_LITERAL =
+  /"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g;
+
+/** 三支里哪一支中了，就取哪一支的内容。 */
+function literalBody(match: RegExpMatchArray): string {
+  return match[1] ?? match[2] ?? match[3] ?? "";
+}
 
 /*
   `cva()` 定义的那一类（wave 143）。上一轮的比对只覆盖「基类是字符串字面量」的写法，
@@ -73,10 +99,14 @@ const STRING_LITERAL = /(['"`])([^'"`]*)\1/g;
   `cva(base, { variants: {...} })` 里。第一跑三个**一字不差**，
   这条检查是用来**维持**那个 0 的（一个没人维持的 0 会烂掉）。
 
-  **只比同名的三个**：上游有 12 个 `cva`、本仓 4 个，其余九个是本仓没有的组件
+  **只比同名的那几个**：上游有 12 个 `cva`、本仓 5 个（wave 145 把 `tabsListVariants`
+  搬了过来，同名的从 3 个变成 4 个），其余是本仓没有的组件
   （`inputGroup*` / `item*` / `sidebarMenuButton` / `buttonGroup` / `emptyMedia`）
-  或本仓没用 variants 表达的（`toggle` / `tabsList`）。**那是另一件事**——
+  或本仓没用 variants 表达的（`toggle`）。**那是另一件事**——
   「上游用 variants 参数化、本仓写死」不是类串漂移，不在这条判据里判。
+
+  而 wave 145 正好量出「那是另一件事」也会咬人：`tabsList` 少这一档的后果不是
+  「参数化程度不同」，是**本仓根本画不出 line 那一档**——技能页那一屏 14 行差异。
 */
 const CVA_DEFINITION = /const\s+(\w*[Vv]ariants)\s*=\s*cva\(/g;
 
@@ -91,7 +121,7 @@ function walk(dir: string, ext: string, out: string[] = []): string[] {
 
 /** 只有「全是字符串字面量」的那一种读得出基类；混了运行时表达式的读不出。 */
 function literalTokens(args: string): string[] | null {
-  const literals = [...args.matchAll(STRING_LITERAL)].map((one) => one[2]!);
+  const literals = [...args.matchAll(STRING_LITERAL)].map(literalBody);
   const rest = args.replace(STRING_LITERAL, "").replace(/[\s,]/g, "");
   if (rest.length > 0 || literals.length === 0) return null;
   return literals.join(" ").split(/\s+/).filter(Boolean);
@@ -162,10 +192,17 @@ function cvaBodies(root: string): Map<string, Map<string, string[]>> {
       }
       const body = source.slice(match.index + match[0].length, index - 1);
       const entries = new Map<string, string[]>();
-      const base = body.match(/^\s*(['"`])([\s\S]*?)\1/);
-      if (base) entries.set("(base)", base[2]!.split(/\s+/).filter(Boolean));
-      for (const pair of body.matchAll(/(\w+):\s*(['"`])([^'"`]*)\2/g))
-        entries.set(pair[1]!, pair[3]!.split(/\s+/).filter(Boolean));
+      const base = body.match(new RegExp(`^\\s*(?:${STRING_LITERAL.source})`));
+      if (base)
+        entries.set("(base)", literalBody(base).split(/\s+/).filter(Boolean));
+      // 各档同理：`(\w+):` 后面跟一个字面量，读法与上面共用一套。
+      for (const pair of body.matchAll(
+        new RegExp(`(\\w+):\\s*(?:${STRING_LITERAL.source})`, "g"),
+      ))
+        entries.set(
+          pair[1]!,
+          (pair[2] ?? pair[3] ?? pair[4] ?? "").split(/\s+/).filter(Boolean),
+        );
       // 本仓把它叫 `rawButtonVariants`（外面再包一层 cn），去掉前缀再比名字。
       const raw = match[1]!.replace(/^raw/, "");
       out.set(raw[0]!.toLowerCase() + raw.slice(1), entries);
@@ -211,8 +248,8 @@ describe.skipIf(!upstreamPresent)("两个应用的 primitive 基类", () => {
     .sort();
 
   it("cva 那一类也扫到了，而且同名的不是零", () => {
-    // 同上：正则写坏会让下面那条静默全绿。实测本仓 4 个、上游 12 个、同名 3 个。
-    expect(sharedCva.length).toBeGreaterThanOrEqual(3);
+    // 同上：正则写坏会让下面那条静默全绿。实测本仓 5 个、上游 12 个、同名 4 个。
+    expect(sharedCva.length).toBeGreaterThanOrEqual(4);
   });
 
   it("同名的 cva 定义，每一档类串都要一致", () => {

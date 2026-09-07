@@ -148,7 +148,6 @@ async function exportConversation(format: ThreadExportFormat) {
         <Pencil :size="14" /> {{ $i18n.t.value.common.rename }}
       </DropdownMenuItem>
       <DropdownMenuItem
-        as="button"
         data-testid="thread-share"
         :disabled="sharing"
         @select="shareThread"
@@ -161,7 +160,6 @@ async function exportConversation(format: ThreadExportFormat) {
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
           <DropdownMenuItem
-            as="button"
             data-testid="thread-export-markdown"
             :disabled="Boolean(exporting)"
             @select="exportConversation('markdown')"
@@ -170,7 +168,6 @@ async function exportConversation(format: ThreadExportFormat) {
             {{ $i18n.t.value.common.exportAsMarkdown }}
           </DropdownMenuItem>
           <DropdownMenuItem
-            as="button"
             data-testid="thread-export-json"
             :disabled="Boolean(exporting)"
             @select="exportConversation('json')"
@@ -189,11 +186,7 @@ async function exportConversation(format: ThreadExportFormat) {
         红色在这里不是可访问性要求（项本身有 "Delete" 文字和垃圾桶图标），
         所以按双向规则删掉本仓多出来的这一处。
       -->
-      <DropdownMenuItem
-        as="button"
-        :disabled="deleting"
-        @select="emit('delete')"
-      >
+      <DropdownMenuItem :disabled="deleting" @select="emit('delete')">
         <Trash2 :size="14" /> {{ $i18n.t.value.common.delete }}
       </DropdownMenuItem>
     </DropdownMenuContent>

@@ -71,7 +71,7 @@ async function createSkill() {
     :title="t.settings.skills.title"
     :description="t.settings.skills.description"
   >
-    <div class="space-y-4">
+    <div class="flex w-full flex-col gap-4">
       <!--
         **取技能清单失败时，这一整块要让位给错误行**（wave 133 对齐）。
 
@@ -90,21 +90,51 @@ async function createSkill() {
         `skill-settings-page.tsx:44` 是 `isLoading ? 只画一句 Loading : …`，
         同样整块让位。量出来与 error 那一支同形（12 行 × 两种语言）。
       -->
-      <div
+      <!--
+        **筛选标签与创建键是同一行**（上游 `skill-settings-page.tsx:82` 的
+        `<header className="flex justify-between">`：左边一个 `flex gap-2` 装 Tabs，
+        右边一个 `<div>` 装按钮）。本仓此前是**上下两行**——创建键自成一行右对齐，
+        标签在下一块里——wave 144 第一次给这一屏取样时，`order` 档报出
+        「第 27 个公共节点 React=tablist / Vue=button」，就是这件事。
+
+        标签**移到权限分支外面**是有意的：上游根本没有权限查询，这一整个 header
+        只由技能清单的 loading/error 决定。放在里面等于让 header 多等一个上游
+        没有的 gate；放在外面之后，两个应用画出 header 的条件逐字相同。
+      -->
+      <header
         v-if="!skills.error.value && !skills.loading.value"
-        class="flex items-start justify-end gap-4"
+        class="flex justify-between"
       >
-        <!--
-          上游 `skill-settings-page.tsx:94` 是
-          `<Button size="sm">` 里放一颗 `<SparklesIcon className="size-4" />`。
-          手写那版**没有图标**，尺寸也是 default 一档（sm 是 `h-8 gap-1.5 px-3`），
-          而且少 `hover:bg-primary/90`、`cursor-pointer`、3px 焦点环与 `disabled:*`。
-        -->
-        <Button size="sm" data-testid="create-skill" @click="createSkill">
-          <Sparkles class="size-4" />
-          {{ t.settings.skills.createSkill }}
-        </Button>
-      </div>
+        <div class="flex gap-2">
+          <Tabs v-model="filter">
+            <!--
+              给这组标签取个名字。没有名字的 tablist 只会被念成「选项卡列表」，
+              说不出它在筛什么（上游同处有同样一句注释）。
+            -->
+            <TabsList variant="line" :aria-label="t.settings.skills.title">
+              <TabsTrigger
+                v-for="kind in ['public', 'custom'] as const"
+                :key="kind"
+                :value="kind"
+              >
+                {{ kind === "public" ? t.common.public : t.common.custom }}
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        <div>
+          <!--
+            上游 `skill-settings-page.tsx:94` 是
+            `<Button size="sm">` 里放一颗 `<SparklesIcon className="size-4" />`。
+            手写那版**没有图标**，尺寸也是 default 一档（sm 是 `h-8 gap-1.5 px-3`），
+            而且少 `hover:bg-primary/90`、`cursor-pointer`、3px 焦点环与 `disabled:*`。
+          -->
+          <Button size="sm" data-testid="create-skill" @click="createSkill">
+            <Sparkles class="size-4" />
+            {{ t.settings.skills.createSkill }}
+          </Button>
+        </div>
+      </header>
 
       <p
         v-if="access.permissions.value.state === 'loading'"
@@ -128,20 +158,6 @@ async function createSkill() {
         >
           {{ t.settings.skills.adminRequired }}
         </p>
-        <Tabs
-          v-if="!skills.error.value && !skills.loading.value"
-          v-model="filter"
-        >
-          <TabsList :aria-label="t.settings.skills.title">
-            <TabsTrigger
-              v-for="kind in ['public', 'custom'] as const"
-              :key="kind"
-              :value="kind"
-            >
-              {{ kind === "public" ? t.common.public : t.common.custom }}
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
         <!--
           `<div>` 不是 `<p>`：上游那一句是
           `<div className="text-muted-foreground text-sm">{t.common.loading}</div>`，

@@ -90,7 +90,6 @@ function exportConversation(format: ThreadExportFormat) {
     -->
     <DropdownMenuContent align="end">
       <DropdownMenuItem
-        as="button"
         data-testid="header-export-markdown"
         @select="exportConversation('markdown')"
       >
@@ -98,7 +97,6 @@ function exportConversation(format: ThreadExportFormat) {
         {{ $i18n.t.value.common.exportAsMarkdown }}
       </DropdownMenuItem>
       <DropdownMenuItem
-        as="button"
         data-testid="header-export-json"
         @select="exportConversation('json')"
       >

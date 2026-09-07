@@ -27,6 +27,18 @@
   `hover:bg-accent` 是本仓多出来的一条，**保留**：Reka 的菜单项只在
   `data-highlighted` 时才 focus，鼠标悬停不触发 focus，而上游 Radix 的
   `focus:` 在鼠标移上去时就成立（它给高亮项打的就是 focus）。
+
+  **菜单项渲染成 `<div>`，不要在调用点传 `as="button"`。**
+  reka 的 `Primitive` 默认就是 `div`，与上游 Radix 一致；`as="button"` 是本仓
+  七个调用点各自加上去的。后果不是「多个标签名」这么轻——
+
+    `<button>` 的 `width: auto` 解析成 fit-content（表单控件的固有尺寸规则，
+    `display: flex` 也改不了它），所以它**不会撑满菜单**。
+
+  wave 145 实测：线程行 ⋯ 菜单的「删除」项 React=182 / Vue=81.8（中文 68），
+  而菜单本身两边都是 192。此前是靠在**这份基类里**写 `w-full text-left` 压住的
+  ——补偿写在了错的那一层：primitive 为一个调用点的选择买单，而上游同一份基类
+  两条都没有。把 `as="button"` 去掉之后，两条补偿一起删。
 */
 import { computed, type HTMLAttributes } from "vue";
 import {
@@ -62,7 +74,7 @@ const delegated = computed(() => {
     v-bind="delegated"
     :class="
       cn(
-        `hover:bg-accent focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
+        `hover:bg-accent focus:bg-accent focus:text-accent-foreground data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:bg-destructive/10 dark:data-[variant=destructive]:focus:bg-destructive/20 data-[variant=destructive]:focus:text-destructive data-[variant=destructive]:*:[svg]:!text-destructive [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
         props.class,
       )
     "
