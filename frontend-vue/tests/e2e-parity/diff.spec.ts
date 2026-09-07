@@ -169,6 +169,7 @@ function diffGeometry(
       "color",
       "background",
       "fontSize",
+      "fontWeight",
       "opacity",
       "hit",
     ] as const) {

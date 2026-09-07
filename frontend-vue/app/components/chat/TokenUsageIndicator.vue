@@ -133,7 +133,7 @@ function presetDescription(value: TokenUsageViewPreset) {
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" side="bottom" class="w-80">
-      <DropdownMenuLabel class="text-foreground text-sm font-semibold">
+      <DropdownMenuLabel>
         {{ $i18n.t.value.tokenUsage.title }}
       </DropdownMenuLabel>
       <dl v-if="usage" class="space-y-1 px-2 py-1 text-xs">
@@ -160,7 +160,7 @@ function presetDescription(value: TokenUsageViewPreset) {
         {{ $i18n.t.value.tokenUsage.unavailable }}
       </p>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel class="text-foreground text-sm font-semibold">
+      <DropdownMenuLabel>
         {{ $i18n.t.value.tokenUsage.view }}
       </DropdownMenuLabel>
       <DropdownMenuRadioGroup

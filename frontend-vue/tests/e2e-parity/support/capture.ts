@@ -81,6 +81,15 @@ export type GeometrySample = {
   background: string;
   fontSize: string;
   /*
+    字重。**加这一档是因为它是一处真的盲区**（wave 140）：
+    本仓的 `DropdownMenuLabel` 基类丢掉了上游的 `font-medium`，于是 token 用量菜单的
+    分组标题上游是 medium、本仓是 semibold——**aria 树不带字重，几何档此前也不采样它，
+    命中测试与 opacity 更不相干**，四档同时看不见。
+    坑 258 的判据（「有没有一种变异能让它响、而现有的档都不响」）在这一条上有现成答案：
+    只改一个 `font-weight`，其余各档一行都不会动。
+  */
+  fontWeight: string;
+  /*
     元素**自己**的 opacity。
 
     加这一档是因为它是一处真的盲区：`opacity: 0` 的元素**照样在可访问性树里**
@@ -374,6 +383,7 @@ export async function sampleGeometry(
             color: toRgba(style.color),
             background: toRgba(style.backgroundColor),
             fontSize: style.fontSize,
+            fontWeight: style.fontWeight,
             opacity: style.opacity,
             hit,
           };

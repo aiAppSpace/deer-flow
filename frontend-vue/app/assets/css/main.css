@@ -70,6 +70,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /*
+    深色主题下全局字重 300，逐字照上游
+    （frontend/src/styles/globals.css:318，同样写在 `.dark` 块里）。
+    本仓此前没有这一条，于是深色下所有没有显式字重的文字都比上游重一档；
+    对照台账在 wave 140 给几何档加上 `fontWeight` 之后当场报出 6 行
+    `selector:textarea fontWeight React=300 Vue=400`（全部落在 dark 那几个样本上）。
+  */
+  font-weight: 300;
 }
 
 @theme inline {
