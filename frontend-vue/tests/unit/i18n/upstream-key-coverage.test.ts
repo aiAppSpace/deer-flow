@@ -41,6 +41,10 @@ const ALIASES: Record<string, string> = {
   // 本仓把会话列表的删除失败与重试放在 navigation.* 下（ThreadSidebar 用的就是它）。
   "chats.deleteChatFailed": "navigation.deleteConversationFailed",
   "chats.tryAgain": "navigation.tryAgain",
+  // wave 169 两边同改历史加载占位：上游此前只有骨架、没有播报，本仓此前只有一行文字、
+  // 没有骨架。两边都补齐之后上游新增了 conversation.loadingConversation，
+  // 而本仓这句话早就在 messages.* 下（MessageList 一直在用）。
+  "conversation.loadingConversation": "messages.loadingConversation",
 };
 
 const upstreamDictionary = fileURLToPath(

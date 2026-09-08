@@ -510,6 +510,7 @@ export const zhCN: Translations = {
 
   // Conversation
   conversation: {
+    loadingConversation: "正在加载会话…",
     noMessages: "还没有消息",
     startConversation: "开始新的对话以查看消息",
     branchCreated: "已创建分叉对话",

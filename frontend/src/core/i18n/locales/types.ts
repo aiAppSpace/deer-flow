@@ -428,6 +428,7 @@ export interface Translations {
 
   // Conversation
   conversation: {
+    loadingConversation: string;
     noMessages: string;
     startConversation: string;
     branchCreated: string;

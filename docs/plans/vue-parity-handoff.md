@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 168，2026-09-08）
+## 当前状态（截至 wave 169，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,61 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 169）做了什么：**历史加载那一屏，两个应用各缺一半**
+
+wave 167 量出的最后一条实质缺口：历史加载时上游画一整块骨架屏
+（`message-list.tsx:926`，`thread.isThreadLoading && messages.length === 0`），
+本仓只有一行居中的灰字。**没有任何地方判过这件事**，而且
+**上游根本没有 `loadingConversation` 这条词条**——那行文字是本仓自己发明的。
+
+### 判断：不是「谁抄谁」，是两边各缺一半
+
+| | 上游 | 本仓 |
+| --- | --- | --- |
+| 视觉 | 骨架屏（保住布局，内容到达时不跳） | 一行灰字（内容到达时整屏跳一下） |
+| 读屏器 | **完全无声**（骨架是纯视觉占位） | 念得出「正在加载会话…」 |
+
+按主流做法，这两件事本来就该同时有：**骨架屏 + `role="status"` 的可访问播报**。
+所以两边同改，各补对方缺的那一半。
+
+### 顺手修掉的：上游那两个不是 ARIA 角色
+
+```jsx
+<div role="human-message" …>
+<div role="assistant-message" …>
+```
+
+**ARIA 的角色词表是固定的**，这两个不在里面——浏览器直接丢掉，元素照样是 generic。
+而且**没有任何地方查询它们**（grep 过 `frontend/src`、`frontend/tests`、`frontend-vue`）。
+两边都改成 `data-slot`：不声称一个交付不了的语义。
+
+### 做了什么
+
+- **上游**：外层加 `role="status"` + `aria-busy`，播报文案放在一个 `sr-only` 子元素里
+  （**活动区播报的是内容变化，不是它的 `aria-label`**）；两处非法 role 换成 `data-slot`；
+  新增 `conversation.loadingConversation` 词条。
+- **本仓**：从零补一条 `ui/skeleton` primitive（类名与 `data-slot` 逐字照抄上游），
+  再补 `MessageListSkeleton.vue`——结构、宽度、60ms 错峰、keyframes 全部照抄，
+  最后接进 `MessageList.vue` 顶掉那行灰字，文案沿用本仓既有的词典键。
+
+`skeleton-entrance` 的 keyframes 我第一版写成了 `scaleX(0.6)`，上游是 `scaleX(0)`——
+**照抄就要逐字照抄**（wave 167 aurora 那条教训），当场改正。
+
+### 四条守卫按设计响了，一条不落
+
+`make verify` 一次红了四条，全是这次改动应该触发的：
+
+| 守卫 | 它要什么 |
+| ---- | -------- |
+| `architecture` L2 集合 | 新增的 `ui/skeleton/*` 要登记进 `l2Files`（**而且按字母序**——我第一次插在 `sidebar` 前面，它当场又红一次：`sidebar` < `skeleton`） |
+| `doc-facts` | `I18N_INVENTORY.md` 里的 SFC 数要跟着走（221 → 223） |
+| `i18n source-guard` | 产品 SFC 计数 219 → 221 |
+| `upstream-key-coverage` | 上游新增的 `conversation.loadingConversation` 在本仓叫 `messages.loadingConversation`，要写进 `ALIASES` |
+
+**这四条正是「加一个组件」应该惊动的全部东西**——没有一条是误报，也没有一条漏报。
+
+---
 
 ## 上一轮（wave 168）做了什么：**同形缺陷全仓扫一遍，扫出第二处，并把这一类锁住**
 

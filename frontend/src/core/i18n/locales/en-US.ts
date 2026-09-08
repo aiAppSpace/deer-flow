@@ -535,6 +535,7 @@ export const enUS: Translations = {
 
   // Conversation
   conversation: {
+    loadingConversation: "Loading conversation…",
     noMessages: "No messages yet",
     startConversation: "Start a conversation to see messages here",
     branchCreated: "Conversation branch created",

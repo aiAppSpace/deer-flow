@@ -34,6 +34,7 @@ import HumanTurnActions from "@/components/chat/HumanTurnActions.vue";
 import HumanInputCard from "@/components/chat/HumanInputCard.vue";
 import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
 import MessageAttachments from "@/components/chat/MessageAttachments.vue";
+import MessageListSkeleton from "@/components/chat/MessageListSkeleton.vue";
 import MessageMarkdown from "@/components/chat/MessageMarkdown.vue";
 import MessageTokenUsage from "@/components/chat/MessageTokenUsage.vue";
 import MarkdownLink from "@/components/chat/MarkdownLink.vue";
@@ -949,9 +950,13 @@ onUnmounted(() => {
       @pointerdown="onScrollIntent"
       @keydown="onScrollKey"
     >
-      <div v-if="loading" class="py-8 text-center text-sm text-gray-500">
-        {{ $i18n.t.value.messages.loadingConversation }}
-      </div>
+      <!--
+        历史加载中的占位。wave 169 之前这里是一行居中的灰字，上游是一整块骨架屏
+        （`message-list.tsx:926`）——**各缺一半**：本仓的文字对读屏器友好，但视觉上
+        会让内容到达时整屏跳一下；上游的骨架保住了布局，却对读屏器完全无声。
+        两边同改成「骨架 + `role="status"` 播报」，文案沿用本仓这一条词典键。
+      -->
+      <MessageListSkeleton v-if="loading" />
       <!--
         「加载更早」整块照 `message-list.tsx:159` 的 `LoadMoreHistoryIndicator` 重排，
         三处可观察差异都由此而来：

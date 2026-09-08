@@ -358,6 +358,8 @@ const l2Files = [
   "app/components/ui/sheet/variants.ts",
   "app/components/ui/sidebar/SidebarTrigger.vue",
   "app/components/ui/sidebar/index.ts",
+  "app/components/ui/skeleton/Skeleton.vue",
+  "app/components/ui/skeleton/index.ts",
   "app/components/ui/switch/Switch.vue",
   "app/components/ui/switch/index.ts",
   "app/components/ui/tabs/Tabs.vue",
