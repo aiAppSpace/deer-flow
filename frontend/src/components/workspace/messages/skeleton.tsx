@@ -13,8 +13,15 @@ function SkeletonBar({
 }) {
   return (
     <div
-      className={`animate-skeleton-entrance fill-mode-[forwards] overflow-hidden rounded-md ${originRight ? "origin-[right]" : "origin-[left]"} ${className ?? ""}`}
-      style={{ opacity: 0, ...style }}
+      // No `opacity: 0` here, and no `fill-mode-[forwards]` override: the
+      // animation is `both`, so the keyframes cover the stagger delay and the
+      // element's own resting style stays visible. Making the element itself
+      // transparent meant a withheld animation left the whole skeleton blank —
+      // the same defect the suggestion chips carried until 2026-09-08.
+      // `motion-safe:` withholds the entrance under `prefers-reduced-motion`,
+      // which is only safe because of the above.
+      className={`motion-safe:animate-skeleton-entrance overflow-hidden rounded-md ${originRight ? "origin-[right]" : "origin-[left]"} ${className ?? ""}`}
+      style={style}
     >
       <Skeleton className="h-full w-full rounded-md" />
     </div>

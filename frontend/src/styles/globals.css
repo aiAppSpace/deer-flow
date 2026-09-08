@@ -108,15 +108,11 @@
     }
   }
 
-  --animate-bouncing: bouncing 0.5s infinite alternate;
-  @keyframes bouncing {
-    to {
-      opacity: 0.1;
-      transform: translateY(-8px);
-    }
-  }
-
-  --animate-skeleton-entrance: skeleton-entrance 0.35s ease-out forwards;
+  /* `both` for the same reason as `fade-in-up`: the callers stagger these with
+     `animation-delay`, and `backwards` is what covers the delay — otherwise the
+     caller has to make the element itself transparent, and then a withheld
+     animation leaves the skeleton permanently invisible. */
+  --animate-skeleton-entrance: skeleton-entrance 0.35s ease-out both;
   @keyframes skeleton-entrance {
     0% {
       opacity: 0;

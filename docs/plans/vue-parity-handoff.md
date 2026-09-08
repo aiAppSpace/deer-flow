@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 167，2026-09-08）
+## 当前状态（截至 wave 168，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,75 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 168）做了什么：**同形缺陷全仓扫一遍，扫出第二处，并把这一类锁住**
+
+wave 167 修掉「建议芯片的可见性挂在动画上」之后，按规矩系统扫同形问题。
+
+### 扫出第二处，一模一样
+
+`workspace/messages/skeleton.tsx` 的 `SkeletonBar`：
+
+```jsx
+className="animate-skeleton-entrance fill-mode-[forwards] …"
+style={{ opacity: 0, ...style }}
+```
+
+**同一个写法**：`opacity: 0` 是元素自己的静止态，靠 `forwards` 把动画终点留住。
+而这块骨架屏是**历史加载时整屏的内容**（`message-list.tsx:926`，
+`thread.isThreadLoading && messages.length === 0`）——动画一旦被跳过，
+用户看到的是**一片空白**，不是「正在加载」。
+
+修法与上一轮同：`--animate-skeleton-entrance` 的 `forwards` → **`both`**，
+去掉内联 `opacity: 0` 与那个重复的 `fill-mode-[forwards]`，再套 `motion-safe:`。
+
+### 顺手：第四条死代码
+
+`workspace/streaming-indicator.tsx` **零消费者**——整个组件是死的。
+它是 `--animate-bouncing` 唯一的使用者，所以那条主题条目也跟着是死的。
+两个一起删。**上游的 `--animate-*` 从 9 条降到 5 条**（wave 167 删了三条，这一轮第四条）。
+
+**订正 wave 167 的说法**：我当时把 `bouncing` 记成「本仓没有对应组件的缺口」——
+不对，**上游那个组件本身就没人用**，谈不上缺口。
+
+### 判据：怎么锁住这一类
+
+想过扫调用点（「class 串里既有 `animate-` 又有 `opacity-0`」），但**人肉扫的时候
+正是这一招漏掉了第二处**——那里的 `className` 与 `style={{opacity:0}}` 隔着几行，
+grep 关联不起来。
+
+**所以判据钉在声明上，而且是纯静态的**：
+
+> **`0%` / `from` 帧把 `opacity` 设成 0 的动画，声明里必须有 `both` 或 `backwards`，
+> 不许只有 `forwards`。**
+
+因为 `forwards` 只保住最后一帧，错峰入场需要的 `animation-delay` 期间没人画第一帧，
+**调用方只能自己把元素藏起来**——根因就在这里。零豁免：
+今天全集 5 条，起点透明的两条都已是 `both`，另外三条根本不从透明开始。
+第二条用例再补上调用点那半边（同一串 class 里不许既有 `animate-` 又有 `opacity-0`），
+两个方向都堵住。
+
+两边各一份：`frontend/tests/unit/styles/animation-visibility.test.ts` 与
+`frontend-vue/tests/guards/animation-visibility.test.ts`。
+
+### 负向验证：Vue 那份**第一跑就被自己抓了**
+
+第三条用例当场红，指着 `WelcomeSuggestionList.vue` ——**里面那句写着
+`animate-fade-in-up + opacity-0 + forwards` 的注释**，是 wave 167 我自己写下来
+解释这条规则的。**「扫描前先剥注释」这一天里撞了第三次**（坑 202 / 316）。
+两份守卫都补上剥注释，并各留一条用例专门验「剥注释没剥过头」。
+
+| # | 变异 | React | Vue |
+| - | ---- | ----- | --- |
+| 1 | 起点透明的动画改回 `forwards` | 红 | 红 |
+| 2 | 给 class 串加回 `opacity-0` | 红 | 红 |
+| 3 | 只在**注释里**写那串字 | — | **绿（正确）** |
+| 4 | 扫描面指向不存在的目录 | 红（`failedFiles: 1`，exit 1） | 红 3 条 |
+
+**第 4 条 React 那侧要小心**：计数是 `0 passed / 0 failed`，
+**「一条用例都没跑」和「全绿」在计数上长得一样**——是查退出码才确认它真红的。
+
+---
 
 ## 上一轮（wave 167）做了什么：**取样上下文钉死 `reduce`，于是两个应用在 `no-preference` 下的动画从没被比过**
 
