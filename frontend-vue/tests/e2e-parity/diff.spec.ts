@@ -23,17 +23,7 @@ import { dirname } from "node:path";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  diffAriaDepth,
-  diffAriaLines,
-  diffAriaOrder,
-  diffSequenceOrder,
-} from "../../scripts/lib/aria-parity.mjs";
-import {
-  captureScenario,
-  sampleGeometry,
-  type GeometrySample,
-} from "./support/capture";
+import { captureScenario, sampleGeometry } from "./support/capture";
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { reactAppPresent } from "./support/react-preview";
 import {
@@ -47,6 +37,7 @@ import {
 } from "./support/scenarios";
 
 import { type DiffEntry, addedRows } from "./support/ledger";
+import { buildDiffEntry, countPseudoSamples } from "./support/diff-entry";
 
 const VUE_APP = process.env.E2E_APP_URL ?? "http://localhost:3115";
 const REACT_APP = process.env.E2E_REACT_APP_URL ?? "http://localhost:3116";
@@ -88,7 +79,6 @@ const REPORT = new URL(
  * 193、Vue 是 192（React 侧那个 `overflow:hidden` 的行容器内容高 52、盒子高 50，
  * 被滚了 1px）。此前两边都量成 192，因为视口坐标把那 1px 滚动一起量了进去。
  */
-const GEOMETRY_TOLERANCE_PX = 2;
 
 test.skip(
   !reactAppPresent,
@@ -109,78 +99,6 @@ function key(
 ) {
   const suffix = state.id ? `#${state.id}` : "";
   return `${scenarioId}${suffix}/${dimension.viewport}/${dimension.theme}/${dimension.locale}`;
-}
-
-/** 多重集差异，与 aria 用同一套办法：同一条出现三次和出现一次不是一回事。 */
-function diffMultiset(react: string[], vue: string[]) {
-  const count = (items: string[]) => {
-    const map = new Map<string, number>();
-    for (const item of items) map.set(item, (map.get(item) ?? 0) + 1);
-    return map;
-  };
-  const reactCount = count(react);
-  const vueCount = count(vue);
-  const onlyReact: string[] = [];
-  const onlyVue: string[] = [];
-  for (const [item, n] of reactCount) {
-    for (let i = 0; i < n - (vueCount.get(item) ?? 0); i++)
-      onlyReact.push(item);
-  }
-  for (const [item, n] of vueCount) {
-    for (let i = 0; i < n - (reactCount.get(item) ?? 0); i++)
-      onlyVue.push(item);
-  }
-  return { onlyReact: onlyReact.sort(), onlyVue: onlyVue.sort() };
-}
-
-function diffGeometry(
-  react: Record<string, GeometrySample | null>,
-  vue: Record<string, GeometrySample | null>,
-) {
-  const lines: string[] = [];
-  for (const label of [
-    ...new Set([...Object.keys(react), ...Object.keys(vue)]),
-  ].sort()) {
-    const r = react[label] ?? null;
-    const v = vue[label] ?? null;
-    /*
-      两边都没取到 → 跳过，不是差异。
-
-      wave 76 把 `steps` 里的 `visible` 也接成了锚点，而那些锚点到取样时
-      可能已经被后续步骤换掉了（`artifact-batched-stream` 一路点过好几个文件）。
-      **两个应用同时没有它，就没有可比的几何**；一边有一边没有仍然要报。
-    */
-    if (!r && !v) continue;
-    if (!r || !v) {
-      lines.push(
-        `${label} 取样缺失 React=${r ? "有" : "无"} Vue=${v ? "有" : "无"}`,
-      );
-      continue;
-    }
-    for (const field of ["x", "y", "width", "height"] as const) {
-      const delta = Math.round((v[field] - r[field]) * 10) / 10;
-      if (Math.abs(delta) > GEOMETRY_TOLERANCE_PX) {
-        lines.push(
-          `${label} ${field} React=${r[field]} Vue=${v[field]} Δ${delta}`,
-        );
-      }
-    }
-    for (const field of [
-      "color",
-      "background",
-      "fontSize",
-      "fontWeight",
-      "opacity",
-      "hit",
-      "before",
-      "after",
-    ] as const) {
-      if (r[field] !== v[field]) {
-        lines.push(`${label} ${field} React=${r[field]} Vue=${v[field]}`);
-      }
-    }
-  }
-  return lines;
 }
 
 test("每个场景的双向差异都与签入的清单一致", async ({ browser }) => {
@@ -232,39 +150,11 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
         await vueContext.close();
         await reactContext.close();
 
-        for (const sample of [
-          ...Object.values(react.geometry),
-          ...Object.values(vue.geometry),
-        ]) {
-          if (!sample) continue;
-          if (sample.before !== "none") pseudoSamples += 1;
-          if (sample.after !== "none") pseudoSamples += 1;
-        }
-
-        const aria = diffAriaLines(react.aria, vue.aria);
-        const requests = diffMultiset(react.requests, vue.requests);
-        entries[key(scenario.id, state, dimension)] = {
-          ariaOnlyReact: aria.onlyReact,
-          ariaOnlyVue: aria.onlyVue,
-          requestsOnlyReact: requests.onlyReact,
-          requestsOnlyVue: requests.onlyVue,
-          geometry: diffGeometry(react.geometry, vue.geometry),
-          focus:
-            react.focus === vue.focus
-              ? []
-              : [`React=${react.focus} Vue=${vue.focus}`],
-          order: diffAriaOrder(react.aria, vue.aria),
-          depth: diffAriaDepth(react.ariaTree, vue.ariaTree),
-          tabbablesOnlyReact: diffMultiset(react.tabbables, vue.tabbables)
-            .onlyReact,
-          tabbablesOnlyVue: diffMultiset(react.tabbables, vue.tabbables)
-            .onlyVue,
-          tabOrder: diffSequenceOrder(
-            react.tabbables,
-            vue.tabbables,
-            "公共可 tab 元素",
-          ),
-        };
+        pseudoSamples += countPseudoSamples(react, vue);
+        entries[key(scenario.id, state, dimension)] = buildDiffEntry(
+          react,
+          vue,
+        );
       }
   }
 

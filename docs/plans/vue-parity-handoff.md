@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 189，2026-09-09）
+## 当前状态（截至 wave 190，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,45 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 190）做了什么：**把台账的判词抽成一处，并给这把尺子补上单测**
+
+路由棘轮还剩 `/login` `/setup` 两条，挡路是「取样面得有一套开鉴权的对照」。
+那是一整套基础设施（新 config、新 testDir、新 baseline、新 make 目标、
+外加 README×2 与三条守卫要接）。**先把它的前置做完，不半途落地。**
+
+### 前置：判词不能有第二份拷贝
+
+开鉴权那套要用**同一套判词**。照抄一份到新 spec 里，就是这一整段（wave 181~187）
+反复撞见的那个形状——**同一份东西存在多份拷贝，其中一份悄悄落后**
+（三份 nginx 配置、两份守卫各写一份名单）。
+而**判词是这个工厂的尺子**：两把不一样的尺子比没有尺子更糟，
+两套结论会互相印证地错下去。
+
+所以先抽：`tests/e2e-parity/support/diff-entry.ts`，
+把 `buildDiffEntry` / `countPseudoSamples` / `diffMultiset` / `diffGeometry`
+与几何容差常量**逐字**搬过去，`diff.spec.ts` 改成 import。
+
+**等价性判据：签入的 `baseline/parity-diff.json` 一行都不能动。**
+实测 `make e2e-parity` **103 passed / 0 failed**——那份基线正是它逐行比对的对象，
+判词只要变了一个字符就会红。局部拷贝已删除，类型检查会挡住悬空引用，
+所以「还在用旧代码」这条路也堵死了。
+
+### 顺带：这把尺子此前没有单测
+
+它只有一个消费者，而那个消费者要跑满 11 分钟才告诉你它坏没坏。
+**而尺子坏掉的方式恰恰是「两边一致」**——多重集退化成集合、几何容差写反、
+focus 比较取反，每一种都让台账**变短**，而变短看起来正是我们想要的结果。
+
+`tests/unit/parity/diff-entry.test.ts` 四条，专钉「坏了会让差异消失」的那几条性质；
+四次变异各红一条（集合化、focus 取反、一边缺几何时不报、伪元素计数把 `none` 也算）。
+
+- 门禁：`make verify` **275 files / 2246 tests**、`make e2e-parity` **103 passed**。
+  只动了取样面自身，**不需要 marker chore**。
+- **下一轮**：在这个共享判词上建 `e2e-parity-auth`（两个应用各起一份开鉴权的 preview，
+  不接 Gateway——Vue 的 `e2e-auth` 就是这么跑的），把 `/login` `/setup` 接进来。
+
+---
 
 ## 上一轮（wave 189）做了什么：**公开分享页上，React 替一个匿名访客发了四条工作区请求**
 
