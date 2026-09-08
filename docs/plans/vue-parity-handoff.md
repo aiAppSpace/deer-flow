@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 173，2026-09-08）
+## 当前状态（截至 wave 174，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,74 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 174）做了什么：**落地页那条抖动查了六轮，根因是一个没有超时的外部 fetch**
+
+wave 173 把 Vue 那侧「拆 context 超时」查成「用例真的在出网」之后，按规矩扫同形问题。
+**扫到了 React 那条挂了六轮的 `landing.spec.ts:61`。**
+
+### 扫描本身先踩了一次坑
+
+第一版扫描是「同一行里既有 `fetch(` 又有 `https://`」——**报了零处**。
+而我明明知道有一处。**因为 URL 在下一行**（多行调用）。
+**（线索 339：扫「调用」就要按调用扫，不能按行扫。）**
+改成从每个 `fetch(` 走到它配平的右括号再看整段之后，全集出来了：
+
+**两个应用加起来，对外部主机的 `fetch` 只有一处** ——
+`frontend/src/components/landing/header.tsx:95`，取 GitHub 的 star 数。
+其余十几个外部 URL 全是链接 `href` 或分享地址常量，没人 fetch。
+
+### 根因
+
+那一处**没有超时**：
+
+```tsx
+async function StarCounter() {
+  let stars = 10000;              // 兜底值，已经写好了
+  try {
+    const response = await fetch("https://api.github.com/repos/bytedance/deer-flow", {
+      next: { revalidate: 3600 },
+    });
+```
+
+`try/catch` 接得住**报错**，接不住**「一直不返回」**。
+而它在一个 **async Server Component** 里——所以卡住的不是那颗 star 徽章，
+**是整个 `/` 的响应**。
+
+未认证的 GitHub API 是**每 IP 每小时 60 次**；`landing.spec.ts` 有 7 条用例、
+每条都载入 `/`，一个下午跑十来次 `test:e2e` 就打满了。
+
+**这也订正了我自己前几轮的归因**：wave 160 量到那一屏空 `evaluate` 往返中位 749ms
+（3930 宽），那个读数是真的，但**它不是抖动的扳机**——扳机是这个网络停顿。
+
+### 修法与读数
+
+`signal: AbortSignal.timeout(3000)`。兜底值 `10000` 本来就是「读不到时该显示什么」的设计答案，
+超时直接走它。
+
+**默认 workers 下连跑四次全绿：**
+
+| | 修之前（本 session） | 修之后 |
+| --- | --- | --- |
+| `pnpm test:e2e` | **6 跑红 4 次**，每次都是 `landing.spec.ts:61` | **4 跑全绿，148 passed** |
+
+### 守卫
+
+`frontend/tests/unit/styles/external-fetch-timeout.test.ts`：
+**凡是 fetch 外部主机，必须带 `signal`。** 零豁免（全集就 1 条）。
+扫描按**调用**走（从 `fetch(` 到配平右括号），并先剥注释。
+
+三次变异：拿掉超时 → 红；扫描面指向不存在的目录 → exit 1；
+**只在注释里写一个外部 fetch → 绿（正确）**。
+
+### 这一轮和上一轮是同一件事
+
+Vue 那侧是**浏览器里**的一跳出网（弹窗导航到 `open.feishu.cn`），
+React 这侧是**服务端**的一跳出网（Server Component fetch GitHub）——
+**两条都是「用例的成败取决于一台我们不控制的服务器」**，
+只是一条能用 Playwright 路由拦住，另一条只能靠超时。
+
+---
 
 ## 上一轮（wave 173）做了什么：**那条「抖动」不是抖动——四条用例会真的去访问外网**
 

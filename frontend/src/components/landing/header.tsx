@@ -104,6 +104,19 @@ async function StarCounter() {
         next: {
           revalidate: 3600,
         },
+        /*
+          A page render must not be able to hang on somebody else's server.
+          `try/catch` below catches an *error*; it does not catch "never
+          answers", and this runs inside an async Server Component — so a slow
+          api.github.com stalls the whole `/` response, not just the badge.
+
+          Unauthenticated GitHub allows 60 requests an hour per IP, which a
+          test suite reaches quickly: on 2026-09-08 `landing.spec.ts` was
+          timing out at 30s under load, and this is the only external fetch in
+          the app. The fallback below (10000) is already the designed answer
+          for "we could not read it", so timing out simply uses it.
+        */
+        signal: AbortSignal.timeout(3000),
       },
     );
 
