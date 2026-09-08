@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 191，2026-09-09）
+## 当前状态（截至 wave 192，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,58 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 192）做了什么：**登录页第一次被真正比过——两边完全一致；wave 191 那份读数是纯夹具假象**
+
+wave 191 撤回时留了一个问题：**把两个应用放进同一个「确实没有会话」的状态，各自显示什么？**
+
+### 不用新套件——那个状态就在跑着的机器上
+
+```
+$ docker exec deer-flow-gateway sh -c 'echo $DEER_FLOW_AUTH_DISABLED'   →（空，鉴权是开的）
+$ curl localhost:2026/api/v1/auth/me                                     → HTTP 401
+```
+
+**真环境正好就是「鉴权开 + 无会话」。** 于是直接在它上面比。
+
+### 读数：两边逐字一致
+
+| | React（`localhost:2026`） | Vue（`vue.localhost:2026`） |
+| --- | --- | --- |
+| `/login` 的正文 | `登录你的账号 / 邮箱 / 密码 / 保持登录 / 下次打开 DeerFlow 时…` | **一字不差** |
+| 输入框 | `email:you@example.com`、`password:•••••••`、`checkbox` | **一样** |
+| 按钮 | `登录`、`还没有账号？立即注册` | **一样** |
+| 链接 | `← 返回首页` | **一样** |
+| `/setup` | 跳到 `/login` | **也跳到 `/login`**，之后同上 |
+
+**这是登录页第一次被两边真正比过，结论是：没有差异。**
+
+### 所以 wave 191 那份基线记的确实是假象——而且我两个猜想都错了
+
+当时怀疑「回放 Gateway 的种子给了 Vue 一个会话」。**两个都实测否掉了**：
+
+```
+回放 Gateway  /api/v1/auth/me        → HTTP 401  {"code":"not_authenticated"}
+              /api/v1/auth/setup-status → 200 {"needs_setup":true}
+DEERFLOW_ENABLE_TEST_SEED=1 只挂了一个 /api/test-only/seed-runs 路由，不造会话
+```
+
+**真正的原因还没查到**，如实记着。撤回那一轮是对的：**签进去的话，一条本不存在的
+「登录页差异」会以「已判过的台账行」的身份长期误导后面每一轮**。
+
+### 顺带一条待验的线索（**没验，别当结论**）
+
+`tests/support/playwright-factory.ts` 的 `nuxtPreview` 里，
+`DEER_FLOW_INTERNAL_GATEWAY_BASE_URL=... nuxt build && ... nuxt preview`
+——shell 的这种写法**只把那个变量给了 `build`，没给 `preview`**。
+主对照套件能正常比请求，说明 Nuxt 把它烤进了构建；但开鉴权那套里
+Vue 的运行期代理到底打到哪，值得单独量一次。
+
+- 门禁：无代码改动（只改了两条挡路理由的文字）。
+- **下一轮**：要么把上面那条线索查清、让开鉴权的对照成立；要么判「这一屏已在真环境比过、
+  自动化取样成本不划算」并把两条 pending 转成 exempt——**两条路都要有实测支撑，不能靠推断。**
+
+---
 
 ## 上一轮（wave 191）做了什么：**搭了开鉴权的对照，量出它还不可对照，整体撤回**
 

@@ -26,11 +26,11 @@
   "pending": [
     {
       "route": "/login",
-      "reason": "每个用户看到的第一屏，两边都有，却从没被取样过。wave 189 量清了第一层：取样面以 DEER_FLOW_AUTH_DISABLED=1 构建，两个应用都把 /login replace 到 /workspace/chats/new。wave 191 试着搭了一套开鉴权的对照（两个前端 authDisabled:false + 同一个开鉴权的回放 Gateway），**实测仍然不可对照**：React 停在登录表单，Vue 直接进工作区。原因是两边判会话用的端点不同——React 问 /api/v1/auth/providers 与 /setup-status，Vue 问 /api/v1/auth/me。在分清「这是产品差异」还是「回放 Gateway 的种子会话让两边看到不同状态」之前，那份读数不能签入，所以那一轮的半成品已整体撤回。下一步先单独回答这个问题，再谈接场景。"
+      "reason": "每个用户看到的第一屏，两边都有，却从没被**取样面**碰过。wave 192 已在真环境（跑着的 Docker 栈，鉴权开、无会话）**用浏览器逐项比过一次：两边完全一致**——邮箱/密码输入框、保持登录复选框、登录与注册按钮、返回首页链接，文案与占位符逐字相同。所以这一条现在欠的不是「这一屏对不对」，而是「让它进自动化取样面」。挡路的是：wave 191 搭的开鉴权对照会把两边放进不同状态（React 停登录页、Vue 进工作区），而原因已排除两个猜想——回放 Gateway 的 /api/v1/auth/me 实测返回 401，不给会话；种子只挂一个 seed-runs 路由，不造会话。**真正的原因还没查到。**"
     },
     {
       "route": "/setup",
-      "reason": "首次安装向导，两边都有。挡路的与 /login 同源且同样已实测：关掉鉴权时两边都跳走；开着鉴权时 wave 191 实测 **React 的 /setup 自己也跳到了 /login**，Vue 则在工作区，两边仍不可对照。先解开 /login 那条，这一条才有意义。"
+      "reason": "首次安装向导。wave 192 在真环境实测：**两个应用都把 /setup 跳到 /login**（这台实例已装好），且跳过去之后渲染完全一致。所以这一屏要能取样，前提是先有一个「尚未安装」的后端状态；回放 Gateway 实测 setup-status 返回 needs_setup: true，具备这个条件——但与 /login 同一个挡路：那套对照还会把两边放进不同状态。"
     },
     {
       "route": "/auth/callback",
