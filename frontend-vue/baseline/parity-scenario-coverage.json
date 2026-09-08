@@ -17,6 +17,7 @@
     "browser-feature",
     "channels",
     "chat",
+    "chat-thread-init-ordering",
     "integrations",
     "scheduled-tasks",
     "settings-notification",
@@ -32,9 +33,7 @@
     "user-message-plain-text",
     "workspace-changes"
   ],
-  "pending": [
-    "chat-thread-init-ordering"
-  ],
+  "pending": [],
   "exempt": [
     {
       "id": "docs-localized-links",
@@ -50,7 +49,5 @@
       "note": "这份 spec 与路由无关：它往页面里注入元素，核的是全局/scoped 样式规则在 prefers-reduced-motion 下解析成什么。落在 / 上只是因为随便哪一页都会加载那份样式表，而 / 已经在 exemptRoutes 里。对照工厂不覆盖它，本仓自己带了一份镜像 spec（tests/e2e/reduced-motion.spec.ts），所以两侧都有机器在守。上游那份只覆盖 ambilight——它的 Shimmer 是 motion/react 驱动的，jsdom 里就能观察到位移，所以钉在单测 tests/unit/components/ui/reduced-motion.dom.test.tsx 里；本仓的 Shimmer 是 scoped CSS，只能在真浏览器里核。"
     }
   ],
-  "$pendingReasons": {
-    "chat-thread-init-ordering": "步骤词汇够用（`fill` + `press \"Enter\"` 走得完一次真实提交，wave 29 实测）。挡住它的是**上游这一屏在取样点上有两个终态，而 Vue 只有一个**。判据：**同一次构建连取 20 次，React 只出现一个终态**——`aria` 与 `requests` 两档都算，**判据不许放松**（硬规则 3）。 **wave 158：`aria` 那一半做到了，`requests` 那一半没有。**今天的读数（settle 恒为默认、每次取样换 fresh context）：**react aria 终态 1 个 ×20**（两跑复现，另一跑 20/20 也是 1 个）；**react requests 终态 2 个（17/3，另一跑 14/6）**；**vue aria 1 个 ×20、vue requests 1 个 ×20**。 **`aria` 那一半是怎么做到的（两处根因，两边同改，改的是代码不是判据）**：①**AI 回复之后多出一整条重复的「Hello」**（连带多一颗复制键）——`frontend/src/core/threads/hooks.ts` 里那个「切会话就重置」的 effect **也会在这次发送自己的 id 交接时触发**：`/chats/new` 用客户端生成的 uuid 渲染，而 `onStart` 报回来的是后端另给的 id。它把 `sendMessage` 刚捕好的 `prevHumanMsgCountRef` 基线覆盖成「交接那一刻的计数」，于是「服务器那条人类消息到了」这个边沿被吞掉。**探针实测**：两个终态的 trace 只差一个数——那一行写进去的是 1（坏）还是 0（好）。修法是让它只在真的换了会话视图时跑。②**播报器里压着 `Loading... - DeerFlow`**——`thread-title.tsx` 把 `isLoading` 排在优先级最前面、无条件盖掉已经知道的名字，标签页闪一下 `Loading...`，Next 的 `aria-live=\"assertive\"` 路由播报器在导航时读到它、播出去、再不更正（WCAG 4.1.3）。Vue 的 `app/core/threads/utils.ts:documentTitleOfThread` **同形同病，一起改**。**中间读数很关键**：只修①时重复消息 20/20 归零、但终态仍是 2 个，剩下的整整一行就是播报器。 **`requests` 那一半还差什么（wave 158 已定位，下一轮从这里接）**：两个请求终态只差**三条交接后的后续 GET**——`GET /api/langgraph/threads/{id}`、`GET /api/threads/{id}/messages/page`、`GET /api/threads/{id}/token-usage`。多数态（17/20，19 条请求）里**没有**它们，少数态（3/20，22 条）里有。也就是**「这三条在 700ms 取样窗内发没发出去」的时序**，不是集合差。**不许用「给场景加一个等这三条的步骤」来凑绿**——那是换取样点，不算翻案（本条判据原文）。要做就查清为什么它们的发起时机会飘：怀疑对象是 wave 158 那处修改带来的连带效果（重置不再在交接时跑 → `pendingUsageBaselineMessageIdsRef` 等不再被清 → 少了一轮重取），**这只是假设，下一轮当假设重新验**。 **订正 wave 102 写在这里的一句话**：它说这三条「在 A 里同样发了、也都 200 回来了」。今天 20 个样本里 **17 个在取样窗内根本没有它们**。要么是当时的读数只看了一个样本，要么是 wave 158 的改动改变了它们的时机——**没查清，只记读数**。 **复现方法**：在 `tests/e2e-parity/` 下写一次性 probe（**跑完记得删**），场景 `backend: \"mock\"`、`path: /workspace/chats/new`、settle 只等 textarea 可见，steps 是 fill textarea `Hello` → press Enter → 等 `Hello from DeerFlow!`；调 `captureScenario(page, base, scenario, DEFAULT_DIMENSION, state)`——**第 6 个位置参数是 `settleMs` 不是 timeout，别传**（wave 101 踩过）。`aria` 与 `requests` **分别**哈希（wave 158 踩过：只哈希 aria 会漏掉请求档那一半）。20 个样本约 2 分钟（含 React 构建约 1.5 分钟）。 **满足之后**：把这条挪进 `covered`、在 `scenarios.ts` 里注册场景，然后跑 `make e2e-parity` 看它带出多少行台账。**wave 158 试过一次，带出 12 行**——其中三行 aria 是此前从没量过的真差异，要逐条判：Vue 的人类消息上有 `button \"Edit and rerun\"` 而 React 那一刻没有（两边都有这个功能，条件不同：React 多要求 `!replayActionBusy` 与 `canEdit`）；React 有 `text: Completed in <1s` 而 Vue 那一刻没有；播报器 React 空、Vue 是 `New chat - DeerFlow`（框架管道差异，Next 认为标题没变就不播）。**这三行 wave 158 没有判**，因为场景还进不来。 **wave 159 把 `requests` 那一半也查到根因了（这一轮零代码改动，只有度量）。** **先订正 wave 158 自己写下的一句话**：它说两个请求终态「差三条交接后的后续 GET」，像是「有没有发」。**不对——那三条 20/20 都发了**，差的是**发了几次**。wave 158 拿排序后的列表做 `diff`，而 `diff` 把「一份里出现两次、另一份一次」显示成一条 `<`，我读成了「缺一条」。按计数重比：`GET /api/langgraph/threads/{id}`、`GET /api/threads/{id}/messages/page`、`GET /api/threads/{id}/token-usage` **各 2 次 vs 各 1 次**，正好差一整轮。**教训**：多重集差异不能用 `diff`，要用 `Counter` 比。 **根因（探针实测，不是读代码读出来的）**：把 `queryClient.invalidateQueries` 包起来记时刻与调用栈，两种样本各 dump 一条——单轮样本：三个 query 在 t=679/679/682 取，invalidate 在 **t=686**（**+7ms**）；双轮样本：t=340/340/343 取，invalidate 在 **t=356/358**（**+16ms**），随即第二轮 t=356/358/358。那批 invalidate 的栈是 **`Object.onFinish`** —— 运行结束就刷 `thread` / `thread-messages` / `thread metadata` / `thread-token-usage`。而这三个 query 是在 **`onStart`**（`isNewThread` 翻假）时挂载并立刻取的。于是**「第一轮取回来了没有」决定 1 轮还是 2 轮**：还在飞就被 React Query 去重（+7ms），已经落地就真的重取（+16ms）。**第一轮的解析耗时被这两个数夹在 (7, 16] ms 之间。** **所以这不是抖动，是结构**：回放 Gateway 一次运行只要十几毫秒，正好落在那个夹缝里；**换成任何真实后端（运行以秒计），第一轮必然先落地、必然被刷第二遍，稳定 2 轮**——也就是说**生产里 `onStart` 那一轮请求是稳定浪费的**（取的是一个正在跑的运行的历史与用量，随即被 `onFinish` 覆盖）。 **修法与它的代价（wave 159 权衡后没做，理由写在这里）**：要让它确定，就得把 `chat-page.tsx` 里 `useThreadTokenUsage(isNewThread || isMock ? undefined : threadId)` 与同族的历史查询，从「`onStart` 就放行」推迟到「运行结束才放行」。**收益**是每次新建会话省一轮必然被覆盖的三条请求；**代价**是要把这几条失败路径全部想清并各配用例：①运行报错（`onError`）②用户中途 stop ③运行中刷新页面 ④运行永不结束。为省一轮请求而给取数放行条件加上运行生命周期依赖，**风险大于收益**，所以这一轮只把结论钉死、不动代码。**下一轮要做就带着上面四条失败路径做。** **判据仍不满足，`pending` 保留**，并且**不许**用「给场景加一个等第二轮的步骤」或「把请求档从这个场景排除」来凑绿。"
-  }
+  "$pendingReasons": {}
 }

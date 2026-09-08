@@ -778,6 +778,47 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     ),
   },
   {
+    /*
+      **首次提交后的那一屏。** 挂了 146 轮才进来，卡点从来不是步骤词汇不够
+      （`fill` + `press "Enter"` wave 29 就走得完），而是**上游这一屏在取样点上有两个
+      终态、Vue 只有一个**。采纳判据是「同一次构建连取 20 次，React 只出现一个终态」，
+      而且 `aria` 与 `requests` **两档都算**：wave 63 量到 19/4、wave 101 量到 15/5、
+      wave 102 又量了 22 个。
+
+      **wave 158 修掉 aria 那一半、wave 175 修掉 requests 那一半，判据一个字没改。**
+      两次连取 20 样本，四档（react/vue × aria/requests）**全部单一终态**。
+
+      三处根因，都是「同一个逻辑事件被两个独立机制各触发一次」：
+
+      ① **AI 回复之后多出一条重复的「Hello」**（wave 158）。`hooks.ts` 里那个「切会话
+         就重置」的 effect **也会在这次发送自己的 id 交接时触发**，把 `sendMessage` 刚捕好的
+         `prevHumanMsgCountRef` 基线覆盖掉，于是「服务器那条人类消息到了」的边沿被吞掉。
+      ② **播报器里压着 `Loading...`**（wave 158）。`thread-title.tsx` 把 `isLoading` 排在
+         优先级最前、盖掉已知名字，被 Next 的 assertive 路由播报器播出且再不更正。
+      ③ **三条请求各发两次**（wave 175）。`onStart` 把 history / token-usage / metadata
+         三个查询挂上并立刻取，`onFinish` 又把同一批 key 失效一次——**不是竞态是重复**，
+         竞态只决定 React Query 有没有恰好去重（invalidate 落在 +7ms 被去重、+16ms 真重取）。
+         修法是让这三个查询等这一轮 run 结束再取（`thread.isLoading` 由 SDK 维护，
+         报错 / 用户 stop / 正常结束三条路都走同一个翻转）。
+         **去掉的那一轮没有任何可观察效果**——两个终态的 `aria` 此前就逐字相同。
+    */
+    id: "chat-thread-init-ordering",
+    title: "首次提交后的会话初始化",
+    backend: "mock",
+    path: "/workspace/chats/new",
+    settle: [{ kind: "visible", target: { selector: "textarea" } }],
+    states: [
+      {
+        id: "",
+        steps: [
+          { kind: "fill", target: { selector: "textarea" }, value: "Hello" },
+          { kind: "press", key: "Enter" },
+          { kind: "visible", target: { text: "Hello from DeerFlow!" } },
+        ],
+      },
+    ],
+  },
+  {
     id: "sidebar",
     title: "侧栏的 Chats / Agents 导航",
     backend: "mock",

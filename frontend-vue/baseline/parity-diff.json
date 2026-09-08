@@ -181,6 +181,34 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "chat-thread-init-ordering/desktop/light/en-US": {
+      "ariaOnlyReact": [
+        "- alert",
+        "- text: Completed in <1s"
+      ],
+      "ariaOnlyVue": [
+        "- alert: New chat - DeerFlow",
+        "- button \"Edit and rerun\""
+      ],
+      "requestsOnlyReact": [
+        "POST /api/langgraph/threads/search",
+        "POST /api/langgraph/threads/search"
+      ],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [
+        "React=body Vue=textarea \"How can I assist you today?\""
+      ],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [
+        "button"
+      ],
+      "tabOrder": [
+        "第 16 个公共可 tab 元素 React=textarea Vue=button"
+      ]
+    },
     "sidebar/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],

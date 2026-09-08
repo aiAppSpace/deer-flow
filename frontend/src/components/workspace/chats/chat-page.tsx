@@ -75,17 +75,7 @@ export default function ChatPage() {
   const [localSettings, setLocalSettings] = useLocalSettings();
   const { enabled: browserControlEnabled } = useBrowserControlEnabled();
   const { tokenUsageEnabled } = useModels();
-  const threadTokenUsage = useThreadTokenUsage(
-    isNewThread || isMock ? undefined : threadId,
-    { enabled: !isMock },
-  );
-  const threadMetadata = useThreadMetadata(threadId, {
-    enabled: !isNewThread && !isMock,
-    isMock,
-  });
   const branchThread = useBranchThread();
-  const backendTokenUsage = threadTokenUsageToTokenUsage(threadTokenUsage.data);
-  const contextUsage = selectContextUsage(threadTokenUsage.data);
   const mountedRef = useRef(false);
   useSpecificChatMode();
 
@@ -149,6 +139,37 @@ export default function ChatPage() {
   });
 
   const hasThreadMessages = thread.messages.length > 0;
+
+  /*
+    这两个查询**要等这一轮 run 结束再取**，所以声明在 `useThreadStream` 之后
+    —— `thread.isLoading` 是 SDK 维护的「有一轮 run 正在流」。
+
+    为什么：新建会话那条路上，`onStart` 一把 `isNewThread` 翻假就把它们挂上并立刻取，
+    而 `onFinish` 又会把同一批 key 失效一次。同一个逻辑事件被两个独立机制各触发一次取数
+    ——**不是竞态，是重复**。竞态只决定 React Query 有没有恰好去重：实测 invalidate 落在
+    第一次 fetch 之后 +7ms 时被去重（一轮），+16ms 时真的重取（两轮），
+    于是同一个构建连取 20 次会出现两个不同的请求多重集。
+
+    去掉哪一次：**`onStart` 那一次**。它取的是一轮**正在跑的** run 的历史与用量，随即被
+    `onFinish` 覆盖——对照实测两个终态的 `aria` **逐字相同**，也就是说那一轮取数
+    **没有任何可观察效果**。留下的是 `onFinish` 之后那一次，携带的才是终值。
+
+    失败路径不用手搓标志去数：`thread.isLoading` 由 SDK 在**流结束**时翻假，
+    报错、用户 stop、运行完成三条路都走同一个翻转；运行中刷新页面是全新一次挂载，
+    本来就没有 run 在流。查询被禁用期间 React Query 继续显示已缓存的值，
+    与此前「两次 fetch 之间」显示的东西一样，所以没有可见退化。
+  */
+  const runInFlight = thread.isLoading;
+  const threadTokenUsage = useThreadTokenUsage(
+    isNewThread || isMock ? undefined : threadId,
+    { enabled: !isMock && !runInFlight },
+  );
+  const threadMetadata = useThreadMetadata(threadId, {
+    enabled: !isNewThread && !isMock && !runInFlight,
+    isMock,
+  });
+  const backendTokenUsage = threadTokenUsageToTokenUsage(threadTokenUsage.data);
+  const contextUsage = selectContextUsage(threadTokenUsage.data);
 
   useEffect(() => {
     if (

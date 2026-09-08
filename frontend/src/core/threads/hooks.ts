@@ -1571,16 +1571,6 @@ export function useThreadStream({
     onFinish,
   });
 
-  const {
-    messages: history,
-    hasMore: hasMoreHistory,
-    loadMore: loadMoreHistory,
-    loading: isHistoryLoading,
-  } = useThreadHistory(onStreamThreadId ?? "", {
-    enabled: !isMock,
-    pendingSupersededRunIds,
-  });
-
   // Keep listeners ref updated with latest callbacks
   useEffect(() => {
     listeners.current = { onSend, onStart, onFinish };
@@ -1872,6 +1862,32 @@ export function useThreadStream({
       );
       invalidateStoppedThreadCaches(queryClient, threadIdRef.current, isMock);
     },
+  });
+
+  /*
+    历史这一条**要等这一轮 run 结束再取**，所以声明在 `useStream` 之后
+    —— `thread.isLoading` 是 SDK 维护的「有一轮 run 正在流」。
+
+    与 `chat-page.tsx` 里那两个查询同一条理由：新建会话那条路上，`onStart` 一把 id 交出去
+    就把这条查询挂上并立刻取，而 `onFinish` 又会 `invalidateQueries(threadHistoryQueryKey)`
+    ——**同一个逻辑事件被两个独立机制各触发一次取数**。竞态只决定 React Query 有没有恰好
+    去重（实测 invalidate 落在第一次 fetch 之后 +7ms 被去重、+16ms 真重取），于是同一个
+    构建连取 20 次会出现两个不同的请求多重集。
+
+    去掉的是 `onStart` 那一次：它取的是一轮**正在跑的** run 的历史，随即被 `onFinish`
+    覆盖；对照实测两个终态的 `aria` 逐字相同，**那一轮取数没有任何可观察效果**。
+    流式消息本来就走 `useStream`，不靠这条查询。
+
+    禁用期间 React Query 继续显示已缓存的页，与此前「两次 fetch 之间」显示的一样。
+  */
+  const {
+    messages: history,
+    hasMore: hasMoreHistory,
+    loadMore: loadMoreHistory,
+    loading: isHistoryLoading,
+  } = useThreadHistory(onStreamThreadId ?? "", {
+    enabled: !isMock && !thread.isLoading,
+    pendingSupersededRunIds,
   });
 
   const stopThread = useCallback(async () => {
