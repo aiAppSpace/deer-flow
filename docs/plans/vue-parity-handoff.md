@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 183，2026-09-08）
+## 当前状态（截至 wave 184，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,46 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 184）做了什么：**把判据再提一档——但**不是**提到「所有指令」，那会需要豁免表**
+
+wave 183 的判据钉在 `location` 上。按 `(指令, 首参)` 再量一遍，还剩 **5 项**（全在 local）：
+
+```
+access_log /dev/stdout        ← 环境差异：local 写仓内 logs/ 文件
+error_log  /dev/stderr        ← 同上
+pid        /tmp/nginx.pid     ← 同上
+map $http_x_forwarded_proto   ← **不是**环境差异
+default $scheme               ← 上面那个 map 的内容
+```
+
+**所以判据不能提到「所有指令」**：那三项日志/pid 是真的环境差异，写进豁免表就是坑 180。
+**提到 `map` 这一档才对**——`map` 从**请求**里推导变量，
+**与进程跑在哪儿无关**，两份需要第三份就需要。零豁免。
+
+### 它要求的那一条有实际后果
+
+local 缺 `map $http_x_forwarded_proto $forwarded_proto`，
+16 处 `X-Forwarded-Proto` 直接写 `$scheme`。上游那份配置的注释写着后果：
+
+> the Gateway treats HTTPS browser traffic as HTTP and rejects the login POST with
+> 403 "Cross-site auth request denied" (Origin scheme mismatch), and also drops
+> the Secure flag / max-age on session cookies.
+
+即：**`make dev` 跑在另一层 TLS 反代后面时，登录会 403**。
+补上 map 并把 16 处换成 `$forwarded_proto`；`default $scheme` 保证
+**nginx 自己是 TLS 边缘时行为一字不变**。
+
+### 负向验证
+
+- 撤回 local 的 map → 红，**报错点名 `'$http_x_forwarded_proto': ['docker/nginx/nginx.local.conf']`**。
+- 把 map 的正则改成永不匹配 → **形状断言**红（不是漂移那条）。
+- 改过的 `nginx.local.conf` 实测 `nginx -t`：**syntax is ok**。
+
+- 门禁：`backend make lint` 全过；后端整套 **11365 passed / 72 skipped，exit 0**。
+  只动了 `backend/tests/` 与 `docker/nginx/`，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 183）做了什么：**别再一条一条找了——把「三份是同一份配置」做成判据，它自己又吐出两条**
 

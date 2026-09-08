@@ -39,6 +39,7 @@ from collections import defaultdict
 from support.nginx_configs import KNOWN, discover, repo_root
 
 _LOCATION = re.compile(r"location\s+(.*?)\s*\{")
+_MAP = re.compile(r"map\s+(\S+)\s")
 
 
 def _locations(text: str) -> set[str]:
@@ -51,6 +52,40 @@ def _locations(text: str) -> set[str]:
         if match:
             found.add(match.group(1).strip())
     return found
+
+
+def _maps(text: str) -> set[str]:
+    """The source variable of every ``map`` block.
+
+    ``map`` derives a variable from the request. Unlike a log path or a pid
+    file it never depends on where the process runs, so "two of the three
+    configs need it" settles the question for the third with no room for an
+    environment-specific exception -- which is what makes this a second
+    zero-exemption criterion rather than a second list. `nginx.local.conf` was
+    missing `map $http_x_forwarded_proto`, so running `make dev` behind another
+    TLS terminator sent the Gateway `http` and its login POST came back 403.
+    """
+    found = set()
+    for line in text.splitlines():
+        stripped = line.split("#", 1)[0].strip()
+        match = _MAP.match(stripped)
+        if match:
+            found.add(match.group(1))
+    return found
+
+
+def _drifted(by_config: dict[str, set[str]]) -> dict[str, list[str]]:
+    """Items present in every config but one -- see the module docstring."""
+    owners: dict[str, set[str]] = defaultdict(set)
+    for name, items in by_config.items():
+        for item in items:
+            owners[item].add(name)
+    return {item: sorted(set(by_config) - present) for item, present in owners.items() if len(present) == len(by_config) - 1}
+
+
+def _maps_by_config() -> dict[str, set[str]]:
+    root = repo_root()
+    return {path.relative_to(root).as_posix(): _maps(path.read_text(encoding="utf-8")) for path in discover()}
 
 
 def _routes_by_config() -> dict[str, set[str]]:
@@ -70,12 +105,16 @@ def test_this_file_checks_every_nginx_config() -> None:
 
 def test_a_route_two_configs_agree_on_is_in_all_three() -> None:
     routes = _routes_by_config()
-    owners: dict[str, set[str]] = defaultdict(set)
-    for name, locations in routes.items():
-        for location in locations:
-            owners[location].add(name)
-
-    drifted = {location: sorted(set(routes) - present) for location, present in owners.items() if len(present) == len(routes) - 1}
-    assert drifted == {}, (
+    assert _drifted(routes) == {}, (
         "these routes exist in every nginx config but one, which is drift rather than an environment-specific addition; add them to the config listed against each, or explain in that config why the system does not need the route there"
     )
+
+
+def test_a_map_two_configs_agree_on_is_in_all_three() -> None:
+    by_config = _maps_by_config()
+    # Shape assert: a config whose maps all stopped matching would otherwise
+    # make the comparison below vacuously true.
+    for name, found in by_config.items():
+        assert found, name
+
+    assert _drifted(by_config) == {}, "these `map` blocks exist in every nginx config but one. A map derives a variable from the request, so it cannot be environment-specific: add it to the config listed against each"
