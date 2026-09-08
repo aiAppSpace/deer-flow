@@ -11,7 +11,7 @@
 你接手一个已经跑了 **193 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 `bd0f33c4`（wave 192），已推到
+分支 `main-wc`，**接手时 HEAD 是 `0b2cc17b`（wave 193），已推到
 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
