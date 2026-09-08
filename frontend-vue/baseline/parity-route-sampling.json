@@ -26,11 +26,11 @@
   "pending": [
     {
       "route": "/login",
-      "reason": "每个用户看到的第一屏，两边都有，却从没被取样过。挡路的**已实测清楚**：取样面统一以 DEER_FLOW_AUTH_DISABLED=1 构建，这一模式下两个应用都把 /login 直接 replace 到 /workspace/chats/new（wave 189 实测，两边一致）。auth 模式是**构建期**决定的（见 playwright.auth.config.ts 的文件头），所以要取样它得为两个应用各起一份开鉴权的 preview——那是一整套基础设施，不是写一条场景。"
+      "reason": "每个用户看到的第一屏，两边都有，却从没被取样过。wave 189 量清了第一层：取样面以 DEER_FLOW_AUTH_DISABLED=1 构建，两个应用都把 /login replace 到 /workspace/chats/new。wave 191 试着搭了一套开鉴权的对照（两个前端 authDisabled:false + 同一个开鉴权的回放 Gateway），**实测仍然不可对照**：React 停在登录表单，Vue 直接进工作区。原因是两边判会话用的端点不同——React 问 /api/v1/auth/providers 与 /setup-status，Vue 问 /api/v1/auth/me。在分清「这是产品差异」还是「回放 Gateway 的种子会话让两边看到不同状态」之前，那份读数不能签入，所以那一轮的半成品已整体撤回。下一步先单独回答这个问题，再谈接场景。"
     },
     {
       "route": "/setup",
-      "reason": "首次安装向导，两边都有。挡路的与 /login 同一条且同样已实测：关掉鉴权时两个应用都把 /setup replace 到 /workspace/chats/new（wave 189 实测）。同样需要开鉴权的第二套 preview。"
+      "reason": "首次安装向导，两边都有。挡路的与 /login 同源且同样已实测：关掉鉴权时两边都跳走；开着鉴权时 wave 191 实测 **React 的 /setup 自己也跳到了 /login**，Vue 则在工作区，两边仍不可对照。先解开 /login 那条，这一条才有意义。"
     },
     {
       "route": "/auth/callback",
