@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 184，2026-09-08）
+## 当前状态（截至 wave 185，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,77 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 185）做了什么：**React 的生产容器一直以 root 在跑，Vue 的没有**
+
+nginx 那条缝扫完了（181~184 修了 5 处）。**同一手法搬到最该用的地方：两个前端的 Dockerfile**
+——这本来就是 React/Vue 对齐面。按指令计数比一遍：
+
+```
+指令        react   vue
+USER            0     1   ← 不同
+HEALTHCHECK     0     1   ← 不同
+```
+
+### 先量，不读代码
+
+```
+$ docker exec deer-flow-frontend id       → uid=0(root)
+$ docker exec deer-flow-frontend-vue id   → uid=0(root)
+```
+
+两个都是 root——但那是 **dev** 那套（`target: dev`）。**生产 compose 才是重点**：
+
+| | compose 的 `target` | 实际发的 stage | `USER` |
+| --- | --- | --- | --- |
+| React | `prod` | `prod` | **无 → root** |
+| Vue | *（不写）* | 最后一个 `runtime` | `USER node` ✓ |
+
+**所以生产环境里 React 的前端容器以 root 在跑，Vue 的不是。**
+Helm chart 另外用 `runAsUser: 1000` 强行压过——**于是 Kubernetes 是加固的、Compose 不是**，
+而且因为两条部署路径各读各的，这件事一直看不见。
+（Helm README 里那句「`.next/cache` **root-owned in the image**」就是这个状态的痕迹。）
+
+### 改法照抄旁边那份
+
+```dockerfile
+COPY --from=builder --chown=node:node /app/frontend ./frontend
+USER node
+```
+
+`--chown` 不是装饰：`next start` 要往 `.next/cache` 里写，
+root 拥有的树会逼你要么用 root 跑、要么挂一个卷盖住那一个目录（Helm 现在正是后者）。
+
+### 实测，不是读出来的
+
+真构建 `--target prod` 并跑起来：
+
+```
+身份： uid=1000(node) gid=1000(node)
+第 4 次探测：HTTP 200 ✓
+/app/frontend/.next/cache  drwxr-xr-x  node node   → 可写 ✓
+```
+
+### 负向验证（五次，各红对应的一条）
+
+撤回 React 的 `USER`、把它改成 `USER root`、**只写进注释**（剥注释后仍红）、
+**挪到 builder stage**（不是 compose 发的那个 stage，仍红）、撤回 Vue 的 `USER`。
+判据刻意钉的是「**compose 实际发的那个 stage**」而不是「文件里某处有 USER」。
+
+### 新记一笔账：HEALTHCHECK 的差异是**路由缺席**
+
+Vue 有 `server/routes/health.get.ts`（`GET /health`）并据此配了 HEALTHCHECK；
+**React 没有健康路由**，所以也没有 HEALTHCHECK。这一条**没修**：
+补它要往 `frontend/src/app/` 加一条产品外的路由，属于运维面不是产品面，
+**下一轮判要不要做**。
+
+- `frontend/Dockerfile` **不在 marker 监视路径**（`upstream-drift.mjs` 只看
+  `frontend/src` 与 `frontend/tests`），与 wave 177 同例，**不需要 chore**。
+- 门禁：React `pnpm check` EXIT=0 / `pnpm test` **1050 passed** / `pnpm test:e2e` **148 passed**；
+  backend `make lint` 全过、整套 **11368 passed / 72 skipped**；
+  另有一次**真构建 + 真运行**的实测（见上）。
+
+---
 
 ## 上一轮（wave 184）做了什么：**把判据再提一档——但**不是**提到「所有指令」，那会需要豁免表**
 

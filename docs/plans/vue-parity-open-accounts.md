@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 184，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 185，2026-09-08）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,16 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 185：不动台账，但新记一笔。** 把「三份配置比一遍」的手法搬到两个前端的 Dockerfile：
+> **生产 compose 下 React 的前端容器以 root 在跑，Vue 的是 `node`**（Helm 另用 `runAsUser: 1000`
+> 压过，于是 K8s 加固而 Compose 不是）。已照 Vue 那份改（`--chown` + `USER node`），
+> **真构建真运行验过**：`uid=1000(node)`、HTTP 200、`.next/cache` 可写。
+>
+> **新记一笔（第 10 条）**：Vue 有 `server/routes/health.get.ts` 与容器 HEALTHCHECK，
+> **React 两样都没有**。没修——补它要往 `frontend/src/app/` 加一条运维用的路由，
+> 属于运维面不是产品面，**下一轮判要不要做**。
+
 
 > **wave 184：不动台账。** 判据再提一档，但**不是**提到「所有指令」——日志与 pid 路径是真的
 > 环境差异，写进豁免表就是坑 180。提到 **`map`** 这一档：`map` 从请求推导变量、与进程跑在哪儿

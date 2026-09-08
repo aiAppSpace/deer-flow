@@ -89,6 +89,18 @@ RUN if [ -n "${NPM_REGISTRY}" ]; then \
 RUN pnpm config set store-dir ${PNPM_STORE_PATH}
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 WORKDIR /app
-COPY --from=builder /app/frontend ./frontend
+# `--chown=node:node` so the server can own its own writable state: `next start`
+# writes into `.next/cache`, and a root-owned tree would force either a root
+# process or a mounted volume over that one directory (which is exactly what
+# the Helm chart had to do -- see its README's "root-owned in the image" note).
+COPY --from=builder --chown=node:node /app/frontend ./frontend
+
+# Drop privileges. This image served production as **root**: nothing in the
+# `prod` stage set a user, and the node base images leave it at 0. The Vue
+# image next door has run as `node` all along, which is how the difference
+# surfaced -- `docker exec deer-flow-frontend id` said uid=0 while the Helm
+# chart separately forced runAsUser 1000, so Kubernetes was hardened and
+# Compose was not.
+USER node
 EXPOSE 3000
 CMD ["sh", "-c", "cd /app/frontend && pnpm start"]
