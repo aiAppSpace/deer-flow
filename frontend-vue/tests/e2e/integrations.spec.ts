@@ -8,7 +8,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { mockLangGraphAPI } from "./utils/mock-api";
+import { mockLangGraphAPI, offMachineRequestsSeenBy } from "./utils/mock-api";
 
 function configuredLarkStatus() {
   return {
@@ -339,6 +339,22 @@ test.describe("Integrations settings", () => {
     await expect(
       dialog.getByText("https://open.feishu.cn/auth/mock-device"),
     ).toBeVisible();
+
+    /*
+      **这一跳真的想出网。** 授权流程会 `globalThis.open("about:blank")` 之后把弹窗
+      导航到 `open.feishu.cn`（`IntegrationsSettings.vue:345/362`），而套件里没有任何
+      mock 盖住那个域——2026-09-08 实测：同一批用例，能连上时 1.7~3.8 秒，连不上时
+      58.8 秒~1 分钟，四条一起把「拆 context」拖过 30 秒预算。
+
+      现在 `mockLangGraphAPI` 在 **context 级**（弹窗是另一个 page，page 级盖不到）
+      把所有离开本机的 http(s) 请求就地 fulfill 掉。这条断言核的是**那条拦截真的响过**
+      ——否则它会变成一个永远不响的摆设，而且没人分得清「拦住了」和「压根没请求」。
+    */
+    await expect
+      .poll(() => offMachineRequestsSeenBy(page))
+      .toEqual(
+        expect.arrayContaining([expect.stringContaining("open.feishu.cn")]),
+      );
   });
 
   test("can switch the Lark app by entering new credentials", async ({

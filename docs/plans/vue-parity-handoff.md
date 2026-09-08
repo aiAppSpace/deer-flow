@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 172，2026-09-08）
+## 当前状态（截至 wave 173，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,69 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
 
+## 上一轮（wave 173）做了什么：**那条「抖动」不是抖动——四条用例会真的去访问外网**
+
+wave 172 全扫时 `e2e-mock` 首跑红了四条，全在 `integrations.spec.ts`，
+形态一样：`Tearing down "context" exceeded the test timeout of 30000ms`。
+当时记的是「一次红两次绿，形态像资源竞争，翻案要拿一次能复现的红」。
+
+**这一轮不等下一次红，直接去比耗时。**
+
+| 用例 | 绿的那次 | 红的那次 |
+| ---- | -------- | -------- |
+| falls back when copying a Lark authorization link… | **1.7s** | **58.8s** |
+| keeps selected permissions when re-registering… | **2.6s** | **1.0m** |
+| can switch the Lark app by entering new credentials | **3.4s** | **59.7s** |
+| can install the Lark integration skill pack… | **3.8s** | **1.0m** |
+
+**20~35 倍，四条一起。** 这不是负载渐变——**是一个外部依赖有时挂住**。
+
+### 根因
+
+`IntegrationsSettings.vue:345/362`：Lark 授权流程先 `globalThis.open("about:blank")`，
+再把那个弹窗导航到 `result.verification_url` ——
+mock 里给的是 **`https://open.feishu.cn/auth/mock-device`**，
+而**套件里没有任何 route 盖住这个域**。
+
+于是这四条用例**真的会去连 open.feishu.cn**：连得上就 2 秒，连不上就 60 秒，
+拆 context 时还挂在那一跳上 → 超 30 秒预算。
+
+**为什么只有这四条**：通过的三条（`:47/:59/:184`）根本不走 auth/start 那条路。
+
+### 修法
+
+`mockLangGraphAPI` 里加一条**离开本机就地答掉**的拦截。三处判据都是有理由的：
+
+1. **装在 `page.context()` 上，不是 `page` 上**——**弹窗是同一个 context 里的另一个 page**，
+   `page.route` 盖不到它，而出问题的正是弹窗那一跳。
+2. **`fulfill` 而不是 `abort`**——那几条用例断言 `popup.url()` 变成了那个地址；
+   abort 会让导航失败、URL 停在 `about:blank`，那是**用改判据换绿**。
+   fulfill 之后可观察行为不变（地址真的换了），只是不出网。
+3. **记下拦到过什么**（`offMachineRequestsSeenBy`），并在用例里断言那一跳确实发生过。
+   否则这条拦截会变成一个永远不响的摆设，而且**没人分得清「拦住了」和「压根没请求」**
+   （坑 131 的形状）。
+
+### 负向验证
+
+| # | 变异 | 结果 |
+| - | ---- | ---- |
+| 1 | 整条拦截去掉（回到事故前） | 红 1 条 |
+| 2 | 拦截留着、只把记录关掉 | 红 1 条 |
+| 3 | 还原 | 7 passed |
+
+**第 1 条只红了一条**——其余三条那一刻外网是通的，**正好印证这条抖动的性质**：
+它的红与不红取决于一台我们不控制的服务器。
+
+### 读数
+
+`integrations` 那四条回到 **1.3~9.5 秒**；`e2e-mock` 全组 269+22+15+2+6 全绿；
+`verify` 270 文件 / 2227 单测 exit 0。
+
+**这条抖动从「待复现」变成「已根治」**，而且顺带把整套 mock e2e 的网络依赖切断了——
+40 个 spec 都走 `mockLangGraphAPI`，从此谁想出网都会被就地答掉。
+
+---
+
 ## 九门禁全扫（wave 172，2026-09-08）
 
 距上一次全扫（wave 166）过了 5 轮，按批次规则补一次。**八绿 + `audit` 预期红 14**，
@@ -476,6 +539,8 @@ Error: browserContext.close: Test ended.
 **没有把它判成「环境问题」就算了**——它与 React 那侧的 `landing.spec.ts:61`
 是同一族（都是「某个操作在负载下超过 30 秒」），两条都记在这里。
 **要翻案就拿一次能复现的红来翻**，别拿「我这次跑绿了」。
+> ⚠ **wave 173 已翻案，而且不是靠再红一次**：直接比耗时（绿 1.7~3.8 秒 vs 红 58.8 秒~1 分钟）
+> 就看出是外部依赖。根因与修法见上一节。
 
 **这一轮我自己踩了一次并发**：想复跑 `e2e` 时 `e2e-backend` 还在跑（`pgrep` 当场看到），
 那次 `RETRY=2` 是撞车不是门禁红——**线索 335 的第三次**。复跑前先 `pgrep -f "playwright test"`。

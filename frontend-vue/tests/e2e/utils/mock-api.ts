@@ -18,7 +18,7 @@
  * `handleRunStream` from here.
  */
 
-import type { Page, Route } from "@playwright/test";
+import type { BrowserContext, Page, Route } from "@playwright/test";
 
 // ---------------------------------------------------------------------------
 // Constants — deterministic IDs used across tests
@@ -258,7 +258,56 @@ function runStreamThreadId(route: Route) {
  * during message sending.  Without these mocks the pages would hang waiting
  * for a real backend.
  */
+/**
+ * 把一切**离开本机的** http(s) 请求就地答掉，绝不真的出网。
+ *
+ * 为什么要有这条（2026-09-08 实测）：`integrations.spec.ts` 里那条 Lark 授权流程会
+ * `globalThis.open("about:blank")` 之后把弹窗导航到 `https://open.feishu.cn/...`
+ * （`IntegrationsSettings.vue:345/362`）——**那是一个真实外网地址，套件里没有任何 mock
+ * 盖住它**。同一批用例的耗时因此完全取决于那台服务器答不答：
+ *
+ *     绿的那次   1.7s / 2.6s / 3.4s / 3.8s
+ *     红的那次   58.8s / 59.7s / 1.0m / 1.0m   ← 四条一起，拆 context 超 30s 预算
+ *
+ * 20~35 倍，而且四条同时发生——不是负载渐变，是一个外部依赖有时挂住。
+ *
+ * **fulfill 而不是 abort**：那几条用例断言 `popup.url()` 变成了那个地址；abort 会让导航
+ * 失败、URL 停在 `about:blank`，等于用「改判据」换绿。fulfill 之后可观察行为不变
+ * （地址真的换了），只是不出网。
+ *
+ * **装在 `page.context()` 上而不是 `page` 上**：弹窗是同一个 context 里的**另一个 page**，
+ * `page.route` 盖不到它——而出问题的正是弹窗那一跳。
+ */
+const offMachineRequests = new WeakMap<BrowserContext, string[]>();
+
+/**
+ * 这条拦截**拦到过什么**。用例可以据此断言「那一跳确实想出网」——否则这条规则会变成
+ * 一个永远不响的摆设，而且没人分得清「拦住了」和「压根没请求」（坑 131 的形状）。
+ */
+export function offMachineRequestsSeenBy(page: Page): string[] {
+  return offMachineRequests.get(page.context()) ?? [];
+}
+
+function blockOffMachineRequests(page: Page) {
+  const context = page.context();
+  if (offMachineRequests.has(context)) return;
+  const seen: string[] = [];
+  offMachineRequests.set(context, seen);
+  void context.route(
+    /^https?:\/\/(?!localhost[:/]|127\.0\.0\.1[:/]|\[::1\][:/])/,
+    (route) => {
+      seen.push(route.request().url());
+      return route.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: "<!doctype html><title>blocked by e2e</title>",
+      });
+    },
+  );
+}
+
 export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
+  blockOffMachineRequests(page);
   let threads = [...(options?.threads ?? [])];
   const agents = options?.agents ?? [];
   const skills = options?.skills ?? DEFAULT_SKILLS;
