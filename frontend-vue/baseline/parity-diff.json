@@ -186,8 +186,7 @@
         "- alert"
       ],
       "ariaOnlyVue": [
-        "- alert: New chat - DeerFlow",
-        "- button \"Edit and rerun\""
+        "- alert: New chat - DeerFlow"
       ],
       "requestsOnlyReact": [
         "POST /api/langgraph/threads/search",
@@ -199,12 +198,8 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],
-      "tabbablesOnlyVue": [
-        "button"
-      ],
-      "tabOrder": [
-        "第 16 个公共可 tab 元素 React=textarea Vue=button"
-      ]
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
     },
     "sidebar/desktop/light/en-US": {
       "ariaOnlyReact": [],

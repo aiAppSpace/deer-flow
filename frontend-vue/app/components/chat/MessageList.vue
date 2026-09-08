@@ -1226,6 +1226,17 @@ onUnmounted(() => {
                   test-id="message-reference-attachment"
                   class="mt-2"
                 />
+                <!--
+                  **`Boolean(message.id)` 这一项不能省**，它是上游
+                  message-list.tsx:1025 `group.type === "human" && Boolean(msg.id) && …`
+                  里那一项。少了它，两边都是 `undefined` 的时候
+                  `editable?.humanMessage.id === message.id` 会**相等**：
+                  新建会话刚发出第一条时，那条人类消息还没有后端给的 id，
+                  `editable` 也是 null，于是 `undefined === undefined` 成立，
+                  本仓就给一条**根本没法寻址、点了也重跑不了**的消息画出编辑键。
+                  wave 180 实测：两个应用的 groups 一模一样（human 的 id 都是 null），
+                  上游不画、本仓画——差的就是这一项。
+                -->
                 <HumanTurnActions
                   :copied="
                     copiedMessage === (message.id ?? `human:${entry.index}`)
@@ -1235,6 +1246,7 @@ onUnmounted(() => {
                   :show-edit="
                     interactive !== false &&
                     !hasOpenHumanInput &&
+                    Boolean(message.id) &&
                     editable?.humanMessage.id === message.id
                   "
                   @copy="

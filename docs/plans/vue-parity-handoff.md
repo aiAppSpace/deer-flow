@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 179，2026-09-08）
+## 当前状态（截至 wave 180，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,61 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 180）做了什么：**`undefined === undefined` 也是相等——本仓给一条没法寻址的消息画了「改完重跑」**
+
+#9 最后一条（④⑧⑨ `Edit and rerun` 那一组三行）。
+
+### 前两轮的猜测全错，读数一句话说清
+
+wave 175 猜「哪边对不知道，React 多要求 `!replayActionBusy` 与 `canEdit`」；
+wave 179 把候选缩到「两边历史端点不同、assistant 消息的终态判定不同」——**也是错的**。
+
+两个应用同时插桩，把 groups 与判定结果 dump 出来，**两边一模一样**：
+
+```
+groups: [ {type:"human",      id:null,        messages:[{type:"human", id:null}]},
+          {type:"assistant",  id:"msg-ai-1",  messages:[{type:"ai",    id:"msg-ai-1"}]} ]
+React: latestEditableHumanMessageId = null,  canEditProp = true,  isLoading = false → 编辑键 0
+Vue  : editableHumanId              = null,  interactive = true,  streaming = false → 编辑键 1
+```
+
+**新建会话刚发出第一条时，那条人类消息还没有后端给的 id。** 两边算出的 editable 都是 null。
+差别只在最后那一步比法：
+
+| | 表达式 | 结果 |
+| --- | --- | --- |
+| 上游 | `group.type === "human" && **Boolean(msg.id)** && msg.id === latestEditableHumanMessageId && …` | `Boolean(undefined)` → **false**，不画 |
+| 本仓 | `interactive !== false && !hasOpenHumanInput && editable?.humanMessage.id === message.id` | `undefined === undefined` → **true**，画了 |
+
+**所以是本仓错，上游对。** 改完重跑要把这条消息的 id 发回后端，
+**没有 id 就根本寻址不到**——那颗键点了也没用。补上 `Boolean(message.id)`。
+
+### 判据做成了行为判据，不是源码扫描
+
+同形的 `a?.x.id === b.id` 全仓还有三处（`ThreadSidebar.vue:164` /
+`recent-chat-list.tsx:158` 是两边成对的同一处，`scheduled-tasks/page.tsx:414` 同理），
+**右侧恒有值**，都是正常写法。要给它们开豁免的判据是错判据（坑 180）。
+所以钉的是「**没有 id 的人类消息不提供改完重跑**」这条行为——
+`tests/unit/chat/edit-rerun-needs-an-id.dom.test.ts`，两条，两次变异各红一条
+（拿掉 `Boolean(message.id)` 红第 1 条、改成恒假红第 2 条）。
+
+### 台账：**209 → 206，一处改动关掉三行**
+
+`ariaOnlyVue: - button "Edit and rerun"`、
+`tabOrder: 第 16 个公共可 tab 元素 React=textarea Vue=button`、
+`tabbablesOnlyVue: button` —— 三行同一个根，一起归零。
+
+**这个场景现在只剩两行，而且都是 wave 175 判过、留了翻案判据的**：
+`- alert` / `- alert: New chat - DeerFlow`（路由播报器的框架管道差异）与
+两条 `POST /api/langgraph/threads/search`（次数差不是集合差）。
+**#9 这笔账到此全部处理完，三条「下一轮验」全部结清。**
+
+- 改动只在 `frontend-vue/`，不需要 marker chore。
+- 门禁：`make verify` **273 files / 2239 tests**、`e2e-parity` 99 条、
+  `e2e-mock` **269 + 22 + 15 + 2 + 6** 全过。
+
+---
 
 ## 上一轮（wave 179）做了什么：**补上 Vue 缺的客户端兜底计时——中途被自己的单测骗过一次**
 
