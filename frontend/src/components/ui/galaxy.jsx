@@ -221,6 +221,38 @@ export default function Galaxy({
       return;
     }
 
+    /*
+      Don't run a decorative full-screen shader on a software rasterizer.
+
+      Every fragment of this effect is per-frame work. With hardware
+      acceleration that is the GPU's job and the main thread barely notices;
+      when the browser falls back to SwiftShader / llvmpipe it becomes CPU
+      work, forever, and pins a core. Measured on 2026-09-08 in the headless
+      test browser (`ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device ...))`):
+      a trivial `page.evaluate(() => 1)` round trip took a median of 123ms at
+      1366x768 and 749ms at 3930x1650, with single tasks up to 786ms. That is
+      what made `landing.spec.ts` blow a 30s action timeout on wide viewports.
+
+      This is not a test-only concern: a headless browser is simply the case
+      where it is easy to observe. Remote desktops, VMs, machines with the GPU
+      blocklisted and older hardware all land on the same fallback, and there
+      the page is janky for a background image nobody asked for.
+
+      Bailing out here reuses the path this file already had for "no WebGL":
+      the container stays empty and the page is otherwise unchanged.
+    */
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    const rendererName = debugInfo
+      ? String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL))
+      : String(gl.getParameter(gl.RENDERER));
+    if (/swiftshader|llvmpipe|softpipe|software/i.test(rendererName)) {
+      console.warn(
+        `Galaxy: WebGL is software-rendered (${rendererName}). Skipping the ` +
+          "galaxy background rather than spending a CPU core on it.",
+      );
+      return;
+    }
+
     if (transparent) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -232,9 +264,33 @@ export default function Galaxy({
     /** @type {Program | undefined} */
     let program;
 
+    /*
+      Cap the backing store of a purely decorative full-bleed shader.
+
+      This used to render at the container's full resolution with no ceiling, so
+      its per-frame fragment cost grew with the viewport without bound: 1366x768
+      is 1.05 Mpx, 3930x1650 is 6.5 Mpx. Measured on 2026-09-08 at the two
+      sizes — a trivial `page.evaluate(() => 1)` round trip took a median of
+      124ms vs 749ms, and the longest single task 122ms vs 786ms. That is the
+      main thread being held by a background image, and it is what made
+      `landing.spec.ts` time out at 30s on wide viewports.
+
+      `renderer.dpr` is the right knob rather than shrinking `setSize`: ogl
+      derives the canvas *style* size from the arguments and the *backing store*
+      from `dpr`, so this keeps the element filling its container and only
+      lowers the resolution it is drawn at. A nebula gradient does not survive
+      or fail on those pixels — nothing here has edges to lose.
+    */
+    const MAX_BACKING_PIXELS = 1920 * 1080;
+
     function resize() {
-      const scale = 1;
-      renderer.setSize(ctn.offsetWidth * scale, ctn.offsetHeight * scale);
+      const width = ctn.offsetWidth;
+      const height = ctn.offsetHeight;
+      renderer.dpr = Math.min(
+        1,
+        Math.sqrt(MAX_BACKING_PIXELS / Math.max(1, width * height)),
+      );
+      renderer.setSize(width, height);
       if (program) {
         program.uniforms.uResolution.value = new Color(
           gl.canvas.width,
