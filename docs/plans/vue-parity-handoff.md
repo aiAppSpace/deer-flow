@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 182，2026-09-08）
+## 当前状态（截至 wave 183，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,57 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 183）做了什么：**别再一条一条找了——把「三份是同一份配置」做成判据，它自己又吐出两条**
+
+wave 181 找到一条（压缩）、wave 182 找到一条（`Connection: upgrade`），
+**都是人眼一次找一条**。这一轮换做法：**把那句话做成机器判据**。
+
+### 先试粒度
+
+| 粒度 | 抓得住 wave 181 吗 | 抓得住 wave 182 吗 |
+| ---- | ---- | ---- |
+| 「指令出现与否」 | 能（helm 没有 `gzip`） | **不能**（helm 有别的 `map`，`map` 照样"存在"） |
+| 「(指令, 首参)」 | 能 | **能**（`map $http_upgrade` 缺席） |
+| 「`location` 路径集合」 | — | — |
+
+`(指令, 首参)` 这一档量出来：prod、helm 各自「另两份都有、它没有」的项**都是 0**，
+**local 有 8 项**——其中 6 项有正当理由（日志走文件、`resolver` 是 Docker 专用、
+`set $…_upstream` 是 Vue 主机名选择），剩下的落到 `location` 这一档上更清楚。
+
+### 判据：**凡是出现在 ≥2 份配置里的 `location`，必须三份都有**
+
+刻意**不是**「三份完全一致」——它们本来就不该一致（`/nginx-health` 只有 K8s 探针要）。
+**只出现在一份 = 环境特有的合理增补；出现在两份、少第三份 = 漂移**：
+两位作者各自认定系统需要它，而有一份被漏了。**这条判据今天零豁免。**
+
+### 它吐出四条，其中两条是我肉眼没找到的真缺陷
+
+| 缺在哪 | 少什么 | 后果 |
+| ------ | ------ | ---- |
+| **Helm** | `~ ^/api/threads/[^/]+/browser/stream` | **K8s 上浏览器面板的实时流建立不起来**——落到通用 `/api/threads` 那条上，而仓库自己的注释写着它「omits Upgrade/Connection forwarding and **would downgrade it to plain HTTP**」 |
+| **local** | `/api/sandboxes` | `make dev` 下 provisioner 模式的 sandbox API **不可达**——落到 `location /api/`，Gateway 404 |
+| local | `/docs`、`/redoc` | 同一套系统，**API 文档地址随跑法而变**：Docker/K8s 是 `/docs`，`make dev` 却是 `/api/docs` |
+
+**取舍写在这里**：`/api/docs` `/api/redoc` 这两条 local 独有的别名**删掉**而不是保留。
+理由是这一轮要治的正是「三份各说各话」；留着别名等于把漂移固化。
+全仓 grep 过，除博客里的外部链接外**没有任何地方引用它们**。
+
+### 负向验证 + 实测语法
+
+- 撤回 Helm 的 browser/stream → 红，**报错逐字点名缺哪条路由、缺在哪份配置**。
+- 撤回 local 的 `/api/sandboxes` → 红。
+- 把 local 的 `/docs` 改回 `/api/docs` → 红。
+- 把一份配置的 `location` 全部改名 → **自证那条**红（不是漂移那条）。
+- **三份配置各跑一次真的 `nginx -t`**（容器里，helm 那份先抽出配置体、去掉模板行、
+  用 `--add-host` 把集群主机名映射掉）：**全部 syntax is ok**。
+  改配置只读不测是不够的——这一步是实测。
+
+- 门禁：`backend make lint` / `ruff format --check` 全过；
+  后端整套 **11364 passed / 72 skipped，exit 0**；三份 nginx 配置 `nginx -t` 全过。
+  只动了 `backend/tests/`、`docker/nginx/` 与 `deploy/`，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 182）做了什么：**把上一轮那个发现系统扫一遍，扫出一条会真出故障的**
 

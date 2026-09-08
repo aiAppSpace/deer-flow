@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 182，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 183，2026-09-08）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,14 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 183：不动台账。** 别再一条一条找了——把「三份 nginx 配置是同一份配置」做成判据：
+> **凡是出现在 ≥2 份里的 `location`，必须三份都有**（零豁免；只出现在一份是环境特有的
+> 合理增补，出现在两份少第三份就是漂移）。它自己吐出两条我肉眼没找到的真缺陷：
+> **Helm 缺 browser/stream 那条 location**（K8s 上浏览器面板实时流被降级成普通 HTTP、建不起来），
+> **local 缺 `/api/sandboxes`**（`make dev` 下 provisioner 模式不可达）。
+> 另外把「API 文档地址随跑法而变」也统一了。三份配置各跑过真的 `nginx -t`。
+
 
 > **wave 182：不动台账。** 把 wave 181 的发现系统扫一遍——`test_gateway_runtime_cleanup.py`
 > 的**四条** nginx 性质各写着一个内联二元组，Helm 那份四条都不在内。实测**三条成立、一条不**：
