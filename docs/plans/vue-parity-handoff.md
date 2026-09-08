@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 169，2026-09-08）
+## 当前状态（截至 wave 170，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,32 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 170）做了什么：**wave 167 那张缺口表的最后一条：👋 不会挥手**
+
+wave 167 量出三条 Vue 缺的动画，wave 168 证明 `bouncing` 那条其实是**上游死代码**，
+wave 169 补了骨架屏那条。**剩下 `wave` 这一条**——上游欢迎页的 👋 会挥两下，本仓的不会。
+
+上游的做法是一个**模块级**的 `let waved = false`，在 `useEffect` 里置 true：
+整个页面生命周期只有第一次挂载会挥。本仓照同一套语义
+（模块级 `hasWavedOnce` + `onMounted` 置位），keyframes 与 `0.6s ease-in-out 2` 逐字照抄。
+
+**两边同时套上 `motion-safe:`**——0.6s×2 的纯装饰动作，减动偏好下不播；
+表情本身照常渲染，收住的只是动作。只给一边加会造出新的分叉，
+所以这一条和前三轮一样是两边同改。
+
+它是**有限次数**（2 次）的动画，所以不进 `looping-animations` 声明表；
+起点也不透明，`animation-visibility` 那条判据不适用。
+
+**至此 wave 167 那张表全部结清**：`aurora` / `shine` / `fade-in-up` / `skeleton-entrance` /
+`wave` 两边一致，`fade-in` / `loading-bar` / `suggestion-in` / `bouncing` 四条死条目已删。
+
+**踩到两次并发撞车**（都是我自己的操作，不是门禁问题）：
+`pnpm test:e2e` 与 `make e2e-parity` 同时跑 → `Another next build process is already running`；
+`make e2e-mock` 与 `make e2e-parity` 同时跑 → `Another Nuxt build is already running`。
+**这两套门禁都要独占构建，只能串行。**
+
+---
 
 ## 上一轮（wave 169）做了什么：**历史加载那一屏，两个应用各缺一半**
 

@@ -49,7 +49,15 @@ export function Welcome({
           `✨ ${t.welcome.createYourOwnSkill} ✨`
         ) : (
           <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
-            <div className={cn("inline-block", !waved ? "animate-wave" : "")}>
+            {/* A 0.6s x2 decorative wave; `motion-safe:` withholds it under
+                `prefers-reduced-motion`. Nothing hangs off it — the emoji is
+                rendered either way, so withholding only removes the motion. */}
+            <div
+              className={cn(
+                "inline-block",
+                !waved ? "motion-safe:animate-wave" : "",
+              )}
+            >
               {isUltra ? "🚀" : "👋"}
             </div>
             <AuroraText colors={colors}>{t.welcome.greeting}</AuroraText>

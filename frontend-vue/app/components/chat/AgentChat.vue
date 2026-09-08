@@ -225,6 +225,17 @@ const context = computed(() => ({
   ...(props.agentName ? { agent_name: props.agentName } : {}),
   ...(props.bootstrap ? { is_bootstrap: true } : {}),
 }));
+/*
+  与上游 `welcome.tsx` 的模块级 `let waved = false` 同一套语义：整个页面生命周期里
+  只有第一次挂载会挥手，之后换会话再回到欢迎页不再重复。放在模块作用域而不是组件
+  状态里，正是因为它要跨组件实例存活。
+*/
+let hasWavedOnce = false;
+const hasWaved = ref(hasWavedOnce);
+onMounted(() => {
+  hasWavedOnce = true;
+});
+
 const isUltraWelcome = computed(() => context.value.mode === "ultra");
 const welcomeColors = computed(() =>
   isUltraWelcome.value
@@ -2267,7 +2278,19 @@ onUnmounted(() => {
                         v-else
                         class="flex max-w-full flex-wrap items-center justify-center gap-2"
                       >
-                        <span>{{ isUltraWelcome ? "🚀" : "👋" }}</span>
+                        <!--
+                          挥手一次。上游 `welcome.tsx` 用一个**模块级**的 `waved`
+                          标志（`useEffect` 里置 true），所以整个页面生命周期里只有
+                          第一次挂载会挥；本仓照同一套语义。
+                          动效走 `motion-safe:`——0.6s×2 的纯装饰，减动偏好下不播；
+                          表情本身照常渲染，收住的只是动作。
+                          （这个 👋 不能 aria-hidden，理由见上面那段。）
+                        -->
+                        <span
+                          class="inline-block"
+                          :class="hasWaved ? '' : 'wave-once'"
+                          >{{ isUltraWelcome ? "🚀" : "👋" }}</span
+                        >
                         <AuroraText :colors="welcomeColors">
                           {{ $i18n.t.value.welcome.greeting }}
                         </AuroraText>
@@ -2358,3 +2381,27 @@ onUnmounted(() => {
     </template>
   </WorkspacePanels>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: no-preference) {
+  .wave-once {
+    animation: wave 0.6s ease-in-out 2;
+  }
+}
+
+@keyframes wave {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(20deg);
+  }
+  50% {
+    transform: rotate(0deg);
+  }
+  75% {
+    transform: rotate(20deg);
+  }
+}
+</style>
