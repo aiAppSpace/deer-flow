@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 171，2026-09-08）
+## 当前状态（截至 wave 172，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,44 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 九门禁全扫（wave 172，2026-09-08）
+
+距上一次全扫（wave 166）过了 5 轮，按批次规则补一次。**八绿 + `audit` 预期红 14**，
+外加一条**新记的抖动**（见下）。
+
+| 门禁 | 读数 | exit |
+| ---- | ---- | ---- |
+| `verify` | **270 文件 / 2227 单测** | 0 |
+| `standalone-sim` | 跑过 15 条 / 未跑 5 条 / 红 0 | 0 |
+| `e2e-parity` | **98 passed**，台账 **90 样本 / 202 行** | 0 |
+| `e2e-mock` | **首跑 4 failed / 265 passed**，见下；单独复跑两次都是 **269 passed** | 0（复跑） |
+| `e2e-visual` | 8 passed | 0 |
+| `asset-budget` | — | 0 |
+| `e2e-backend` | 2+5+2+3+3+5+1+1 | 0 |
+| `icon-parity` | 共 0 处待核、0 条 ⚠ | 0 |
+| `audit` | **预期红 14 条** | 2 |
+
+### 新记一条抖动：`integrations.spec.ts` 的 context 拆除超时
+
+首跑那次红的四条**全在 `tests/e2e/integrations.spec.ts`**，而且**四条的失败形态一样**：
+
+```
+Tearing down "context" exceeded the test timeout of 30000ms.
+Error: browserContext.close: Test ended.
+```
+
+**不是断言失败**——是拆 browser context 超过 30 秒。单独复跑**两次都是 269 passed**。
+
+**如实记法**：一次红、两次干净复现绿，形态是资源竞争而不是产品失败。
+**没有把它判成「环境问题」就算了**——它与 React 那侧的 `landing.spec.ts:61`
+是同一族（都是「某个操作在负载下超过 30 秒」），两条都记在这里。
+**要翻案就拿一次能复现的红来翻**，别拿「我这次跑绿了」。
+
+**这一轮我自己踩了一次并发**：想复跑 `e2e` 时 `e2e-backend` 还在跑（`pgrep` 当场看到），
+那次 `RETRY=2` 是撞车不是门禁红——**线索 335 的第三次**。复跑前先 `pgrep -f "playwright test"`。
+
+---
 
 ## 上一轮（wave 171）做了什么：**React 容器答了十小时之后开始 500——镜像里装的是 macOS 的原生二进制**
 
