@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 192，2026-09-09）
+## 当前状态（截至 wave 193，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,73 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 193）做了什么：**wave 191 的分叉查清了，是我自己的场景写错；登录页正式进了取样面**
+
+### 一句话根因
+
+`login.vue` 在 `onMounted` 里跑 `redirectIfSignedIn()`——探到「已登录」就跳去工作区。
+而 `tests/e2e/utils/mock-api.ts:499` 对 `GET /api/v1/auth/me` **返回 200 + MOCK_AUTH_USER**
+（它的用途是让工作区用例不依赖真实会话）。
+
+**我给那两条场景写了 `backend: "mock"`，等于亲口告诉 Vue「你已登录」。**
+React 的登录页不问这个端点，所以留在原地——两边就落在了不同的屏上。
+**不是 Vue 的缺陷，不是管道问题，不是 Gateway。是我的场景写错了。**
+
+（wave 191 当时猜的两个原因——种子给会话、缺 Gateway——wave 192 已逐一实测否掉。）
+
+### 重建，这次带一条「防止再犯」的断言
+
+套件重建：config（三者 auth 模式一致、接开着鉴权的回放 Gateway）、testDir、
+spec（**判词从主套件取，不另立一把尺子**）、独立 baseline、两个 make 目标。
+场景 `backend` 一律 `"gateway"`，理由写在 config 与场景表的文件头里。
+
+**关键是加了这一条**：
+
+```ts
+expect(sharedAriaLines(react.aria, vue.aria)).toBeGreaterThanOrEqual(8)
+  // 两棵树几乎没有公共行，这不是「差异很多」，是它们根本不在同一屏上
+```
+
+wave 191 那份基线**每一档都满是行、看起来像一份丰收的差异清单**，实际上记的是
+「我把两个应用放在了不同的屏上」。**差异清单长成那样时，正确的反应是当场红，不是签收。**
+
+### 它当场就抓到了一次
+
+`setup-screen/zh-CN` 连跑两次都只有 **3 行公共行**（en-US 两次都正常）。
+换过锚点也一样——第一版锚在 `input[type='password']` 上，**登录页也有一个密码框**，
+所以一边跳走了锚点照样成立；改成 `:nth-match(input[type='password'], 2)`（安装表单有两个）
+之后**依旧 3 行**。所以不是锚点问题，是**两个应用在 zh-CN 下的 `/setup` 落在不同的屏上**。
+
+**原因没查清，所以 `/setup` 没有写进场景表**——录一份两边毫不相干的基线，等于把噪声当成发现。
+读数记在路由棘轮那条 pending 的理由里。
+
+### 登录页的第一份自动化基线
+
+**十一档里只有 1 行**（每种语言各一条）：
+
+```
+requestsOnlyVue: ["GET /api/v1/auth/me"]
+```
+
+可访问性树、几何、焦点、Tab 序、tabbables——**全部一致**。
+那一条是 Vue 登录页那次会话探测（把已登录的访客送走），React 用的是别的机制。
+**判：接受。翻案判据**——哪天 React 也加上同一个探测，或者 Vue 能在不丢那个行为的前提下去掉它。
+
+**非 accept 复跑一次通过**，基线稳定。
+
+### 五条守卫依次拦住了我，逐条接上
+
+套件契约的 standalone 集合、两份 README 的套件表、`baseline-keys-consumed`
+（新 baseline 是**生成**的，要点名生成器）、CI 覆盖表（新套件是只在本地）、
+以及 `tooling-contracts`——**新 make 目标必须进 `.PHONY`**，否则同名文件存在时 make 会静默什么都不做。
+
+- 门禁：`make verify` **275 files / 2246 tests**、`make e2e-parity-auth` 复跑通过、
+  backend 整套 **11381 passed / 72 skipped**。
+- 路由棘轮：`/login` 移出 pending，剩 `/setup` 与 `/auth/callback` 两条。
+- 只动了取样面与门禁自身，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 192）做了什么：**登录页第一次被真正比过——两边完全一致；wave 191 那份读数是纯夹具假象**
 

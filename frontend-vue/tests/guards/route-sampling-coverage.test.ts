@@ -30,9 +30,15 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const pagesDir = fileURLToPath(new URL("../../app/pages", import.meta.url));
-const scenariosFile = fileURLToPath(
+/*
+  **两份场景表都要扫。** 主对照套件（关掉鉴权）与开着鉴权那套各有一份；
+  合并成一份会让棘轮把「只有 auth 套件跑得到的屏」也算成主套件覆盖了。
+  分开放、这里一起读，才是「被任意一套取样过」。
+*/
+const scenarioFiles = [
   new URL("../e2e-parity/support/scenarios.ts", import.meta.url),
-);
+  new URL("../e2e-parity-auth/scenarios.ts", import.meta.url),
+].map((url) => fileURLToPath(url));
 const baseline = JSON.parse(
   readFileSync(
     fileURLToPath(
@@ -68,10 +74,12 @@ function stripComments(text: string): string {
 
 /** 场景里出现过的 `path:`，去掉查询串。 */
 function sampledPaths(): string[] {
-  const source = stripComments(readFileSync(scenariosFile, "utf8"));
-  return [...source.matchAll(/path:\s*"([^"]+)"/g)].map(
-    (match) => match[1]!.split("?")[0]!,
-  );
+  return scenarioFiles.flatMap((file) => {
+    const source = stripComments(readFileSync(file, "utf8"));
+    return [...source.matchAll(/path:\s*"([^"]+)"/g)].map(
+      (match) => match[1]!.split("?")[0]!,
+    );
+  });
 }
 
 /** `/workspace/chats/[thread_id]` → 只匹配「恰好一段」的正则。 */

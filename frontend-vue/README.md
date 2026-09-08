@@ -123,12 +123,25 @@ make e2e-shell          # workspace shell and workspace-changes, auth on
 make e2e-browser        # browser panel against a real Chromium backend
 make e2e-external       # WebSocket and OIDC; needs the backend browser extra
 make e2e-parity         # React and Vue on one replay Gateway; needs ../frontend
+make e2e-parity-auth    # the same two apps built with auth ON: the login screen
 ```
 
 `make e2e-mock` aggregates `e2e`, `e2e-auth`, `e2e-infra`, `e2e-proxy-options`
 and `e2e-stream`; `make e2e-backend` aggregates `e2e-protocol`, `e2e-real`,
 `e2e-scheduled`, `e2e-channels`, `e2e-agents`, `e2e-settings`, `e2e-shell` and
-`e2e-browser`. `make e2e-parity` is in neither either, for a different reason:
+`e2e-browser`. `make e2e-parity-auth` exists because auth is a **build-time** decision -- one
+preview can only be one mode. With auth disabled, which is how the main parity
+suite builds both apps, `/login` redirects straight to `/workspace/chats/new` in
+**both** of them, so that suite can never reach the first screen a user sees.
+It ships its own baseline (`baseline/parity-auth-diff.json`) because the two
+suites run different builds, and shares the _criterion_ with the main one
+(`tests/e2e-parity/support/diff-entry.ts`) because two rulers that disagree are
+worse than none. Its scenarios must use `backend: "gateway"`: the workspace mock
+answers `GET /api/v1/auth/me` with a signed-in user, which makes the Vue login
+page bounce to the workspace while React stays put -- two different screens, and
+a diff of them is noise, not a finding.
+
+`make e2e-parity` is in neither either, for a different reason:
 it is the only suite that needs the sibling React app, and this workspace's
 install, build, test and e2e must all work without it (`make standalone-check`
 proves it statically, `make standalone-sim` proves it by actually doing it).
@@ -148,8 +161,8 @@ this one needs `lucide-react`'s type declarations to resolve icon aliases.
 `e2e-visual`'s siblings. Three gates run **only locally**, and the reasons
 differ: `icon-parity` because no workflow installs both apps' `node_modules`
 (see above); `standalone-sim` because it renames the sibling app out of the
-checkout; `e2e-parity` because it builds both apps against a replay Gateway and
-takes about twelve minutes. Those last two are a cost decision that has never
+checkout; `e2e-parity` and `e2e-parity-auth` because they build both apps against a
+replay Gateway. Those last two are a cost decision that has never
 actually been made -- they are local-only by default, not by design. Only
 `e2e-visual`'s local-only status is machine-coupled to its cause
 (`tests/guards/visual-baseline-platforms.test.ts`).
@@ -166,6 +179,7 @@ Targeted checks:
 
 ```bash
 make parity-accept      # re-record baseline/parity-diff.json after a parity change
+make parity-auth-accept # same, for baseline/parity-auth-diff.json
 make proxy-security     # Nitro body limits, bodyless/chunked DELETE, SSE and traversal
 make i18n-source-check  # AST guard for every product Vue SFC
 make icon-parity        # icon/size/variant parity vs ../frontend; skips without it

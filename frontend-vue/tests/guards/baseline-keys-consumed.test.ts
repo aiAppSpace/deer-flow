@@ -141,6 +141,7 @@ const GENERATED: Record<string, string> = {
   "i18n-keys.json": "scripts/i18n-manager.mjs",
   "openapi.snapshot.json": "scripts/gen-api-types.mjs",
   "parity-diff.json": "tests/e2e-parity/diff.spec.ts",
+  "parity-auth-diff.json": "tests/e2e-parity-auth/diff.spec.ts",
   "upstream-marker.json": "scripts/upstream-drift.mjs",
 };
 

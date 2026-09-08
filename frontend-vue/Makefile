@@ -3,9 +3,9 @@
 .PHONY: help install dev build preview lint format format-check typecheck typecheck-core test verify asset-budget \
 	e2e-install e2e-preflight e2e e2e-auth e2e-visual e2e-infra e2e-proxy-options e2e-stream \
 	e2e-protocol e2e-real e2e-scheduled e2e-channels e2e-agents e2e-settings e2e-shell \
-	e2e-browser e2e-external e2e-parity e2e-mock e2e-backend e2e-list \
+	e2e-browser e2e-external e2e-parity e2e-parity-auth e2e-mock e2e-backend e2e-list \
 	proxy-security audit docker-build container-smoke \
-	upstream-drift upstream-accept dom-parity icon-parity parity-accept \
+	upstream-drift upstream-accept dom-parity icon-parity parity-accept parity-auth-accept \
 	i18n-check i18n-diff i18n-unused i18n-source-check i18n-refresh \
 	gen-api-types gen-api-types-check gen-contract-constants gen-contract-constants-check \
 	consumer-check standalone-check standalone-sim coverage
@@ -269,6 +269,11 @@ e2e-external:
 e2e-parity:
 	$(call run_suite,parity)
 
+# 开着鉴权才到得了的那几屏（登录、安装向导）。与 e2e-parity 分开是因为
+# auth 模式是构建期决定的，一个 preview 只能是一种——见该 config 的文件头。
+e2e-parity-auth:
+	$(call run_suite,parity-auth)
+
 # 刷新对照差异清单。
 #
 # **它现在会判一件事：台账不许变长。** accept 时把新旧逐行比对，只要出现一行
@@ -285,6 +290,10 @@ e2e-parity:
 parity-accept:
 	@$(MAKE) --no-print-directory e2e-preflight
 	PARITY_ACCEPT=1 $(E2E_EXEC) playwright test -c playwright.parity.config.ts diff.spec.ts
+
+parity-auth-accept:
+	@$(MAKE) --no-print-directory e2e-preflight
+	PARITY_ACCEPT=1 $(E2E_EXEC) playwright test -c playwright.parity-auth.config.ts diff.spec.ts
 
 # ── 聚合入口 ────────────────────────────────────────────────────────────
 # 不需要任何后端进程，CI 的主门禁。

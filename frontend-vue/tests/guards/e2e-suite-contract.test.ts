@@ -100,7 +100,7 @@ describe("E2E 套件布局", () => {
     //   parity   —— 需要**兄弟应用** ../frontend 才能跑，而本仓的
     //               install/build/test/e2e 都不依赖它（见 make standalone-check）。
     //               把它放进聚合入口，等于把独立性这条硬要求悄悄降级成建议。
-    const standalone = new Set(["external", "visual", "parity"]);
+    const standalone = new Set(["external", "visual", "parity", "parity-auth"]);
     /*
       反方向（wave 111）：这三个 id 必须真的还是 config。此前只有正方向——
       「非 standalone 的都要进聚合入口」；一个改了名的套件会**同时**从

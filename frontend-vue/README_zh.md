@@ -105,6 +105,7 @@ make e2e-shell          # workspace 壳层与 workspace-changes，auth 开启
 make e2e-browser        # 真实 Chromium 后端上的 browser 面板
 make e2e-external       # WebSocket 与 OIDC；需要 backend 的 browser extra
 make e2e-parity         # React 与 Vue 架在同一个 replay Gateway 上；需要 ../frontend
+make e2e-parity-auth    # 同样两个应用、但开着鉴权构建：登录页
 ```
 
 `make e2e-mock` 聚合 `e2e`、`e2e-auth`、`e2e-infra`、`e2e-proxy-options` 与
@@ -125,6 +126,7 @@ make e2e-parity         # React 与 Vue 架在同一个 replay Gateway 上；需
 
 ```bash
 make parity-accept      # 对照差异变了之后重新记录 baseline/parity-diff.json
+make parity-auth-accept # 同上，刷新 baseline/parity-auth-diff.json
 make proxy-security     # Nitro body 限制、无 body/chunked DELETE、SSE 与 traversal
 make i18n-source-check  # 全部产品 Vue SFC 的 AST 文案门禁
 make standalone-check   # 不允许任何指向 ../frontend 的跨应用引用（静态证明）
@@ -137,8 +139,8 @@ make upstream-drift     # 报告 ../frontend 自 marker 以来改了什么
 **CI 实际跑哪些。** `frontend-vue-verify.yml` 跑 `verify`、`asset-budget`、`audit`、
 `container-smoke`、`e2e-mock`、`e2e-backend`。有三条**只在本地**跑，理由各不相同：
 `icon-parity` 是因为没有任何 workflow 会把两个应用的 `node_modules` 都装上；
-`standalone-sim` 是因为它要把兄弟应用改名移出 checkout；`e2e-parity` 是因为它要把两个应用
-都构建起来接同一个回放 Gateway，约十二分钟。**后两条是一个从来没有真正做过的成本决定**
+`standalone-sim` 是因为它要把兄弟应用改名移出 checkout；`e2e-parity` 与 `e2e-parity-auth`
+是因为它们都要把两个应用构建起来接回放 Gateway。**后两条是一个从来没有真正做过的成本决定**
 ——它们是默认只在本地，不是设计成只在本地。只有 `e2e-visual` 的「只在本地」是有机器和成因
 绑在一起的（`tests/guards/visual-baseline-platforms.test.ts`）。
 

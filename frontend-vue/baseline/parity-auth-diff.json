@@ -1,0 +1,35 @@
+{
+  "$comment": "React 与 Vue 在**开着鉴权**才到得了的那几屏上的双向差异（登录、安装向导）。主对照套件用的是关掉鉴权的构建，那两屏在它那里会直接跳走——wave 189 实测。这份清单与 parity-diff.json 同一条纪律：只能缩短，刷新用 make parity-auth-accept。",
+  "entries": {
+    "login-screen/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [
+        "GET /api/v1/auth/me"
+      ],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "login-screen/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [
+        "GET /api/v1/auth/me"
+      ],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    }
+  }
+}
