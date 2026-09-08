@@ -32,6 +32,36 @@ COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
 RUN --mount=type=cache,id=deer-flow-frontend-pnpm,target=${PNPM_STORE_PATH} \
     cd /app/frontend && pnpm install --frozen-lockfile
 
+WORKDIR /app/frontend
+# Refuse to bake an image whose node_modules was resolved for another platform.
+#
+# 2026-09-08: the dev image carried `lightningcss-darwin-arm64` — the macOS
+# build of Tailwind's CSS engine — on an Alpine/arm64 container, from a
+# `dependencies` layer Docker had cached a month earlier. Nothing revalidates
+# such a layer: its only inputs are package.json and pnpm-lock.yaml, so as long
+# as those do not change the same tree is served forever. It surfaced ten hours
+# into a session as a 500 the first time Tailwind compiled a stylesheet from
+# cold, because the compile cache had answered everything until then.
+#
+# How that layer came to hold a macOS package was never established — today's
+# builds resolve correctly, and the production image built 2026-08-23 from this
+# same Dockerfile is correct too. So this asserts the property instead of
+# guessing at the cause: pnpm installs exactly the optional platform package
+# matching the install host, so a `*-darwin-*` or `*-win32-*` directory here
+# means the tree was resolved somewhere else, and the build must not proceed.
+#
+# The startup check in docker/node-entrypoint.sh is the other half: this one
+# stops a bad image from being *produced*, that one stops an already-cached bad
+# image from being *started*.
+RUN found=$(find node_modules/.pnpm -maxdepth 1 -type d \
+        \( -name '*-darwin-*' -o -name '*-win32-*' \) -print 2>/dev/null | head -1); \
+    if [ -n "$found" ]; then \
+        echo "node_modules was resolved for another platform: $found" >&2; \
+        echo "rebuild with --no-cache; a cached dependencies layer never revalidates" >&2; \
+        exit 1; \
+    fi
+WORKDIR /app
+
 # ── Dev: install only, CMD is overridden by docker-compose ───────────────────
 FROM dependencies AS dev
 COPY frontend ./frontend
