@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 186，2026-09-08）
+## 当前状态（截至 wave 187，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,69 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 187）做了什么：**我自己写的那行注释说「不进任何门禁」，而它从 wave 111 起就会红**
+
+九门禁全扫欠了 7 轮（上次 wave 179），这一轮补上；同时问一个此前没问过的问题：
+**这些门禁，CI 到底跑不跑？**
+
+### 量出来：九条里有三条 CI 不跑
+
+```
+verify ✓   e2e-mock ✓   e2e-visual ✓   asset-budget ✓   e2e-backend ✓   audit ✓
+standalone-sim ✗   e2e-parity ✗   icon-parity ✗
+```
+
+`e2e-visual` 只在本地是**有据可查的**：README 写明原因（截图基线只有 `-darwin`），
+而且用 `tests/guards/visual-baseline-platforms.test.ts` 把「签入 linux 基线」与
+「接进 CI」**双向绑住**。**另外三条既没有 CI，也没有这种绑定——它们是「默认」只在本地，
+不是「设计成」只在本地。**
+
+### 顺着 `icon-parity` 挖，挖到我自己写的一句假话
+
+它在两份 README 里**一个字都没有**。读脚本文件头，写着：
+
+> 这是**顾问工具，不进任何门禁**。
+
+**这句话从 wave 111 起就是假的，而 wave 111 正是我改的**：那一轮给过期豁免加了
+`process.exitCode = 1`；另有三处形状断言 `exit(2)`。**它会红，它就是一道门禁。**
+留着那句话的后果不是措辞问题——**读到它的人会以为这份输出可以忽略，接 CI 的人会照它跳过**，
+而这恰好解释了它为什么既不在 README 也不在 CI。
+
+（报告正文里那句「都是线索不是结论」仍然对：**那说的是要逐条回源码确认，不是说它不会失败**。）
+
+### 改了三件事
+
+1. **把那句假话改成真话**，并写清它红的两个条件（豁免过期 / 形状断言不成立），
+   与「今天有多少条差异」无关。
+2. **两份 README 都补上 `make icon-parity`**（`doc-references` 早有守卫在核两份的目标集合一致，
+   只补一份会红——这次两份同补）。
+3. **把「CI 实际跑哪些」写进两份 README**，三条只在本地的各写明理由：
+   `icon-parity` 没有任何 workflow 会装两个应用的 `node_modules`；
+   `standalone-sim` 要把兄弟应用移出 checkout；`e2e-parity` 要构建两个应用、约十二分钟。
+   **并明说后两条是一个从来没有真正做过的成本决定。**
+
+### 但写下来的话必须有机器守着——否则就是同一个病
+
+新建 `backend/tests/test_vue_gate_ci_coverage.py`：**两张表恰好划分全集**——
+README 说 CI 跑的必须在某个 workflow 里，README 说只在本地的必须不在任何 workflow 里。
+**两个方向都验过**：CI 里删掉 `make audit` 会红；**把 `e2e-parity` 接进 CI 而不改 README 也会红**；
+README 那一段被删掉，自证那条会红。
+
+### 九门禁全扫（wave 187）
+
+| 门禁 | EXIT |
+| ---- | ---- |
+| verify / standalone-sim / e2e-parity / e2e-mock / e2e-visual / asset-budget / e2e-backend / icon-parity | **0** |
+| audit | **2（预期红）** |
+
+**八绿 + audit 预期红。**
+
+- 门禁：**九门禁全扫八绿 + audit 预期红 14**（1 low / 10 moderate / 3 high，
+  与 wave 166 / 172 / 179 一致、无新增）；backend `make lint` 全过、整套 **11380 passed / 72 skipped**。
+  只动了 `frontend-vue/` 的文档与脚本注释、`backend/tests/`，没动任何应用代码，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 186）做了什么：**判掉上一轮新记的那笔账——补 HEALTHCHECK，但不新增产品路由**
 

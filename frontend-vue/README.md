@@ -134,6 +134,26 @@ install, build, test and e2e must all work without it (`make standalone-check`
 proves it statically, `make standalone-sim` proves it by actually doing it).
 When `../frontend` is absent it does not start React and its cases skip.
 
+`make icon-parity` compares the two apps' icons, icon sizes and button
+variants -- three things that never enter the accessibility tree, so no
+screenshot or ARIA gate can reach them. It exits 0 with a note when
+`../frontend` is absent, because nothing in this workspace may depend on the
+sibling; when the sibling **is** there it can fail, on a stale exemption or a
+broken shape assert. That is why it is a gate and not a report, and why it is
+not wired into CI: no existing workflow installs both apps' `node_modules`, and
+this one needs `lucide-react`'s type declarations to resolve icon aliases.
+
+**What CI actually runs.** `frontend-vue-verify.yml` runs `verify`,
+`asset-budget`, `audit`, `container-smoke`, `e2e-mock`, `e2e-backend` and
+`e2e-visual`'s siblings. Three gates run **only locally**, and the reasons
+differ: `icon-parity` because no workflow installs both apps' `node_modules`
+(see above); `standalone-sim` because it renames the sibling app out of the
+checkout; `e2e-parity` because it builds both apps against a replay Gateway and
+takes about twelve minutes. Those last two are a cost decision that has never
+actually been made -- they are local-only by default, not by design. Only
+`e2e-visual`'s local-only status is machine-coupled to its cause
+(`tests/guards/visual-baseline-platforms.test.ts`).
+
 `make e2e-visual` is deliberately in neither: its screenshot
 baselines exist only for `-darwin`, so it stays a local gate until `-linux`
 baselines are generated and checked in. Those two facts are coupled by
@@ -148,6 +168,7 @@ Targeted checks:
 make parity-accept      # re-record baseline/parity-diff.json after a parity change
 make proxy-security     # Nitro body limits, bodyless/chunked DELETE, SSE and traversal
 make i18n-source-check  # AST guard for every product Vue SFC
+make icon-parity        # icon/size/variant parity vs ../frontend; skips without it
 make standalone-check   # no cross-app reference to ../frontend (static)
 make standalone-sim     # move ../frontend away, run what claims to cope, move it back
 make typecheck-core     # standalone tsc for packages/agent-core

@@ -128,10 +128,19 @@ make parity-accept      # 对照差异变了之后重新记录 baseline/parity-d
 make proxy-security     # Nitro body 限制、无 body/chunked DELETE、SSE 与 traversal
 make i18n-source-check  # 全部产品 Vue SFC 的 AST 文案门禁
 make standalone-check   # 不允许任何指向 ../frontend 的跨应用引用（静态证明）
+make icon-parity        # 与 ../frontend 对图标/尺寸/变体；上游缺席时跳过
 make standalone-sim     # 真把 ../frontend 移走，跑一遍声称能扛的东西，再移回来
 make typecheck-core     # packages/agent-core 的独立 tsc
 make upstream-drift     # 报告 ../frontend 自 marker 以来改了什么
 ```
+
+**CI 实际跑哪些。** `frontend-vue-verify.yml` 跑 `verify`、`asset-budget`、`audit`、
+`container-smoke`、`e2e-mock`、`e2e-backend`。有三条**只在本地**跑，理由各不相同：
+`icon-parity` 是因为没有任何 workflow 会把两个应用的 `node_modules` 都装上；
+`standalone-sim` 是因为它要把兄弟应用改名移出 checkout；`e2e-parity` 是因为它要把两个应用
+都构建起来接同一个回放 Gateway，约十二分钟。**后两条是一个从来没有真正做过的成本决定**
+——它们是默认只在本地，不是设计成只在本地。只有 `e2e-visual` 的「只在本地」是有机器和成因
+绑在一起的（`tests/guards/visual-baseline-platforms.test.ts`）。
 
 两条体积门禁量的不是同一个东西，别混：`make asset-budget` 把**全部**构建产物加起来，
 管的是产物总量失控；用户真正下载的由 `make e2e` 里的

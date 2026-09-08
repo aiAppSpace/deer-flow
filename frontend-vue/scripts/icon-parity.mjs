@@ -196,10 +196,21 @@ const load = (root, alias) => {
 /*
   **上游缺席时打印一行就退出 0**（同 upstream-drift.mjs）。本仓的
   install / build / test / e2e 都不依赖 `../frontend`（见 make standalone-check），
-  这是顾问工具，不能因为兄弟应用没 checkout 就让任何入口变红。
+  不能因为兄弟应用没 checkout 就让任何入口变红。
+
+  ⚠ **这里原来写着「这是顾问工具，不进任何门禁」——那句话从 wave 111 起就是假的**：
+  那一轮给过期豁免加了 `process.exitCode = 1`，加上另外三处形状断言的 `exit(2)`，
+  **这个脚本会红，它就是一道门禁**。留着那句话的后果不是措辞问题：
+  读到它的人会以为这份输出可以忽略，接 CI 的人会照它跳过。
+  报告本身仍然是「线索不是结论」——**那说的是要逐条回源码确认，不是说它不会失败**。
+  它红的条件只有两类，两类都与「今天的差异有多少条」无关：
+  **① 豁免表过期**（VERIFIED 里记的那条已经不复存在）、**② 形状断言不成立**
+  （别名表解析不出来——空表会让每一条都「相同」）。
 */
 if (!existsSync(reactRoot) || !existsSync(REACT_DTS)) {
-  console.log(`跳过：找不到上游（${reactRoot}）。这是顾问工具，不进任何门禁。`);
+  console.log(
+    `跳过：找不到上游（${reactRoot}）。需要兄弟应用及其 node_modules 才能对账。`,
+  );
   process.exit(0);
 }
 
