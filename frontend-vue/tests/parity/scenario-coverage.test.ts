@@ -65,18 +65,34 @@ describe("对照场景覆盖率", () => {
     expect(new Set(all).size).toBe(all.length);
   });
 
-  it.skipIf(!upstreamPresent)("三个桶恰好划分 React 的用例清单", () => {
+  /*
+    **这里原来断言的是「恰好相等」，而那给取样面设了一个看不见的天花板。**
+
+    wave 188 实测：这份棘轮 `pending: 0`、三桶恰好划分上游 28 份 spec、一切正常，
+    而本仓 14 条路由里**有 9 条从没出现在任何场景的 `path` 上**——其中
+    `/login`、`/setup`、`/workspace/agents/new` 是真产品屏。
+    原因不是没人想到，是**规则不允许**：`covered` 必须逐字等于场景 id 集合，
+    而 `classified` 又必须逐字等于上游 spec 清单，
+    两条合起来就是「**上游没为某一屏写过 spec，那一屏就永远进不了取样面**」。
+
+    要守的东西其实只有一件：**上游每一份 spec 都要被表过态**。那是包含关系，不是相等。
+    多出来的场景 id（上游没写过 spec 的屏）是合法的，而且正是这份工厂该去做的事；
+    它们由另一个坐标系兜着——`tests/guards/route-sampling-coverage.test.ts`
+    要求每一条路由要么被取样过、要么写明为什么不。
+    两个坐标系各自零缺口，合起来没有夹缝。
+  */
+  it.skipIf(!upstreamPresent)("上游每一份 spec 都被表过态", () => {
     const exemptIds = coverage.exempt.map((entry) => entry.id);
-    const classified = [
+    const classified = new Set([
       ...coverage.covered,
       ...coverage.pending,
       ...exemptIds,
-    ].sort();
+    ]);
+    const unclassified = reactSpecIds().filter((id) => !classified.has(id));
     expect(
-      classified,
-      "上游 spec 清单变了：新增的要进 pending（要做）或 exempt（在已豁免的路由上），" +
-        "删掉的要从三个桶里一起移除。",
-    ).toEqual(reactSpecIds());
+      unclassified,
+      "上游新增了 spec：要进 pending（要做）或 exempt（在已豁免的路由上）。",
+    ).toEqual([]);
   });
 
   /*

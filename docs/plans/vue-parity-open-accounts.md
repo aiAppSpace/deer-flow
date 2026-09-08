@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 187，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 188，2026-09-09）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,18 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 188：换了个坐标系，照出 9 条从没被取样过的路由——其中 4 条是真产品屏。**
+> 覆盖率棘轮的坐标系是**上游 e2e spec 的文件名**，而它的两条断言合起来是一道天花板：
+> **上游没写过 spec 的屏永远排不进取样面**。`/login`（第一屏）、`/setup`、
+> `/workspace/agents/new`、`/showcase/[thread_id]` 就是这样一直在外面。
+> 已把「恰好相等」放松成「上游每一份 spec 都被表过态」，并新加**以路由为坐标的第二个棘轮**
+> （`baseline/parity-route-sampling.json`，4 豁免 / 4 待做，各写明理由）。
+> 当轮关掉一条：`/workspace/agents/new` 第一次进取样面，**两边十一档全空，台账一行没长**
+> （206 行不变，取样点 91 → 93）。
+>
+> **新的 4 条 pending 不是回归**：原棘轮仍是 `pending: 0`，这 4 条是换坐标系才看见的缺口。
+
 
 > **wave 187：九门禁全扫（八绿 + audit 预期红 14），并问了一个此前没问过的问题——CI 到底跑不跑。**
 > 九条里 **三条 CI 不跑**（`standalone-sim` / `e2e-parity` / `icon-parity`），而只有 `e2e-visual`

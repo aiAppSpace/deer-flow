@@ -105,6 +105,7 @@ const baselines = readdirSync(baselineDir).filter((name) =>
  */
 const HAND_MAINTAINED = [
   "looping-animations.json",
+  "parity-route-sampling.json",
   "parity-scenario-coverage.json",
   "react-parity-scope.json",
   "route-payload-budget.json",

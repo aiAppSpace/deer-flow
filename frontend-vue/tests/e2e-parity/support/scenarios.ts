@@ -925,6 +925,28 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
+  /*
+    **建 agent 那一屏第一次进取样面**（wave 188）。
+
+    它一直进不来不是没人想到，是**规则不允许**：`covered` 必须逐字等于场景 id 集合，
+    而 `classified` 又必须逐字等于上游 spec 清单——上游没为这一屏写过 e2e spec，
+    于是它永远排不进来。wave 188 把那条相等放松成包含（改动与理由写在
+    `tests/parity/scenario-coverage.test.ts` 里），并新加了一个以**路由**为坐标的棘轮
+    （`tests/guards/route-sampling-coverage.test.ts`），这一条才排得进来。
+
+    这一屏是名字步：一颗 `<Input>`（可访问名来自 placeholder，两边都不写 aria-label）
+    加一颗继续键，填完之后才换成引导 composer。取样停在名字步——
+    引导 composer 那一半要发一条真实消息，属于另一条场景。
+  */
+  {
+    id: "agent-create-name-step",
+    title: "建 agent 的名字步",
+    backend: "mock",
+    path: "/workspace/agents/new",
+    mock: { agents: MOCK_AGENTS },
+    settle: [{ kind: "visible", target: { selector: "input[placeholder]" } }],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
   {
     id: "agents-feature-disabled",
     title: "agents_api 关闭时的说明页",

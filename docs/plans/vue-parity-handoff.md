@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 187，2026-09-08）
+## 当前状态（截至 wave 188，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,73 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 188）做了什么：**棘轮说「满覆盖」，而 9 条路由从没被取样过——规则不允许它们进来**
+
+覆盖率棘轮的读数是 `pending: 0`、三桶恰好划分上游 28 份 spec、一切正常。
+**这一轮问了一个此前没问过的问题：这些「覆盖」说的是哪些屏？**
+
+### 实测：14 条路由里 9 条从没出现在任何场景的 `path` 上
+
+```
+✓ /workspace/chats  /workspace/chats/[thread_id]  /workspace/agents
+✓ /workspace/agents/[agent_name]/chats/[thread_id]  /workspace/scheduled-tasks
+· /  /workspace  /workspace/agents/new  /login  /setup
+· /showcase/[thread_id]  /auth/callback  /__m0/splitpanes  /__m0/visual
+```
+
+其中 **`/login`（每个用户看到的第一屏）、`/setup`、`/workspace/agents/new`、
+`/showcase/[thread_id]` 是真产品屏**。
+
+> ⚠ 我第一次量用的是**前缀判断**，只找出 6 条。**它把 `/workspace/chats/new` 算成
+> `[thread_id]` 被取样过了**。改成「把路由编译成正则、只匹配恰好一段」之后才是 9 条。
+> 守卫第一次跑就把我这个错抓了出来。
+
+### 不是没人想到，是**规则不允许**
+
+`scenario-coverage.test.ts` 里两条断言合起来是一道天花板：
+
+- `covered` 必须**逐字等于**场景 id 集合；
+- `covered ∪ pending ∪ exempt` 必须**逐字等于**上游 spec 清单。
+
+⇒ **上游没为某一屏写过 e2e spec，那一屏就永远排不进取样面。**
+`/login` `/setup` `/showcase` 上游都没有 spec，所以棘轮里连它们的名字都不存在，
+而它报「满覆盖」**没有说谎**——那句话说的不是「所有屏都比过」。
+
+### 改了三件事
+
+1. **把那条相等放松成包含**：要守的其实只有「上游每一份 spec 都被表过态」。
+   多出来的场景 id（上游没写过 spec 的屏）是合法的，而且正是这个工厂该做的事。
+2. **新加第二个坐标系：路由**。`baseline/parity-route-sampling.json` +
+   `tests/guards/route-sampling-coverage.test.ts`——每条路由要么被取样过、
+   要么写明为什么不（理由不短于 20 字），两张表恰好划分「未取样」的全集。
+   `sampled` **不存盘**，从 `scenarios.ts` 反查，免得又多一份会烂的名单。
+3. **当轮就关掉一条 pending**：给 `/workspace/agents/new` 写了场景
+   `agent-create-name-step`（名字步：一颗 Input + 继续键）。
+   **两边十一档全空，两个语言都是——台账一行都没长**（206 行不变，取样点 91 → 93）。
+
+判词：4 条豁免（落地页在对齐范围外、`/workspace` 是纯跳转空 div、两条 `__m0` 是生产 404 的夹具），
+4 条 pending（`/login` `/setup` `/showcase/[thread_id]` `/auth/callback`，各写明挡路的是什么）。
+
+> **这不是棘轮退步**：pending 从 0 变成 4，是因为**换了坐标系照出了此前看不见的缺口**，
+> 不是原来那份棘轮出了回归——它现在仍然是 `pending: 0`。
+
+### 两条守卫当场拦住了我
+
+`baseline-keys-consumed` 要求新 baseline 进「手工维护」名单并声明**实测的** `$readers`；
+`doc-references` 抓到我注释里举例用的 `app/pages/a/b.vue` **在 checkout 里不存在**
+——**假路径不许当例子**。两条都按要求改了。
+
+> ⚠ **有一次红我没查清，如实记在这里**：第一次 `make parity-accept` 是 **2 passed + 1 failed**，
+> 重跑是 3 passed，基线正确写入。**失败详情丢了，因为我把命令管道给了 `tail -3`。**
+> 这是我的操作问题：**门禁的输出不要管道给 `tail`**，要整份留盘再看。
+> 这一红**没有诊断**，若再出现要当真事查。
+
+- 门禁：`make verify` **274 files / 2242 tests**、`e2e-parity` **101 条全绿**、
+  `e2e-mock` **269 + 22 + 15 + 2 + 6** 全过。
+  改的都是取样面与门禁自身，**没动任何应用代码，不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 187）做了什么：**我自己写的那行注释说「不进任何门禁」，而它从 wave 111 起就会红**
 

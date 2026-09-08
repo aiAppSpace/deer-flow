@@ -289,6 +289,32 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "agent-create-name-step/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "agent-create-name-step/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
     "agents-feature-disabled#default/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],

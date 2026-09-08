@@ -1,0 +1,44 @@
+{
+  "$comment": "取样面的**第二个坐标系**：路由。parity-scenario-coverage.json 的坐标系是上游 e2e spec 的文件名——它自己也写明那是「React 认为哪些行为值得守住」的代理。代理会漏：上游没有为某一屏写 spec 时，那一屏在那份棘轮里根本不存在，于是它报「满覆盖」而那一屏从没被取样过。wave 188 实测：本仓 14 条路由里有 6 条从没出现在任何场景的 path 上，其中 4 条是真产品屏（登录是每个用户看到的第一屏）。这份文件把「哪些屏被取样面碰过」变成机器可读的划分：sampled 由 tests/e2e-parity/support/scenarios.ts 反查（不存盘，免得第三份名单也会烂），exempt 与 pending 两张表必须与「未取样」的集合恰好相等。",
+  "$readers": [
+    "tests/guards/baseline-keys-consumed.test.ts",
+    "tests/guards/route-sampling-coverage.test.ts"
+  ],
+  "$semantics": "exempt 的含义是「这条路由不该进取样面」，必须写出为什么它不是可对照的产品屏；pending 的含义是「该进，还没进」，必须写出挡住它的是什么。两张表恰好划分「未取样」的全集：多一条、少一条、或同一条同时出现在两表里，门禁都会红。理由不短于 20 字，因为一条写不出理由的豁免与没有豁免是同一件事。**pending 只能变短**与 parity-scenario-coverage.json 那句同理，是评审政策不是门禁——它靠「删一条 pending」这件事必然出现在 diff 里。",
+  "exempt": [
+    {
+      "route": "/",
+      "reason": "落地页在对齐范围外，这一条不是本文件新定的：baseline/react-parity-scope.json 的 contentExemptRoutes 里已经有 /，上游那份 landing spec 在 parity-scenario-coverage.json 里也是 exempt。"
+    },
+    {
+      "route": "/__m0/splitpanes",
+      "reason": "测试夹具，不是业务页面：默认生产配置下返回 404，只有 NUXT_PUBLIC_M0_TEST_PAGES=1 才可达，上游那边对应的是 app/mock 而不是一条产品路由。"
+    },
+    {
+      "route": "/__m0/visual",
+      "reason": "同 /__m0/splitpanes：隔离的 M0 Button 视觉夹具，生产配置 404，专供本仓自己的视觉门禁使用，与上游没有可对照的同名屏。"
+    },
+    {
+      "route": "/workspace",
+      "reason": "纯跳转，没有可对照的内容：整页模板就是一个空 div，middleware 立刻 replace 到 /workspace/chats/new，而那一屏本来就在取样面里。"
+    }
+  ],
+  "pending": [
+    {
+      "route": "/login",
+      "reason": "每个用户看到的第一屏，两边都有，却从没被取样过。挡路的是取样面统一以 DEER_FLOW_AUTH_DISABLED=1 启动，需要先量清楚这一屏在关掉鉴权时是否仍可达、以及是否会立刻跳走。"
+    },
+    {
+      "route": "/setup",
+      "reason": "首次安装向导，两边都有。挡路的与 /login 同源（鉴权关闭下的可达性），另外它的内容取决于后端的 setup 状态，需要一份让它停在向导上的夹具。"
+    },
+    {
+      "route": "/showcase/[thread_id]",
+      "reason": "分享出去的只读会话视图，两边都有。挡路的是它需要一个已存在且可公开读的 thread 夹具，回放 Gateway 目前的种子数据里没有这样一条。"
+    },
+    {
+      "route": "/auth/callback",
+      "reason": "不是纯跳转：它会渲染校验状态再 replace 跳走，所以有可对照的内容。挡路的是要到达它得先有一次真实的 OIDC callback session，回放 Gateway 不提供。"
+    }
+  ]
+}
