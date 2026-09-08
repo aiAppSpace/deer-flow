@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 178，2026-09-08）
+## 当前状态（截至 wave 179，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,111 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 179）做了什么：**补上 Vue 缺的客户端兜底计时——中途被自己的单测骗过一次**
+
+#9 的第③条：`text: Completed in <1s` 只在 React 出现。
+
+### 先订正 wave 175 的判词
+
+当时写的是「两边都有这条词条，所以是**取到的运行时长有没有值**的差别，**不是缺功能**」。
+**是缺功能。** 两边 `core/messages/run-duration.ts` 逐字相同，差的在组件里：
+
+- 后端把 `turn_duration` 写在 AI 消息的 `additional_kwargs` 里，
+  但那要等这一轮**落库、再被历史查询取回来**才有值——刚跑完的这一轮拿不到。
+- 上游 `message-list.tsx:339` 因此有一条**客户端兜底计时**：`thread.isLoading` 翻真记开始时间、
+  翻假算出秒数存进 `clientDurationsByGroupId`，**先顶上**，等后端那个值到了再让位。
+- 本仓的 `durations` 只是 `getRunDurationDisplaysByGroupIndex(groups)`，**没有这条兜底**。
+
+Vue 其实已经有 `turnStartTime`（`RunActivity` 用它显示「跑了几秒」），
+只是在下降沿**把它丢掉了**。改动就是「先量再清」，加一个 Map，渲染时后端优先。
+
+### 中途被自己的单测骗了一次——这一段比修法本身重要
+
+第一版照抄上游把键写成 `${threadId}:${group.id}`。**五条单测全绿，真应用一个字都不显示。**
+探针在真应用里打了一条日志：
+
+```
+PROBE_FALLING_EDGE {"startTime":…,"threadError":"","threadId":"","groups":[["human","values-0"],["assistant","msg-ai-1"]]}
+```
+
+**下降沿那一刻 `props.threadId` 还是空串**，渲染时才是真 id：写进去的键是 `":msg-ai-1"`、
+读出来找的是 `"<id>:msg-ai-1"`，**永远对不上**。
+**又是 id 交接那一族**（wave 158「发送自己的 id 交接被当成换了会话」、
+wave 175「三条请求各发两次」，这是第三例）。
+
+上游那条键在它那侧成立，因为 React 一开始就把 threadId 生成好、从头到尾不变；
+本仓这个组件的 threadId 是**交接过来的**。所以这里**有意与上游分叉**：
+键只用 `group.id`，「换会话别复用上一轮秒数」改由一个 watch 保证——
+**真 id 之间切换时清空，空串→真 id 是交接本身、不清**。
+
+**为什么单测照不出来**：七条里前五条都在「threadId 从头到尾不变」的前提下跑。
+补了第 6 条（threadId 在 run 跑完之后才交接过来）之后，把键改回上游写法它就红。
+
+### 负向验证
+
+七条用例、七次变异，各红对应的一条：撤回整份改动、兜底不让位、写入侧 `threadError`
+判断删掉、落点找成 human 组、渲染侧 `threadError` 判断删掉、键改回上游写法、
+删掉换会话清空的 watch。
+
+**其中两次是被变异抓出「我的用例太松」才补的**：
+- 把落点改成 human 组时，红的是「不会两个都画」而不是第一条——因为第一条只问了
+  「页面上有没有 run-duration」，**没问它挂在哪儿**（每个组都会渲染 `durations[index]`）。
+  现在第一条还要断言它的父节点里**不含**那条人类消息的文本。
+- 把写入侧 `threadError` 判断删掉时四条全绿——渲染侧还有一道同样的判断兜着。
+  补了第 4、5 条之后两道门各有各的用例。
+
+**最后回真应用验了一次**：react `Completed in <1s`、vue `Completed in <1s`，两边一致。
+**单测绿不算数，这一轮就是被它骗过一回。**
+
+### 台账
+
+**210 → 209**，只少 `ariaOnlyReact` 里的 `- text: Completed in <1s`。
+
+### ④⑧⑨ 仍然开着，但量到了两件事
+
+- **不是时序**：React 的编辑键在 +0.5s、+4.5s、hover、**以及刷新之后**都是 0，
+  Vue 一直是 1。所以「刚提交完还没轮到」这条解释被否掉了。
+- **三项候选被实测排掉**：`isMock` / `NEXT_PUBLIC_STATIC_WEBSITE_ONLY` / `isUploading`
+  都在 InputBox 的 `disabled` 表达式里，而提交前输入框是可用的 → 三项全假。
+  `hasGoal` 也排掉（若为真，台账里会出现 goal 面板的行，没有）。
+- **`getLatestEditableTurn` 与 `isTerminalAssistantTextMessage` 两边逐字相同**，
+  所以差异只能来自**喂给它的消息形状**——
+  **假设**：刷新后两边走的是不同的历史端点
+  （React `/api/langgraph/threads/<id>/history`，本仓自己的那条），
+  assistant 消息的「终态」判定因此不同。**这是假设，没验，下一轮把两边的消息数组 dump 出来比。**
+
+### 顺带修了一条被这次改动照出来的过度断言
+
+`e2e-stream/real-stream.spec.ts:143` 原来是
+`await expect(items.nth(1)).toHaveText("Hello from DeerFlow!")`——
+`items.nth(1)` 是 assistant 的**整个回合块**，而上游 `withRunDuration` 把正文和时长
+包在同一个 div 里。补上兜底计时之后这一块变成 `Hello from DeerFlow!Completed in <1s`，
+用例红了。**红得对，但断言本来就错**：它顺带断言了「这一块里没有别的东西」，
+那从来不是这条用例要守的东西，而且上游也不成立。
+改成 `toHaveText(/^Hello from DeerFlow!/)`——截断与重复照样挡得住——
+并**顺手把时长钉成这一块里的另一个元素**（`getByTestId("run-duration")` 可见），
+免得下次又被读成正文。
+
+### 九门禁全扫（wave 179，2026-09-08）——上一次全扫是 wave 172
+
+| 门禁 | EXIT | 说明 |
+| ---- | ---- | ---- |
+| `verify` | 0 | 272 files / **2237 tests** |
+| `standalone-sim` | 0 | |
+| `e2e-parity` | 0 | 99 条（accept 之后） |
+| `e2e-mock` | 0 | 269 + 22 + 15 + 2 + 6 |
+| `e2e-visual` | 0 | |
+| `asset-budget` | 0 | |
+| `e2e-backend` | 0 | |
+| `icon-parity` | 0 | |
+| `audit` | **2** | **预期红**：14 vulnerabilities（1 low / 10 moderate / 3 high），**与 wave 166 / 172 读数一致，没有新增** |
+
+**八绿 + audit 预期红。**
+
+- 改动只在 `frontend-vue/`，不需要 marker chore。
+
+---
 
 ## 上一轮（wave 178）做了什么：**焦点丢了不是「重挂」，是有人给聚焦的控件置了 12ms 的 `disabled`**
 

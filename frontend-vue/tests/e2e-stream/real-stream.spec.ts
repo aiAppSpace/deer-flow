@@ -138,11 +138,21 @@ test.describe("真流 gate", () => {
 
     const items = page.locator('[data-testid="message-list"] > [data-role]');
     await expect(items).toHaveCount(2, { timeout: 20_000 });
-    // 正面特征：**五片拼起来的全文**。任何一片被覆盖而不是追加，
-    // 这里都会拿到一个截断的字符串，而截断的字符串同样「非空」。
-    await expect(items.nth(1)).toHaveText("Hello from DeerFlow!", {
+    /*
+      正面特征：**五片拼起来的全文**。任何一片被覆盖而不是追加，这里都会拿到一个
+      截断的字符串，而截断的字符串同样「非空」。
+
+      **锚定开头，不再要求整块只有这一句**：这一块是 assistant 的**整个回合**，
+      跑完之后里面还会多一行「本次任务耗时」（上游 message-list.tsx 的
+      `withRunDuration` 把正文和时长包在同一个 div 里，wave 179 本仓补齐了同一条）。
+      旧写法的 `toHaveText("…")` 顺带断言了「这一块里没有别的东西」——那从来不是
+      这条用例要守的东西，而且上游也不成立。`^` 照样挡得住截断与重复。
+    */
+    await expect(items.nth(1)).toHaveText(/^Hello from DeerFlow!/, {
       timeout: 20_000,
     });
+    // 时长是这一块里的**另一个**元素，不是正文的一部分——顺手钉住，免得下次又被读成正文。
+    await expect(items.nth(1).getByTestId("run-duration")).toBeVisible();
     await expect(items.nth(0)).toHaveAttribute("data-role", "human");
     await expect(items.nth(1)).toHaveAttribute("data-role", "ai");
   });

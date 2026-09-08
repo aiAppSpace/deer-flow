@@ -183,8 +183,7 @@
     },
     "chat-thread-init-ordering/desktop/light/en-US": {
       "ariaOnlyReact": [
-        "- alert",
-        "- text: Completed in <1s"
+        "- alert"
       ],
       "ariaOnlyVue": [
         "- alert: New chat - DeerFlow",

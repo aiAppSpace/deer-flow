@@ -261,9 +261,51 @@ const latestAssistantGroupId = computed(() => {
   }
   return null;
 });
-const durations = computed(() =>
-  getRunDurationDisplaysByGroupIndex(groups.value),
+/*
+  **客户端兜底计时**，与上游 message-list.tsx:339 同一条。
+
+  后端把 `turn_duration` 写在 AI 消息的 `additional_kwargs` 里，但那要等这一轮落库、
+  再被历史查询取回来才有值；**刚跑完的这一轮拿不到**。上游因此在 streaming 的下降沿
+  自己量一次墙钟先顶上，等后端那个值到了再让位。本仓此前只认后端给的值，于是
+  「首次提交后」那一屏上游有 `Completed in <1s`、本仓一个字都没有
+  （对照台账 wave 175 记的那一行；当时判成「取到的时长有没有值」，**判错了，是缺功能**）。
+
+  **键只用 group.id，不像上游那样拼上 threadId——这是有意的分叉，实测逼出来的。**
+  上游 `${threadId}:${group.id}` 在它那侧成立，因为 React 一开始就生成好 threadId、
+  从头到尾不变；本仓这个组件的 `threadId` 是**交接过来的**：实测下降沿那一刻它还是空串
+  （`PROBE_FALLING_EDGE … "threadId":""`），渲染时才变成真 id，于是写进去的是
+  `":msg-ai-1"`、读出来找的是 `"<id>:msg-ai-1"`，**永远对不上**。
+  第一版就是这么写的，单测全绿、真应用一个字都不显示——**又一次假绿**，
+  和 wave 158/175 同一族（id 交接）。
+
+  拼 threadId 的用意是「换了会话别复用上一个会话量出来的秒数」。这一点改由
+  下面那个 watch 保证：**从一个真 id 换到另一个真 id 时清空**；空串→真 id 是交接本身，
+  不清。这比上游那条键更稳，因为它不依赖「写和读的那一刻 threadId 相同」。
+*/
+const clientDurationsByGroupId = ref(new Map<string, number>());
+watch(
+  () => props.threadId,
+  (next, previous) => {
+    if (previous) clientDurationsByGroupId.value = new Map();
+  },
 );
+function clientDurationKey(groupId: string) {
+  return groupId;
+}
+const durations = computed(() => {
+  const persisted = getRunDurationDisplaysByGroupIndex(groups.value);
+  return persisted.map((rows, index) => {
+    // 后端给了就用后端的：兜底只在这一格是空的时候顶上。
+    if (rows.length > 0) return rows;
+    const group = groups.value[index];
+    if (props.threadError || !group?.id) return rows;
+    const durationSeconds = clientDurationsByGroupId.value.get(
+      clientDurationKey(group.id),
+    );
+    if (durationSeconds === undefined) return rows;
+    return [{ runId: `client:${group.id}`, durationSeconds }];
+  });
+});
 /*
   可见性判据必须显式传 `isHiddenFromUIMessage`，不能用 deriveHumanInputThreadState
   的默认值（那个只看 `hide_from_ui`）。上游 message-list.tsx:521 传的就是它。
@@ -806,7 +848,28 @@ watch(
   () => props.streaming,
   (streaming, previous) => {
     if (streaming && !previous) turnStartTime.value = Date.now();
-    if (!streaming && previous) turnStartTime.value = null;
+    if (!streaming && previous) {
+      /*
+        下降沿**先量再清**，顺序和上游一致（它读 `turnStartTimeRef.current` 之后才置 null）。
+        落点是**从尾部倒着找的第一个非 human 且有 id 的组**——与上游
+        `[...groupedMessages].reverse().find((group) => group.type !== "human" && group.id)`
+        同一条。这一轮出错就不记：一次失败的 run 没有「耗时多久」可言。
+      */
+      const startTime = turnStartTime.value;
+      const lastAssistantGroup = [...groups.value]
+        .reverse()
+        .find((group) => group.type !== "human" && group.id);
+      if (startTime !== null && lastAssistantGroup?.id && !props.threadError) {
+        const durationSeconds = Math.max(
+          0,
+          Math.floor((Date.now() - startTime) / 1_000),
+        );
+        const next = new Map(clientDurationsByGroupId.value);
+        next.set(clientDurationKey(lastAssistantGroup.id), durationSeconds);
+        clientDurationsByGroupId.value = next;
+      }
+      turnStartTime.value = null;
+    }
   },
 );
 watch(

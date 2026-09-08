@@ -8,7 +8,7 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **178 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
+你接手一个已经跑了 **179 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
 分支 `main-wc`，**接手时 HEAD 是 `ede1231c`（wave 178 的 marker chore，代码在 `cb68f726`），已推到

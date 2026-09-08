@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 178，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 179，2026-09-08）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,21 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 179：第 9 条三条「下一轮验」的第二条结清，台账 210 → 209。**
+> ③ `Completed in <1s` 只在 React——**wave 175 的判词错了，是缺功能**：上游有一条
+> **客户端兜底计时**（`message-list.tsx:339`），本仓只认后端给的 `turn_duration`。已补齐。
+> **中途被自己的单测骗过一次**：照抄上游把键写成 `${threadId}:${group.id}`，五条单测全绿、
+> 真应用一个字都不显示——实测下降沿那一刻 threadId 还是空串（**第三例 id 交接**，
+> 与 wave 158 / 175 同族）。键改成只用 `group.id`，换会话清空由 watch 保证，
+> 并补了两条专门照这件事的用例。
+>
+> **④⑧⑨ 仍开着，但排掉了几项**：React 的编辑键在 +0.5s / +4.5s / hover / **刷新之后**
+> 都是 0，**不是时序**；`isMock` / `STATIC` / `isUploading` / `hasGoal` 都实测为假；
+> `getLatestEditableTurn` 与 `isTerminalAssistantTextMessage` 两边逐字相同。
+> **下一轮把两边的消息数组 dump 出来比**——假设是历史端点不同导致 assistant 消息的
+> 「终态」判定不同，**没验**。
+
 
 > **wave 178：第 9 条里三条「下一轮验」的第一条结清，台账 211 → 210。**
 > ⑤`focus: React=body Vue=textarea` 的**根因不是我猜的那个**——不是 composer 重挂
