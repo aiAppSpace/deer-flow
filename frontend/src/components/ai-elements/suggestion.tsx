@@ -25,7 +25,13 @@ export const Suggestions = ({
       {Children.map(children, (child, index) =>
         child != null ? (
           <span
-            className="animate-fade-in-up max-w-full opacity-0"
+            // No `opacity-0` here: the keyframes own the entrance and the
+            // animation is `both`, so the element is visible whenever the
+            // animation does not run. `motion-safe:` withholds it under
+            // `prefers-reduced-motion: reduce` — a decorative 0.15s entrance is
+            // exactly what that preference asks to skip, and skipping it is only
+            // safe because the resting state is no longer transparent.
+            className="motion-safe:animate-fade-in-up max-w-full"
             style={{
               animationDelay: `${STAGGER_DELAY_MS_OFFSET + index * STAGGER_DELAY_MS}ms`,
             }}

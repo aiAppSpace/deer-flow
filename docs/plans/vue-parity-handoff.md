@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 165，2026-09-08）
+## 当前状态（截至 wave 167，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,86 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 167）做了什么：**取样上下文钉死 `reduce`，于是两个应用在 `no-preference` 下的动画从没被比过**
+
+`PARITY_CONTEXT_OPTIONS` 把 `reducedMotion` 钉死成 `reduce`，注释给的理由是
+「否则第一层比对会被时区、**动画中间帧**和配色方案淹没」——**理由成立**。
+但它覆盖的是「为什么不在那儿取样」，**不是「两个应用在那儿一不一致」**。
+而 `animation-duration/timing/iteration/direction/fill` 是**声明**，不随帧变，可以比。
+
+在 `no-preference` 下取一次**动画声明**（不是帧），当场两条：
+
+```
+chat 那一屏     React 7 条带动画   Vue 1 条
+subtask-card    React 8 条         Vue 8 条（逐字相同）
+```
+
+### 一、aurora：Vue 是「重新实现」而不是「照抄」
+
+```
+React  name=aurora        dur=10s  timing=ease-in-out  iter=infinite  dir=alternate
+Vue    name=aurora-shift  dur=10s  timing=linear       iter=infinite  dir=normal
+```
+
+上游 `@keyframes aurora` 有**五个停点、而且带 `transform: rotate(±5deg) scale(0.9~1.1)`**；
+本仓那条 `aurora-shift` 只是 `background-position` 从 `0% 50%` 线性走到 `200% 50%`。
+时长一样，**动的东西根本不是一回事**：一个是缓入缓出的来回摆动加缩放，一个是匀速单向平移。
+
+**根因是「重新实现」**——本仓对 `ambilight`、`shine` 走的都是逐字照抄。
+修法：keyframes 与三个参数按上游写，减动分支不变。
+
+### 二、`fade-in-up`：上游把可见性挂在了动画上（两边同改）
+
+上游 `ai-elements/suggestion.tsx` 给每个建议芯片套一层
+`className="animate-fade-in-up max-w-full opacity-0"`，配 `animation-fill-mode: forwards`
+和错峰 `animationDelay`。
+
+**`opacity-0` 是元素自己的静止态。** 错峰延时期间靠它保持透明——
+于是**动画一旦被跳过（减动分支、打印、跳过动画的浏览器），那几颗芯片就永远看不见**。
+本仓 FlipDisplay 的注释早写过同一条教训（「稳定态写成静态样式，不靠动画的 fill-mode」）。
+
+**根因修法（企业主流做法）**：`forwards` → **`both`**，并把 `opacity-0` 从元素上去掉。
+`both` 里的 `backwards` 负责延时期间那一帧，视觉逐帧不变，
+而元素自身的静止态变回可见。**有了这一条，才敢做下一步**：
+给它套 `motion-safe:`——0.15s 的装饰性入场正是减动偏好要跳过的东西。
+
+**Vue 此前一处都没有**，这一轮补上（scoped 样式，参数与常数照上游：`250 + index*60` ms）。
+**不跟的仍然不跟**：上游那层 `Suggestions` 是个永不滚动的 ScrollArea，
+一页纸清单第 6 条判过「不跟」，这一轮只补动画那一半。
+
+### 三、顺手扫出三条死主题条目
+
+按 `--animate-*` 全集逐条对消费者：
+
+| | React 用在哪 | Vue |
+| --- | --- | --- |
+| `aurora` | `ui/aurora-text.tsx` | ✓（本轮对齐） |
+| `shine` | `ui/shine-border.tsx` | ✓ |
+| `fade-in-up` | `ai-elements/suggestion.tsx` | ✓（本轮补上） |
+| `bouncing` | `workspace/streaming-indicator.tsx` | ✗ **本仓没有这个组件** |
+| `skeleton-entrance` | `workspace/messages/skeleton.tsx` | ✗ **本仓没有这个组件** |
+| `wave` | `workspace/welcome.tsx` 的 👋 | ✗ |
+| **`fade-in`** | **0 个消费者** | — |
+| **`loading-bar`** | **0 个消费者** | — |
+| **`suggestion-in`** | **0 个消费者** | — |
+
+后三条是**死 CSS**，按主流做法删掉（变量 + keyframes 共 566 字节）。
+**顺带订正我自己**：wave 163 的交接文档里写着「`loading-bar` / `bouncing` 是状态指示，
+有意留着不门控」——`bouncing` 对，**`loading-bar` 根本是死的**，我连着两轮拿它当活的在推理。
+
+剩下三条（`bouncing` / `skeleton-entrance` / `wave`）**这一轮没做**：
+前两条本仓连对应组件都没有（流式指示器、骨架屏），那是组件级的缺口不是动画级的；
+`wave` 是欢迎页 👋 的一次性挥手。**都记在这里，不写进声明表**——
+声明表只收「会无限循环的」，这三条都不是。
+
+### 读数
+
+改完再取一次：**两边都是 7 条、逐项相同**（只剩 Vue 的 scoped keyframes 后缀，
+那是 SFC 机制不是行为差异）。台账 **90 样本 / 202 行一行未动**——
+给 Vue 加那层 `<span>` 没有产生新差异，因为上游本来就有同一层。
+
+---
 
 ## 九门禁全扫（wave 166，2026-09-08）
 

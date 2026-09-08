@@ -87,27 +87,17 @@
     ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
     "Segoe UI Symbol", "Noto Color Emoji";
 
-  --animate-fade-in: fade-in 1.1s;
-  @keyframes fade-in {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-
-  --animate-loading-bar: loading-bar 1s ease-in-out infinite;
-  @keyframes loading-bar {
-    0% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(400%);
-    }
-  }
-
-  --animate-fade-in-up: fade-in-up 0.15s ease-in-out forwards;
+  /*
+    `both`, not `forwards`. The staggered entrance runs behind an
+    `animation-delay`, and `backwards` is what paints the `from` frame during
+    that delay — which is why the callers used to carry an `opacity-0` class
+    instead. That class made the element's *resting* state invisible, so
+    anything that withheld the animation (a reduced-motion branch, a browser
+    that skips animations, print) left the content permanently unreachable.
+    With `both` the delay is covered by the keyframes and the element's own
+    style stays visible.
+  */
+  --animate-fade-in-up: fade-in-up 0.15s ease-in-out both;
   @keyframes fade-in-up {
     0% {
       opacity: 0;
@@ -135,18 +125,6 @@
     100% {
       opacity: 1;
       transform: scaleX(1);
-    }
-  }
-
-  --animate-suggestion-in: suggestion-in 0.2s ease-out forwards;
-  @keyframes suggestion-in {
-    0% {
-      opacity: 0;
-      transform: translateY(-1.25rem);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0);
     }
   }
 
