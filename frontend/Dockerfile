@@ -103,4 +103,23 @@ COPY --from=builder --chown=node:node /app/frontend ./frontend
 # Compose was not.
 USER node
 EXPOSE 3000
+
+# A TCP connect, not an HTTP GET, and deliberately so.
+#
+# `/` is the landing page: rendering it runs a server-side fetch to the GitHub
+# API for the star count. Probing it every 10s would spend 360 requests an hour
+# against an unauthenticated limit of 60 -- the same rate-limit stall that made
+# `landing.spec.ts` flake for six waves. Next.js ships no lightweight route of
+# its own, and inventing one just to be probed would put an ops endpoint in the
+# product tree.
+#
+# The Helm chart already answered this question for the same workload: its
+# frontend Deployment uses `tcpSocket` probes. `next start` binds the port after
+# the server is ready, so accepting a connection is a fair readiness signal.
+# The Vue image next door checks `/health` because it has one (a real Nitro
+# route); each image uses the best signal it actually has, and
+# backend/tests/test_frontend_images_drop_privileges.py pins that both have one.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+  CMD ["node", "-e", "require('net').connect(3000, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+
 CMD ["sh", "-c", "cd /app/frontend && pnpm start"]

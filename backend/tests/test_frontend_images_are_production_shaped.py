@@ -1,4 +1,9 @@
-"""A frontend container that serves production traffic must not run as root.
+"""What the stage Compose ships has to look like for a production frontend.
+
+Two properties so far, and both were found the same way: by comparing the two
+frontend images against each other instead of reading either on its own.
+
+**Not root.**
 
 Measured on 2026-09-08 against the running stack: `docker exec
 deer-flow-frontend id` answered `uid=0(root)`.  Nothing in `frontend/`'s `prod`
@@ -14,9 +19,18 @@ about the file containing a `USER` line somewhere: `frontend/Dockerfile` builds
 `target: prod` and `frontend-vue/Dockerfile` builds its last stage, and a
 `USER` in some earlier builder stage would prove nothing about either.
 
-Zero exemptions. There are exactly two frontend images and both serve browser
-traffic; an allow-list here would just record which one we decided to leave
-running as root.
+**Declares a healthcheck.** ``frontend-vue`` has had one all along; ``frontend``
+had none, so ``docker ps`` reported health for one of the two frontends of the
+same product and nothing for the other.  The two images probe differently on
+purpose -- Vue has a real ``/health`` Nitro route, React has no lightweight
+route and probing ``/`` would run the landing page's GitHub fetch 360 times an
+hour against a limit of 60 -- so the criterion is "declares one", not "declares
+the same one".  The Helm chart reached the same conclusion independently: its
+frontend Deployment probes with ``tcpSocket``.
+
+Zero exemptions on both. There are exactly two frontend images and both serve
+browser traffic; an allow-list here would just record which one we decided to
+leave running as root, or unmonitored.
 """
 
 from __future__ import annotations
@@ -67,21 +81,26 @@ def test_both_frontend_images_are_covered() -> None:
         assert _stages(dockerfile.read_text(encoding="utf-8")), name
 
 
-@pytest.mark.parametrize("service_name", sorted(_shipped_services()))
-def test_the_stage_compose_ships_drops_privileges(service_name: str) -> None:
-    service = _shipped_services()[service_name]
-    build = service["build"]
-    dockerfile = (REPO_ROOT / build["dockerfile"]).read_text(encoding="utf-8")
-    stages = _stages(dockerfile)
+def _shipped_stage(service_name: str) -> tuple[str | None, list[str]]:
+    """The stage Compose actually builds for this service.
 
+    Not "the file": a `USER` or `HEALTHCHECK` in some earlier builder stage
+    proves nothing about what gets shipped, which is why both tests go through
+    here. No `target:` means Compose builds the last stage.
+    """
+    build = _shipped_services()[service_name]["build"]
+    stages = _stages((REPO_ROOT / build["dockerfile"]).read_text(encoding="utf-8"))
     target = build.get("target")
     if target is None:
-        # No `target:` means Compose builds the last stage.
-        shipped = stages[-1]
-    else:
-        matching = [stage for stage in stages if stage[0] == target]
-        assert matching, f"{service_name}: no stage named {target!r}"
-        shipped = matching[-1]
+        return stages[-1]
+    matching = [stage for stage in stages if stage[0] == target]
+    assert matching, f"{service_name}: no stage named {target!r}"
+    return matching[-1]
+
+
+@pytest.mark.parametrize("service_name", sorted(_shipped_services()))
+def test_the_stage_compose_ships_drops_privileges(service_name: str) -> None:
+    shipped = _shipped_stage(service_name)
 
     users = [line.split(None, 1)[1].strip() for line in shipped[1] if line.upper().startswith("USER ")]
     assert users, (
@@ -91,3 +110,11 @@ def test_the_stage_compose_ships_drops_privileges(service_name: str) -> None:
         "the app in with `--chown` so it can still write its own cache"
     )
     assert users[-1] not in {"root", "0", "0:0"}, f"{service_name}: last USER is {users[-1]!r}"
+
+
+@pytest.mark.parametrize("service_name", sorted(_shipped_services()))
+def test_the_stage_compose_ships_declares_a_healthcheck(service_name: str) -> None:
+    shipped = _shipped_stage(service_name)
+    declared = [line for line in shipped[1] if line.upper().startswith("HEALTHCHECK")]
+    assert declared, f"{service_name}: the stage Compose ships ({shipped[0] or 'last'}) declares no HEALTHCHECK, so nothing but the process being alive distinguishes a serving container from a wedged one"
+    assert "NONE" not in declared[0].upper(), f"{service_name}: {declared[0]!r}"

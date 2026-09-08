@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 185，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 186，2026-09-08）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,13 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 186：上一轮新记的第 10 条当轮判掉并结清。** React 补上容器 HEALTHCHECK，
+> 但**不新增产品路由**：探 `/` 会每小时触发 360 次 GitHub 取数（限额 60，正是 wave 174 那个坑），
+> 新增 `/health` 会把运维端点塞进产品树；**用 TCP 连通探测**——依据是仓库自己已经判过一次，
+> Helm 的 frontend Deployment 对同一个 workload 用的就是 `tcpSocket`。
+> 判据因此是「**声明了 HEALTHCHECK**」而不是「声明同一个」。双向实测（healthy / unhealthy）。
+
 
 > **wave 185：不动台账，但新记一笔。** 把「三份配置比一遍」的手法搬到两个前端的 Dockerfile：
 > **生产 compose 下 React 的前端容器以 root 在跑，Vue 的是 `node`**（Helm 另用 `runAsUser: 1000`

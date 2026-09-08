@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 185，2026-09-08）
+## 当前状态（截至 wave 186，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,47 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 186）做了什么：**判掉上一轮新记的那笔账——补 HEALTHCHECK，但不新增产品路由**
+
+wave 185 记了第 10 条：Vue 有 `server/routes/health.get.ts` 与容器 HEALTHCHECK，React 两样都没有。
+当时写「下一轮判要不要做」。**判了：做，但不用 Vue 的做法。**
+
+### 三个候选，两个被量掉
+
+| 做法 | 判 |
+| ---- | -- |
+| 探 `/`（落地页） | **否决**。渲染它会触发一次服务端 GitHub 取数；每 10 秒探一次 = **360 次/小时**，而未认证限额是 **60**。那正是 `landing.spec.ts` 抖了六轮的那个限流（wave 174）。 |
+| 给 React 新增 `/health` 路由 | **否决**。要往 `frontend/src/app/` 放一条运维用的路由，把运维端点塞进产品树。 |
+| **TCP 连通探测** | **采用**。`next start` 是**服务就绪之后**才绑端口，能接受连接就是合格的就绪信号。 |
+
+**决定性的依据不是我的偏好，是仓库自己已经判过一次**：
+Helm 的 frontend Deployment 用的就是 **`tcpSocket` 探针**（同一个 workload）。
+Vue 那份继续探 `/health`——**它有一条真路由**。
+所以判据是「**声明了 HEALTHCHECK**」，不是「声明同一个」。
+
+### 实测两个方向
+
+```
+第 15s：healthy                     ← start-period 15s 之后转健康
+（杀掉服务）第 10s：exited/unhealthy  ← 反向也验了
+```
+
+健康日志里最早那条是 `exit=1`（端口还没绑），随后 `exit=0`——**这正是 start-period 存在的理由**。
+
+### 负向验证（四次，各红对应的一条）
+
+撤回 React 的 HEALTHCHECK、写成 **`HEALTHCHECK NONE`**（「写了等于没写」那一形态）、
+只写进注释（剥注释后仍红）、撤回 Vue 的 HEALTHCHECK。
+
+守卫改名成 `test_frontend_images_are_production_shaped.py`（`git mv`，保住历史），
+两条判据共用同一个「**compose 实际发的那个 stage**」解析。
+
+- 门禁：backend `make lint` 全过、整套 **11370 passed / 72 skipped**；
+  另有真构建 + 真运行的双向实测（healthy / unhealthy）。
+  `frontend/Dockerfile` 不在 marker 监视路径，**不需要 chore**。
+
+---
 
 ## 上一轮（wave 185）做了什么：**React 的生产容器一直以 root 在跑，Vue 的没有**
 
