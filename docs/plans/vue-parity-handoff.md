@@ -8,13 +8,14 @@
 
 ---
 
-## 当前状态（截至 wave 176，2026-09-08）
+## 当前状态（截至 wave 177，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
   `54454b7c` = wave 43，`46f62dea` = wave 44，`f15c7181` = wave 45，`ca1c7f1d` = wave 46，
   `c12c4d37` = wave 47，`3f152764` = wave 48，`5978d533` = wave 49，`80ef4d15` = wave 50，
   `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉；`d468c4bf` = wave 146（**伪元素进取样面**，分栏拖拽把手第一次挂成锚点）；`ab4dea2c` = wave 147（**会话行的 ⋯ 在手机上够不着**；并推翻了我自己 wave 146 那张表的两行；`ParityState.dimensions` 让终态自己钉断点；`b60966bf` = wave 148（**手搓的模态语义全仓扫一遍，三处一起换成 primitive**，并配上零豁免守卫；`91af7855` = wave 149（**台账里认不出是谁的行清零**，59/79 → 0；`ef247138` = wave 150（**「全表 A–S 共 19 组」那句话守卫只读到 14 组**，O–S 五组 45 条从没被读过；`cc4c6e60` = wave 151（**订正 wave 150 的说明**：那句话本来就有 `doc-facts` 在守）；`0f9d304f` = wave 152（**两份 README 记的门禁不是同一套**，中文版少了 `standalone-sim`；`cb625bc1` = wave 153（**一条正确、但没人守的边界**：Reka 只能出现在 `app/components/ui/` 里）；`ca8eef42` = wave 154（**浮层层级也是一条正确、但没人守的规则**）；`016704d1` = wave 155（**判据走出 frontend-vue**：AGENTS.md 拓扑表里 Vue 那行写的是本机端口不是容器端口）；`10be0106` = wave 156（**「it maps the whole repo」而四个已跟踪的顶层目录不在图上**）；`8a69c12a` = wave 157（**被文档标成 optional 的 compose 服务，裸 `up` 会无条件启动它**——实测 `RestartCount 4370`；顺带抓到我自己引入的两处回归与两次假绿）；`ce1a1c04` = wave 158（**两边同改**：发送自己的 id 交接被当成「用户换了会话」，把这次发送的基线冲掉；chore `352753b1` 把 marker 推到它）。另有 `3ec1f496`（**容器里的 .venv 不属于这个平台时，启动前就地重建**，用户实测事故）。
+  wave 159~177：`ea1b4666` = wave 159（**只有度量**：#2 剩下那一半查到根因）；`fe882f61` = wave 160（chore `de67deae`，**两边同改**：三处产品动画不理会减动偏好）；`decab3bd` = wave 161（chore `90b03ea0`，**两边同改** ambilight）；`c360d05c` = wave 162（chore `ec3e7f40`，**两边同改** shimmer）；`e6a264d1` = wave 163（**判据换个形状**：会无限循环的动画都必须表态）；`cd5945ac` = wave 164（**零代码改动**：给动画加一档，三重堵死）；`767abd31` = wave 165（chore `b49b02ab`，**两边同加** `data-slot`）；`f6ab35ed` = wave 166（**九门禁全扫读数**）；`34e49e22` = wave 167（chore `d418a691`，**两边同改** fade-in-up）；`642dda3f` = wave 168（chore `a8332f14`，**两边同改**骨架屏 + 新守卫）；`ac30835c` = wave 169（chore `a5534c82`，**两边同改**骨架屏与可访问播报）；`80d72dd1` = wave 170（chore `9ef01c59`，**两边同改**挥手动画）；`e9752c31` = wave 171（**前端镜像里装的是 macOS 原生二进制**，用户实测事故）；`fc1615f3` = wave 172（**九门禁全扫读数**）；`ea873d2b` = wave 173（**那条「抖动」不是抖动**：四条用例真的会出网）；`08793db0` = wave 174（chore `1c735271`，**改 `frontend/`**：外部 fetch 没超时）；`a9c04f3a` = wave 175（**改 `frontend/`**：挂了 146 轮那条账收了）；`6473e83a` = wave 176（chore `b4b7ffbf` 一次覆盖 175/176 两处 `frontend/` 改动；**改 `frontend/`**：一块全屏 shader 跑在软件光栅化上）；`0f4b3e02` = **这一段修过的每一处的自审**（12 根因 / 1 半根因 / 1 不是）；`06beaf48` = wave 177（**把自审里那唯一一条「不是根因」补上构建期拦截**）。
 - **动过 `frontend/` 的是二十四轮**（wave 158 新增一轮：发送交接冲掉基线 + 标题里的 `Loading...`）
   （此前记的是二十三轮）（wave 138 新增一轮：模型设置对话框的可访问名）（wave 52 实测订正，wave 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97 各加一轮）：
   wave **3 / 4 / 6 / 11 / 17 / 20 / 21 / 22 / 23 / 27 / 28 / 36 / 39 / 40 / 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97**。
@@ -443,6 +444,53 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 177）做了什么：**自审判成「不是根因」的那一条，重现没拿到，但补上了另一半**
+
+上一步的自审（`docs/plans/vue-parity-fix-audit-2026-09-08.md`）把 16 处修改分了三档，
+其中**只有一条被判成「不是根因」**：wave 171——前端镜像里装着 macOS 的原生二进制。
+这一轮就去啃它。
+
+**先量，不推断。** 四条实测：
+
+| 量什么 | 读数 | 说明什么 |
+| ------ | ---- | -------- |
+| `.dockerignore` 排除 `node_modules` 从哪天起 | **2026-02-09**，早于事故七个月 | 「宿主机的树被 COPY 进去」这条路早就堵死 |
+| 2026-08-23 的生产镜像 `deer-flow-frontend:latest` 里是什么 | `lightningcss-linux-arm64-**musl**` | **同一份 Dockerfile、早于我介入，产出是对的** |
+| 今天重建的两个前端 | react → `-musl`、vue → `-gnu` | 各自拿到**正确的 libc 变体**（Alpine vs bookworm-slim），不是缺陷 |
+| 坏层还在不在 | 不在——我自己 `--no-cache` 重建冲掉了，dangling 里最近的是 6 月的 | **重现取不回来了** |
+
+**所以「构建本身会产出 darwin 包」这个猜想被否掉了。** 我没有编一个根因出来顶上。
+
+**但有一件事是能解释、也能修的**：那一层**被永久缓存**。`dependencies` 阶段的输入只有
+`package.json` 与 `pnpm-lock.yaml`；这两个文件不变，**同一棵树就会被永远发下去，
+没有任何东西复核它**。这解释不了它当初怎么产生，但解释了**它为什么能活一个月**。
+
+于是补上构建期这一道，和 wave 171 的启动期那道配成一对：
+
+| 挡在哪 | 做了什么 | 挡住的是 | 为什么另一道挡不住 |
+| ------ | -------- | -------- | ------------------ |
+| **构建期**（本轮） | 两份 Dockerfile 在 `pnpm install` **之后**扫 `node_modules/.pnpm`，撞见 `*-darwin-*` / `*-win32-*` 就 `exit 1`，报错逐字给出 `--no-cache` 修法 | 坏树被**烤进**镜像 | 启动期那道是**事后**才发现，镜像已经发出去了 |
+| **启动期**（wave 171） | `docker/node-entrypoint.sh` 同样的扫描，撞见就**拒绝启动** | **已经缓存**的坏镜像被**启动** | 构建期这道**对已缓存的层根本不会重跑** |
+
+**负向验证**：构建期那条实测把一次真实构建打到 `BUILD_EXIT=1`，报错原文对得上；
+用例三次变异（拿掉自查 / 挪到 `install` 之前 / 拿掉修法指引）**各红一条**。
+
+**其中「挪到 install 之前」那次第一版没抓住**——Dockerfile 注释里写着
+「pnpm install**s** exactly the optional platform package」，`text.index("pnpm install")`
+找到的是**那句散文**，于是变异后断言照样绿。剥注释后才转红。
+**同一个坑（扫描前先剥注释）这一天撞了四次**（坑 202/316）。
+
+**档位不变，仍然是「不是根因」**：现在是产不出来、也启动不了，
+但**没人知道它当初是怎么来的**。自审文档已就地更新，写清「能拦住 ≠ 查清了」。
+**下一次若再出现，先 `docker save` 那个镜像再动手**——那是拿到重现的唯一机会。
+
+- 提交：`06beaf48`（`frontend/Dockerfile`、`frontend-vue/Dockerfile`、
+  `backend/tests/test_node_entrypoint.py`、自审文档）。
+- 门禁：backend 整套 **11354 passed / 72 skipped，exit 0**；
+  两个前端镜像重建（`BUILD_EXIT=0`）并重建容器后，react 200（0.13s）/ vue 200（0.02s）/ gateway 200。
+
+---
 
 ## 上一轮（wave 176）做了什么：**落地页那条抖动的真根因——一块全屏 shader 跑在软件光栅化上**
 
