@@ -31,16 +31,18 @@ used by ``make dev``, and the Kubernetes/Helm ConfigMap template.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
+from support.nginx_configs import discover, repo_root
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-NGINX_CONFIGS = (
-    "docker/nginx/nginx.conf",
-    "docker/nginx/nginx.local.conf",
-    "deploy/helm/deer-flow/templates/configmap-nginx.yaml",
-)
+# The three places named in this module's docstring are not typed out here:
+# `support/nginx_configs` is the single definition of "the nginx configs this
+# repo ships", and it finds them rather than trusting a list. Two guards used
+# to keep their own tuple and they disagreed -- the compression one was missing
+# the Kubernetes ConfigMap entirely. `test_nginx_compression` asserts that
+# discovery still finds exactly the expected set.
+REPO_ROOT = repo_root()
+NGINX_CONFIGS = tuple(path.relative_to(REPO_ROOT).as_posix() for path in discover())
 
 # Text prompts never carry binary file attachments (those go through the
 # dedicated uploads route), so the ceiling here is intentionally well below
@@ -86,6 +88,19 @@ def _parse_body_size_bytes(block: str) -> int:
     assert match, "client_max_body_size value not found or not parseable"
     value, unit = match.groups()
     return int(value) * _SIZE_MULTIPLIERS[unit.lower()]
+
+
+def test_this_file_checks_every_nginx_config():
+    """Shape assert -- see the same test in test_nginx_compression.py.
+
+    Narrowing the discovery once left this file running against two configs
+    instead of three, silently and green, because the completeness check lived
+    in a different module.
+    """
+    from support.nginx_configs import KNOWN
+
+    assert len(NGINX_CONFIGS) == len(KNOWN)
+    assert set(NGINX_CONFIGS) == set(KNOWN)
 
 
 @pytest.mark.parametrize("path", NGINX_CONFIGS)

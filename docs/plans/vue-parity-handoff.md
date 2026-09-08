@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 180，2026-09-08）
+## 当前状态（截至 wave 181，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,74 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 181）做了什么：**「这份 nginx 配置维护在三处」是明写的规则，而压缩守卫只扫了两处**
+
+台账上再没有「待办」的账（#9 于 wave 180 结清，其余三条都是判过并留了翻案判据的），
+所以回到冷启动 prompt 指的那条路：**找一句写下来、当规则用、却没有任何机器在守的话**。
+
+### 线索是从 `deploy/` 进去的
+
+`deploy/` 是仓库地图上的「Helm chart for the Kubernetes deployment」，
+而**全仓只有两处测试碰过它**。先量了一圈：
+
+- **Helm chart 里一个 `vue` 字都没有** ——
+  但它的 README 自己写的是「**frontend** (Next.js)」，**边界是诚实的**，不是假声明。
+  这一条不算发现，记下来不动。
+- 但同一次扫描撞出了另一件事：`test_nginx_langgraph_body_size.py` 的文件头写着
+  「**across all three places this nginx config is maintained**」——
+  Docker 生产配置、`make dev` 的本地配置、**Kubernetes/Helm 的 ConfigMap 模板**。
+  **这句话就是那条规则**，而它只被那一条属性（`/api/langgraph/` 的请求体设置）跨三处钉住。
+
+### 于是量下一条属性：压缩
+
+`AGENTS.md` 把压缩策略写成 **Nginx 的性质**，不带条件——
+「compresses HTML and configured textual assets, while deliberately leaving SSE,
+fonts, images, audio, and video uncompressed at the proxy layer」。
+
+| | 有压缩块吗 | 被 `test_nginx_compression.py` 扫吗 |
+| --- | --- | --- |
+| `docker/nginx/nginx.conf` | 有 | **是** |
+| `docker/nginx/nginx.local.conf` | 有 | **是** |
+| `deploy/helm/deer-flow/templates/configmap-nginx.yaml` | **一条 `gzip` 都没有** | **否** |
+
+`CONFIGS` 是一个**手写的二元组**，第三份从来不在名单里。
+**Helm 装出来的那套，每一份资产都是不压缩发出去的**，而文档说的是另一回事。
+判成缺口不是边界的依据：ingress 注解默认 `{}`（没有在上一层做压缩），
+Helm README 只字未提，而两份配置在 SSE 那一段（`proxy_buffering off` /
+`X-Accel-Buffering no`）本来就是互为拷贝。
+
+### 改了三件事
+
+1. **把压缩块补进 Helm 的 ConfigMap**，与另外两份逐字相同。
+   `text/event-stream` 不在 `gzip_types` 里，所以流式不受影响——与 compose 同一条保障。
+2. **扫描面从「手写名单」改成「自己去发现」**：新建
+   `backend/tests/support/nginx_configs.py`，用 `events {` + `http {` 两个标记在
+   `docker/` 与 `deploy/` 下找（ConfigMap 把配置嵌在 YAML 里，**不能按后缀认**）。
+   仓库根用已有的 `resolve_repo_root`（marker 式，不是 `parents[N]` 式）。
+   **两份守卫此前各有一份名单、而且互相矛盾**——一份写两条、一份写三条；现在只有一处定义。
+3. **顺手给压缩守卫加了「先剥注释」**：nginx 配置里 `#` 注释遍地，
+   而这两份配置都在注释里谈论自己的指令（坑 202/316）。
+
+### 负向验证，其中一次抓到我自己修得不彻底
+
+- 撤掉 Helm 的压缩块 → configmap 那一份当场红（**这就是修复前的状态**）。
+- 把 `gzip on;` 塞进注释 → **仍然红**（剥注释是承重的）。
+- 多放一份 nginx 配置进 `docker/` → 自证那一条红。
+- 把发现范围缩到只有 `docker/` → ……
+
+> ⚠ **最后这次变异抓到了我自己的问题**：第一版把自证断言写在
+> `test_nginx_compression.py` 里，于是缩窄发现范围时**只有它红**，
+> 而 `test_nginx_langgraph_body_size.py` **悄悄少扫了一份、仍然全绿**（9 passed → 8 passed）。
+> **这正是这一整轮要防的那种失败。**
+> 判据因此挪到**定义**上（新建 `test_nginx_config_discovery.py`），
+> 并给两个消费者各加一条形状断言，**单跑任何一份也自证**。
+> 重跑同一次变异：三份文件全红，`body-size` 单跑也红。
+
+- 门禁：`backend make lint` / `ruff format --check` 全过；后端整套 **11360 passed / 72 skipped，exit 0**。
+- 只动了 `backend/tests/` 与 `deploy/`，不涉及两个前端，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 180）做了什么：**`undefined === undefined` 也是相等——本仓给一条没法寻址的消息画了「改完重跑」**
 
