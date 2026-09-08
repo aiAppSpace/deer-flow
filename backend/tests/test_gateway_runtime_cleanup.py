@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+from support.nginx_configs import KNOWN, discover, repo_root
+
+REPO_ROOT = repo_root()
+
+# "The nginx configs this repo ships" has exactly one definition, and it finds
+# them rather than trusting a list -- see support/nginx_configs. The four nginx
+# checks below used to loop over an inline two-element tuple that omitted the
+# Kubernetes ConfigMap, and the ConfigMap was hard-coding
+# `proxy_set_header Connection 'upgrade';` on the frontend location: the exact
+# string one of them forbids. Every request through the Helm nginx was sent
+# upstream as a connection upgrade whether or not the browser asked for one.
+NGINX_CONFIGS = tuple(path.relative_to(REPO_ROOT).as_posix() for path in discover())
 
 
 def _read(path: str) -> str:
@@ -124,8 +134,18 @@ def test_root_makefile_clean_does_not_reference_langgraph_server_cache():
     assert ".langgraph_api" not in makefile
 
 
+def test_this_file_checks_every_nginx_config():
+    """Shape assert -- see the same test in test_nginx_compression.py.
+
+    Without it, a discovery that returns fewer configs leaves the loops below
+    quietly checking a subset and still reporting success.
+    """
+    assert len(NGINX_CONFIGS) == len(KNOWN)
+    assert set(NGINX_CONFIGS) == set(KNOWN)
+
+
 def test_nginx_routes_official_langgraph_prefix_to_gateway_api():
-    for path in ("docker/nginx/nginx.local.conf", "docker/nginx/nginx.conf"):
+    for path in NGINX_CONFIGS:
         content = _read(path)
 
         assert "/api/langgraph-compat" not in content
@@ -135,7 +155,7 @@ def test_nginx_routes_official_langgraph_prefix_to_gateway_api():
 
 
 def test_nginx_defers_cors_to_gateway_allowlist():
-    for path in ("docker/nginx/nginx.local.conf", "docker/nginx/nginx.conf"):
+    for path in NGINX_CONFIGS:
         content = _read(path)
 
         assert "Access-Control-Allow-Origin" not in content
@@ -147,7 +167,7 @@ def test_nginx_defers_cors_to_gateway_allowlist():
 
 
 def test_nginx_frontend_upgrade_header_is_conditional():
-    for path in ("docker/nginx/nginx.local.conf", "docker/nginx/nginx.conf"):
+    for path in NGINX_CONFIGS:
         content = _read(path)
 
         _assert_frontend_upgrade_header_is_conditional(content)

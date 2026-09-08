@@ -29,6 +29,30 @@ def _nginx() -> str:
     return NGINX_PATH.read_text(encoding="utf-8")
 
 
+HELM_DIR = REPO_ROOT / "deploy/helm"
+
+
+def test_the_helm_chart_ships_react_only_and_says_so() -> None:
+    """The dual-hostname topology is Compose's; the chart has one frontend.
+
+    Both halves have to be pinned together or one of them rots. The chart's own
+    README says "**frontend** (Next.js)", and `AGENTS.md` now qualifies the
+    topology sentence the same way -- without that qualification a reader takes
+    "Vue is selected by a secondary hostname" as a property of the system and
+    goes looking for a Vue workload that was never there.
+
+    So: no Vue anywhere under `deploy/helm`, and the qualification present in
+    `AGENTS.md`. Adding a Vue workload to the chart turns this red on purpose --
+    the chart's ingress contract then needs the same coverage the Compose one
+    has above, and this test is where you will be told so.
+    """
+    mentions = sorted(path.relative_to(REPO_ROOT).as_posix() for path in HELM_DIR.rglob("*") if path.is_file() and "vue" in path.read_text(encoding="utf-8", errors="ignore").lower())
+    assert mentions == [], "the Helm chart now references Vue: give it the same ingress contract coverage the Compose topology has in this file, then update the AGENTS.md sentence and this test together"
+
+    agents_md = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Helm chart under `deploy/` ships React only" in agents_md, "AGENTS.md no longer says the chart is React-only; either the chart grew a Vue workload (see above) or the qualification was dropped"
+
+
 def test_production_compose_builds_secondary_vue_without_publishing_a_port() -> None:
     services = _compose()["services"]
     vue = services["frontend-vue"]

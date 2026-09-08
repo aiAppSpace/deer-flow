@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 181，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 182，2026-09-08）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,13 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 182：不动台账。** 把 wave 181 的发现系统扫一遍——`test_gateway_runtime_cleanup.py`
+> 的**四条** nginx 性质各写着一个内联二元组，Helm 那份四条都不在内。实测**三条成立、一条不**：
+> Helm 的前端 location 写死 `proxy_set_header Connection 'upgrade';`（正是守卫明令禁止的字符串），
+> **每个前端请求都被当成 WebSocket 升级发给上游**。已补 `map` 并改成 `$connection_upgrade`，
+> 四条接到共享发现上。顺带把「Helm 只发 React」这条边界在 AGENTS.md 与守卫里**双向**钉住。
+
 
 > **wave 181：不动台账。** 台账上已无「待办」的账，这一轮回到「找一句写下来当规则用、
 > 却没有机器在守的话」：`test_nginx_langgraph_body_size.py` 写着这份配置维护在**三处**，

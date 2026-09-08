@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 181，2026-09-08）
+## 当前状态（截至 wave 182，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,84 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 182）做了什么：**把上一轮那个发现系统扫一遍，扫出一条会真出故障的**
+
+wave 181 修的是「压缩守卫只扫了两份 nginx 配置」。**同一个形状不该只查一次**，
+所以这一轮机械地问：**哪些性质只钉在一份或两份配置上？**
+
+```
+test_dual_frontend_production_ingress.py   conf=1 local=0 helm=0
+test_gateway_runtime_cleanup.py            conf=3 local=3 helm=0   ← 同形
+test_serve_nginx_stop.py                   conf=0 local=2 helm=0
+```
+
+`test_gateway_runtime_cleanup.py` 里有**四条**关于 nginx 的性质，
+每一条都写着一个**内联的二元组** `for path in ("…local.conf", "…nginx.conf")`，
+**Helm 的 ConfigMap 四条都不在内**。
+
+### 先量：这四条性质对 Helm 那份成立吗
+
+把 Helm 那份临时加进三个循环里跑一遍——**三条成立，一条不成立**：
+
+```
+FAILED test_nginx_frontend_upgrade_header_is_conditional
+  assert 'map $http_upgrade $connection_upgrade' in content
+```
+
+对照两份配置的前端 `location /`：
+
+| | `Connection` 头 | 有 `map $http_upgrade` 吗 |
+| --- | --- | --- |
+| `docker/nginx/nginx.conf` | `$connection_upgrade` | 有 |
+| `docker/nginx/nginx.local.conf` | `$connection_upgrade` | 有 |
+| Helm ConfigMap | **`'upgrade'`（写死）** | **没有** |
+
+**`proxy_set_header Connection 'upgrade';` 正是那条守卫明令禁止的字符串**
+（`assert "…Connection 'upgrade';" not in frontend_block`）。
+后果 compose 的注释里写着：
+
+> forcing "Connection: upgrade" on those requests makes nginx treat the upstream
+> response as an invalid upgrade handshake.
+
+**也就是说：Helm 装出来的那套，每一个前端请求都被当成 WebSocket 升级发给上游，
+无论浏览器有没有要求。** 这不是风格问题，是会出故障的配置。
+
+### 改法
+
+1. Helm ConfigMap 补上 `map $http_upgrade $connection_upgrade`（与另外两份逐字相同，
+   位置也放在 `forwarded_proto` 那个 map 之后），
+   前端 location 改成 `$connection_upgrade`。
+2. 四条性质接到 wave 181 建的**共享发现**上，并给这份文件加一条形状断言
+   ——**单跑它也自证扫全了**（这正是 wave 181 抓到自己的那个坑）。
+
+### 顺带把这一轮量到的**边界**也钉住
+
+wave 181 量到「Helm chart 里一个 `vue` 字都没有」，当时判为**诚实的边界**、不动。
+但 `AGENTS.md` 把双前端拓扑写成**无条件**的一句话，读者会以为 K8s 那套也有 Vue。
+所以：AGENTS.md 那句加上限定（「那是 Docker Compose 的拓扑；`deploy/` 下的 Helm chart
+只发 React」），并配一条**双向**守卫——
+chart 里出现 `vue` 会红（提示先把 ingress 契约覆盖上），AGENTS.md 里那句限定被删掉也会红。
+**两张表恰好划分全集**，不是一句只能靠人记的话。
+
+### 负向验证
+
+- Helm 改回写死 `'upgrade'` → 红（**这就是修复前的状态**）。
+- 删掉新加的 `map` → 红。
+- 发现范围缩到只有 `docker/` → **形状断言红**（单跑这一份也抓得住）。
+- chart 里放一份提到 `vue` 的文件 → 边界守卫红。
+- 删掉 AGENTS.md 那句限定 → 同一条守卫红。
+
+> ⚠ **收尾时被另一条守卫打红了一次，记下来**：`AGENTS.md` 有 **12288 字节的软预算**
+> （`test_agent_guidance_check.py`——它每次都进每个 agent 的上下文，所以有预算）。
+> 我加的那几行把它顶到 **12388**。**没有去抬预算**（那是拆守卫），
+> 而是把话压短到 40 字节余量以内。**下一轮要动 AGENTS.md 的话先看这个余量。**
+
+- 门禁：`backend make lint` / `ruff format --check` 全过；
+  后端整套 **11362 passed / 72 skipped，exit 0**。
+  只动了 `backend/tests/`、`deploy/` 与 `AGENTS.md`，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 181）做了什么：**「这份 nginx 配置维护在三处」是明写的规则，而压缩守卫只扫了两处**
 
