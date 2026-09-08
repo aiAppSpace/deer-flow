@@ -73,7 +73,11 @@ export default function ChatPage() {
   const [isWelcomeMode, setIsWelcomeMode] = useState(isNewThread);
   const [settings, setSettings] = useThreadSettings(threadId);
   const [localSettings, setLocalSettings] = useLocalSettings();
-  const { enabled: browserControlEnabled } = useBrowserControlEnabled();
+  // `browserEnabled` below already requires `!isMock`; don't fetch what a
+  // showcase page can never use.
+  const { enabled: browserControlEnabled } = useBrowserControlEnabled({
+    enabled: !isMock,
+  });
   const { tokenUsageEnabled } = useModels();
   const branchThread = useBranchThread();
   const mountedRef = useRef(false);

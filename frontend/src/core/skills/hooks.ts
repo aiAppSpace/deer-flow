@@ -4,10 +4,19 @@ import { enableSkill, SkillRequestError } from "./api";
 
 import { loadSkills } from ".";
 
-export function useSkills() {
+/*
+ * `enabled` so a public showcase page can opt out. `/showcase/<id>` renders the
+ * same ChatPage, and `useThreadChat` already resolves `isMock` from that route
+ * prefix -- but these queries were never gated on it, so an anonymous visitor
+ * to a shared read-only conversation still triggered the workspace API calls.
+ * Measured by the parity harness on 2026-09-09: four requests React made on
+ * that screen that the Vue app made none of.
+ */
+export function useSkills(options?: { enabled?: boolean }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["skills"],
     queryFn: () => loadSkills(),
+    enabled: options?.enabled ?? true,
     retry: (count, err) => !(err instanceof SkillRequestError) && count < 3,
   });
   return { skills: data ?? [], isLoading, error };

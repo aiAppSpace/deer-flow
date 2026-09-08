@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 188，2026-09-09）
+## 当前状态（截至 wave 189，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,57 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 189）做了什么：**公开分享页上，React 替一个匿名访客发了四条工作区请求**
+
+wave 188 新开的路由棘轮有 4 条待做。这一轮关掉两条，并把另外两条的挡路理由从**猜的**换成**实测的**。
+
+### `/login` 与 `/setup`：挡路的查清了，是构建期的事
+
+探针实测（两个应用同时）：**关掉鉴权时，两边都把 `/login` 和 `/setup` 直接
+`replace` 到 `/workspace/chats/new`**——行为一致，但取样面到不了那两屏。
+而取样面统一以 `DEER_FLOW_AUTH_DISABLED=1` 构建，
+**auth 模式是构建期决定的**（`playwright.auth.config.ts` 文件头原话：
+「一个 preview 只能是一种」）。所以要取样它们，得为两个应用**各起一份开鉴权的 preview**
+——那是一整套基础设施，不是写一条场景。理由已按实测改写，**不再是猜测**。
+
+### `/showcase/[thread_id]`：挡路的理由本身就是猜的，实测一跑就通
+
+原来写的是「需要一个可公开读的 thread 夹具」。**实测**：两个应用各自把 demo 线程的静态夹具
+签在自己的 `public/` 里，**这一屏不打 Gateway、也不需要鉴权**，两边都直接 200，
+标题相同、正文长度**都是 4661 字符**、按钮列表逐条一致。
+
+于是接进取样面（`showcase-public-thread`），照出 **10 行**：
+
+| 行 | 内容 | 判 |
+| --- | --- | --- |
+| ①–⑧ | `requestsOnlyReact` ×4 ×两语言：`GET /api/features`、`/api/skills`、`/api/suggestions/config`、`/api/threads/«generated»/uploads/limits` | **React 错，已修** |
+| ⑨⑩ | `JPG file` vs `JPG 文件` | 已判过的**「上游写死英文」**那一类（第 4 条账），**接受** |
+
+### ①–⑧ 是真缺陷：一个匿名访客打开分享页，React 替他发了四条工作区请求
+
+Vue 一条都不发。**乍看要给 `ChatPage` 贯穿一个 demo 模式——那是大动**（用户明确说
+「React 不要大动」）。**实测发现不用**：`use-thread-chat.ts:123` 里
+**`isMock` 本来就靠 `/showcase/` 路径前缀判出来了**，`chat-page.tsx:277` 自己也在用
+`!isMock`——那四条查询只是**没挂这个已有的门控**。
+
+修法因此是小改、不引入任何新概念：四个 hook 各加一个可选 `enabled`
+（React Query 的标准写法，这个仓里到处在用），四处调用点传 `!isMock`。
+
+**验证**：重跑取样，**那 8 行全部归零**，可访问性树一行没变。
+台账 **216 → 208**，取样点 93 → 95。
+
+### 一条边界记进记忆
+
+用户这一轮给了界：**「React 不要大动」+「改bug可以」**。
+判据不是「改几行」，是「**有没有引入新概念**」——已写成
+`deerflow-react-no-big-changes` 并挂进索引，与 `deerflow-fork-boundary` 互为两半。
+
+- 门禁：React `pnpm check` 0 / `pnpm test` **1050 passed** / `pnpm test:e2e` **148 passed**；
+  Vue `make verify` **274 files / 2242 tests**、`e2e-parity` **102 条**、`e2e-mock` 全过。
+  **动了 `frontend/src`**（第二十六轮），marker 另起 chore 推。
+
+---
 
 ## 上一轮（wave 188）做了什么：**棘轮说「满覆盖」，而 9 条路由从没被取样过——规则不允许它们进来**
 

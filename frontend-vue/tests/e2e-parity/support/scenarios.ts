@@ -938,6 +938,33 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     加一颗继续键，填完之后才换成引导 composer。取样停在名字步——
     引导 composer 那一半要发一条真实消息，属于另一条场景。
   */
+  /*
+    **公开 showcase 那一屏第一次进取样面**（wave 189）。
+
+    它一直在外面的理由此前写的是「需要一个可公开读的 thread 夹具」——**那是猜的**。
+    实测：两个应用各自把 demo 线程的静态夹具签在自己的 `public/` 里
+    （`public/demo/threads/<id>` 与 `public/images/<id>.jpg`），
+    **这一屏不打 Gateway、也不需要鉴权**，两边都直接 200，标题相同、
+    正文长度都是 4661 字符、按钮列表逐条一致。
+
+    线程 id 取 allowlist 的第一条（`shared/showcase.ts` 的 `DEMO_THREAD_IDS`）。
+    **不在这里重复那份名单**——写死一条就够，名单本身另有守卫。
+    `backend: "mock"` 仍然要给：这一屏虽然不取数据，但页面上的
+    features/models 之类的常规查询照样会发，两边必须看到同一份回答。
+  */
+  {
+    id: "showcase-public-thread",
+    title: "公开 showcase 的只读会话",
+    backend: "mock",
+    path: "/showcase/21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
+    settle: [
+      {
+        kind: "visible",
+        target: { selector: "[data-testid='main-message-list']" },
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
   {
     id: "agent-create-name-step",
     title: "建 agent 的名字步",

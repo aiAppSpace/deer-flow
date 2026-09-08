@@ -289,6 +289,36 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "showcase-public-thread/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "showcase-public-thread/desktop/light/zh-CN": {
+      "ariaOnlyReact": [
+        "- text: doraemon-moe-comic.jpg JPG file"
+      ],
+      "ariaOnlyVue": [
+        "- text: doraemon-moe-comic.jpg JPG 文件"
+      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
     "agent-create-name-step/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],

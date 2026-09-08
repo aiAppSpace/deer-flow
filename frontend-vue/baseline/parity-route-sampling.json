@@ -26,15 +26,11 @@
   "pending": [
     {
       "route": "/login",
-      "reason": "每个用户看到的第一屏，两边都有，却从没被取样过。挡路的是取样面统一以 DEER_FLOW_AUTH_DISABLED=1 启动，需要先量清楚这一屏在关掉鉴权时是否仍可达、以及是否会立刻跳走。"
+      "reason": "每个用户看到的第一屏，两边都有，却从没被取样过。挡路的**已实测清楚**：取样面统一以 DEER_FLOW_AUTH_DISABLED=1 构建，这一模式下两个应用都把 /login 直接 replace 到 /workspace/chats/new（wave 189 实测，两边一致）。auth 模式是**构建期**决定的（见 playwright.auth.config.ts 的文件头），所以要取样它得为两个应用各起一份开鉴权的 preview——那是一整套基础设施，不是写一条场景。"
     },
     {
       "route": "/setup",
-      "reason": "首次安装向导，两边都有。挡路的与 /login 同源（鉴权关闭下的可达性），另外它的内容取决于后端的 setup 状态，需要一份让它停在向导上的夹具。"
-    },
-    {
-      "route": "/showcase/[thread_id]",
-      "reason": "分享出去的只读会话视图，两边都有。挡路的是它需要一个已存在且可公开读的 thread 夹具，回放 Gateway 目前的种子数据里没有这样一条。"
+      "reason": "首次安装向导，两边都有。挡路的与 /login 同一条且同样已实测：关掉鉴权时两个应用都把 /setup replace 到 /workspace/chats/new（wave 189 实测）。同样需要开鉴权的第二套 preview。"
     },
     {
       "route": "/auth/callback",

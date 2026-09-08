@@ -361,8 +361,15 @@ export function InputBox({
   const sidecar = useMaybeSidecar();
   const attachmentParts = attachments.files;
   const removeAttachment = attachments.remove;
-  const { skills, isLoading: skillsLoading } = useSkills();
-  const { data: uploadLimits } = useUploadLimits(threadId);
+  // A read-only showcase thread has no composer actions to configure; see the
+  // note on each hook.
+  const workspaceQueriesEnabled = isMock !== true;
+  const { skills, isLoading: skillsLoading } = useSkills({
+    enabled: workspaceQueriesEnabled,
+  });
+  const { data: uploadLimits } = useUploadLimits(threadId, {
+    enabled: workspaceQueriesEnabled,
+  });
   const promptRootRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const inlineSkillTextRef = useRef<HTMLSpanElement | null>(null);
@@ -398,7 +405,9 @@ export function InputBox({
   const draftSaveGenerationRef = useRef(0);
 
   const [followups, setFollowups] = useState<string[]>([]);
-  const { data: suggestionsConfig } = useSuggestionsConfig();
+  const { data: suggestionsConfig } = useSuggestionsConfig({
+    enabled: workspaceQueriesEnabled,
+  });
   const suggestionsConfigLoaded = suggestionsConfig !== undefined;
   const suggestionsEnabled = suggestionsConfig?.enabled;
   const maxFollowupSuggestions =
