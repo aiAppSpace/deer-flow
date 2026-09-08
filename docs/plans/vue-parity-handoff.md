@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 170，2026-09-08）
+## 当前状态（截至 wave 171，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -443,6 +443,80 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 171）做了什么：**React 容器答了十小时之后开始 500——镜像里装的是 macOS 的原生二进制**
+
+wave 170 收尾时例行检查服务，发现 `http://localhost:2026` **120 秒都不返回**
+（Vue 与 Gateway 都正常）。
+
+### 一路量下来
+
+```
+nginx 日志          GET / 499        ← 是我的 curl 自己超时断开，不是服务返回错误
+frontend 容器日志   Compaction failed: Another write batch or compaction is already active
+                    （无限刷屏 —— Turbopack 持久化缓存卡死）
+重启容器之后        GET / 500
+                    Error: Cannot find module '../lightningcss.linux-arm64-musl.node'
+```
+
+`lightningcss` 是 Tailwind v4 用的**原生二进制**。容器是 **Alpine/arm64**，
+需要 `lightningcss-linux-arm64-musl`；而它 `node_modules` 里装的是
+**`lightningcss-darwin-arm64`——macOS 的构建**，那一族里没有别的。
+
+**这不是我这几轮改 CSS 改坏的**，几条证据：
+
+- 容器**没有任何挂载**（`docker inspect .Mounts` 为空）——`node_modules` 烤在镜像层里。
+  往宿主机 `node_modules` 里放标记文件，容器里看不到。
+- 容器 `.pnpm` **1087 个条目，与 macOS 宿主机同数**；那个包目录的时间戳是 **8 月 4 日**，
+  比 10 小时前那次 `--build` 早一个月 → **Docker 复用了缓存的 `dependencies` 层**
+  （它的输入 `package.json` / `pnpm-lock.yaml` 一直没变）。
+- **锁文件里是有 `lightningcss-linux-arm64-musl` 的**（`pnpm-lock.yaml:4270`），
+  所以不是锁文件的问题。
+
+**为什么藏了十小时**：那个原生模块只在 Tailwind **冷编译** `globals.css` 时才加载。
+dev server 的编译缓存把之前所有请求都答掉了——**直到容器重启**。
+
+### 修法
+
+立即恢复：`docker compose build --no-cache frontend` + `up -d --force-recreate`。
+重建后容器里是 `lightningcss-linux-arm64-musl@1.30.2`，React 200（85ms）。
+
+**durable 的那一半**：新增 `docker/node-entrypoint.sh`，两个前端容器都从它启动。
+它在起 dev server 之前扫一遍 `node_modules/.pnpm`，
+**发现 `*-darwin-*` / `*-win32-*` 平台包就拒绝启动**，并打出确切修法。
+
+**为什么是「拒绝启动」而不是「就地自愈」**——与后端 `.venv` 那条正好相反，
+两条的判据都写在各自脚本头里：
+
+| | 后端 `.venv`（`3ec1f496`） | 前端 `node_modules`（本轮） |
+| --- | --- | --- |
+| 住在哪 | **命名卷**，从镜像只填充一次 | **镜像层** |
+| 自愈行不行 | 行，而且只能这样——卷永远不自己纠正 | **不行**：下次 `up --build` 就冲掉，还会掩盖坏镜像 |
+| 所以做法 | 清空 `.venv` 就地重建 | **拒绝启动 + 给出 `--no-cache` 指引** |
+
+### 两条现成守卫响了，而其中一条**比它自己的意图严**
+
+- `test_agents_md_topology` 与 `test_dual_frontend_production_ingress` 的三条：
+  它们用**子串**匹配钉住 `command`，我改成 YAML 列表就红了。
+  钉的意图没变，**换成字符串形式**即可，一行不用动它们。
+- `test_development_compose_uses_one_watch_path_for_both_frontends`
+  断言 `"volumes" not in react`——**意图是「源码走 Compose Watch，别 bind-mount 源码」**
+  （bind-mount 源码正是那两条轮询监听环境变量存在的原因），
+  但我加的是一个**只读单文件**脚本挂载，gateway 一直就是这么挂 `dev-entrypoint.sh` 的。
+  **没有给它加豁免**（坑 180），而是把断言改成表达意图本身：
+  挂载可以有，但必须只读、必须是单个 `.sh`、不许指向仓库里的应用目录。
+  两次变异验过：把源码 bind-mount 进去→红；把脚本挂载改成可写→红。
+
+### 负向验证
+
+平台自查 4 次（本平台包 ok / darwin 红 / win32 红 / 连 `.pnpm` 都没有也红），
+接线 4 次（去掉 darwin 分支 / 让空目录算 ok / 把 command 改回裸 `pnpm run dev` /
+从报错里拿掉 `--no-cache` 指引），各红一条。
+另在**真容器里**喂一棵坏树，脚本 exit 1 并指名那个包。
+
+后端整套 **11352 passed / 72 skipped，exit 0**。
+
+---
 
 ## 上一轮（wave 170）做了什么：**wave 167 那张缺口表的最后一条：👋 不会挥手**
 

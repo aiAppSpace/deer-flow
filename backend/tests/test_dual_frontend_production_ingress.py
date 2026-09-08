@@ -114,8 +114,19 @@ def test_development_compose_uses_one_watch_path_for_both_frontends() -> None:
     react = services["frontend"]
     vue = services["frontend-vue"]
 
-    assert "volumes" not in react
-    assert "volumes" not in vue
+    # 规则是「源码走 Compose Watch，不要 bind-mount 进容器」——bind-mount 源码正是
+    # 下面那两条环境变量（轮询式文件监听）存在的原因。**但「一个 volumes 都不许有」
+    # 比这条意图严**：wave 171 起两个前端各挂一个**只读的单文件**启动脚本
+    # （docker/node-entrypoint.sh，做平台自查），gateway 一直就是这么挂 dev-entrypoint.sh 的。
+    # 所以断言改成表达意图本身：挂载可以有，但不许挂应用源码。
+    for service_name, spec in (("frontend", react), ("frontend-vue", vue)):
+        for mount in spec.get("volumes") or []:
+            assert isinstance(mount, str), (service_name, mount)
+            source, _, rest = mount.partition(":")
+            assert mount.endswith(":ro"), f"{service_name} 的挂载必须只读，否则容器能写回宿主机源码：{mount}"
+            assert source.endswith(".sh"), f"{service_name} 只能挂单个启动脚本；源码要走 Compose Watch，bind-mount 源码会把轮询式监听重新拖回来：{mount}"
+            assert not source.startswith("../"), f"{service_name} 的挂载不许指向仓库里的应用目录：{mount}"
+            assert rest, (service_name, mount)
     assert "WATCHPACK_POLLING=true" not in react["environment"]
     assert all("CHOKIDAR" not in item for item in vue["environment"])
     assert react["develop"]["watch"]

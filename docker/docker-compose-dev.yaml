@@ -155,7 +155,16 @@ services:
         PNPM_STORE_PATH: ${PNPM_STORE_PATH:-/root/.local/share/pnpm/store}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: deer-flow-frontend
-    command: pnpm run dev
+    # Startup logic lives in docker/node-entrypoint.sh — it refuses to start a
+    # dev server whose node_modules was resolved for another platform. The
+    # incident that motivated it (2026-09-08) is written up in that file: the
+    # image carried `lightningcss-darwin-arm64` on an Alpine/arm64 container,
+    # from a `dependencies` layer Docker had cached a month earlier, and it
+    # surfaced ten hours later as a 500 the first time Tailwind compiled
+    # `globals.css` from cold. Mounted read-only, like the gateway's.
+    command: sh /usr/local/bin/node-entrypoint.sh pnpm run dev
+    volumes:
+      - ./node-entrypoint.sh:/usr/local/bin/node-entrypoint.sh:ro
     working_dir: /app/frontend
     environment:
       - NODE_ENV=development
@@ -192,7 +201,10 @@ services:
       args:
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: deer-flow-frontend-vue
-    command: pnpm exec nuxt dev --host 0.0.0.0 --port 3000
+    # Same platform guard as the React container; see docker/node-entrypoint.sh.
+    command: sh /usr/local/bin/node-entrypoint.sh pnpm exec nuxt dev --host 0.0.0.0 --port 3000
+    volumes:
+      - ./node-entrypoint.sh:/usr/local/bin/node-entrypoint.sh:ro
     working_dir: /workspace/frontend-vue
     environment:
       - NODE_ENV=development
