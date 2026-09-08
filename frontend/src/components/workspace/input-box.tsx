@@ -1318,17 +1318,22 @@ export function InputBox({
       ? matches.filter(({ kind }) => kind === "skill")
       : matches;
   }, [builtinSlashCommands, selectedSlashSkill, skills, slashSkillQuery]);
+  const isComposerDisabled = disabled === true;
+  const isMockThread = isMock === true;
+  const composerLocked = isComposerDisabled || polishingInput;
   // A selected skill does not close the catalog: `/` reopens it so a skill can
   // be found by browsing and swapped without first clearing the chip.
+  //
+  // Gated on the whole lock rather than `disabled` alone. While the composer
+  // was disabled the browser blurred the textarea, so `textareaFocused` closed
+  // this on its own; a read-only composer keeps focus, so the lock has to say
+  // so explicitly.
   const showSkillSuggestions =
-    !disabled &&
+    !composerLocked &&
     textareaFocused &&
     slashSkillQuery !== null &&
     skillSuggestions.length > 0 &&
     dismissedSkillSuggestionValue !== textInput.value;
-  const isComposerDisabled = disabled === true;
-  const isMockThread = isMock === true;
-  const composerLocked = isComposerDisabled || polishingInput;
   /*
    * Menu group headings must name their group. Radix's DropdownMenuLabel is a
    * plain div, so without this wiring the group is announced unnamed and the
@@ -1811,6 +1816,13 @@ export function InputBox({
 
   const handlePromptTextareaKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
+      // A disabled textarea receives no key events at all; a read-only one
+      // does, so the lock has to drop them here. Enter is not handled in this
+      // chain — PromptInputTextarea checks the submit button's disabled state
+      // before it calls requestSubmit, and that button is still `composerLocked`.
+      if (composerLocked) {
+        return;
+      }
       handleSkillSuggestionKeyDown(event);
       if (event.defaultPrevented) {
         return;
@@ -1822,6 +1834,7 @@ export function InputBox({
       handlePromptHistoryKeyDown(event);
     },
     [
+      composerLocked,
       handlePromptHistoryKeyDown,
       handleSelectedSlashSkillKeyDown,
       handleSkillSuggestionKeyDown,
@@ -2308,7 +2321,18 @@ export function InputBox({
           ) : (
             <PromptInputTextarea
               className="min-h-6! w-full min-w-0 p-0! leading-6!"
-              disabled={composerLocked}
+              /*
+                Read-only, not disabled. Disabling the element the caller is
+                typing in makes the browser blur it, and nothing puts focus
+                back: a keyboard user who sends a message lands on `<body>` and
+                has to tab all the way in again. `readOnly` blocks editing while
+                keeping focus and the tab order, and `aria-disabled` still
+                announces the composer as unavailable. Every path that used to
+                rely on a disabled element swallowing events now checks
+                `composerLocked` itself.
+              */
+              readOnly={composerLocked}
+              aria-disabled={composerLocked || undefined}
               placeholder={t.inputBox.placeholder}
               autoFocus={autoFocus}
               defaultValue={initialValue}

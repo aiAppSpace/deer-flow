@@ -109,8 +109,13 @@ function FormFieldInput({
     return (
       <Textarea
         id={controlId}
+        aria-disabled={disabled || undefined}
         className="min-h-20 resize-y text-sm"
-        disabled={disabled}
+        /*
+          Read-only, not disabled — see input-box.tsx. Disabling the control the
+          caller is typing in blurs it, and nothing puts focus back.
+        */
+        readOnly={disabled}
         placeholder={field.placeholder}
         value={stringValue}
         onChange={(event) => onChange(event.target.value)}
@@ -322,6 +327,12 @@ export function HumanInputCard({
   };
 
   const handleTextKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // The textarea is read-only rather than disabled while a response is in
+    // flight, so it still receives key events; the submit shortcut has to be
+    // dropped here instead of relying on a disabled element swallowing it.
+    if (isDisabled) {
+      return;
+    }
     if (shouldSubmitHumanInputTextOnKeyDown(event, isComposing)) {
       event.preventDefault();
       const value = text.trim();
@@ -529,9 +540,10 @@ export function HumanInputCard({
                 id={textInputId}
                 aria-invalid={Boolean(error)}
                 aria-describedby={error ? `${textInputId}-error` : undefined}
+                aria-disabled={isDisabled || undefined}
                 className="min-h-20 resize-y text-sm"
-                disabled={isDisabled}
                 placeholder={t.humanInput.otherPlaceholder}
+                readOnly={isDisabled}
                 value={text}
                 onChange={(event) => {
                   setText(event.target.value);

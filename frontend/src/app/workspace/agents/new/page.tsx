@@ -448,8 +448,13 @@ export default function NewAgentPage() {
                   >
                     <PromptInputTextarea
                       autoFocus
+                      /*
+                        Read-only, not disabled — see input-box.tsx for the measurement.
+                        Disabling a focused control blurs it and nothing restores focus.
+                      */
+                      aria-disabled={thread.isLoading || undefined}
                       placeholder={t.agents.createPageSubtitle}
-                      disabled={thread.isLoading}
+                      readOnly={thread.isLoading}
                     />
                     <PromptInputFooter className="justify-end">
                       <PromptInputSubmit disabled={thread.isLoading} />

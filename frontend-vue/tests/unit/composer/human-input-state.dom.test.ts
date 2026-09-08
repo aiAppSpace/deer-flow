@@ -158,7 +158,8 @@ describe("Human Input state machine", () => {
       本仓此前一有 answered 就把整个卡片体换成一行文字。
     */
     const answeredTextarea = wrapper.get("textarea");
-    expect(answeredTextarea.attributes("disabled")).toBeDefined();
+    expect(answeredTextarea.attributes("readonly")).toBeDefined();
+    expect(answeredTextarea.attributes("aria-disabled")).toBe("true");
     expect((answeredTextarea.element as HTMLTextAreaElement).value).toBe("");
   });
 
@@ -211,7 +212,8 @@ describe("Human Input state machine", () => {
 
     expect(card.props("readOnly")).toBe(true);
     expect(card.text()).toContain(enUS.humanInput.readOnly);
-    expect(card.get("textarea").attributes("disabled")).toBeDefined();
+    expect(card.get("textarea").attributes("readonly")).toBeDefined();
+    expect(card.get("textarea").attributes("aria-disabled")).toBe("true");
   });
 
   it("does not let a hidden control message close an open request", async () => {
@@ -387,7 +389,8 @@ describe("Human Input state machine", () => {
       本仓此前一有 answered 就把整个卡片体换成一行文字。
     */
     const answeredTextarea = wrapper.get("textarea");
-    expect(answeredTextarea.attributes("disabled")).toBeDefined();
+    expect(answeredTextarea.attributes("readonly")).toBeDefined();
+    expect(answeredTextarea.attributes("aria-disabled")).toBe("true");
     expect((answeredTextarea.element as HTMLTextAreaElement).value).toBe("");
   });
 });

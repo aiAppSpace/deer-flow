@@ -196,9 +196,7 @@
       ],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=body Vue=textarea \"How can I assist you today?\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],

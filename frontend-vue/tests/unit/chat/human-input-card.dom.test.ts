@@ -356,7 +356,10 @@ describe("HumanInputCard", () => {
     const wrapper = mountCard(freeText, { active: false, readOnly: true });
 
     expect(wrapper.text()).toContain(enUS.humanInput.readOnly);
-    expect(wrapper.get("textarea").attributes("disabled")).toBeDefined();
+    // readonly，不是 disabled：锁住一个正被聚焦的控件会永久夺走焦点，
+    // 判据与守卫 tests/guards/textarea-lock.test.ts 同一条。
+    expect(wrapper.get("textarea").attributes("readonly")).toBeDefined();
+    expect(wrapper.get("textarea").attributes("aria-disabled")).toBe("true");
     expect(
       wrapper.get("button[type='submit']").attributes("disabled"),
     ).toBeDefined();

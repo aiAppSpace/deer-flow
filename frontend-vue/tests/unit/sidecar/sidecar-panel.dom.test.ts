@@ -160,9 +160,13 @@ describe("SidecarPanel session adapter", () => {
     const { wrapper } = mountPanel(session);
 
     expect(wrapper.get("form").attributes("aria-busy")).toBe("true");
-    expect(wrapper.get("textarea[name='message']").attributes("disabled")).toBe(
+    // readonly，不是 disabled（见 tests/guards/textarea-lock.test.ts）。
+    expect(wrapper.get("textarea[name='message']").attributes("readonly")).toBe(
       "",
     );
+    expect(
+      wrapper.get("textarea[name='message']").attributes("aria-disabled"),
+    ).toBe("true");
     expect(wrapper.get("button[type='submit']").attributes("disabled")).toBe(
       "",
     );
@@ -182,9 +186,13 @@ describe("SidecarPanel session adapter", () => {
     session.stream.isStreaming.value = true;
     await nextTick();
     expect(wrapper.get("form").attributes("aria-busy")).toBe("true");
-    expect(wrapper.get("textarea[name='message']").attributes("disabled")).toBe(
+    // readonly，不是 disabled（见 tests/guards/textarea-lock.test.ts）。
+    expect(wrapper.get("textarea[name='message']").attributes("readonly")).toBe(
       "",
     );
+    expect(
+      wrapper.get("textarea[name='message']").attributes("aria-disabled"),
+    ).toBe("true");
   });
 
   /*

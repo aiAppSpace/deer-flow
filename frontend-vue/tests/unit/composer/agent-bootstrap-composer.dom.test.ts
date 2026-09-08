@@ -68,7 +68,9 @@ describe("agent bootstrap composer", () => {
     });
     const textarea = wrapper.get("textarea");
     const button = wrapper.get("button");
-    expect(textarea.attributes("disabled")).toBeDefined();
+    // 输入框用 readonly（见 tests/guards/textarea-lock.test.ts）；按钮仍是 disabled。
+    expect(textarea.attributes("readonly")).toBeDefined();
+    expect(textarea.attributes("aria-disabled")).toBe("true");
     expect(button.attributes("disabled")).toBeDefined();
     expect(button.attributes("aria-label")).toBe("Submit");
 

@@ -21,8 +21,11 @@
                    `autofocus` 属性只在文档加载阶段的 autofocus candidates 里被处理，
                    对**加载完成之后才插入**的元素基本不生效——本组件正是这一种（用户在
                    名称步骤点「继续」之后 AgentChat 才挂载）。写成属性会静默地不聚焦。
-                   挂载瞬间若正在流式，`disabled` 为真、`.focus()` 按规范是 no-op，
-                   这一点与上游同构（上游那一步同样紧接着就发引导消息）。
+                   **锁住时用 `readonly` 而不是 `disabled`**，与主输入框同一条理由
+                   （wave 178 实测：给正被聚焦的控件置 `disabled`，浏览器当场失焦，
+                   摘掉 `disabled` 也不还回来）。顺带一个结果：挂载瞬间若正在流式，
+                   此前 `disabled` 为真、`.focus()` 按规范是 no-op，现在能聚上了
+                   ——**上游同改，两边仍然同构**。提交的门在 `submit()` 里。
 */
 import { onMounted, ref } from "vue";
 import { ArrowUp } from "lucide-vue-next";
@@ -73,7 +76,8 @@ onMounted(() => textarea.value?.focus());
           rows="1"
           :placeholder="$i18n.t.value.agents.createPageSubtitle"
           class="field-sizing-content max-h-48 min-h-6! w-full min-w-0 resize-none bg-transparent p-0! text-base leading-6! outline-none focus-visible:ring-0 focus-visible:outline-none md:text-sm"
-          :disabled="disabled"
+          :readonly="disabled"
+          :aria-disabled="disabled || undefined"
           @keydown="onKeydown"
           @compositionstart="compositionActive = true"
           @compositionend="compositionActive = false"

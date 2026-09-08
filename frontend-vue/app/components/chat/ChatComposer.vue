@@ -461,10 +461,19 @@ const suggestions = computed<SlashSuggestion[]>(() => {
   「这个会话里别再提示我」。文本一变（继续打字、退格），条件自然不再成立。
 */
 const textareaFocused = ref(false);
+/*
+  上游 input-box.tsx 的 `composerLocked`。此前这三项各自散在模板里
+  （textarea 的 `:disabled`、按钮的 `disabled || polishing`……），
+  而**输入框那一处一定要收成一把锁**：改成 readonly 之后，「锁上时不许做什么」
+  不再由 disabled 属性顺带吞掉事件，必须每一处自己说。
+*/
+const composerLocked = computed(
+  () => props.disabled === true || polishing.value || compactPending.value,
+);
 const dismissedSuggestionValue = ref<string | null>(null);
 const showSuggestions = computed(
   () =>
-    props.disabled !== true &&
+    !composerLocked.value &&
     textareaFocused.value &&
     slashQuery.value !== null &&
     suggestions.value.length > 0 &&
@@ -794,7 +803,7 @@ function applySuggestion(item: SlashSuggestion | undefined) {
 }
 
 async function submit() {
-  if (props.disabled) return;
+  if (composerLocked.value) return;
   /*
     流式输出期间提交要**说一句话**再退出，不是静悄悄什么都不做：上游
     handleSubmit 开头就是 `if (status === "streaming") { toast.info(
@@ -1145,6 +1154,12 @@ function onSuggestionKeydown(event: KeyboardEvent) {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  /*
+    disabled 的 textarea 收不到任何按键，readonly 的收得到，所以锁上时要在这里
+    挡掉——回车那条路也一样，`submit()` 自己也再判一次（两处都判是有意的：
+    这里挡的是历史翻页与斜杠面板，那里挡的是任何别的调用点）。
+  */
+  if (composerLocked.value) return;
   if (isImeComposing(event, compositionActive.value)) return;
   onSuggestionKeydown(event);
   if (event.defaultPrevented) return;
@@ -1512,6 +1527,14 @@ defineExpose({ replaceDraft, offerFollowup });
       控件宣布「不可用」——本仓的语音按钮就是这样：DOM 上是可用的，只是被
       `pointer-events-none` 盖住，读屏器却听到 disabled。
       要说「不可用」，就把 disabled 发给控件本身。
+
+      **输入框是这里唯一的例外，而且例外的理由正好也是「发给控件本身」**：
+      它用 `readonly` + 自己身上的 `aria-disabled`，不用 `disabled`。
+      给一个**正被聚焦**的控件置 `disabled`，浏览器会当场把它失焦
+      （`focusout`，`relatedTarget` 为 null），而摘掉 `disabled` **不会把焦点还回来**
+      ——键盘用户发完一条消息就落在 `<body>` 上，得重新 Tab 回来。
+      `readonly` 挡住编辑、保住焦点、留在 Tab 序里，`aria-disabled` 照样播报不可用。
+      wave 178 在上游实测到这件事：锁只闪了 12ms，焦点却永久丢了。
     -->
     <form
       class="mx-auto w-full"
@@ -1669,7 +1692,8 @@ defineExpose({ replaceDraft, offerFollowup });
             :placeholder="$i18n.t.value.inputBox.placeholder"
             rows="1"
             class="field-sizing-content max-h-48 min-h-6! w-full min-w-0 resize-none bg-transparent p-0! text-base leading-6! outline-none focus-visible:ring-0 focus-visible:outline-none md:text-sm"
-            :disabled="disabled || polishing || compactPending"
+            :readonly="composerLocked"
+            :aria-disabled="composerLocked || undefined"
             @keydown="onKeydown"
             @focus="textareaFocused = true"
             @blur="textareaFocused = false"

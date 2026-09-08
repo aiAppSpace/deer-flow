@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 177，2026-09-08）
+## 当前状态（截至 wave 178，2026-09-08）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,117 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 178）做了什么：**焦点丢了不是「重挂」，是有人给聚焦的控件置了 12ms 的 `disabled`**
+
+wave 175 收 #2 那笔账时带出 9 行新台账，其中三行我自己标了「下一轮验」。这一轮去验。
+
+### 先说我 wave 175 写错的那句
+
+原话：「**假设**是 id 交接那一下 composer 重挂丢了焦点（与 wave 158 修的那处同族）。
+**下一轮验，别直接当结论。**」
+
+**实测把这个假设否掉了。** 在两个应用上各挂一枚探针：给 textarea 打一个 expando 标记、
+挂 `focusin`/`focusout`（连 `relatedTarget` 一起记）、再用 `MutationObserver` 盯着
+它自己和往上八层祖先的属性变化，然后跑场景的那两步（`fill` + `Enter`）。
+
+| 量什么 | React | Vue |
+| ------ | ----- | --- |
+| 打标的那个 textarea 还在不在 | **在**，`removals: []` | 在 |
+| 现在的 textarea 还是同一个吗 | **是**（标记还在） | 是 |
+| focus 事件 | `focusout`，**`relatedTarget: null`** | **一个都没有** |
+| 结束时的 activeElement | `body` | textarea |
+
+**没有重挂。** `relatedTarget` 是 null 的 `focusout` 是「元素被弄成不可交互了」的形状，
+不是「焦点移到别处」。接着盯属性，答案就在读数里：
+
+```
+textarea  disabled  null → ""    t=545ms
+textarea  disabled  ""   → null  t=556ms
+```
+
+**`disabled` 只挂了 11~12 毫秒。** 给一个正被聚焦的控件置 `disabled`，浏览器当场把它失焦；
+**摘掉 `disabled` 不会把焦点还回来**。键盘用户发完一条消息就落在 `<body>` 上。
+
+那 12 毫秒是谁：`chat-page.tsx` 的
+`disabled={... || (!isNewThread && isHistoryLoading)}`。wave 175 把 `useThreadHistory`
+门控成 `enabled: !isMock && !thread.isLoading` 之后，这条查询**恰好在 run 结束那一刻**
+第一次开跑（网络时序对得上：`/api/threads/<id>/messages/page` 542→547，锁 545→556）。
+
+### 但这不是根因，触发条件才是引子
+
+**根因是「用 `disabled` 去锁一个可能正被聚焦的输入框」**。换个触发条件同样会丢焦点。
+于是按同形扫全仓——**扫出来的比 composer 多**：
+
+| | React | Vue |
+| --- | --- | --- |
+| composer 草稿框 | `input-box.tsx`、`agents/new/page.tsx`、`sidecar-panel.tsx` | `ChatComposer.vue`、`AgentBootstrapComposer.vue`、`SidecarPanel.vue` |
+| 其它会被打字的 textarea | `human-input-card.tsx` ×2、`message-list-item.tsx`（编辑消息框） | `HumanInputCard.vue` ×2 |
+| 非 composer 的 textarea（定时任务、记忆设置…） | **一处动态 `disabled` 都没有** | 同 |
+
+**九处，两边同构，零豁免。** 一张「这些可以留着 `disabled`」的表，记的只会是
+「我们决定不修哪些键盘用户」（坑 180）。所以九处全改。
+
+### 改法：`readonly` + `aria-disabled`，不是 `disabled`
+
+`readonly` 挡住编辑、**保住焦点**、留在 Tab 序里；`aria-disabled` 照样播报「不可用」。
+这也是 WAI-ARIA 对「要暂时不可用、又不想丢焦点」的标准答案。
+
+代价要认：**readonly 的 textarea 收得到按键**，此前靠 `disabled` 顺带吞掉的东西现在要自己判。
+逐处补上了：React 的 `handlePromptTextareaKeyDown`（历史翻页、斜杠面板）、
+`handleTextKeyDown`（human-input 的提交快捷键）、编辑框的 Esc / Cmd+Enter；
+Vue 的 `ChatComposer.onKeydown` / `submit()`、`SidecarPanel.onKeydown`、
+`HumanInputCard.handleTextKeyDown`。回车提交那条路 React 本来就查
+`submitButton?.disabled`（按钮仍然是 `disabled`），不用动。
+
+顺带两件小事：两边 `Textarea` primitive 的基类各补
+`aria-disabled:cursor-not-allowed aria-disabled:opacity-50`（**一字不差**，否则基类比对守卫会红），
+锁住时看起来和以前一样；`showSkillSuggestions` / `showSuggestions` 的门控从
+「只看 `disabled`」扩到整把锁——此前是 `disabled` 把 textarea 失焦、
+`textareaFocused` 顺带变假才关掉的，现在焦点不走了，得自己说。
+
+### 负向验证
+
+- **修完再跑一次探针**：React `focus 事件: 无`、`activeElement: textarea`，
+  `readonly`/`aria-disabled` 照常闪一下再摘掉——**锁还在，焦点不丢了**。两边一致。
+- 两份新守卫（`frontend/tests/unit/a11y/textarea-lock.test.ts`、
+  `frontend-vue/tests/guards/textarea-lock.test.ts`）各三条，各三次变异恰好红对应的一条：
+  只加回 `disabled`（红第 2 条）、拿掉 `readonly`（红第 3 条）、扫描根指错目录（红第 1 条）。
+- **剥注释是不是承重的，单独验了一次**：往一份 `.vue` 的注释里塞
+  `<textarea :disabled="composerDisabled" />`，剥注释时绿（正确）、不剥时红（误报）。
+
+> ⚠ **本轮抓到自己一次假绿，记下来**：第一次做「把 readOnly 改回 disabled」这个变异时，
+> 我用 `grep -q "disabled={disabled}"` 确认变异生效——它绿了，我差点写成
+> 「守卫抓不住」。实际上 perl 的替换**根本没落下去**，而那句 grep 命中的是文件里
+> **本来就有的**提交按钮 `<PromptInputSubmit disabled={disabled} />`。
+> **确认变异是否生效，要用 `diff`，不要用 grep 一个可能在别处也出现的字符串。**
+
+### 台账
+
+**211 → 210**，只少一行，正是 #9 里标着「下一轮验」的
+`focus: React=body Vue=textarea`——现在是空数组。合法缩短，`make parity-accept` 直接过。
+
+### #9 另外两条的进展
+
+- **③ `Completed in <1s` 只在 React——根因查清了，而且我 wave 175 的判词说错了一半。**
+  当时写的是「两边都有这条词条，所以是取到的运行时长有没有值的差别，**不是缺功能**」。
+  **是缺功能**：React 在 `message-list.tsx:339` 有一条**客户端兜底计时**——
+  `thread.isLoading` 翻真时记开始时间、翻假时算出秒数存进 `clientDurationsByGroupId`，
+  在后端元数据到位之前先显示；Vue 的 `core/messages/run-duration.ts` 只会把
+  **后端给的** `durationByRunId` 映到组下标上，**没有这条兜底**。
+  这是 Vue 侧的功能缺口，**下一轮补**。
+- **④⑧⑨ `Edit and rerun` 那一组仍然开着。** 这一轮只把差异缩到了具体的项上（**靠读代码，
+  没有实测，别当结论**）：React 的 `canEdit` 比 Vue 多了
+  `!isUploading`、`!branchThread.isPending`、`!hasGoal`、`!isMock` 与
+  `Boolean(onEditAndRegenerateMessage)` 几项（`chat-page.tsx:358`），
+  Vue 那边只有 `interactive !== false && !hasOpenHumanInput && editable?.humanMessage.id === message.id`。
+  **下一轮用同一套探针实测是哪一项在这一刻为真**，再判哪边对。
+
+- 提交：见下方门禁读数那一段。**动了 `frontend/`**（第二十五轮），marker 要另起 chore 推。
+- 门禁：React `pnpm check` EXIT=0、`pnpm test` **1050 passed**、`pnpm test:e2e` **148 passed**；
+  Vue `make verify` **271 files / 2230 tests 全过**、`make e2e-parity` 99 条、`make e2e-mock` **269 + 22 + 15 + 2 + 6 全过**。
+
+---
 
 ## 上一轮（wave 177）做了什么：**自审判成「不是根因」的那一条，重现没拿到，但补上了另一半**
 

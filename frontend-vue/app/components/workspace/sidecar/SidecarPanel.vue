@@ -273,6 +273,11 @@ watch(
 );
 
 function onKeydown(event: KeyboardEvent) {
+  /*
+    输入框锁住时用的是 `readonly` 而不是 `disabled`（理由见模板里那一处），
+    所以按键照样送到这里，得自己挡——此前是 disabled 顺带吞掉的。
+  */
+  if (composerDisabled.value) return;
   if (isImeComposing(event, compositionActive.value)) return;
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
@@ -473,12 +478,19 @@ async function confirmDelete() {
             />
           </div>
           <div data-slot="input-group-body">
+            <!--
+              锁住时 `readonly` + `aria-disabled`，不是 `disabled`：给正被聚焦的控件置
+              `disabled` 会当场失焦、且**不会**还回来（wave 178 在上游实测：锁只闪了
+              12ms，键盘用户发完一条消息就落在 `<body>` 上）。`readonly` 挡住编辑、
+              保住焦点，回车那条路由 onKeydown 自己挡。
+            -->
             <textarea
               v-model="sessionInput"
               name="message"
               data-slot="input-group-control"
               :placeholder="$i18n.t.value.sidecar.placeholder"
-              :disabled="composerDisabled"
+              :readonly="composerDisabled"
+              :aria-disabled="composerDisabled || undefined"
               rows="1"
               class="field-sizing-content max-h-48 min-h-6! w-full min-w-0 resize-none bg-transparent p-0! text-sm leading-6! outline-none focus-visible:ring-0 focus-visible:outline-none"
               @keydown="onKeydown"

@@ -365,7 +365,8 @@ test.describe("Chat workspace", () => {
       .poll(() => polishRequest?.text, { timeout: 10_000 })
       .toBe("summarize report");
     expect(polishRequest?.model_name).toBeUndefined();
-    await expect(textarea).toBeDisabled();
+    await expect(textarea).toHaveAttribute("readonly", "");
+    await expect(textarea).toHaveAttribute("aria-disabled", "true");
     await expect(page.getByText("Polishing input...")).toBeVisible();
 
     finishPolish();
@@ -445,7 +446,8 @@ test.describe("Chat workspace", () => {
     await page.getByTestId("polish-input-button").click();
 
     await expect(page.getByText("Polishing input...")).toBeVisible();
-    await expect(textarea).toBeDisabled();
+    await expect(textarea).toHaveAttribute("readonly", "");
+    await expect(textarea).toHaveAttribute("aria-disabled", "true");
 
     await page.getByTestId("cancel-polish-input-button").click();
 

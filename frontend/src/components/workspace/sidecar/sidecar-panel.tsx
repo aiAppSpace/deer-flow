@@ -626,8 +626,13 @@ export function SidecarPanel({ className }: { className?: string }) {
             <PromptInputBody>
               <PromptInputTextarea
                 className="max-h-36 min-h-16 text-sm"
-                disabled={disabled}
+                /*
+                  Read-only, not disabled — see input-box.tsx for the measurement.
+                  Disabling a focused control blurs it and nothing restores focus.
+                */
+                aria-disabled={disabled || undefined}
                 placeholder={t.sidecar.placeholder}
+                readOnly={disabled}
               />
             </PromptInputBody>
             <PromptInputFooter className="@container flex flex-nowrap gap-2">

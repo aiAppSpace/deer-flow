@@ -215,6 +215,12 @@ function handleTextSubmit() {
 }
 
 function handleTextKeyDown(event: KeyboardEvent) {
+  /*
+    等回复期间输入框是 readonly 而不是 disabled（理由与主输入框同一条：给正被
+    聚焦的控件置 disabled 会当场失焦、且不还回来），所以按键照样送到这里，
+    提交快捷键得自己挡。
+  */
+  if (isDisabled.value) return;
   if (shouldSubmitHumanInputTextOnKeyDown(event, compositionActive.value)) {
     event.preventDefault();
     handleTextSubmit();
@@ -349,7 +355,8 @@ watch(
                 v-if="field.type === 'textarea'"
                 :id="controlId(index)"
                 class="min-h-20 resize-y text-sm"
-                :disabled="isDisabled"
+                :readonly="isDisabled"
+                :aria-disabled="isDisabled || undefined"
                 :placeholder="field.placeholder"
                 :model-value="stringFieldValue(field.name)"
                 :aria-required="field.required || undefined"
@@ -531,7 +538,8 @@ watch(
             :aria-invalid="Boolean(error)"
             :aria-describedby="error ? textErrorId : undefined"
             class="min-h-20 resize-y text-sm"
-            :disabled="isDisabled"
+            :readonly="isDisabled"
+            :aria-disabled="isDisabled || undefined"
             :placeholder="$i18n.t.value.humanInput.otherPlaceholder"
             :model-value="text"
             @update:model-value="handleTextInput"

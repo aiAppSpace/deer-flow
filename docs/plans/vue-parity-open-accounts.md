@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 177，2026-09-08）
+# React → Vue 平替：挂账总清单（截至 wave 178，2026-09-08）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -47,6 +47,21 @@
 ---
 
 ## 一、真正还开着的（4 条）
+
+> **wave 178：第 9 条里三条「下一轮验」的第一条结清，台账 211 → 210。**
+> ⑤`focus: React=body Vue=textarea` 的**根因不是我猜的那个**——不是 composer 重挂
+> （打标的 textarea 一直是同一个节点、`removals` 为空），是 React 在 run 结束那一刻给
+> **正被聚焦**的 textarea 置了 **11~12ms 的 `disabled`**；浏览器当场失焦，摘掉也不还。
+> 按同形扫全仓，两边各三处 composer + 其它会被打字的 textarea 共九处，**全部**改成
+> `readonly` + `aria-disabled`，并各配一份零豁免守卫。那一行台账已归零。
+>
+> **③ 的判词要订正**：wave 175 写的「不是缺功能」是错的。React 有一条**客户端兜底计时**
+> （`message-list.tsx:339`），Vue 的 `core/messages/run-duration.ts` 只认后端给的时长，
+> **没有兜底**。是功能缺口，**下一轮补**。
+>
+> **④⑧⑨ 仍开着**，这一轮只把候选缩到 React `canEdit` 比 Vue 多出的那几项
+> （`chat-page.tsx:358`）——**靠读代码缩的，没实测，下一轮拿探针量。**
+
 
 > **wave 177**：**不动台账**。这一轮修的是 Docker 构建期的一道断言（自审里那唯一一条
 > 「不是根因」的另一半），与对照台账无关。**自审结论见

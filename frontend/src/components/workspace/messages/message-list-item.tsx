@@ -510,13 +510,19 @@ function MessageContent_({
           <div className="bg-background border-border flex w-full min-w-0 flex-col gap-2 rounded-lg border p-2 shadow-sm">
             <Textarea
               autoFocus
+              aria-disabled={editState.disabled || undefined}
               className="min-h-24 resize-y"
-              disabled={editState.disabled}
+              readOnly={editState.disabled}
               value={editState.draft}
               onChange={(event) =>
                 editState.onDraftChange(event.currentTarget.value)
               }
               onKeyDown={(event) => {
+                // Read-only, not disabled (see input-box.tsx), so key events
+                // still arrive while the edit is being submitted.
+                if (editState.disabled) {
+                  return;
+                }
                 if (event.key === "Escape") {
                   event.preventDefault();
                   editState.onCancel();
