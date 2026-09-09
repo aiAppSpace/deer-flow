@@ -7,6 +7,7 @@
 */
 
 import { expect, test } from "@playwright/test";
+import { settledBox } from "../support/settled-box";
 
 test("@splitpanes one group supports three right panes, declarative collapse and release event", async ({
   page,
@@ -45,17 +46,19 @@ test("@splitpanes one group supports three right panes, declarative collapse and
     .toBe(true);
 
   const splitter = page.locator(".splitpanes__splitter").first();
-  // Restore animates the layout back. hover() waits for actionability, which
-  // includes the element having stopped moving; a box read mid-transition puts
-  // mouse.down() beside the splitter and no resize event ever fires.
-  await splitter.hover();
-  const box = await splitter.boundingBox();
-  if (!box) throw new Error("splitter is not visible");
+  /*
+    Restore animates the layout back, so the box has to be read **after** it
+    stops moving.
+
+    这里原来写的是「`hover()` 的可操作性等待包含『元素已停止移动』」——
+    **wave 198 证伪了这句话**：那条等待判的是**相邻两个动画帧**的盒子相同，
+    整套并行跑时渲染帧会被饿着，两次 rAF 之间可能没有重新排版，于是提前判稳。
+    改用按真实时间间隔判稳的 `settledBox`，理由与实测读数见它的文件头。
+  */
+  const box = await settledBox(splitter, "splitter");
   const resizedBefore = Number(
     await page.locator("[data-resized-count]").textContent(),
   );
-  // hover() 放光标用的是它自己那一次观测，上面的 box 是另一次；两次之间布局再动
-  // 一下，mousedown 就按在旧位置上。按下之前先挪到**这次量到的**坐标。
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 5 });

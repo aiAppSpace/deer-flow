@@ -1,5 +1,6 @@
 import { type Locator, type Page, expect, test } from "@playwright/test";
 
+import { settledBox } from "../support/settled-box";
 import { mockLangGraphAPI } from "./utils/mock-api";
 
 const ARTIFACT_PATH = "/artifact-fixtures/report.html";
@@ -44,23 +45,33 @@ async function panelWidth(panel: Locator): Promise<number> {
 }
 
 async function dragPanel(handle: Locator, ...deltas: number[]): Promise<void> {
-  await handle.hover();
-  const box = await handle.boundingBox();
-  expect(box).not.toBeNull();
-  const x = box!.x + box!.width / 2;
-  const y = box!.y + box!.height / 2;
-  const mouse = handle.page().mouse;
-  // 【坑】`hover()` 把光标放到**它当时**量到的中心，`boundingBox()` 是**之后**
-  // 另一次观测。两次之间只要布局再动一下（面板刚打开时会），mousedown 就按在
-  // 上一位置上——按空了整个拖拽什么都不发生，报出来是「面板没关」这种离得很远的
-  // 断言。`tests/e2e-infra/splitpanes.spec.ts` 的注释里记的是同一件事。
-  // 所以按下之前先把光标挪到**这次量到的**坐标上。
+  const page = handle.page();
+  // 停稳了才量得准——为什么、以及量到过多大的代价，见 settled-box.ts 的文件头。
+  const box = await settledBox(handle, "分隔条");
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  const mouse = page.mouse;
   await mouse.move(x, y);
   await mouse.down();
   let currentX = x;
-  for (const delta of deltas) {
+  for (const [index, delta] of deltas.entries()) {
     currentX += delta;
     await mouse.move(currentX, y, { steps: 10 });
+    /*
+      **第一次移动之后就确认真的抓住了。** 没抓住时后面每一步都照跑不误，
+      最后由「面板没关」这类断言在 10 秒后报出来——那条消息指着面板，
+      而真正的问题在按下那一行。
+
+      判据取 splitpanes 的 `splitpanes--dragging`：它**不在 mousedown 上置位**
+      （那时只设内部的 `mouseDown`），要等按住之后的第一次 mousemove，
+      所以这条断言只能放在这里，不能放在 `mouse.down()` 后面。
+    */
+    if (index === 0) {
+      await expect(
+        page.locator(".splitpanes--dragging"),
+        `按在 (${Math.round(x)}, ${Math.round(y)}) 没抓住分隔条——它的命中区只有 16px 宽`,
+      ).toBeAttached({ timeout: 2_000 });
+    }
   }
   await mouse.up();
 }
