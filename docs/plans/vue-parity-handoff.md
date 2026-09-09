@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 195，2026-09-09）
+## 当前状态（截至 wave 196，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -16,11 +16,16 @@
   `c12c4d37` = wave 47，`3f152764` = wave 48，`5978d533` = wave 49，`80ef4d15` = wave 50，
   `a1d675d6` = wave 51，`3382f7e0` = wave 52，`333edeef` = wave 53，`ff2cd759` = wave 54，`c8b2d1a8` = wave 55，`509219ea` = wave 56，`ccf6d0b8` = wave 57，`3e47b1fd` = wave 58，`cffb11f4` = wave 59，`ed0439ee` = wave 60，`88d4859d` = wave 61（chore `891d3f7a`），`ff9552d8` = wave 62（chore `088ea168`），`85ca893a` = wave 63，`2759b3e8` = wave 64，`bc34c7b3` = wave 65，`2b2f56b7` = wave 66，`5cf9d44d` = wave 67，`e775ba9e` = wave 68，`585e0bc7` = wave 69（chore `eec54d3c`），`43d5f289` = wave 70，`32d71958` = wave 71，`3034bd05` = wave 72，`209c49db` = wave 73（chore `7630e6e3`），`16ca870e` = wave 74（chore `b0b7fcb6`），`7d2b7a30` = wave 75，`e96f0adf` = wave 76，`60b8f1e8` = wave 77，`ba84b142` = wave 78，`b79695de` = wave 79，`e1028406` = wave 80，`0722d66a` = wave 81（无代码改动），`c3399c3b` = wave 82（chore `809237ec`），`3703ae61` = wave 83（另有 `5a5580d5`：两处 drag 助手的观测缝），`55022f02` = wave 84，`27fb23ad` = wave 85，`3bfec0f9` = wave 86（chore `1677e96b`），`289cb588` = wave 87，`1083b122` = wave 88（chore `9abc8d0c`；另有 `55678738`：wave 87 漏改的那一份折叠断言），`91ab3b2a` = wave 89（chore `9cb61684`），`1e5a2815` = wave 90，`fa66fb66` = wave 91，`d36c2d60` = wave 92，`0ec3b9a4` = wave 93，`6804bd6b` = wave 94，`855c209c` = wave 95，`d21a1b67` = wave 96（另有 `a165c96c`：rAF stub 的定时器泄漏），`a16ff72a` = wave 97（chore `b92c90e0`，**两边同改**），wave 98 **只有度量与订正、没有代码改动**；wave 99 **是一次否定结论，代码改动为零**；`b34f4f4e` = wave 100；wave 101 **同样只有度量与订正**（只改了 `baseline/parity-scenario-coverage.json` 里 `$pendingReasons` 的一行），**没有代码改动**。wave 102~105 见各自那一节；`29a233e3` = wave 106（五处守卫缺口，**其中一处有活违规**）。`97089b4f` = wave 107（后端枚举镜像 + doc-facts 的静默跳过 + 一条 auth e2e 的根因修复）。`2afc0ba8` = wave 108（把「负载抖动」变成可复现实验，expect 预算 5s → 10s）；`059d8bd5` = wave 109（订正 108 的推断 + 清掉最后 7 处写死的 5s）；`52a35b5b` = wave 110（独立性判据自己身上的两处单向检查）；`a750347f` = wave 111（icon-parity 的两张豁免表补成双向，过期豁免开始让门禁红）；`bdf79e73` = wave 112（四张「指向外部东西」的表补反向校验；upstream-drift 的假「无漂移」）；`071a2414` = wave 113（第六条抖动查清机制并修掉，名单七条 → 六条）；wave 114 / 115 **都只有度量、代码改动为零**；`786cd37e` = wave 116（standalone-sim 只跑 8 份文件而判据说的是整套）；`4279a42e` = wave 117（答掉「要不要加 build」：不加，理由量出来了）；`29fcbb1c` = wave 118（--with-e2e 只跑了那个必然跳过的套件）；`af94ed0d` = wave 119（standalone-check 的正则要求带斜杠）；`9502a05c` = wave 120（三个夹具 id 没登记进 KNOWN_IDS）；`92a8f87d` = wave 121（丢弃查询参数那张表一条都没响过）；`f46dbbd3` = wave 122（那条没注释的归一化规则抹掉的是整棵树的层级）；wave 123 **只有度量、代码改动为零**（在保住缩进的数据上重做层级比对，6 行）；`d440b68c` = wave 124（划词工具条挪出 `role="log"`）；`74fab84a` = wave 125（「深度」做成常驻的一档）；`7d171e03` = wave 126（两个归一化抽成一份共享规则）；wave 127 **只有度量、代码改动为零**；`e53db1d0` = wave 128（第⑥类进取样面，量出 `retry: false 与上游一致` 是假话）；`03c85d6f` = wave 129（场景注释里「锚点钉住编辑表单」是假的——两个锚点都落在创建表单上；并订正 wave 128 自己写下的那条判据）；`d691ec36` = wave 130（同一类的第二例：artifact 面板的两处锚点，一个点击前就满足、一个压根不存在；**并把 `#preview-failed` 那条路量到走不通**）；`2100cb23` = wave 131（把 8 个「一个锚点匹配到多份」逐个核完——3 个是缺陷、5 个正常；会话列表页的锚点一直落在侧栏上）；`6477ec4a` = wave 132（第⑥类第一次量到产品层面的分叉：**预览失败时上游仍然选中「预览」**）；`fbed3dde` = wave 133（技能清单取不到时本仓还留着筛选标签与「创建技能」按钮，已对齐）；`5ffb7fee` = wave 134（**「还在转」那一档第一次进取样面**，同一处根因一并对齐；并订正 wave 133 提交说明里引错的一条证据）；`1c99f9cb` = wave 135（**agents 画廊页第一次进取样面**，量出四处修掉两处；第一版锚点被负向验证当场抓到太松）；`ae941be2` = wave 136（模型清单改成打开对话框才取，结清上一轮挂的那行账；**并抓到自己的一次无效变异**）；`f1a3e3bf` = wave 137（AgentCard 与模型设置对话框第一次进取样面，**量出上游那五个表单控件都没有可访问名**）；`7f97efd1` = wave 138（**两边同改**：给那些控件补上可访问名；chore `ba942911` 把 marker 推到它）；`19cb7edd` = wave 139（**把 wave 137 的错归因查到底**：对话框标题在调用点重复写了一次 `text-lg`，把 primitive 的 `leading-none` 顶掉了）；`86a66f4c` = wave 140（**深色主题少了上游的全局字重 300**；几何档加 `fontWeight`；新门禁 primitive-class-overrides）；`96750443` = wave 141（**逐个对比两边 primitive 的基类**：37 个里 10 个不一致，四处漏抄已修，其余逐条声明）；`71aa29cf` = wave 142（清掉声明表里那三条「真差异、待修」，**一条待修都不剩**）；`ac741338` = wave 143（把 cva variants 那一类也接进基类比对，三个最高频组件一字不差）；`8b5f53e4` = wave 144（技能设置页那一屏第一次进取样面，**Tabs 的 variant 体系本仓整套没有**）；`f7c90563` = wave 145（搬来 Tabs 的 variant 体系，**顺带发现基类守卫看不见 7 个最高频组件**，并把七处 `as="button"` 造成的错层补偿一起删掉；`d468c4bf` = wave 146（**伪元素进取样面**，分栏拖拽把手第一次挂成锚点）；`ab4dea2c` = wave 147（**会话行的 ⋯ 在手机上够不着**；并推翻了我自己 wave 146 那张表的两行；`ParityState.dimensions` 让终态自己钉断点；`b60966bf` = wave 148（**手搓的模态语义全仓扫一遍，三处一起换成 primitive**，并配上零豁免守卫；`91af7855` = wave 149（**台账里认不出是谁的行清零**，59/79 → 0；`ef247138` = wave 150（**「全表 A–S 共 19 组」那句话守卫只读到 14 组**，O–S 五组 45 条从没被读过；`cc4c6e60` = wave 151（**订正 wave 150 的说明**：那句话本来就有 `doc-facts` 在守）；`0f9d304f` = wave 152（**两份 README 记的门禁不是同一套**，中文版少了 `standalone-sim`；`cb625bc1` = wave 153（**一条正确、但没人守的边界**：Reka 只能出现在 `app/components/ui/` 里）；`ca8eef42` = wave 154（**浮层层级也是一条正确、但没人守的规则**）；`016704d1` = wave 155（**判据走出 frontend-vue**：AGENTS.md 拓扑表里 Vue 那行写的是本机端口不是容器端口）；`10be0106` = wave 156（**「it maps the whole repo」而四个已跟踪的顶层目录不在图上**）；`8a69c12a` = wave 157（**被文档标成 optional 的 compose 服务，裸 `up` 会无条件启动它**——实测 `RestartCount 4370`；顺带抓到我自己引入的两处回归与两次假绿）；`ce1a1c04` = wave 158（**两边同改**：发送自己的 id 交接被当成「用户换了会话」，把这次发送的基线冲掉；chore `352753b1` 把 marker 推到它）。另有 `3ec1f496`（**容器里的 .venv 不属于这个平台时，启动前就地重建**，用户实测事故）。
   wave 159~177：`ea1b4666` = wave 159（**只有度量**：#2 剩下那一半查到根因）；`fe882f61` = wave 160（chore `de67deae`，**两边同改**：三处产品动画不理会减动偏好）；`decab3bd` = wave 161（chore `90b03ea0`，**两边同改** ambilight）；`c360d05c` = wave 162（chore `ec3e7f40`，**两边同改** shimmer）；`e6a264d1` = wave 163（**判据换个形状**：会无限循环的动画都必须表态）；`cd5945ac` = wave 164（**零代码改动**：给动画加一档，三重堵死）；`767abd31` = wave 165（chore `b49b02ab`，**两边同加** `data-slot`）；`f6ab35ed` = wave 166（**九门禁全扫读数**）；`34e49e22` = wave 167（chore `d418a691`，**两边同改** fade-in-up）；`642dda3f` = wave 168（chore `a8332f14`，**两边同改**骨架屏 + 新守卫）；`ac30835c` = wave 169（chore `a5534c82`，**两边同改**骨架屏与可访问播报）；`80d72dd1` = wave 170（chore `9ef01c59`，**两边同改**挥手动画）；`e9752c31` = wave 171（**前端镜像里装的是 macOS 原生二进制**，用户实测事故）；`fc1615f3` = wave 172（**九门禁全扫读数**）；`ea873d2b` = wave 173（**那条「抖动」不是抖动**：四条用例真的会出网）；`08793db0` = wave 174（chore `1c735271`，**改 `frontend/`**：外部 fetch 没超时）；`a9c04f3a` = wave 175（**改 `frontend/`**：挂了 146 轮那条账收了）；`6473e83a` = wave 176（chore `b4b7ffbf` 一次覆盖 175/176 两处 `frontend/` 改动；**改 `frontend/`**：一块全屏 shader 跑在软件光栅化上）；`0f4b3e02` = **这一段修过的每一处的自审**（12 根因 / 1 半根因 / 1 不是）；`06beaf48` = wave 177（**把自审里那唯一一条「不是根因」补上构建期拦截**）。
-- **动过 `frontend/` 的是二十四轮**（wave 158 新增一轮：发送交接冲掉基线 + 标题里的 `Loading...`）
-  （此前记的是二十三轮）（wave 138 新增一轮：模型设置对话框的可访问名）（wave 52 实测订正，wave 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97 各加一轮）：
-  wave **3 / 4 / 6 / 11 / 17 / 20 / 21 / 22 / 23 / 27 / 28 / 36 / 39 / 40 / 62 / 73 / 74 / 82 / 86 / 88 / 89 / 97**。
-  此前这里只列了 36/39/40（那三行本身没说错，它们的范围是「wave 30 以来」），
-  而记忆里的压缩版把它读成了「总共三次」。**别再传这个数字，用命令量**：
+  wave 178~196 见各自那一节；**`434042d0` = wave 196（chore `c88dd08e`，**两边同改**：
+  run 结束时的缓存失效被在飞的首次取数吃掉——`cancelRefetch` 只在查询已有数据时才生效，
+  新建 thread 的第一次取数满足不了这个前提）**。
+- **动过 `frontend/` 的有多少轮，这里不再写死一个数——它每次都过期。**
+  wave 196 实测：`--since=2026-08-25` 共 **38 个提交**碰过
+  `frontend/src` 或 `frontend/tests`（2026-09-09 量）。此前这一行写着「二十四轮」，
+  却只列出 22 个 wave，而 wave 158 / 160~176 / 178 / 189 / 196 都动过——
+  **它至少从 wave 160 起就是错的，没有任何机器在守它**（`doc-facts` 不扫这份文档）。
+  再往前一层，这里最早只列了 36/39/40（那三行的范围是「wave 30 以来」，本身没说错），
+  记忆里的压缩版把它读成了「总共三次」。**这个数字一律用命令量，不要引用**：
 
   ```bash
   git log --format='%h %ci %s' --since=2026-08-25 -- frontend/src frontend/tests
@@ -444,6 +449,111 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 196）做了什么：**那条「侧边会话偶尔整个空掉」不是抖动——是一次失效被在飞的取数吃掉了**
+
+上一轮留下的问题：`sidecar-chat.spec.ts` 的「creates a hidden sidecar thread from
+selected quoted text」约 **1/40** 概率红，症状是侧边会话关掉再打开，消息列表整个是空的。
+
+### 查的过程（**每一步都是先量再改**）
+
+wave 195 把 `trace: "retain-on-failure"` 修好之后，`--repeat-each=40` 复现的那一次
+**留下了 trace**。逐条读它的网络时间线，再跑一次**绿的**做对照，差别只有一条：
+
+| | 红（失败那次） | 绿 |
+| --- | --- | --- |
+| `GET …aa/messages/page`（建线程后立刻取，**run 之前**）| 50.309，51 字节（空）| 09.372，51 字节（空）|
+| `POST …aa/runs/stream` | 50.310 | 09.375 |
+| `POST …aa/history`（run-end 的 checkpoint 种子）| 50.324 | 09.387 |
+| `GET …aa/messages/page` **重取** | **一次都没有** | 09.387，**2702 字节** |
+
+重开时**一个请求都不发**（面板一直挂着，不会重新 mount），所以「消息还在不在」
+完全取决于那次重取有没有发生。
+
+**中途否掉过一条自己的归因。** 一开始怀疑是 run-end 的 checkpoint 种子
+（它拿到的 `values.messages` 是空的，而 `applyDurableValues` 是全量替换）把 store 清空了。
+把那条 `POST /history` 延迟 800ms 让它必定落在重取之后——**3/3 全绿**。
+说明清空 store 不是充分条件：`mergedMessages` 里还有 `visibleHistory` 那一路兜着。
+**必要条件只有一个：分页查询从头到尾没拿到过消息。**
+
+### 根因
+
+在 `@tanstack/query-core` 的 `query.js` 里：
+
+```js
+if (this.state.fetchStatus !== "idle" && this.#retryer?.status() !== "rejected") {
+  if (this.state.data !== undefined && fetchOptions?.cancelRefetch) {
+    this.cancel({ silent: true });     // 取消在飞的那次，重新取
+  } else if (this.#retryer) {
+    this.#retryer.continueRetry();
+    return this.#retryer.promise;      // ← 复用在飞的那次
+  }
+}
+```
+
+`invalidateQueries` 默认就带 `cancelRefetch: true`，但那个开关**只在
+`state.data !== undefined` 时才生效**。一条**新建的 thread**，它的每个 thread 级查询
+都还是第一次取数，`data` 是 `undefined`——于是走下面那条，
+`handleStreamFinish` 里的 `invalidateStoppedThreadCaches`
+**被在飞的取数整个吃掉，一次网络请求都不产生**。
+
+而那次在飞的取数是在 run 开始**之前**发出的，它带回来的是 run 之前的世界。
+两件事撞在一起，最终态就是一个**永远空着**的历史。
+
+**这是上游自己的缺陷**：React 的侧边会话同样是
+`createSidecarThread` → `setSidecarThreadId` → `sendMessage`
+（`sidecar-panel.tsx:330/359`），`invalidateStoppedThreadCaches`
+（`hooks.ts:1406`）也是同一串裸 `invalidateQueries`。
+
+### 改了什么
+
+- **两边同改**：thread 级那几条失效改成**先取消在飞的那次、再失效**
+  （`restartThreadScopedQueries`）。`cancelQueries` 对 idle 的查询是空操作，
+  所以只有「失效发生时确实还有取数在飞」这一种情况才真的取消并重取——
+  而那正是唯一会出问题的情况。取消是异步的，**失效因此也变成异步的**。
+- **Vue 单侧补齐**：`useThreadStream` 的历史查询加上 `!isStreaming`，
+  与上游 `enabled: !isMock && !thread.isLoading`（`hooks.ts:1889`）齐平。
+  **它只关得住「threadId 在 run 开始之后才出现」那一类**（`/chats/new` 走的正是这条）；
+  侧边会话是先建线程再发 run，id 就位时门还开着，那一类由上面那条兜住。
+
+### 负向验证
+
+把第一次分页响应体**按发出时的内容取样**再延迟 200ms 投递
+（复刻「run 前发出、run 后落地」），得到**确定性复现**：
+
+- 无补丁：**3/3 红**，日志是 `pageFetch(run 前) → finish(失效被吞) → pageDone rows=0`
+- 有补丁：**3/3 绿**，`finish` 之后立刻多出一次 `pageFetch`——取消生效的直接证据
+
+单元层：两个应用各加一条「在飞的首次取数不许吞掉失效」，
+把实现改回裸 `invalidateQueries` 后**各自只有这一条红**。
+
+### 顺带被门禁抓到的两处
+
+- `upstream-citations`：`app/core/threads/infinite.ts` 引的上游行数 498 → 575
+  （我自己给上游那份测试加了用例）。**这条守卫值回票价了**。
+- `thread-stream.dom.test.ts` 的「A8 停止后的两轮失效」：thread 级四条现在晚一个
+  微任务，用例要先让出一次。**不加这一步，它只看得见全局那两类，而 A8 数的是六个。**
+
+### 挂账（下一轮的题目）
+
+`e2e-mock` 整套跑了四次，**其中两次各红一条不同的用例**，另两次与干净树一次都绿：
+
+| 用例 | 断言 | 隔离态 |
+| --- | --- | --- |
+| `artifact-panel-resize.spec.ts:106` 拖拽折叠 | `#artifacts` 没有隐藏 | `--repeat-each=20` **100/100 绿** |
+| `thread-history.spec.ts:105` 千轮虚拟列表 | 滚到顶后 `Long history question 0` 找不到 | 未单独量 |
+
+**这两条与本轮改动无关**，判据不是「跑几次绿了」而是**执行路径**：两个用例全程
+没有 run（trace 里没有任何 `runs/stream`），所以 `handleStreamFinish` 不会被调用、
+`isStreaming` 恒为 false，本轮两处改动**一处都进不去**。`sessionStatus` 初值是
+`"idle"` 且不在 `STREAMING_STATUSES` 里，首屏行为也没变。
+
+**下一轮查的是「整套负载下」这个条件本身**，而不是这两条用例各自的逻辑——
+它们隔离态都是绿的，红只发生在整套里。两次的 trace 都留下了
+（`frontend-vue/test-results/` 下对应目录）。拖拽那条的现场：hover 1.01s →
+boundingBox → `mouse.move` 1.13s → `down` 1.16s → 移到 x=1301 → `up` 1.37s，
+**鼠标事件一个不缺**，所以要么按下时没落在 splitter 上（`dragPanel` 的注释里
+记着同一个坑），要么 `onResized` 拿到的 `finalSize` 没低过 `COLLAPSE_THRESHOLD = 8`。
 
 ## 上一轮（wave 195）做了什么：**修掉安装页 5 处缺口；顺带发现「trace 从来没被录过」**
 

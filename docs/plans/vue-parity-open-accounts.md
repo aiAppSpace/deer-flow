@@ -1,7 +1,22 @@
-# React → Vue 平替：挂账总清单（截至 wave 195，2026-09-09）
+# React → Vue 平替：挂账总清单（截至 wave 196，2026-09-09）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> **wave 196 结清一条、新挂一条。**
+>
+> **结清**：`sidecar-chat.spec.ts` 那条约 1/40 的偶发红（wave 195 留下的）。
+> **不是抖动**——`invalidateQueries` 的 `cancelRefetch` 只在查询已有数据时才生效，
+> 新建 thread 的第一次取数满足不了这个前提，于是 run 结束时的失效被在飞的取数
+> 整个吃掉、一次请求都不产生。**两边同改**（上游同形），并给 Vue 补上上游那道
+> `!thread.isLoading`。负向验证是确定性的：无补丁 3/3 红、有补丁 3/3 绿。
+>
+> **新挂**：`e2e-mock` 整套四次里有两次各红一条**不同**用例
+> （`artifact-panel-resize:106` 拖拽折叠、`thread-history:105` 千轮虚拟列表），
+> 另两次与干净树一次都绿。**两条都与 wave 196 的改动无关**（判据是执行路径：
+> 两个用例全程没有 run，本轮两处改动一处都进不去），拖拽那条隔离态
+> `--repeat-each=20` **100/100 绿**。**下一轮查的是「整套负载下」这个条件本身**，
+> 两次 trace 都留在 `frontend-vue/test-results/` 下。
 
 > **判据提醒**：台账现在是 **202 行 / 90 个取样点**（wave 150 不动 app 代码，行数未变）。
 >

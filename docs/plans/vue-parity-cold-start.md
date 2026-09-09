@@ -8,11 +8,11 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **195 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
+你接手一个已经跑了 **196 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 `79d462d7`（wave 195），已推到
-`origin/main-wc`，本地与远端齐平**。
+分支 `main-wc`，**接手时 HEAD 是 `c88dd08e`（wave 196 的 chore，
+代码在 `434042d0`），已推到 `origin/main-wc`，本地与远端齐平**。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
 （台账 **202 行**全部已决定、一页纸清单「真正还开着的」**4 条**——wave 157 把 tooltip 那条判决关闭了——
