@@ -12,6 +12,7 @@ import { onMounted, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import FlickeringGrid from "@/components/ui/effects/FlickeringGrid.vue";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { clearAuthenticatedClientState } from "@/core/auth/client-state";
@@ -208,68 +209,109 @@ onMounted(() => {
               : $i18n.t.value.setup.completeAdminTitle
           }}
         </p>
+        <!--
+          上游 `(auth)/setup/page.tsx:225` 在标题下面还有一行小字副标题
+          （`text-muted-foreground mt-1 text-xs`）。本仓一直没有——
+          wave 194 让这一屏第一次进取样面才照出来。
+        -->
+        <p
+          v-if="mode === 'init_admin'"
+          class="text-muted-foreground mt-1 text-xs"
+        >
+          {{ $i18n.t.value.setup.createAdminSubtitle }}
+        </p>
       </header>
+      <!--
+        **表单里的每一个控件都走 primitive，不手写 class。**
+
+        这与 login.vue 是同一条纪律，而那一页 wave 68 就修过了、这一页漏了
+        ——因为 `/setup` 直到 wave 194 才第一次进取样面，这个缺口挂了 126 轮。
+        实测读数与当年一模一样：裸 `<input class="… px-3 py-2">` 是 h 42 / 字号 16px，
+        上游的 `<Input>` 是 `h-9` + `md:text-sm` → **h 36 / 14px**。
+        绕过 primitive 丢掉的不只是尺寸——焦点环、`aria-invalid` 态、深色模式、
+        禁用态全都不再跟着 L2 走。
+
+        字段分组 `flex flex-col space-y-1` 与 form 的 `space-y-2` 也照上游
+        （frontend/src/app/(auth)/setup/page.tsx:229）。
+      -->
       <form
-        class="space-y-3"
+        class="space-y-2"
         @submit.prevent="
           mode === 'init_admin' ? submitInitialize() : submitPasswordChange()
         "
       >
-        <label class="block text-sm font-medium" for="setup-email">{{
-          $i18n.t.value.login.email
-        }}</label>
-        <input
-          id="setup-email"
-          v-model="email"
-          type="email"
-          autocomplete="email"
-          required
-          class="border-input w-full rounded-md border px-3 py-2"
-          :placeholder="$i18n.t.value.login.emailPlaceholder"
-        />
-        <template v-if="mode === 'change_password'">
-          <label class="block text-sm font-medium" for="current-password">{{
+        <div class="flex flex-col space-y-1">
+          <label class="text-sm font-medium" for="setup-email">{{
+            $i18n.t.value.login.email
+          }}</label>
+          <Input
+            id="setup-email"
+            v-model="email"
+            type="email"
+            autocomplete="email"
+            required
+            :placeholder="$i18n.t.value.login.emailPlaceholder"
+          />
+        </div>
+        <div v-if="mode === 'change_password'" class="flex flex-col space-y-1">
+          <label class="text-sm font-medium" for="current-password">{{
             $i18n.t.value.setup.currentPassword
           }}</label>
-          <input
+          <Input
             id="current-password"
             v-model="currentPassword"
             type="password"
             autocomplete="current-password"
             required
-            class="border-input w-full rounded-md border px-3 py-2"
           />
-        </template>
-        <label class="block text-sm font-medium" for="new-password">{{
-          $i18n.t.value.setup.password
-        }}</label>
-        <input
-          id="new-password"
-          v-model="newPassword"
-          type="password"
-          autocomplete="new-password"
-          required
-          minlength="8"
-          class="border-input w-full rounded-md border px-3 py-2"
-          :placeholder="$i18n.t.value.setup.passwordPlaceholder"
-        />
-        <label class="block text-sm font-medium" for="confirm-password">{{
-          $i18n.t.value.setup.confirmPassword
-        }}</label>
-        <input
-          id="confirm-password"
-          v-model="confirmPassword"
-          type="password"
-          autocomplete="new-password"
-          required
-          minlength="8"
-          class="border-input w-full rounded-md border px-3 py-2"
-          :placeholder="$i18n.t.value.setup.confirmPassword"
-        />
-        <label class="flex items-center gap-2 text-sm"
-          ><input v-model="rememberMe" type="checkbox" />
-          {{ $i18n.t.value.login.rememberMe }}</label
-        >
+        </div>
+        <div class="flex flex-col space-y-1">
+          <label class="text-sm font-medium" for="new-password">{{
+            $i18n.t.value.setup.password
+          }}</label>
+          <Input
+            id="new-password"
+            v-model="newPassword"
+            type="password"
+            autocomplete="new-password"
+            required
+            :minlength="8"
+            :placeholder="$i18n.t.value.setup.passwordPlaceholder"
+          />
+        </div>
+        <div class="flex flex-col space-y-1">
+          <label class="text-sm font-medium" for="confirm-password">{{
+            $i18n.t.value.setup.confirmPassword
+          }}</label>
+          <Input
+            id="confirm-password"
+            v-model="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            required
+            :minlength="8"
+            :placeholder="$i18n.t.value.setup.confirmPasswordPlaceholder"
+          />
+        </div>
+        <!--
+          与上游 RememberSessionOption 逐字同构
+          （frontend/src/components/auth/remember-session-option.tsx:17），
+          与 login.vue 那一处同一份写法。本仓这里此前只有一行光秃秃的
+          「保持登录」，说明整句都没有——读屏器听到的可访问名因此也短了一整句。
+        -->
+        <label class="text-muted-foreground flex items-start gap-2 text-sm">
+          <input
+            v-model="rememberMe"
+            type="checkbox"
+            class="border-input mt-1 h-4 w-4 rounded"
+          />
+          <span>
+            <span class="text-foreground block font-medium">{{
+              $i18n.t.value.login.rememberMe
+            }}</span>
+            <span>{{ $i18n.t.value.login.rememberMeDescription }}</span>
+          </span>
+        </label>
         <p v-if="error" role="alert" class="text-sm text-red-500">
           {{ error }}
         </p>

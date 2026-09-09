@@ -1289,11 +1289,13 @@ export const zhCN: Translations = {
   },
   setup: {
     createAdminTitle: "创建管理员账号",
+    createAdminSubtitle: "先创建管理员账号再开始使用。",
     completeAdminTitle: "完成管理员账号设置",
     currentPassword: "当前密码",
     password: "密码",
     passwordPlaceholder: "密码（至少 8 个字符）",
     confirmPassword: "确认密码",
+    confirmPasswordPlaceholder: "再输入一次密码",
     passwordMismatch: "两次输入的密码不一致",
     passwordTooShort: "密码长度至少为 8 个字符",
     createAdmin: "创建管理员账号",

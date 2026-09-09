@@ -1080,11 +1080,13 @@ export interface Translations {
 
   setup: {
     createAdminTitle: string;
+    createAdminSubtitle: string;
     completeAdminTitle: string;
     currentPassword: string;
     password: string;
     passwordPlaceholder: string;
     confirmPassword: string;
+    confirmPasswordPlaceholder: string;
     passwordMismatch: string;
     passwordTooShort: string;
     createAdmin: string;

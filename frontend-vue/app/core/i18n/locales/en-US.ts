@@ -1344,11 +1344,16 @@ export const enUS: Translations = {
   },
   setup: {
     createAdminTitle: "Create admin account",
+    createAdminSubtitle: "Set up the administrator account to get started.",
     completeAdminTitle: "Complete admin account setup",
     currentPassword: "Current password",
     password: "Password",
     passwordPlaceholder: "Password (min. 8 characters)",
-    confirmPassword: "Confirm password",
+    // 上游 `(auth)/setup/page.tsx:258` 的 label 是 `Confirm Password`（大写 P），
+    // placeholder 才是小写的 `Confirm password`。两处此前共用同一条词条，于是
+    // 标签少了个大写、占位符与标签同字导致快照里连 `/placeholder:` 那一行都不出现。
+    confirmPassword: "Confirm Password",
+    confirmPasswordPlaceholder: "Confirm password",
     passwordMismatch: "Passwords do not match",
     passwordTooShort: "Password must be at least 8 characters",
     createAdmin: "Create Admin Account",

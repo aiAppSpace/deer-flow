@@ -184,3 +184,43 @@ describe("跨应用对照工具的登记表", () => {
     ).toEqual([]);
   });
 });
+
+describe("Playwright 的录制策略与重试次数不许自相矛盾", () => {
+  /*
+    `on-first-retry` / `on-all-retries` 只在**重试**时录。本仓 `retries: 0`，
+    所以这两种模式等于「永不录制」——而它是**静默**的：跑一万次也不会有人发现
+    trace 目录一直是空的，直到某天真出了一次偶发红、现场却只有一张截图。
+
+    wave 195 就是这么卡住的：一条 1/15 左右的偶发失败，连跑 14 次没能复现，
+    而唯一的现场没有网络与 DOM 时间线。
+  */
+  const factory = readFileSync(
+    fileURLToPath(new URL("../support/playwright-factory.ts", import.meta.url)),
+    "utf8",
+  );
+
+  function valueOf(key: string): string | null {
+    const match = new RegExp(`(?:^|\\n)\\s*${key}:\\s*([^,\\n]+),`).exec(
+      factory.replaceAll(/\/\*[\s\S]*?\*\//g, ""),
+    );
+    return match ? match[1]!.trim() : null;
+  }
+
+  it("读得到 retries 与 trace 两项", () => {
+    // 少了这一条，改名之后下面那条会在 null 上恒真。
+    expect(valueOf("retries")).not.toBeNull();
+    expect(valueOf("trace")).not.toBeNull();
+  });
+
+  it("retries 为 0 时，trace 不许用只在重试时才录的模式", () => {
+    const retries = Number(valueOf("retries"));
+    const trace = valueOf("trace")!.replaceAll('"', "");
+    if (retries === 0) {
+      expect(
+        ["on-first-retry", "on-all-retries"].includes(trace),
+        `retries=0 而 trace=${trace}：这个组合永远不会录下任何 trace。` +
+          `要么把 retries 调大，要么用 retain-on-failure。`,
+      ).toBe(false);
+    }
+  });
+});

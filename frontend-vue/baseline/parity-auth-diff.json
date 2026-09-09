@@ -32,29 +32,13 @@
       "tabOrder": []
     },
     "setup-screen/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- /placeholder: Confirm password",
-        "- checkbox \"Keep me signed in Keep this browser session when possible. DeerFlow stores only your email, never your password.\" [checked]",
-        "- paragraph: Set up the administrator account to get started.",
-        "- text: Confirm Password",
-        "- text: Keep me signed in Keep this browser session when possible. DeerFlow stores only your email, never your password.",
-        "- textbox \"Confirm Password\":"
-      ],
-      "ariaOnlyVue": [
-        "- checkbox \"Keep me signed in\" [checked]",
-        "- text: Confirm password",
-        "- text: Keep me signed in",
-        "- textbox \"Confirm password\""
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
       ],
-      "geometry": [
-        "selector::nth-match(input[type='password'], 2) y React=462 Vue=487 Δ25",
-        "selector::nth-match(input[type='password'], 2) height React=36 Vue=42 Δ6",
-        "selector::nth-match(input[type='password'], 2) fontSize React=14px Vue=16px"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -67,39 +51,33 @@
         "- /placeholder: Confirm password",
         "- /placeholder: Password (min. 8 characters)",
         "- button \"Create Admin Account\"",
-        "- checkbox \"保持登录 下次打开 DeerFlow 时尽量保持当前会话，仅保存邮箱，不保存密码。\" [checked]",
         "- paragraph: Create admin account",
         "- paragraph: Set up the administrator account to get started.",
         "- text: Confirm Password",
         "- text: Email",
         "- text: Password",
-        "- text: 保持登录 下次打开 DeerFlow 时尽量保持当前会话，仅保存邮箱，不保存密码。",
         "- textbox \"Confirm Password\":",
         "- textbox \"Email\":",
         "- textbox \"Password\":"
       ],
       "ariaOnlyVue": [
+        "- /placeholder: 再输入一次密码",
         "- /placeholder: 密码（至少 8 个字符）",
         "- button \"创建管理员账号\"",
-        "- checkbox \"保持登录\" [checked]",
+        "- paragraph: 先创建管理员账号再开始使用。",
         "- paragraph: 创建管理员账号",
-        "- text: 保持登录",
         "- text: 密码",
         "- text: 确认密码",
         "- text: 邮箱",
         "- textbox \"密码\":",
-        "- textbox \"确认密码\"",
+        "- textbox \"确认密码\":",
         "- textbox \"邮箱\":"
       ],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
       ],
-      "geometry": [
-        "selector::nth-match(input[type='password'], 2) y React=462 Vue=487 Δ25",
-        "selector::nth-match(input[type='password'], 2) height React=36 Vue=42 Δ6",
-        "selector::nth-match(input[type='password'], 2) fontSize React=14px Vue=16px"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],

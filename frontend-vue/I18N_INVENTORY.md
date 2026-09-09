@@ -37,7 +37,7 @@ i18n 之后一次性翻掉的位置。
 
 ## Key 与 unused baseline
 
-`en-US` 和 `zh-CN` 当前各有 943 个完全一致的 leaf key。
+`en-US` 和 `zh-CN` 当前各有 945 个完全一致的 leaf key。
 `baseline/i18n-keys.json` 同时固定精确 key 集合和 18 个已审阅 unused key；
 新增、删除、新增 unused 或旧 key 意外恢复使用都会使
 `i18n-check`、`i18n-diff` 或 `i18n-unused` 失败。只有审阅精确 diff 与真实消费者后，

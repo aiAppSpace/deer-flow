@@ -303,9 +303,17 @@ test("setup initialization uses the exact JSON contract", async ({ page }) => {
   });
 
   await page.goto("/setup");
-  await page.getByLabel("Email").fill("admin@example.com");
+  /*
+    `exact: true`：wave 195 给「保持登录」补上上游那句说明之后
+    （「…DeerFlow stores only your **email**, never your password.」），
+    `getByLabel("Email")` 会同时命中邮箱输入框和那个复选框——**子串匹配**。
+    改动是对的（上游一直有那句），脆的是这里的选择器。
+  */
+  await page.getByLabel("Email", { exact: true }).fill("admin@example.com");
   await page.getByLabel("Password", { exact: true }).fill("new-password-123");
-  await page.getByLabel("Confirm Password").fill("new-password-123");
+  await page
+    .getByLabel("Confirm Password", { exact: true })
+    .fill("new-password-123");
   await page.getByRole("button", { name: "Create Admin Account" }).click();
   await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
   expect(body).toEqual({

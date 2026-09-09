@@ -165,7 +165,23 @@ export function defineSuite(options: {
     use: {
       baseURL,
       locale: "en-US",
-      trace: "on-first-retry",
+      /*
+        **`retain-on-failure`，不是 `on-first-retry`。**
+
+        本仓 `retries: 0`（就在上面几行），而 `on-first-retry` 只在**重试**时录
+        ——没有重试，就永远没有 trace。**这条设置从来没有触发过。**
+        它旁边的 `video` 用的正是 `retain-on-failure`，同一份文件里两条策略自相矛盾。
+
+        代价是这么写的：录制只在**失败**的用例上保留，绿的一律丢弃，
+        所以正常跑一遍不多花一点存储。换来的是**一次偶发失败就能查**：
+        wave 195 遇到一条 1/15 左右的偶发红（sidecar 关闭再打开后消息列表为空），
+        连跑 14 次没能复现，而现场只剩一张截图——**没有网络与 DOM 时间线，
+        就只能靠猜**。这条设置就是那次查不下去的直接原因。
+
+        `tests/guards/tooling-contracts.test.ts` 钉住「retries 为 0 时不许用只在重试时
+        才录的模式」，免得它再退回去。
+      */
+      trace: "retain-on-failure",
       screenshot: "only-on-failure",
       video: "retain-on-failure",
       ...options.use,
