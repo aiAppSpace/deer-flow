@@ -30,14 +30,20 @@ import { AgentStreamError } from "@deerflow/agent-core";
  * 前 8 个是业务事件，后 3 个是控制事件。心跳不在表里——它在传输层就被识别成
  * 注释帧，根本到不了这里。
  *
- * **「全集」这句话有意没有门禁**（wave 107 量过，别再试第二次）：后端那边
- * **没有**对应的枚举，wire 名字散在 `bridge.publish(run_id, <mode>)` 的调用点上，
- * 实测只有 `values` 与 `messages` 是字面量、其余走变量（`single_mode`），
- * 照这个扫出来的集合会漏，做成门禁就是一条会误报的规则。
- * 兄弟表 `DEERFLOW_DURABLE_STATUS` 能钉是因为后端那边是一个 `StrEnum`
- * （见 tests/guards/backend-enum-mirror.test.ts）。**后端哪天给 stream mode
- * 也定了枚举，这条就可以照着补。** 在那之前，这里漏一个名字的后果是
- * 「未知事件归 data 交给 reducer」——不静默丢，见下面那段。
+ * **「全集」这句话现在有机器守着**（wave 201）：
+ * `tests/guards/backend-enum-mirror.test.ts` 把这 11 个名字逐个钉到后端的出处——
+ * 8 个业务事件 = `metadata` + `runtime/stream_modes.py` 的 `RunStreamMode`
+ * （`messages-tuple` 按后端 `to_langgraph_stream_modes` 的改名折算成 `messages`，
+ * 那处改名本身也断言），3 个控制事件各自钉到发它的那份文件
+ * （`error` 在 `runs/worker.py`，`end` / `gap` 在 `app/gateway/services.py`）。
+ *
+ * **wave 107 当时判的是「有意不钉」**，理由是后端没有对应枚举、wire 名字散在
+ * `bridge.publish(run_id, <mode>)` 的调用点上、照那个扫会漏——那个判断当时是对的，
+ * 而它留下的翻案判据是「后端哪天给 stream mode 也定了枚举，这条就可以照着补」。
+ * **wave 201 量到判据成立**（`stream_modes.py` 里已有 `type RunStreamMode = Literal[…]`），
+ * 于是照着补了。**翻案判据留着是有用的，它让一条「现在做不了」不会变成「永远不做」。**
+ *
+ * 万一还是漏了一个名字，后果是「未知事件归 data 交给 reducer」——不静默丢，见下面那段。
  */
 export const DEERFLOW_WIRE_EVENTS = [
   "metadata",
