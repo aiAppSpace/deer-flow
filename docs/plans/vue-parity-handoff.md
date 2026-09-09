@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 196，2026-09-09）
+## 当前状态（截至 wave 197，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -19,6 +19,8 @@
   wave 178~196 见各自那一节；**`434042d0` = wave 196（chore `c88dd08e`，**两边同改**：
   run 结束时的缓存失效被在飞的首次取数吃掉——`cancelRefetch` 只在查询已有数据时才生效，
   新建 thread 的第一次取数满足不了这个前提）**。
+  `b7f9e9da` = wave 197（**失败现场活不过下一次运行**：Playwright 每次清空 `outputDir`，
+  而偶发红之后最自然的动作就是重跑；新增归档包装器 + 守卫，并修掉一处没剥注释的老守卫）。
 - **动过 `frontend/` 的有多少轮，这里不再写死一个数——它每次都过期。**
   wave 196 实测：`--since=2026-08-25` 共 **38 个提交**碰过
   `frontend/src` 或 `frontend/tests`（2026-09-09 量）。此前这一行写着「二十四轮」，
@@ -450,6 +452,49 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
 
+## 上一轮（wave 197）做了什么：**wave 195 让 trace 录得下来，这一轮让它活过下一次运行**
+
+### 起因是一次真实的证据丢失
+
+wave 196 里 `thread-history` 那条红留下了 trace，我为了确认「是不是本轮回归」
+重跑了两次——回头去看时 `test-results/e2e/` 已经空了。**上一轮交接文档里那句
+「两次 trace 都留在 `test-results/` 下」，写下来的时候就已经是假的。**
+
+**量到的**：往 `test-results/e2e/` 放一个 marker 文件，随便跑一条用例，marker 就没了
+——Playwright 每次运行都会先清空 `outputDir`。而偶发红之后人做的第一件事恰恰是
+**重跑一次看看**。两件事撞在一起，现场必然在被人看之前消失。
+
+**这和 wave 195 是一件事的两段**：那次修的是「`retries: 0` 配
+`trace: "on-first-retry"` 等于从来不录」，这次是「录下来了，但活不过下一次运行」。
+只修一段，偶发红照样查不了。
+
+### 改了什么
+
+`scripts/keep-e2e-failure-artifacts.mjs`：跑给定命令，**失败时**把这一次写出来的
+用例目录挪到 `test-results/failures/<UTC 时间戳>/<套件>/<用例>`，保留最近 20 次。
+Makefile 里所有真跑用例的调用统一走 `E2E_RUN`。
+
+两处判据：
+
+- **不按套件名归档**——套件名从 Makefile 传进来就多一处会漂的对应关系。
+  改成扫「哪些用例目录里有产物」，什么 config 都不用知道。
+- **只收这一次运行之后写出来的**（按 mtime 筛）。第一版没筛，实测把
+  `e2e-protocol` / `e2e-infra` 上一次红留下的目录也收了进去——
+  **工具自己那句「失败现场已另存」就成了假话。**
+
+### 顺带：坑 202/316 又重演了一次
+
+`e2e-suite-contract.test.ts` 的「所有 playwright 调用都走 loopback 代理包装」
+**直接扫全文、没剥注释**。我在 Makefile 里写下一句含「不能直接写 `playwright test`」
+的注释，它当场报「有一条调用没走包装」——而那一行根本不是调用。
+**扫命令的守卫，扫之前一律先剥注释。** 已修，并负向验证它仍然会咬。
+
+### 挂账没有变
+
+上一轮那两条低频红（`artifact-panel-resize:106`、`thread-history:105`）**仍然开着**。
+本轮修的是「下次发生时现场还在不在」，不是它们本身。
+下一次整套红时，`test-results/failures/` 里会留下完整的 trace/video/截图。
+
 ## 上一轮（wave 196）做了什么：**那条「侧边会话偶尔整个空掉」不是抖动——是一次失效被在飞的取数吃掉了**
 
 上一轮留下的问题：`sidecar-chat.spec.ts` 的「creates a hidden sidecar thread from
@@ -549,8 +594,8 @@ if (this.state.fetchStatus !== "idle" && this.#retryer?.status() !== "rejected")
 `"idle"` 且不在 `STREAMING_STATUSES` 里，首屏行为也没变。
 
 **下一轮查的是「整套负载下」这个条件本身**，而不是这两条用例各自的逻辑——
-它们隔离态都是绿的，红只发生在整套里。两次的 trace 都留下了
-（`frontend-vue/test-results/` 下对应目录）。拖拽那条的现场：hover 1.01s →
+它们隔离态都是绿的，红只发生在整套里。两次的 trace **都已经没了**——`test-results/` 会被下一次运行清空，
+而我为了判断是不是回归恰好重跑了两次（wave 197 修的就是这件事）。拖拽那条的现场：hover 1.01s →
 boundingBox → `mouse.move` 1.13s → `down` 1.16s → 移到 x=1301 → `up` 1.37s，
 **鼠标事件一个不缺**，所以要么按下时没落在 splitter 上（`dragPanel` 的注释里
 记着同一个坑），要么 `onResized` 拿到的 `finalSize` 没低过 `COLLAPSE_THRESHOLD = 8`。
