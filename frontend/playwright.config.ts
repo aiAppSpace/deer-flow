@@ -31,8 +31,7 @@ export default defineConfig({
   webServer: skipWebServer
     ? undefined
     : {
-        command:
-          "./node_modules/.bin/next build && ./node_modules/.bin/next start",
+        command: "pnpm exec next build && pnpm exec next start",
         url: baseURL,
         reuseExistingServer: false,
         timeout: 120_000,

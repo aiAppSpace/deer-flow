@@ -10,7 +10,7 @@
                    重写中丢失的部分」，而它的 25 个上游单测里 C 组那几个正是因为
                    `import { … } from "@/core/threads/hooks"` 会连带拖进
                    `useStream` / react-query / sonner 才没能落地。拆到这里之后，
-                   `message-merge.test.ts`（上游 2,095 行）可以逐条搬。
+                   `message-merge.test.ts`（上游 2,381 行）可以逐条搬。
 
                    `messageIdentity` 的 `__user` 后缀归一化**只对 human 生效**
                    （05 C7）。DynamicContextMiddleware 把提交的 HumanMessage(id=X)

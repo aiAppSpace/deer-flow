@@ -822,7 +822,20 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
   });
 
   // Thread search — sidebar thread list & chats list page
-  void page.route("**/api/langgraph/threads/search", async (route) => {
+  /*
+    会话搜索有**两条**路由，喂的是同一份 fixture。
+
+    本仓走 SDK 的 `POST /api/langgraph/threads/search`；上游 #5265 之后，React
+    的会话列表在带 `archived` 过滤时改打 Gateway 原生的
+    `POST /api/threads/search`（`core/threads/api.ts::searchThreadsByArchive`）。
+    对照工厂把这一份 mock **同时套在两个应用上**，所以少了后一条，React 侧栏
+    会渲染成空列表——2026-09 合并上游时实测：thread-history / thread-list-pin /
+    thread-list-infinite-scroll 共 6 条对照场景全部在等会话标题时超时 30 秒，
+    而失败快照里 React 那侧的侧栏只剩「Projects」一栏。
+
+    两条喂同一份数据，差异才落在 UI 上而不是数据上。
+  */
+  const searchThreadsHandler = async (route: Route) => {
     let body = sortThreadSearchResults(threads).map(threadSearchResult);
 
     let limit: number | undefined;
@@ -832,6 +845,7 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         limit?: number;
         offset?: number;
         metadata?: Record<string, unknown>;
+        archived?: boolean;
       } | null;
       if (postData) {
         if (typeof postData.limit === "number") {
@@ -847,6 +861,17 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
             ),
           );
         }
+        /*
+          后端 `ThreadSearchRequest.archived` 的语义：省略含全部、`false` 含未归档。
+          fixture 里的线程除非自己标了 `deerflow_archived: true`，否则都算未归档。
+        */
+        if (typeof postData.archived === "boolean") {
+          const wantArchived = postData.archived;
+          body = body.filter(
+            (thread) =>
+              (thread.metadata?.deerflow_archived === true) === wantArchived,
+          );
+        }
       }
     } catch {
       // No / invalid JSON body — fall back to returning the full list.
@@ -860,7 +885,10 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       contentType: "application/json",
       body: JSON.stringify(sliced),
     });
-  });
+  };
+
+  void page.route("**/api/langgraph/threads/search", searchThreadsHandler);
+  void page.route("**/api/threads/search", searchThreadsHandler);
 
   // Thread create — called when user sends first message in a new chat
   void page.route("**/api/langgraph/threads", (route) => {

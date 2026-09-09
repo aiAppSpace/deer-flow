@@ -7,11 +7,18 @@
                    defaultRemarkPlugins / defaultRehypePlugins / appRemarkPlugins /
                    rawHtmlRehypePlugins · wordAnimation
   【依赖关系】     unist-util-visit · rehype-{raw,sanitize,harden,katex} · remark-{gfm,math}
-  【边界与注意】   上游 `plugins.ts` 98 行里**只有 `rehypeStreamingListItems` 能搬**，其余
+  【边界与注意】   上游 `plugins.ts` 现在 269 行（合并 2026-09 上游后从 98 行涨上来），
+                   其中**只有 `rehypeStreamingListItems` 是这里直接搬的**；其余
                    import 了 `@streamdown/code` / `@streamdown/mermaid` / `streamdown` 三个
                    React-only 包。它导出的 `streamdownWordAnimation` 等常量是**规格说明**
                    （Streamdown 自己的动画 API 参数），不是可搬代码——这里按规格重新给出，
                    消费方是本层自写的动画实现。
+
+                   涨出来的那 171 行里有两个**框架无关**的 hast 插件，都已核实**不必搬**：
+                   `rehypeScopedSlug` 在 sanitize 之前就给标题打上 `user-content-` 前缀，
+                   于是 sanitize 会再加一次，`rehypeClobberFragments` 是用来擦掉那个双前缀的
+                   ——本仓的 `rehypeHeadingSlugs`（下方）只写裸 slug，前缀交给 sanitize 统一加，
+                   压根不产生双前缀，所以这两个一个有等价物、一个无对象。
 
                    `defaultRemarkPlugins` / `defaultRehypePlugins` 是 **Streamdown 2.5 内建
                    默认链的等价物**，从它 dist 里读出来后按同样的顺序、同样的选项重建：

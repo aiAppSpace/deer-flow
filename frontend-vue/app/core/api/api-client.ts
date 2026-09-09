@@ -3,7 +3,7 @@
   【架构位置】     L3
   【主要导出】     getAPIClient · resetAPIClients · gap 相关类型与 helper
   【依赖关系】     ./client · @/core/config · @/core/agent-deerflow/gap
-  【边界与注意】   REWRITE，不是搬运。上游 `api-client.ts`（471 行）里**大部分是在给 SDK 打补丁**
+  【边界与注意】   REWRITE，不是搬运。上游 `api-client.ts`（475 行）里**大部分是在给 SDK 打补丁**
                    （包 runs.stream/joinStream/cancel、SDK 错误串匹配、
                    sessionStorage 里的重连记账）。没有 SDK 就没有这些补丁的对象，
                    照着补一遍等于把 SDK 的问题连同解法一起搬进来。

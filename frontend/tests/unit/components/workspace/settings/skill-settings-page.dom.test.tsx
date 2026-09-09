@@ -46,6 +46,15 @@ rs.mock("@/core/skills/hooks", () => ({
     error: null,
   }),
   useEnableSkill: () => ({ mutate: rs.fn() }),
+  // 上游 #5039 给这一屏加了「安装本地技能包」，组件现在会调它。
+  // 这份 mock 少一个成员，整块 rs.mock 就把真模块替换成了不完整的对象，
+  // 报出来是 `useUploadSkillArchive is not a function`。
+  useUploadSkillArchive: () => ({
+    mutate: rs.fn(),
+    mutateAsync: rs.fn(),
+    isPending: false,
+    reset: rs.fn(),
+  }),
 }));
 
 rs.mock("@/env", () => ({

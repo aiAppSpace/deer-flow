@@ -94,7 +94,7 @@ const artifactRehypePlugins = computed<PluggableList>(() => [
 // 与 React 一致：只有 markdown 预览才抽引用来源。
 /*
   markdown 预览里的链接**不走 markdown 层默认的安全确认按钮**，走普通 `<a>`——
-  上游 artifact-file-detail.tsx:1014 就是这么覆盖的（`components={{ a: ArtifactLink }}`）。
+  上游 artifact-file-preview.tsx:311 就是这么覆盖的（`components={{ a: ArtifactLink }}`）。
   理由：artifact 是用户自己让 agent 写下来的文件，预览它等同于打开自己的文档；
   而聊天正文里的链接才是"模型现编的外链"，那一层才需要先确认。
 

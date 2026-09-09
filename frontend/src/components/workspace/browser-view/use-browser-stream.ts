@@ -72,7 +72,11 @@ export function useBrowserStream(
   );
   const [liveUrl, setLiveUrl] = useState<string | null>(null);
   const [tabs, setTabs] = useState<BrowserTab[]>([]);
-  const [connectionAttempt, setConnectionAttempt] = useState(0);
+  // This state is only a lifecycle-generation signal. The actual consecutive
+  // reconnect count lives in a ref so resetting it after a successful open
+  // does not recreate the WebSocket effect.
+  const [reconnectGeneration, setReconnectGeneration] = useState(0);
+  const reconnectAttemptRef = useRef(0);
   const socketRef = useRef<WebSocket | null>(null);
   const pendingNavigateRef = useRef<Extract<
     BrowserInputEvent,
@@ -111,7 +115,8 @@ export function useBrowserStream(
     if (enabled) {
       return;
     }
-    setConnectionAttempt(0);
+    reconnectAttemptRef.current = 0;
+    setReconnectGeneration(0);
     frameBuffer.dispose();
     setLiveUrl(null);
     setTabs([]);
@@ -146,23 +151,27 @@ export function useBrowserStream(
       }
       // Exponential backoff with a ceiling + attempt cap so a server that keeps
       // rejecting the upgrade cannot pin the client in a tight reconnect loop.
-      if (connectionAttempt >= RECONNECT_MAX_ATTEMPTS) {
+      // #4951 moved the attempt counter into a ref so a reconnect does not
+      // recreate the stream; read it from there.
+      const attempt = reconnectAttemptRef.current;
+      if (attempt >= RECONNECT_MAX_ATTEMPTS) {
         // Returning here without telling anyone leaves the mode button
         // rendering "…" — which reads as "connecting" — forever, even though
         // no further attempt will ever be made. Hand the give-up back to the
         // caller so it can leave live mode: the button then reads "Live" /
         // "Take live control" again, which is true, and the single click that
         // re-enables live also resets the budget (the disabled-effect above
-        // zeroes connectionAttempt).
+        // zeroes the counter).
         onReconnectExhaustedRef.current?.();
         return;
       }
       const delay = Math.min(
-        RECONNECT_BASE_DELAY_MS * 2 ** connectionAttempt,
+        RECONNECT_BASE_DELAY_MS * 2 ** attempt,
         RECONNECT_MAX_DELAY_MS,
       );
       reconnectTimer = window.setTimeout(() => {
-        setConnectionAttempt((attempt) => attempt + 1);
+        reconnectAttemptRef.current += 1;
+        setReconnectGeneration((generation) => generation + 1);
       }, delay);
     };
 
@@ -177,7 +186,7 @@ export function useBrowserStream(
       // mounted, so after RECONNECT_MAX_ATTEMPTS total reconnects — even across
       // many healthy connections — scheduleReconnect would bail forever and
       // Live would go permanently dead until the panel is toggled off/on.
-      setConnectionAttempt(0);
+      reconnectAttemptRef.current = 0;
       setStatus("open");
     };
     socket.onmessage = (message) => {
@@ -240,7 +249,7 @@ export function useBrowserStream(
       socket.close();
       frameBuffer.dispose();
     };
-  }, [connectionAttempt, enabled, frameBuffer, threadId]);
+  }, [reconnectGeneration, enabled, frameBuffer, threadId]);
 
   // Steer an already-open stream toward a changed seed in-band instead of
   // rebuilding the socket. Only navigates when the live page differs from the

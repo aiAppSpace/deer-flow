@@ -8,7 +8,14 @@ const SUPPORTED_RUN_STREAM_MODES = new Set([
   "custom",
 ] as const);
 
+export const CHAT_RUN_STREAM_MODES = [
+  "messages-tuple",
+  "updates",
+  "custom",
+] as const;
+
 const warnedUnsupportedStreamModes = new Set<string>();
+let warnedUnsupportedStreamResumable = false;
 
 export function warnUnsupportedStreamModes(
   modes: string[],
@@ -36,13 +43,27 @@ export function sanitizeRunStreamOptions<T>(options: T): T {
     return options;
   }
 
+  let sanitizedOptions: T = options;
+  if ("streamResumable" in options) {
+    const withoutStreamResumable = { ...options };
+    delete withoutStreamResumable.streamResumable;
+    sanitizedOptions = withoutStreamResumable as T;
+
+    if (!warnedUnsupportedStreamResumable) {
+      warnedUnsupportedStreamResumable = true;
+      console.warn(
+        "[deer-flow] Dropped unsupported LangGraph run option: streamResumable",
+      );
+    }
+  }
+
   if (!("streamMode" in options)) {
-    return options;
+    return sanitizedOptions;
   }
 
   const streamMode = options.streamMode;
   if (streamMode == null) {
-    return options;
+    return sanitizedOptions;
   }
 
   const requestedModes = Array.isArray(streamMode) ? streamMode : [streamMode];
@@ -56,5 +77,36 @@ export function sanitizeRunStreamOptions<T>(options: T): T {
     );
   }
 
-  return options;
+  return sanitizedOptions;
+}
+
+/**
+ * Keep chat streams on incremental events only. Without an explicit mode list,
+ * the SDK's lazy message tracking also requests `values`, retransmitting the
+ * full thread state (including message history) after graph steps.
+ */
+export function forceChatRunStreamOptions<T>(options: T): T {
+  const sanitizedOptions = sanitizeRunStreamOptions(options);
+  const preservedOptions =
+    typeof AbortSignal !== "undefined" &&
+    sanitizedOptions instanceof AbortSignal
+      ? { signal: sanitizedOptions }
+      : typeof sanitizedOptions === "object" && sanitizedOptions !== null
+        ? sanitizedOptions
+        : {};
+  const requestedMode = Reflect.get(preservedOptions, "streamMode");
+  const streamModes = new Set<string>([
+    ...CHAT_RUN_STREAM_MODES,
+    ...((Array.isArray(requestedMode)
+      ? requestedMode
+      : requestedMode == null
+        ? []
+        : [requestedMode]) as string[]),
+  ]);
+  streamModes.delete("values");
+
+  return {
+    ...preservedOptions,
+    streamMode: [...streamModes],
+  } as T;
 }

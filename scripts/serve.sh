@@ -13,9 +13,11 @@
 #   --dual      Start both frontends directly; dual-host nginx remains M7 scope
 #
 # Actions:
-#   --skip-install  Skip dependency installation (faster restart)
-#   --stop      Stop all running services and exit
-#   --restart   Stop all services, then start with the given mode flags
+#   --skip-install        Skip dependency installation (faster restart)
+#   --skip-frontend-build With --prod, reuse the existing .next build via `next start`
+#                         instead of `next build` (opt-in; fails if no build exists)
+#   --stop                Stop all running services and exit
+#   --restart             Stop all services, then start with the given mode flags
 #
 # Examples:
 #   ./scripts/serve.sh --dev                 # Gateway dev, hot reload
@@ -42,7 +44,15 @@ fi
 _pick_python() {
     local candidate
     for candidate in python3 python py; do
-        if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1; then
+        # Probe through `env` as well: the frontend is launched as
+        # `env PORT=3000 "$DEERFLOW_PNPM_PYTHON" ...` (FRONTEND_CMD below), and on
+        # Windows/Git Bash the Microsoft Store python aliases under WindowsApps
+        # are skipped by Bash's own PATH lookup yet still resolved (and fail to
+        # exec) inside /usr/bin/env. A bare "$candidate" probe passes while the
+        # real launch dies with: env: 'python3': No such file or directory
+        if command -v "$candidate" >/dev/null 2>&1 \
+            && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1 \
+            && env "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info.major >= 3 else 1)' >/dev/null 2>&1; then
             printf '%s\n' "$candidate"
             return 0
         fi
@@ -56,6 +66,7 @@ DEV_MODE=true
 DAEMON_MODE=false
 SKIP_INSTALL=false
 FRONTEND_MODE="react"
+SKIP_FRONTEND_BUILD=false
 ACTION="start"   # start | stop | restart
 
 for arg in "$@"; do
@@ -66,11 +77,12 @@ for arg in "$@"; do
         --vue)     FRONTEND_MODE="vue" ;;
         --dual)    FRONTEND_MODE="dual" ;;
         --skip-install) SKIP_INSTALL=true ;;
+        --skip-frontend-build) SKIP_FRONTEND_BUILD=true ;;
         --stop)    ACTION="stop" ;;
         --restart) ACTION="restart" ;;
         *)
             echo "Unknown argument: $arg"
-            echo "Usage: $0 [--dev|--prod] [--vue|--dual] [--daemon] [--skip-install] [--stop|--restart]"
+            echo "Usage: $0 [--dev|--prod] [--vue|--dual] [--daemon] [--skip-install] [--skip-frontend-build] [--stop|--restart]"
             exit 1
             ;;
     esac
@@ -273,9 +285,19 @@ stop_all() {
     _kill_repo_port 3000
     _kill_repo_port 3100
     _kill_repo_port 2026
-    ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true
+    bash ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true
     echo "✓ All services stopped"
 }
+
+# Validate the reusable frontend build before any stop_all runs, so start and
+# restart never tear down a healthy stack only to fail here. --stop is exempt.
+if [ "$ACTION" != "stop" ] && ! $DEV_MODE && $SKIP_FRONTEND_BUILD; then
+    if [ ! -f "$REPO_ROOT/frontend/.next/BUILD_ID" ]; then
+        echo "✗ --skip-frontend-build requires an existing frontend build."
+        echo "  Run 'make start' once (full build), or: cd frontend && pnpm run build"
+        exit 1
+    fi
+fi
 
 # ── Action routing ───────────────────────────────────────────────────────────
 
@@ -313,10 +335,19 @@ export DEERFLOW_PNPM_PYTHON DEERFLOW_PNPM_RUNNER
 
 # Frontend commands. The default deliberately remains React.
 if $DEV_MODE; then
-    REACT_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
+    # 上游 #5053 给 React 这条加了显式 PORT=3000（Windows 上 next dev 不认 .env 里的 PORT）。
+    REACT_FRONTEND_CMD='env PORT=3000 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
     VUE_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt dev --port 3100'
+    if $SKIP_FRONTEND_BUILD; then
+        echo "  Note: --skip-frontend-build is ignored in dev mode (neither next dev nor nuxt dev builds)."
+    fi
+elif $SKIP_FRONTEND_BUILD; then
+    # 复用已有构建。React 侧的 .next/BUILD_ID 前置检查在上面；
+    # Vue 侧同理跳过 `nuxt build`，直接 preview 现成的 .output。
+    REACT_FRONTEND_CMD="env PORT=3000 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start"
+    VUE_FRONTEND_CMD='PORT=3100 HOST=127.0.0.1 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt preview'
 else
-    REACT_FRONTEND_CMD="env BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
+    REACT_FRONTEND_CMD="env PORT=3000 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
     VUE_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt build && PORT=3100 HOST=127.0.0.1 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt preview'
 fi
 
@@ -368,7 +399,7 @@ if ! { \
     exit 1
 fi
 
-"$REPO_ROOT/scripts/config-upgrade.sh"
+bash "$REPO_ROOT/scripts/config-upgrade.sh"
 
 # ── Install dependencies ────────────────────────────────────────────────────
 
@@ -401,7 +432,7 @@ if ! $SKIP_INSTALL; then
     # `--all-packages` propagates extras into workspace members (deerflow-harness
     # in particular). Required for postgres extras — see PR #2584.
     # Intentionally unquoted to splat multiple `--extra X` pairs.
-    (cd backend && uv sync --quiet --all-packages $UV_EXTRAS_FLAGS) || { echo "✗ Backend dependency install failed"; exit 1; }
+    (cd backend && uv sync --locked --quiet --all-packages $UV_EXTRAS_FLAGS) || { echo "✗ Backend dependency install failed"; exit 1; }
     (cd frontend && "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" install --silent) || { echo "✗ Frontend dependency install failed"; exit 1; }
     if [ "$FRONTEND_MODE" = "vue" ] || [ "$FRONTEND_MODE" = "dual" ]; then
         "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue install --silent || { echo "✗ Vue frontend dependency install failed"; exit 1; }
@@ -419,6 +450,9 @@ echo "  Starting DeerFlow"
 echo "=========================================="
 echo ""
 echo "  Mode: $MODE_LABEL"
+if ! $DEV_MODE && $SKIP_FRONTEND_BUILD; then
+    echo "  (frontend: reusing existing build)"
+fi
 echo ""
 echo "  Services:"
 echo "    Gateway     → localhost:8001  (REST API + agent runtime)"
@@ -469,7 +503,7 @@ run_service() {
         sh -c "$cmd" &
     fi
 
-    ./scripts/wait-for-port.sh "$port" "$timeout" "$name" || {
+    bash ./scripts/wait-for-port.sh "$port" "$timeout" "$name" || {
         local logfile="logs/$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-').log"
         echo "✗ $name failed to start."
         [ -f "$logfile" ] && tail -20 "$logfile"
@@ -485,14 +519,15 @@ mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp
 
 # 1. Gateway API
 run_service "Gateway" \
-    "cd backend && PYTHONPATH=. uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 $GATEWAY_EXTRA_FLAGS > ../logs/gateway.log 2>&1" \
+    "cd backend && PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 $GATEWAY_EXTRA_FLAGS > ../logs/gateway.log 2>&1" \
     8001 30
 
 # 2. Explicit frontend selection.
+# 超时 120 → 300 是上游 #4899：冷启动的 next build 在慢机器上会超过两分钟。
 if [ "$FRONTEND_MODE" = "react" ] || [ "$FRONTEND_MODE" = "dual" ]; then
     run_service "React Frontend" \
         "cd frontend && $REACT_FRONTEND_CMD > ../logs/frontend.log 2>&1" \
-        3000 120
+        3000 300
 fi
 
 if [ "$FRONTEND_MODE" = "vue" ] || [ "$FRONTEND_MODE" = "dual" ]; then

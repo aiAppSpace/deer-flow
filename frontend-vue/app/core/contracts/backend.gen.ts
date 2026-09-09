@@ -30,6 +30,7 @@ export type BackendSubagentStopReason = (typeof SUBAGENT_STOP_REASON_VALUES)[num
 
 /** 占用前导斜杠的 composer 控制命令，永远不能当作技能激活。 */
 export const RESERVED_SLASH_SKILL_NAMES = [
+  "agent",
   "bootstrap",
   "goal",
   "help",

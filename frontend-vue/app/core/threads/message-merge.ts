@@ -16,7 +16,7 @@
                    唯一一处「原样」有明确含义的地方：`mergeMessages` 的锚点编织
                    （C2「不能在第一个锚点处切片」）和 `resolveTransientHistoryBridge`
                    的未加载页抑制（C4）都是被具体 issue 逼出来的形状，读代码看不出
-                   哪一步在防什么，只有上游 2,095 行的 `message-merge.test.ts` 能
+                   哪一步在防什么，只有上游 2,381 行的 `message-merge.test.ts` 能
                    证明它们还成立。改这里之前先让那份测试红。
 
                    与上游唯一的实质差异：`EMPTY_MESSAGES` / `EMPTY_MESSAGE_IDENTITIES`

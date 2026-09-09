@@ -3,20 +3,28 @@ import { useEffect } from "react";
 
 import { useI18n } from "@/core/i18n/hooks";
 import type { AgentThreadState } from "@/core/threads";
+import { cn } from "@/lib/utils";
 
 import { useThreadChat } from "./chats";
 import { FlipDisplay } from "./flip-display";
 
-export function ThreadTitle({
-  threadId,
-  thread,
-}: {
+export type ThreadTitleProps = {
   className?: string;
   threadId: string;
   thread: BaseStream<AgentThreadState>;
-}) {
+  canonicalTitle?: string;
+};
+
+export function ThreadTitle({
+  className,
+  threadId,
+  thread,
+  canonicalTitle,
+}: ThreadTitleProps) {
   const { t } = useI18n();
   const { isNewThread } = useThreadChat();
+  const title = canonicalTitle?.length ? canonicalTitle : thread.values?.title;
+
   useEffect(() => {
     // Precedence, best-known first. "Loading..." is a placeholder for a name we
     // do not have yet, so it must not overwrite one we do: the previous order
@@ -26,9 +34,14 @@ export function ThreadTitle({
     // left standing — the user hears "Loading..." and never hears a correction
     // (WCAG 4.1.3). Measured on the parity harness: the announcer's text was
     // the last non-deterministic thing left in this scenario.
+    //
+    // `title` (not `thread.values?.title`) is #5045's source: it prefers the
+    // canonical title so a rename stays in sync. That only changes *which*
+    // known name wins — the ordering below is what keeps the placeholder from
+    // outranking any of them.
     let _title: string;
-    if (thread.values?.title) {
-      _title = thread.values.title;
+    if (title) {
+      _title = title;
     } else if (isNewThread) {
       _title = t.pages.newChat;
     } else if (thread.isThreadLoading) {
@@ -43,15 +56,18 @@ export function ThreadTitle({
     t.pages.untitled,
     t.pages.appName,
     thread.isThreadLoading,
-    thread.values,
+    title,
   ]);
 
-  if (!thread.values?.title) {
+  if (!title) {
     return null;
   }
   return (
-    <FlipDisplay uniqueKey={threadId}>
-      {thread.values.title ?? "Untitled"}
+    <FlipDisplay
+      uniqueKey={threadId}
+      className={cn("min-w-0 [&>div]:truncate", className)}
+    >
+      {title}
     </FlipDisplay>
   );
 }

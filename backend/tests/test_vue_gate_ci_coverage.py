@@ -30,9 +30,7 @@ README = REPO_ROOT / "frontend-vue/README.md"
 # than parsed out of the prose: a regex over a sentence would quietly match
 # less as the sentence is edited, and this list is the thing under test.
 CI_RUN = frozenset({"verify", "asset-budget", "audit", "container-smoke", "e2e-mock", "e2e-backend"})
-LOCAL_ONLY = frozenset(
-    {"icon-parity", "standalone-sim", "e2e-parity", "e2e-parity-auth"}
-)
+LOCAL_ONLY = frozenset({"icon-parity", "standalone-sim", "e2e-parity", "e2e-parity-auth"})
 
 
 def _workflow_make_targets() -> set[str]:

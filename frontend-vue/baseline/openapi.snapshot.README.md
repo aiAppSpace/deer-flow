@@ -35,7 +35,7 @@ cd ../frontend-vue && make gen-api-types
 `create_app()` 只打一行 warning。当前快照就是带着这个变量抓的：
 103 条路径 / 128 个 schema，不设变量是 102 条。
 
-`app.py` 里唯一按条件 `include_router` 的就是这一个（其余 22 个 router 无条件挂载），
+`app.py` 里唯一按条件 `include_router` 的就是这一个（其余 26 个 router 无条件挂载），
 所以路由集只受这一个变量影响。**没有验证过**的是 `config.yaml` 的
 memory / scheduler / tracing 开关会不会改变 schema 细节——它们看上去只影响启动期
 行为，但没实测。刷新快照时如果 diff 出意料之外的东西，先怀疑这里。

@@ -35,7 +35,16 @@
     "user-message-plain-text",
     "workspace-changes"
   ],
-  "pending": [],
+  "pending": [
+    "artifact-table-performance",
+    "artifact-table-preview",
+    "artifact-viewer-window",
+    "background-tasks",
+    "mcp-settings",
+    "thread-archive",
+    "thread-ordering",
+    "thread-title-sync"
+  ],
   "exempt": [
     {
       "id": "docs-localized-links",
@@ -51,5 +60,14 @@
       "note": "这份 spec 与路由无关：它往页面里注入元素，核的是全局/scoped 样式规则在 prefers-reduced-motion 下解析成什么。落在 / 上只是因为随便哪一页都会加载那份样式表，而 / 已经在 exemptRoutes 里。对照工厂不覆盖它，本仓自己带了一份镜像 spec（tests/e2e/reduced-motion.spec.ts），所以两侧都有机器在守。上游那份只覆盖 ambilight——它的 Shimmer 是 motion/react 驱动的，jsdom 里就能观察到位移，所以钉在单测 tests/unit/components/ui/reduced-motion.dom.test.tsx 里；本仓的 Shimmer 是 scoped CSS，只能在真浏览器里核。"
     }
   ],
-  "$pendingReasons": {}
+  "$pendingReasons": {
+    "artifact-table-performance": "同上那一面的性能三例（冷 Worker 跑 1MiB CSV、超宽引号记录时主线程不卡、病态解析后还能开下一个 Worker）。**什么时候重新问**：artifact-table-preview 进目录之后——性能例依赖同一套 fixture。",
+    "artifact-table-preview": "上游 #5265 起的表格预览面（真 Worker 解析、分页、源码切换、宽表视窗、截断末记录、坏引号、草稿冲突）。本仓有 ArtifactTablePreview，但对照目录还没有覆盖这 5 例。**什么时候重新问**：跑一次 e2e-parity 把表格预览纳入取样点时。",
+    "artifact-viewer-window": "独立视窗路由：markdown 渲染成果而非源码、html 留在 gateway URL 以保持下载语义、会话过期后回到同一件产物。**什么时候重新问**：本仓的 standalone viewer 路由补齐这三条语义时。",
+    "background-tasks": "当前会话的后台任务卡片（功能不可用时既不显示也不发请求；可用时显示/刷新/取消）。**什么时候重新问**：本仓接上 background-tasks 接口时。",
+    "mcp-settings": "编辑单个 MCP server 时不能丢掉 advanced 字段、也不能动到兄弟条目。**什么时候重新问**：本仓 MCP 设置页支持 advanced 字段编辑时。",
+    "thread-archive": "归档：保留当前会话、支持撤销、能从归档区恢复；归档失败时聊天仍可见；活跃列表要包含超过一整页归档之后的旧会话。**什么时候重新问**：本仓实现归档功能时（图标 Archive/ArchiveRestore 目前也只有 React 用到）。",
+    "thread-ordering": "分页长历史按 feed 顺序渲染并在刷新后保持；提交中途发生压缩仍保序并追加新轮次；自定义 agent 会话在分页与刷新间保持同一顺序。**什么时候重新问**：本仓 MessageList 虚拟化改动时——这三例正是那块最容易回归的地方。",
+    "thread-title-sync": "重命名要同步侧栏、头部与 document.title；过期的 metadata 响应不能把旧标题写回来。**什么时候重新问**：下一轮碰 thread-title 时（本仓已有 ThreadTitle，缺的是这两条竞态断言）。"
+  }
 }

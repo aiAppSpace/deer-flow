@@ -73,8 +73,16 @@ describe("external fetch", () => {
     const calls = fetchCalls();
     // The known external call spans several lines; a line-based scan misses it.
     const external = calls.filter((call) => EXTERNAL.test(call.text));
+    /*
+      The anchor moved: #5302 took the call out of `landing/header.tsx` (an
+      async Server Component) and put it behind `app/github-stars/route.ts`.
+      That relocation fixed the worse half of the original bug — a slow
+      api.github.com no longer stalls the `/` render — but arrived without the
+      bound, and this guard caught it on the merge. Anchor on the call's
+      current home, not the one it had when the rule was written.
+    */
     expect(external.map((call) => call.file)).toContain(
-      path.join("components", "landing", "header.tsx"),
+      path.join("app", "github-stars", "route.ts"),
     );
     expect(calls.length).toBeGreaterThan(3);
   });

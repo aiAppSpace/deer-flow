@@ -1,3 +1,9 @@
+export function getTabularDelimiter(
+  language: string | null,
+): "," | "\t" | null {
+  return language === "csv" ? "," : language === "tsv" ? "\t" : null;
+}
+
 export type ArtifactViewMode = "code" | "preview";
 
 type ArtifactPreviewMessage = {
@@ -516,6 +522,33 @@ function collectCssResourceUrls(value: string) {
     },
   );
   return urls;
+}
+
+function escapeHtmlAttribute(value: string) {
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;");
+}
+
+export function appendHtmlPreviewBaseHref(
+  content: string,
+  url?: string,
+  currentHref = globalThis.location?.href ?? "http://localhost/",
+) {
+  if (!url || /<base\s/i.exec(content)) {
+    return content;
+  }
+
+  const baseHref = htmlBaseHref(url, currentHref);
+  const baseElement = `<base href="${escapeHtmlAttribute(baseHref)}">`;
+  // "(?:\s[^>]*)?" keeps the tag-name boundary so `<header>` (a common
+  // leading tag in agent-generated fragments) is not mistaken for `<head>`;
+  // mirrors appendHtmlPreviewScrollRestoration below.
+  if (/<head(?:\s[^>]*)?>/i.test(content)) {
+    return content.replace(
+      /<head(?:\s[^>]*)?>/i,
+      (headTag) => `${headTag}${baseElement}`,
+    );
+  }
+  return `${baseElement}${content}`;
 }
 
 export const HTML_PREVIEW_SCROLL_MESSAGE_SOURCE =

@@ -25,7 +25,7 @@
                    不用行号（行号会随任何一次编辑失效），也不靠「看起来像历史」猜。
 
                    识别规则：命令里的 target 名带连字符，或者整条命令被反引号/代码块
-                   包住时参与检查。这样「Deerflow is AI and can make mistakes」这类散文
+                   包住时参与检查。这样「DeerFlow is AI and can make mistakes」这类散文
                    不会误报，而 `e2e-m7` 这类死名字跑不掉。
                    残留缺口：一个**没有连字符**、又**没被反引号包住**的已删除
                    target 仍会漏网。当前 Makefile 里的单词 target（verify、test、

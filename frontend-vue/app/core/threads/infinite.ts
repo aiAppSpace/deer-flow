@@ -8,7 +8,7 @@
   【依赖关系】     @tanstack/vue-query（仅类型与 QueryClient）· ./thread-search-query
   【边界与注意】   这是本仓第一次 import `@tanstack/vue-query`。它进 `core/` 而不是
                    `composables/`，因为这几个函数**不用组件上下文**：拿到
-                   `QueryClient` 就能跑，上游 `infinite.test.ts`（575 行）正是
+                   `QueryClient` 就能跑，上游 `infinite.test.ts`（594 行）正是
                    直接 `new QueryClient()` 测的，搬过来不用改测试形状。
 
                    `getInfiniteThreadsNextPageParam` 的 Symbol 标注不是优化。

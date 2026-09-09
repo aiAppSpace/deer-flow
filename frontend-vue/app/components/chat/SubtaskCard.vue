@@ -246,19 +246,27 @@ onUnmounted(() => {
           @click="toggle"
         >
           <div class="flex w-full items-center justify-between">
-            <ChainOfThoughtStep class="font-normal">
+            <!--
+              标题**截断成一行**，不换行把卡片撑高。`min-w-24 flex-1` 让它占住
+              剩余宽度、`block truncate` 才有可截断的盒子，右侧那组元数据配
+              `min-w-0` 才让得动。对齐上游 #5136；本仓此前是自然宽度，
+              对照台账上量到 React 706px / Vue 232.6px。
+            -->
+            <ChainOfThoughtStep class="min-w-24 flex-1 font-normal">
               <template #icon><ClipboardList /></template>
               <template #label>
-                <Shimmer
-                  v-if="viewModel.status === 'in_progress'"
-                  :text="viewModel.description"
-                  :duration="3"
-                  :spread="3"
-                />
-                <template v-else>{{ viewModel.description }}</template>
+                <span class="block truncate" :title="viewModel.description">
+                  <Shimmer
+                    v-if="viewModel.status === 'in_progress'"
+                    :text="viewModel.description"
+                    :duration="3"
+                    :spread="3"
+                  />
+                  <template v-else>{{ viewModel.description }}</template>
+                </span>
               </template>
             </ChainOfThoughtStep>
-            <div class="flex items-center gap-1">
+            <div class="flex min-w-0 items-center gap-1">
               <div v-if="collapsed" :class="metadataClasses">
                 <span
                   v-if="viewModel.modelLabel"

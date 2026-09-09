@@ -110,6 +110,7 @@ const HAND_MAINTAINED = [
   "parity-scenario-coverage.json",
   "react-parity-scope.json",
   "route-payload-budget.json",
+  "upstream-i18n-map.json",
 ];
 
 /**

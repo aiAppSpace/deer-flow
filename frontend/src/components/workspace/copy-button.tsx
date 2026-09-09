@@ -40,10 +40,12 @@ export function CopyButton({
         `aria-label` stays ahead of `{...props}` so callers can still override.
       */}
       <Button
+        aria-label={
+          copied ? t.clipboard.copiedToClipboard : t.clipboard.copyToClipboard
+        }
         size="icon-sm"
         type="button"
         variant="ghost"
-        aria-label={t.clipboard.copyToClipboard}
         onClick={handleCopy}
         {...props}
       >

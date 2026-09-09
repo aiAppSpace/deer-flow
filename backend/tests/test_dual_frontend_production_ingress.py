@@ -32,6 +32,17 @@ def _nginx() -> str:
 HELM_DIR = REPO_ROOT / "deploy/helm"
 
 
+def _prose(markdown: str) -> str:
+    """Collapse whitespace so a prose assertion survives a re-wrap.
+
+    The sentences below are pinned for their meaning, not their line breaks.
+    Matching the raw text made re-flowing a paragraph -- which happens whenever
+    AGENTS.md is edited near its size budget -- fail as if the qualification had
+    been deleted.
+    """
+    return re.sub(r"\s+", " ", markdown)
+
+
 def test_the_helm_chart_ships_react_only_and_says_so() -> None:
     """The dual-hostname topology is Compose's; the chart has one frontend.
 
@@ -49,7 +60,7 @@ def test_the_helm_chart_ships_react_only_and_says_so() -> None:
     mentions = sorted(path.relative_to(REPO_ROOT).as_posix() for path in HELM_DIR.rglob("*") if path.is_file() and "vue" in path.read_text(encoding="utf-8", errors="ignore").lower())
     assert mentions == [], "the Helm chart now references Vue: give it the same ingress contract coverage the Compose topology has in this file, then update the AGENTS.md sentence and this test together"
 
-    agents_md = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    agents_md = _prose((REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8"))
     assert "Helm chart under `deploy/` ships React only" in agents_md, "AGENTS.md no longer says the chart is React-only; either the chart grew a Vue workload (see above) or the qualification was dropped"
 
 
@@ -176,7 +187,11 @@ def test_vue_dockerfile_and_dev_launcher_expose_the_vue_hmr_service() -> None:
     assert "WATCH_PID_FILE" not in docker_script
     assert "--frontend)" not in docker_script
 
-    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    # **先剥注释再扫。** 断言的是「Makefile 里没有 docker-logs-frontend 这个
+    # 目标」，而一句*解释*为什么没有它的注释同样含这个字符串——不剥的话，
+    # 写下那句解释就会让这条守卫红。同一个坑在本仓已经踩到第三次
+    # （frontend-vue 的 e2e-suite-contract 与 tooling-contracts 各一次）。
+    makefile = "\n".join(line for line in (REPO_ROOT / "Makefile").read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#"))
     assert "docker-logs-react" in makefile
     assert "docker-logs-vue" in makefile
     assert "docker-logs-frontend" not in makefile
@@ -197,7 +212,13 @@ def test_production_launcher_reconciles_both_frontend_containers() -> None:
 
     assert 'services="redis frontend frontend-vue gateway nginx"' in deploy_script
     assert 'services="$services provisioner"' in deploy_script
-    assert '"${COMPOSE_CMD[@]}" up --build -d --remove-orphans $services' in deploy_script
+    # 钉的是「重建 + 后台 + 清理孤儿容器」这三样，不钉整行：上游 #5166 在同一行
+    # 加了 `--wait --wait-timeout 180`（等 Gateway 的就绪探针），那是它的新功能。
+    # **`--build` 必须在**——自动合并曾经把它吃掉一次，而少了它 make up 会复用旧镜像。
+    up_line = next(line for line in deploy_script.splitlines() if '"${COMPOSE_CMD[@]}" up' in line and "$services" in line)
+    assert "--build" in up_line, up_line
+    assert "-d" in up_line, up_line
+    assert "--remove-orphans" in up_line, up_line
 
 
 def test_all_gateway_proxy_locations_overwrite_forwarded_host_and_proto() -> None:

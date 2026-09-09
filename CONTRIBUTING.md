@@ -13,6 +13,13 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
 #### Prerequisites
 
 - Docker Desktop or Docker Engine
+- Docker Compose **v2.24 or newer** (check with `docker compose version`). The dev
+  Compose file marks its `env_file` entries optional using the long-form
+  `path`/`required` syntax; older clients reject it with
+  `services.gateway.env_file.0 must be a string`. `make docker-start` verifies the
+  version and tells you to upgrade — direct `docker compose` callers get that raw
+  message instead.
+- pnpm (for caching optimization)
 
 #### Setup Steps
 
@@ -31,17 +38,42 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
    make docker-init
    ```
    This will:
-   - Pull the sandbox image used by container-based agent execution
-   - Leave application image builds to `make docker-start`
+   - Pull the sandbox image used by container-based agent execution (skipped in
+     local sandbox mode, which needs no image)
+   - Leave application image builds and dependency installs to `make docker-start`
 
 3. **Start development services**:
    ```bash
    make docker-start
    ```
    `make docker-start` reads `config.yaml` and starts `provisioner` only for provisioner/Kubernetes sandbox mode.
-   It remains in the foreground so Compose owns Watch and live logs without a
-   second background supervisor. Stop it with `Ctrl+C`, or run
+   It stays in the foreground (`exec … up --build --watch`) so Compose itself owns Watch
+   and live logs without a second background supervisor. Stop it with `Ctrl+C`, or run
    `make docker-stop` from another terminal.
+
+   Prefer this wrapper over invoking Compose yourself: it checks your Compose
+   version, creates the missing `.env` files, and exports `DEER_FLOW_ROOT`.
+
+   If you do run Compose directly, run it **from the repository root** and set
+   `DEER_FLOW_ROOT` to the absolute path of your checkout. Compose interpolates
+   that variable into host-side paths (`DEER_FLOW_HOST_BASE_DIR`,
+   `THREADS_HOST_PATH`) that the AIO and provisioner sandbox modes bind-mount;
+   leaving it unset renders them as `/backend/.deer-flow`, so those mounts
+   silently miss your checkout instead of failing:
+
+   ```bash
+   # macOS / Linux
+   DEER_FLOW_ROOT="$PWD" docker compose -f docker/docker-compose-dev.yaml up --build
+   ```
+
+   ```powershell
+   # Windows PowerShell
+   $env:DEER_FLOW_ROOT = (Get-Location).Path
+   docker compose -f docker/docker-compose-dev.yaml up --build
+   ```
+
+   Do not reuse that `-f` path from inside `docker/` — it resolves to
+   `docker/docker/docker-compose-dev.yaml` and fails with a file-not-found error.
 
    All services will start with hot-reload enabled:
    - React and Vue source changes are synchronized by Compose Watch and trigger framework HMR
@@ -51,7 +83,7 @@ Docker provides a consistent, isolated environment with all dependencies pre-con
 
 4. **Access the application**:
    - React: http://localhost:2026
-   - Vue: http://vue.localhost:2026
+   - Vue: http://vue.localhost:2026 (`DEER_FLOW_VUE_HOSTNAME`, default `vue.localhost`)
    - API Gateway: http://localhost:2026/api/*
    - LangGraph-compatible API: http://localhost:2026/api/langgraph/*
 
@@ -66,7 +98,7 @@ make docker-start
 make docker-stop
 # View Docker development logs
 make docker-logs
-# View Docker React/Vue frontend logs
+# View Docker frontend logs (this fork runs two, so the target is per-app)
 make docker-logs-react
 make docker-logs-vue
 # View Docker gateway logs
@@ -180,7 +212,7 @@ Required tools:
    ```
 
 4. **Access the application**:
-   - Web Interface: http://localhost:2026
+   - React: http://localhost:2026, Vue: http://vue.localhost:2026
    - All API requests are automatically proxied through nginx
 
 #### Manual Service Control
@@ -309,9 +341,12 @@ before review.
 ## Testing
 
 ```bash
-# Backend tests (offline by default; excludes live external-API tests)
+# Default backend tests (excludes live and blocking-I/O tests)
 cd backend
 make test
+
+# Strict blocking-I/O tests
+make test-blocking-io
 
 # Live DeerFlowClient integration tests (explicit opt-in)
 # Requires a valid root config.yaml and API credentials.

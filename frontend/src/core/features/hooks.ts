@@ -1,6 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { fetchBrowserControlEnabled } from "./api";
+import {
+  fetchBrowserControlEnabled,
+  fetchMcpTasksEnabled,
+  fetchSubagentBatchesCapability,
+} from "./api";
 
 /*
  * `enabled` so a public showcase page can opt out. `/showcase/<id>` renders the
@@ -22,6 +26,37 @@ export function useBrowserControlEnabled(options?: { enabled?: boolean }) {
 
   return {
     enabled: data ?? false,
+    isLoading: isPending,
+  };
+}
+
+export function useMcpTasksEnabled() {
+  const { data, isPending } = useQuery({
+    queryKey: ["features", "mcp_tasks"],
+    queryFn: () => fetchMcpTasksEnabled(),
+    staleTime: 0,
+    refetchOnMount: true,
+    retry: false,
+  });
+
+  return {
+    enabled: data ?? false,
+    isLoading: isPending,
+  };
+}
+
+export function useSubagentBatchesCapability() {
+  const { data, isPending } = useQuery({
+    queryKey: ["features", "subagent_batches"],
+    queryFn: () => fetchSubagentBatchesCapability(),
+    staleTime: 0,
+    refetchOnMount: true,
+    retry: false,
+  });
+  return {
+    repositoryAvailable: data?.repositoryAvailable ?? false,
+    workerRunning: data?.workerRunning ?? false,
+    maxRunning: data?.maxRunning ?? 0,
     isLoading: isPending,
   };
 }

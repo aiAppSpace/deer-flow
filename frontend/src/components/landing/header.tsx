@@ -1,14 +1,14 @@
-import { StarFilledIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
+import { GitHubLogoIcon } from "@radix-ui/react-icons";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { NumberTicker } from "@/components/ui/number-ticker";
 import { DEFAULT_LOCALE, type Locale } from "@/core/i18n/locale";
 import { getI18n } from "@/core/i18n/server";
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 import { MobileNav } from "./mobile-nav";
+import { StarCounter } from "./star-counter";
 
 export type HeaderProps = {
   className?: string;
@@ -23,7 +23,7 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
   return (
     <header
       className={cn(
-        "container-md fixed top-0 right-0 left-0 z-20 flex h-16 items-center justify-between gap-3 px-4 backdrop-blur-xs",
+        "container-md fixed top-0 right-0 left-0 z-20 mx-auto flex h-16 items-center justify-between gap-3 px-4 backdrop-blur-xs",
         className,
       )}
     >
@@ -72,8 +72,7 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
           >
             <GitHubLogoIcon className="size-4" />
             <span className="hidden sm:inline">Star on GitHub</span>
-            {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" &&
-              env.GITHUB_OAUTH_TOKEN && <StarCounter />}
+            {env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" && <StarCounter />}
           </a>
         </Button>
       </div>
@@ -85,54 +84,5 @@ export async function Header({ className, homeURL, locale }: HeaderProps) {
       />
       <hr className="from-border/0 via-border/70 to-border/0 absolute top-16 right-0 left-0 z-10 m-0 h-px w-full border-none bg-linear-to-r" />
     </header>
-  );
-}
-
-async function StarCounter() {
-  let stars = 10000; // Default value
-
-  try {
-    const response = await fetch(
-      "https://api.github.com/repos/bytedance/deer-flow",
-      {
-        headers: env.GITHUB_OAUTH_TOKEN
-          ? {
-              Authorization: `Bearer ${env.GITHUB_OAUTH_TOKEN}`,
-              "Content-Type": "application/json",
-            }
-          : {},
-        next: {
-          revalidate: 3600,
-        },
-        /*
-          A page render must not be able to hang on somebody else's server.
-          `try/catch` below catches an *error*; it does not catch "never
-          answers", and this runs inside an async Server Component — so a slow
-          api.github.com stalls the whole `/` response, not just the badge.
-
-          Unauthenticated GitHub allows 60 requests an hour per IP, which a
-          test suite reaches quickly: on 2026-09-08 `landing.spec.ts` was
-          timing out at 30s under load, and this is the only external fetch in
-          the app. The fallback below (10000) is already the designed answer
-          for "we could not read it", so timing out simply uses it.
-        */
-        signal: AbortSignal.timeout(3000),
-      },
-    );
-
-    if (response.ok) {
-      const data = await response.json();
-      stars = data.stargazers_count ?? stars; // Update stars if API response is valid
-    }
-  } catch (error) {
-    console.error("Error fetching GitHub stars:", error);
-  }
-  return (
-    <>
-      <StarFilledIcon className="size-4 transition-colors duration-300 group-hover:text-yellow-500" />
-      {stars && (
-        <NumberTicker className="font-mono tabular-nums" value={stars} />
-      )}
-    </>
   );
 }

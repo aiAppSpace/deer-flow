@@ -96,7 +96,7 @@ Behavior:
 - Stops existing local services first.
 - Starts Gateway (`8001`, with the embedded LangGraph-compatible runtime), Frontend (`3000`), nginx (`2026`). There is no standalone LangGraph service.
 - Unified app endpoint: `http://localhost:2026`.
-- Logs: `logs/gateway.log`, `logs/frontend.log`, `logs/nginx.log`.
+- Logs: `logs/gateway.log`, `logs/frontend.log`, `logs/frontend-vue.log` (when the Vue frontend is started), `logs/nginx.log`.
 
 Stop services:
 
@@ -137,7 +137,7 @@ Root-level orchestration and config:
 
 - `Makefile` - main local/dev/docker command entrypoints
 - `config.example.yaml` - primary app config template
-- `config.yaml` - local active config (gitignored)
+- `config.yaml` - local active config (tracked in this repo)
 - `docker/docker-compose-dev.yaml` - Docker dev topology
 - `.github/workflows/backend-unit-tests.yml` - PR validation workflow
 

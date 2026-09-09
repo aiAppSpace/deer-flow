@@ -392,17 +392,36 @@ echo ""
 
 # ── Start / Up ───────────────────────────────────────────────────────────────
 
+report_startup_failure() {
+    echo -e "${RED}✗ DeerFlow services failed to become ready.${NC}" >&2
+    echo '  If Docker Compose reports "unknown flag: --wait", upgrade to a version that' >&2
+    echo '  supports `docker compose up --wait`.' >&2
+    echo "  Container status:" >&2
+    "${COMPOSE_CMD[@]}" ps >&2 || true
+    echo "" >&2
+    echo "  Recent Gateway logs:" >&2
+    "${COMPOSE_CMD[@]}" logs --no-color --tail 100 gateway >&2 || true
+}
+
 if [ "$CMD" = "start" ]; then
     echo "Starting containers (no rebuild)..."
     echo ""
     # shellcheck disable=SC2086
-    "${COMPOSE_CMD[@]}" up -d --remove-orphans $services
+    # `--build` 不能少：make up 要在重建之后**把两个前端容器都对齐**，
+    # 少了它上一次的镜像会被原样复用（自动合并曾把这个 flag 吃掉一次）。
+    if ! "${COMPOSE_CMD[@]}" up --build -d --remove-orphans --wait --wait-timeout 180 $services; then
+        report_startup_failure
+        exit 1
+    fi
 else
     # Default: build + start
     echo "Building images and starting containers..."
     echo ""
     # shellcheck disable=SC2086
-    "${COMPOSE_CMD[@]}" up --build -d --remove-orphans $services
+    if ! "${COMPOSE_CMD[@]}" up --build -d --remove-orphans --wait --wait-timeout 180 $services; then
+        report_startup_failure
+        exit 1
+    fi
 fi
 
 echo ""
