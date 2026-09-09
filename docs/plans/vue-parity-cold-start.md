@@ -8,10 +8,10 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **200 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
+你接手一个已经跑了 **201 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 `91d9e134`（wave 199），已推到
+分支 `main-wc`，**接手时 HEAD 是 wave 201 的文档提交，已推到
 `origin/main-wc`，本地与远端齐平**。
 
 > **远端换过一次家（2026-09-09）。** 原来的 `YanivWang/deer-flow` 消失了，
