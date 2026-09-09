@@ -303,6 +303,15 @@ describe("upsertThreadInInfiniteCache", () => {
 });
 
 describe("invalidateStoppedThreadCaches", () => {
+  /*
+    thread 级那几条**是异步的**：要先等在飞的取数被取消掉、`fetchStatus` 回到
+    `idle`，`invalidateQueries` 才不会被它吞掉（见 `cache-invalidation.ts` 里
+    `restartThreadScopedQueries` 的说明）。所以断言 thread 级 key 的用例都要先
+    让出一个宏任务；全局那两条仍然是同步的，「没有 threadId」那条因此不用等。
+  */
+  const flushThreadScoped = () =>
+    new Promise((resolve) => setTimeout(resolve, 0));
+
   function invalidatedQueryKeys(client: QueryClient) {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     return {
@@ -312,11 +321,12 @@ describe("invalidateStoppedThreadCaches", () => {
     };
   }
 
-  test("refreshes current thread and sidebar caches after fire-and-forget stop", () => {
+  test("refreshes current thread and sidebar caches after fire-and-forget stop", async () => {
     const client = new QueryClient();
     const { queryKeys } = invalidatedQueryKeys(client);
 
     invalidateStoppedThreadCaches(client, "thread-1");
+    await flushThreadScoped();
 
     expect(queryKeys()).toContainEqual(["threads", "search"]);
     expect(queryKeys()).toContainEqual(INFINITE_THREADS_QUERY_KEY_PREFIX);
@@ -325,7 +335,7 @@ describe("invalidateStoppedThreadCaches", () => {
     expect(queryKeys()).toContainEqual(["thread-token-usage", "thread-1"]);
   });
 
-  test("preserves loaded history pages while invalidating", () => {
+  test("preserves loaded history pages while invalidating", async () => {
     const client = new QueryClient();
     const key = ["thread-messages", "thread-1"] as const;
     const latest = { data: [], has_more: true, next_before_seq: 20 };
@@ -336,6 +346,7 @@ describe("invalidateStoppedThreadCaches", () => {
     });
 
     invalidateStoppedThreadCaches(client, "thread-1");
+    await flushThreadScoped();
 
     expect(client.getQueryData(key)).toEqual({
       pages: [latest, older],
@@ -367,11 +378,12 @@ describe("invalidateStoppedThreadCaches", () => {
   // A8 数的是**语义类别**（当前 thread / history / token usage / 侧栏搜索），
   // 落到 key 上是 6 个。这条守的是「有没有漏一类」——上游没有对应用例，
   // 因为上游把这 6 个 key 直接写死在函数体里，数不出来。
-  test("A8 的四类缓存展开成六个 key，一个都不能少", () => {
+  test("A8 的四类缓存展开成六个 key，一个都不能少", async () => {
     const client = new QueryClient();
     const { queryKeys } = invalidatedQueryKeys(client);
 
     invalidateStoppedThreadCaches(client, "thread-1");
+    await flushThreadScoped();
 
     expect(queryKeys()).toEqual([
       ["threads", "search"],
@@ -383,12 +395,62 @@ describe("invalidateStoppedThreadCaches", () => {
     ]);
   });
 
+  /*
+    **失效不许被在飞的那次取数吞掉。**
+
+    这条守的是一个只在「新建 thread 的第一个回合」上才成立的条件：thread 级查询
+    还没有任何数据（`state.data === undefined`），而 TanStack Query 的
+    `cancelRefetch` 只在**已经有数据**时才会去取消并重取；没有数据时它直接复用
+    在飞的那次 promise。于是「run 结束了，去把 thread 级缓存刷一遍」这句话
+    **一次网络请求都不会产生**，页面停在那次取数带回来的、run 之前的世界。
+
+    真实症状：侧边会话发出第一条消息后关掉再打开，消息列表整个是空的
+    （`sidecar-chat.spec.ts` 里约 1/40 复现，wave 196）。
+
+    这里用普通 `QueryObserver` 而不是无限查询：踩中的分支在 `Query.fetch` 里，
+    与分页行为无关，用最小的查询形状反而更能说明是哪一处。
+  */
+  test("在飞的首次取数不许吞掉失效", async () => {
+    const client = new QueryClient();
+    const queryKey = ["thread-messages", "thread-1"];
+    let releaseFirstFetch: () => void = () => {};
+    let calls = 0;
+    const queryFn = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        // run 开始之前发出的那次：它看到的世界里这条 thread 还没有任何消息。
+        await new Promise<void>((resolve) => {
+          releaseFirstFetch = resolve;
+        });
+        return { rows: [] };
+      }
+      return { rows: ["run 之后的消息"] };
+    });
+
+    const observer = new QueryObserver(client, { queryKey, queryFn });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+
+    invalidateStoppedThreadCaches(client, "thread-1");
+    releaseFirstFetch();
+
+    try {
+      await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2));
+      expect(client.getQueryData(queryKey)).toEqual({
+        rows: ["run 之后的消息"],
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test("wraps SDK stop and refreshes caches after it resolves", async () => {
     const client = new QueryClient();
     const stop = vi.fn(() => Promise.resolve());
     const { queryKeys } = invalidatedQueryKeys(client);
 
     await stopThreadAndInvalidateCaches(client, stop, "thread-1");
+    await flushThreadScoped();
 
     expect(stop).toHaveBeenCalledTimes(1);
     expect(queryKeys()).toContainEqual(["thread", "metadata", "thread-1"]);
@@ -404,6 +466,7 @@ describe("invalidateStoppedThreadCaches", () => {
     await expect(
       stopThreadAndInvalidateCaches(client, stop, "thread-1"),
     ).rejects.toThrow("cancel failed");
+    await flushThreadScoped();
 
     expect(queryKeys()).toContainEqual(["threads", "search"]);
     expect(queryKeys()).toContainEqual(["thread", "metadata", "thread-1"]);

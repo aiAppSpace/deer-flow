@@ -71,9 +71,57 @@ export function invalidateThreadCaches(
   if (!threadId) {
     return;
   }
-  for (const queryKey of THREAD_CACHE_KEYS.threadScoped(threadId)) {
-    void queryClient.invalidateQueries({ queryKey });
-  }
+  restartThreadScopedQueries(
+    queryClient,
+    THREAD_CACHE_KEYS.threadScoped(threadId),
+  );
+}
+
+/**
+ * thread 级缓存的失效**必须先取消在飞的那一次**，否则会被它整个吞掉。
+ *
+ * TanStack Query 里 `invalidateQueries` 默认带 `cancelRefetch: true`，但那个开关
+ * 在 `query.fetch` 里有一处**只对已经有数据的查询生效**的前提：
+ *
+ *     if (fetchStatus !== "idle" && retryer.status() !== "rejected") {
+ *       if (state.data !== undefined && fetchOptions?.cancelRefetch) {
+ *         this.cancel({ silent: true });   // 取消在飞的那次，重新取
+ *       } else if (this.#retryer) {
+ *         return this.#retryer.promise;    // ← 复用在飞的那次
+ *       }
+ *     }
+ *
+ * 一条**新建的 thread**，它的每一个 thread 级查询都还是第一次取数，`state.data`
+ * 是 `undefined`——于是走下面那条，失效被在飞的取数吃掉，**不产生重取**。而那次
+ * 取数是在 run 开始之前发出的，它带回来的是 run 之前的世界：历史是空的、标题还是
+ * New chat、run 列表里什么都没有。之后没有任何机制会补上这一次（查询的宿主一直
+ * 挂着不会重新 mount，`staleTime` 只影响下一次取数的时机）。
+ *
+ * 最短的一条路径是侧边会话：`POST /threads` 建线程 → threadId 就位 → thread 级
+ * 查询立刻发出 → 紧接着 run 开跑 → run 结束时它们还在飞。实测
+ * `sidecar-chat.spec.ts` 的「creates a hidden sidecar thread」约 1/40 复现，
+ * 症状是侧边会话关掉再打开后消息列表整个是空的。
+ *
+ * **取消是异步的，所以失效也变成异步的**：`Query.cancel` 要等在飞的那次真正
+ * settle、`fetchStatus` 回到 `idle`，紧跟着同步调 `invalidateQueries` 仍然会撞上
+ * 上面那个分支。取消全部排在一起等一次，是为了让失效顺序仍然等于
+ * `THREAD_CACHE_KEYS.threadScoped` 的顺序——那张表本身是被断言的。
+ *
+ * `cancelQueries` 对 idle 的查询是空操作，所以正常情况下这里不多花任何代价——
+ * 只有「失效发生时确实还有一次取数在飞」这一种情况才会真的取消并重取，
+ * 而那正是唯一会出问题的情况。`revert: true`（默认）保证取消不会丢掉已加载的页。
+ */
+function restartThreadScopedQueries(
+  queryClient: QueryClient,
+  queryKeys: readonly (readonly unknown[])[],
+) {
+  void Promise.all(
+    queryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })),
+  ).then(() => {
+    for (const queryKey of queryKeys) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  });
 }
 
 /** Remove deleted rows and every thread-scoped cache without dropping siblings. */

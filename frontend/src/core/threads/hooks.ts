@@ -3,6 +3,7 @@ import type { ThreadsClient } from "@langchain/langgraph-sdk/client";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import {
   type QueryClient,
+  type QueryKey,
   type InfiniteData,
   useInfiniteQuery,
   useMutation,
@@ -1417,15 +1418,64 @@ export function invalidateStoppedThreadCaches(
     return;
   }
 
-  void queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
-  void queryClient.invalidateQueries({
-    queryKey: threadHistoryQueryKey(threadId),
-  });
-  void queryClient.invalidateQueries({
-    queryKey: ["thread", "metadata", threadId, isMock],
-  });
-  void queryClient.invalidateQueries({
-    queryKey: threadTokenUsageQueryKey(threadId),
+  restartThreadScopedQueries(queryClient, [
+    ["thread", threadId],
+    threadHistoryQueryKey(threadId),
+    ["thread", "metadata", threadId, isMock],
+    threadTokenUsageQueryKey(threadId),
+  ]);
+}
+
+/*
+  Per-thread invalidation has to cancel the in-flight fetch first, or the
+  in-flight fetch swallows it whole.
+
+  `invalidateQueries` already defaults to `cancelRefetch: true`, but that switch
+  has a precondition inside `Query.fetch` that only holds once the query has
+  data:
+
+      if (fetchStatus !== "idle" && retryer.status() !== "rejected") {
+        if (state.data !== undefined && fetchOptions?.cancelRefetch) {
+          this.cancel({ silent: true });   // cancel the in-flight one, refetch
+        } else if (this.#retryer) {
+          return this.#retryer.promise;    // <- reuse the in-flight one
+        }
+      }
+
+  On a freshly created thread every per-thread query is still on its first
+  fetch, so `state.data` is `undefined` and the second branch wins: the
+  invalidation is absorbed by the in-flight fetch and **no refetch happens at
+  all**. That in-flight fetch was issued before the run started, so it answers
+  with the pre-run world — empty history, "New chat" title, no runs — and
+  nothing ever refetches it (the hosting components stay mounted, and
+  `staleTime` only governs when the next fetch may start).
+
+  The shortest path to it is the side chat, which creates the thread and sends
+  the first message in one gesture: `POST /threads` resolves, the per-thread
+  queries fire, the run starts immediately after, and it finishes while they are
+  still in flight. Symptom: reopening the side chat shows an empty message list.
+
+  Cancelling is asynchronous, so the invalidation becomes asynchronous too —
+  `Query.cancel` resolves only once the in-flight fetch has settled and
+  `fetchStatus` is back to `idle`; invalidating synchronously right after the
+  cancel call would still hit the branch above. The cancels are awaited together
+  so the invalidation order stays the declared one.
+
+  `cancelQueries` is a no-op on idle queries, so this costs nothing in the
+  normal case — it only cancels and refetches when a fetch really is in flight
+  at invalidation time, which is exactly the case that was broken. The default
+  `revert: true` keeps already loaded pages.
+*/
+function restartThreadScopedQueries(
+  queryClient: QueryClient,
+  queryKeys: readonly QueryKey[],
+) {
+  void Promise.all(
+    queryKeys.map((queryKey) => queryClient.cancelQueries({ queryKey })),
+  ).then(() => {
+    for (const queryKey of queryKeys) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
   });
 }
 

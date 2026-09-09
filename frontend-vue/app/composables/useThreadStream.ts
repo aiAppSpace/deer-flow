@@ -312,9 +312,29 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     STREAMING_STATUSES.has(sessionStatus.value),
   );
 
-  // ---- 历史 --------------------------------------------------------------
+  /*
+    ---- 历史 --------------------------------------------------------------
+
+    **run 在跑的时候不取历史**——上游 `enabled: !isMock && !thread.isLoading`
+    （hooks.ts:1889）本仓一直缺这一半，只判了 `Boolean(threadId)`。
+
+    上游那条注释讲的是「省掉一次没有可观察效果的取数」。**本仓少了它还多一层
+    后果**：`/chats/new` 提交之后 threadId 由 `onStart` 交出来，那一刻 run 已经
+    在流——上游此时查询是关的，本仓会当场发一次分页取数，而它带回来的是 run
+    之前的世界。run 结束时的那次缓存失效如果恰好落在它还在飞的时候，会被它整个
+    吞掉（机制见 `@/core/threads/cache-invalidation` 里
+    `restartThreadScopedQuery` 的说明），历史于是永远停在空的。
+
+    **这道门只关得住「threadId 在 run 开始之后才出现」那一类。** 侧边会话是先
+    `POST /threads` 拿到 id、再发 run，id 就位时 `isStreaming` 还是 false，
+    门是开的——那一类由 `restartThreadScopedQuery` 兜住。两处都要有：
+    这里省的是请求（与上游齐平），那里保的是失效一定生效。
+
+    禁用期间 vue-query 继续给出已缓存的页，与上游禁用期间的表现一致；
+    `useThreadHistory` 自己的保留区（C6）也仍然兜着已经加载过的行。
+  */
   const history = useThreadHistory(() => threadId.value ?? "", {
-    enabled: computed(() => Boolean(threadId.value)),
+    enabled: computed(() => Boolean(threadId.value) && !isStreaming.value),
     pendingSupersededRunIds,
   });
 

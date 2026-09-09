@@ -607,6 +607,10 @@ describe("useThreadStream · A8 停止后的两轮失效", () => {
 
     ctx.invalidated.length = 0;
     await ctx.api.stop();
+    // thread 级那四条要等在飞的取数先被取消掉才发得出去，见
+    // `cache-invalidation.ts` 的 `restartThreadScopedQueries`。**这一步不能省**：
+    // 省掉它这条用例只看得见全局那两类，而 A8 数的是六个。
+    await vi.advanceTimersByTimeAsync(0);
 
     const firstRound = [...ctx.invalidated];
     expect(firstRound).toEqual([

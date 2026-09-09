@@ -299,7 +299,28 @@ describe("upsertThreadInInfiniteCache", () => {
   });
 });
 
+async function waitForCalls(
+  fn: { mock: { calls: unknown[] } },
+  count: number,
+) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (fn.mock.calls.length >= count) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(
+    `expected ${count} calls, saw ${fn.mock.calls.length} after waiting`,
+  );
+}
+
 describe("invalidateStoppedThreadCaches", () => {
+  // The per-thread invalidations are asynchronous: the in-flight fetch has to
+  // be cancelled and settle back to `idle` first, otherwise `invalidateQueries`
+  // is absorbed by it (see `restartThreadScopedQueries`). Assertions about
+  // per-thread keys therefore have to yield a macrotask first; the two global
+  // keys are still invalidated synchronously.
+  const flushThreadScoped = () =>
+    new Promise((resolve) => setTimeout(resolve, 0));
+
   function invalidatedQueryKeys(client: QueryClient) {
     const invalidate = rs.spyOn(client, "invalidateQueries");
     return {
@@ -309,11 +330,12 @@ describe("invalidateStoppedThreadCaches", () => {
     };
   }
 
-  test("refreshes current thread and sidebar caches after fire-and-forget stop", () => {
+  test("refreshes current thread and sidebar caches after fire-and-forget stop", async () => {
     const client = new QueryClient();
     const { queryKeys } = invalidatedQueryKeys(client);
 
     invalidateStoppedThreadCaches(client, "thread-1", false);
+    await flushThreadScoped();
 
     expect(queryKeys()).toContainEqual(["threads", "search"]);
     expect(queryKeys()).toContainEqual(INFINITE_THREADS_QUERY_KEY_PREFIX);
@@ -327,7 +349,7 @@ describe("invalidateStoppedThreadCaches", () => {
     expect(queryKeys()).toContainEqual(["thread-token-usage", "thread-1"]);
   });
 
-  test("preserves loaded history pages while invalidating", () => {
+  test("preserves loaded history pages while invalidating", async () => {
     const client = new QueryClient();
     const key = ["thread-messages", "thread-1"] as const;
     const latest = { data: [], has_more: true, next_before_seq: 20 };
@@ -338,6 +360,7 @@ describe("invalidateStoppedThreadCaches", () => {
     });
 
     invalidateStoppedThreadCaches(client, "thread-1", false);
+    await flushThreadScoped();
 
     expect(client.getQueryData(key)).toEqual({
       pages: [latest, older],
@@ -363,12 +386,65 @@ describe("invalidateStoppedThreadCaches", () => {
     expect(queryKeys()).not.toContainEqual(["thread-token-usage", "thread-1"]);
   });
 
+  /*
+    An in-flight fetch must not swallow the invalidation.
+
+    This only bites on a freshly created thread's first turn: the per-thread
+    queries have no data yet (`state.data === undefined`), and TanStack Query's
+    `cancelRefetch` only cancels-and-refetches once a query *has* data — without
+    it, the in-flight promise is reused. "The run finished, refresh the
+    per-thread caches" then issues no network request at all, and the UI stays
+    on whatever that fetch brought back: the pre-run world.
+
+    Real symptom: send the first message in a side chat, close and reopen it,
+    and the message list is empty.
+
+    A plain `QueryObserver` is enough here — the branch being pinned lives in
+    `Query.fetch` and has nothing to do with pagination.
+  */
+  test("an in-flight first fetch does not swallow the invalidation", async () => {
+    const client = new QueryClient();
+    const queryKey = ["thread-messages", "thread-1"];
+    let releaseFirstFetch: () => void = () => {
+      throw new Error("the first fetch has not started yet");
+    };
+    let calls = 0;
+    const queryFn = rs.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        // Issued before the run started: it sees a thread with no messages.
+        await new Promise<void>((resolve) => {
+          releaseFirstFetch = resolve;
+        });
+        return { rows: [] };
+      }
+      return { rows: ["message from the run"] };
+    });
+
+    const observer = new QueryObserver(client, { queryKey, queryFn });
+    const unsubscribe = observer.subscribe(() => undefined);
+    try {
+      await waitForCalls(queryFn, 1);
+
+      invalidateStoppedThreadCaches(client, "thread-1", false);
+      releaseFirstFetch();
+
+      await waitForCalls(queryFn, 2);
+      expect(client.getQueryData(queryKey)).toEqual({
+        rows: ["message from the run"],
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test("wraps SDK stop and refreshes caches after it resolves", async () => {
     const client = new QueryClient();
     const stop = rs.fn(() => Promise.resolve());
     const { queryKeys } = invalidatedQueryKeys(client);
 
     await stopThreadAndInvalidateCaches(client, stop, "thread-1", false);
+    await flushThreadScoped();
 
     expect(stop).toHaveBeenCalledTimes(1);
     expect(queryKeys()).toContainEqual([
@@ -389,6 +465,7 @@ describe("invalidateStoppedThreadCaches", () => {
     await expect(
       stopThreadAndInvalidateCaches(client, stop, "thread-1", false),
     ).rejects.toThrow("cancel failed");
+    await flushThreadScoped();
 
     expect(queryKeys()).toContainEqual(["threads", "search"]);
     expect(queryKeys()).toContainEqual([
