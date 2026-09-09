@@ -6,7 +6,13 @@
   【边界与注意】   Vue 使用自身 DOM 与门禁，不依赖 React 组件结构。
 */
 
-import { expect, test, type Route } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Locator,
+  type Page,
+  type Route,
+} from "@playwright/test";
 
 import {
   mockLangGraphAPI,
@@ -30,6 +36,60 @@ const DEMO_THREAD_ID = "7cfa5f8f-a2f8-47ad-acbd-da7137baf990";
 const SVG_PROMPT_THREAD_ID = "00000000-0000-0000-0000-000000000777";
 const SVG_PROMPT_MARKER = "LEAK-STRICT-SVG-PROMPT-SHOULD-DISAPPEAR";
 const OPTIMISTIC_PROMPT_MARKER = "LEAK-OPTIMISTIC-SVG-PROMPT-SHOULD-DISAPPEAR";
+
+/*
+  **滚到顶：先用真滚轮把列表带离尾部，再把 `scrollTop` 归零。**
+
+  原来这里是 `dispatchEvent("wheel", { deltaY: -1000 })`——**合成事件不会真的滚动**，
+  元素照旧停在尾部。而 `MessageList.onScroll` 的第一条分支是「在尾部就恢复跟随尾部」：
+
+      if (atTail) { followingTail.value = true; windowStart.value = maxStart; return; }
+
+  于是只要在那之后落下**任何一个** scroll 事件（例如上一次
+  `scrollToTail("smooth")` 的平滑滚动还在发），`followingTail` 就被置回 true；
+  随后这里把 `scrollTop` 设成 0 再发 scroll，走的是
+
+      if (followingTail.value) { windowStart.value = maxStart; return; }
+
+  ——虚拟窗口**钉死在尾部**，`Long history question 0` 永远不渲染。
+  报出来是 15 秒后的 `element(s) not found`，而 `scrollTop` 明明是 0
+  （wave 196 那次整套红就是这个形状）。
+
+  wave 199 的探针把这条链跑通了（同一棵树、单 worker）：
+
+      原样                          → scrollTop=0 首条命中 1
+      wheel 后补一个「尾部」scroll   → scrollTop=0 首条命中 **0**   ← 复刻失败
+      真滚轮 + 同样补那个 scroll     → scrollTop=0 首条命中 1        ← 修法成立
+
+  真滚轮会**真的**把 `scrollTop` 降下来，元素不再在尾部，后面的 scroll 事件
+  进不了 `atTail` 那条分支。与 `e2e-stream/real-stream.spec.ts` 里那段
+  「别拿一次输入去赌一个动着的界面」同族。
+*/
+async function scrollLogToTop(page: Page, scroller: Locator) {
+  const before = await scroller.evaluate((element) => element.scrollTop);
+  await scroller.hover();
+  await expect
+    .poll(
+      async () => {
+        await page.mouse.wheel(0, -1_000);
+        return scroller.evaluate((element) => element.scrollTop);
+      },
+      { timeout: 15_000, message: "真滚轮没能把列表带离尾部" },
+    )
+    .toBeLessThan(before);
+  /*
+    **把那个曾经让它翻车的事件永久留在这里。** 真滚轮之后它落不进 `atTail`
+    分支，所以不影响这条用例；而一旦有人把真滚轮换回合成 `wheel`，
+    这条用例会**确定性地**红，而不是每几十次整套才红一次。
+  */
+  await scroller.evaluate((element) => {
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await scroller.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
+}
 
 test.describe("Thread history", () => {
   test("sidebar shows existing threads", async ({ page }) => {
@@ -139,11 +199,7 @@ test.describe("Thread history", () => {
       .poll(() => conversation.locator("[data-index]").count())
       .toBeLessThan(60);
 
-    await scroller.dispatchEvent("wheel", { deltaY: -1_000 });
-    await scroller.evaluate((element) => {
-      element.scrollTop = 0;
-      element.dispatchEvent(new Event("scroll"));
-    });
+    await scrollLogToTop(page, scroller);
     await expect(page.getByText("Long history question 0")).toBeVisible({
       timeout: 15_000,
     });
@@ -287,11 +343,7 @@ test.describe("Thread history", () => {
       .toBeGreaterThan(0);
     const conversation = page.getByRole("log");
     const scroller = conversation.locator(":scope > div").first();
-    await scroller.dispatchEvent("wheel", { deltaY: -1_000 });
-    await scroller.evaluate((element) => {
-      element.scrollTop = 0;
-      element.dispatchEvent(new Event("scroll"));
-    });
+    await scrollLogToTop(page, scroller);
     await expect(page.getByText(originalPrompt)).toBeVisible({
       timeout: 15_000,
     });
