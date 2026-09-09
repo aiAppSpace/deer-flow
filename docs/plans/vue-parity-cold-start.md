@@ -8,7 +8,7 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **199 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
+你接手一个已经跑了 **200 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
 分支 `main-wc`，**接手时 HEAD 是 `91d9e134`（wave 199），已推到
@@ -24,7 +24,8 @@
 > 旧文档与旧提交说明里出现的 `YanivWang/deer-flow` 都是指这份工作副本的前身。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
-（台账 **202 行**全部已决定、一页纸清单「真正还开着的」**4 条**——wave 157 把 tooltip 那条判决关闭了——
+（台账**实测 103 行 / 95 个取样点**——`node frontend-vue/scripts/parity-ledger-report.mjs` 量，
+别引用散文；**三张 pending 表 wave 200 起全是空的**，一页纸清单原来那句「真正还开着的 4 条」是历史文本——wave 157 把 tooltip 那条判决关闭了——
 只剩一条 `chat-thread-init-ordering` 是真的还欠着——**wave 158 修掉两处根因（`aria` 20/20 达标），
 wave 159 把 `requests` 那一档也查到根因、并权衡后决定不改**，接着做就看
 `frontend-vue/baseline/parity-scenario-coverage.json` 的 `$pendingReasons`），
