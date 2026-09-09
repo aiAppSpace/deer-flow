@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 wave 197，2026-09-09）
+# React → Vue 平替：挂账总清单（截至 wave 198，2026-09-09）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
@@ -21,6 +21,11 @@
 > 是不是回归恰好重跑了两次。**wave 197 修的就是这件事**：真跑用例统一走
 > `E2E_RUN`，失败时把现场另存到 `test-results/failures/<时间戳>/`。
 > 下一次整套红时，trace/video/截图都会留住。
+>
+> **wave 198 收掉两条里的第一条**（`artifact-panel-resize:106`）：splitpanes 的窗格
+> `width .2s ease-out` 让分隔条 200ms 内滑 332px，而命中区只有 16px——
+> 在过渡途中量一次就按在那个读数上，拖拽静默失效。已改成按真实时间间隔判稳，
+> 并当场断言「抓住了没有」。**第二条（`thread-history:105` 千轮虚拟列表）仍然开着。**
 
 > **判据提醒**：台账现在是 **202 行 / 90 个取样点**（wave 150 不动 app 代码，行数未变）。
 >
