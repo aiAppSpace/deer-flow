@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 201，2026-09-09）
+## 当前状态（截至 wave 202，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -30,6 +30,9 @@
   对话框缩放进场时点击会偏 21.2px，收成唯一入口 + 零豁免守卫）。
   `f960035a` = wave 201（**最后一句没人守的「全集」补上门禁**：`DEERFLOW_WIRE_EVENTS`
   的 11 个名字逐个钉到后端出处；wave 107 留的翻案判据这一轮量到成立）。
+  `cd0d828a` = wave 202（**「永远红」的 audit 改成棘轮**：分诊从散文变成
+  `baseline/audit-triage.json`，7 个包逐条表态 + 两个方向的差集 + 离线结构守卫；
+  **九门禁第一次全绿**）。
 - **动过 `frontend/` 的有多少轮，这里不再写死一个数——它每次都过期。**
   wave 196 实测：`--since=2026-08-25` 共 **38 个提交**碰过
   `frontend/src` 或 `frontend/tests`（2026-09-09 量）。此前这一行写着「二十四轮」，
@@ -136,7 +139,7 @@ make -C frontend-vue icon-parity   **0 处待核、0 条 ⚠**（wave 75 逐条�
                                    核清单的人 grep 的是最后那句「共 0 处待核」
 make -C frontend-vue asset-budget  exit 0（wave 72 把 vendor-ui 预算按实测重定了一次，
                                    见 scripts/asset-budget.mjs 里那段注释）
-make -C frontend-vue audit         **预期红**：14 条，分诊写在 Makefile 的 audit 上方
+make -C frontend-vue audit         **棘轮，正常是绿的**（wave 202 改）：每个被报出来的包都要在 baseline/audit-triage.json 里表过态，冒出没表态的就红
 make -C frontend-vue coverage      语句 73.22% / 分支 64.72% / 函数 70.55% / 行 74.9%
                                    **诊断工具，不进 verify，没有阈值**
                                    standalone-check BLOCKING 0 处 / 0 个文件（DECLARED **40** 处 / **18** 个文件）
@@ -460,6 +463,37 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 202）做了什么：**把「永远红」的 audit 门禁改成棘轮——它的分诊已经盖不住它了**
+
+`make audit` 一直是「预期红」，注释写着「14 条，逐条分诊见上，免得下一个人再做一遍」。
+
+| | 分诊（wave 66）| **wave 202 实测** |
+| --- | --- | --- |
+| 条数 | 14（1 low / 10 mod / 3 high）| **20（1 low / 13 mod / 6 high）**|
+| 覆盖的包 | js-yaml · nanoid · lodash-es · mermaid | 这四个 **+ svgo(high) · vitest · @vitest/mocker** |
+
+后三个**从来没被分诊过**。数字和包名写死在散文里，而 `pnpm audit` 每天在变——
+**两边漂了没有任何征兆**，那句「免得下一个人再做一遍」现在会误导人。
+（产品风险面没变：新出现的三个逐个查过路径，都是构建期/开发期。）
+
+**一个永远红的门禁不产生信息**，人只会学会忽略它。改成棘轮：
+**每个被报出来的包都表过态就绿，冒出没表过态的、或表里有过期条目，就红。**
+逐包写 `reachability` / `decision` / `why` / **`revisit`**。
+
+两处判据：**严重度不进判据**（会被上游改，钉它等于把门禁绑在别人的评级上；
+同 `backend-enum-mirror` 的「只钉成员集合，不钉映射」）；**`revisit` 必填**
+（wave 201 刚证明过一次它的价值）。
+
+### 顺带订正 `animationName` 那段
+
+wave 164 列的三重堵死，**复量后有一条不成立**：伪元素那一格现在就在量
+`animationName`（wave 165/166 接的），装饰层已进取样面。另两条（只有一份 cassette、
+两边的每秒计时器）仍成立。已就地订正，免得下一轮照着复述「一格都没量过」。
+
+### 门禁
+
+**九门禁第一次全绿**（此前一直是「八绿 + audit 预期红」）。
 
 ## 上一轮（wave 201）做了什么：**最后一句没人守的「全集」补上门禁——判据四轮前就成立了**
 
