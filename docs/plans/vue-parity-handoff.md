@@ -145,7 +145,10 @@ make -C frontend-vue coverage      语句 73.22% / 分支 64.72% / 函数 70.55%
                                    standalone-check BLOCKING 0 处 / 0 个文件（DECLARED **40** 处 / **18** 个文件）
                                    ——**它只是静态证明**，证不了「移走之后还能跑」：
                                    wave 83 第一次真做实验时它早已是 0，而 verify 当场红。
-make -C frontend-vue e2e-parity    **81**  台账 **95 行**，**73** 样本
+make -C frontend-vue e2e-parity    **别引用这里的数字，跑 `node scripts/parity-ledger-report.mjs` 去量**
+                                   （2026-09-09 实测：**103** 条用例 / 台账 **103 行** / **95** 个取样点；
+                                   此处原写「81 / 95 行 / 73 样本」，三个数字全旧——
+                                   这张表里的读数没有任何机器在守，线索 179：**不承重的数字干脆别写**）
                                    （wave 94 起多一档 `focus`：7 行；
                                    wave 95 起多一档 `order`：**0 行**；
                                    wave 96 起多三档 tab 序：wave 97 结清后剩 **44 行**；
@@ -494,6 +497,19 @@ wave 164 列的三重堵死，**复量后有一条不成立**：伪元素那一�
 ### 门禁
 
 **九门禁第一次全绿**（此前一直是「八绿 + audit 预期红」）。
+
+> **⚠ 订正（当轮末尾）**：这句话第一次说出口时，`e2e-backend` **还没跑过**——
+> 我把后来新增的 `e2e-parity-auth` 顶替进去凑够了九个。补跑之后
+> **`e2e-backend` EXIT=0（22 条）**，结论确实成立，但**当时不该那么说**。
+> 判据：**「全绿」这种话要么逐条列出跑过的读数，要么别说。**
+>
+> 补跑时另外看到一处**没人在看的静默失败**：`e2e-agents` 里
+> `suggest_agent` 每跑必报两次
+> `Failed to generate suggestions: err='replay miss …'`，而用例照绿
+> （那几条不断言跟进建议）。**不是产品缺陷**（生产走真实 LLM），是
+> `write_read_file.ultra` 这份 cassette 里没有这两个输入的录制。
+> 要真修得重录——**与 `animationName` 卡点② 是同一个障碍**（后端活 + API key）。
+> **新挂一条账。**
 
 ## 上一轮（wave 201）做了什么：**最后一句没人守的「全集」补上门禁——判据四轮前就成立了**
 

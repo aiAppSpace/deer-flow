@@ -1,8 +1,25 @@
-# React → Vue 平替：挂账总清单（截至 wave 201，2026-09-09）
+# React → Vue 平替：挂账总清单（截至 wave 202，2026-09-09）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## wave 202 新挂一条：**`e2e-agents` 里有一处没人在看的静默失败**
+>
+> 补跑 `e2e-backend`（EXIT=0，22 条）时看到的：`suggest_agent` 每跑必报两次
+>
+>     app.gateway.routers.suggestions - ERROR - Failed to generate suggestions:
+>     err='replay miss: … Caller: suggest_agent'
+>
+> **而用例照绿**——那几条不断言跟进建议，于是这条错误每次都在日志里、没人看。
+> **不是产品缺陷**（生产走真实 LLM），是 `write_read_file.ultra` 这份 cassette
+> 里没有这两个输入的录制。
+>
+> **三条可选的做法，各自的代价**：① 重录 cassette（要后端活 + API key，
+> **与 `animationName` 卡点② 同一个障碍**，一次能解两条账）；
+> ② 让用例显式断言「这里现在没有建议、因为夹具没覆盖」，把静默变成写下来的事实；
+> ③ 让 `e2e-backend` 见到 `replay miss` 就红——**信号最强，但今天没法修就等于把门禁钉死在红**。
+> **翻案判据**：哪天有人重录 cassette，①②③ 都不必做了。
+>
 > ## wave 200：**机器可读的账全清了。**（2026-09-09 实测）
 >
 > | 表 | pending |
