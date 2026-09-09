@@ -62,6 +62,17 @@ export type ParityCapture = {
   focus: string;
   /** 取样时刻**能用 Tab 走到**的元素，按 DOM 顺序，各归一成一句话。见 sampleTabbables。 */
   tabbables: string[];
+  /**
+   * 取样时刻的**最终路径**（只取 pathname，不含 host 与查询串）。
+   *
+   * 不进台账——它不是「两边有什么差异」，而是「这次比的是不是同一屏」。
+   * wave 191 录过一份基线：React 停在 `/login`、Vue 因为夹具把它当成已登录而跳去了
+   * `/workspace/chats/new`，**每一档都满是行、看起来像一份丰收的差异清单**。
+   * 那种情形下该做的是当场红，不是签收；而两个应用的最终路径是判断它最直接的证据
+   * ——比「两棵树有多少公共行」准得多：同一屏但一侧没翻译时，公共行同样会塌到近乎零
+   * （wave 194 实测：上游的安装页在 zh-CN 下几乎整屏英文，公共行只有 3）。
+   */
+  url: string;
 };
 
 /**
@@ -610,7 +621,15 @@ export async function captureScenario(
     const geometry = await sampleGeometry(page, scenario, state);
     const focus = await describeFocus(page);
     const tabbables = await sampleTabbables(page);
-    return { aria, ariaTree, requests, geometry, focus, tabbables };
+    return {
+      aria,
+      ariaTree,
+      requests,
+      geometry,
+      focus,
+      tabbables,
+      url: new URL(page.url()).pathname,
+    };
   } finally {
     page.off("request", onRequest);
   }

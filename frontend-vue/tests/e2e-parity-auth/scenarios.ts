@@ -18,15 +18,6 @@ import {
   type ParityScenario,
 } from "../e2e-parity/support/scenarios";
 
-/*
-  ⚠ **`/setup` 暂时不在这里，理由是实测的**（wave 193）：
-  `setup-screen/desktop/light/zh-CN` 连跑两次，两棵可访问性树都只有 **3 行公共行**
-  （en-US 两次都正常），被 diff.spec.ts 里那条「公共行不能太少」的断言拦下。
-  换过锚点（从「有密码框」改成「第二个密码框」——登录页也有一个密码框）之后**依旧如此**，
-  所以不是锚点问题，是**这两个应用在 zh-CN 下的 /setup 落在了不同的屏上**。
-  **原因还没查清，所以不写进这张表**：录一份两边毫不相干的基线，等于把噪声当成发现。
-  路由棘轮里 `/setup` 那条 pending 记着这个读数。
-*/
 export const AUTH_PARITY_SCENARIOS: ParityScenario[] = [
   {
     id: "login-screen",
@@ -35,6 +26,30 @@ export const AUTH_PARITY_SCENARIOS: ParityScenario[] = [
     path: "/login",
     settle: [
       { kind: "visible", target: { selector: "input[type='password']" } },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
+    id: "setup-screen",
+    title: "首次安装向导",
+    backend: "gateway",
+    path: "/setup",
+    /*
+      **锚在「第二个密码框」上，不是「有密码框」**：登录页也有一个密码框，
+      一边跳去登录页时，「有密码框」这个锚点照样成立，取样就会在两个不同的屏上进行。
+      安装表单有两个（新密码 + 确认）。两个应用这几个 input 的 id 各不相同
+      （Vue `new-password` / `confirm-password`，React `password` / `confirmPassword`），
+      没有共用属性可锚；`:nth-match` 是 Playwright 自己的选择器引擎支持的，且与语言无关。
+
+      wave 193 时这一条被挡在门外：当时的「同不同屏」判据是「两棵树公共行不能太少」，
+      而 zh-CN 下只有 3 行——**误判**。wave 194 把判据换成「最终路径相同」之后
+      才看清：两边其实都停在 `/setup`，公共行少是因为**上游那一屏在 zh-CN 下几乎整屏英文**。
+    */
+    settle: [
+      {
+        kind: "visible",
+        target: { selector: ":nth-match(input[type='password'], 2)" },
+      },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },

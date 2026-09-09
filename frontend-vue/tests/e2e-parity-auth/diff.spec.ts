@@ -40,31 +40,6 @@ const BASELINE = new URL(
   import.meta.url,
 );
 
-/**
- * 两棵可访问性树至少要有这么多**公共行**，这次取样才算「两个应用在比同一屏」。
- *
- * wave 191 录到过一份「两边完全不同」的基线：React 停在登录表单、Vue 因为夹具
- * 把它当成已登录而跳去了工作区。那份东西**每一档都满是行、看起来像一份丰收的
- * 差异清单**，实际上记的是「我把两个应用放在了不同的屏上」。
- * 差异清单长成那样时，正确的反应不是签收，是**当场红**。
- *
- * 8 是量出来的下限：登录页两边公共行实测 20 行以上（wave 193）。
- */
-const MIN_SHARED_ARIA_LINES = 8;
-
-function sharedAriaLines(react: string, vue: string): number {
-  const vueLines = new Set(
-    vue
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean),
-  );
-  return react
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && vueLines.has(line)).length;
-}
-
 test.skip(!reactAppPresent, "兄弟应用不在 checkout 里，整组跳过");
 
 test("开着鉴权那几屏的双向差异都与签入的清单一致", async ({ browser }) => {
@@ -100,11 +75,22 @@ test("开着鉴权那几屏的双向差异都与签入的清单一致", async ({
         const suffix = state.id ? `#${state.id}` : "";
         const key = `${scenario.id}${suffix}/${dimension.viewport}/${dimension.theme}/${dimension.locale}`;
 
+        /*
+          **先确认这次比的是同一屏。**
+
+          wave 191 录过一份基线：React 停在 `/login`、Vue 因为夹具把它当成已登录而
+          跳去了工作区，**每一档都满是行、看起来像一份丰收的差异清单**——实际记的是
+          「我把两个应用放在了不同的屏上」。那种情形该当场红，不是签收。
+
+          判据是**最终路径相同**，不是「两棵树有多少公共行」。后者是 wave 193 的第一版，
+          wave 194 实测它会误判：上游的安装页在 zh-CN 下几乎整屏英文，两边**明明都停在
+          `/setup`**，公共行却只有 3 行。**「同一屏但一侧没翻译」与「不在同一屏」必须分得开。**
+        */
         expect(
-          sharedAriaLines(react.aria, vue.aria),
-          `${key}：两个应用的可访问性树几乎没有公共行，这不是「差异很多」，` +
-            `是它们根本不在同一屏上——先弄清楚谁跳走了，再谈比对。`,
-        ).toBeGreaterThanOrEqual(MIN_SHARED_ARIA_LINES);
+          { 应用: "react", 路径: react.url },
+          `${key}：两个应用停在不同的路径上，这不是「差异很多」，是它们根本不在同一屏——` +
+            `先弄清楚谁跳走了、为什么，再谈比对。`,
+        ).toEqual({ 应用: "react", 路径: vue.url });
 
         entries[key] = buildDiffEntry(react, vue);
       }

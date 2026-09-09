@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（截至 wave 193，2026-09-09）
+## 当前状态（截至 wave 194，2026-09-09）
 
 - 分支 `main-wc`。`b700cf17` = wave 39（chore `b09adb80`），
   `aef3618d` = wave 40（chore `2f9627fa`），`096c17d4` = wave 41，`706b3785` = wave 42，
@@ -444,6 +444,73 @@ wave 62 给消息轮次的复制键补上可访问名之后，这一屏同名元
 
 `asset-budget` 与 `audit` **此前不在任何一轮的门禁清单里**——和 `make coverage`
 之前的处境一样。`asset-budget` 现在是绿的，已进清单；`audit` 预期红，分诊已记。
+
+## 上一轮（wave 194）做了什么：**我上一轮那条「同不同屏」的判据是错的——它把「一侧没翻译」当成了「不在同一屏」**
+
+wave 193 把 `/setup` 挡在门外，理由是「zh-CN 下两棵树只有 3 行公共行」。这一轮查它。
+
+### 先排除顺序效应，再把树打出来
+
+让 `setup/zh-CN` **单独第一个跑**——**仍然是 3 行**，所以不是「排在最后受了前面的影响」。
+于是加一段临时诊断把两棵树打出来：
+
+```
+--- REACT ---            --- VUE ---
+paragraph: Create admin account          paragraph: 创建管理员账号
+paragraph: Set up the administrator…     （没有这一行）
+text: Email / Password / Confirm Password   text: 邮箱 / 密码 / 确认密码
+button "Create Admin Account"            button "创建管理员账号"
+```
+
+**两边明明都在同一屏**（创建管理员表单）。公共行少，是因为
+**上游那一屏在 zh-CN 下几乎整屏英文**——「上游写死英文」那一类（第 4 条账）。
+
+### 所以判据本身要换
+
+「公共行不能太少」把**两件完全不同的事**混在了一起：
+
+- 「两个应用不在同一屏」——该红；
+- 「同一屏，但一侧没翻译」——**不该红**，那正是这个工厂要记的差异。
+
+换成**最终路径必须相同**：`ParityCapture` 加一个 `url`（只取 pathname，**不进台账**——
+它不是「有什么差异」，是「这次比的是不是同一屏」）。这条判据是精确的，
+wave 191 那种「React 在 `/login`、Vue 在 `/workspace/chats/new`」会当场红，
+而「同屏不同语」不会。
+
+> 顺带修掉一个我自己的操作问题：上一次改这段时 python 的替换断言失败了，
+> 而我只 grep 了 `EXIT/passed/failed`，**没看那条 Traceback**，于是拿一份没改动的
+> spec 跑了一轮。**后台任务的输出要从头看，不能只 grep 结尾。**
+
+### `/setup` 第一次进取样面就照出 5 处 Vue 侧缺口
+
+en-US 那一列不受翻译干扰，是干净信号：
+
+| 差异 | React | Vue |
+| --- | --- | --- |
+| 副标题 | 有 `Set up the administrator account to get started.` | **没有** |
+| 「保持登录」说明 | 复选框可访问名里带整句说明 | **只有「保持登录」** |
+| 确认密码占位符 | 有 `Confirm password` | **没有** |
+| 标签大小写 | `Confirm Password` | `Confirm password` |
+| 确认密码输入框 | 高 36 / 字号 14px | **高 42 / 字号 16px**（y 差 25） |
+
+**判词**：zh-CN 多出来的那些行属于已判过的「上游写死英文」类，**接受**；
+上表五条是**真缺口，Vue 侧，下一轮修**——都在 `frontend-vue/` 内，不需要动 React。
+
+> ⚠ **主对照套件红过一次，复跑不可复现，如实记着**：
+> `integrations#permission-request` 上多出两行几何——
+> `button[Docs] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)` 与
+> `button[申请新权限] hit React=self Vue=div`。
+> **230 这个 alpha 是弹层淡入的中途值**，`hit` 从 `self` 变 `div` 也是同一形状。
+> 复跑 **103 全绿**。wave 193 用同一份基线也是绿的，而本轮唯一的改动是给
+> `ParityCapture` 加了个**不进台账**的 `url`。**记为取样抖动，不当成差异**；
+> 若再出现要按 wave 108~113 那套办法查（它是那份「抖动名单」的形状）。
+
+- 门禁：`make verify` **275 files / 2246 tests**、`e2e-parity-auth` 复跑通过、
+  `e2e-parity` **103 全绿**（第一次红过一条，见上）。
+  路由棘轮 `/setup` 出列，**只剩 `/auth/callback` 一条**。
+- 只动了取样面自身，**不需要 marker chore**。
+
+---
 
 ## 上一轮（wave 193）做了什么：**wave 191 的分叉查清了，是我自己的场景写错；登录页正式进了取样面**
 
