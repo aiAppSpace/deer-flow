@@ -1,0 +1,67 @@
+{
+  "$comment": "`pnpm audit` 报出来的每一个包，逐条表态。**这张表必须与实际输出的包集合逐个相等**——scripts/audit-triage.mjs 两个方向都查。",
+  "$readers": [
+    "scripts/audit-triage.mjs",
+    "tests/guards/audit-triage.test.ts",
+    "tests/guards/baseline-keys-consumed.test.ts"
+  ],
+  "$semantics": "**这张表不证明「没有漏洞」，它保证「每一个被报出来的包都表过态」。** 零豁免：audit 报了一个这里没有的包，`make audit` 当场红；这里登记了一个 audit 已经不报的包，同样红（否则过期条目会一直躺着，正是它取代的那段散文的毛病）。 **为什么把一个「永远红」的门禁改成棘轮**：原来的做法是 `pnpm audit` 直接当门禁、注释里写「当前预期是红的，14 条，分诊见上」。wave 202 实测那段分诊已经盖不住了——**7 个包**里 svgo / vitest / @vitest/mocker **从来没被分诊过**，其中 svgo 是 high。（当时的条数读数是 1 low / 13 moderate / 6 high，**写在这里只作为一次带日期的观测，不是判据**——判据是下面 packages 的集合。把条数写成规则正是这张表要取代的那个毛病。）**一个永远红的门禁不产生信息**，人只会学会忽略它；改成「表过态就绿、冒出新的就红」之后，它才真的在守什么。 **reachability 的取值**：`runtime` = 会进客户端产物；`build` = 只在构建期跑；`dev` = 只在开发/测试时跑。 **decision 的取值**：`accept` = 判定不可达或后果可接受，why 里必须写清判据；`hold` = 有意不升，why 里必须写清为什么升比不升更糟。 **revisit 是必填的**：wave 201 刚证明过一次——wave 107 那条「有意不钉」正是靠留下的翻案判据在四轮后被推翻并补上。只写结论、不写「什么时候该重新问一次」，等于把它埋了。",
+  "packages": [
+    {
+      "package": "@vitest/mocker",
+      "entry": "vitest",
+      "reachability": "dev",
+      "decision": "accept",
+      "why": "测试运行器自身的依赖，只在 `make verify` / `pnpm vitest` 里跑，不进任何客户端 chunk，也不进容器镜像（Dockerfile 的生产阶段不装 devDependencies）。",
+      "revisit": "vitest 升级到修复版本时，这一条会因为 audit 不再报它而自动变红——照着删掉即可。"
+    },
+    {
+      "package": "js-yaml",
+      "entry": "@nuxt/eslint · openapi-typescript",
+      "reachability": "build",
+      "decision": "accept",
+      "why": "两条来路都是构建期工具（eslint 类型生成、OpenAPI 类型生成）。wave 66 逐条查过可达性：**0 个客户端 chunk**。漏洞是 `!!omap` 的二次方 CPU，攻击面要求解析攻击者可控的 YAML，而这两处解析的是本仓自己的配置与 schema。",
+      "revisit": "哪天有 YAML 走到运行时（例如产品面读用户上传的 yaml），这一条立刻不成立。"
+    },
+    {
+      "package": "lodash-es",
+      "entry": "mermaid",
+      "reachability": "runtime",
+      "decision": "accept",
+      "why": "来路是 mermaid → @mermaid-js/parser → langium → chevrotain → @chevrotain/gast，**5 个 chunk**。high 那条是 `_.template` 代码注入，要求把攻击者可控的模板串喂给 `_.template`——chevrotain 不这么用（wave 66 查过调用点）。",
+      "revisit": "mermaid 升级换掉 langium/chevrotain，或 chevrotain 开始把外部串喂给 `_.template`。"
+    },
+    {
+      "package": "mermaid",
+      "entry": "mermaid",
+      "reachability": "runtime",
+      "decision": "hold",
+      "why": "**有意锁在 11.12.2，不跟着 advisory 升。** 上游 React 侧的 mermaid 来自 `@streamdown/mermaid → streamdown → mermaid@^11.12.2`，实际解析成 11.12.2；本仓精确锁同一个版本，**为的是两个应用画出同一张图**——mermaid 的渲染结果直接进对照取样面（`thread-history-mermaid` 是台账里的场景），单边升级会让台账立刻分叉。要升就得两边一起升，而 React 那边的版本由被 vendored 的 streamdown 的依赖树决定，覆盖它等于从上游的锁文件上分叉。**正确归属方是上游 streamdown / DeerFlow，不是这个 fork。** 该组 advisory 的后果是「渲染恶意图时卡住自己这一个标签页」，而图的来源是 agent 输出。",
+      "revisit": "上游 streamdown 把 mermaid 提上去——那时两边一起升，台账不会分叉。"
+    },
+    {
+      "package": "nanoid",
+      "entry": "@nuxt/eslint",
+      "reachability": "dev",
+      "decision": "accept",
+      "why": "来路是 @nuxt/eslint → @nuxt/eslint-config → eslint-processor-*，只在 lint 时跑。漏洞要求传入**自定义生成器**才会死循环，本仓没有这种用法（wave 66 查过）。",
+      "revisit": "nanoid 进到运行时依赖树里（例如产品代码直接用它生成 id）。"
+    },
+    {
+      "package": "svgo",
+      "entry": "nuxt",
+      "reachability": "build",
+      "decision": "accept",
+      "why": "来路是 nuxt → @nuxt/vite-builder → cssnano → cssnano-preset-*，**只在构建期压缩 CSS**，不进产物。high 那条是 `removeScripts` 允许可执行链接通过——本仓不把用户提供的 SVG 喂给 svgo，它处理的是自己样式表里的内联资源。**wave 66 的分诊没有这一条**，是 wave 202 补的。",
+      "revisit": "svgo 进到运行时（例如产品面在浏览器里用它处理用户上传的 SVG）。"
+    },
+    {
+      "package": "vitest",
+      "entry": "vitest",
+      "reachability": "dev",
+      "decision": "accept",
+      "why": "同 @vitest/mocker：测试运行器本体，不进产物也不进镜像。**wave 66 的分诊没有这一条**，是 wave 202 补的。",
+      "revisit": "同 @vitest/mocker。"
+    }
+  ]
+}

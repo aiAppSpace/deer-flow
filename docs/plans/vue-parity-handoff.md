@@ -2662,6 +2662,24 @@ textarea / 侧栏链接 / 对话框 / assistant turn。
 录一份带子代理的 cassette；给步骤词汇加「挂住一条流」；
 把 `RunActivity` 的计时器在取样上下文里冻住（或换一个不带计时器的锚点）。
 
+> ### ⚠ wave 202 复量：**三条里已经有一条不成立了**
+>
+> **卡点① 已解**，而这段话没跟上。`sampleGeometry` 的伪元素那一格现在**就在量
+> `animationName`**（`capture.ts` 的 `anim=${ps.animationName}`，wave 165/166 接的），
+> 而 wave 165 又把 `hidden` 的 target 也纳入取样——`ambilight` 那层盒子高度为 0 的
+> 装饰层因此进了取样面。**「锚点集合里没有会动的元素」这句话现在是错的。**
+>
+> 另两条**逐个复量，仍然成立**（2026-09-09）：
+>
+> - **② cassette 仍只有一份**：`backend/tests/fixtures/replay/` 下依旧只有
+>   `write_read_file.ultra`，没有带子代理的录制。
+> - **③ 计时器两边都还在**：`run-duration.tsx:24` 与 `RunActivity.vue:38` 都是
+>   `setInterval(updateElapsed, 1000)`——那一屏天生不确定，这一条最硬。
+>
+> **所以现在的准确说法是**：装饰层的动画**已经在量了**；还缺的是「一条正在跑的流」
+> 上的动画（shimmer / 运行中态），卡在 ②③ 上。**别再照 wave 164 那段去复述
+> 「一格都没量过」。**
+
 **这一轮零代码改动**，只把三条路各堵在哪写清楚——省下的是下一轮重新推一遍的时间。
 先例：wave 98 / 99 / 101 / 114 / 115 / 123 / 127 都是这种轮次。
 

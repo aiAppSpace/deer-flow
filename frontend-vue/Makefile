@@ -351,27 +351,18 @@ dom-parity:
 icon-parity:
 	node scripts/icon-parity.mjs
 
-# `make audit` **当前预期是红的**，2026-09-04（wave 66）逐条查过可达性，结论记在这里，
-# 免得下一个人看到 "14 vulnerabilities" 再做一遍同样的分析。
+# `make audit` 是**棘轮，不是「永远红」**（wave 202 改的）。
 #
-#   js-yaml（high，!!omap 二次方 CPU）—— **0 个客户端 chunk**，构建期依赖，运行时无关。
-#   nanoid（high，自定义生成器可能死循环）—— 1 个 chunk，但漏洞要求传入自定义生成器，
-#           本仓没有这种用法。
-#   lodash-es（high，`_.template` 代码注入）—— 5 个 chunk，来路是
-#           mermaid → @mermaid-js/parser → langium → chevrotain → @chevrotain/gast。
-#           漏洞要求把攻击者可控的模板串喂给 `_.template`，chevrotain 不这么用。
-#   mermaid（moderate，radar 图 DoS，>=11.6.0 <11.16.1）—— **有意不升**，见下。
+# 原来它直接跑 `pnpm audit`，注释里写着「当前预期是红的，14 条，逐条分诊见上」。
+# wave 202 实测那段分诊已经盖不住它了：**7 个包**里 svgo / vitest / @vitest/mocker
+# 从来没被分诊过（svgo 还是 high），而数字和包名写死在散文里、`pnpm audit` 每天在变，
+# **两边漂了没有任何征兆**。**一个永远红的门禁不产生信息**——人只会学会忽略它。
 #
-# **mermaid 有意锁在 11.12.2，不跟着 advisory 升。** 那不是保守，是判据：
-# 上游 React 侧的 mermaid 来自 `@streamdown/mermaid → streamdown → mermaid@^11.12.2`，
-# 实际解析成 **11.12.2**；本仓精确锁同一个版本，**为的是两个应用画出同一张图**。
-# mermaid 的渲染结果直接进对照取样面（`thread-history-mermaid` 是台账里的场景），
-# 单边升级会让台账立刻分叉。要升就得两边一起升，而 React 那边的版本由被 vendored 的
-# streamdown 的依赖树决定——覆盖它等于从上游的锁文件上分叉，正是本仓一直在避免的漂移。
-# **这条的正确归属方是上游 streamdown / DeerFlow，不是这个 fork。**
-# 该 advisory 是「渲染恶意 radar 图时卡住自己这一个标签页」，而图的来源是 agent 输出。
+# 现在的判据：**每一个被报出来的包都在 baseline/audit-triage.json 里表过态就绿，
+# 冒出一个没表过态的、或者表里有已经不报的过期条目，就红。**
+# 逐包的可达性 / 决定 / 为什么 / 翻案判据都在那张表里，不在这段注释里。
 audit:
-	$(PNPM) audit --audit-level moderate --registry https://registry.npmjs.org
+	node scripts/audit-triage.mjs
 
 docker-build:
 	docker build --file Dockerfile --tag $(IMAGE) ..
