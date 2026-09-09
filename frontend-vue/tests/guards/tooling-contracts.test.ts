@@ -86,10 +86,8 @@ describe("成组依赖的版本必须一起升", () => {
   wave 60 手工量过一次（53 : 53 全对），但**没有留下门禁**；wave 64 变异实测：
   把 `coverage:` 改名成 `coverageX:` 而 `.PHONY` 不动，当时一条用例都不红。
 */
-const makefile = readFileSync(
-  fileURLToPath(new URL("../../Makefile", import.meta.url)),
-  "utf8",
-);
+const makefileDir = fileURLToPath(new URL("../../", import.meta.url));
+const makefile = readFileSync(join(makefileDir, "Makefile"), "utf8");
 
 function declaredPhony(): Set<string> {
   const match = /^\.PHONY:((?:[^\n\\]|\\\n)*)/m.exec(makefile);
@@ -182,6 +180,71 @@ describe("跨应用对照工具的登记表", () => {
         .filter((file) => !existsSync(join(CROSS_APP_ROOT, file))),
       "登记表指着一个不存在的文件",
     ).toEqual([]);
+  });
+});
+
+/*
+  第五条：**每一次真跑用例，都要经过会保存失败现场的那个包装器。**
+
+  **起因是一次真实的证据丢失**（wave 197）：`thread-history` 那条偶发红留下了
+  trace，而我为了确认「是不是本轮回归」重跑了两次——Playwright **每次运行都会先
+  清空 `outputDir`**，那份 trace 就没了。实测过：往 `test-results/e2e/` 放一个
+  marker 文件，随便跑一条用例之后它就不在了。
+
+  **这条和 wave 195 那条是一件事的两段**：那次修的是「`retries: 0` 配
+  `trace: "on-first-retry"` 等于从来不录」，这次是「录下来了，但活不过下一次运行」。
+  偶发红之后最自然的动作恰恰就是重跑——两条都不修，现场必然在被人看之前消失。
+
+  守的是形状而不是某个具体命令：Makefile 里**除了 `E2E_RUN` 自己那一行和只列用例
+  的 `--list`**，不许再出现别的 `playwright test`。**扫之前要先去掉注释行**
+  （坑 202/316：注释里出现的字样会让这类扫描白扫或误报）。
+*/
+describe("跑用例必须经过保存失败现场的包装器", () => {
+  const WRAPPER = "scripts/keep-e2e-failure-artifacts.mjs";
+  const commandLines = makefile
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("#"));
+  // 字面量 `playwright test` 只该出现在两处：`E2E_RUN` 的定义，和只列用例的
+  // `--list`。真正跑用例的 target 行里出现的是展开前的 `$(E2E_RUN)`。
+  const invocations = commandLines.filter((line) =>
+    line.includes("playwright test"),
+  );
+  const wrapped = commandLines.filter((line) => line.includes("$(E2E_RUN)"));
+
+  it("形状先断言：两边都扫到了东西", () => {
+    expect(
+      invocations.length,
+      "一条 playwright 调用都没扫到——这条守卫在空转",
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      wrapped.length,
+      "一条 $(E2E_RUN) 都没扫到——这条守卫在空转",
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("包装器脚本存在", () => {
+    expect(existsSync(join(makefileDir, WRAPPER))).toBe(true);
+  });
+
+  it("除了包装器定义与 --list，没有别的地方直接跑 playwright", () => {
+    expect(
+      invocations.filter(
+        (line) =>
+          !line.includes(WRAPPER) &&
+          !line.includes("--list") &&
+          !line.includes("$(E2E_RUN)"),
+      ),
+      "这一行绕过了 E2E_RUN：它失败时 test-results/ 里的 trace 会被下一次运行清掉",
+    ).toEqual([]);
+  });
+
+  it("E2E_RUN 的定义确实指向包装器", () => {
+    const definition = commandLines.find((line) =>
+      /^E2E_RUN\s*=/.test(line.trim()),
+    );
+    expect(definition, "Makefile 里找不到 E2E_RUN 的定义").toBeDefined();
+    expect(definition).toContain(WRAPPER);
+    expect(definition).toContain("playwright test");
   });
 });
 

@@ -205,18 +205,25 @@ e2e-preflight:
 	@test -f node_modules/@playwright/test/package.json \
 		|| { echo "@playwright/test 未安装：先运行 make install"; exit 1; }
 
+# **每一次真跑用例都要经过 `E2E_RUN`，不能直接写 `playwright test`。**
+# Playwright 每次运行都会先清空 `outputDir`，而偶发红之后最自然的动作就是重跑一次
+# ——失败现场因此在被人看之前就没了（wave 197 实测：放进去的 marker 文件跑一次就消失，
+# 本轮真丢过一份 trace）。`E2E_RUN` 在命令失败时把现场另存到 `test-results/failures/`。
+# 这条规则由 tests/guards/tooling-contracts.test.ts 守着。
+E2E_RUN = node scripts/keep-e2e-failure-artifacts.mjs -- $(E2E_EXEC) playwright test
+
 # 一个套件 = 一份 config = 一种后端拓扑。名字说的是**测什么**，
 # 不是迁移阶段——套件之间不能合并的原因写在各自 config 的文件头里。
 define run_suite
 	@$(MAKE) --no-print-directory e2e-preflight
-	$(E2E_EXEC) playwright test -c playwright.$(1).config.ts
+	$(E2E_RUN) -c playwright.$(1).config.ts
 endef
 
 # ── 只需要 Nuxt preview 的套件（page.route() mock Gateway）────────────────
 # 主 config 用 Playwright 的默认文件名，所以不走 run_suite 的 playwright.<id>.config.ts 规则。
 e2e:
 	@$(MAKE) --no-print-directory e2e-preflight
-	$(E2E_EXEC) playwright test
+	$(E2E_RUN)
 
 e2e-auth:
 	$(call run_suite,auth)
@@ -289,11 +296,11 @@ e2e-parity-auth:
 # 剩下那一半仍然是人的事：**每一条变化是修好了还是新坏了，得逐条看清楚。**
 parity-accept:
 	@$(MAKE) --no-print-directory e2e-preflight
-	PARITY_ACCEPT=1 $(E2E_EXEC) playwright test -c playwright.parity.config.ts diff.spec.ts
+	PARITY_ACCEPT=1 $(E2E_RUN) -c playwright.parity.config.ts diff.spec.ts
 
 parity-auth-accept:
 	@$(MAKE) --no-print-directory e2e-preflight
-	PARITY_ACCEPT=1 $(E2E_EXEC) playwright test -c playwright.parity-auth.config.ts diff.spec.ts
+	PARITY_ACCEPT=1 $(E2E_RUN) -c playwright.parity-auth.config.ts diff.spec.ts
 
 # ── 聚合入口 ────────────────────────────────────────────────────────────
 # 不需要任何后端进程，CI 的主门禁。

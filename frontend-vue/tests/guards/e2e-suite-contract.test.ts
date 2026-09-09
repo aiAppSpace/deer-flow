@@ -126,8 +126,15 @@ describe("E2E 套件布局", () => {
 
 describe("本地 Playwright 调用约定", () => {
   it("所有 playwright 调用都走 loopback 代理包装", () => {
+    /*
+      **先去掉注释行**（坑 202/316 的又一次重演）。这条守卫原来直接扫全文，
+      于是 wave 197 在 Makefile 里写下一句「……不能直接写 `playwright test`」的
+      注释时它当场红了——报的是「有一条调用没走包装」，而那一行根本不是调用。
+      **扫命令的守卫，扫之前一律先剥注释**：不剥的话，误报和漏报都只是时间问题。
+    */
     const commands = makefile
       .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
       .filter((line) => line.includes("playwright test"));
     expect(commands.length).toBeGreaterThan(0);
     expect(commands.every((line) => line.includes("$(E2E_EXEC)"))).toBe(true);
