@@ -11,15 +11,17 @@
 你接手一个已经跑了 **199 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
 `frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
 仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 199 的文档提交，只在本地**。
+分支 `main-wc`，**接手时 HEAD 是 `91d9e134`（wave 199），已推到
+`origin/main-wc`，本地与远端齐平**。
 
-> **⚠️ 远端状态变了，接手前先确认。** 2026-09-09 16:22 前后：
-> `origin` 被指向了上游 `https://github.com/bytedance/deer-flow.git`（无写权限），
-> 而此前每一次推送的目标 `YanivWang/deer-flow` **已经不存在**
-> （`gh repo list` 下该账号 8 个仓库、没有任何 fork）。
-> **不是本轮改的，也没有自行改回**——改 remote / 建仓库是「往哪里发布代码」的决定，
-> 要由人来做。已推到远端的最后一个提交是 `e28f7e97`（wave 198 的文档提交）；
-> **wave 199 的 `dbd1e2a5` 与 `364875f9` 只在本地。**
+> **远端换过一次家（2026-09-09）。** 原来的 `YanivWang/deer-flow` 消失了，
+> `origin` 一度被指向上游 `bytedance/deer-flow`（无写权限，推不上去）。
+> 现在的布局是常规的两个远端：
+>
+> - `origin` = `https://github.com/aiAppSpace/deer-flow.git`（**私有**，工作副本，往这里推）
+> - `upstream` = `https://github.com/bytedance/deer-flow.git`（上游，只取不推）
+>
+> 旧文档与旧提交说明里出现的 `YanivWang/deer-flow` 都是指这份工作副本的前身。
 
 **这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
 （台账 **202 行**全部已决定、一页纸清单「真正还开着的」**4 条**——wave 157 把 tooltip 那条判决关闭了——
