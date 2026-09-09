@@ -6,6 +6,7 @@
   【边界与注意】   此处证明浏览器行为；生产 Gateway 协议另由 wp11-real-backend 证明。
 */
 import { expect, test, type Page } from "@playwright/test";
+import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI } from "./utils/mock-api";
 
@@ -98,10 +99,10 @@ test("settings deep link traps focus and back/forward replays only settings quer
   page,
 }) => {
   mockThreads(page);
-  await page.goto(
+  const dialog = await openSettingsDialog(
+    page,
     "/workspace/chats/new?settings=appearance&keep=files#run-anchor",
   );
-  const dialog = page.getByRole("dialog", { name: "Settings" });
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(
     dialog.getByRole("button", { name: "Appearance" }),

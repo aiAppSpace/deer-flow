@@ -7,6 +7,7 @@
 */
 
 import { expect, test, type Page } from "@playwright/test";
+import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI } from "./utils/mock-api";
 import { enUS } from "../../app/core/i18n/locales/en-US";
@@ -46,9 +47,11 @@ test("locale switch updates an open dialog, product surfaces, future errors and 
   page,
 }) => {
   prepare(page);
-  await page.goto(`/workspace/chats/${THREAD_ID}?settings=appearance`);
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
+  // **不按名字锁**：这条用例随后会切语言，对话框的可访问名会跟着变。
+  const dialog = await openSettingsDialog(
+    page,
+    `/workspace/chats/${THREAD_ID}?settings=appearance`,
+  );
   await expect(dialog).toContainText(enUS.settings.appearance.themeTitle);
   /*
     语言选择器已经从原生 `<select>` 换成 shadcn 的 Select（与上游同一个 primitive）：
@@ -234,8 +237,11 @@ test("explicit theme ignores media, returning to system resyncs, and reload init
 }) => {
   await page.emulateMedia({ colorScheme: "light" });
   prepare(page);
-  await page.goto("/workspace/chats/new?settings=appearance");
-  const dialog = page.getByRole("dialog", { name: enUS.settings.title });
+  const dialog = await openSettingsDialog(
+    page,
+    "/workspace/chats/new?settings=appearance",
+    enUS.settings.title,
+  );
   await dialog.locator('[data-theme-preference="dark"]').click();
   await expect(page.locator("html")).toHaveClass(/dark/);
   await page.emulateMedia({ colorScheme: "light" });

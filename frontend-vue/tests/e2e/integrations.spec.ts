@@ -7,6 +7,7 @@
 */
 
 import { expect, test } from "@playwright/test";
+import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI, offMachineRequestsSeenBy } from "./utils/mock-api";
 
@@ -49,9 +50,10 @@ test.describe("Integrations settings", () => {
   }) => {
     mockLangGraphAPI(page);
 
-    await page.goto("/workspace/chats/new?settings=integrations");
-
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Lark / Feishu CLI")).toBeVisible();
   });
@@ -74,9 +76,10 @@ test.describe("Integrations settings", () => {
       }),
     );
 
-    await page.goto("/workspace/chats/new?settings=integrations");
-
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
     await expect(dialog.getByText("Installed: v1.0.65")).toBeVisible();
     await expect(
       dialog.getByText("Update available: v1.0.66", { exact: false }),
@@ -154,8 +157,10 @@ test.describe("Integrations settings", () => {
       }),
     );
 
-    await page.goto("/workspace/chats/new?settings=integrations");
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
     const popupPromise = page.waitForEvent("popup");
     await dialog.getByRole("button", { name: "Connect Lark" }).click();
     const popup = await popupPromise;
@@ -187,8 +192,10 @@ test.describe("Integrations settings", () => {
     mockLangGraphAPI(page);
 
     // Deep link opens the shared dialog on Integrations.
-    await page.goto("/workspace/chats/new?settings=integrations");
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("Lark / Feishu CLI")).toBeVisible();
     await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(1);
@@ -419,8 +426,10 @@ test.describe("Integrations settings", () => {
       });
     });
 
-    await page.goto("/workspace/chats/new?settings=integrations");
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
     await dialog.getByRole("button", { name: "Change Lark app" }).click();
     await expect(
       dialog.getByText("Switch to a different Lark app"),
@@ -476,8 +485,10 @@ test.describe("Integrations settings", () => {
       await route.fallback();
     });
 
-    await page.goto("/workspace/chats/new?settings=integrations");
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
     await dialog.getByRole("button", { name: "calendar" }).click();
     await dialog
       .getByLabel("Exact OAuth scope")

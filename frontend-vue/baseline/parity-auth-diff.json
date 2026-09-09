@@ -31,6 +31,36 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "auth-callback/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "auth-callback/desktop/light/zh-CN": {
+      "ariaOnlyReact": [
+        "- paragraph: Signing you in..."
+      ],
+      "ariaOnlyVue": [
+        "- paragraph: 正在登录..."
+      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
     "setup-screen/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],

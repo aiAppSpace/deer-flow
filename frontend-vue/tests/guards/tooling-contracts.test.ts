@@ -26,7 +26,7 @@
                    是正常的，也实测能跑。真正会炸的是跨大版本。
 */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -199,6 +199,54 @@ describe("跨应用对照工具的登记表", () => {
   的 `--list`**，不许再出现别的 `playwright test`。**扫之前要先去掉注释行**
   （坑 202/316：注释里出现的字样会让这类扫描白扫或误报）。
 */
+/*
+  第六条：**打开设置对话框只有一个入口。**
+
+  对话框是缩放着进场的（`data-[state=open]:zoom-in-95` + `duration-200`）。
+  wave 200 实测：进场那 ~170ms 里，框里第一个可点元素的 x 从 **119.2 走到 98.0**
+  （21.2px），框宽 1107 → 1152。**在这段里量一次坐标再按下去就点偏了**，
+  而报出来是 30 秒后的 `locator.click: Test timeout`，call log 停在「done scrolling」
+  ——指不出真正的原因（wave 199 那轮循环里 `integrations.spec.ts:461` 就这么红过）。
+
+  `openSettingsDialog` 在导航之后**按真实时间间隔等它停稳**再返回。
+  「开完记得等一下」如果只写在注释里，是一条要靠人记住的规矩，忘一次就回到偶发红；
+  收成唯一入口之后这里零豁免地拦住绕过它的写法。**扫之前先剥注释**（坑 305）。
+*/
+describe("打开设置对话框只有一个入口", () => {
+  const specs = readdirSync(join(makefileDir, "tests/e2e")).filter((name) =>
+    name.endsWith(".spec.ts"),
+  );
+
+  it("形状先断言：确实扫到了 spec 文件", () => {
+    expect(specs.length).toBeGreaterThan(20);
+  });
+
+  it("没有任何 spec 自己 goto 一个 ?settings= 深链", () => {
+    const offenders: string[] = [];
+    for (const name of specs) {
+      const source = readFileSync(join(makefileDir, "tests/e2e", name), "utf8");
+      source.split("\n").forEach((line, index) => {
+        const code = line.replace(/\/\/.*$/, "");
+        if (/goto\(/.test(code) && /[?&]settings=/.test(code)) {
+          offenders.push(`${name}:${index + 1}`);
+        }
+      });
+    }
+    expect(
+      offenders,
+      "这些地方绕过了 openSettingsDialog：对话框还在缩放进场时点里面的东西会点偏",
+    ).toEqual([]);
+  });
+
+  it("助手本身在，且确实等停稳", () => {
+    const helper = readFileSync(
+      join(makefileDir, "tests/support/settings-dialog.ts"),
+      "utf8",
+    );
+    expect(helper).toContain("settledBox");
+  });
+});
+
 describe("跑用例必须经过保存失败现场的包装器", () => {
   const WRAPPER = "scripts/keep-e2e-failure-artifacts.mjs";
   const commandLines = makefile

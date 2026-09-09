@@ -30,6 +30,47 @@ export const AUTH_PARITY_SCENARIOS: ParityScenario[] = [
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
   {
+    id: "auth-callback",
+    title: "OIDC 回调页（还在验证）",
+    backend: "gateway",
+    path: "/auth/callback",
+    /*
+      **挡这条路的理由本来是错的。** 路由棘轮里它挂着的原因写的是
+      「要到达它得先有一次真实的 OIDC callback session，回放 Gateway 不提供」——
+      而两边的实现都只做一件事：**问一次 `GET /api/v1/auth/me`，按结果分支**
+      （React `auth/callback/page.tsx` 三态、Vue `callback.vue` 四态）。
+      它不需要任何真实的 OIDC 往返，只需要那个端点给一个答案。
+      **wave 189 踩过同一个坑**：`/showcase/[thread_id]` 挂着的理由也是猜的。
+
+      **取的是「还在验证」这一态，不是终态。** 两边验证完都会 `replace` 跳走
+      （成功 300ms、失败 1500ms），终态其实是 `/login`，而那一屏已经在取样面里；
+      真正只有这一屏才有的内容就是验证过程本身。把 `auth/me` 用 `delayMs` 挂住，
+      它就从「一闪而过」变成一个稳定终态——这正是 wave 134 加 `delayMs` 的用意。
+
+      **锚点不能取那颗转圈的 `.animate-spin`。** 第一版取了它，zh-CN 当场报
+
+          selector:.animate-spin width  React=41.3 Vue=44.7 Δ3.4
+          selector:.animate-spin height React=41.3 Vue=44.7 Δ3.4
+
+      ——`h-8 w-8` 明明是 32px。41.3 / 44.7 是**旋转中的外接盒**
+      （32×(|cosθ|+|sinθ|)，随角度在 32 到 45.25 之间变）。而 `animate-spin` 在
+      `baseline/looping-animations.json` 里是 `decision: "always"`：**有意常开**
+      （冻住转圈会让界面撒谎成「卡住了」，走 WCAG 2.2.2 本质性动效那个口子），
+      所以这不是「顺手把它门控掉」能解决的——签进基线就是签一条**必红**的行。
+      en-US 那次没报，只是两边角度恰好落进了容差，纯属运气。
+
+      改锚外层那个全屏容器：两边的类名**逐字相同**
+      （`bg-background relative flex min-h-screen items-center justify-center`），
+      尺寸就是视口、与语言无关。**换锚点不丢信号**——十一档里只有 `geometry`
+      比锚点，其余十档比的都是整屏。
+    */
+    routes: [
+      { pattern: "**/api/v1/auth/me", delayMs: 15_000, status: 200, json: {} },
+    ],
+    settle: [{ kind: "visible", target: { selector: "div.min-h-screen" } }],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
     id: "setup-screen",
     title: "首次安装向导",
     backend: "gateway",

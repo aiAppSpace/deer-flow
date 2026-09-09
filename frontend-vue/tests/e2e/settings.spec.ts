@@ -7,6 +7,7 @@
 */
 
 import { expect, test, type Page } from "@playwright/test";
+import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI } from "./utils/mock-api";
 
@@ -159,8 +160,7 @@ async function openSettings(
   page: Page,
   section: "memory" | "skills" | "tools",
 ) {
-  await page.goto(`/workspace/chats/new?settings=${section}`);
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  await openSettingsDialog(page, `/workspace/chats/new?settings=${section}`);
 }
 
 test.describe("Vue settings", () => {

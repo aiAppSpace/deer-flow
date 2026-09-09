@@ -10,6 +10,7 @@
 */
 
 import { expect, test, type Page } from "@playwright/test";
+import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI, MOCK_THREAD_ID } from "./utils/mock-api";
 
@@ -182,8 +183,7 @@ test("skill source is a tablist and the enable control is a switch", async ({
   await page.route(/\/api\/skills$/, (route) =>
     route.fulfill({ json: { skills: [SKILL] } }),
   );
-  await page.goto("/workspace/chats/new?settings=skills");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  await openSettingsDialog(page, "/workspace/chats/new?settings=skills");
 
   const tabs = page.getByRole("tab");
   await expect(tabs).toHaveCount(2);
