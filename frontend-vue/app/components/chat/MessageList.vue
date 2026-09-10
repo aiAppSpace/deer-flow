@@ -57,6 +57,7 @@ import {
   type HumanInputRequest,
   type HumanInputResponse,
 } from "@/core/messages/human-input";
+import { getArtifactArchiveCandidatesByGroupIndex } from "@/core/messages/artifact-archive";
 import { deriveAssistantTurnUsageState } from "@/core/messages/derived-state";
 import type { BrowserViewMeta } from "@/core/messages/processing";
 import {
@@ -235,6 +236,15 @@ const groups = computed(() =>
 );
 const turnUsageMessagesByGroupIndex = computed(
   () => deriveAssistantTurnUsageState(groups.value).byGroupIndex,
+);
+/*
+  归档下载键挂在**这次运行最后一组** present-files 上，判据在
+  core/messages/artifact-archive.ts。不是「组里最后一条消息的 run_id」
+  （那是 runIdOfGroup 干的，用途不同）——同一次运行分几次呈递时，
+  每组都拿得到 run_id，但键只该出现一次。
+*/
+const archiveCandidates = computed(() =>
+  getArtifactArchiveCandidatesByGroupIndex(groups.value),
 );
 const branchable = computed(() =>
   getBranchableAssistantGroupIds(groups.value, props.streaming),
@@ -1169,6 +1179,8 @@ onUnmounted(() => {
                 :files="presentFiles(entry.group)"
                 :is-mock="isMock"
                 :is-admin="isAdmin"
+                :run-id="archiveCandidates[entry.index]?.runId"
+                :archive-downloads-enabled="!streaming"
                 @select="emit('artifact', $event)"
               />
             </div>

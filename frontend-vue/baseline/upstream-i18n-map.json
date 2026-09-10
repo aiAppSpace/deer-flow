@@ -173,7 +173,6 @@
   "pending": {
     "$comment": "本仓确实没有这句话的 key，按上游顶层块分组给理由。目标状态是空数组。**每一条都要能说清什么时候重新问**——否则它就是一条永远不会被回看的豁免。",
     "$reasons": {
-      "artifactArchive": "产物归档下载（当前版本提示、下载失败）。**什么时候重新问**：与 artifact-viewer-window 一起做。",
       "backgroundTasks": "当前会话的后台任务卡片与通知。**什么时候重新问**：与 pending 场景 background-tasks 一起做。",
       "chats": "会话列表的归档、分支标记、加载重试等新话。**什么时候重新问**：与 pending 场景 thread-archive / thread-ordering 一起做。",
       "conversation": "会话面新增的两条。**什么时候重新问**：下一轮碰会话面时。",
@@ -185,9 +184,6 @@
       "workspace": "工作区新增的几条。**什么时候重新问**：下一轮碰工作区外壳时。"
     },
     "keys": [
-      "artifactArchive.currentVersionNotice",
-      "artifactArchive.downloadCurrent",
-      "artifactArchive.downloadFailed",
       "backgroundTasks.active",
       "backgroundTasks.cancel",
       "backgroundTasks.cancelFailed",

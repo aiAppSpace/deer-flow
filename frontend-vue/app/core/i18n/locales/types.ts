@@ -165,6 +165,12 @@ export interface Translations {
     missingTarget: string;
   };
 
+  artifactArchive: {
+    downloadCurrent: (count: number) => string;
+    currentVersionNotice: string;
+    downloadFailed: string;
+  };
+
   artifactTable: {
     title: string;
     header: string;

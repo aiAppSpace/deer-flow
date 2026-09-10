@@ -39,9 +39,16 @@
                    单测里直接挂 MessageList 的要自己 provide 一份。
 */
 import { computed, ref } from "vue";
+import { useQuery } from "@tanstack/vue-query";
 import { Download, Loader, Package } from "lucide-vue-next";
 
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  ArtifactRequestError,
+  downloadArtifactArchive,
+  getArtifactArchiveManifest,
+  MAX_ARTIFACT_ARCHIVE_FILES,
+} from "@/core/artifacts/api";
 import {
   artifactFileIcon,
   artifactFileName,
@@ -60,6 +67,16 @@ const props = defineProps<{
   files: string[];
   isMock?: boolean;
   isAdmin?: boolean;
+  /**
+   * 这批文件属于哪一次运行。有它才谈得上「把这次运行的产物打个包」。
+   *
+   * 只在**这次运行最后一组** present-files 上给（见
+   * core/messages/artifact-archive.ts）——压缩包按 run 打、每次都是全量，
+   * 每组都给会画出几颗内容一模一样的键。
+   */
+  runId?: string;
+  /** 运行还没结束时关掉：文件还在变，这时候打的包立刻就过期了。 */
+  archiveDownloadsEnabled?: boolean;
 }>();
 const emit = defineEmits<{ select: [path: string] }>();
 const { $i18n } = useNuxtApp();
@@ -67,6 +84,74 @@ const toast = useWorkspaceToast();
 
 /** 上游用一个 `installingFile` 记住是**哪一条**在装，不是一个全局布尔。 */
 const installingFile = ref<string | null>(null);
+
+/*
+  先问清单再决定那颗键出不出现：只有一个文件时打包没意义（下载那一个就行），
+  太多时打包慢到让人以为点了没反应，而这一步没有进度可看。
+
+  案例页（isMock）不问：那里的产物是 Nitro 直接吐的固定内容，压根没有 Gateway
+  可以打包，问一次只会拿回 404。
+*/
+const archiveEnabled = computed(
+  () =>
+    props.archiveDownloadsEnabled !== false &&
+    props.runId !== undefined &&
+    props.isMock !== true,
+);
+const archiveManifest = useQuery({
+  queryKey: computed(() => [
+    "artifact-archive-manifest",
+    props.threadId,
+    props.runId,
+  ]),
+  queryFn: () =>
+    getArtifactArchiveManifest({
+      threadId: props.threadId,
+      runId: props.runId!,
+    }),
+  enabled: archiveEnabled,
+  retry: false,
+  staleTime: Infinity,
+});
+const archiveCount = computed(() => archiveManifest.data.value?.fileCount);
+const canDownloadArchive = computed(
+  () =>
+    archiveEnabled.value &&
+    archiveCount.value !== undefined &&
+    archiveCount.value > 1 &&
+    archiveCount.value <= MAX_ARTIFACT_ARCHIVE_FILES,
+);
+const downloadingArchive = ref(false);
+
+async function downloadArchive() {
+  const runId = props.runId;
+  if (!runId || downloadingArchive.value) return;
+  downloadingArchive.value = true;
+  let objectUrl: string | undefined;
+  try {
+    const { blob, filename } = await downloadArtifactArchive({
+      threadId: props.threadId,
+      runId,
+    });
+    objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } catch (cause) {
+    toast.error(
+      cause instanceof ArtifactRequestError
+        ? cause.message
+        : $i18n.t.value.artifactArchive.downloadFailed,
+    );
+  } finally {
+    // 撤销要在点击之后：浏览器读完这个 URL 才开始下载。
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    downloadingArchive.value = false;
+  }
+}
 
 const entries = computed(() =>
   props.files.map((filepath) => ({
@@ -113,28 +198,48 @@ async function install(filepath: string) {
 </script>
 
 <template>
-  <ul class="flex w-full flex-col gap-4">
-    <div
-      v-for="entry in entries"
-      :key="entry.filepath"
-      class="bg-card text-card-foreground relative cursor-pointer rounded-xl border p-3 shadow-sm"
-      @click="emit('select', entry.filepath)"
-    >
-      <div
-        class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 pr-2 pl-1"
+  <div class="flex w-full flex-col gap-4">
+    <!--
+      提示句和键放一起：包里是**当前**版本，不是这条回复当时的版本。
+      文件列表来自回复，内容可能已经被后来的运行改过——不说清楚，用户会以为
+      下到的是那一刻的快照。
+    -->
+    <div v-if="canDownloadArchive" class="flex flex-col items-start gap-1">
+      <Button
+        variant="outline"
+        :disabled="downloadingArchive"
+        @click="downloadArchive"
       >
-        <div class="relative min-w-0 pl-8 leading-tight font-semibold">
-          <div class="min-w-0 [overflow-wrap:anywhere] break-words">
-            {{ entry.name }}
+        <Loader v-if="downloadingArchive" class="size-4 animate-spin" />
+        <Download v-else class="size-4" />
+        {{ $i18n.t.value.artifactArchive.downloadCurrent(archiveCount!) }}
+      </Button>
+      <p class="text-muted-foreground text-xs">
+        {{ $i18n.t.value.artifactArchive.currentVersionNotice }}
+      </p>
+    </div>
+    <ul class="flex w-full flex-col gap-4">
+      <div
+        v-for="entry in entries"
+        :key="entry.filepath"
+        class="bg-card text-card-foreground relative cursor-pointer rounded-xl border p-3 shadow-sm"
+        @click="emit('select', entry.filepath)"
+      >
+        <div
+          class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 pr-2 pl-1"
+        >
+          <div class="relative min-w-0 pl-8 leading-tight font-semibold">
+            <div class="min-w-0 [overflow-wrap:anywhere] break-words">
+              {{ entry.name }}
+            </div>
+            <div class="absolute top-2 -left-0.5">
+              <component :is="entry.icon" class="size-6" />
+            </div>
           </div>
-          <div class="absolute top-2 -left-0.5">
-            <component :is="entry.icon" class="size-6" />
+          <div class="text-muted-foreground col-start-1 min-w-0 pl-8 text-xs">
+            {{ $i18n.t.value.artifacts.fileTypeLabel(entry.type) }}
           </div>
-        </div>
-        <div class="text-muted-foreground col-start-1 min-w-0 pl-8 text-xs">
-          {{ $i18n.t.value.artifacts.fileTypeLabel(entry.type) }}
-        </div>
-        <!--
+          <!--
           上游是 `<CardAction className="row-span-1 self-center">`
           （artifact-file-list.tsx:109）。CardAction 的基础 class 里是
           `row-span-2 ... self-start justify-self-end`，调用点用 tailwind-merge
@@ -142,40 +247,41 @@ async function install(filepath: string) {
           得把合并之后的结果直接写出来。跨两行还是一行会改卡片高度：
           按钮比标题行高，占一行时第一行被它撑开，占两行时两行一起分担。
         -->
-        <div
-          class="col-start-2 row-span-1 row-start-1 self-center justify-self-end"
-        >
-          <!--
+          <div
+            class="col-start-2 row-span-1 row-start-1 self-center justify-self-end"
+          >
+            <!--
             Install 在下载**左边**，与上游同序（artifact-file-list.tsx 的 CardAction
             先渲染 Install 再渲染 Download）。`@click.stop` 与上游的
             `e.stopPropagation(); e.preventDefault()` 同义：卡片本身是可点的，
             点安装不该顺手把这个文件在面板里打开。
           -->
-          <Button
-            v-if="entry.installable"
-            variant="ghost"
-            :disabled="installingFile === entry.filepath"
-            @click.stop="install(entry.filepath)"
-          >
-            <Loader
-              v-if="installingFile === entry.filepath"
-              class="size-4 animate-spin"
-            />
-            <Package v-else class="size-4" />
-            {{ $i18n.t.value.common.install }}
-          </Button>
-          <a
-            :href="entry.downloadURL"
-            target="_blank"
-            rel="noopener noreferrer"
-            :class="buttonVariants({ variant: 'ghost' })"
-            @click.stop
-          >
-            <Download class="size-4" />
-            {{ $i18n.t.value.common.download }}
-          </a>
+            <Button
+              v-if="entry.installable"
+              variant="ghost"
+              :disabled="installingFile === entry.filepath"
+              @click.stop="install(entry.filepath)"
+            >
+              <Loader
+                v-if="installingFile === entry.filepath"
+                class="size-4 animate-spin"
+              />
+              <Package v-else class="size-4" />
+              {{ $i18n.t.value.common.install }}
+            </Button>
+            <a
+              :href="entry.downloadURL"
+              target="_blank"
+              rel="noopener noreferrer"
+              :class="buttonVariants({ variant: 'ghost' })"
+              @click.stop
+            >
+              <Download class="size-4" />
+              {{ $i18n.t.value.common.download }}
+            </a>
+          </div>
         </div>
       </div>
-    </div>
-  </ul>
+    </ul>
+  </div>
 </template>

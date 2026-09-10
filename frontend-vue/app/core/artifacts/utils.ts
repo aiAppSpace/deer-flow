@@ -96,6 +96,17 @@ export function urlOfArtifact({
   return `${getBackendBaseURL()}/api/threads/${encodedThreadId}/artifacts${encodedFilepath}${download ? "?download=true" : ""}`;
 }
 
+/** 一次运行产出的全部产物打成压缩包的地址。GET 取清单，POST 取包。 */
+export function urlOfArtifactArchive({
+  threadId,
+  runId,
+}: {
+  threadId: string;
+  runId: string;
+}) {
+  return `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/runs/${encodeURIComponent(runId)}/artifacts/archive`;
+}
+
 export function extractArtifactsFromThread(thread: {
   values: Pick<AgentThreadState, "artifacts">;
 }) {
