@@ -1453,12 +1453,28 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
     不需要再维护一份「项目→会话」的映射（那份映射迟早和 metadata 对不上）。
   */
   const projects = options?.projects ?? [];
+  /*
+    形状照后端的 `ProjectResponse`（backend/app/gateway/routers/projects.py）：
+    `instructions` 与 `presentation` 两个字段少了的话，两个应用读到的都是
+    undefined——而 mock 的意义就是让它们读到与真后端**同形**的东西。
+  */
   const normalizeProject = (project: MockProject) => ({
     id: project.id,
     name: project.name,
+    instructions: "",
+    presentation: {},
     status: project.status ?? "active",
     created_at: project.created_at ?? "2025-01-01T00:00:00Z",
     updated_at: project.updated_at ?? "2025-01-01T00:00:00Z",
+  });
+
+  /** `GET /api/projects/{id}/threads` 的行形状：只有这五个字段。 */
+  const projectThreadRow = (thread: MockThread) => ({
+    thread_id: thread.thread_id,
+    display_name: thread.title ?? null,
+    created_at: "2025-01-01T00:00:00Z",
+    updated_at: thread.updated_at ?? "2025-01-01T00:00:00Z",
+    metadata: thread.metadata ?? {},
   });
   const projectThreadsOf = (projectId: string) =>
     threads.filter(
@@ -1474,7 +1490,8 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(visible.map(normalizeProject)),
+        // 后端返回的是 `{projects: [...]}`，不是裸数组。
+        body: JSON.stringify({ projects: visible.map(normalizeProject) }),
       });
     }
     return route.fallback();
@@ -1509,7 +1526,8 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        projectThreadsOf(id).map((thread) => threadSearchResult(thread)),
+        // 项目内会话是**裸数组**（与列表不同），行形状见 projectThreadRow。
+        projectThreadsOf(id).map(projectThreadRow),
       ),
     });
   });

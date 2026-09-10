@@ -53,13 +53,16 @@ Vue 的 `ThreadSidebar.vue` 有 `WorkspaceChannelsList`、`VirtualThreadList`（
 
 React 有、Vue 没有对应物的（已排除豁免的 `blog`、以及两边都有只是我脚本误判的 `clipboard.ts`）：
 
-**仍缺**：`subagents`、`subagent-batches`、`background-tasks`、
-`threads/message-order`、`messages/conversation-outline`、`mcp/parse`、
-`api/static-response`、`dom/render-activity`、`notification`。
+**仍缺**：`threads/message-order`、`api/static-response`、`dom/render-activity`、
+`notification`——这四个还没逐个读过代码，不知道是真缺还是「组织方式不同但功能在」
+（前面三项就有过这种误判）。**它们不在任何一张 pending 表上**，因为三张表的坐标系
+分别是路由、i18n key 和取样点，而「core 模块目录名」不是其中任何一个。
+下一轮的起点就是逐个读它们。
 
 **已补齐**（2026-09-10）：`projects`、`artifacts/delimited-preview*`（含 worker 与工厂）、
 `artifacts/viewer`（+ `viewer-route`、`query-keys`）、`threads/archive`、
-`threads/thread-branch-tree`、`messages/artifact-archive`。
+`threads/thread-branch-tree`、`messages/artifact-archive`、`messages/conversation-outline`、
+`background-tasks`、`subagent-batches`、`subagents`、`mcp/parse`。
 
 `static-mode.ts` **不补**：`useProjects.ts` 文件头已记下这条取舍——上游用它在静态演示站
 屏蔽所有 Gateway 请求（23 处贯穿式分支），本仓改由调用方用 `enabled` / `isMock` 在调用点决定。
@@ -82,10 +85,16 @@ login/setup 页——这些都还没有逐个读代码比对。
    同一批顺带补的（都属于「历史没对齐」）：会话列表页的归档页签 + 三条空态 + 加载失败重试
    + 行内恢复键；产物面板视图切换那两颗键的可访问名；从项目里新建会话的项目归属
    （`?project=` 此前没有任何消费者）；上一轮遗留的 5 个死导入。
-4. **background tasks（#4833）/ subagents（#4887）/ subagent batches（#4998）** —— 三者共用 features 接口
-5. **设置页：MCP server 管理（#5022）、本地安装技能包（#5039）**
-6. **其余零散**：会话大纲导航（#5025）、分支会话标记（#4983）、复制定时任务（#5064）、
-   产物视图 radio→tabs、图标尺寸
+4. ~~**background tasks（#4833）/ subagents（#4887）/ subagent batches（#4998）**~~
+   ✅ 2026-09-10（`0107650b`、`0f98f2a1`、`8af549ee`）
+5. ~~**设置页：MCP server 管理（#5022）、本地安装技能包（#5039）**~~
+   ✅ 2026-09-10（`4d312031`）
+6. ~~**其余零散**~~ ✅ 2026-09-10
+   会话大纲导航（#5025，`cd1e61ec`）、分支会话标记（#4983，`c96bba31`）、
+   复制定时任务（#5064，`d7c3127b`）、模型加载失败提示（`26180e5e`）、
+   图标尺寸（`8a5d3e68`）。
+   **「产物视图 radio→tabs」这一条已经不成立**：两边现在都用 ToggleGroup，
+   补可访问名那一批顺带对齐了——这份清单写下时它就已经过期。
 
 ---
 
@@ -149,12 +158,77 @@ login/setup 页——这些都还没有逐个读代码比对。
 | 账 | 起点 | 现在 | 怎么量 |
 | --- | --- | --- | --- |
 | `pendingRoutes` | 2 | **0** | `baseline/react-parity-scope.json` |
-| 对照场景 pending | 8 | **6** | `baseline/parity-scenario-coverage.json` |
-| i18n pending key | 179 | **115** | `baseline/upstream-i18n-map.json` |
-| 词典 unused key | 18 | **16** | `baseline/i18n-keys.json`（新增的 24 条 key 全部被引用） |
-| 取样面 pending 路由 | 1 | **1** | `baseline/parity-route-sampling.json`（`/workspace/projects/[id]`，缺 mock fixture） |
+| 对照场景 pending | 8 | **5** | `baseline/parity-scenario-coverage.json` |
+| i18n pending key | 179 | **0** | `baseline/upstream-i18n-map.json` |
+| 词典 unused key | 18 | **16** | `baseline/i18n-keys.json`（这一轮新增的 key 全部被引用） |
+| 取样面 pending 路由 | 1 | **0** | `baseline/parity-route-sampling.json` |
 
-**i18n pending 剩下的 115 条集中在四块**（跑一次上面那个 json 的分组统计得出）：
-`subagents` 38、`backgroundTasks` 32、`subagentBatches` 25，其余 20 条散在
-`scheduledTasks`(5)、`skills`(5)、`settings`(4)、`workspace`(3)、`conversation`(2)、`chats`(1)。
-前三块正是执行顺序第 4 条，所以下一批做完这 95 条会一起掉下来。
+**三张 pending 表全空。** i18n 那张归零意味着：上游词典里的每一条，本仓要么同名有、
+要么在那 4 条手工判过的别名里——没有第三种情况。
+
+对照场景 pending 剩 5 条：`artifact-table-performance`（性能三例，依赖 e2e 跑真 Worker）、
+`background-tasks`、`mcp-settings`、`thread-ordering`、`thread-title-sync`。
+**功能都已经做了**，缺的是对照目录里的场景——那是取样面的活，不是功能缺口。
+
+## 这一轮顺带修掉的三处门禁盲区
+
+都不是功能，但都属于「以后不会再犯」的那类：
+
+1. **`upstream-key-coverage` 的词典解析器**把跨行模板字符串里的括号数进了段名栈
+   （`settings.tools.addServerPlaceholder` 的值是一段多行 JSON 示例）。后果是那张
+   基线表整个按错坐标系记了几百条账，`movedByUpstream` 里 164 条「上游拍平了路径」
+   全是假象。修掉之后真实缺口只有 37 条。
+2. **模板里用到却没导入的组件**：`vue-tsc` 和 `eslint` 双双放行，Vue 会把它当未知
+   HTML 元素静默渲染成空。新增门禁 + 自证。
+3. **script 里靠 Nuxt 自动导入的 Vue API**：生产不报错，但不经过 Nuxt 的 dom 测试
+   一挂载就 `ReferenceError`——也就意味着那个组件从来没被挂载测试过。同一次扫出 3 处。
+
+另加一道 **菜单项图标尺寸** 门禁：`icon-parity.mjs` 只报「两边完全不相交」的尺寸，
+看不见「调用点覆盖了 primitive 默认值」这一类。
+
+---
+
+## 对照台账现在是红的，红在两类没人看过的差异上（2026-09-10）
+
+`make e2e-parity`：**108 passed / 1 failed**，失败的是 `diff.spec` —— 台账与实跑对不上。
+scenarios 那 108 条全过，包括这一轮新加的三个场景。
+
+台账**净减少 428 行**（ProjectsSection 那一大类差异消失了：`- text: Projects`、
+`- button "New project"`、`- button "Group chats by project"` 各 20+ 次，
+`tabbablesOnlyReact` 里 168 个 `"button"`，51 处 tabOrder 差异）。
+
+但有两类**新出现**的行，按 `parity-accept` 的规矩「每一条变化是修好了还是新坏了，
+得逐条看清楚」，**没有接受**（不 `PARITY_ACCEPT_GROW=1`）：
+
+### 一、`GET /api/projects?status=active|archived` 进了 `requestsOnlyVue`（98 次）
+
+说的是：这些场景里 Vue 发了这两个请求，React 没发。
+
+已经排除的解释（都实测过）：
+- 两边的 URL 拼法逐字相同（`?status=` + encodeURIComponent）；
+- React 的 `ProjectsSection` 在 `workspace-sidebar.tsx:34` 是**无条件挂载**的；
+- React 的 `useProjects` 只在 `isStaticWebsiteOnly()` 时才 `enabled: false`，
+  而 parity 的 React preview（`react-preview.ts` 的 env 块）没设那个变量；
+- **同一批差异里 `ariaOnly*` 是空的**——也就是说 React 侧确实把项目区渲染出来了。
+
+渲染了却不发请求，说不通。**下一轮从这里入手**：起一个 React preview，
+打开 `/workspace/agents/test-agent/chats/new`，直接看它的网络面板。
+在看到那个读数之前不要写结论——这一轮已经在这条上猜错过两次
+（先猜「React 认裸数组」，再猜「static mode 挡住了」，都被源码推翻）。
+
+### 二、「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」（16 次）
+
+tab 顺序在第 15 个元素上分叉。这是 ProjectsSection 补齐之后**新暴露**的——
+两边现在都有那一片按钮了，顺序才比得出来。同样没查。
+
+### 顺带修掉的两处
+
+- **对照 mock 的项目 fixture 形状是猜的**，与后端 `ProjectResponse` 对不上：
+  列表要包一层 `{projects: []}`（写成了裸数组）、少 `instructions`/`presentation`
+  两个字段、项目内会话的行形状借用了 thread search 的投影。已按
+  `backend/app/gateway/routers/projects.py` 逐字段对齐。
+- **`/workspace/projects/[id]` 漏了 `definePageMeta({ layout: "workspace" })`**，
+  SSR 直接 500「Workspace toast owner is not available」。从建出来那天就坏着，
+  `make verify` 一路全绿——因为没有任何测试访问过那条路由。
+  加了门禁 `tests/guards/page-layout-declared.test.ts`。
+

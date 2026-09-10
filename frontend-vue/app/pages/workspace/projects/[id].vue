@@ -54,6 +54,16 @@ import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 const route = useRoute();
 const router = useRouter();
 const { $i18n } = useNuxtApp();
+/*
+  **必须显式声明 layout**：Nuxt 的默认 layout 是营销页外壳（app/layouts/default.vue），
+  那里没有 workspace 的 toast owner，于是这一页在服务端渲染时直接 500
+  「Workspace toast owner is not available」。
+
+  这一条从这个页面建出来那天起就坏着——门禁一路全绿，因为**没有任何测试
+  访问过这条路由**。它是 2026-09-10 把该路由加进对照取样面时当场露出来的。
+*/
+definePageMeta({ layout: "workspace" });
+
 const toast = useWorkspaceToast();
 
 const projectId = computed(() => String(route.params.id ?? ""));
