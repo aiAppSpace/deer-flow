@@ -10,6 +10,7 @@ import {
   workspaceToastKey,
 } from "@/core/workspace-shell/toast";
 import { enUS } from "@/core/i18n/locales/en-US";
+import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 
 const push = vi.fn();
 
@@ -24,7 +25,7 @@ function mountWithToast(component: Parameters<typeof h>[0]) {
   const wrapper = mount(Host, {
     attachTo: document.body,
     global: {
-      config: { globalProperties: { $i18n: { t: { value: enUS } } } },
+      mocks: nuxtI18nMocks(),
     },
   });
   return { wrapper, toast };
@@ -38,7 +39,7 @@ beforeEach(() => {
     fullPath: "/workspace/chats",
     path: "/workspace/chats",
   }));
-  vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: { value: enUS } } }));
+  vi.stubGlobal("useNuxtApp", () => ({ $i18n: nuxtI18nStub() }));
 });
 
 afterEach(() => {

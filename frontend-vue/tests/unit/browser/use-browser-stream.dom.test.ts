@@ -96,7 +96,7 @@ describe("useBrowserStream", () => {
       stream.sendInput({ type: "navigate", url: "https://queued.example" }),
     ).toBe("queued");
     sockets[0]?.open();
-    expect(sockets[0]?.sent.map(JSON.parse)).toEqual([
+    expect(sockets[0]?.sent.map((frame) => JSON.parse(frame))).toEqual([
       { type: "navigate", url: "https://queued.example" },
     ]);
     sockets[0]?.message(new Blob(["jpeg"], { type: "image/jpeg" }));

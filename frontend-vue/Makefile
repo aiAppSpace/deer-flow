@@ -1,6 +1,6 @@
 # frontend-vue developer entrypoint. package.json intentionally contains only postinstall.
 
-.PHONY: help install dev build preview lint format format-check typecheck typecheck-core test verify asset-budget \
+.PHONY: help install dev build preview lint format format-check typecheck typecheck-tests typecheck-core test verify asset-budget \
 	e2e-install e2e-preflight e2e e2e-auth e2e-visual e2e-infra e2e-proxy-options e2e-stream \
 	e2e-protocol e2e-real e2e-scheduled e2e-channels e2e-agents e2e-settings e2e-shell \
 	e2e-browser e2e-external e2e-parity e2e-parity-auth e2e-mock e2e-backend e2e-list \
@@ -68,6 +68,7 @@ help:
 	@echo "  make dom-parity                diff React vs Vue semantic DOM (needs both apps running)"
 	@echo "  make icon-parity               diff React vs Vue icon glyphs/sizes and tooltips (source scan)"
 	@echo "  make parity-accept             re-record the checked-in parity difference list"
+	@echo "  make typecheck-tests           type-check tests/ (not covered by make typecheck)"
 	@echo "  make typecheck-core            standalone tsc for packages/agent-core"
 	@echo "  make gen-api-types             regenerate app/core/api/types.gen.ts from the snapshot"
 	@echo "  make gen-contract-constants    regenerate backend contract constants from contracts/*.json"
@@ -105,6 +106,21 @@ format-check:
 
 typecheck:
 	$(EXEC) vue-tsc --noEmit
+
+# `tests/` 整棵树**不在** `make typecheck` 里：Nuxt 生成的 tsconfig 只收
+# `app/**` 与 `tests/nuxt/**`，而 vitest 只转译不查类型。也就是说在这条门禁之前，
+# 每一份夹具、每一个 `global.mocks`、每一份 e2e mock 的形状都没有任何机器在看。
+#
+# 它不是洁癖，第一次跑出来 134 条，其中挖出的**真问题**包括：
+#   · e2e 的 agent mock 带着一个真后端从来不返回的 `system_prompt` 字段；
+#   · `use: { reducedMotion }` 写在 Playwright 不认识的位置，被安静忽略；
+#   · `useSidecarSession().submit()` 的返回类型被推成字面量 `false`
+#     （赋值在回调里，控制流看不进去），而调用方正靠这个返回值决定要不要撤回 pending；
+#   · 假 runner 少了 `refreshDurableState`，run-end 那条路径在夹具下是调一个不存在的方法。
+#
+# 用单独的 tsconfig 而不是改 Nuxt 那份：`.nuxt/tsconfig.json` 是生成物。
+typecheck-tests:
+	$(EXEC) vue-tsc --noEmit -p tsconfig.tests.json
 
 # packages/agent-core 走**自己的** tsconfig，不走 vue-tsc。
 #
@@ -194,7 +210,7 @@ i18n-refresh:
 
 # gen-contract-constants-check 是上游同步 L1：后端 contracts/*.json 变了就红。
 # 它是三层同步方案里唯一阻断的一层——那是上游变更能直接让 Vue 功能损坏的路径。
-verify: lint format-check typecheck typecheck-core test i18n-check i18n-source-check gen-api-types-check gen-contract-constants-check standalone-check build
+verify: lint format-check typecheck typecheck-tests typecheck-core test i18n-check i18n-source-check gen-api-types-check gen-contract-constants-check standalone-check build
 
 # The build dependency makes the gate inspect the current checkout rather than stale .output.
 asset-budget: build

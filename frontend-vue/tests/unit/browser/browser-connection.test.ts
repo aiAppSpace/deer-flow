@@ -110,7 +110,7 @@ describe("BrowserConnectionController", () => {
     expect(sockets[0]?.sent).toEqual([]);
 
     sockets[0]?.open();
-    expect(sockets[0]?.sent.map(JSON.parse)).toEqual([
+    expect(sockets[0]?.sent.map((frame) => JSON.parse(frame))).toEqual([
       { type: "navigate", url: "https://two.example" },
     ]);
 
@@ -119,7 +119,7 @@ describe("BrowserConnectionController", () => {
     expect(
       controller.sendInput({ type: "navigate", url: "https://three.example" }),
     ).toBe("sent");
-    expect(sockets[0]?.sent.map(JSON.parse)).toEqual([
+    expect(sockets[0]?.sent.map((frame) => JSON.parse(frame))).toEqual([
       { type: "navigate", url: "https://two.example" },
       { type: "navigate", url: "https://three.example" },
     ]);
@@ -196,7 +196,7 @@ describe("BrowserConnectionController", () => {
     expect(sockets[0]?.sent).toEqual([]);
 
     controller.updateSeed("https://example.com/other");
-    expect(sockets[0]?.sent.map(JSON.parse)).toEqual([
+    expect(sockets[0]?.sent.map((frame) => JSON.parse(frame))).toEqual([
       { type: "navigate", url: "https://example.com/other" },
     ]);
 

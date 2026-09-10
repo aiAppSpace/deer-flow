@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ExportTrigger from "@/components/workspace/ExportTrigger.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { AgentThread } from "@/core/threads/types";
+import type { Message } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
   workspaceToastKey,
@@ -12,7 +14,7 @@ import {
 const mocks = vi.hoisted(() => ({ exportThread: vi.fn() }));
 vi.mock("@/core/threads/export", () => ({ exportThread: mocks.exportThread }));
 
-const thread = {
+const thread: AgentThread = {
   thread_id: "thread-1",
   created_at: "2026-08-24T00:00:00Z",
   updated_at: "2026-08-24T00:00:00Z",
@@ -20,10 +22,10 @@ const thread = {
   status: "idle",
   values: { title: "Weather", messages: [] },
   interrupts: {},
-} as const;
-const messages = [{ id: "ai-1", type: "ai", content: "Sunny" }] as const;
+};
+const messages: Message[] = [{ id: "ai-1", type: "ai", content: "Sunny" }];
 
-function mountTrigger(messageList = messages) {
+function mountTrigger(messageList: Message[] = messages) {
   const toast = createWorkspaceToastStore({ durationMs: 60_000 });
   const Host = defineComponent({
     setup() {

@@ -108,7 +108,11 @@ describe("AppearanceSettings", () => {
 
     const wrapper = mount(AppearanceSettings, {
       attachTo: document.body,
-      global: { config: { globalProperties: { $i18n: i18n, $theme: theme } } },
+      /*
+        走 `mocks` 而不是 `config.globalProperties`：后者的类型是完整的
+        `ComponentCustomProperties`，只塞两个全局属性天生编译不过。
+      */
+      global: { mocks: { $i18n: i18n, $theme: theme } },
     });
     expect(wrapper.text()).toContain(enUS.settings.appearance.themeTitle);
     /*

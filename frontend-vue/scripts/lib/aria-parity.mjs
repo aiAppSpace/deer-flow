@@ -44,6 +44,9 @@ function isDecorative(body) {
  * 去掉的都是**两边不可能相同、且用户感知不到**的东西：reka-ui 与 radix 生成的
  * 元素 id、Nuxt/Next 各自的水合标记、以及纯装饰性的空节点。保留 role、可访问名、
  * 层级与顺序——差一条就是真差异。
+ *
+ * @param {string} snapshot
+ * @returns {string} 归一化后的整份快照（仍然是多行文本）。
  */
 export function normalizeAriaSnapshot(snapshot) {
   /*
@@ -172,12 +175,21 @@ export function diffAriaLines(reactSnapshot, vueSnapshot) {
 }
 
 /**
+ * @typedef {object} AriaTreeRow
+ * @property {number} depth 缩进层级（两个空格一层）。
+ * @property {string} body 与 `normalizeAriaSnapshot` 同一套规则收拾过的行内容。
+ */
+
+/**
  * 归一化成**带深度**的行。与 `normalizeAriaSnapshot` 同样的几条规则，
  * 唯一的区别是**先把缩进量出来再收拾行内容**，所以层级信息留了下来。
  *
  * **为什么需要单独一份**：`normalizeAriaSnapshot` 里那条 `\s{2,}` → 一个空格
  * 会把每一层缩进都塌掉（wave 122 实测：7692 行里命中 6698），
  * 层级信息在那一步就没了——**任何层级比对都不可能从它的输出里恢复**。
+ *
+ * @param {string} snapshot
+ * @returns {AriaTreeRow[]}
  */
 export function normalizeAriaTree(snapshot) {
   return snapshot
@@ -205,6 +217,10 @@ export function normalizeAriaTree(snapshot) {
  * 焦点 / 命中六档全是 0，只有这一档报出 6 行**。这也正是 wave 99 撤掉层级档时
  * 立的判据（「有没有一种变异能让它响、而现有的档都不响」）——当年答不上来，
  * 是因为它量的是**已经被塌平**的数据（见 wave 122/123）。
+ *
+ * @param {readonly AriaTreeRow[]} reactTree
+ * @param {readonly AriaTreeRow[]} vueTree
+ * @returns {string[]}
  */
 export function diffAriaDepth(reactTree, vueTree) {
   const index = (rows) => {

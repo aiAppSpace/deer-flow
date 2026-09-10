@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AccountSettings from "@/components/workspace/settings/AccountSettings.vue";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
-import { enUS } from "@/core/i18n/locales/en-US";
+import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 import { buildComposerDraftKey } from "@/core/threads/composer-draft";
 
 vi.mock("@/core/api/fetcher", () => ({ fetch: vi.fn() }));
@@ -17,7 +17,7 @@ describe("AccountSettings authenticated client boundary", () => {
     navigateTo.mockReset().mockResolvedValue(undefined);
     vi.stubGlobal("navigateTo", navigateTo);
     vi.stubGlobal("useNuxtApp", () => ({
-      $i18n: { t: { value: enUS } },
+      $i18n: nuxtI18nStub(),
     }));
   });
 
@@ -60,7 +60,7 @@ describe("AccountSettings authenticated client boundary", () => {
     const wrapper = mount(AccountSettings, {
       global: {
         plugins: [[VueQueryPlugin, { queryClient }]],
-        config: { globalProperties: { $i18n: { t: { value: enUS } } } },
+        mocks: nuxtI18nMocks(),
       },
     });
     await flushPromises();

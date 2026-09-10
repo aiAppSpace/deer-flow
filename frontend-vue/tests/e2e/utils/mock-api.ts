@@ -18,6 +18,7 @@
  * `handleRunStream` from here.
  */
 
+import type { Agent } from "@/core/agents/types";
 import type { BrowserContext, Page, Route } from "@playwright/test";
 
 // ---------------------------------------------------------------------------
@@ -54,12 +55,12 @@ export type MockThread = {
   goal?: Record<string, unknown> | null;
 };
 
-export type MockAgent = {
-  name: string;
-  description?: string;
-  system_prompt?: string;
-  tool_groups?: string[] | null;
-};
+/*
+  就是 Gateway 的 `AgentResponse`（backend/app/gateway/routers/agents.py:39），
+  不是另写一份。此前那份手抄的带着 `system_prompt`——**真后端从来不返回这个字段**，
+  于是 mock 下的 agent 比线上多一个键，谁要是读了它，只有 e2e 是绿的。
+*/
+export type MockAgent = Agent;
 
 export type MockSkill = {
   name: string;
@@ -419,17 +420,25 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
     threads = [thread, ...threads];
   };
 
-  const threadSearchResult = (thread: MockThread) => ({
-    thread_id: thread.thread_id,
-    created_at: "2025-01-01T00:00:00Z",
-    updated_at: thread.updated_at ?? "2025-01-01T00:00:00Z",
-    metadata: {
+  const threadSearchResult = (thread: MockThread) => {
+    /*
+      标注成开放的 metadata 袋子，不是让 TS 从两个 spread 里推——推出来的是
+      `{ agent_name?: string }`，于是搜索处理器按 `deerflow_archived` 过滤时
+      被判成「这个键不存在」。真后端的 metadata 就是个自由字典。
+    */
+    const metadata: Record<string, unknown> = {
       ...(thread.metadata ?? {}),
       ...(thread.agent_name ? { agent_name: thread.agent_name } : {}),
-    },
-    status: "idle",
-    values: { title: thread.title ?? "Untitled", goal: thread.goal ?? null },
-  });
+    };
+    return {
+      thread_id: thread.thread_id,
+      created_at: "2025-01-01T00:00:00Z",
+      updated_at: thread.updated_at ?? "2025-01-01T00:00:00Z",
+      metadata,
+      status: "idle",
+      values: { title: thread.title ?? "Untitled", goal: thread.goal ?? null },
+    };
+  };
 
   /**
    * 一条线程的**完整 channel values**——`GET /threads/{id}` 与

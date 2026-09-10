@@ -13,14 +13,15 @@
 */
 import { expect, test, type Page, type Route } from "@playwright/test";
 
+import type { ScheduledTask } from "@/core/scheduled-tasks/types";
+
 import {
   MOCK_THREAD_ID,
   mockLangGraphAPI,
   type MockAPIOptions,
 } from "./utils/mock-api";
 
-type TaskStatus =
-  "enabled" | "paused" | "running" | "completed" | "failed" | "cancelled";
+type TaskStatus = ScheduledTask["status"];
 
 function task(
   id: string,
@@ -30,7 +31,7 @@ function task(
     threadId?: string | null;
     title?: string;
   } = {},
-) {
+): ScheduledTask {
   const scheduleType = options.scheduleType ?? "cron";
   return {
     id,
@@ -58,7 +59,13 @@ function task(
   };
 }
 
-type MockTask = ReturnType<typeof task>;
+/*
+  夹具就是 Gateway 契约本身，不是从工厂反推出来的形状。反推那版把
+  `schedule_spec` 收成了 `{cron} | {run_at}` 的字面量联合——于是 mock 里
+  「按请求体回写 spec」这条正常路径反而编译不过。Gateway 加字段时，
+  这一行会让这份 mock 当场失效，那正是我们要的。
+*/
+type MockTask = ScheduledTask;
 type MockRun = {
   id: string;
   task_id: string;

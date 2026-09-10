@@ -9,7 +9,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import { getArtifactArchiveCandidatesByGroupIndex } from "@/core/messages/artifact-archive";
+import {
+  getArtifactArchiveCandidatesByGroupIndex,
+  type ArtifactArchiveCandidate,
+} from "@/core/messages/artifact-archive";
 import { getMessageGroups } from "@/core/messages/utils";
 import type { Message } from "@/core/types/message";
 
@@ -92,7 +95,10 @@ describe("归档下载键的落点", () => {
     expect(groups.map((group) => group.type)).toEqual(expectedTypes);
     // 键永远落在 present-files 那一组上，不管普通回复排在它前面还是后面。
     const filesIndex = expectedTypes.indexOf("assistant:present-files");
-    const expected = [undefined, undefined];
+    const expected: Array<ArtifactArchiveCandidate | undefined> = [
+      undefined,
+      undefined,
+    ];
     expected[filesIndex] = { runId: "run-1" };
     expect(getArtifactArchiveCandidatesByGroupIndex(groups)).toEqual(expected);
   });

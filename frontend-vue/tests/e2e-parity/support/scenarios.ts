@@ -23,6 +23,8 @@
 
 import type { Page } from "@playwright/test";
 
+import type { Agent } from "@/core/agents/types";
+
 import {
   mockLangGraphAPI,
   type MockAPIOptions,
@@ -494,33 +496,45 @@ const MOCK_THREAD_ID_2 = "00000000-0000-0000-0000-000000000002";
 export const HISTORY_THREAD_ID_NEWEST = "00000000-0000-0000-0000-00000000010a";
 export const HISTORY_THREAD_ID_OLDER = "00000000-0000-0000-0000-00000000010b";
 
-const MOCK_AGENTS = [
+/*
+  不渲染 agent 卡片的那几屏用这一份（新会话页、创建向导）。三个可空字段照
+  Gateway 的缺省给 `null`——`AgentResponse` 里它们一定在。
+
+  原来这份只有 name/description/**system_prompt**，而 `AgentResponse`
+  （backend/app/gateway/routers/agents.py:39）根本没有 system_prompt 这个字段：
+  是 mock 自己长出来的键。2026-09-11 接上 tests/ 的类型检查时才露出来。
+*/
+const MOCK_AGENTS: Agent[] = [
   {
     name: "test-agent",
     description: "A test agent for E2E tests",
-    system_prompt: "You are a test agent.",
+    model: null,
+    tool_groups: null,
+    skills: null,
   },
   {
     name: "second-agent",
     description: "Another test agent for E2E tests",
-    system_prompt: "You are another test agent.",
+    model: null,
+    tool_groups: null,
+    skills: null,
   },
 ];
 
 /*
-  画廊那一屏用的 agent 夹具。**不能用上面那份 `MOCK_AGENTS`**：它只有
-  name/description/system_prompt，而 `Agent` 类型里 `model` / `tool_groups` / `skills`
-  是必填的，卡片直接对它们取 `.length`——喂上面那份，两个应用都会在渲染里抛错，
-  整屏只剩页头（wave 137 第一版实测：快照里一张卡都没有）。
+  画廊那一屏用的 agent 夹具。**不能用上面那份 `MOCK_AGENTS`**：卡片直接对
+  `tool_groups` / `skills` 取 `.length`，而上面那份三项全 `null`，走的是
+  「继承默认 / 全部工具组 / 没有技能」那一条分支——画廊要的是**两条分支都有**。
+  （wave 137 第一版实测：喂了没有这三个字段的夹具，两个应用都在渲染里抛错，
+  快照里一张卡都没有。那一版的类型缺口已经由上面那条注解补上。）
 
   两个 agent 刻意走**不同分支**：第一个有模型、两个工具组、一个技能；
-  第二个三项全 `null`，走「继承默认 / 全部工具组 / 没有技能」那一侧。
+  第二个三项全 `null`。
 */
-const GALLERY_AGENTS = [
+const GALLERY_AGENTS: Agent[] = [
   {
     name: "test-agent",
     description: "A test agent for E2E tests",
-    system_prompt: "You are a test agent.",
     model: "parity-basic",
     tool_groups: ["search", "code"],
     skills: ["review"],
@@ -528,7 +542,6 @@ const GALLERY_AGENTS = [
   {
     name: "second-agent",
     description: "Another test agent for E2E tests",
-    system_prompt: "You are another test agent.",
     model: null,
     tool_groups: null,
     skills: null,

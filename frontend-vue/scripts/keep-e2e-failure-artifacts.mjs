@@ -206,6 +206,8 @@ export function processIsAlive(
   }
 }
 
+/** @typedef {{ pid?: number, command?: string, startedAt?: string }} RunLockHolder */
+
 /**
  * 抢独占锁。
  *
@@ -228,7 +230,12 @@ export function processIsAlive(
  *   removeLock?: (path: string) => void,
  *   isAlive?: (pid: number) => boolean,
  * }} [io]
- * @returns {{ acquired: boolean, holder: { pid?: number, command?: string, startedAt?: string } | null, release?: () => void }}
+ *
+ * 返回的是**可辨识联合**，不是「`release` 可选」：**抢到才有得放**。
+ * 写成 optional 的那版允许调用方在没抢到的分支上写 `lock.release?.()`，
+ * 而那正是「删掉接管者的锁」这类事故的入口。
+ * @returns {{ acquired: true, holder: RunLockHolder, release: () => void }
+ *          | { acquired: false, holder: RunLockHolder | null, release?: undefined }}
  */
 export function acquireRunLock(
   lockPath = RUN_LOCK_PATH,

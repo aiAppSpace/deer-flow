@@ -23,6 +23,7 @@ import { ref } from "vue";
 
 import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { CitationSource } from "@/core/citations/sources";
 import {
   createWorkspaceToastStore,
   workspaceToastKey,
@@ -33,11 +34,17 @@ vi.mock("@/core/clipboard", () => clipboard);
 
 const toastStore = createWorkspaceToastStore();
 
-const source = {
+/*
+  面板会画 domain 与 citeCount，所以夹具把它们给全；原来那份只有四个键，
+  其中 `index` 还不是 `CitationSource` 的字段（它在 occurrences 里）。
+*/
+const source: CitationSource = {
   id: "source-1",
-  index: 1,
   title: "Agent trends 2026",
   url: "https://example.com/trends",
+  domain: "example.com",
+  count: 1,
+  occurrences: [{ index: 1, title: "Agent trends 2026" }],
 };
 
 function mountPanel() {

@@ -36,6 +36,7 @@ vi.mock("@/core/skills/api", () => ({
 import MessageList from "@/components/chat/MessageList.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { ArtifactRequestError } from "@/core/artifacts/api";
+import type { Message } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
   workspaceToastKey,
@@ -66,16 +67,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function presentFilesMessage(id: string, runId: string, files: string[]) {
+function presentFilesMessage(
+  id: string,
+  runId: string,
+  files: string[],
+): Message {
   return {
     id,
     type: "ai",
     content: "",
+    // `run_id` 不在 Message 上，但线路上真的带着它（core/messages/run-duration.ts
+    // 也是这么读的）；这里跟着上游的写法走。
     run_id: runId,
     tool_calls: [
       { id: `call-${id}`, name: "present_files", args: { filepaths: files } },
     ],
-  };
+  } as Message & { run_id: string };
 }
 
 const TWO_FILES = [

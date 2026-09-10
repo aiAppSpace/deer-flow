@@ -248,12 +248,13 @@ describe("messages-tuple 流式分片（golden trace，第 2 类证据）", () =
     );
     expect(withParsed).toBeDefined();
 
-    const agent = toAgentMessage(withParsed as WireMessageLike);
+    const agent = toAgentMessage(withParsed!);
     const call = agent.toolCalls?.[0];
     expect(call?.name).toBe("read_file");
     // 成品 args 是后端解析过的对象，保持原样。
     expect(call?.args).toEqual(
-      (withParsed as { tool_calls: { args: unknown }[] }).tool_calls[0].args,
+      (withParsed as unknown as { tool_calls: { args: unknown }[] })
+        .tool_calls[0]!.args,
     );
     // 原文同时留着：解析失败时它是唯一还原现场的东西。
     expect(call?.argsChunks?.join("")).toContain('"path"');

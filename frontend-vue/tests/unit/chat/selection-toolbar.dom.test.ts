@@ -23,6 +23,7 @@ import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { Message } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
   workspaceToastKey,
@@ -55,12 +56,14 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-const CONVERSATION = [
+const CONVERSATION: Message[] = [
   { id: "human-1", type: "human", content: [{ type: "text", text: "Who?" }] },
   { id: "ai-1", type: "ai", content: "I am DeerFlow, a super agent." },
 ];
 
-function mountList(props: Record<string, unknown> = {}) {
+type ListProps = InstanceType<typeof MessageList>["$props"];
+
+function mountList(props: Partial<ListProps> = {}) {
   return mount(MessageList, {
     props: {
       messages: CONVERSATION,
@@ -316,7 +319,7 @@ describe("when the toolbar must not appear", () => {
     （core/messages/utils.ts:155 的 isUnresolvedAssistantText），本来就没有
     data-assistant-turn，拿它当锚点会退化成在测分组而不是在测这条判据。
   */
-  const twoTurns = [
+  const twoTurns: Message[] = [
     { id: "human-1", type: "human", content: [{ type: "text", text: "Who?" }] },
     { id: "ai-1", type: "ai", content: "I am DeerFlow, a super agent." },
     {

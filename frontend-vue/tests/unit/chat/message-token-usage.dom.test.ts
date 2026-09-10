@@ -12,6 +12,7 @@ import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { Message } from "@/core/types/message";
 
 const mocks = vi.hoisted(() => ({ buildTokenDebugSteps: vi.fn() }));
 vi.mock("@/core/messages/usage-model", () => ({
@@ -20,7 +21,7 @@ vi.mock("@/core/messages/usage-model", () => ({
 
 import MessageTokenUsage from "@/components/chat/MessageTokenUsage.vue";
 
-const aiMessage = {
+const aiMessage: Message = {
   id: "ai-1",
   type: "ai",
   content: "hi",

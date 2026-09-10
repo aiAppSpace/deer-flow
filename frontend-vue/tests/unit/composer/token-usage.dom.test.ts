@@ -7,6 +7,7 @@ import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { retainThreadTokenUsagePlaceholder } from "@/core/threads/token-usage";
 import type { Message } from "@/core/types/message";
+import type { ThreadTokenUsageResponse } from "@/core/threads/types";
 
 const persisted = {
   id: "ai-persisted",
@@ -29,6 +30,26 @@ const pending = {
     total_tokens: 25,
   },
 } as unknown as Message;
+
+/**
+ * `GET /threads/{id}/token-usage` 的完整响应。用例只关心其中一两个字段，
+ * 但夹具照整份契约给——少给的那些字段一样会被组件读到。
+ */
+function threadTokenUsage(
+  overrides: Partial<ThreadTokenUsageResponse> = {},
+): ThreadTokenUsageResponse {
+  return {
+    thread_id: "thread-1",
+    total_tokens: 0,
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    total_runs: 0,
+    by_model: {},
+    by_caller: { lead_agent: 0, subagent: 0, middleware: 0 },
+    context_usage: null,
+    ...overrides,
+  };
+}
 
 describe("token usage surfaces", () => {
   beforeEach(() => {
@@ -119,11 +140,15 @@ describe("token usage surfaces", () => {
   it("rejects a retained snapshot whose response belongs to another thread", () => {
     expect(
       retainThreadTokenUsagePlaceholder(
-        {
+        threadTokenUsage({
           thread_id: "thread-1",
           total_tokens: 42,
-          context_usage: { percentage: 42 },
-        },
+          context_usage: {
+            token_count: 42,
+            max_context_tokens: 100,
+            percentage: 42,
+          },
+        }),
         "thread-2",
       ),
     ).toBeUndefined();

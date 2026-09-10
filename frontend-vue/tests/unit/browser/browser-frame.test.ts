@@ -20,6 +20,7 @@ describe("latestBrowserViewFrame", () => {
         {
           type: "tool",
           id: "tool-1",
+          tool_call_id: "call-tool-1",
           content: "first",
           additional_kwargs: {
             browser_view: {
@@ -33,6 +34,7 @@ describe("latestBrowserViewFrame", () => {
         {
           type: "tool",
           id: "tool-2",
+          tool_call_id: "call-tool-2",
           content: "second",
           additional_kwargs: {
             browser_view: {
@@ -64,6 +66,7 @@ describe("latestBrowserViewFrame", () => {
         {
           type: "tool",
           id: "tool-1",
+          tool_call_id: "call-tool-1",
           content: "bad",
           additional_kwargs: { browser_view: { screenshot: "" } },
         },

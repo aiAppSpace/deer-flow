@@ -169,16 +169,18 @@ describe("ArtifactTablePreview", () => {
   });
 
   it("空文件和「一条完整记录都放不下」是两句话", async () => {
-    state().result.value = {
-      rows: [],
+    // 具名放一份：`result` 是可空的，直接展开它会把每个字段变成可选。
+    const empty = {
+      rows: [] as string[][],
       columnCount: 0,
       limited: false,
       unevenRows: false,
     };
+    state().result.value = empty;
     const wrapper = render();
     expect(wrapper.text()).toContain("This file is empty.");
 
-    state().result.value = { ...state().result.value, limited: true };
+    state().result.value = { ...empty, limited: true };
     await wrapper.vm.$nextTick();
     expect(wrapper.text()).toContain("No complete records fit in this preview");
   });

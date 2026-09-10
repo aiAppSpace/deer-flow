@@ -154,14 +154,18 @@ describe("useAgentCreationSession", () => {
   });
 
   it("deduplicates double save and aborts run/verification on scope dispose", async () => {
-    let runSignal: AbortSignal | null = null;
+    /*
+      收进数组，不是 `let ... = null`：赋值发生在回调里，TS 的控制流看不进闭包，
+      于是外面那句 `runSignal?.aborted` 会被当成对 `null` 取属性。
+    */
+    const runSignals: AbortSignal[] = [];
     let resolveSubmit!: (value: boolean) => void;
     const submit = new Promise<boolean>((resolve) => {
       resolveSubmit = resolve;
     });
     const { scope, session, submitSave } = createHarness({
       submitSave: async (signal) => {
-        runSignal = signal;
+        runSignals.push(signal);
         return submit;
       },
     });
@@ -170,7 +174,7 @@ describe("useAgentCreationSession", () => {
     expect(await session.save()).toBe(false);
     expect(submitSave).toHaveBeenCalledTimes(1);
     scope.stop();
-    expect(runSignal?.aborted).toBe(true);
+    expect(runSignals.at(-1)?.aborted).toBe(true);
     resolveSubmit(true);
     expect(await first).toBe(false);
     expect(session.status.value).not.toBe("created");

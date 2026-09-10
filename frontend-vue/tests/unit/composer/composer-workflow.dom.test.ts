@@ -46,7 +46,11 @@ function mountComposer(
     options.onAccepted();
     return true;
   }),
-  props: { isWelcome?: boolean; showWelcomeSuggestions?: boolean } = {},
+  /*
+    覆盖项直接取组件自己的 props 契约，不再手抄两个键——手抄的那份漏了
+    `streaming`，于是「流式态按回车该提示等一下」那条用例传的是个未知属性。
+  */
+  props: Partial<InstanceType<typeof ChatComposer>["$props"]> = {},
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -81,7 +85,7 @@ function mountComposer(
 }
 
 async function selectFile(
-  wrapper: ReturnType<typeof mount>["wrapper"],
+  wrapper: ReturnType<typeof mountComposer>["wrapper"],
   file: File,
 ) {
   const input = wrapper.get("input[type='file']");
@@ -124,8 +128,8 @@ describe("composer submission and stale lifecycle", () => {
     vi.stubGlobal(
       "URL",
       class extends NativeURL {
-        static createObjectURL = createObjectURL;
-        static revokeObjectURL = revokeObjectURL;
+        static override createObjectURL = createObjectURL;
+        static override revokeObjectURL = revokeObjectURL;
       },
     );
   });

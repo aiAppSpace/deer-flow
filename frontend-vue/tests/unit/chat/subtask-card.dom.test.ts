@@ -18,6 +18,7 @@ import MessageList from "@/components/chat/MessageList.vue";
 import SubtaskCard from "@/components/chat/SubtaskCard.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import type { Subtask } from "@/core/tasks/types";
+import type { ToolCall } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
   workspaceToastKey,
@@ -59,7 +60,7 @@ afterEach(() => {
 
 /** `token_usage.enabled` 与模型显示名都从这份 /api/models 响应来。 */
 function mountCard(
-  props: Record<string, unknown>,
+  props: InstanceType<typeof SubtaskCard>["$props"],
   models: { enabled: boolean; withModel?: boolean } = { enabled: false },
 ) {
   const queryClient = new QueryClient({
@@ -301,7 +302,7 @@ describe("SubtaskCard", () => {
 });
 
 describe("MessageList subtask group header", () => {
-  function mountList(toolCalls: Record<string, unknown>[]) {
+  function mountList(toolCalls: ToolCall[]) {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -330,7 +331,7 @@ describe("MessageList subtask group header", () => {
     });
   }
 
-  const call = (id: string, description: string) => ({
+  const call = (id: string, description: string): ToolCall => ({
     id,
     name: "task",
     args: { subagent_type: "general-purpose", description, prompt: "Go" },

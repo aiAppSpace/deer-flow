@@ -121,7 +121,12 @@ describe("HumanInputCard", () => {
       question: "Confirm delivery details",
       input_mode: "form",
       fields: [
-        { name: "approved", label: "Approved", type: "checkbox" },
+        {
+          name: "approved",
+          label: "Approved",
+          type: "checkbox",
+          required: false,
+        },
         { name: "owner", label: "Owner", type: "text", required: true },
       ],
     });
@@ -265,7 +270,7 @@ describe("HumanInputCard", () => {
       request_id: "all-optional",
       question: "Anything to add?",
       input_mode: "form",
-      fields: [{ name: "note", label: "Note", type: "text" }],
+      fields: [{ name: "note", label: "Note", type: "text", required: false }],
     });
 
     await wrapper.get("form").trigger("submit");

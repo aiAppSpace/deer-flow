@@ -17,6 +17,7 @@ import type { Model } from "@/core/models/types";
 
 const models: Model[] = [
   {
+    id: "basic",
     name: "basic",
     model: "basic-provider-id",
     display_name: "Basic",
@@ -24,6 +25,7 @@ const models: Model[] = [
     supports_reasoning_effort: false,
   },
   {
+    id: "thinking",
     name: "thinking",
     model: "thinking-provider-id",
     display_name: "Thinking",
@@ -31,6 +33,7 @@ const models: Model[] = [
     supports_reasoning_effort: false,
   },
   {
+    id: "reasoning",
     name: "reasoning",
     model: "reasoning-provider-id",
     display_name: "Reasoning",

@@ -16,6 +16,7 @@ import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { Message } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
   workspaceToastKey,
@@ -71,7 +72,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mountList(props: Record<string, unknown>) {
+type ListProps = InstanceType<typeof MessageList>["$props"];
+
+function mountList(props: Partial<ListProps> & Pick<ListProps, "messages">) {
   return mount(MessageList, {
     props: {
       streaming: false,
@@ -86,7 +89,7 @@ function mountList(props: Record<string, unknown>) {
   });
 }
 
-const completedTurn = [
+const completedTurn: Message[] = [
   { id: "human-1", type: "human", content: [{ type: "text", text: "Hi" }] },
   { id: "ai-1", type: "ai", content: "First answer" },
   { id: "human-2", type: "human", content: [{ type: "text", text: "More" }] },
@@ -144,7 +147,7 @@ describe("read-only turn actions", () => {
   台账永远是 0（线索 114），所以 artifact-stream-state 的夹具里补了一条。
 */
 describe("assistant:present-files group", () => {
-  const presentFiles = [
+  const presentFiles: Message[] = [
     { id: "human-1", type: "human", content: [{ type: "text", text: "Go" }] },
     {
       id: "ai-present",
@@ -246,7 +249,7 @@ describe("assistant:present-files group", () => {
   （/showcase/<id>）根本不在取样面里（线索 107）。所以它只能靠这里守。
 */
 describe("assistant:present-files .skill install", () => {
-  const skillFiles = [
+  const skillFiles: Message[] = [
     { id: "human-1", type: "human", content: [{ type: "text", text: "Go" }] },
     {
       id: "ai-present",
@@ -418,12 +421,13 @@ describe("assistant:present-files .skill install", () => {
   不带请求的那一支上游按 markdown 渲染，本仓此前什么都不画。
 */
 describe("assistant:clarification without a structured request", () => {
-  const messages = [
+  const messages: Message[] = [
     { id: "human-1", type: "human", content: [{ type: "text", text: "Go" }] },
     { id: "ai-1", type: "ai", content: "Let me check." },
     {
       id: "tool-clarify",
       type: "tool",
+      tool_call_id: "call-clarify",
       name: "ask_clarification",
       content: "Which one did you mean?\n\n  1. Staging\n  2. Production",
     },

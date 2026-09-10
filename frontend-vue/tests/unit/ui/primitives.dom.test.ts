@@ -183,7 +183,7 @@ describe("Sheet", () => {
   it("keeps dialog semantics and records the edge it slides from", async () => {
     await mountPortal(() =>
       h(Sheet, { open: true }, () => [
-        h(SheetContent, { side: "right" }, () => [
+        h(SheetContent, { side: "right", closeLabel: "Close" }, () => [
           h(SheetTitle, () => "Changes"),
           h(SheetDescription, () => "Two files changed"),
         ]),
@@ -393,7 +393,12 @@ describe("Tabs", () => {
             Tabs,
             {
               modelValue: active.value,
-              "onUpdate:modelValue": (next: string) => (active.value = next),
+              /*
+                reka 的 Tabs 收的是 `StringOrNumber`，不是 string——写窄了这里
+                编译不过，而运行时它真的可能给数字。
+              */
+              "onUpdate:modelValue": (next: string | number) =>
+                (active.value = String(next)),
             },
             () => [
               h(TabsList, { "aria-label": "Skill source" }, () => [

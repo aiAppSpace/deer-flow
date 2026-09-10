@@ -3,6 +3,10 @@ import { fileURLToPath } from "node:url";
 
 const REQUIRED_LOOPBACK_HOSTS = ["127.0.0.1", "localhost"];
 
+/**
+ * @param {string | undefined} value
+ * @returns {string[]}
+ */
 function entries(value) {
   return (value ?? "")
     .split(",")
@@ -10,6 +14,12 @@ function entries(value) {
     .filter(Boolean);
 }
 
+/**
+ * 把两种拼写的 NO_PROXY 并成同一份，并保证回环地址在里面。
+ *
+ * @param {NodeJS.ProcessEnv} [environment]
+ * @returns {NodeJS.ProcessEnv} 原环境的副本，两个拼写都改写成合并后的值。
+ */
 export function mergeLoopbackNoProxy(environment = process.env) {
   const noProxy = [
     ...new Set([

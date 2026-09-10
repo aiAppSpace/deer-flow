@@ -54,6 +54,7 @@ test("restoreReconnectedTurnMessageOrder heals a same-run sandwich", () => {
   const earlyTool = {
     id: "tool-early",
     type: "tool",
+    tool_call_id: "call-early",
     content: "working",
     run_id: "run-new",
   } as Message;
@@ -91,6 +92,7 @@ test("restoreReconnectedTurnMessageOrder preserves completed and unrelated histo
   const orphan = {
     id: "orphan",
     type: "tool",
+    tool_call_id: "call-orphan",
     content: "older page",
     run_id: "run-old",
   } as Message;

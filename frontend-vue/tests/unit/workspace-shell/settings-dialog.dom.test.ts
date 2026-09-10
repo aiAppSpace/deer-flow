@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import SettingsDialog from "@/components/workspace/settings/SettingsDialog.vue";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
-import { enUS } from "@/core/i18n/locales/en-US";
+import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 
 const route = reactive({
   path: "/workspace/chats/t-1",
@@ -20,7 +20,7 @@ function mountDialog() {
   mounted = mount(SettingsDialog, {
     attachTo: document.body,
     global: {
-      config: { globalProperties: { $i18n: { t: { value: enUS } } } },
+      mocks: nuxtI18nMocks(),
       stubs: {
         AccountSettings: {
           template:
@@ -47,7 +47,7 @@ beforeEach(() => {
   useSettingsDialog().close({ source: "route" });
   vi.stubGlobal("useRoute", () => route);
   vi.stubGlobal("useRouter", () => ({ push }));
-  vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: { value: enUS } } }));
+  vi.stubGlobal("useNuxtApp", () => ({ $i18n: nuxtI18nStub() }));
 });
 
 afterEach(async () => {

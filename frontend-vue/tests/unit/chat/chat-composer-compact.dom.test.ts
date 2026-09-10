@@ -92,14 +92,16 @@ describe("ChatComposer /compact", () => {
         message: enUS.inputBox.compactSuccess,
       },
     ]);
-    expect(invalidate.mock.calls.map(([filters]) => filters.queryKey)).toEqual([
-      ["threads", "search"],
-      ["threads", "searchInfinite"],
-      ["thread", "thread-1"],
-      ["thread-messages", "thread-1"],
-      ["thread", "metadata", "thread-1"],
-      ["thread-token-usage", "thread-1"],
-    ]);
+    expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
+      [
+        ["threads", "search"],
+        ["threads", "searchInfinite"],
+        ["thread", "thread-1"],
+        ["thread-messages", "thread-1"],
+        ["thread", "metadata", "thread-1"],
+        ["thread-token-usage", "thread-1"],
+      ],
+    );
     wrapper.unmount();
   });
 

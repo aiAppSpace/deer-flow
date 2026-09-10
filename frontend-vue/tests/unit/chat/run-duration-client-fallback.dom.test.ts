@@ -59,7 +59,12 @@ function messages(turnDuration?: number): Message[] {
   ] as unknown as Message[];
 }
 
-function mountList(props: Record<string, unknown>) {
+type ListProps = InstanceType<typeof MessageList>["$props"];
+
+function mountList(
+  /* 这一组用例全部围着 `streaming` 的下降沿转，所以它和 messages 一样是必给的。 */
+  props: Partial<ListProps> & Pick<ListProps, "messages" | "streaming">,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });

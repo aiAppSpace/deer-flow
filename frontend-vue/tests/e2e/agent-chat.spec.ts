@@ -13,13 +13,17 @@ import {
   mockLangGraphAPI,
   MOCK_RUN_ID,
   MOCK_THREAD_ID,
+  type MockAgent,
 } from "./utils/mock-api";
 
-const MOCK_AGENTS = [
+/*
+  形状钉在 Gateway 的 `AgentResponse` 上（见 mock-api.ts 的 MockAgent）。
+  原来这两条各带一个 `system_prompt`——真后端不返回它，属于 mock 自己长出来的字段。
+*/
+const MOCK_AGENTS: MockAgent[] = [
   {
     name: "test-agent",
     description: "A test agent for E2E tests",
-    system_prompt: "You are a test agent.",
     model: "reasoning",
     tool_groups: ["browser", "file:read", "browser"],
     skills: ["review", "review", "long-skill-name"],
@@ -30,7 +34,6 @@ const MOCK_AGENTS = [
   {
     name: "second-agent",
     description: "Another test agent for E2E tests",
-    system_prompt: "You are another test agent.",
     model: null,
     tool_groups: [],
     skills: [],
@@ -623,9 +626,12 @@ test.describe("Agent chat", () => {
     },
   ]) {
     test(name, async ({ page }) => {
-      const agent = {
+      const agent: MockAgent = {
         name: "browser-agent",
         description: "A custom agent for Browser Live tests",
+        // 真后端这两个键一定在，缺省是 null；mock 少了它们就与线上不同形。
+        model: null,
+        skills: null,
         tool_groups: toolGroups,
       };
       mockLangGraphAPI(page, {
@@ -704,6 +710,8 @@ test.describe("Agent chat", () => {
         {
           name: "browser-agent",
           description: "A custom agent for Browser Live tests",
+          model: null,
+          skills: null,
           tool_groups: ["browser"],
         },
       ],

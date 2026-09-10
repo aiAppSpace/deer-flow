@@ -15,22 +15,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   type DiffEntry,
+  DIFF_ENTRY_FIELDS,
   addedRows,
   ledgerRows,
 } from "../../e2e-parity/support/ledger";
 
-const empty = (): DiffEntry => ({
-  ariaOnlyReact: [],
-  ariaOnlyVue: [],
-  requestsOnlyReact: [],
-  requestsOnlyVue: [],
-  geometry: [],
-  focus: [],
-  order: [],
-  tabbablesOnlyReact: [],
-  tabbablesOnlyVue: [],
-  tabOrder: [],
-});
+/*
+  从字段表生成，不手抄。手抄那份漏了第 11 个字段 `depth`——而这组用例正是
+  台账摊平逻辑的守卫，夹具少一个字段等于那一档从来没被摊平过。
+*/
+const empty = (): DiffEntry =>
+  Object.fromEntries(
+    DIFF_ENTRY_FIELDS.map((field) => [field, [] as string[]]),
+  ) as DiffEntry;
 
 const entry = (patch: Partial<DiffEntry>): DiffEntry => ({
   ...empty(),

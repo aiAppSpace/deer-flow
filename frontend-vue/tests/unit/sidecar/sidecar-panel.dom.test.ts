@@ -1,11 +1,20 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
-import { defineComponent, nextTick, ref } from "vue";
+import { computed, defineComponent, nextTick, ref, type Ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import SidecarPanel from "@/components/workspace/sidecar/SidecarPanel.vue";
 import HumanInputCard from "@/components/chat/HumanInputCard.vue";
+import type { SidecarReference } from "@/composables/useSidecar";
+import type { SidecarContext } from "@/core/sidecar";
+import type { SidecarSession } from "@/composables/useSidecarSession";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type {
+  HumanInputRequest,
+  HumanInputResponse,
+} from "@/core/messages/human-input";
+import type { SidecarSessionPhase } from "@/core/sidecar/session-lifecycle";
+import type { ThreadRunContextInput } from "@/core/threads/submit";
 import type { Message } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
@@ -44,6 +53,48 @@ const MessageListStub = defineComponent({
   template: '<div data-testid="message-list-stub" />',
 });
 
+/*
+  面板只从 stream 上读这四个口子（SidecarPanel.vue:421-426）。useThreadStream 另外
+  十几个成员这些用例既不读也不写，其中 `__runner` 还是一整台流式状态机——造它等于
+  在测试里重写一遍运行时。所以夹具只造这四个，但**类型从真契约 Pick 出来**：
+  真的改了名字或换了类型，这里当场编译不过。
+*/
+type PanelStreamKey = "messages" | "isStreaming" | "isHistoryLoading" | "error";
+/*
+  值类型从真契约里推，但一律换成**可写** ref：面板只读它们（真身多半是 computed），
+  用例却要驱动它们。这样名字改了、值类型换了，这里当场编译不过；
+  只读/可写这一层差异留给下面那个具名断言。
+*/
+type PanelStream = {
+  [K in PanelStreamKey]: Ref<
+    SidecarSession["stream"][K] extends { value: infer V } ? V : never
+  >;
+};
+
+/** 假 session：除 stream 收窄外，逐个成员都要能当真的用。 */
+type FakeSidecarSession = Omit<SidecarSession, "stream"> & {
+  stream: PanelStream;
+};
+
+/*
+  唯一一处收窄发生的地方。挂载时 props 要的是完整 SidecarSession，而夹具的 stream
+  只有四个口子——把这个断言收在一个具名函数里，比在每个 mount 上各写一次
+  `as never` 好：将来 stream 用到第五个口子，改 PanelStream 一处即可。
+*/
+function asSidecarSession(session: FakeSidecarSession): SidecarSession {
+  return session as unknown as SidecarSession;
+}
+
+/** 引用面板只按条数出文案，但夹具照样给全 `SidecarContext` 的必填字段。 */
+function quotedContext(content: string): SidecarContext {
+  return {
+    type: "referenced_message",
+    label: "Message",
+    role: "assistant",
+    content,
+  };
+}
+
 function makeSession() {
   const input = ref("");
   return {
@@ -54,24 +105,33 @@ function makeSession() {
     deleting: ref(false),
     submissionError: ref<unknown>(null),
     fileError: ref(""),
-    errorMessage: ref(""),
-    phase: ref("ready"),
-    ready: ref(true),
+    errorMessage: computed(() => ""),
+    phase: computed<SidecarSessionPhase>(() => "ready"),
+    ready: computed(() => true),
     stream: {
-      messages: ref([]),
+      messages: ref<Message[]>([]),
       isStreaming: ref(false),
       isHistoryLoading: ref(false),
-      error: ref<unknown>(new Error("sidecar run failed")),
+      error: ref<Error | null>(new Error("sidecar run failed")),
     },
+    restore: vi.fn(async () => null),
+    ensureThread: vi.fn(async () => null),
     submit: vi.fn(async () => true),
-    submitHumanInput: vi.fn(async () => true),
+    /*
+      形参照抄真签名：用例要读 `mock.calls.at(-1)?.[1]`（第二个实参才是回答），
+      `vi.fn(async () => true)` 的调用记录是空元组，那一行永远取不到东西。
+    */
+    submitHumanInput: vi.fn(
+      async (_request: HumanInputRequest, _response: HumanInputResponse) =>
+        true,
+    ),
     setInput: vi.fn((value: string) => {
       input.value = value;
     }),
     addFiles: vi.fn(),
     removeFile: vi.fn(),
     deleteThread: vi.fn(async () => true),
-  };
+  } satisfies FakeSidecarSession;
 }
 
 /*
@@ -94,16 +154,16 @@ function queryPlugins() {
 
 function mountPanel(
   session = makeSession(),
-  references: unknown[] = [],
+  references: SidecarReference[] = [],
   /** 只有档位相关的用例需要换 mode；其余照旧拿 pro。 */
-  context: Record<string, unknown> = { model_name: "reasoner", mode: "pro" },
+  context: ThreadRunContextInput = { model_name: "reasoner", mode: "pro" },
 ) {
   const wrapper = mount(SidecarPanel, {
     props: {
       references,
       context,
       active: true,
-      session,
+      session: asSidecarSession(session),
     },
     global: {
       provide: { [workspaceToastKey as symbol]: toastStore },
@@ -314,7 +374,7 @@ describe("SidecarPanel session adapter", () => {
         references: [],
         context: { model_name: "reasoner", mode: "pro" },
         active: true,
-        session,
+        session: asSidecarSession(session),
       },
       global: {
         provide: { [workspaceToastKey as symbol]: toastStore },
@@ -443,8 +503,8 @@ describe("SidecarPanel session adapter", () => {
     expect(draft.wrapper.text()).not.toContain(enUS.sidecar.continuing);
 
     const quoted = mountPanel(makeSession(), [
-      { id: 1, context: { content: "a" } },
-      { id: 2, context: { content: "b" } },
+      { id: 1, context: quotedContext("a") },
+      { id: 2, context: quotedContext("b") },
     ]).wrapper;
     expect(quoted.text()).toContain("2 selected text fragments");
     expect(quoted.text()).not.toContain(enUS.sidecar.continuing);

@@ -392,6 +392,23 @@ test("rejects select options with empty values or duplicates", () => {
   ).toBeNull();
 });
 
+/*
+  线路上 `required` 是可省的，解析后**一定**是布尔——`HumanInputField.required`
+  是必填字段，靠的就是这一步归一化。此前只有 HumanInputCard 的用例在夹具里省掉它，
+  等于隔着组件去证解析器的行为；把这条挪到解析器自己身上。
+*/
+test("wire 省略 required 时归一成 false", () => {
+  const request = extractHumanInputRequest(
+    toolMessage({
+      ...formPayload,
+      fields: [{ name: "note", label: "Note", type: "text" }],
+    }),
+  );
+  expect(request?.fields).toEqual([
+    { name: "note", label: "Note", type: "text", required: false },
+  ]);
+});
+
 test("rejects duplicate field names and enforces the form/version binding", () => {
   expect(
     extractHumanInputRequest(

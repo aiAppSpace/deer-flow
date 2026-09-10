@@ -23,7 +23,7 @@ type WebServer = NonNullable<PlaywrightTestConfig["webServer"]>;
   四份 config 里的 `servers: [...]` 全部「不能赋给 never」。
   运行时一直是对的；**类型上一直是错的，而 `tests/` 不在 typecheck 里，没人说话。**
 */
-type WebServerEntry = Extract<WebServer, readonly unknown[]>[number];
+export type WebServerEntry = Extract<WebServer, readonly unknown[]>[number];
 
 const isCI = Boolean(process.env.CI);
 

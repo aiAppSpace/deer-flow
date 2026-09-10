@@ -4,7 +4,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import WorkspaceChangesBadge from "@/components/workspace/changes/WorkspaceChangesBadge.vue";
-import { enUS } from "@/core/i18n/locales/en-US";
+import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 
 const fetchChanges = vi.hoisted(() => vi.fn());
 vi.mock("@/core/workspace-changes/api", () => ({
@@ -113,7 +113,7 @@ function mountBadge() {
     attachTo: document.body,
     global: {
       plugins: [[VueQueryPlugin, { queryClient }]],
-      config: { globalProperties: { $i18n: { t: { value: enUS } } } },
+      mocks: nuxtI18nMocks(),
     },
   });
 }
@@ -121,7 +121,7 @@ function mountBadge() {
 beforeEach(() => {
   document.body.innerHTML = "";
   fetchChanges.mockReset().mockResolvedValue(summary);
-  vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: { value: enUS } } }));
+  vi.stubGlobal("useNuxtApp", () => ({ $i18n: nuxtI18nStub() }));
 });
 
 afterEach(() => {

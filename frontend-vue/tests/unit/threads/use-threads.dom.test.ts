@@ -39,7 +39,7 @@ function thread(id: string, sidecar = false): AgentThread {
     metadata: sidecar
       ? { deerflow_sidecar: true, parent_thread_id: "main" }
       : {},
-    values: { title: id },
+    values: { title: id, messages: [] },
     interrupts: {},
   };
 }

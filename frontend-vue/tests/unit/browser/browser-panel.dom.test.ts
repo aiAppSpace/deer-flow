@@ -73,8 +73,11 @@ function mountPanel(
   return { wrapper, queryClient };
 }
 
+/** 发出去的输入帧：形状由协议定，这里只要能按键名取值。 */
+type InputFrame = Record<string, unknown>;
+
 function parsedInputs(socket = sockets.at(-1)) {
-  return socket?.sent.map((value) => JSON.parse(value) as unknown) ?? [];
+  return socket?.sent.map((value) => JSON.parse(value) as InputFrame) ?? [];
 }
 
 function setImageGeometry(
@@ -243,9 +246,9 @@ describe("BrowserPanel behavior", () => {
     panel.element.dispatchEvent(
       new KeyboardEvent("keyup", { key: "a", bubbles: true }),
     );
-    expect(
-      parsedInputs().filter((event) => Reflect.get(event, "text") === "a"),
-    ).toHaveLength(1);
+    expect(parsedInputs().filter((event) => event.text === "a")).toHaveLength(
+      1,
+    );
 
     const localShortcut = new KeyboardEvent("keydown", {
       key: "l",

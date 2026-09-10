@@ -23,10 +23,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import type { PlaywrightTestConfig } from "@playwright/test";
-
-type WebServer = NonNullable<PlaywrightTestConfig["webServer"]>;
-type WebServerEntry = WebServer extends readonly (infer T)[] ? T : never;
+import type { WebServerEntry } from "../../support/playwright-factory";
 
 const reactRoot = fileURLToPath(
   new URL("../../../../frontend/", import.meta.url),

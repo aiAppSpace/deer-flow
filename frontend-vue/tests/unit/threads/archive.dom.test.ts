@@ -35,11 +35,16 @@ function harness() {
     "resetQueries",
     "invalidateQueries",
   ] as const) {
-    vi.spyOn(queryClient, op).mockImplementation(
-      async (filters?: { queryKey?: unknown[] }) => {
-        calls.push({ op, key: (filters?.queryKey ?? []) as unknown[] });
-      },
-    );
+    /*
+      三个方法的 filters 参数类型互不相同（QueryFilters / ResetQueryFilters /
+      InvalidateQueryFilters），一份实现喂三个 spy 必然对不上其中两个。
+      这里只关心「被调用时带的 queryKey」，所以按最小共同形状读。
+    */
+    vi.spyOn(queryClient, op).mockImplementation((async (filters?: {
+      queryKey?: unknown[];
+    }) => {
+      calls.push({ op, key: (filters?.queryKey ?? []) as unknown[] });
+    }) as never);
   }
   const setSpy = vi.spyOn(queryClient, "setQueriesData").mockImplementation(((
     ...a: unknown[]

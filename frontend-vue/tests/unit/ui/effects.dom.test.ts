@@ -71,7 +71,7 @@ describe("named effects", () => {
       options: CanvasRenderingContext2DSettings | undefined;
     }> = [];
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
-      function (_type, options) {
+      function (this: HTMLCanvasElement, _type, options) {
         calls.push({ canvas: this, options });
         return context;
       } as typeof HTMLCanvasElement.prototype.getContext,

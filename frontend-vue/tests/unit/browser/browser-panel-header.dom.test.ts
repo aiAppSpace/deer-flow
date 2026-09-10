@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import BrowserPanel from "@/components/workspace/browser-view/BrowserPanel.vue";
 import type { BrowserViewFrame } from "@/core/browser/frame";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { BrowserInputDisposition } from "@/core/browser/protocol";
 
 const harness = vi.hoisted(() => {
   return {
@@ -32,7 +33,11 @@ const harness = vi.hoisted(() => {
     error: { value: null as string | null },
     canRetry: { value: false },
     isPending: { value: false },
-    sendInput: vi.fn(() => "sent" as const),
+    /*
+      返回类型写成真契约的联合，不是 `"sent" as const`——写死一个字面量之后
+      `mockReturnValue("unavailable")` 这条分支根本表达不出来。
+    */
+    sendInput: vi.fn((): BrowserInputDisposition => "sent"),
   };
 });
 

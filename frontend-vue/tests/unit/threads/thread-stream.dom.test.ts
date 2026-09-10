@@ -80,6 +80,18 @@ function createFakeRunner(
 
   const submissions: Parameters<ThreadRunner["submit"]>[0][] = [];
   const seeds: Record<string, unknown>[] = [];
+  /*
+    `values` 对 reducer 是全量替换，这里照同一语义换掉消息集合，
+    于是种子能一路走到 mergeMessages，而不是停在一个只有测试看得见的数组里。
+  */
+  const applyDurableValues = (values: Record<string, unknown>) => {
+    seeds.push(values);
+    if (Array.isArray(values.messages)) {
+      messages = values.messages as Message[];
+    }
+    options.onSnapshot?.();
+    return true;
+  };
   return {
     submissions,
     seeds,
@@ -89,15 +101,18 @@ function createFakeRunner(
     isStreaming: () => status === "streaming",
     seedDurableState(values) {
       // 与真 runner 同形：只在 idle 时收下，返回值就是「有没有落下去」。
-      // `values` 对 reducer 是全量替换，这里照同一语义换掉消息集合，
-      // 于是种子能一路走到 mergeMessages，而不是停在一个只有测试看得见的数组里。
       if (status !== "idle") return false;
-      seeds.push(values);
-      if (Array.isArray(values.messages)) {
-        messages = values.messages as Message[];
-      }
-      options.onSnapshot?.();
-      return true;
+      return applyDurableValues(values);
+    },
+    /*
+      真 runner 的第二个落库口（frontend-vue/app/core/agent-deerflow/thread-runner.ts:291）：
+      run **落定之后**那一帧 checkpoint 走的是它，判据比 seed 松——只有流式中才拒收。
+      frontend-vue/app/composables/useThreadStream.ts:616 的 `mode === "run-end"`
+      就打在这里；假 runner 少了它，那条路径在这份夹具下是「调一个不存在的方法」。
+    */
+    refreshDurableState(values) {
+      if (status === "streaming") return false;
+      return applyDurableValues(values);
     },
     subscribe: () => () => {},
     async submit(input) {

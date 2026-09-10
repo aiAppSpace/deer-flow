@@ -148,10 +148,21 @@ describe("e2e 独占锁：谁能拿到", () => {
   });
 });
 
+/**
+ * 锁的返回值是可辨识联合：**抢到才有 `release`**。这一组用例的前提都是
+ * 「已经抢到」，前提不成立就是用例自己坏了——在这里断言掉，而不是在每个
+ * 调用点写 `release?.()` 把它糊过去。
+ */
+function takeLock(...args: Parameters<typeof acquireRunLock>) {
+  const lock = acquireRunLock(...args);
+  if (!lock.acquired) throw new Error("用例前提不成立：这一轮没抢到锁");
+  return lock;
+}
+
 describe("e2e 独占锁：谁有权放", () => {
   it("release 删的是自己的锁", () => {
     const { state, io } = fakeLockFs();
-    const lock = acquireRunLock(LOCK, { pid: 111, ...io });
+    const lock = takeLock(LOCK, { pid: 111, ...io });
 
     lock.release();
 
@@ -160,7 +171,7 @@ describe("e2e 独占锁：谁有权放", () => {
 
   it("锁已经被接管者改写时 release 不动它", () => {
     const { state, io } = fakeLockFs();
-    const lock = acquireRunLock(LOCK, { pid: 111, ...io });
+    const lock = takeLock(LOCK, { pid: 111, ...io });
     // 我这一轮被 kill -9，下一轮认定我死了、接管了锁；随后我的 exit 钩子才跑到。
     state.body = lockBody(222);
 

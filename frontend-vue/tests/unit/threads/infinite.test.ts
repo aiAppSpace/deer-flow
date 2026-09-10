@@ -542,7 +542,6 @@ describe("invalidateStoppedThreadCaches", () => {
         client,
         () => Promise.resolve(),
         "thread-1",
-        false,
       );
       await Promise.resolve();
 

@@ -229,7 +229,9 @@ async function chooseOption(testId: string, label: string) {
   await flushPromises();
 }
 
-async function mountSettings(props: Record<string, unknown>) {
+async function mountSettings(
+  props: InstanceType<typeof AgentSettingsDialog>["$props"],
+) {
   const wrapper = mount(AgentSettingsDialog, {
     attachTo: document.body,
     props,

@@ -1064,7 +1064,12 @@ describe("multi-part content with bare-string continuations", () => {
 
   test("textOfMessage 对非字符串非数组的 content 给空串", () => {
     expect(
-      textOfMessage({ id: "m", type: "ai", content: undefined } as Message),
+      // 线路上真的会来一条 content 为空的消息；类型不允许，所以经 unknown 造出来。
+      textOfMessage({
+        id: "m",
+        type: "ai",
+        content: undefined,
+      } as unknown as Message),
     ).toBe("");
   });
 });

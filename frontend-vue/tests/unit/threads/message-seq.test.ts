@@ -266,7 +266,10 @@ describe("内容替换不丢排序元数据", () => {
   test("没有 seq 的实时刷新，保住 seq、run_id 与 turn_duration", () => {
     const history = [
       withKwargs(
-        { ...msg("h1", "human", "question", 1), run_id: "run-1" } as Message,
+        // `run_id` 不在 Message 的声明里，但线路上带着（core/messages/run-duration.ts 同源）。
+        { ...msg("h1", "human", "question", 1), run_id: "run-1" } as Message & {
+          run_id: string;
+        },
         { turn_duration: 42 },
       ),
       msg("a1", "ai", "draft", 2),

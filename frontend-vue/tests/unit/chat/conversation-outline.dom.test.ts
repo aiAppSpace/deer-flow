@@ -59,7 +59,9 @@ function turns(count: number): Message[] {
   ]).flat() as unknown as Message[];
 }
 
-function mountList(props: Record<string, unknown>) {
+type ListProps = InstanceType<typeof MessageList>["$props"];
+
+function mountList(props: Partial<ListProps> & Pick<ListProps, "messages">) {
   return mount(MessageList, {
     attachTo: document.body,
     props: {
@@ -138,7 +140,10 @@ describe("会话目录", () => {
 
   it("点一章会滚过去，并把它标成当前", async () => {
     const scrolled: unknown[] = [];
-    Element.prototype.scrollIntoView = function (...args: unknown[]) {
+    Element.prototype.scrollIntoView = function (
+      this: Element,
+      ...args: unknown[]
+    ) {
       scrolled.push({ index: this.getAttribute("data-index"), args });
     } as never;
     const wrapper = mountList({ messages: turns(6) });

@@ -10,6 +10,7 @@ import {
   createWorkspaceToastStore,
 } from "@/core/workspace-shell/toast";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { AgentThread } from "@/core/threads/types";
 
 const mocks = vi.hoisted(() => ({
   clipboard: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock("@/core/api/api-client", () => ({
 }));
 vi.mock("@/core/threads/export", () => ({ exportThread: mocks.exportThread }));
 
-const thread = {
+const thread: AgentThread = {
   thread_id: "t-1",
   created_at: "2026-08-23T00:00:00Z",
   updated_at: "2026-08-23T00:00:00Z",
@@ -30,7 +31,7 @@ const thread = {
   status: "idle",
   values: { title: "WP 11", messages: [] },
   interrupts: {},
-} as const;
+};
 
 function mountMenu() {
   const toast = createWorkspaceToastStore({ durationMs: 60_000 });

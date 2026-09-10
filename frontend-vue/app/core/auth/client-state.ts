@@ -12,7 +12,14 @@ import type { QueryClient } from "@tanstack/vue-query";
 import { getSessionComposerDraftStorage } from "@/core/threads/composer-draft";
 import { clearComposerDrafts } from "@/core/threads/composer-draft-lifecycle";
 
-export function clearAuthenticatedClientState(queryClient: QueryClient) {
+/*
+  只要 `clear()`。收窄到实际用到的那一个方法，调用方（含测试）就不必造一台
+  真的 QueryClient，也不必用 `as never` 把类型糊过去——糊过去之后
+  `expect(p.queryClient.clear).toHaveBeenCalled()` 断言的是一个 never。
+*/
+export function clearAuthenticatedClientState(
+  queryClient: Pick<QueryClient, "clear">,
+) {
   clearComposerDrafts(getSessionComposerDraftStorage() as Storage | null);
   queryClient.clear();
 }

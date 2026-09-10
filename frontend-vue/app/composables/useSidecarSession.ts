@@ -241,7 +241,7 @@ export function useSidecarSession(options: {
     selectedFiles.value = selectedFiles.value.filter((item) => item !== file);
   }
 
-  async function submit() {
+  async function submit(): Promise<boolean> {
     if (submissionPending.value || stream.isStreaming.value) return false;
     const text = input.value.trim();
     const files = [...selectedFiles.value];
@@ -326,10 +326,16 @@ export function useSidecarSession(options: {
     }
   }
 
+  /*
+    `accepted` 只在 onAccepted 回调里被写；TS 的控制流看不进闭包，于是
+    `return dispatched && accepted` 会被推成字面量 `false`——整个函数的契约变成
+    「永远失败」，而调用方（MessageList.vue:540）正是靠这个返回值决定要不要把
+    pending 撤回来。显式标注返回类型，把这条契约钉回 boolean。submit() 同理。
+  */
   async function submitHumanInput(
     request: HumanInputRequest,
     response: HumanInputResponse,
-  ) {
+  ): Promise<boolean> {
     if (submissionPending.value || stream.isStreaming.value) return false;
     const targetThreadId = options.sidecarThreadId.value;
     if (!targetThreadId) return false;

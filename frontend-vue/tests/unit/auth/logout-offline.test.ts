@@ -30,7 +30,7 @@ function ports(post: () => Promise<{ ok: boolean }>) {
     post,
     navigate: vi.fn(),
     hardNavigate: vi.fn(),
-    queryClient: { clear: vi.fn() } as never,
+    queryClient: { clear: vi.fn() },
   };
 }
 

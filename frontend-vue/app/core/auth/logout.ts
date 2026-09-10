@@ -39,7 +39,8 @@ export type LogoutPorts = {
   navigate: (to: string) => Promise<unknown> | unknown;
   /** 失败路径的硬跳转。 */
   hardNavigate: (to: string) => void;
-  queryClient: QueryClient;
+  /** 只用来清本地缓存；收窄到 `clear`，理由见 client-state.ts。 */
+  queryClient: Pick<QueryClient, "clear">;
 };
 
 export type LogoutOutcome = "signed-out" | "forced-out";

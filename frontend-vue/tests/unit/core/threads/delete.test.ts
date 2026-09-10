@@ -15,9 +15,14 @@ function sidecar(id: string, parent = "main-1"): AgentThread {
     updated_at: "2026-08-21T00:00:00Z",
     status: "idle",
     metadata: { deerflow_sidecar: true, parent_thread_id: parent },
-    values: {},
+    values: { title: `Side ${id}`, messages: [] },
     interrupts: {},
   };
+}
+
+/** 只翻页的那条路径上任何一次删除都是错的，让它自己喊出来。 */
+async function neverDeletes(): Promise<never> {
+  throw new Error("这条路径不该删任何线程");
 }
 
 describe("main-thread cascade deletion", () => {
@@ -28,7 +33,12 @@ describe("main-thread cascade deletion", () => {
       .mockResolvedValueOnce([sidecar("side-2")]);
 
     await expect(
-      findSidecarThreadIdsForParent({ threads: { search } }, "main-1", 2),
+      findSidecarThreadIdsForParent(
+        // 这一条只翻页，不删；`delete` 给个哨兵，被调到就是回归。
+        { threads: { search, delete: vi.fn(neverDeletes) } },
+        "main-1",
+        2,
+      ),
     ).resolves.toEqual(["side-1", "side-2"]);
     expect(search).toHaveBeenNthCalledWith(
       2,

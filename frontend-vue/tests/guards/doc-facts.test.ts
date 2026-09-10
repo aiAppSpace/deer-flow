@@ -48,7 +48,7 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 const VERIFY_STEPS: Record<string, string[]> = {
   lint: ["lint"],
   格式: ["format-check"],
-  类型: ["typecheck", "typecheck-core"],
+  类型: ["typecheck", "typecheck-tests", "typecheck-core"],
   单测: ["test"],
   i18n: ["i18n-check", "i18n-source-check"],
   OpenAPI: ["gen-api-types-check"],
@@ -236,7 +236,8 @@ describe("文档里的数字和代码一致", () => {
 
   it("SSE golden trace 的帧数就是签入文件里的帧数", () => {
     const trace = read("tests/fixtures/streams/deerflow-create.sse");
-    const events = [...trace.matchAll(/^event: *(\S+)/gm)].map((m) => m[1]);
+    // 捕获组与整条正则同生共死：匹配上了就一定有 group 1。
+    const events = [...trace.matchAll(/^event: *(\S+)/gm)].map((m) => m[1]!);
     const counts = new Map<string, number>();
     for (const name of events) counts.set(name, (counts.get(name) ?? 0) + 1);
     const doc = read("tests/fixtures/streams/README.md");
