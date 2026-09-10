@@ -527,6 +527,33 @@ const GALLERY_AGENTS = [
 ];
 
 /** 与 frontend/tests/e2e/thread-list-infinite-scroll.spec.ts 同一份构造。 */
+/** 归档场景里那条"比一整页归档还旧"的活跃会话。进 KNOWN_IDS。 */
+export const ARCHIVE_LEGACY_THREAD_ID = "00000000-0000-0000-0000-0000000000b1";
+
+/*
+  55 条已归档 + 1 条很旧的活跃会话。
+
+  55 不是随手挑的：列表每页 50 条（`INFINITE_THREADS_PAGE_SIZE`），所以「已归档的
+  超过一整页」之后，那条按时间排在它们后面的活跃会话**还得出现在活跃页签里**——
+  这正是上游 `thread-archive.spec.ts:108` 那一例的形状。
+*/
+const ARCHIVE_THREADS = [
+  ...Array.from({ length: 55 }, (_, index) => {
+    const padded = String(index).padStart(2, "0");
+    return {
+      thread_id: `00000000-0000-0000-0000-00000000a${padded.padStart(3, "0")}`,
+      title: `Archived ${padded}`,
+      updated_at: new Date(Date.UTC(2026, 7, 1) - index * 60_000).toISOString(),
+      metadata: { deerflow_archived: true },
+    };
+  }),
+  {
+    thread_id: ARCHIVE_LEGACY_THREAD_ID,
+    title: "Legacy chat",
+    updated_at: "2020-01-01T00:00:00Z",
+  },
+];
+
 const MANY_THREADS = Array.from({ length: 120 }, (_, index) => {
   const padded = String(index + 1).padStart(3, "0");
   return {
@@ -1399,6 +1426,139 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { role: "button", name: /^(More|更多)$/ },
           },
         ],
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
+    id: "background-tasks",
+    title: "当前会话的后台任务抽屉",
+    backend: "mock",
+    path: `/workspace/chats/${MOCK_THREAD_ID}`,
+    mock: {
+      threads: [{ thread_id: MOCK_THREAD_ID, title: "Background work" }],
+    },
+    /*
+      两个终态都是这一屏真正的分支，判据取上游 `background-tasks.spec.ts`：
+      `mcp_tasks` 关掉时**整个入口不存在**，打开时抽屉里列出任务。
+
+      两边的开关是同一条：`/api/features` 的 `mcp_tasks.enabled`，
+      入口的渲染条件也同形（React 早返回 null / 本仓 `v-if="mcpTasksEnabled"`），
+      所以这一屏可以直接对照。
+
+      `settle` 留空：两个终态一个共有元素都没有（关掉时连入口都不在），
+      等待交给各终态自己的步骤——与 agents-feature-disabled 同一条判据。
+    */
+    settle: [],
+    states: [
+      {
+        id: "disabled",
+        routes: [
+          {
+            pattern: "**/api/features",
+            json: { mcp_tasks: { enabled: false } },
+          },
+        ],
+        steps: [
+          // 入口不该在。这一档是主角：`visible` 证明不了"不该在"。
+          {
+            kind: "hidden",
+            target: { testId: "background-tasks-trigger" },
+          },
+        ],
+      },
+      {
+        id: "drawer",
+        routes: [
+          {
+            pattern: "**/api/features",
+            json: { mcp_tasks: { enabled: true } },
+          },
+          {
+            pattern: "**/api/threads/*/mcp-tasks*",
+            json: [
+              {
+                task_id: "task-report",
+                task_name: "Generate quarterly report",
+                status: "working",
+                created_at: "2026-08-08T00:00:00+00:00",
+                updated_at: "2026-08-08T00:02:00+00:00",
+                error: null,
+                tracking_degraded: false,
+                cancel_requested: false,
+              },
+              {
+                task_id: "task-export",
+                task_name: "Export archive",
+                status: "failed",
+                created_at: "2026-08-07T23:00:00+00:00",
+                updated_at: "2026-08-07T23:01:00+00:00",
+                error: "Archive service unavailable",
+                tracking_degraded: false,
+                cancel_requested: false,
+              },
+            ],
+          },
+        ],
+        steps: [
+          { kind: "click", target: { testId: "background-tasks-trigger" } },
+          {
+            kind: "visible",
+            target: { text: "Generate quarterly report" },
+          },
+          { kind: "visible", target: { text: "Export archive" } },
+        ],
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
+    id: "thread-archive",
+    title: "会话列表的归档页签",
+    backend: "mock",
+    path: "/workspace/chats",
+    mock: { threads: ARCHIVE_THREADS },
+    /*
+      **这一屏是这一轮真出过 bug 的地方，而在此之前取样面上是空的。**
+
+      本仓的 `useThreads()` 不传 `archived` 就当"不过滤"，而 Gateway 的语义是
+      「omitted includes all」——于是侧栏、聊天页、项目分区把**已归档的会话一起列了
+      出来**，归档过的对话从列表里根本没消失。上游在每个调用点各写一次
+      `archived: false`。这条差异**没有任何门禁看得见**：单测都在 mock 之上，
+      而对照台账当时只看到「两边打了不同的 search 端点」，看不出结果不一样。
+
+      判据取上游 `thread-archive.spec.ts:108` 那一例：活跃页签里**不出现**已归档的，
+      切到归档页签之后才出现。`hidden` 那一步是主角——`visible` 证明不了"不该在"。
+
+      为什么用 `a:not([data-sidebar])`：这一屏上同一个标题会匹配到两份（侧栏一份、
+      页面列表一份），侧栏那份先到，`settle` 会在页面列表还没画出来时就通过。
+      两个应用的侧栏链接都写死 `data-sidebar="menu-button"`，所以这是一条共有的表达
+      （同 thread-list-infinite-scroll 的判据）。
+    */
+    settle: [
+      {
+        kind: "visible",
+        target: {
+          selector: 'a:not([data-sidebar]):has-text("Legacy chat")',
+        },
+      },
+    ],
+    steps: [
+      {
+        kind: "hidden",
+        target: {
+          selector: 'a:not([data-sidebar]):has-text("Archived 00")',
+        },
+      },
+      {
+        kind: "click",
+        target: { role: "tab", name: /^(Archived|已归档)$/ },
+      },
+      {
+        kind: "visible",
+        target: {
+          selector: 'a:not([data-sidebar]):has-text("Archived 00")',
+        },
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],

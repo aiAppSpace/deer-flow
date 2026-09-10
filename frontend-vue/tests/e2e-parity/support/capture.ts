@@ -39,6 +39,7 @@ import {
   normalizeAriaTree,
 } from "../../../scripts/lib/aria-parity.mjs";
 import {
+  ARCHIVE_LEGACY_THREAD_ID,
   HISTORY_THREAD_ID_NEWEST,
   HISTORY_THREAD_ID_OLDER,
   locateTarget,
@@ -175,6 +176,8 @@ export const KNOWN_IDS = new Set([
   WORKSPACE_CHANGES_RUN_ID,
   // 项目详情页那条场景的项目 id（scenarios.ts 的 PARITY_PROJECT_ID）。
   PARITY_PROJECT_ID,
+  // 归档场景里那条「比一整页归档还旧」的活跃会话。
+  ARCHIVE_LEGACY_THREAD_ID,
 ]);
 
 /**

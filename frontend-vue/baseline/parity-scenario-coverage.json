@@ -16,6 +16,7 @@
     "artifact-stream-state",
     "artifact-table-preview",
     "artifact-viewer-window",
+    "background-tasks",
     "branch-thread",
     "browser-feature",
     "channels",
@@ -30,6 +31,7 @@
     "sidecar-chat",
     "streaming-reasoning-order",
     "subtask-card",
+    "thread-archive",
     "thread-history",
     "thread-history-mermaid",
     "thread-list-infinite-scroll",
@@ -40,9 +42,7 @@
   ],
   "pending": [
     "artifact-table-performance",
-    "background-tasks",
     "mcp-settings",
-    "thread-archive",
     "thread-ordering",
     "thread-title-sync"
   ],
@@ -63,9 +63,7 @@
   ],
   "$pendingReasons": {
     "artifact-table-performance": "同上那一面的性能三例（冷 Worker 跑 1MiB CSV、超宽引号记录时主线程不卡、病态解析后还能开下一个 Worker）。**什么时候重新问**：artifact-table-preview 进目录之后——性能例依赖同一套 fixture。",
-    "background-tasks": "当前会话的后台任务卡片（功能不可用时既不显示也不发请求；可用时显示/刷新/取消）。**什么时候重新问**：本仓接上 background-tasks 接口时。",
     "mcp-settings": "编辑单个 MCP server 时不能丢掉 advanced 字段、也不能动到兄弟条目。**什么时候重新问**：本仓 MCP 设置页支持 advanced 字段编辑时。",
-    "thread-archive": "归档：保留当前会话、支持撤销、能从归档区恢复；归档失败时聊天仍可见；活跃列表要包含超过一整页归档之后的旧会话。**什么时候重新问**：本仓实现归档功能时（图标 Archive/ArchiveRestore 目前也只有 React 用到）。",
     "thread-ordering": "分页长历史按 feed 顺序渲染并在刷新后保持；提交中途发生压缩仍保序并追加新轮次；自定义 agent 会话在分页与刷新间保持同一顺序。**什么时候重新问**：本仓 MessageList 虚拟化改动时——这三例正是那块最容易回归的地方。",
     "thread-title-sync": "重命名要同步侧栏、头部与 document.title；过期的 metadata 响应不能把旧标题写回来。**什么时候重新问**：下一轮碰 thread-title 时（本仓已有 ThreadTitle，缺的是这两条竞态断言）。"
   }
