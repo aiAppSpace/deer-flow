@@ -1960,6 +1960,7 @@ onUnmounted(() => {
             :interactive="!isDemo"
             selection-mode="main"
             test-id="main-message-list"
+            enable-conversation-outline
             @artifact="openArtifact"
             @browser="openBrowserFrame"
             @selection-ask="askInSidecar"

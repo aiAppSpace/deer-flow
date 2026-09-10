@@ -35,6 +35,7 @@ import HumanInputCard from "@/components/chat/HumanInputCard.vue";
 import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
 import MessageAttachments from "@/components/chat/MessageAttachments.vue";
 import MessageListSkeleton from "@/components/chat/MessageListSkeleton.vue";
+import ConversationOutline from "@/components/chat/ConversationOutline.vue";
 import MessageMarkdown from "@/components/chat/MessageMarkdown.vue";
 import MessageTokenUsage from "@/components/chat/MessageTokenUsage.vue";
 import MarkdownLink from "@/components/chat/MarkdownLink.vue";
@@ -58,6 +59,10 @@ import {
   type HumanInputResponse,
 } from "@/core/messages/human-input";
 import { getArtifactArchiveCandidatesByGroupIndex } from "@/core/messages/artifact-archive";
+import {
+  buildConversationChapters,
+  CONVERSATION_OUTLINE_MIN_TURNS,
+} from "@/core/messages/conversation-outline";
 import { deriveAssistantTurnUsageState } from "@/core/messages/derived-state";
 import type { BrowserViewMeta } from "@/core/messages/processing";
 import {
@@ -125,6 +130,8 @@ const props = withDefaults(
       response: HumanInputResponse,
     ) => boolean | undefined | Promise<boolean | undefined>;
     tokenUsageInlineMode?: "off" | "per_turn" | "step_debug";
+    /** 长会话的章节跳转目录。只有主会话开，sidecar 不开。 */
+    enableConversationOutline?: boolean;
   }>(),
   {
     active: true,
@@ -246,6 +253,64 @@ const turnUsageMessagesByGroupIndex = computed(
 const archiveCandidates = computed(() =>
   getArtifactArchiveCandidatesByGroupIndex(groups.value),
 );
+
+/*
+  会话目录：够长才出现（少于 5 轮滚一下就到了）。
+
+  「当前是哪一章」**记着 threadId 一起**：切走再切回来时，上一条会话的章节 id
+  在这一条里不存在，高亮要落空而不是错误地标在同位置的另一章上。
+*/
+const chapters = computed(() =>
+  buildConversationChapters(
+    groups.value,
+    $i18n.t.value.conversation.outlineAttachmentFallback,
+  ),
+);
+const outlineEnabled = computed(
+  () =>
+    props.enableConversationOutline === true &&
+    chapters.value.length >= CONVERSATION_OUTLINE_MIN_TURNS,
+);
+const activeChapter = ref<{
+  threadId: string | null;
+  chapterId: string;
+} | null>(null);
+const activeChapterId = computed(() => {
+  const current = activeChapter.value;
+  if (!current || current.threadId !== (props.threadId ?? null)) return null;
+  return chapters.value.some((chapter) => chapter.id === current.chapterId)
+    ? current.chapterId
+    : null;
+});
+
+/*
+  跳到某一组。虚拟窗口是自己滚出来的，所以要**两步**：先把窗口挪到能包含
+  目标那一组，等它渲染出来，再滚到那个元素。少了第一步，目标还在窗口外面，
+  `querySelector` 什么都找不到，点了没反应。
+*/
+async function scrollToGroup(groupIndex: number) {
+  const total = groups.value.length;
+  if (total > 80) {
+    const maxStart = Math.max(0, total - VIRTUAL_WINDOW_SIZE);
+    // 目标放在窗口靠前的位置，它下面那几组也一起渲染出来。
+    windowStart.value = Math.min(Math.max(0, groupIndex - 2), maxStart);
+    followingTail.value = false;
+    await nextTick();
+  }
+  const target = scroller.value?.querySelector<HTMLElement>(
+    `[data-index="${groupIndex}"]`,
+  );
+  target?.scrollIntoView({ block: "start", behavior: "auto" });
+}
+
+async function selectChapter(chapterId: string) {
+  const chapter = chapters.value.find(
+    (candidate) => candidate.id === chapterId,
+  );
+  if (!chapter) return;
+  activeChapter.value = { threadId: props.threadId ?? null, chapterId };
+  await scrollToGroup(chapter.groupIndex);
+}
 const branchable = computed(() =>
   getBranchableAssistantGroupIds(groups.value, props.streaming),
 );
@@ -1544,6 +1609,16 @@ onUnmounted(() => {
       三颗按钮都要 `@mousedown.prevent`：默认的 mousedown 会先把选区折叠掉，
       工具条上的高亮随之消失，看起来像点错了。上游三颗也都写了。
     -->
+  <!--
+    会话目录挂在**日志区外面**（与上游 message-list.tsx 同处）：它是绝对定位在
+    这一屏右侧的浮层，放进滚动容器里会跟着内容一起滚走。
+  -->
+  <ConversationOutline
+    v-if="outlineEnabled"
+    :chapters="chapters"
+    :active-chapter-id="activeChapterId"
+    @select="selectChapter"
+  />
   <div
     v-if="selection"
     data-sidecar-selection-toolbar

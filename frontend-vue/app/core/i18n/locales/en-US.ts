@@ -764,6 +764,8 @@ export const enUS: Translations = {
 
   // Conversation
   conversation: {
+    outlineLabel: "Conversation outline",
+    outlineAttachmentFallback: "Image or file message",
     noMessages: "No messages yet",
     startConversation: "Start a conversation to see messages here",
     newChatNotificationTitle: "New Chat",

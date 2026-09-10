@@ -1,7 +1,7 @@
 {
   "$comment": "词典 key 基线。由 `make i18n-refresh` 生成。趁词典还是上游原样时取（06 §M1 1d）——此后 key 新增/删除或 unused 集漂移，`make i18n-check` 立刻报出来。",
   "source": "app/core/i18n/locales/en-US.ts",
-  "total": 1127,
+  "total": 1129,
   "keys": [
     "agents.agentCreated",
     "agents.agentCreatedPendingRefresh",
@@ -301,6 +301,8 @@
     "conversation.branchFailed",
     "conversation.newChatNotificationTitle",
     "conversation.noMessages",
+    "conversation.outlineAttachmentFallback",
+    "conversation.outlineLabel",
     "conversation.startConversation",
     "conversation.streamReplayGap",
     "home.blog",

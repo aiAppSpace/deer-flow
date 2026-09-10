@@ -621,6 +621,8 @@ export interface Translations {
 
   // Conversation
   conversation: {
+    outlineLabel: string;
+    outlineAttachmentFallback: string;
     noMessages: string;
     startConversation: string;
     newChatNotificationTitle: string;

@@ -722,6 +722,8 @@ export const zhCN: Translations = {
 
   // Conversation
   conversation: {
+    outlineLabel: "对话章节",
+    outlineAttachmentFallback: "图片或文件消息",
     noMessages: "还没有消息",
     startConversation: "开始新的对话以查看消息",
     newChatNotificationTitle: "新对话",
