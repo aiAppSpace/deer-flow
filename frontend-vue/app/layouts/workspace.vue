@@ -10,6 +10,7 @@ import { onUnmounted } from "vue";
 
 import CommandPalette from "@/components/workspace/CommandPalette.vue";
 import GatewayStatusBanner from "@/components/workspace/GatewayStatusBanner.vue";
+import ModelLoadErrorBanner from "@/components/workspace/ModelLoadErrorBanner.vue";
 import ThreadSidebar from "@/components/workspace/ThreadSidebar.vue";
 import WorkspaceToaster from "@/components/workspace/WorkspaceToaster.vue";
 import SettingsDialog from "@/components/workspace/settings/SettingsDialog.vue";
@@ -24,6 +25,8 @@ onUnmounted(() => toast.clear());
     <ThreadSidebar />
     <main class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <GatewayStatusBanner />
+      <!-- 与上游 workspace-content.tsx 的顺序一致：Gateway 那条在上面。 -->
+      <ModelLoadErrorBanner />
       <div class="relative min-h-0 flex-1 overflow-hidden">
         <slot />
       </div>

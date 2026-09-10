@@ -603,6 +603,9 @@ export interface Translations {
 
   // Workspace
   workspace: {
+    modelLoadFailed: string;
+    modelLoadRetry: string;
+    modelLoadRetrying: string;
     officialWebsite: string;
     githubTooltip: string;
     sidePanelDescription: string;

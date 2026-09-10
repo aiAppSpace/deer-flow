@@ -4,6 +4,11 @@
   【主要导出】     useModels · MODELS_QUERY_KEY
   【依赖关系】     core/models/api
   【边界与注意】   同时暴露 models 与 token_usage.enabled，禁止组件各自重复请求。
+
+                   `isFetching` 和 `refetch` 是给**错误横幅**用的：它以
+                   `enabled: false` 挂一个观察者，只看这份共享查询的状态、
+                   不自己发请求（真正加载由模型选择器等消费者负责），
+                   并提供一次显式重试。
 */
 
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
@@ -34,6 +39,8 @@ export function useModels(
       () => query.data.value?.token_usage.enabled ?? false,
     ),
     loading: query.isLoading,
+    fetching: query.isFetching,
     error: query.error,
+    refetch: query.refetch,
   };
 }

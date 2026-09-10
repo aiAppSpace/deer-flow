@@ -1,4 +1,5 @@
 import { buildLoginUrl } from "@/core/auth/types";
+import { UnauthorizedError } from "@/core/api/errors";
 
 /** HTTP methods that the gateway's CSRFMiddleware checks. */
 export type StateChangingMethod = "POST" | "PUT" | "DELETE" | "PATCH";
@@ -82,7 +83,7 @@ export async function fetch(
 
   if (res.status === 401) {
     window.location.href = buildLoginUrl(window.location.pathname);
-    throw new Error("Unauthorized");
+    throw new UnauthorizedError();
   }
 
   return res;

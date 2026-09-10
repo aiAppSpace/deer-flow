@@ -74,7 +74,7 @@ const errorCode = "permission_denied"
 
   it("keeps the full product Vue surface free of untranslated core English", () => {
     const inventory = productVueInventory();
-    expect(inventory.checked).toHaveLength(260);
+    expect(inventory.checked).toHaveLength(261);
     expect(inventory.checked).toContain("app/app.vue");
     expect(inventory.checked).toContain(
       "app/components/chat/AssistantTurnActions.vue",

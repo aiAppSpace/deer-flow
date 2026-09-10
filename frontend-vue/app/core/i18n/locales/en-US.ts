@@ -746,6 +746,10 @@ export const enUS: Translations = {
 
   // Workspace
   workspace: {
+    modelLoadFailed:
+      "Models couldn't be loaded. Model selection and token usage may be unavailable.",
+    modelLoadRetry: "Retry",
+    modelLoadRetrying: "Retrying…",
     officialWebsite: "DeerFlow's official website",
     githubTooltip: "DeerFlow on GitHub",
     sidePanelDescription: "Browse the side panel for this conversation.",

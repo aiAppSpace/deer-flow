@@ -704,6 +704,10 @@ export const zhCN: Translations = {
 
   // Workspace
   workspace: {
+    modelLoadFailed:
+      "模型列表加载失败，模型选择和 Token 用量信息可能暂时不可用。",
+    modelLoadRetry: "重试",
+    modelLoadRetrying: "正在重试…",
     officialWebsite: "访问 DeerFlow 官方网站",
     githubTooltip: "访问 DeerFlow 的 GitHub 仓库",
     sidePanelDescription: "浏览本次会话的侧边面板。",
