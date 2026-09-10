@@ -3,6 +3,32 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 挂着（**试过一版、量出来更差、已回退**）：`chat-thread-init-ordering`
+> 上那一行 `requestsOnlyReact: POST /api/threads/search`
+>
+> 用新加的 `PARITY_ONLY=<场景id> make e2e-parity`（单场景 + 两边完整请求序列转储，
+> 4 分钟一轮）量清了**位置**：
+>
+> ```
+> React: … POST /api/langgraph/threads → POST /api/threads/search → runs/stream …
+> Vue:   … POST /api/langgraph/threads →                            runs/stream …
+> ```
+>
+> 上游 `upsertThreadInInfiniteCache`（`hooks.ts:1281`）对**带 `archived` 过滤**的
+> 缓存是 `invalidateQueries` 而不是乐观插入，注释写着「Run-created snapshots do not
+> carry archive metadata」——run 里现造的快照没有归档元数据，塞进「只看未归档」的
+> 列表是在替服务端猜。
+>
+> **照抄过来会过头，实测方向反了**：本仓每一份列表缓存都带 `archived` 过滤
+> （`useThreads` 的 params 一定带），而 `upsert` 的调用点比上游多，
+> 单场景实测 React 4 次 / 本仓 **6 次**。收窄成「只有这条 thread 还不在列表里时
+> 才失效」也没降下来（仍是 6）——多半是失效之后重取还没落地，下一次 upsert 又判成
+> 「不在列表里」，级联出去。**已回退，不留一个把台账变长的改动。**
+>
+> **下一步怎么查**：先列清本仓一次 run 里 `upsert` / `upsertCreated` 的**全部调用点
+> 与触发顺序**，与上游逐个对；有了那张表再动 `upsertThreadInInfiniteCache`。
+> 工具已经就位（`PARITY_ONLY` + 请求序列转储）。
+>
 > ## 2026-09-11 已修：归档一条会话会把侧栏列表清空（`48e9297a`）
 >
 > 根因与「改名之后不与服务端收敛」同一个：**本仓的会话列表查询是 `enabled: false`

@@ -58,6 +58,18 @@ const ACCEPT = process.env.PARITY_ACCEPT === "1";
  */
 const ACCEPT_GROW = process.env.PARITY_ACCEPT_GROW === "1";
 
+/*
+  **只跑一个场景**，用来查某一行台账。整套是 13 分钟，一个场景约 4 分钟——
+  查一条差异要反复量的时候，这个差别决定了「量一次」还是「猜一次」。
+
+  开着它就**既不比基线、也不许 accept**：过滤过的报告里其余 112 个场景全都缺席，
+  拿去比会看起来像「一大批差异一次修好了」，拿去 accept 会直接把基线写成一条。
+  下面那条伪元素样本数的断言同理跳过——它数的是整套的量。
+
+  用法：`PARITY_ONLY=chat-thread-init-ordering make e2e-parity`
+*/
+const ONLY = process.env.PARITY_ONLY?.trim();
+
 const BASELINE = new URL("../../baseline/parity-diff.json", import.meta.url);
 const REPORT = new URL(
   "../../test-results/e2e-parity/report.json",
@@ -116,8 +128,11 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     所以这里数一下真的采到伪元素的锚点，下面断言它不是 0。
   */
   let pseudoSamples = 0;
+  /** 只有 `PARITY_ONLY` 时才收：两边的完整请求序列。 */
+  const rawRequests: Record<string, { react: string[]; vue: string[] }> = {};
 
   for (const scenario of PARITY_SCENARIOS) {
+    if (ONLY && scenario.id !== ONLY) continue;
     for (const state of scenarioStates(scenario))
       for (const dimension of state.dimensions ??
         scenario.dimensions ?? [DEFAULT_DIMENSION]) {
@@ -151,10 +166,19 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
         await reactContext.close();
 
         pseudoSamples += countPseudoSamples(react, vue);
-        entries[key(scenario.id, state, dimension)] = buildDiffEntry(
-          react,
-          vue,
-        );
+        const entryKey = key(scenario.id, state, dimension);
+        entries[entryKey] = buildDiffEntry(react, vue);
+        /*
+          诊断模式下把**两边的请求原样**留下来。台账那一档只报差集，
+          而查「谁多发了一次」要看的是完整序列与它们的顺序——没有这个，
+          下一步只能靠猜。
+        */
+        if (ONLY) {
+          rawRequests[entryKey] = {
+            react: [...react.requests],
+            vue: [...vue.requests],
+          };
+        }
       }
   }
 
@@ -170,10 +194,28 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     这条断言挡的是「`pseudo()` 写坏了→永远返回 `none`→两边一致→台账 0 行→
     没有任何用例会红」。数字变了要**看一眼再改**，不要顺手调低。
   */
-  expect(
-    pseudoSamples,
-    "伪元素这一档一个样本都没采到——先确认 pseudo() 还在工作，再改这个阈值",
-  ).toBeGreaterThanOrEqual(4);
+  if (!ONLY) {
+    expect(
+      pseudoSamples,
+      "伪元素这一档一个样本都没采到——先确认 pseudo() 还在工作，再改这个阈值",
+    ).toBeGreaterThanOrEqual(4);
+  }
+
+  if (ONLY) {
+    /*
+      诊断模式：把这一个场景的差异打出来就结束，**不写报告、不比基线、不 accept**。
+      要它一条都没有匹配上也算错——`PARITY_ONLY` 拼错了不该静默地「全绿」。
+    */
+    expect(
+      Object.keys(entries),
+      `PARITY_ONLY=${ONLY} 没有匹配到任何场景——检查 id 拼写`,
+    ).not.toEqual([]);
+    console.log(
+      `PARITY_ONLY=${ONLY}\n${JSON.stringify(entries, null, 2)}\n` +
+        `REQUESTS\n${JSON.stringify(rawRequests, null, 2)}`,
+    );
+    return;
+  }
 
   mkdirSync(dirname(REPORT.pathname), { recursive: true });
   writeFileSync(REPORT, JSON.stringify(entries, null, 2));
