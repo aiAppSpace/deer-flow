@@ -188,47 +188,77 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ---
 
-## 对照台账现在是红的，红在两类没人看过的差异上（2026-09-10）
+## 对照台账：2026-09-10 收工时的实测状态
 
-`make e2e-parity`：**108 passed / 1 failed**，失败的是 `diff.spec` —— 台账与实跑对不上。
-scenarios 那 108 条全过，包括这一轮新加的三个场景。
+数字都用 `baseline/parity-diff.json` 与实跑的 `report.json` 逐行比出来，不是散文估计。
 
-台账**净减少 428 行**（ProjectsSection 那一大类差异消失了：`- text: Projects`、
-`- button "New project"`、`- button "Group chats by project"` 各 20+ 次，
-`tabbablesOnlyReact` 里 168 个 `"button"`，51 处 tabOrder 差异）。
+| | 行数 |
+| --- | --- |
+| 签入基线 | 1070 |
+| 这一轮实测（`2b41e1bd` 那次） | 502 |
+| 再修一轮之后（`3bacbe49` 前的那次） | 431 |
 
-但有两类**新出现**的行，按 `parity-accept` 的规矩「每一条变化是修好了还是新坏了，
-得逐条看清楚」，**没有接受**（不 `PARITY_ACCEPT_GROW=1`）：
+`make e2e-parity`：**108 passed / 1 failed**，失败的就是 `diff.spec` 的台账比对。
 
-### 一、`GET /api/projects?status=active|archived` 进了 `requestsOnlyVue`（98 次）
+### 审「新增行」的判据（这一轮踩出来的，下一轮直接用）
 
-说的是：这些场景里 Vue 发了这两个请求，React 没发。
+台账只能缩短，所以每一条新增行都要过一遍。但**「新增行」不等于「新坏了」**——
+实测这一轮 107 条新增里，真正是新问题的只有个位数。四类分开看：
 
-已经排除的解释（都实测过）：
-- 两边的 URL 拼法逐字相同（`?status=` + encodeURIComponent）；
-- React 的 `ProjectsSection` 在 `workspace-sidebar.tsx:34` 是**无条件挂载**的；
-- React 的 `useProjects` 只在 `isStaticWebsiteOnly()` 时才 `enabled: false`，
-  而 parity 的 React preview（`react-preview.ts` 的 env 块）没设那个变量；
-- **同一批差异里 `ariaOnly*` 是空的**——也就是说 React 侧确实把项目区渲染出来了。
+1. **序号漂移。** `order` / `tabOrder` 报的是「第 N 个节点/可 tab 元素」，
+   而它们只报**第一处分岔**。别处修好了，第一处分岔就往后挪，同一条差异会以
+   新的 N 重新出现。实测：`chat-thread-init-ordering` 的
+   `React=button "Copy to clipboard" Vue=- paragraph:` 从「第 38 个」变成「第 41 个」，
+   基线里本来就有，不是新的。
+2. **数值变好。** `geometry` 的行把数值写进了行里，于是差距**变小**也是
+   「删一行 + 加一行」。实测：`agents-feature-disabled#gallery` 的对话框高度
+   从 Δ-135.1 变成 Δ-6.2，读起来像新增。
+3. **原本被遮住、现在才看得见。** 实测：`artifact-batched-stream#preview-failed` 的
+   两颗 radio 此前在本仓是**匿名**的（`- radio` / `- radio [checked]`），
+   补上可访问名之后才比得出「两边选中的不是同一颗」。修好一个问题会露出下一个。
+4. **真的新坏了。** 只有排除掉前三类之后剩下的才是。
 
-渲染了却不发请求，说不通。**下一轮从这里入手**：起一个 React preview，
-打开 `/workspace/agents/test-agent/chats/new`，直接看它的网络面板。
-在看到那个读数之前不要写结论——这一轮已经在这条上猜错过两次
-（先猜「React 认裸数组」，再猜「static mode 挡住了」，都被源码推翻）。
+**判据是「拿同一个场景键去基线里查它原来长什么样」**，不是看行文本在不在基线里。
+`python3` 三行就够：读两份 JSON，按场景键并排打印非空字段。
 
-### 二、「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」（16 次）
+### 还开着的账
 
-tab 顺序在第 15 个元素上分叉。这是 ProjectsSection 补齐之后**新暴露**的——
-两边现在都有那一片按钮了，顺序才比得出来。同样没查。
+- **「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」（16 次）。**
+  这是 `tabbablesOnlyReact: ['div[scroll-area-viewport]']` 那条**基线里早就有**的差异
+  变成了第一处分岔。已经排除的解释：本仓 `ScrollArea` 的 viewport 挂载起来实测
+  带着 `tabindex="0"` 与 `data-slot="scroll-area-viewport"`，两边设置对话框的结构
+  也逐行对过（都是 `<nav>` + `<ScrollArea>`）。所以成因在**页面层**不在 primitive，
+  还没查出来。下一轮：起两个 preview，打开设置对话框，把两边的
+  `document.querySelectorAll` 结果并排打出来——**在看到那个读数之前不要写结论**。
+- **`tests/` 整棵树没有类型检查。** Nuxt 的 tsconfig 只 include `app/**` 与
+  `tests/nuxt/**`，所以 `make typecheck` 看不见 `tests/`；vitest 只转译不查类型。
+  实测：临时给 `tests/**` + `playwright*.config.ts` 开一份 tsconfig 跑 `vue-tsc`，
+  **346 条错误**，绝大多数是测试脚手架的类型学（`global.mocks` 只给一半、
+  只读夹具、vue-test-utils 的 `DOMWrapper`），不是真 bug。开这道检查是独立的一轮活。
+  在它开起来之前，**别在 `tests/` 里写类型层断言**——那等于写了个不会执行的注释
+  （本轮实测过：改坏字段表两次，`vue-tsc` 都是绿的）。
+- **`core/threads/message-order`（435 行）还没逐行读过。** 另外三个已经读完并结账：
+  `dom/render-activity` 已覆盖、`api/static-response` 属静态整站模式豁免、
+  `core/notification` 的四处差异已修（见 `03c03848`）。
+- **`focus` 档：`React=button "Account" Vue=button "Integrations"`。** 设置对话框
+  打开时两边把焦点放在了不同的地方。基线里就有，没查过。
 
-### 顺带修掉的两处
+### 这一轮结掉的两笔旧账
 
-- **对照 mock 的项目 fixture 形状是猜的**，与后端 `ProjectResponse` 对不上：
-  列表要包一层 `{projects: []}`（写成了裸数组）、少 `instructions`/`presentation`
-  两个字段、项目内会话的行形状借用了 thread search 的投影。已按
+- **`GET /api/projects?status=*` 只有 Vue 发（98 次）——已修。** 根因不是猜的那三条，
+  是 React 的 `useProjects` 住在 `GroupedProjectList` 里，而**扁平模式是默认值**，
+  那个组件根本不渲染。本仓改成 `useProjects(..., { enabled: groupByProject })`
+  （与上游 `recent-chat-list.tsx:492` 同一条），实测那 98 行消失。
+- **对照 mock 的项目 fixture 形状是猜的**，已按
   `backend/app/gateway/routers/projects.py` 逐字段对齐。
 - **`/workspace/projects/[id]` 漏了 `definePageMeta({ layout: "workspace" })`**，
-  SSR 直接 500「Workspace toast owner is not available」。从建出来那天就坏着，
-  `make verify` 一路全绿——因为没有任何测试访问过那条路由。
-  加了门禁 `tests/guards/page-layout-declared.test.ts`。
+  SSR 直接 500。加了门禁 `tests/guards/page-layout-declared.test.ts`。
 
+## 2026-09-10 这一轮补的门禁（都做过变异验证）
+
+| 门禁 | 它守的失效方式 | 实测证据 |
+| --- | --- | --- |
+| `as-child-is-supported` | `as-child` 传给接不住它的组件，静默失效 | `Button.vue` 没有 `asChild`，`<Button as-child><a>` 渲染成 `<button><a>`；tsc/eslint 双双放行 |
+| `breadcrumb-linkable-sections` | 面包屑链到不存在的路由 | 「Projects」指向 `/workspace/projects`，而那条路由不存在 |
+| `parity-ledger-fields` | 报告脚本的字段表与 `DiffEntry` 漂移 | 脚本停在 5 个字段而类型有 11 个，六档差异一行没算、总数照打 |
+| e2e 独占锁（不是测试，是运行时闸门） | 两轮 e2e 并发互删产物 | 两轮撞在一起产生 3 条假失败，判断它们不是回归花了 25 分钟 |

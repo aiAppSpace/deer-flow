@@ -59,6 +59,35 @@ export type DiffEntry = {
   depth: string[];
 };
 
+/**
+ * `DiffEntry` 的字段名，**运行时也能读到的那一份**。
+ *
+ * 存在的理由：`scripts/parity-ledger-report.mjs` 是 `.mjs`，读不到 TS 类型，
+ * 只能自己抄一份字段表。实测它抄漏了——那份表停在 5 个字段，而这里已经有 11 个，
+ * 于是那个报告**六档差异一行都没算进去**，还照样打印出一个像模像样的总数。
+ * 它自己的文件头写着「多一个少一个都要在这里显式加」，可没有任何机器在守。
+ *
+ * **证据是门禁不是类型**：`tests/` 整棵树不在 `make typecheck` 的 include 里
+ * （Nuxt 的 tsconfig 只收 `app/**` 与 `tests/nuxt/**`），在这里写类型层断言等于
+ * 写了个不会执行的注释——实测：把这份表改少一个、改多一个假字段，
+ * `vue-tsc` 两次都是绿的。所以判据落在
+ * tests/guards/parity-ledger-fields.test.ts：它把这份表、那个脚本的表、
+ * 以及签入基线里真实出现的字段三方对账。
+ */
+export const DIFF_ENTRY_FIELDS = [
+  "ariaOnlyReact",
+  "ariaOnlyVue",
+  "requestsOnlyReact",
+  "requestsOnlyVue",
+  "geometry",
+  "focus",
+  "order",
+  "tabbablesOnlyReact",
+  "tabbablesOnlyVue",
+  "tabOrder",
+  "depth",
+] as const;
+
 /** 摊平成 `场景键 · 字段: 那一行` 的形式，排序后返回。 */
 export function ledgerRows(entries: Record<string, DiffEntry>): string[] {
   const rows: string[] = [];
