@@ -36,6 +36,7 @@ import { enUS } from "@/core/i18n/locales/en-US";
 import { zhCN } from "@/core/i18n/locales/zh-CN";
 
 import { useThreadStream } from "@/composables/useThreadStream";
+import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
 
 // `useThreadHistory` 真的会发请求。这里给一个空历史，让被测对象只剩实时那一路。
 vi.mock("@/composables/useThreadHistory", () => ({
@@ -215,7 +216,6 @@ describe("useThreadStream · K3 编辑并重跑", () => {
     });
     expect(ctx.invalidated).toEqual(
       expect.arrayContaining([
-        ["threads", "search"],
         ["threads", "searchInfinite"],
         ["thread", "thread-1"],
         ["thread-messages", "thread-1"],
@@ -614,7 +614,7 @@ describe("useThreadStream · A8 停止后的两轮失效", () => {
     vi.useRealTimers();
   });
 
-  it("stop 立刻失效六个 key，并在 1.5 秒后再来一轮", async () => {
+  it("stop 立刻失效五个 key，并在 1.5 秒后再来一轮", async () => {
     vi.useFakeTimers();
     const ctx = mountStream();
     await ctx.api.sendMessage("thread-1", { text: "hi" });
@@ -629,7 +629,6 @@ describe("useThreadStream · A8 停止后的两轮失效", () => {
 
     const firstRound = [...ctx.invalidated];
     expect(firstRound).toEqual([
-      ["threads", "search"],
       ["threads", "searchInfinite"],
       ["thread", "thread-1"],
       ["thread-messages", "thread-1"],
@@ -651,35 +650,47 @@ describe("useThreadStream · 标题定稿写回侧栏缓存", () => {
   // **只补丁 title，其余字段一个都不动**，并且不认识的 thread 不受影响。
   it("只改匹配 thread 的 values.title，不碰 metadata/status", async () => {
     const ctx = mountStream();
+    /*
+      写的是**真实那张列表缓存**（无限查询）。原来这里挂的是
+      `["threads","search"]`——本仓没有任何查询拥有它，这条用例因此自己造了一个
+      生产里不存在的拥有者，验的是一段到不了的代码。
+    */
     ctx.queryClient.setQueryData(
-      ["threads", "search"],
-      [
-        {
-          thread_id: "thread-1",
-          status: "idle",
-          metadata: { agent_name: "lead" },
-          values: { title: "New chat", messages: [] },
-        },
-        {
-          thread_id: "thread-2",
-          status: "idle",
-          metadata: {},
-          values: { title: "Other", messages: [] },
-        },
-      ],
+      [...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"],
+      {
+        pages: [
+          [
+            {
+              thread_id: "thread-1",
+              status: "idle",
+              metadata: { agent_name: "lead" },
+              values: { title: "New chat", messages: [] },
+            },
+            {
+              thread_id: "thread-2",
+              status: "idle",
+              metadata: {},
+              values: { title: "Other", messages: [] },
+            },
+          ],
+        ],
+        pageParams: [0],
+      },
     );
 
     ctx.fake.emitUpdate({ some_node: { title: "Generated Title" } });
     await flushPromises();
 
-    const rows = ctx.queryClient.getQueryData<
-      {
-        thread_id: string;
-        status: string;
-        metadata: Record<string, unknown>;
-        values: { title: string };
-      }[]
-    >(["threads", "search"]);
+    const rows = ctx.queryClient
+      .getQueryData<{
+        pages: {
+          thread_id: string;
+          status: string;
+          metadata: Record<string, unknown>;
+          values: { title: string };
+        }[][];
+      }>([...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"])
+      ?.pages.flat();
     expect(rows?.[0]?.values.title).toBe("Generated Title");
     // 正面特征：**其余字段原样**。用 upsert 的那一版会把 metadata 冲掉。
     expect(rows?.[0]?.metadata).toEqual({ agent_name: "lead" });
@@ -690,12 +701,20 @@ describe("useThreadStream · 标题定稿写回侧栏缓存", () => {
 
   it("缓存里没有这条 thread 时不凭空插入", async () => {
     const ctx = mountStream();
-    ctx.queryClient.setQueryData(["threads", "search"], []);
+    ctx.queryClient.setQueryData(
+      [...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"],
+      { pages: [[]], pageParams: [0] },
+    );
 
     ctx.fake.emitUpdate({ some_node: { title: "Generated Title" } });
     await flushPromises();
 
-    expect(ctx.queryClient.getQueryData(["threads", "search"])).toEqual([]);
+    expect(
+      ctx.queryClient.getQueryData([
+        ...INFINITE_THREADS_QUERY_KEY_PREFIX,
+        "all",
+      ]),
+    ).toEqual({ pages: [[]], pageParams: [0] });
     ctx.wrapper.unmount();
   });
 });

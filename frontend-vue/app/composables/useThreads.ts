@@ -23,7 +23,6 @@ import {
   mapInfiniteThreadsCache,
   type InfiniteThreadsParams,
   upsertThreadInInfiniteCache,
-  upsertThreadInSearchCache,
 } from "@/core/threads/infinite";
 import {
   deleteThreadCascade,
@@ -196,7 +195,6 @@ export function useThreads(
         pageParams: [0],
       });
     }
-    upsertThreadInSearchCache(queryClient, thread);
     upsertThreadInInfiniteCache(queryClient, thread);
   }
 
@@ -204,13 +202,6 @@ export function useThreads(
     threadId: string,
     updater: (thread: AgentThread) => AgentThread,
   ) {
-    queryClient.setQueriesData(
-      { queryKey: ["threads", "search"], exact: false },
-      (oldData: AgentThread[] | undefined) =>
-        oldData?.map((thread) =>
-          thread.thread_id === threadId ? updater(thread) : thread,
-        ),
-    );
     queryClient.setQueriesData(
       { queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX, exact: false },
       (oldData: InfiniteData<AgentThread[]> | undefined) =>

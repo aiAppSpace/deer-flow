@@ -165,7 +165,6 @@ export function useMoveThreadToProject(options?: {
       await queryClient.invalidateQueries({ queryKey: metadataKey });
     },
     onSettled() {
-      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
       void queryClient.invalidateQueries({
         queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
       });

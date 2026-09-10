@@ -60,7 +60,7 @@ describe("ChatComposer /compact", () => {
     sessionStorage.clear();
   });
 
-  it("executes the Gateway command once, clears the draft and invalidates all six caches", async () => {
+  it("executes the Gateway command once, clears the draft and invalidates all five caches", async () => {
     let resolveCompact!: (value: Record<string, unknown>) => void;
     compactThreadContext.mockImplementation(
       () =>
@@ -94,7 +94,6 @@ describe("ChatComposer /compact", () => {
     ]);
     expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual(
       [
-        ["threads", "search"],
         ["threads", "searchInfinite"],
         ["thread", "thread-1"],
         ["thread-messages", "thread-1"],

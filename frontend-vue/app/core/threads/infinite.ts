@@ -4,7 +4,7 @@
   【主要导出】     INFINITE_THREADS_PAGE_SIZE · INFINITE_THREADS_QUERY_KEY_PREFIX
                    fetchInfiniteThreadsPage · getInfiniteThreadsNextPageParam
                    mapInfiniteThreadsCache · filterInfiniteThreadsCache
-                   upsertThreadInSearchCache · upsertThreadInInfiniteCache
+                   upsertThreadInInfiniteCache
   【依赖关系】     @tanstack/vue-query（仅类型与 QueryClient）· ./thread-search-query
   【边界与注意】   这是本仓第一次 import `@tanstack/vue-query`。它进 `core/` 而不是
                    `composables/`，因为这几个函数**不用组件上下文**：拿到
@@ -179,34 +179,6 @@ function mergeExistingThread(
       ...existing.values,
     },
   };
-}
-
-export function upsertThreadInSearchCache(
-  queryClient: QueryClient,
-  thread: AgentThread,
-) {
-  queryClient.setQueriesData(
-    {
-      queryKey: ["threads", "search"],
-      exact: false,
-    },
-    (oldData: AgentThread[] | undefined) => {
-      if (!oldData) {
-        return [thread];
-      }
-
-      const existingIndex = oldData.findIndex(
-        (t) => t.thread_id === thread.thread_id,
-      );
-      if (existingIndex === -1) {
-        return [thread, ...oldData];
-      }
-
-      return oldData.map((t, index) =>
-        index === existingIndex ? mergeExistingThread(thread, t) : t,
-      );
-    },
-  );
 }
 
 export function upsertThreadInInfiniteCache(

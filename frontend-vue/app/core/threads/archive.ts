@@ -62,13 +62,6 @@ export function setThreadMetadataInCaches(
     metadata: { ...thread.metadata, ...metadata },
   });
 
-  queryClient.setQueriesData<AgentThread[]>(
-    { queryKey: ["threads", "search"] },
-    (old) =>
-      old?.map((thread) =>
-        thread.thread_id === threadId ? merge(thread) : thread,
-      ),
-  );
   queryClient.setQueriesData(
     { queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX },
     (old) =>
@@ -96,7 +89,6 @@ export function useArchiveThread(options: ArchiveThreadOptions = {}) {
         queryClient.cancelQueries({
           queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
         }),
-        queryClient.cancelQueries({ queryKey: ["threads", "search"] }),
         queryClient.cancelQueries({ queryKey: metadataKey }),
       ]);
 
@@ -109,7 +101,6 @@ export function useArchiveThread(options: ArchiveThreadOptions = {}) {
         queryClient.resetQueries({
           queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
         }),
-        queryClient.invalidateQueries({ queryKey: ["threads", "search"] }),
         queryClient.invalidateQueries({ queryKey: metadataKey }),
         queryClient.invalidateQueries({
           queryKey: projectKeys.threadsPrefix(),

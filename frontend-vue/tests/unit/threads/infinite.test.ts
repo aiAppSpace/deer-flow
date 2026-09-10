@@ -328,7 +328,6 @@ describe("invalidateStoppedThreadCaches", () => {
     invalidateStoppedThreadCaches(client, "thread-1");
     await flushThreadScoped();
 
-    expect(queryKeys()).toContainEqual(["threads", "search"]);
     expect(queryKeys()).toContainEqual(INFINITE_THREADS_QUERY_KEY_PREFIX);
     expect(queryKeys()).toContainEqual(["thread", "thread-1"]);
     expect(queryKeys()).toContainEqual(["thread", "metadata", "thread-1"]);
@@ -362,13 +361,12 @@ describe("invalidateStoppedThreadCaches", () => {
   // 换成保留下来的那半条语义：**没有 threadId 时只失效全局两类**。
   // 新建 thread 的第一次停止走的正是这条路径，而它与 mock 分支共用同一个
   // 早退 `return`——删掉 mock 后这个 return 仍然必须在。
-  test("只失效全局两类缓存：thread 还没有 id 时", () => {
+  test("只失效全局那一类缓存：thread 还没有 id 时", () => {
     const client = new QueryClient();
     const { queryKeys } = invalidatedQueryKeys(client);
 
     invalidateStoppedThreadCaches(client, null);
 
-    expect(queryKeys()).toContainEqual(["threads", "search"]);
     expect(queryKeys()).toContainEqual(INFINITE_THREADS_QUERY_KEY_PREFIX);
     expect(queryKeys()).not.toContainEqual(["thread", "thread-1"]);
     expect(queryKeys()).not.toContainEqual(["thread", "metadata", "thread-1"]);
@@ -378,7 +376,7 @@ describe("invalidateStoppedThreadCaches", () => {
   // A8 数的是**语义类别**（当前 thread / history / token usage / 侧栏搜索），
   // 落到 key 上是 6 个。这条守的是「有没有漏一类」——上游没有对应用例，
   // 因为上游把这 6 个 key 直接写死在函数体里，数不出来。
-  test("A8 的四类缓存展开成六个 key，一个都不能少", async () => {
+  test("A8 的四类缓存展开成五个 key，一个都不能少", async () => {
     const client = new QueryClient();
     const { queryKeys } = invalidatedQueryKeys(client);
 
@@ -386,7 +384,6 @@ describe("invalidateStoppedThreadCaches", () => {
     await flushThreadScoped();
 
     expect(queryKeys()).toEqual([
-      ["threads", "search"],
       [...INFINITE_THREADS_QUERY_KEY_PREFIX],
       ["thread", "thread-1"],
       ["thread-messages", "thread-1"],
@@ -468,7 +465,7 @@ describe("invalidateStoppedThreadCaches", () => {
     ).rejects.toThrow("cancel failed");
     await flushThreadScoped();
 
-    expect(queryKeys()).toContainEqual(["threads", "search"]);
+    expect(queryKeys()).toContainEqual(INFINITE_THREADS_QUERY_KEY_PREFIX);
     expect(queryKeys()).toContainEqual(["thread", "metadata", "thread-1"]);
   });
 
@@ -485,21 +482,22 @@ describe("invalidateStoppedThreadCaches", () => {
         null,
       );
 
-      const countSearchInvalidations = () =>
+      /* 数的是侧栏那张列表被失效了几次（真实 key，不是那个没人拥有的死键）。 */
+      const countListInvalidations = () =>
         queryKeys().filter(
           (queryKey) =>
             queryKey?.length === 2 &&
-            queryKey[0] === "threads" &&
-            queryKey[1] === "search",
+            queryKey[0] === INFINITE_THREADS_QUERY_KEY_PREFIX[0] &&
+            queryKey[1] === INFINITE_THREADS_QUERY_KEY_PREFIX[1],
         ).length;
 
-      expect(countSearchInvalidations()).toBe(1);
+      expect(countListInvalidations()).toBe(1);
 
       await vi.advanceTimersByTimeAsync(
         STOP_THREAD_FINALIZATION_REFETCH_DELAY_MS,
       );
 
-      expect(countSearchInvalidations()).toBe(2);
+      expect(countListInvalidations()).toBe(2);
       expect(queryKeys()).not.toContainEqual(["thread", null]);
     } finally {
       client.clear();
@@ -515,8 +513,14 @@ describe("invalidateStoppedThreadCaches", () => {
     });
     let finalized = false;
     let fetchCount = 0;
+    /*
+      观察的是**真实那个 key**（`["threads","searchInfinite", …]`）。
+      原来这里挂的是 `["threads","search"]`——本仓没有任何查询拥有它，
+      于是这条用例自己造了一个生产里不存在的拥有者，测的是一段到不了的代码。
+    */
+    const listKey = [...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"] as const;
     const observer = new QueryObserver<AgentThread[]>(client, {
-      queryKey: ["threads", "search"],
+      queryKey: listKey,
       queryFn: async () => {
         fetchCount += 1;
         return [
@@ -534,8 +538,7 @@ describe("invalidateStoppedThreadCaches", () => {
     try {
       await observer.refetch();
       expect(
-        client.getQueryData<AgentThread[]>(["threads", "search"])?.[0]?.values
-          ?.title,
+        client.getQueryData<AgentThread[]>(listKey)?.[0]?.values?.title,
       ).toBe("New Conversation");
 
       await stopThreadAndInvalidateCaches(
@@ -546,8 +549,7 @@ describe("invalidateStoppedThreadCaches", () => {
       await Promise.resolve();
 
       expect(
-        client.getQueryData<AgentThread[]>(["threads", "search"])?.[0]?.values
-          ?.title,
+        client.getQueryData<AgentThread[]>(listKey)?.[0]?.values?.title,
       ).toBe("New Conversation");
 
       finalized = true;
@@ -556,8 +558,7 @@ describe("invalidateStoppedThreadCaches", () => {
       );
 
       expect(
-        client.getQueryData<AgentThread[]>(["threads", "search"])?.[0]?.values
-          ?.title,
+        client.getQueryData<AgentThread[]>(listKey)?.[0]?.values?.title,
       ).toBe("Generated Title");
       expect(fetchCount).toBeGreaterThanOrEqual(3);
     } finally {
@@ -569,12 +570,8 @@ describe("invalidateStoppedThreadCaches", () => {
 });
 
 describe("removeDeletedThreadCaches", () => {
-  test("removes only deleted main/sidecar ids from array, infinite and scoped caches", () => {
+  test("removes only deleted main/sidecar ids from the infinite and scoped caches", () => {
     const client = new QueryClient();
-    client.setQueryData(
-      ["threads", "search"],
-      [makeThread("main"), makeThread("side"), makeThread("keep")],
-    );
     client.setQueryData([...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"], {
       pages: [[makeThread("main"), makeThread("side"), makeThread("keep")]],
       pageParams: [0],
@@ -584,11 +581,6 @@ describe("removeDeletedThreadCaches", () => {
 
     removeDeletedThreadCaches(client, ["main", "side"]);
 
-    expect(
-      client
-        .getQueryData<AgentThread[]>(["threads", "search"])
-        ?.map((thread) => thread.thread_id),
-    ).toEqual(["keep"]);
     expect(
       client
         .getQueryData<InfiniteData<AgentThread[]>>([

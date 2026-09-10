@@ -451,10 +451,6 @@ export function useThreadStream(options: UseThreadStreamOptions) {
           : thread;
 
       queryClient.setQueriesData(
-        { queryKey: ["threads", "search"], exact: false },
-        (oldData: AgentThread[] | undefined) => oldData?.map(withTitle),
-      );
-      queryClient.setQueriesData(
         { queryKey: [...INFINITE_THREADS_QUERY_KEY_PREFIX], exact: false },
         (oldData: InfiniteData<AgentThread[]> | undefined) =>
           mapInfiniteThreadsCache(oldData, withTitle),
@@ -821,7 +817,6 @@ export function useThreadStream(options: UseThreadStreamOptions) {
         // attachments remain retryable.
         throw settledState.error;
       }
-      void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
       void queryClient.invalidateQueries({
         queryKey: [...INFINITE_THREADS_QUERY_KEY_PREFIX],
       });

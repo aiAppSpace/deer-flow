@@ -235,7 +235,7 @@ describe("移动会话到项目", () => {
     wrapper.unmount();
   });
 
-  it("移动之后失效搜索、无限列表与项目会话列表三处", async () => {
+  it("移动之后失效无限列表与项目会话列表两处", async () => {
     threadsApi.moveThreadToProject.mockResolvedValue({});
     const {
       invalidated,
@@ -245,7 +245,6 @@ describe("移动会话到项目", () => {
 
     await mutation.mutateAsync({ threadId: "t-1", projectId: null });
 
-    expect(invalidatedWith(invalidated, ["threads", "search"])).toBe(true);
     expect(
       invalidatedWith(invalidated, INFINITE_THREADS_QUERY_KEY_PREFIX),
     ).toBe(true);

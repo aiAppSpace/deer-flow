@@ -101,16 +101,18 @@ describe("归档会话的缓存收尾", () => {
     wrapper.unmount();
   });
 
-  it("同时失效搜索、单条元数据与项目会话列表", async () => {
+  /*
+    列表本身走的是上一条用例里的 `resetQueries`，不在这里数——
+    这一条只管另外两处 invalidate。（原来它还断言了 `["threads","search"]`，
+    而本仓没有任何查询拥有那个 key，那一行验的是一次空操作。）
+  */
+  it("同时失效单条元数据与项目会话列表", async () => {
     api.patchThreadMetadata.mockResolvedValue({});
     const { mutation, calls, wrapper } = harness();
 
     await mutation.mutateAsync({ threadId: "t-1", archived: false });
 
     const invalidated = calls.filter((c) => c.op === "invalidateQueries");
-    expect(
-      invalidated.some((c) => startsWith(c.key, ["threads", "search"])),
-    ).toBe(true);
     expect(
       invalidated.some((c) => startsWith(c.key, ["thread", "metadata", "t-1"])),
     ).toBe(true);

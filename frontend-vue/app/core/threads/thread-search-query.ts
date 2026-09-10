@@ -1,42 +1,35 @@
 /*
-  【文件职责】     见下方导出与 JSDoc。
+  【文件职责】     会话列表结果的过滤规则：什么算「该出现在主列表里」。
   【架构位置】     L3
-  【主要导出】     ThreadSearchParams / DEFAULT_THREAD_SEARCH_PARAMS / THREAD_SEARCH_REFETCH_INTERVAL_MS / shouldIncludeSidecarThreads / filterThreadSearchResults / buildThreadsSearchQueryOptions
-  【依赖关系】     见下方 import。
-  【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
-*/
+  【主要导出】     ThreadSearchParams · filterThreadSearchResults
+  【依赖关系】     core/sidecar/thread · core/types/message · ./types
+  【边界与注意】   **这里曾经还有一个 `buildThreadsSearchQueryOptions`**，
+                   它是 `["threads", "search"]` 这个 key 的唯一生产者——而
+                   `app/` 下没有任何调用点，只有它自己的单测在用（上游同名的
+                   `useThreads` 同样零调用点）。于是那个 key 在本仓**没有任何查询
+                   拥有它**，所有针对它的 `setQueriesData` / `invalidateQueries` /
+                   `cancelQueries` 全是空操作——`setQueriesData` 只更新已存在的查询。
+                   2026-09-11 连同 11 处空操作一起删掉；会话列表走的是
+                   `["threads", "searchInfinite", params]`（`./infinite.ts`）。
 
-import type { ThreadsClient } from "@/core/types/message";
+                   `shouldIncludeSidecarThreads` 不再导出：它只被下面这一个函数用。
+*/
 
 import {
   SIDECAR_METADATA_KEY,
   shouldShowInPrimaryThreadLists,
 } from "@/core/sidecar/thread";
+import type { ThreadsClient } from "@/core/types/message";
 
-import type { AgentThread, AgentThreadState } from "./types";
-
-type ThreadsSearchClient = {
-  threads: {
-    search: ThreadsClient["search"];
-  };
-};
+import type { AgentThread } from "./types";
 
 export type ThreadSearchParams = NonNullable<
   Parameters<ThreadsClient["search"]>[0]
 >;
 
-export const DEFAULT_THREAD_SEARCH_PARAMS: ThreadSearchParams = {
-  limit: 50,
-  sortBy: "updated_at",
-  sortOrder: "desc",
-  select: ["thread_id", "updated_at", "values", "metadata"],
-};
-
-export const THREAD_SEARCH_REFETCH_INTERVAL_MS = 5000;
-
 type ThreadSearchFilterParams = Pick<ThreadSearchParams, "metadata">;
 
-export function shouldIncludeSidecarThreads(params: ThreadSearchFilterParams) {
+function shouldIncludeSidecarThreads(params: ThreadSearchFilterParams) {
   const metadata = params.metadata;
   return (
     typeof metadata === "object" &&
@@ -54,68 +47,4 @@ export function filterThreadSearchResults(
     return threads;
   }
   return threads.filter(shouldShowInPrimaryThreadLists);
-}
-
-export function buildThreadsSearchQueryOptions(
-  apiClient: ThreadsSearchClient,
-  params: ThreadSearchParams = DEFAULT_THREAD_SEARCH_PARAMS,
-) {
-  return {
-    queryKey: ["threads", "search", params],
-    queryFn: async () => {
-      const maxResults = params.limit;
-      const initialOffset = params.offset ?? 0;
-      const DEFAULT_PAGE_SIZE = 50;
-
-      // Preserve prior semantics: if a non-positive limit is explicitly provided,
-      // delegate to a single search call with the original parameters.
-      if (maxResults !== undefined && maxResults <= 0) {
-        const response =
-          await apiClient.threads.search<AgentThreadState>(params);
-        return filterThreadSearchResults(response as AgentThread[], params);
-      }
-
-      const pageSize =
-        typeof maxResults === "number" && maxResults > 0
-          ? Math.min(DEFAULT_PAGE_SIZE, maxResults)
-          : DEFAULT_PAGE_SIZE;
-
-      const threads: AgentThread[] = [];
-      let offset = initialOffset;
-
-      while (true) {
-        if (typeof maxResults === "number" && threads.length >= maxResults) {
-          break;
-        }
-
-        const currentLimit =
-          typeof maxResults === "number"
-            ? Math.min(pageSize, maxResults - threads.length)
-            : pageSize;
-
-        if (typeof maxResults === "number" && currentLimit <= 0) {
-          break;
-        }
-
-        const response = (await apiClient.threads.search<AgentThreadState>({
-          ...params,
-          limit: currentLimit,
-          offset,
-        })) as AgentThread[];
-
-        threads.push(...filterThreadSearchResults(response, params));
-
-        if (response.length < currentLimit) {
-          break;
-        }
-
-        offset += response.length;
-      }
-
-      return threads;
-    },
-    refetchInterval: THREAD_SEARCH_REFETCH_INTERVAL_MS,
-    refetchIntervalInBackground: false,
-    refetchOnWindowFocus: false,
-  };
 }

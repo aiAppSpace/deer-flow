@@ -38,11 +38,14 @@ import { threadTokenUsageQueryKey } from "./token-usage";
 
 /**
  * 05 A8 点名的全部缓存类别。`threadScoped` 的那几个需要 threadId，
- * `global` 的两个在没有 threadId 时也要失效（新建 thread 的第一次停止）。
+ * `global` 的那一个在没有 threadId 时也要失效（新建 thread 的第一次停止）。
+ *
+ * **原来这里还有 `["threads", "search"]`**：本仓没有任何查询拥有那个 key
+ * （唯一的生产者 `buildThreadsSearchQueryOptions` 零调用点，2026-09-11 已删），
+ * 于是那一条一直是空操作。
  */
 export const THREAD_CACHE_KEYS = {
   global: (): readonly (readonly unknown[])[] => [
-    ["threads", "search"],
     [...INFINITE_THREADS_QUERY_KEY_PREFIX],
   ],
   threadScoped: (threadId: string): readonly (readonly unknown[])[] => [
@@ -131,11 +134,6 @@ export function removeDeletedThreadCaches(
 ) {
   const deleted = new Set(threadIds);
   if (deleted.size === 0) return;
-  queryClient.setQueriesData(
-    { queryKey: ["threads", "search"], exact: false },
-    (oldData: AgentThread[] | undefined) =>
-      oldData?.filter((thread) => !deleted.has(thread.thread_id)),
-  );
   queryClient.setQueriesData(
     { queryKey: [...INFINITE_THREADS_QUERY_KEY_PREFIX], exact: false },
     (oldData: InfiniteData<AgentThread[]> | undefined) =>

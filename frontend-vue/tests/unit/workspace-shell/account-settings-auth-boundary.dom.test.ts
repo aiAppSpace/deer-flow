@@ -6,6 +6,7 @@ import AccountSettings from "@/components/workspace/settings/AccountSettings.vue
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 import { buildComposerDraftKey } from "@/core/threads/composer-draft";
+import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
 
 vi.mock("@/core/api/fetcher", () => ({ fetch: vi.fn() }));
 
@@ -31,8 +32,10 @@ describe("AccountSettings authenticated client boundary", () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
-    queryClient.setQueryData(["threads", "search"], {
-      threads: [{ thread_id: "admin-thread" }],
+    /* 随便两个上一位用户的查询；这一条钉的是 `clear()` 一个都不留。 */
+    queryClient.setQueryData([...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"], {
+      pages: [[{ thread_id: "admin-thread" }]],
+      pageParams: [0],
     });
     queryClient.setQueryData(["memory", "facts"], ["admin-memory"]);
     sessionStorage.setItem(
