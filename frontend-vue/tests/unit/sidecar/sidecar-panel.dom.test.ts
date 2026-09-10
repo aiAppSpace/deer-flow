@@ -237,7 +237,7 @@ describe("SidecarPanel session adapter", () => {
     expect(
       wrapper.get("textarea[name='message']").attributes("data-slot"),
     ).toBe("input-group-control");
-    expect(surface.get("[data-slot='input-group-body']").exists()).toBe(true);
+    expect(surface.find("[data-slot='input-group-body']").exists()).toBe(true);
     // footer 也是 InputGroupAddon，必须带 role="group"（见 SidecarPanel.vue 那条注释）。
     const footer = surface.get("[data-slot='input-group-footer']");
     expect(footer.attributes("role")).toBe("group");

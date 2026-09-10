@@ -368,11 +368,11 @@ describe("role-aware skill and MCP settings", () => {
     });
     expect(skill.text()).toContain("review");
     expect(skill.get('[role="switch"]').attributes("disabled")).toBeDefined();
-    expect(skill.get('[data-testid="skills-admin-required"]').exists()).toBe(
+    expect(skill.find('[data-testid="skills-admin-required"]').exists()).toBe(
       true,
     );
     const tool = mount(ToolSettings);
-    expect(tool.get('[data-testid="mcp-admin-required"]').exists()).toBe(true);
+    expect(tool.find('[data-testid="mcp-admin-required"]').exists()).toBe(true);
     expect(tool.find('[role="switch"]').exists()).toBe(false);
   });
 

@@ -70,9 +70,9 @@ describe("markdown table controls", () => {
       },
     });
 
-    expect(wrapper.get('[title="Copy table"]').exists()).toBe(true);
-    expect(wrapper.get('[title="Download table"]').exists()).toBe(true);
-    expect(wrapper.get('[title="View fullscreen"]').exists()).toBe(true);
+    expect(wrapper.find('[title="Copy table"]').exists()).toBe(true);
+    expect(wrapper.find('[title="Download table"]').exists()).toBe(true);
+    expect(wrapper.find('[title="View fullscreen"]').exists()).toBe(true);
 
     // 复制/下载现在是 DropdownMenu：菜单项 portal 到 body，且只响应 select，
     // 所以断言从 wrapper 子树移到 document。

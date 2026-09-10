@@ -1310,6 +1310,50 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
 
   // Thread state — getState for individual thread
   void page.route("**/api/langgraph/threads/*/state", (route) => {
+    /*
+      **POST 也要接住。** 本仓的重命名走的就是它
+      （`useThreads.rename` → `apiClient.threads.updateState(id, { values: { title } })`
+      → `POST {base}/threads/{id}/state`）。此前这里只处理 GET，POST 掉进
+      `route.fallback()`，于是那次写**必然失败**、乐观更新回滚、标题纹丝不动。
+
+      后果不是「少测了一条」，是**重命名的成功路径从来没被任何 e2e 走过**：
+      本模块 `tests/e2e/ui-primitives-a11y.spec.ts` 那条断言的恰恰是「写失败时对话框仍在」，
+      它在这个 mock 下永远成立。2026-09-10 加 `thread-title-sync` 对照场景时，
+      两个应用同时到不了终态，才把它照出来。
+    */
+    if (route.request().method() === "POST") {
+      const url = route.request().url();
+      const matchingThread = threads.find((t) => url.includes(t.thread_id));
+      const body = route.request().postDataJSON() as {
+        values?: { title?: unknown };
+      };
+      const title = body.values?.title;
+      const updated =
+        matchingThread && typeof title === "string"
+          ? { ...matchingThread, title }
+          : matchingThread;
+      // 与上游 mock 同形（frontend/tests/e2e/utils/mock-api.ts:1262）：
+      // 找不到 thread 是 404，不是静默成功。
+      if (!updated) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Thread not found" }),
+        });
+      }
+      upsertThread(updated);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          configurable: {
+            thread_id: updated.thread_id,
+            checkpoint_ns: "",
+            checkpoint_id: "mock-checkpoint",
+          },
+        }),
+      });
+    }
     if (route.request().method() === "GET") {
       const url = route.request().url();
       const matchingThread = threads.find((t) => url.includes(t.thread_id));

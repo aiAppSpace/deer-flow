@@ -45,11 +45,11 @@ describe("Reasoning primitive", () => {
   it("carries the three upstream data-slots", () => {
     const wrapper = mountReasoning();
 
-    expect(wrapper.get("[data-slot='collapsible']").exists()).toBe(true);
-    expect(wrapper.get("[data-slot='collapsible-trigger']").exists()).toBe(
+    expect(wrapper.find("[data-slot='collapsible']").exists()).toBe(true);
+    expect(wrapper.find("[data-slot='collapsible-trigger']").exists()).toBe(
       true,
     );
-    expect(wrapper.get("[data-slot='collapsible-content']").exists()).toBe(
+    expect(wrapper.find("[data-slot='collapsible-content']").exists()).toBe(
       true,
     );
   });

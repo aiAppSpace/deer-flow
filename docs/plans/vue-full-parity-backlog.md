@@ -223,6 +223,29 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
+- **`ui/item` 这一族 primitive 本仓没有，四个设置页因此各自手写行。**
+  上游 `components/ui/item.tsx` 有十个导出（ItemGroup / Item / ItemMedia /
+  ItemContent / ItemTitle / ItemDescription / ItemActions / ItemHeader /
+  ItemFooter / ItemSeparator），用在 **tool / skill / channels / subagent** 四个设置页。
+  本仓四处都是 `flex items-center justify-between border-b` 的手写行。
+
+  2026-09-11 由新加的 `mcp-settings` 取样点量出来（14 行台账）：
+  `text:Local tools` 的 fontSize 14px vs 12px、width **654 vs 61.1**、x/y 也偏——
+  上游那一行是 `Item variant="outline"` 的卡片、描述是撑满的 `ItemDescription`
+  （`text-sm line-clamp-2`），本仓是分隔线行、描述是 `text-xs` 且被 `min-w-0` 挤扁。
+
+  **只改字号不解决问题**：卡片与分隔线行是两种视觉treatment，改一半只会换一批台账行。
+  这是一笔独立的活：移植那一族 primitive，再把四个设置页改过去。
+
+- **重命名之后上游会重取，本仓不重取**（`thread-title-sync` 量到 4 行）：
+  `requestsOnlyReact: GET /api/langgraph/threads/{id}` 与 `POST /api/threads/search`。
+  本仓靠乐观缓存更新，上游改完再读一遍。哪种对还没判——先记下读数。
+
+- **侧栏当前会话行的字重**（`thread-title-sync` 量到 2 行）：
+  `text:Renamed title fontWeight React=500 Vue=400`。上游给选中行 `font-medium`，
+  本仓没有。看着像小事，但它是「当前在哪条会话」的唯一视觉线索之一。
+
+
 - **`topology.spec.ts:112 › react renders the same accessibility tree on two loads` 会偶发红。**
   实测差异是上游第二次加载多出一颗 `button "Batches"`：`subagent_batches.enabled`
   这个 feature 标志是异步到的，取样时它到没到决定了那颗按钮在不在。

@@ -71,6 +71,15 @@ export const ARCHIVE_KEEP_RUNS = 20;
  * 目录（它们要等那个套件自己再跑一次才会被清掉）。不按时间筛的话，
  * 「失败现场已另存」这句话就把上一次、上上次的东西也算进来了——工具自己说了假话。
  */
+/**
+ * @param {number} [since]
+ * @param {string} [testResultsDir]
+ * @param {{
+ *   readDir?: (path: string, options?: unknown) => { name: string; isDirectory(): boolean }[],
+ *   modifiedAt?: (path: string) => number,
+ *   exists?: (path: string) => boolean,
+ * }} [io] 注入点要的是这三个小函数，不是 node fs 的完整签名。
+ */
 export function collectFailureArtifactDirs(
   since = 0,
   testResultsDir = TEST_RESULTS,
@@ -105,6 +114,15 @@ export function collectFailureArtifactDirs(
  *
  * 与用例目录不同，这些**复制**而不是搬走：套件文档里写着它在那个路径上，
  * 搬走会让同一次会话里后面的步骤扑空。反正下一次运行会清掉。
+ */
+/**
+ * @param {number} [since]
+ * @param {string} [testResultsDir]
+ * @param {{
+ *   readDir?: (path: string, options?: unknown) => { name: string; isDirectory(): boolean }[],
+ *   modifiedAt?: (path: string) => number,
+ *   exists?: (path: string) => boolean,
+ * }} [io]
  */
 export function collectSuiteReportFiles(
   since = 0,
@@ -170,6 +188,10 @@ function pruneArchives() {
 /**
  * 进程还在不在。`EPERM` 算「在」——那是**别的用户**的进程，不是没了；
  * 当成陈旧锁抢过去，就等于允许并发。
+ *
+ * @param {number} pid
+ * @param {(target: number) => void} [kill] 注入点只要「问一下这个 pid 在不在」，
+ *   不是 `process.kill` 的全套重载——契约写清楚，调用方才好给桩。
  */
 export function processIsAlive(
   pid,
@@ -193,6 +215,20 @@ export function processIsAlive(
  *
  * 返回 `{ acquired, holder, release }`。`release` 只在**文件里还是自己的 pid** 时才删，
  * 免得删掉接管者的锁。
+ */
+/**
+ * @param {string} [lockPath]
+ * @param {{
+ *   pid?: number,
+ *   command?: string,
+ *   startedAt?: string,
+ *   ensureDir?: (path: string) => void,
+ *   writeExclusive?: (path: string, body: string) => void,
+ *   readLock?: (path: string) => string,
+ *   removeLock?: (path: string) => void,
+ *   isAlive?: (pid: number) => boolean,
+ * }} [io]
+ * @returns {{ acquired: boolean, holder: { pid?: number, command?: string, startedAt?: string } | null, release?: () => void }}
  */
 export function acquireRunLock(
   lockPath = RUN_LOCK_PATH,

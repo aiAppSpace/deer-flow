@@ -320,7 +320,7 @@ describe("Human Input state machine", () => {
     */
     const wrapper = mountHumanInput(vi.fn(async () => true));
 
-    expect(wrapper.getComponent(HumanInputCard).exists()).toBe(true);
+    expect(wrapper.findComponent(HumanInputCard).exists()).toBe(true);
     expect(wrapper.findAll("details")).toHaveLength(0);
   });
 

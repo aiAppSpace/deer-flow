@@ -304,7 +304,7 @@ describe("BrowserPanel header", () => {
     const alert = wrapper.get("[role='alert']");
     expect(alert.text()).toContain("Live browser connection closed.");
     expect(
-      alert.get(`button[aria-label='${enUS.browser.retryLive}']`).exists(),
+      alert.find(`button[aria-label='${enUS.browser.retryLive}']`).exists(),
     ).toBe(true);
   });
 

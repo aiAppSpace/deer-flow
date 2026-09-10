@@ -123,7 +123,9 @@ describe("persisted message surfaces", () => {
     expect(wrapper.find("button[aria-label='Not helpful']").exists()).toBe(
       false,
     );
-    expect(wrapper.get("[data-testid='run-duration'] svg").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='run-duration'] svg").exists()).toBe(
+      true,
+    );
     const actions = wrapper.get("[data-testid='assistant-turn-actions']");
     expect(actions.classes()).toContain("gap-1");
     expect(actions.findAll("button")).toHaveLength(3);
@@ -191,7 +193,7 @@ describe("persisted message surfaces", () => {
       wrapper.get("[data-testid='message-list']").element.children,
     ).toHaveLength(0);
     expect(
-      wrapper.get("[role='status'] [data-testid='run-activity']").exists(),
+      wrapper.find("[role='status'] [data-testid='run-activity']").exists(),
     ).toBe(true);
   });
 

@@ -349,7 +349,7 @@ describe("HumanInputCard", () => {
     );
     expect(wrapper.text()).toContain(enUS.humanInput.answered);
     expect(wrapper.text()).toContain(enUS.humanInput.answeredValue("EMEA"));
-    expect(wrapper.get("[data-slot='badge']").exists()).toBe(true);
+    expect(wrapper.find("[data-slot='badge']").exists()).toBe(true);
   });
 
   it("badges a read-only card and disables its controls", () => {

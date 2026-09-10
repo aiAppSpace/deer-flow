@@ -237,8 +237,10 @@ describe("composer submission and stale lifecycle", () => {
     expect(wrapper.get("textarea").attributes("data-slot")).toBe(
       "input-group-control",
     );
-    expect(surface.get("[data-slot='input-group-body']").exists()).toBe(true);
-    expect(surface.get("[data-slot='input-group-footer']").exists()).toBe(true);
+    expect(surface.find("[data-slot='input-group-body']").exists()).toBe(true);
+    expect(surface.find("[data-slot='input-group-footer']").exists()).toBe(
+      true,
+    );
     const attachment = surface.get("[data-testid='composer-attachment']");
     expect(attachment.text()).toContain("cat.png");
     expect(attachment.get("img").attributes("src")).toBe("blob:cat.png");

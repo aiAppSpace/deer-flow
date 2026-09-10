@@ -78,7 +78,7 @@ describe("ProcessingMessageGroup", () => {
     });
 
     expect(
-      wrapper.get("[data-testid='processing-message-group']").exists(),
+      wrapper.find("[data-testid='processing-message-group']").exists(),
     ).toBe(true);
     expect(wrapper.text()).toContain("1 more step");
     expect(wrapper.text()).toContain(

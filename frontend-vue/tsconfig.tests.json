@@ -1,0 +1,14 @@
+{
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": [
+    "./.nuxt/nuxt.d.ts",
+    "./.nuxt/nuxt.node.d.ts",
+    "./app/**/*",
+    "./shared/**/*.d.ts",
+    "./*.d.ts",
+    "./nuxt.config.*",
+    "./tests/**/*.ts",
+    "./playwright*.config.ts"
+  ]
+}

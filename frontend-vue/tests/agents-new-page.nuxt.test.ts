@@ -69,7 +69,7 @@ describe("new agent name step", () => {
   it("renders the upstream header above the form", async () => {
     const wrapper = await mountPage();
 
-    const back = wrapper.get(
+    const back = wrapper.find(
       `button[aria-label="${enUS.agents.backToGallery}"]`,
     );
     expect(back.exists()).toBe(true);

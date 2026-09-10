@@ -74,7 +74,16 @@ export const ZH_DIMENSION: ParityDimension = {
 export type ParityTarget =
   | { testId: string }
   | { selector: string }
-  | { role: Parameters<Page["getByRole"]>[0]; name: string | RegExp }
+  /*
+    `name` 可以不给：**只按 role 定位**是两处场景有意为之的写法
+    （分隔线、tablist——它们本来就没有可访问名，而两边各恰好一个，
+    唯一性在场景注释里数过）。`getByRole(role, { name: undefined })`
+    在 Playwright 里就是「这个 role 的任意元素」。
+
+    此前这里写成必填，于是那两处**运行时一直是对的、类型上一直是错的**——
+    而 `tests/` 整棵树不在 typecheck 里，所以没有任何机器说过话。
+  */
+  | { role: Parameters<Page["getByRole"]>[0]; name?: string | RegExp }
   | { text: string | RegExp };
 
 /** 一个具名终态：`id` 进台账的键，`steps` 是走到它的交互。 */
@@ -960,6 +969,22 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           { kind: "fill", target: { selector: "textarea" }, value: "Hello" },
           { kind: "press", key: "Enter" },
           { kind: "visible", target: { text: "Hello from DeerFlow!" } },
+          /*
+            **等到这一轮真的落定再取样。**「答案文字出现」不是终态：那一刻流还没关，
+            两边的「最新可编辑回合」有没有解析出来是碰运气的。
+
+            实测过它的后果：同一条场景 en-US 那一维台账上有
+            `ariaOnlyVue: - button "Edit and rerun"`、`tabOrder` 差一位、
+            外加三条 `requestsOnlyReact`，而 **zh-CN 那一维零差异**——
+            同样的步骤、同样的两个应用，差别只在取样早了一点。
+            这一档是「不稳定的取样点会造出幻影差异」的活样本（坑同 wave 129）。
+
+            `completedIn` 是 `onFinish` 之后才画的那一行，两边同源。
+          */
+          {
+            kind: "visible",
+            target: { text: /^(Completed in|本次任务耗时) / },
+          },
         ],
       },
     ],
@@ -1514,6 +1539,100 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           },
         ],
       },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
+    id: "mcp-settings",
+    title: "设置里的 MCP server 列表与编辑对话框",
+    backend: "mock",
+    path: "/workspace/chats/new?settings=tools",
+    routes: [
+      {
+        pattern: "**/api/mcp/config",
+        json: {
+          mcp_servers: {
+            local: {
+              enabled: true,
+              description: "Local tools",
+              command: "uvx",
+              args: ["local-tools"],
+            },
+            remote: {
+              enabled: false,
+              description: "Remote tools",
+              type: "http",
+              url: "https://example.test/mcp",
+              headers: { "X-API-Key": "***" },
+              // 这一屏**不认识**的字段：编辑时必须原样带过去。
+              routing: { mode: "prefer" },
+            },
+          },
+        },
+      },
+    ],
+    /*
+      两边的编辑模型是同一个：**粘一段 JSON**，不是一堆字段输入框
+      （上游 `mcp-settings.spec.ts` 也是 `JSON.parse(await textbox.inputValue())`）。
+      所以这一屏可以直接对照——列表行的开关/描述/编辑删除入口，以及编辑对话框
+      里那个带着 `routing` 这种「这一屏不认识的字段」的 JSON。
+
+      上游那条用例真正断言的是 **PUT body 里没丢 advanced 字段、也没动到兄弟条目**，
+      而对照台账只比 method + path + query，比不到请求体——这条场景补的是**取样面**：
+      在它之前，MCP 这一屏连同它的编辑对话框一行台账都没有。
+    */
+    settle: [{ kind: "visible", target: { text: "Local tools" } }],
+    steps: [
+      {
+        kind: "click",
+        target: { role: "button", name: /^(Edit|编辑) remote$/ },
+      },
+      {
+        kind: "visible",
+        target: {
+          role: "dialog",
+          name: /^(Edit MCP server|编辑 MCP 服务器)$/,
+        },
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
+    id: "thread-title-sync",
+    title: "重命名会话后侧栏与头部同步",
+    backend: "mock",
+    path: `/workspace/chats/${MOCK_THREAD_ID}`,
+    mock: {
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Original title",
+          updated_at: "2026-07-05T10:00:00Z",
+        },
+      ],
+    },
+    /*
+      重命名对话框**只在两次点击之后才存在**，在这条场景之前一行台账都没有。
+      判据取上游 `thread-title-sync.spec.ts:9`：改完之后侧栏那一行与头部都得是新名字。
+
+      `document.title` 不进可访问性树，所以那一半仍然只有两侧各自的 spec 在守
+      （本仓 tests/e2e/、上游 frontend/tests/e2e/）；这里守的是**看得见的那两处**。
+    */
+    settle: [{ kind: "visible", target: { text: "Original title" } }],
+    steps: [
+      { kind: "hover", target: { text: "Original title" } },
+      { kind: "click", target: { role: "button", name: /^(More|更多)$/ } },
+      {
+        kind: "click",
+        target: { role: "menuitem", name: /^(Rename|重命名)$/ },
+      },
+      {
+        kind: "fill",
+        target: { selector: '[role="dialog"] input' },
+        value: "Renamed title",
+      },
+      { kind: "click", target: { role: "button", name: /^(Save|保存)$/ } },
+      { kind: "visible", target: { text: "Renamed title" } },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },

@@ -15,7 +15,15 @@ import { defineConfig, devices } from "@playwright/test";
 import type { PlaywrightTestConfig } from "@playwright/test";
 
 type WebServer = NonNullable<PlaywrightTestConfig["webServer"]>;
-type WebServerEntry = WebServer extends readonly (infer T)[] ? T : never;
+/*
+  取联合里**数组那一支**的成员类型。
+
+  原来写的是 `WebServer extends readonly (infer T)[] ? T : never`——条件类型在
+  联合上会分配，非数组那一支求出 `never`，于是整体塌成 `never`，
+  四份 config 里的 `servers: [...]` 全部「不能赋给 never」。
+  运行时一直是对的；**类型上一直是错的，而 `tests/` 不在 typecheck 里，没人说话。**
+*/
+type WebServerEntry = Extract<WebServer, readonly unknown[]>[number];
 
 const isCI = Boolean(process.env.CI);
 
