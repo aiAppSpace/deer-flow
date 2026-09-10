@@ -274,11 +274,16 @@ login/setup 页——这些都还没有逐个读代码比对。
   模式豁免、`core/notification` 的四处差异已修（`03c03848`）、
   `threads/message-order` 的 **seq 骨架整段缺失**，已补（新增 `core/threads/message-seq.ts`
   与 17 条用例）。**这一栏现在是空的**——下一轮要找活得换个坐标系。
-- ~~`focus` 档：`React=button "Account" Vue=button "Integrations"`~~ **已修。**
-  本仓接管了 `open-auto-focus`，把焦点放到**当前分区**那颗导航键上；上游没有这一手。
-  那是一处**没有依据的分歧**：既没有注释说明，也没有用例钉过它。
-  实测去掉这个覆盖之后 reka 的默认焦点**也是 "Account"**——两个 primitive 在这件事上
-  一致，删掉即对齐。
+- **`focus` 档：`React=button "Account" Vue=当前分区`（6 行）——不是缺陷，是有据的分歧。**
+  本仓接管 `open-auto-focus`，把焦点放到深链指向的那个分区上；上游不接管，
+  Radix 的默认永远落在第一个可聚焦元素（"Account"）。
+
+  **这条我判错过一次，记在这里免得重蹈**：2026-09-10 有一轮把它当成
+  「没有依据的分歧」删了，理由是「没有注释说明，也没有用例钉过它」——
+  而实际上 `tests/e2e/workspace-shell.spec.ts` 有两条 e2e 深链到
+  `?settings=appearance` 并断言焦点在 "Appearance" 上。当时按 "settings" 搜文件名，
+  判据在 `workspace-shell` 里，没搜到；`make e2e` 当场把它挡了回来。
+  **教训与三份挂账文档那条同源：搜判据要按行为搜，不能按文件名猜。**
 
 ### 这一轮结掉的两笔旧账
 

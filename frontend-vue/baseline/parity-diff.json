@@ -616,6 +616,32 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "thread-ordering/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "thread-ordering/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
     "background-tasks#disabled/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
@@ -782,7 +808,9 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [],
+      "focus": [
+        "React=button \"Account\" Vue=button \"Integrations\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -799,7 +827,9 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [],
+      "focus": [
+        "React=button \"账号\" Vue=button \"集成\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -820,7 +850,9 @@
       ],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [],
+      "focus": [
+        "React=button \"Account\" Vue=button \"Integrations\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -841,7 +873,9 @@
       ],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [],
+      "focus": [
+        "React=button \"账号\" Vue=button \"集成\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -1281,7 +1315,9 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [],
+      "focus": [
+        "React=button \"Account\" Vue=button \"Notification\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -1298,7 +1334,9 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [],
+      "focus": [
+        "React=button \"账号\" Vue=button \"通知\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
