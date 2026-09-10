@@ -24,7 +24,7 @@
                    「两边完全不同」的基线，那记的是夹具不是差异，已整体撤回。
 */
 
-import { PARITY_CONTEXT_OPTIONS } from "./tests/e2e-parity/support/context-options";
+import { PARITY_USE_OPTIONS } from "./tests/e2e-parity/support/context-options";
 import {
   reactAppPresent,
   reactAppUrl,
@@ -60,5 +60,5 @@ export default defineSuite({
       ? [reactPreview({ port: reactPort, authDisabled: false, gatewayPort })]
       : []),
   ],
-  use: PARITY_CONTEXT_OPTIONS,
+  use: PARITY_USE_OPTIONS,
 });

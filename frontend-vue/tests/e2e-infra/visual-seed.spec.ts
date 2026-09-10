@@ -14,7 +14,15 @@
 
 import { expect, test } from "@playwright/test";
 
-test.use({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" });
+/*
+  `reducedMotion` 在 `use` **顶层不是选项**（Playwright 1.59 的 PlaywrightTestOptions
+  里没有这个键），写在那里会被安静忽略；只有 contextOptions 这条路真的传到页面上。
+  实测见 tests/e2e-parity/support/context-options.ts 的文件头。
+*/
+test.use({
+  viewport: { width: 1440, height: 900 },
+  contextOptions: { reducedMotion: "reduce" },
+});
 
 /** Freeze every transition/animation so computed styles and screenshots are at rest. */
 const FREEZE_MOTION = `*, *::before, *::after {

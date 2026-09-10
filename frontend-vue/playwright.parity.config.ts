@@ -18,7 +18,7 @@
                    八个套件的确定性后端。手写夹具会随后端演进过期，真 Gateway 不会。
 */
 
-import { PARITY_CONTEXT_OPTIONS } from "./tests/e2e-parity/support/context-options";
+import { PARITY_USE_OPTIONS } from "./tests/e2e-parity/support/context-options";
 import {
   reactAppPresent,
   reactAppUrl,
@@ -59,5 +59,5 @@ export default defineSuite({
       : []),
   ],
   // 取样条件与 diff.spec.ts 为每个场景新开的 context 共用一份，见该文件头。
-  use: PARITY_CONTEXT_OPTIONS,
+  use: PARITY_USE_OPTIONS,
 });
