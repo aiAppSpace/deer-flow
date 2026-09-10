@@ -223,19 +223,21 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
-- **`ui/item` 这一族 primitive 本仓没有，四个设置页因此各自手写行。**
-  上游 `components/ui/item.tsx` 有十个导出（ItemGroup / Item / ItemMedia /
-  ItemContent / ItemTitle / ItemDescription / ItemActions / ItemHeader /
-  ItemFooter / ItemSeparator），用在 **tool / skill / channels / subagent** 四个设置页。
-  本仓四处都是 `flex items-center justify-between border-b` 的手写行。
+- ~~`ui/item` 这一族 primitive 本仓没有~~ **已移植（六个）并改了三个设置页。**
+  上游十个导出里，四个设置页只用到六个（Item / ItemMedia / ItemContent /
+  ItemTitle / ItemDescription / ItemActions），另外四个（ItemGroup /
+  ItemSeparator / ItemHeader / ItemFooter）一个调用点都没有，按「不承重就别写」不移植。
 
-  2026-09-11 由新加的 `mcp-settings` 取样点量出来（14 行台账）：
-  `text:Local tools` 的 fontSize 14px vs 12px、width **654 vs 61.1**、x/y 也偏——
-  上游那一行是 `Item variant="outline"` 的卡片、描述是撑满的 `ItemDescription`
-  （`text-sm line-clamp-2`），本仓是分隔线行、描述是 `text-xs` 且被 `min-w-0` 挤扁。
+  实测效果（`mcp-settings` 取样点）：描述那一处的 5 行几何差异塌成 1 行，
+  宽度差从 **Δ-592.9 变成 Δ8**，fontSize / height / x / y 全部对上。
 
-  **只改字号不解决问题**：卡片与分隔线行是两种视觉treatment，改一半只会换一批台账行。
-  这是一笔独立的活：移植那一族 primitive，再把四个设置页改过去。
+  **还剩 `ChannelConnections.vue` 没改**：那一处不是 1:1 替换——本仓在 provider 行
+  下面多一段「账号列表」，上游那一行之后只跟一个对话框。而且 channels 设置页
+  **没有任何对照取样点**，改了也没有机器能验证。留作独立一笔，
+  真要做就先给它加取样点。
+
+  同理 `SubagentSettings.vue` 虽然已经改了（1:1 结构替换、typecheck 与单测都过），
+  它那一页同样没有取样点——ledger 证明不了它，只有代码与上游逐行对得上这一条。
 
 - **重命名之后上游会重取，本仓不重取**（`thread-title-sync` 量到 4 行）：
   `requestsOnlyReact: GET /api/langgraph/threads/{id}` 与 `POST /api/threads/search`。

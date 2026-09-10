@@ -21,6 +21,13 @@ import { Loader, Sparkles, Upload } from "lucide-vue-next";
 
 import SettingsSection from "./SettingsSection.vue";
 import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
@@ -308,26 +315,38 @@ function archiveErrorOptions(cause: unknown) {
           {{ t.settings.skills.emptyTitle }}
         </p>
         <template v-if="!skills.error.value && !skills.loading.value">
-          <div
+          <!-- 行的形状照上游 `skill-settings-page.tsx:203` 的 Item 一族。 -->
+          <Item
             v-for="skill in filtered"
             :key="skill.name"
-            class="border-border flex items-center justify-between gap-4 rounded-md border p-3"
+            variant="outline"
+            class="w-full"
             :data-testid="`skill-${skill.name}`"
           >
-            <div class="min-w-0">
-              <div class="font-medium">{{ skill.name }}</div>
-              <p class="text-muted-foreground text-sm">
+            <ItemContent>
+              <ItemTitle>
+                <div class="flex items-center gap-2">{{ skill.name }}</div>
+              </ItemTitle>
+              <ItemDescription class="line-clamp-4">
                 {{ skill.description }}
-              </p>
-            </div>
-            <Switch
-              :aria-label="skill.name"
-              :model-value="skill.enabled"
-              :disabled="!access.canManageSkills.value || skills.pending.value"
-              :data-pending="pendingName === skill.name || undefined"
-              @update:model-value="toggle(skill, $event)"
-            />
-          </div>
+              </ItemDescription>
+            </ItemContent>
+            <ItemActions>
+              <!--
+                开关按技能命名：一页技能否则就是一列长得一样、又没有名字的开关，
+                读屏器分不出停在哪一个（WCAG 4.1.2）。上游同一条注释。
+              -->
+              <Switch
+                :aria-label="skill.name"
+                :model-value="skill.enabled"
+                :disabled="
+                  !access.canManageSkills.value || skills.pending.value
+                "
+                :data-pending="pendingName === skill.name || undefined"
+                @update:model-value="toggle(skill, $event)"
+              />
+            </ItemActions>
+          </Item>
         </template>
       </template>
     </div>

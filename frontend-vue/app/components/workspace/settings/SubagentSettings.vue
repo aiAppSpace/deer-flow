@@ -19,6 +19,13 @@ import { computed, ref } from "vue";
 import { Pencil, Plus, Trash2 } from "lucide-vue-next";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import SettingsActionDialog from "./SettingsActionDialog.vue";
@@ -125,33 +132,32 @@ async function confirmDelete() {
         {{ labels.empty }}
       </p>
       <div v-else class="space-y-3">
-        <div
+        <!-- 行的形状照上游 `subagent-settings-page.tsx:172` 的 Item 一族。 -->
+        <Item
           v-for="subagent in subagents"
           :key="`${subagent.source}-${subagent.name}`"
-          class="border-border flex items-start gap-3 rounded-lg border p-4"
+          variant="outline"
           :data-testid="`subagent-${subagent.name}`"
         >
-          <div class="min-w-0 flex-1 space-y-1">
-            <div class="flex flex-wrap items-center gap-2 text-sm font-medium">
+          <ItemContent>
+            <ItemTitle class="flex flex-wrap items-center gap-2">
               <span>{{ subagent.display_name ?? subagent.name }}</span>
               <Badge variant="outline">{{ sourceLabel(subagent) }}</Badge>
               <Badge v-if="subagent.conflict" variant="destructive">
                 {{ labels.conflict }}
               </Badge>
-            </div>
-            <p class="text-muted-foreground text-sm">
-              {{ subagent.description }}
-            </p>
+            </ItemTitle>
+            <ItemDescription>{{ subagent.description }}</ItemDescription>
             <p
               v-if="Object.keys(subagent.config_overrides).length > 0"
               class="text-muted-foreground text-xs"
             >
               {{ labels.overridden }}: {{ overrideSummary(subagent) }}
             </p>
-          </div>
-          <div
+          </ItemContent>
+          <ItemActions
             v-if="access.canManageMcp.value && subagent.editable"
-            class="flex shrink-0 items-center gap-1"
+            class="gap-1"
           >
             <Switch
               :model-value="subagent.enabled"
@@ -175,8 +181,8 @@ async function confirmDelete() {
             >
               <Trash2 class="size-4" />
             </Button>
-          </div>
-        </div>
+          </ItemActions>
+        </Item>
       </div>
     </div>
 

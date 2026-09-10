@@ -616,6 +616,90 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "mcp-settings/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "text:Local tools x React=367 Vue=350 Δ-17",
+        "text:Local tools y React=368.3 Vue=364 Δ-4.3",
+        "text:Local tools width React=654 Vue=61.1 Δ-592.9",
+        "text:Local tools height React=21 Vue=16 Δ-5",
+        "text:Local tools fontSize React=14px Vue=12px"
+      ],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "div[scroll-area-viewport]"
+      ],
+      "tabbablesOnlyVue": [],
+      "tabOrder": [
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
+      ]
+    },
+    "mcp-settings/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "text:Local tools x React=367 Vue=350 Δ-17",
+        "text:Local tools y React=368.3 Vue=364 Δ-4.3",
+        "text:Local tools width React=654 Vue=61.1 Δ-592.9",
+        "text:Local tools height React=21 Vue=16 Δ-5",
+        "text:Local tools fontSize React=14px Vue=12px"
+      ],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "div[scroll-area-viewport]"
+      ],
+      "tabbablesOnlyVue": [],
+      "tabOrder": [
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
+      ]
+    },
+    "thread-title-sync/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [
+        "GET /api/langgraph/threads/00000000-0000-0000-0000-000000000001",
+        "POST /api/threads/search"
+      ],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "text:Renamed title width React=90.9 Vue=88.8 Δ-2.1",
+        "text:Renamed title fontWeight React=500 Vue=400"
+      ],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "thread-title-sync/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [
+        "GET /api/langgraph/threads/00000000-0000-0000-0000-000000000001",
+        "POST /api/threads/search"
+      ],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "text:Renamed title width React=90.9 Vue=88.8 Δ-2.1",
+        "text:Renamed title fontWeight React=500 Vue=400"
+      ],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
     "thread-ordering/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],

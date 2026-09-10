@@ -24,6 +24,13 @@ import { Pencil, Trash2 } from "lucide-vue-next";
 import SettingsActionDialog from "./SettingsActionDialog.vue";
 import SettingsSection from "./SettingsSection.vue";
 import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -280,19 +287,33 @@ async function toggle(name: string, enabled: boolean) {
         >
           {{ t.settings.tools.empty }}
         </div>
-        <div
+        <!--
+          行的形状照上游 `tool-settings-page.tsx:209`：`Item variant="outline"`
+          的卡片 + ItemContent/ItemTitle/ItemDescription/ItemActions。
+
+          此前这里是手写的 `flex … border-b` 分隔线行，描述写成 `text-xs` 的 div
+          且被 `min-w-0` 挤扁——对照台账在 `mcp-settings` 上量到
+          `fontSize 14px vs 12px`、`width 654 vs 61.1`。差的不是几个 class，
+          是「卡片」与「分隔线行」两种 treatment。
+        -->
+        <Item
           v-for="(server, name) in mcp.config.value?.mcp_servers ?? {}"
           :key="name"
-          class="border-border flex items-center justify-between border-b py-3"
+          variant="outline"
+          class="w-full"
           :data-testid="`mcp-${String(name)}`"
         >
-          <div class="min-w-0">
-            <div class="font-medium">{{ displayServerName(String(name)) }}</div>
-            <div class="text-muted-foreground text-xs">
+          <ItemContent>
+            <ItemTitle>
+              <div class="flex items-center gap-2">
+                <div>{{ displayServerName(String(name)) }}</div>
+              </div>
+            </ItemTitle>
+            <ItemDescription class="line-clamp-4">
               {{ server.description }}
-            </div>
-          </div>
-          <div class="flex shrink-0 items-center gap-1">
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions class="gap-1">
             <Switch
               :aria-label="String(name)"
               :model-value="server.enabled"
@@ -318,8 +339,8 @@ async function toggle(name: string, enabled: boolean) {
             >
               <Trash2 class="size-4" />
             </Button>
-          </div>
-        </div>
+          </ItemActions>
+        </Item>
       </template>
     </div>
 
