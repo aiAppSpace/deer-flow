@@ -170,19 +170,19 @@ async function exportConversation(format: ThreadExportFormat) {
         文字换了、图标没换。
       -->
       <DropdownMenuItem @select="emit('togglePin')">
-        <component :is="pinned ? PinOff : Pin" :size="14" />
+        <component :is="pinned ? PinOff : Pin" />
         {{
           pinned ? $i18n.t.value.chats.unpinChat : $i18n.t.value.chats.pinChat
         }}
       </DropdownMenuItem>
       <DropdownMenuItem @select="emit('rename')">
-        <Pencil :size="14" /> {{ $i18n.t.value.common.rename }}
+        <Pencil /> {{ $i18n.t.value.common.rename }}
       </DropdownMenuItem>
       <DropdownMenuItem
         :disabled="archiveAction.isPending.value"
         @select="archiveAction.setArchived(props.thread.thread_id, true)"
       >
-        <Archive :size="14" /> {{ $i18n.t.value.chats.archiveChat }}
+        <Archive /> {{ $i18n.t.value.chats.archiveChat }}
       </DropdownMenuItem>
       <MoveToProjectMenu
         :thread="props.thread"
@@ -194,11 +194,11 @@ async function exportConversation(format: ThreadExportFormat) {
         :disabled="sharing"
         @select="shareThread"
       >
-        <Share2 :size="14" /> {{ $i18n.t.value.common.share }}
+        <Share2 /> {{ $i18n.t.value.common.share }}
       </DropdownMenuItem>
       <DropdownMenuSub>
         <DropdownMenuSubTrigger data-testid="thread-export-submenu">
-          <Download :size="14" /> {{ $i18n.t.value.common.export }}
+          <Download /> {{ $i18n.t.value.common.export }}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
           <DropdownMenuItem
@@ -206,7 +206,7 @@ async function exportConversation(format: ThreadExportFormat) {
             :disabled="Boolean(exporting)"
             @select="exportConversation('markdown')"
           >
-            <FileText :size="14" />
+            <FileText />
             {{ $i18n.t.value.common.exportAsMarkdown }}
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -214,7 +214,7 @@ async function exportConversation(format: ThreadExportFormat) {
             :disabled="Boolean(exporting)"
             @select="exportConversation('json')"
           >
-            <FileJson :size="14" /> {{ $i18n.t.value.common.exportAsJSON }}
+            <FileJson /> {{ $i18n.t.value.common.exportAsJSON }}
           </DropdownMenuItem>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
@@ -229,7 +229,7 @@ async function exportConversation(format: ThreadExportFormat) {
         所以按双向规则删掉本仓多出来的这一处。
       -->
       <DropdownMenuItem :disabled="deleting" @select="emit('delete')">
-        <Trash2 :size="14" /> {{ $i18n.t.value.common.delete }}
+        <Trash2 /> {{ $i18n.t.value.common.delete }}
       </DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>

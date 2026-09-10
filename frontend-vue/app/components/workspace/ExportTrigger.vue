@@ -93,14 +93,14 @@ function exportConversation(format: ThreadExportFormat) {
         data-testid="header-export-markdown"
         @select="exportConversation('markdown')"
       >
-        <FileText :size="16" class="text-muted-foreground" />
+        <FileText class="text-muted-foreground" />
         {{ $i18n.t.value.common.exportAsMarkdown }}
       </DropdownMenuItem>
       <DropdownMenuItem
         data-testid="header-export-json"
         @select="exportConversation('json')"
       >
-        <FileJson :size="16" class="text-muted-foreground" />
+        <FileJson class="text-muted-foreground" />
         {{ $i18n.t.value.common.exportAsJSON }}
       </DropdownMenuItem>
     </DropdownMenuContent>
