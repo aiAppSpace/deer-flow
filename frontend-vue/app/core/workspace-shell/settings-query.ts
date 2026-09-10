@@ -27,6 +27,7 @@ export const SETTINGS_SECTIONS = [
   "integrations",
   "memory",
   "tools",
+  "subagents",
   "skills",
   "about",
 ] as const;

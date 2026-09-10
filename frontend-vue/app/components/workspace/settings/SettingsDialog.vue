@@ -36,6 +36,7 @@ import {
   PlugZap,
   Sparkles,
   User,
+  UsersRound,
   Wrench,
 } from "lucide-vue-next";
 import {
@@ -53,6 +54,7 @@ import MemorySettings from "@/components/workspace/settings/MemorySettings.vue";
 import NotificationSettings from "@/components/workspace/settings/NotificationSettings.vue";
 import SettingsPageLoading from "@/components/workspace/settings/SettingsPageLoading.vue";
 import SkillSettings from "@/components/workspace/settings/SkillSettings.vue";
+import SubagentSettings from "@/components/workspace/settings/SubagentSettings.vue";
 import ToolSettings from "@/components/workspace/settings/ToolSettings.vue";
 import {
   useSettingsDialog,
@@ -100,6 +102,7 @@ const SECTION_ICONS = {
   integrations: PlugZap,
   memory: Brain,
   tools: Wrench,
+  subagents: UsersRound,
   skills: Sparkles,
   about: Info,
 } as const satisfies Record<SettingsSection, Component>;
@@ -252,6 +255,9 @@ function onOpenChange(open: boolean) {
               v-else-if="settings.section.value === 'channels'"
             />
             <ToolSettings v-else-if="settings.section.value === 'tools'" />
+            <SubagentSettings
+              v-else-if="settings.section.value === 'subagents'"
+            />
             <SkillSettings v-else-if="settings.section.value === 'skills'" />
             <MemorySettings v-else-if="settings.section.value === 'memory'" />
             <AboutSettings v-else-if="settings.section.value === 'about'" />

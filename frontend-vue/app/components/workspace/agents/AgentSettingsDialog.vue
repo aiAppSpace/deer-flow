@@ -33,6 +33,12 @@ import {
 } from "@/core/agents/settings";
 import type { Agent, UpdateAgentRequest } from "@/core/agents/types";
 import type { Model } from "@/core/models/types";
+import { useSubagents } from "@/composables/useSubagents";
+import {
+  allowedSubagentsToMode,
+  modeToAllowedSubagents,
+  type OptionalNameListMode,
+} from "@/core/subagents";
 
 const props = defineProps<{
   agent: Agent;
@@ -56,6 +62,37 @@ const thinking = ref<AgentThinkingSelection>("inherit");
 const reasoningEffort = ref<AgentReasoningSelection>("inherit");
 const validationError = ref("");
 
+/*
+  subagent 访问是三态（全部 / 一个都不给 / 指定几个），与 subagent 自己的
+  tools/skills 同构，转换在 core/subagents/optional-name-list.ts。
+  **由服务端强制**，这里只是编辑入口。
+*/
+const { subagents } = useSubagents();
+const subagentAccess = ref<OptionalNameListMode>("all");
+const selectedSubagents = ref<string[]>([]);
+
+/** 只有启用了的、且没有名字冲突的才选得中——冲突的那条压根没进运行时。 */
+const selectableSubagents = computed(() =>
+  subagents.value.filter((subagent) => subagent.enabled && !subagent.conflict),
+);
+/*
+  已经勾上、但现在目录里没有的名字（被删了、被禁用了、或者名字冲突了）。
+  **仍然显示出来并保持勾选**：静默丢掉的话，用户一保存就把一条自己没动过的
+  绑定删掉了，而界面上没有任何地方提过它。
+*/
+const missingSubagents = computed(() => {
+  const selectable = new Set(
+    selectableSubagents.value.map((subagent) => subagent.name),
+  );
+  return selectedSubagents.value.filter((name) => !selectable.has(name));
+});
+
+function toggleSubagent(name: string, checked: boolean) {
+  selectedSubagents.value = checked
+    ? [...selectedSubagents.value, name]
+    : selectedSubagents.value.filter((item) => item !== name);
+}
+
 function reset(agent: Agent) {
   model.value = agent.model ?? DEFAULT_AGENT_MODEL_VALUE;
   temperature.value = agent.model_settings?.temperature?.toString() ?? "";
@@ -67,6 +104,8 @@ function reset(agent: Agent) {
         ? "on"
         : "off";
   reasoningEffort.value = agent.reasoning_effort ?? "inherit";
+  subagentAccess.value = allowedSubagentsToMode(agent.allowed_subagents);
+  selectedSubagents.value = agent.allowed_subagents ?? [];
   validationError.value = "";
 }
 watch(() => props.agent, reset, { immediate: true });
@@ -104,7 +143,13 @@ function save() {
           : $i18n.t.value.agents.settingsInvalidModel;
     return;
   }
-  emit("save", result.request);
+  emit("save", {
+    ...result.request,
+    allowed_subagents: modeToAllowedSubagents(
+      subagentAccess.value,
+      selectedSubagents.value,
+    ),
+  });
 }
 </script>
 
@@ -299,6 +344,100 @@ function save() {
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <!--
+          subagent 访问绑定，与上游 agent-settings-dialog.tsx 同一块。
+          勾选框用原生 `<input type="checkbox">`——上游同样是原生的，
+          本仓也没有 Checkbox primitive，为这一处新造一个不划算。
+        -->
+        <div class="space-y-2 border-t pt-4">
+          <div>
+            <p class="text-sm font-medium">
+              {{ $i18n.t.value.settings.subagents.bindingTitle }}
+            </p>
+            <p class="text-muted-foreground text-xs">
+              {{ $i18n.t.value.settings.subagents.bindingDescription }}
+            </p>
+          </div>
+          <!--
+            提交中整块锁住，与这一屏其余控件一致：请求已经在飞，这时候改的值
+            不会进入这一次保存，而界面上看不出这件事。
+          -->
+          <Select v-model="subagentAccess" :disabled="pending">
+            <SelectTrigger
+              class="w-full"
+              :aria-label="$i18n.t.value.settings.subagents.bindingTitle"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                {{ $i18n.t.value.settings.subagents.allAllowed }}
+              </SelectItem>
+              <SelectItem value="none">
+                {{ $i18n.t.value.settings.subagents.noneAllowed }}
+              </SelectItem>
+              <SelectItem value="selected">
+                {{ $i18n.t.value.settings.subagents.selectedAllowed }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <div
+            v-if="subagentAccess === 'selected'"
+            class="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3"
+            data-testid="subagent-access-list"
+          >
+            <label
+              v-for="item in selectableSubagents"
+              :key="item.name"
+              class="flex items-start gap-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                class="mt-0.5 size-4"
+                :disabled="pending"
+                :checked="selectedSubagents.includes(item.name)"
+                @change="
+                  toggleSubagent(
+                    item.name,
+                    ($event.target as HTMLInputElement).checked,
+                  )
+                "
+              />
+              <span>
+                <span class="font-medium">{{
+                  item.display_name ?? item.name
+                }}</span>
+                <span class="text-muted-foreground block text-xs">{{
+                  item.description
+                }}</span>
+              </span>
+            </label>
+            <!--
+              已经绑上、但目录里已经没有的名字：仍然显示且保持勾选，取消勾选才移除。
+              静默丢掉的话，用户一保存就删掉了一条自己没动过的绑定。
+            -->
+            <label
+              v-for="name in missingSubagents"
+              :key="name"
+              class="text-muted-foreground flex items-start gap-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                class="mt-0.5 size-4"
+                checked
+                :disabled="pending"
+                @change="toggleSubagent(name, false)"
+              />
+              <span>
+                <span class="font-medium">{{ name }}</span>
+                <span class="block text-xs">{{
+                  $i18n.t.value.settings.subagents.missing
+                }}</span>
+              </span>
+            </label>
+          </div>
         </div>
 
         <p

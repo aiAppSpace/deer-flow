@@ -79,7 +79,15 @@ function readDictionary(path: string) {
   const keys = new Set<string>();
   const values = new Map<string, string>();
   const stack: string[] = [];
+  let inTemplate = false;
   for (const rawLine of readFileSync(path, "utf8").split("\n")) {
+    // 转义字符先剥掉，`\`` 不该被当成模板的起止。
+    const backticks = (rawLine.replaceAll(/\\./g, "").match(/`/g) ?? []).length;
+    const togglesTemplate = backticks % 2 === 1;
+    if (inTemplate) {
+      if (togglesTemplate) inTemplate = false;
+      continue;
+    }
     const line = rawLine.trim();
     const open = /^([A-Za-z_$][\w$]*): \{$/.exec(line);
     if (open) {
@@ -91,11 +99,18 @@ function readDictionary(path: string) {
       continue;
     }
     const leaf = /^([A-Za-z_$][\w$]*):/.exec(line);
-    if (!leaf || stack.length === 0) continue;
-    const key = [...stack, leaf[1]!].join(".");
-    keys.add(key);
-    const literal = /^[A-Za-z_$][\w$]*: "((?:\\.|[^"\\])*)",?$/.exec(line);
-    if (literal) values.set(key, literal[1]!);
+    if (leaf && stack.length > 0) {
+      const key = [...stack, leaf[1]!].join(".");
+      keys.add(key);
+      const literal = /^[A-Za-z_$][\w$]*: "((?:\\.|[^"\\])*)",?$/.exec(line);
+      if (literal) values.set(key, literal[1]!);
+    }
+    /*
+      **开启模板的那一行本身要先当普通行解析完**：`addServerPlaceholder: \`{`
+      既是一条 key，又是一段跨行模板的开头。先 continue 再置位的话，这条 key
+      会凭空消失——而它消失得毫无声息，只表现为「上游少了一条 key」。
+    */
+    if (togglesTemplate) inTemplate = true;
   }
   return { keys, values };
 }

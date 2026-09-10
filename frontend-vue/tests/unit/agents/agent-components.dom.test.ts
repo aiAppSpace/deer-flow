@@ -7,8 +7,21 @@
 */
 
 import { flushPromises, mount } from "@vue/test-utils";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/*
+  设置对话框里那块 subagent 访问绑定要读 subagent 目录（wave：#4887）。
+  目录本身另有用例，这里只喂一份固定数据，让绑定那几条断言有东西可选。
+*/
+const subagentsApi = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/core/subagents/api", () => ({
+  listSubagents: subagentsApi.list,
+  createManagedSubagent: vi.fn(),
+  updateManagedSubagent: vi.fn(),
+  deleteManagedSubagent: vi.fn(),
+}));
 
 import AgentCard from "@/components/workspace/agents/AgentCard.vue";
 import AgentSettingsDialog from "@/components/workspace/agents/AgentSettingsDialog.vue";
@@ -25,6 +38,8 @@ const agent: Agent = {
   model_settings: { temperature: 0, max_tokens: 200_000 },
   thinking_enabled: false,
   reasoning_effort: "high",
+  // 没碰绑定那一块 → 继承全部，送的是 null 而不是 []。
+  allowed_subagents: null,
 };
 
 const models: Model[] = [
@@ -46,7 +61,54 @@ const models: Model[] = [
   },
 ];
 
+const SUBAGENT_BASE = {
+  display_name: null,
+  description: "",
+  system_prompt: null,
+  tools: null,
+  disallowed_tools: null,
+  skills: null,
+  model: "inherit",
+  max_turns: 50,
+  timeout_seconds: 900,
+  source: "managed" as const,
+  editable: true,
+  config_overrides: {},
+};
+
+const SUBAGENT_CATALOG = [
+  {
+    name: "researcher",
+    display_name: "Researcher",
+    description: "Reads sources.",
+    system_prompt: null,
+    tools: null,
+    disallowed_tools: null,
+    skills: null,
+    model: "inherit",
+    max_turns: 50,
+    timeout_seconds: 900,
+    enabled: true,
+    source: "managed" as const,
+    editable: true,
+    conflict: false,
+    config_overrides: {},
+  },
+  // 禁用的和名字冲突的都选不中：冲突那条压根没进运行时。
+  { name: "disabled-one", enabled: false, conflict: false },
+  { name: "conflicting-one", enabled: true, conflict: true },
+].map((item, index) =>
+  index === 0
+    ? item
+    : {
+        ...SUBAGENT_BASE,
+        ...item,
+      },
+);
+
 beforeEach(() => {
+  subagentsApi.list.mockReset();
+  subagentsApi.list.mockResolvedValue(SUBAGENT_CATALOG);
   vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: ref(enUS) } }));
 });
 
@@ -171,6 +233,18 @@ async function mountSettings(props: Record<string, unknown>) {
   const wrapper = mount(AgentSettingsDialog, {
     attachTo: document.body,
     props,
+    global: {
+      plugins: [
+        [
+          VueQueryPlugin,
+          {
+            queryClient: new QueryClient({
+              defaultOptions: { queries: { retry: false } },
+            }),
+          },
+        ],
+      ],
+    },
   });
   // portal 的内容要等一次 flush 才进 body。
   await flushPromises();
@@ -190,6 +264,8 @@ describe("AgentSettingsDialog", () => {
       model_settings: { temperature: 0, max_tokens: 200_000 },
       thinking_enabled: false,
       reasoning_effort: "high",
+      // 没碰绑定那一块 → 继承全部，送的是 null 而不是 []。
+      allowed_subagents: null,
     });
   });
 
@@ -211,6 +287,8 @@ describe("AgentSettingsDialog", () => {
       model: "basic",
       thinking_enabled: null,
       reasoning_effort: null,
+      // 没碰绑定那一块 → 继承全部，送的是 null 而不是 []。
+      allowed_subagents: null,
     });
   });
 
@@ -236,7 +314,61 @@ describe("AgentSettingsDialog", () => {
       model_settings: { temperature: 0, max_tokens: 200000 },
       thinking_enabled: null,
       reasoning_effort: null,
+      // 没碰绑定那一块 → 继承全部，送的是 null 而不是 []。
+      allowed_subagents: null,
     });
+  });
+
+  /*
+    subagent 访问绑定（#4887）。三态与 subagent 自己的 tools/skills 同构：
+    `null` 全都给、`[]` 一个都不给、`[...]` 只给这几个。
+  */
+  it("送出 subagent 绑定的三态，并且只让能选的进列表", async () => {
+    const wrapper = await mountSettings({
+      agent: { ...agent, allowed_subagents: ["researcher", "deleted-one"] },
+      models,
+    });
+
+    // selected 模式：列表里是目录中「启用且不冲突」的那些。
+    const list = inDialog<HTMLElement>('[data-testid="subagent-access-list"]');
+    expect(list.textContent).toContain("Researcher");
+    // 禁用的和名字冲突的选不中——冲突那条压根没进运行时。
+    expect(list.textContent).not.toContain("disabled-one");
+    expect(list.textContent).not.toContain("conflicting-one");
+    /*
+      已经绑上、但目录里已经没有的名字仍然显示且保持勾选：静默丢掉的话，
+      用户一保存就删掉了一条自己没动过的绑定。
+    */
+    expect(list.textContent).toContain("deleted-one");
+    expect(list.textContent).toContain(enUS.settings.subagents.missing);
+
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(
+      (wrapper.emitted("save")?.[0]?.[0] as { allowed_subagents: unknown })
+        .allowed_subagents,
+    ).toEqual(["researcher", "deleted-one"]);
+  });
+
+  it("绑定为空数组时进入「一个都不给」，而不是「全都给」", async () => {
+    const wrapper = await mountSettings({
+      agent: { ...agent, allowed_subagents: [] },
+      models,
+    });
+    expect(
+      document.body.querySelector('[data-testid="subagent-access-list"]'),
+    ).toBeNull();
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    // `[]` 与 `null` 一旦混掉，一个本该什么都不能调的 agent 会变成全都能调。
+    expect(
+      (wrapper.emitted("save")?.[0]?.[0] as { allowed_subagents: unknown })
+        .allowed_subagents,
+    ).toEqual([]);
   });
 
   it("keeps model/save failures visible and locks conflicting actions while pending", async () => {
