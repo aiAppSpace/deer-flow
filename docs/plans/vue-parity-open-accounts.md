@@ -3,6 +3,37 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 新挂一条（**已量出真缺陷，最高优先**）：归档一条会话会把侧栏列表清空
+>
+> 根因与「改名之后不与服务端收敛」同一个：**本仓的会话列表查询是 `enabled: false`
+> 的手动查询**（`useThreads` 的 `useInfiniteQuery`，`eaf9d6a7` 写下时没有留任何理由）。
+> 探针实测（Vue Query 5，`enabled:false` 的 infinite query）：
+>
+> | 操作 | queryFn 跑了吗 | 缓存数据 |
+> | --- | --- | --- |
+> | `query.refetch()` | ✅ | 有 |
+> | `invalidateQueries` | ❌ | 有 |
+> | `refetchQueries` | ❌ | 有 |
+> | `refetchQueries({type:"all"})` | ❌ | 有 |
+> | `resetQueries` | ❌ | **被清空** |
+>
+> `core/threads/archive.ts:109` 对这个 key 调的正是 `resetQueries`
+> （注释写着「成员关系变了，旧的分页偏移作废——必须 reset 而不是 invalidate」，
+> 判断没错，错在它 reset 的是一个**不会自己重取**的查询）。
+> 第二个探针直接量了后果：`loadInitial()` 之后侧栏有 1 条，`resetQueries` 之后
+> **变成 0 条，且没有任何重取**。也就是说**归档一条会话，侧栏列表就空了**，
+> 直到换路由或手动刷新。现有 e2e 没有在归档之后看侧栏，所以门禁全绿。
+>
+> 同一个根因还产生了台账上 4 行 `requestsOnlyReact: POST /api/threads/search`
+> （`chat-thread-init-ordering` 3 行 + `thread-list-pin#mobile-drawer` 1 行）：
+> 一次 run 结束后上游会重取列表，本仓的 `invalidateStoppedThreadCaches` 是空操作。
+>
+> **怎么修**：让列表查询自己会跑（`enabled` 打开），这才是 server-state 库的模型，
+> 上游 `useInfiniteThreads` 也是这样。要注意的是 `useThreads()` 有四个调用点，
+> 其中 `AgentChat.vue` 与 `ProjectsSection.vue` **只读缓存、不该自己发请求**
+> （上游的 chat-page 根本不挂这个查询），所以它们要显式传 `enabled: false`；
+> 侧栏与会话列表页打开。改完的验收判据：上面那 4 行台账消失、且归档之后侧栏还在。
+>
 > ## 2026-09-11 新挂一条（**已量清，等执行**）：`["threads", "search"]` 是一个死缓存键
 >
 > 修改名那条账时量出来的：**本仓没有任何查询拥有 `["threads", "search"]`。**
