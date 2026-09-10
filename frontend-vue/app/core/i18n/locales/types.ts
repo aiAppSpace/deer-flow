@@ -636,6 +636,8 @@ export interface Translations {
 
   // Chats
   chats: {
+    /** 分支会话在列表里的可访问名：「X，分叉自 Y」。 */
+    branchLabel: (title: string, parentTitle: string) => string;
     noActiveChats: string;
     activeChats: string;
     archivedChats: string;

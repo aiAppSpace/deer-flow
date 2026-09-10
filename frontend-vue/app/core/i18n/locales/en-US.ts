@@ -781,6 +781,7 @@ export const enUS: Translations = {
 
   // Chats
   chats: {
+    branchLabel: (title, parentTitle) => `${title}, branch of ${parentTitle}`,
     noActiveChats: "No recent chats",
     activeChats: "Recent chats",
     archivedChats: "Archived",

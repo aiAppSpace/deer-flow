@@ -14,13 +14,20 @@
                    上面那段取舍就会在两处各漂各的。
 -->
 <script setup lang="ts">
+import { computed } from "vue";
+
 import { Pin } from "lucide-vue-next";
 
 import ThreadActionsMenu from "@/components/workspace/ThreadActionsMenu.vue";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
 import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
 import { SidebarMenuItem } from "@/components/ui/sidebar";
-import { channelSourceOfThread, pathOfThread } from "@/core/threads/utils";
+import {
+  channelSourceOfThread,
+  pathOfThread,
+  titleOfThread,
+} from "@/core/threads/utils";
+import type { ThreadBranchEntry } from "@/core/threads/thread-branch-tree";
 import type { AgentThread } from "@/core/threads/types";
 
 const props = defineProps<{
@@ -29,7 +36,36 @@ const props = defineProps<{
   isActive: boolean;
   pinned: boolean;
   deleting: boolean;
+  /**
+   * 这一行在分支树里的位置。给了才画树枝符号和缩进。
+   *
+   * 树枝是**纯装饰**（`aria-hidden`）：读屏器念「└─」毫无意义，
+   * 「这是从哪条会话分叉出来的」由链接的可访问名说（`chats.branchLabel`）。
+   */
+  branchEntry?: ThreadBranchEntry;
 }>();
+
+const { $i18n } = useNuxtApp();
+
+/*
+  只有真的知道父会话是谁才给这个名字——只有 depth 没有 parentThread 时
+  （父会话不在当前这一页里）说不出「分叉自谁」，那就退回普通标题，
+  而不是造一句「分叉自 undefined」。
+*/
+const branchLabel = computed(() => {
+  const parent = props.branchEntry?.parentThread;
+  if (!parent) return undefined;
+  return $i18n.t.value.chats.branchLabel(
+    props.title,
+    titleOfThread(parent, $i18n.t.value.pages.untitled),
+  );
+});
+/** 缩进最多退一档：再深下去侧栏就没有可用宽度了（上游同一条封顶）。 */
+const branchIndentPx = computed(() =>
+  props.branchEntry && props.branchEntry.depth > 0
+    ? Math.min(props.branchEntry.depth - 1, 1) * 8
+    : null,
+);
 
 defineEmits<{
   rename: [];
@@ -47,8 +83,24 @@ defineEmits<{
       data-sidebar="menu-button"
       :to="pathOfThread(props.thread)"
       :data-active="props.isActive"
+      :aria-label="branchLabel"
+      :title="branchLabel"
+      :data-branch-depth="
+        props.branchEntry && props.branchEntry.depth > 0
+          ? props.branchEntry.depth
+          : undefined
+      "
+      :data-branch-parent-id="props.branchEntry?.parentThread?.thread_id"
       class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground peer/menu-button flex h-8 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md p-2 pr-8 text-left text-sm whitespace-nowrap"
     >
+      <span
+        v-if="branchIndentPx !== null"
+        aria-hidden="true"
+        data-testid="thread-branch-stem"
+        class="text-muted-foreground/70 shrink-0 font-mono text-[10px] leading-none"
+        :style="{ marginLeft: `${branchIndentPx}px` }"
+        >{{ props.branchEntry?.isLastSibling ? "└─" : "├─" }}</span
+      >
       <ThreadChannelIcon :source="channelSourceOfThread(props.thread)" />
       <Pin
         v-if="props.pinned"

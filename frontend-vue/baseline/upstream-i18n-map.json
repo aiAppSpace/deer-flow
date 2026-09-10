@@ -8,11 +8,9 @@
   "pending": {
     "$comment": "本仓确实没有这句话的 key，按上游顶层块分组给理由。目标状态是空数组。**每一条都要能说清什么时候重新问**——否则它就是一条永远不会被回看的豁免。",
     "$reasons": {
-      "chats": "分支会话在列表里的可访问名（「X，分叉自 Y」）。本仓已有分支功能，但会话列表那一行还没有把父会话读出来。**什么时候重新问**：做 #4983 分支会话标记时。",
       "scheduledTasks": "复制定时任务（#5064）及其标题后缀、从会话上下文新建时的说明条、以及 launching 这一档运行状态。**什么时候重新问**：做 #5064 时——五条同属那一个交互。"
     },
     "keys": [
-      "chats.branchLabel",
       "scheduledTasks.actions.duplicate",
       "scheduledTasks.actions.duplicateTitleSuffix",
       "scheduledTasks.context.reuseNoticeDescription",

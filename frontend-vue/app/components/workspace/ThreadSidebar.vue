@@ -54,6 +54,7 @@ import {
   useWorkspaceSidebar,
 } from "@/composables/useWorkspaceSidebar";
 import { ThreadCascadeDeleteError } from "@/core/threads/delete";
+import { flattenThreadBranches } from "@/core/threads/thread-branch-tree";
 import { pathOfThread, titleOfThread } from "@/core/threads/utils";
 import type { AgentThread } from "@/core/threads/types";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
@@ -165,6 +166,13 @@ const moveToProject = useMoveThreadToProject({
 });
 const newProjectForThreadId = ref<string | null>(null);
 
+/*
+  侧栏列表按**分支树**展开：分叉出来的会话缩进挂在父会话下面，而不是按时间
+  散在列表各处。摊成带 `thread_id` 的行，是因为虚拟列表的泛型只要求这一个字段
+  （见 VirtualThreadList 的 `generic="Row extends { thread_id: string }"`），
+  这样分支信息能一路带到行组件里而不用改那份契约。
+*/
+
 function requestMoveToProject(threadId: string, projectId: string | null) {
   moveToProject.mutate({ threadId, projectId });
 }
@@ -186,6 +194,13 @@ const sidebarThreads = computed(() => {
     ? [...threads.displayedThreads, active]
     : threads.displayedThreads;
 });
+
+const sidebarRows = computed(() =>
+  flattenThreadBranches(sidebarThreads.value).map((entry) => ({
+    ...entry,
+    thread_id: entry.thread.thread_id,
+  })),
+);
 
 function startNewChat() {
   mobileOpen.value = false;
@@ -565,7 +580,7 @@ function openSettingsDialog(section: "appearance" | "about") {
         念出「最近的对话，列表，0 项」，而屏幕上其实什么都没有。
       -->
       <div
-        v-if="sidebarExpanded && sidebarThreads.length"
+        v-if="sidebarExpanded && sidebarRows.length"
         data-slot="sidebar-group"
         data-sidebar="group"
         class="relative flex w-full min-w-0 flex-col p-2"
@@ -599,24 +614,25 @@ function openSettingsDialog(section: "appearance" | "about") {
               <VirtualThreadList
                 :estimate-size="36"
                 :gap="4"
-                :items="sidebarThreads"
+                :items="sidebarRows"
                 scroll-parent-selector='[data-sidebar="content"]'
               >
-                <template #default="{ thread }">
+                <template #default="{ thread: row }">
                   <ThreadSidebarItem
-                    :thread="thread"
-                    :title="displayThreadTitle(thread)"
-                    :is-active="isActive(pathOfThread(thread))"
-                    :pinned="threads.isPinned(thread)"
-                    :deleting="deletingThreadId === thread.thread_id"
-                    @rename="beginRename(thread.thread_id)"
-                    @toggle-pin="togglePinned(thread)"
-                    @delete="removeThread(thread)"
+                    :thread="row.thread"
+                    :title="displayThreadTitle(row.thread)"
+                    :is-active="isActive(pathOfThread(row.thread))"
+                    :pinned="threads.isPinned(row.thread)"
+                    :deleting="deletingThreadId === row.thread.thread_id"
+                    :branch-entry="row"
+                    @rename="beginRename(row.thread.thread_id)"
+                    @toggle-pin="togglePinned(row.thread)"
+                    @delete="removeThread(row.thread)"
                     @new-project-for-thread="
-                      newProjectForThreadId = thread.thread_id
+                      newProjectForThreadId = row.thread.thread_id
                     "
                     @move-to-project="
-                      requestMoveToProject(thread.thread_id, $event)
+                      requestMoveToProject(row.thread.thread_id, $event)
                     "
                   />
                 </template>

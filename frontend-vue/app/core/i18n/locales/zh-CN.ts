@@ -738,6 +738,7 @@ export const zhCN: Translations = {
 
   // Chats
   chats: {
+    branchLabel: (title, parentTitle) => `${title}，分叉自 ${parentTitle}`,
     noActiveChats: "暂无近期会话",
     activeChats: "近期会话",
     archivedChats: "已归档",
