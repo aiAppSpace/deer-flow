@@ -84,7 +84,11 @@ install:
 dev:
 	$(EXEC) nuxt dev --port $(DEV_PORT)
 
+# 构建会重写 `.output/`，而正在跑的 e2e 的 preview server 就是从那里取文件的。
+# 有 e2e 在跑时先挡住——理由与实测记在 scripts/require-no-e2e-run.mjs。
+# e2e 自己的 webServer 直接调 nuxt 二进制，不走这条 target，所以不会自锁。
 build:
+	node scripts/require-no-e2e-run.mjs
 	$(EXEC) nuxt build
 
 preview:

@@ -223,13 +223,18 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
-- **「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」（16 次）。**
-  这是 `tabbablesOnlyReact: ['div[scroll-area-viewport]']` 那条**基线里早就有**的差异
-  变成了第一处分岔。已经排除的解释：本仓 `ScrollArea` 的 viewport 挂载起来实测
-  带着 `tabindex="0"` 与 `data-slot="scroll-area-viewport"`，两边设置对话框的结构
-  也逐行对过（都是 `<nav>` + `<ScrollArea>`）。所以成因在**页面层**不在 primitive，
-  还没查出来。下一轮：起两个 preview，打开设置对话框，把两边的
-  `document.querySelectorAll` 结果并排打出来——**在看到那个读数之前不要写结论**。
+- ~~「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」~~
+  **不是开着的账——它在 `docs/plans/vue-parity-open-accounts.md` 第 6 条（wave 98）
+  就已经判过「不跟」了。** 上游把欢迎建议行套在 `ai-elements/suggestion` 的
+  `Suggestions` 里，而那就是一个 `ScrollArea`：里面是 `flex flex-wrap`（内容本来
+  就换行），外面那条横向 `ScrollBar` 写着 `className="hidden"`——**永远不会真的滚动**，
+  只多出一个键盘停靠点。本仓用普通 flex 容器，什么都没少。
+  翻案判据是「上游把那条 `hidden` 去掉」——2026-09-10 复核，**还在**，原判有效。
+  基线里 43 个场景带这条 `tabbablesOnlyReact`，16 条 `tabOrder` 是它的下游序号效应。
+
+  **这次我差点重查一遍。** 教训记在这里：本仓的挂账分散在三份文档里——
+  `vue-parity-open-accounts.md`（逐条判过的账）、`vue-parity-handoff.md`（历轮交接）、
+  以及本文件。**查一条台账之前先在这三份里搜一遍关键词。**
 - **`tests/` 整棵树没有类型检查。** Nuxt 的 tsconfig 只 include `app/**` 与
   `tests/nuxt/**`，所以 `make typecheck` 看不见 `tests/`；vitest 只转译不查类型。
   实测：临时给 `tests/**` + `playwright*.config.ts` 开一份 tsconfig 跑 `vue-tsc`，
@@ -237,11 +242,16 @@ login/setup 页——这些都还没有逐个读代码比对。
   只读夹具、vue-test-utils 的 `DOMWrapper`），不是真 bug。开这道检查是独立的一轮活。
   在它开起来之前，**别在 `tests/` 里写类型层断言**——那等于写了个不会执行的注释
   （本轮实测过：改坏字段表两次，`vue-tsc` 都是绿的）。
-- **`core/threads/message-order`（435 行）还没逐行读过。** 另外三个已经读完并结账：
-  `dom/render-activity` 已覆盖、`api/static-response` 属静态整站模式豁免、
-  `core/notification` 的四处差异已修（见 `03c03848`）。
-- **`focus` 档：`React=button "Account" Vue=button "Integrations"`。** 设置对话框
-  打开时两边把焦点放在了不同的地方。基线里就有，没查过。
+- ~~`core/threads/message-order`（435 行）还没逐行读过~~ **已读完并移植**（`a12ae79f`）。
+  四个模块全部结账：`dom/render-activity` 已覆盖、`api/static-response` 属静态整站
+  模式豁免、`core/notification` 的四处差异已修（`03c03848`）、
+  `threads/message-order` 的 **seq 骨架整段缺失**，已补（新增 `core/threads/message-seq.ts`
+  与 17 条用例）。**这一栏现在是空的**——下一轮要找活得换个坐标系。
+- ~~`focus` 档：`React=button "Account" Vue=button "Integrations"`~~ **已修。**
+  本仓接管了 `open-auto-focus`，把焦点放到**当前分区**那颗导航键上；上游没有这一手。
+  那是一处**没有依据的分歧**：既没有注释说明，也没有用例钉过它。
+  实测去掉这个覆盖之后 reka 的默认焦点**也是 "Account"**——两个 primitive 在这件事上
+  一致，删掉即对齐。
 
 ### 这一轮结掉的两笔旧账
 
@@ -262,3 +272,4 @@ login/setup 页——这些都还没有逐个读代码比对。
 | `breadcrumb-linkable-sections` | 面包屑链到不存在的路由 | 「Projects」指向 `/workspace/projects`，而那条路由不存在 |
 | `parity-ledger-fields` | 报告脚本的字段表与 `DiffEntry` 漂移 | 脚本停在 5 个字段而类型有 11 个，六档差异一行没算、总数照打 |
 | e2e 独占锁（不是测试，是运行时闸门） | 两轮 e2e 并发互删产物 | 两轮撞在一起产生 3 条假失败，判断它们不是回归花了 25 分钟 |
+| `make build` 的 e2e 闸门（同上） | 构建重写 `.output/`，正在跑的 e2e 的 preview 从那里取文件 | 跑一半时执行 `make verify`，那一轮当场 `500 ENOENT: .output/public/_nuxt/vendor-*.js.br`，13 分钟作废 |
