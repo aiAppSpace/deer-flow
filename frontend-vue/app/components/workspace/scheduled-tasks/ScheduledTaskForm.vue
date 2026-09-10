@@ -21,6 +21,9 @@
 import { computed, ref } from "vue";
 
 import ScheduledTaskScheduleInput from "./ScheduledTaskScheduleInput.vue";
+import { TriangleAlert } from "lucide-vue-next";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   applyScheduledTaskRecipe,
@@ -119,14 +122,30 @@ const textareaClass =
       </Button>
     </div>
 
-    <input
-      v-if="draft.contextMode === 'reuse_thread'"
-      data-testid="scheduled-task-thread-id"
-      :class="inputClass"
-      :value="draft.threadId"
-      :placeholder="labels.context.threadIdPlaceholder"
-      @input="patch({ threadId: ($event.target as HTMLInputElement).value })"
-    />
+    <template v-if="draft.contextMode === 'reuse_thread'">
+      <input
+        data-testid="scheduled-task-thread-id"
+        :class="inputClass"
+        :value="draft.threadId"
+        :placeholder="labels.context.threadIdPlaceholder"
+        @input="patch({ threadId: ($event.target as HTMLInputElement).value })"
+      />
+      <!--
+        复用同一条会话意味着每次运行都往那条会话里追加上下文，跑久了会越来越长、
+        也越来越贵。这是一句**提醒**而不是错误，所以用 Alert 的默认样式加暖色，
+        不是 destructive——把它画成红的会让人以为选错了。
+      -->
+      <Alert
+        class="border-amber-500/50 bg-amber-500/10"
+        data-testid="scheduled-task-reuse-notice"
+      >
+        <TriangleAlert class="text-amber-600 dark:text-amber-400" />
+        <AlertTitle>{{ labels.context.reuseNoticeTitle }}</AlertTitle>
+        <AlertDescription>
+          {{ labels.context.reuseNoticeDescription }}
+        </AlertDescription>
+      </Alert>
+    </template>
     <input
       data-testid="scheduled-task-title"
       :class="inputClass"

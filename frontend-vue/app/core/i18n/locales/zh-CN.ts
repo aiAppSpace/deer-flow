@@ -511,6 +511,9 @@ export const zhCN: Translations = {
       fillRequired: "请填写所有必填项",
     },
     context: {
+      reuseNoticeTitle: "使用该线程的历史对话",
+      reuseNoticeDescription:
+        "如果触发时该线程正在运行，DeerFlow 会将本次执行排队，并在线程空闲后启动；超过配置的最长等待时间后会标记为失败。",
       fresh: "新线程",
       reuse: "复用线程",
       threadIdPlaceholder: "线程 ID",
@@ -544,6 +547,8 @@ export const zhCN: Translations = {
       loadFailed: "加载定时任务失败",
     },
     actions: {
+      duplicate: "复制",
+      duplicateTitleSuffix: "（副本）",
       edit: "编辑",
       cancelEdit: "取消编辑",
       pause: "暂停",
@@ -575,6 +580,7 @@ export const zhCN: Translations = {
     },
     runTrigger: { scheduled: "定时", manual: "手动" },
     runStatus: {
+      launching: "启动中",
       queued: "排队中",
       running: "运行中",
       success: "成功",

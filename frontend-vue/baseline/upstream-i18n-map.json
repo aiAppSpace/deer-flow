@@ -6,16 +6,8 @@
   ],
   "movedByUpstream": {},
   "pending": {
-    "$comment": "本仓确实没有这句话的 key，按上游顶层块分组给理由。目标状态是空数组。**每一条都要能说清什么时候重新问**——否则它就是一条永远不会被回看的豁免。",
-    "$reasons": {
-      "scheduledTasks": "复制定时任务（#5064）及其标题后缀、从会话上下文新建时的说明条、以及 launching 这一档运行状态。**什么时候重新问**：做 #5064 时——五条同属那一个交互。"
-    },
-    "keys": [
-      "scheduledTasks.actions.duplicate",
-      "scheduledTasks.actions.duplicateTitleSuffix",
-      "scheduledTasks.context.reuseNoticeDescription",
-      "scheduledTasks.context.reuseNoticeTitle",
-      "scheduledTasks.runStatus.launching"
-    ]
+    "$comment": "React 有、本仓还没做、但要做的 i18n key。**目标状态是空数组，2026-09-10 达成。** 它和 movedByUpstream 分成两份，是为了让上游新增的 key 无处可去：落在两份清单之外会立刻让门禁变红，逼人显式选一边，而不是被顺手塞进豁免里。",
+    "$reasons": {},
+    "keys": []
   }
 }

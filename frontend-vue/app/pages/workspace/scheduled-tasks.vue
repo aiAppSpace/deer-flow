@@ -22,7 +22,7 @@
                    删除确认是 Dialog 不是 AlertDialog，并且**归页面持有**：React 的
                    `<Dialog>` 就在页面根上，由详情里的 Delete 打开。
 */
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 import {
   Dialog,
@@ -43,6 +43,7 @@ import {
   buildScheduledTaskUpdatePayload,
   createScheduledTaskDraft,
   draftForScheduledTask,
+  duplicateScheduledTaskDraft,
   isScheduledTaskDraftComplete,
   type ScheduledTaskDraft,
 } from "@/core/scheduled-tasks/form";
@@ -128,8 +129,34 @@ watch(
 );
 
 const createDraft = ref<ScheduledTaskDraft>(createScheduledTaskDraft());
+const createForm = ref<HTMLElement | null>(null);
 const createFormKey = ref(0);
 const formError = ref<string | null>(null);
+
+/*
+  复制一条任务：把它的内容填进**上面那张新建表单**，标题加个后缀。
+
+  填完要滚回表单：这一页上下两块，详情在下面，用户点了「复制」之后如果不滚，
+  屏幕上什么都没变，看起来像没生效。
+*/
+async function duplicateTask() {
+  const task = selectedTask.value;
+  if (!task) return;
+  createDraft.value = duplicateScheduledTaskDraft(
+    task,
+    $i18n.t.value.scheduledTasks.actions.duplicateTitleSuffix,
+  );
+  // 上一次提交留下的报错跟这份新草稿没关系了（上游同处的 setFormError(null)）。
+  formError.value = null;
+  /*
+    重挂表单，与切换 thread 过滤时同一条：表单里的排程输入自己带本地状态
+    （cron 文本、run_at 时间），只换 draft 的话它们会停在上一次的值上。
+    上游用 `createNonce` 表达的是同一件事。
+  */
+  createFormKey.value += 1;
+  await nextTick();
+  createForm.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 watch(
   routeThreadId,
   (threadId) => {
@@ -220,13 +247,15 @@ const loadError = computed(() => {
         {{ $i18n.t.value.sidebar.scheduledTasks }}
       </h1>
 
-      <ScheduledTaskForm
-        :key="createFormKey"
-        v-model:draft="createDraft"
-        :pending="mutations.create.isPending.value"
-        :error="formError"
-        @submit="createTask"
-      />
+      <div ref="createForm">
+        <ScheduledTaskForm
+          :key="createFormKey"
+          v-model:draft="createDraft"
+          :pending="mutations.create.isPending.value"
+          :error="formError"
+          @submit="createTask"
+        />
+      </div>
 
       <div v-if="routeThreadId" class="text-muted-foreground text-sm">
         {{
@@ -270,6 +299,7 @@ const loadError = computed(() => {
             @pause="runAction('pause')"
             @resume="runAction('resume')"
             @trigger="runAction('trigger')"
+            @duplicate="duplicateTask"
             @delete="deleteOpen = true"
             @load-more-runs="runsQuery.loadMore()"
           />

@@ -22,6 +22,8 @@
                    tooltip 与上游同形（`delayDuration={500}` + `asChild` 触发器，
                    两边的 `TooltipTrigger` 默认都是 as-child，所以不会多出 DOM 节点）。
 */
+import { computed } from "vue";
+
 import { Monitor } from "lucide-vue-next";
 
 import { Button } from "@/components/ui/button";

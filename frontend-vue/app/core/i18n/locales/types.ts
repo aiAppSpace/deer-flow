@@ -433,6 +433,8 @@ export interface Translations {
       fresh: string;
       reuse: string;
       threadIdPlaceholder: string;
+      reuseNoticeTitle: string;
+      reuseNoticeDescription: string;
     };
     filters: {
       allStatuses: string;
@@ -469,6 +471,8 @@ export interface Translations {
       resume: string;
       trigger: string;
       delete: string;
+      duplicate: string;
+      duplicateTitleSuffix: string;
     };
     deleteConfirm: string;
     errors: {
@@ -494,6 +498,7 @@ export interface Translations {
     };
     runTrigger: { scheduled: string; manual: string };
     runStatus: {
+      launching: string;
       queued: string;
       running: string;
       success: string;

@@ -27,6 +27,8 @@ import { computed } from "vue";
 
 import ScheduledTaskRunList from "./ScheduledTaskRunList.vue";
 import ScheduledTaskScheduleInput from "./ScheduledTaskScheduleInput.vue";
+import { Copy } from "lucide-vue-next";
+
 import { Button } from "@/components/ui/button";
 import {
   formatScheduledTaskTimestamp,
@@ -55,6 +57,8 @@ const emit = defineEmits<{
   pause: [];
   resume: [];
   trigger: [];
+  /** 以这条任务为模板，在上面的新建表单里预填一份。 */
+  duplicate: [];
   delete: [];
   loadMoreRuns: [];
 }>();
@@ -177,6 +181,19 @@ const editTextareaClass =
         @click="emit('trigger')"
       >
         {{ labels.actions.trigger }}
+      </Button>
+      <!--
+        复制排在触发和删除之间，与上游 page.tsx 的顺序一致
+        （暂停/恢复 → 立即运行 → 复制 → 删除）。
+      -->
+      <Button
+        data-testid="scheduled-task-duplicate"
+        variant="outline"
+        size="sm"
+        @click="emit('duplicate')"
+      >
+        <Copy class="size-4" />
+        {{ labels.actions.duplicate }}
       </Button>
       <Button
         data-testid="scheduled-task-delete"

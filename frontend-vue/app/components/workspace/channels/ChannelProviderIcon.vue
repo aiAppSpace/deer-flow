@@ -10,6 +10,8 @@
                    一份简化路径（797 字符 vs React 的 2349），wave 5 补回。图标 aria-hidden，
                    对照取样结构上看不见这一层，只能逐条比 `d`。
 */
+import { computed } from "vue";
+
 import { MessageCircle } from "lucide-vue-next";
 import BuzzProviderIcon from "./BuzzProviderIcon.vue";
 

@@ -141,3 +141,18 @@ export function buildScheduledTaskUpdatePayload(
     timezone: draft.schedule.timezone || "UTC",
   };
 }
+
+/**
+ * 从一条已有任务造一份**新建**草稿（复制任务）。
+ *
+ * 与 `draftForScheduledTask`（编辑用）的差别只在标题后缀：复制出来的那条如果
+ * 与原任务同名，列表里两条一模一样，谁也分不出哪条是新的。其余字段照抄——
+ * 复制的意义就是「和这条一样，我再改两处」。
+ */
+export function duplicateScheduledTaskDraft(
+  task: ScheduledTask,
+  titleSuffix: string,
+): ScheduledTaskDraft {
+  const draft = draftForScheduledTask(task);
+  return { ...draft, title: `${draft.title}${titleSuffix}` };
+}

@@ -1,5 +1,5 @@
 /*
-  【文件职责】     模板里用到的每一个大写标签，都要有人给它做 owner。
+  【文件职责】     模板里的大写标签、以及 script 里的 Vue 响应式 API，都要显式导入。
   【架构位置】     门禁测试
   【主要导出】     无
   【依赖关系】     app 目录下的全部 SFC
@@ -93,6 +93,75 @@ describe("模板里的组件都有 owner", () => {
       [...new Set(orphans)].sort(),
       "模板里用到但没人导入的组件会被当成未知 HTML 元素静默渲染成空——" +
         "typecheck 和 eslint 都不管这一条。",
+    ).toEqual([]);
+  });
+});
+
+/**
+ * Vue 的响应式 API 在 Nuxt 里是自动导入的，所以漏写 import **在生产里不报错**。
+ *
+ * 代价落在别处：不经过 Nuxt 的 dom 测试一挂载就 `ReferenceError`。
+ * 2026-09-10 实测——`ScheduledTaskRunList.vue` 用了 `computed` 没导入，
+ * 从来没人挂载过它，直到这一批第一次写它的用例才炸出来；同一次扫出 3 处。
+ *
+ * 所以本仓的规矩是**显式写**：既让组件在任何环境下都能挂载，也让读代码的人
+ * 一眼看得出这个文件用了哪些响应式能力。
+ */
+const VUE_APIS = [
+  "computed",
+  "ref",
+  "shallowRef",
+  "reactive",
+  "watch",
+  "watchEffect",
+  "onMounted",
+  "onUnmounted",
+  "onBeforeUnmount",
+  "onScopeDispose",
+  "nextTick",
+  "provide",
+  "inject",
+  "toValue",
+  "toRef",
+  "toRefs",
+  "markRaw",
+  "effectScope",
+  "defineAsyncComponent",
+] as const;
+
+describe("script 里的 Vue API 都显式导入", () => {
+  it("没有哪个 SFC 靠 Nuxt 的自动导入过日子", () => {
+    const missing: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(file, "utf8");
+      const script = [...source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)]
+        .map((match) => match[1])
+        .join("\n");
+      if (!script) continue;
+      // 注释里常常提到这些名字，先剥掉。
+      const bare = script
+        .replaceAll(/\/\*[\s\S]*?\*\//g, "")
+        .replaceAll(/^[ \t]*\/\/.*$/gm, "");
+      const imported = new Set<string>();
+      for (const match of bare.matchAll(
+        /import\s+\{([^}]*)\}\s+from\s+"vue"/g,
+      )) {
+        for (const name of match[1]!.split(",")) {
+          imported.add(name.trim().replace(/^type\s+/, ""));
+        }
+      }
+      for (const api of VUE_APIS) {
+        if (imported.has(api)) continue;
+        // `foo.computed(` 和 `myRef(` 不算——只看独立的调用。
+        if (new RegExp(`(?<![\\w.])${api}\\s*\\(`).test(bare)) {
+          missing.push(`${file.slice(appDir.length + 1)}: ${api}`);
+        }
+      }
+    }
+    expect(
+      [...new Set(missing)].sort(),
+      "Nuxt 的自动导入让漏写 import 在生产里不报错，代价是 dom 测试一挂载就 " +
+        "ReferenceError——而那意味着这个组件从来没被挂载测试过。",
     ).toEqual([]);
   });
 });

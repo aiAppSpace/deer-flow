@@ -543,6 +543,9 @@ export const enUS: Translations = {
       fillRequired: "Fill all required fields",
     },
     context: {
+      reuseNoticeTitle: "Uses this thread's conversation history",
+      reuseNoticeDescription:
+        "If this thread has an active run at the scheduled time, DeerFlow queues this occurrence and starts it when the thread is available. It fails if the configured queue wait limit is exceeded.",
       fresh: "Fresh thread",
       reuse: "Reuse thread",
       threadIdPlaceholder: "Thread ID",
@@ -576,6 +579,8 @@ export const enUS: Translations = {
       loadFailed: "Failed to load scheduled tasks",
     },
     actions: {
+      duplicate: "Duplicate",
+      duplicateTitleSuffix: " (Copy)",
       edit: "Edit",
       cancelEdit: "Cancel edit",
       pause: "Pause",
@@ -608,6 +613,7 @@ export const enUS: Translations = {
     },
     runTrigger: { scheduled: "scheduled", manual: "manual" },
     runStatus: {
+      launching: "Launching",
       queued: "Queued",
       running: "Running",
       success: "Success",
