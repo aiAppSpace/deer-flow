@@ -1,5 +1,5 @@
 {
-  "$comment": "取样面的**第二个坐标系**：路由。parity-scenario-coverage.json 的坐标系是上游 e2e spec 的文件名——它自己也写明那是「React 认为哪些行为值得守住」的代理。代理会漏：上游没有为某一屏写 spec 时，那一屏在那份棘轮里根本不存在，于是它报「满覆盖」而那一屏从没被取样过。wave 188 实测：本仓 14 条路由里有 6 条从没出现在任何场景的 path 上，其中 4 条是真产品屏（登录是每个用户看到的第一屏）。这份文件把「哪些屏被取样面碰过」变成机器可读的划分：sampled 由 tests/e2e-parity/support/scenarios.ts 反查（不存盘，免得第三份名单也会烂），exempt 与 pending 两张表必须与「未取样」的集合恰好相等。 wave 200：`/auth/callback` 的挡路理由（「要一次真实的 OIDC callback session」）**是猜的、且是错的**——两边的实现都只是问一次 `GET /api/v1/auth/me` 再按结果分支，把那个端点用 `delayMs` 挂住就得到一个稳定的「还在验证」终态。**同一个坑 wave 189 踩过一次**（`/showcase/[thread_id]` 的理由也是猜的）。所以这里的 reason 一律要写成**量过的**：写不出「我试了什么、卡在哪一步」就不要写进 pending。",
+  "$comment": "取样面的**第二个坐标系**：路由。parity-scenario-coverage.json 的坐标系是上游 e2e spec 的文件名——它自己也写明那是「React 认为哪些行为值得守住」的代理。代理会漏：上游没有为某一屏写 spec 时，那一屏在那份棘轮里根本不存在，于是它报「满覆盖」而那一屏从没被取样过。wave 188 实测：本仓 14 条路由里有 6 条从没出现在任何场景的 path 上，其中 4 条是真产品屏（登录是每个用户看到的第一屏）。这份文件把「哪些屏被取样面碰过」变成机器可读的划分：sampled 由 tests/e2e-parity/support/scenarios.ts 反查（不存盘，免得第三份名单也会烂），exempt 与 pending 两张表必须与「未取样」的集合恰好相等。 wave 200：`/auth/callback` 的挡路理由（「要一次真实的 OIDC callback session」）**是猜的、且是错的**——两边的实现都只是问一次 `GET /api/v1/auth/me` 再按结果分支，把那个端点用 `delayMs` 挂住就得到一个稳定的「还在验证」终态。**同一个坑 wave 189 踩过一次**（`/showcase/[thread_id]` 的理由也是猜的）。所以这里的 reason 一律要写成**量过的**：写不出「我试了什么、卡在哪一步」就不要写进 pending。 wave/2026-09-10：pending 清空。最后一条 `/workspace/projects/[id]` 的挡路理由（「对照 mock 里既没有 /api/projects 的响应、也没有会话带 deerflow_project_id」）是**量过的**，补法就是照它写的做：给共享 mock 加了 projects 三条路由（列表/详情/项目内会话），会话按 metadata.deerflow_project_id 归属——与真后端同一条判据，不用再维护一份「项目→会话」的映射。",
   "$readers": [
     "tests/guards/baseline-keys-consumed.test.ts",
     "tests/guards/route-sampling-coverage.test.ts"
@@ -23,10 +23,5 @@
       "reason": "纯跳转，没有可对照的内容：整页模板就是一个空 div，middleware 立刻 replace 到 /workspace/chats/new，而那一屏本来就在取样面里。"
     }
   ],
-  "pending": [
-    {
-      "route": "/workspace/projects/[id]",
-      "reason": "2026-09-10 刚补出来的路由，还没进 tests/e2e-parity/support/scenarios.ts 的场景目录，所以取样面碰不到它。挡路的不是技术问题：这一屏要一个已存在的项目和几条已归属的会话，而对照 mock 的 fixture 里目前既没有 /api/projects 的响应、也没有会话带 deerflow_project_id。补 fixture 与场景是下一步，不是做不了。"
-    }
-  ]
+  "pending": []
 }

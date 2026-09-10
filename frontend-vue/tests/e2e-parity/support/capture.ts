@@ -42,6 +42,7 @@ import {
   HISTORY_THREAD_ID_NEWEST,
   HISTORY_THREAD_ID_OLDER,
   locateTarget,
+  PARITY_PROJECT_ID,
   runScenario,
   WORKSPACE_CHANGES_RUN_ID,
   type ParityDimension,
@@ -172,6 +173,8 @@ export const KNOWN_IDS = new Set([
   HISTORY_THREAD_ID_NEWEST,
   HISTORY_THREAD_ID_OLDER,
   WORKSPACE_CHANGES_RUN_ID,
+  // 项目详情页那条场景的项目 id（scenarios.ts 的 PARITY_PROJECT_ID）。
+  PARITY_PROJECT_ID,
 ]);
 
 /**

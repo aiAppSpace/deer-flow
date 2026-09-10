@@ -118,6 +118,19 @@ export type MockAPIOptions = {
     agentsApiEnabled?: boolean;
     browserControlEnabled?: boolean;
   };
+  /**
+   * 项目列表。不给就是空数组——侧栏的项目区因此天然是空态，
+   * 与此前没有这条路由时的表现一致（那时是 404，两边都渲染成空）。
+   */
+  projects?: MockProject[];
+};
+
+export type MockProject = {
+  id: string;
+  name: string;
+  status?: "active" | "archived";
+  created_at?: string;
+  updated_at?: string;
 };
 
 const DEFAULT_SKILLS: MockSkill[] = [
@@ -1430,6 +1443,75 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       });
     }
     return route.fallback();
+  });
+
+  /*
+    项目：列表、单个详情、以及项目内的会话。
+
+    会话按 `metadata.deerflow_project_id` 归属，与真后端同一条判据——
+    夹具里只要给会话的 metadata 填上项目 id，它就会出现在那个项目下面，
+    不需要再维护一份「项目→会话」的映射（那份映射迟早和 metadata 对不上）。
+  */
+  const projects = options?.projects ?? [];
+  const normalizeProject = (project: MockProject) => ({
+    id: project.id,
+    name: project.name,
+    status: project.status ?? "active",
+    created_at: project.created_at ?? "2025-01-01T00:00:00Z",
+    updated_at: project.updated_at ?? "2025-01-01T00:00:00Z",
+  });
+  const projectThreadsOf = (projectId: string) =>
+    threads.filter(
+      (thread) => thread.metadata?.deerflow_project_id === projectId,
+    );
+
+  void page.route("**/api/projects", (route) => {
+    if (route.request().method() === "GET") {
+      const status = new URL(route.request().url()).searchParams.get("status");
+      const visible = projects.filter(
+        (project) => !status || (project.status ?? "active") === status,
+      );
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(visible.map(normalizeProject)),
+      });
+    }
+    return route.fallback();
+  });
+
+  void page.route("**/api/projects/*", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const id = decodeURIComponent(
+      new URL(route.request().url()).pathname.split("/").pop() ?? "",
+    );
+    const project = projects.find((candidate) => candidate.id === id);
+    if (!project) {
+      return route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Project not found." }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(normalizeProject(project)),
+    });
+  });
+
+  void page.route("**/api/projects/*/threads*", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const id = decodeURIComponent(
+      new URL(route.request().url()).pathname.split("/").at(-2) ?? "",
+    );
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        projectThreadsOf(id).map((thread) => threadSearchResult(thread)),
+      ),
+    });
   });
 
   // Skills list — settings page and slash autocomplete

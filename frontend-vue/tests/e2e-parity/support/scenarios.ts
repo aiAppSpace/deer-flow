@@ -651,6 +651,16 @@ const MODELS_ROUTE_THINKER_FIRST: ParityRouteOverride = {
 
 const ARTIFACT_PATH = "/artifact-fixtures/report.html";
 
+/*
+  项目详情页那条路由要一个真实存在的项目 id。
+
+  **导出**给 `capture.ts` 的 `KNOWN_IDS`：那边不认得它的话，
+  `normalizeRequest` 会把它当成客户端生成的 id 抹成 «generated»——
+  两个应用请求了不同的项目，差异会凭空消失。夹具 id 一律定义在这里、
+  由 capture 导入（与 HISTORY_THREAD_ID_* 同一条）。
+*/
+export const PARITY_PROJECT_ID = "00000000-0000-0000-0000-0000000000c1";
+
 /** 独立视窗的夹具：视窗只接 markdown 与表格，这里取 markdown 那一支。 */
 const VIEWER_ARTIFACT_PATH = "/artifact-fixtures/standalone.md";
 const VIEWER_ARTIFACT_MARKDOWN =
@@ -3221,6 +3231,42 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         kind: "visible",
         target: { role: "textbox", name: /^(Cell value|单元格内容)$/ },
       },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  /*
+    项目详情页。这一屏此前**一个取样点都没有**——不是因为难，是因为对照 mock
+    里既没有 /api/projects 的响应，也没有会话带 deerflow_project_id
+    （baseline/parity-route-sampling.json 里那条 pending 写的就是这个）。
+
+    会话按 `metadata.deerflow_project_id` 归属，与真后端同一条判据：夹具里给
+    会话的 metadata 填上项目 id 就够，不用再维护一份「项目→会话」的映射。
+  */
+  {
+    id: "project-detail",
+    title: "项目详情页",
+    backend: "mock",
+    path: `/workspace/projects/${PARITY_PROJECT_ID}`,
+    mock: {
+      projects: [{ id: PARITY_PROJECT_ID, name: "Quarterly research" }],
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Sources for Q3",
+          updated_at: "2026-06-05T12:00:00Z",
+          metadata: { deerflow_project_id: PARITY_PROJECT_ID },
+        },
+        {
+          thread_id: MOCK_THREAD_ID_2,
+          title: "Unrelated chat",
+          updated_at: "2026-06-05T11:00:00Z",
+        },
+      ],
+    },
+    settle: [{ kind: "visible", target: { text: "Quarterly research" } }],
+    steps: [
+      // 归属这个项目的会话在，不归属的不在。
+      { kind: "visible", target: { text: "Sources for Q3" } },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
