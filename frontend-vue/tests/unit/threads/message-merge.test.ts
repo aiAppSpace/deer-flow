@@ -126,7 +126,17 @@ test("mergeMessages removes duplicate messages already present in history", () =
   expect(mergeMessages([human, ai, human, ai], [], [])).toEqual([human, ai]);
 });
 
-test("mergeMessages does not collapse an unloaded gap before the first shared anchor", () => {
+/*
+  一个受保护的早期输入排在**第一个共有锚点之前**时，织在那个锚点前面，不丢。
+
+  本仓此前是**压住**它的（注释写着「宁可压住这段有歧义的前缀，也不要在视觉上
+  把一段没加载的历史空档抹平」）。那是从上游**加 seq 骨架之前**的版本移植来的
+  设计；上游后来把这一段改成无条件编织，因为位置这件事已经交给 seq 骨架去管：
+  前缀自己带可信 seq 时落在它真正的位置上，不带时才退回锚点编织。
+  两害相权，上游选的是「用户真发过的消息不该在刷新之前一直看不见」。
+  2026-09-10 随 seq 骨架一起跟到上游这一版。
+*/
+test("mergeMessages 把第一个共有锚点之前的受保护输入织在它前面", () => {
   const protectedEarly = {
     id: "protected-early",
     type: "human",
@@ -145,7 +155,7 @@ test("mergeMessages does not collapse an unloaded gap before the first shared an
 
   expect(
     mergeMessages([latestHuman, latestAi], [protectedEarly, latestHuman], []),
-  ).toEqual([latestHuman, latestAi]);
+  ).toEqual([protectedEarly, latestHuman, latestAi]);
 });
 
 test("mergeMessages lets live thread messages replace overlapping history", () => {
@@ -205,7 +215,9 @@ test("mergeMessages preserves historical run metadata on a live checkpoint repla
     {
       ...checkpointAi,
       run_id: "run-1",
-      additional_kwargs: { turn_duration: 114 },
+      // 替换保住的不只是 run 元数据，还有那条**可信 feed 位置**：
+      // 上游把「这里把 deerflow_seq 丢了」记为缺陷 R3。
+      additional_kwargs: { turn_duration: 114, deerflow_seq: 1 },
     },
   ]);
 });
@@ -951,9 +963,11 @@ test("buildVisibleHistoryMessages filters superseded runs but keeps regenerated 
 
   // run_id is carried onto each content message (#3779) so historical subtask
   // cards can fetch their persisted step history on expand.
+  // seq 与 run_id 一起搭车留在消息身上：合并时要**在消息上**读到位置，
+  // 才能安放一条落在已加载窗口之外的 checkpoint 副本。
   expect(buildVisibleHistoryMessages(rows, new Set(["run-old"]))).toEqual([
-    { ...newHuman, run_id: "run-new" },
-    { ...newAi, run_id: "run-new" },
+    { ...newHuman, run_id: "run-new", additional_kwargs: { deerflow_seq: 3 } },
+    { ...newAi, run_id: "run-new", additional_kwargs: { deerflow_seq: 4 } },
   ]);
 });
 

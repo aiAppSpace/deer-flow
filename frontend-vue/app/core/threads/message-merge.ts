@@ -10,7 +10,8 @@
                    countHumanMessagesExcludingSuperseded
                    getVisibleOptimisticMessages · areOptimisticMessagesConfirmed
                    getSummarizationMiddlewareMessages
-  【依赖关系】     ./message-identity · ../messages/{utils,run-duration} · ../types/message
+  【依赖关系】     ./message-identity · ./message-seq · ../messages/{utils,run-duration} ·
+                   ../types/message
   【边界与注意】   这是 05 C1–C4 的实现主体，函数体逐字搬自上游——**有意不重新设计**。
                    05 C 组自己写着「建议原样复制…不要重新设计」，而本文件是全仓
                    唯一一处「原样」有明确含义的地方：`mergeMessages` 的锚点编织
@@ -18,6 +19,19 @@
                    的未加载页抑制（C4）都是被具体 issue 逼出来的形状，读代码看不出
                    哪一步在防什么，只有上游 2,381 行的 `message-merge.test.ts` 能
                    证明它们还成立。改这里之前先让那份测试红。
+
+                   **2026-09-10：补上了 seq 骨架。** 此前本文件是从上游**加骨架之前**
+                   的版本移植的（上游那一版的局部规则叫 canonicalMinSeq），于是排序
+                   全靠身份锚点编织：一条 seq 已知、但在已加载窗口里找不到桥接身份的
+                   消息，只能落到队尾而不是它在 feed 里的位置。位置这件事现在交给
+                   `./message-seq` 的可信 seq——`mergeMessages` 用它建骨架、
+                   `resolveTransientHistoryBridge` 用 `insertByTrustedSeq` 先插位再编织，
+                   两处都是「骨架压过锚点猜测」。判据在 tests/unit/threads/message-seq.test.ts。
+
+                   跟着骨架一起改掉的一处**本仓旧行为**：第一个共有锚点之前的受保护
+                   前缀，此前是**压住不显示**的（宁可不显示，也不要视觉上抹平一段没加载
+                   的历史空档）；上游改成无条件编织在锚点之前——位置的歧义交给骨架管，
+                   而「用户真发过的消息在刷新之前一直看不见」是更坏的一头。
 
                    与上游唯一的实质差异：`EMPTY_MESSAGES` / `EMPTY_MESSAGE_IDENTITIES`
                    这两个稳定空数组在上游是为了不让 React 的 `useMemo` 依赖每帧失效；
@@ -27,6 +41,11 @@
 */
 
 import { getMessageRunId } from "../messages/run-duration";
+import {
+  MESSAGE_SEQ_KEY,
+  insertByTrustedSeq,
+  trustedMessageSeq,
+} from "./message-seq";
 import { isHiddenFromUIMessage } from "../messages/utils";
 import type { Message } from "../types/message";
 
@@ -44,26 +63,62 @@ const SUMMARIZATION_MIDDLEWARE_UPDATE_KEYS = new Set([
   "DeerFlowSummarizationMiddleware.before_model",
 ]);
 
+type PositionedMessage = {
+  message: Message;
+  /*
+    排序用的二元键。有 seq 的条目坐在 [seq, 0]；其余都锚在某个有位置的邻居上
+    （见 mergeMessages）。键相等时靠**稳定排序**回落到插入顺序，于是一个无 seq 段
+    不用额外的键间距就能保住段内顺序。
+  */
+  major: number;
+  minor: number;
+};
+
 export function mergeMessages(
   historyMessages: Message[],
   threadMessages: Message[],
   optimisticMessages: Message[],
 ): Message[] {
+  /*
+    Pass 1：按身份收敛**可信位置**与值得保留的历史元数据。
+    同一身份的多个可信 seq 收敛到**最早**的那个；隐藏的控制副本只在没有任何
+    可见副本带位置时才贡献位置——于是一条被重新盖过键的提醒，拖不动那条可见的用户消息。
+  */
+  const visibleSeqByIdentity = new Map<string, number>();
+  const anySeqByIdentity = new Map<string, number>();
   const savedTurnDurations = new Map<string, number>();
   const savedRunIds = new Map<string, string>();
-  for (const msg of historyMessages) {
-    const identity = messageIdentity(msg);
-    const runId = getMessageRunId(msg);
-    if (identity && runId) {
-      savedRunIds.set(identity, runId);
+  const collectTrustedSeq = (message: Message) => {
+    const identity = messageIdentity(message);
+    if (!identity) return;
+    const seq = trustedMessageSeq(message);
+    if (seq === undefined) return;
+    const known = anySeqByIdentity.get(identity);
+    if (known === undefined || seq < known) anySeqByIdentity.set(identity, seq);
+    if (!isHiddenFromUIMessage(message)) {
+      const knownVisible = visibleSeqByIdentity.get(identity);
+      if (knownVisible === undefined || seq < knownVisible) {
+        visibleSeqByIdentity.set(identity, seq);
+      }
     }
-    if (identity && msg.additional_kwargs?.turn_duration !== undefined) {
+  };
+  const trustedSeqOf = (identity: string | undefined) =>
+    identity === undefined
+      ? undefined
+      : (visibleSeqByIdentity.get(identity) ?? anySeqByIdentity.get(identity));
+  for (const message of historyMessages) {
+    collectTrustedSeq(message);
+    const identity = messageIdentity(message);
+    const runId = getMessageRunId(message);
+    if (identity && runId) savedRunIds.set(identity, runId);
+    if (identity && message.additional_kwargs?.turn_duration !== undefined) {
       savedTurnDurations.set(
         identity,
-        msg.additional_kwargs.turn_duration as number,
+        message.additional_kwargs.turn_duration as number,
       );
     }
   }
+  for (const message of threadMessages) collectTrustedSeq(message);
 
   const canonical = dedupeMessagesByIdentity(historyMessages);
   const live = dedupeMessagesByIdentity(threadMessages);
@@ -73,107 +128,165 @@ export function mergeMessages(
       return identity ? [[identity, message] as const] : [];
     }),
   );
-  const replacementByIdentity = new Map<string, Message>();
-  // This uses the same identity-anchor weaving shape as
-  // resolveTransientHistoryBridge, but intentionally remains separate: live
-  // messages may replace canonical copies and identity-less entries survive.
-  const beforeAnchor = new Map<string, Message[]>();
-  let pending: Message[] = [];
-  let lastAnchorIdentity: string | undefined;
-  let hasSharedAnchor = false;
 
-  // A summarized checkpoint is not necessarily a contiguous history suffix:
-  // middleware may retain protected prompt/input messages at the front and a
-  // recent tail at the back. Treat every shared identity as an ordering anchor,
-  // replacing the canonical copy in place. New live messages are woven before
-  // the next shared anchor (or after the last one), so a protected early input
-  // can never be moved to the tail by global last-copy deduplication.
+  /*
+    Pass 2：走一遍实时尾巴。共有身份是排序锚点、并且可以替换权威内容；
+    带可信 seq 的实时独有消息加入骨架；其余堆成「无 seq 段」，编织到它下一个
+    共有锚点之前。
+
+    一个被摘要过的 checkpoint 不一定是历史的连续后缀：中间件可能在头部留下
+    受保护的 prompt/input、在尾部留下最近的一段。所以每个共有身份都算锚点，
+    就地替换权威副本，新的实时消息织在下一个锚点之前（或最后一个锚点之后），
+    于是一条受保护的早期输入不会被全局的「后者胜」去重挪到队尾。
+  */
+  const replacementByIdentity = new Map<string, Message>();
+  const beforeAnchor = new Map<string, Message[]>();
+  const skeletonLive: Message[] = [];
+  let pending: Message[] = [];
+  let trailingAnchorSeq: number | undefined;
   for (const message of live) {
     const identity = messageIdentity(message);
     const canonicalMessage = identity
       ? canonicalByIdentity.get(identity)
       : undefined;
-    if (!identity || !canonicalMessage) {
-      pending.push(message);
+    if (identity && canonicalMessage) {
+      if (pending.length > 0) {
+        beforeAnchor.set(identity, [
+          ...(beforeAnchor.get(identity) ?? []),
+          ...pending,
+        ]);
+      }
+      pending = [];
+      trailingAnchorSeq = undefined;
+      // 隐藏的 checkpoint 控制消息不许替换一条恰好复用了同一身份的可见用户消息。
+      // 其余情况下实时副本更新，就地替换而不移动位置。
+      if (
+        !isHiddenFromUIMessage(message) ||
+        isHiddenFromUIMessage(canonicalMessage)
+      ) {
+        replacementByIdentity.set(identity, message);
+      }
       continue;
     }
-
-    if (pending.length > 0 && hasSharedAnchor) {
-      beforeAnchor.set(identity, [
-        ...(beforeAnchor.get(identity) ?? []),
-        ...pending,
-      ]);
+    if (identity && trustedSeqOf(identity) !== undefined) {
+      // 一条有位置的实时独有结果，同时也是它前面那些步骤的锚点。
+      beforeAnchor.set(identity, pending);
+      pending = [];
+      skeletonLive.push(message);
+      trailingAnchorSeq = trustedSeqOf(identity);
+      continue;
     }
-    // A summarized checkpoint may start with a protected message whose true
-    // canonical position is separated from this anchor by unloaded pages.
-    // Suppress that ambiguous prefix instead of visually collapsing the gap.
-    pending = [];
-    hasSharedAnchor = true;
-    lastAnchorIdentity = identity;
-
-    // A hidden checkpoint control message must not replace a visible canonical
-    // user turn that happens to reuse its identity. In every other case the
-    // live checkpoint copy is fresher and replaces history without moving it.
-    if (
-      !isHiddenFromUIMessage(message) ||
-      isHiddenFromUIMessage(canonicalMessage)
-    ) {
-      replacementByIdentity.set(identity, message);
-    }
+    pending.push(message);
   }
+  // 只有「实时独有且有位置」的锚点才能把尾随步骤拉进一个空档。
+  // 共有锚点之后，保持权威源顺序直到队尾。
+  const trailingPending = pending;
 
-  let canonicalAndLive: Message[];
-  if (!lastAnchorIdentity) {
-    canonicalAndLive = [...canonical, ...live];
-  } else {
-    canonicalAndLive = [];
-    for (const message of canonical) {
-      const identity = messageIdentity(message);
-      if (identity) {
-        canonicalAndLive.push(...(beforeAnchor.get(identity) ?? []));
+  /*
+    Pass 3：给权威条目定位。没有可信 seq 的权威条目，保持它相对**前一条**
+    有位置条目的既定位置（前面一条都没有时就排在最前）。
+  */
+  const entries: PositionedMessage[] = [];
+  let minorCounter = 0;
+  let previousCanonicalSeq = 0;
+  let firstCanonicalSeq = Number.POSITIVE_INFINITY;
+  for (const message of canonical) {
+    const identity = messageIdentity(message);
+    const seq = trustedSeqOf(identity);
+    let major: number;
+    let minor: number;
+    if (seq !== undefined) {
+      major = seq;
+      minor = 0;
+      previousCanonicalSeq = seq;
+      firstCanonicalSeq = Math.min(firstCanonicalSeq, seq);
+    } else {
+      major = previousCanonicalSeq;
+      minor = ++minorCounter;
+    }
+    if (identity) {
+      // 已知排在这个锚点之前的无 seq 段，紧挨着它之前；稳定排序保住段内顺序。
+      const segment = beforeAnchor.get(identity);
+      if (segment) {
+        for (const segmentMessage of segment) {
+          entries.push({ message: segmentMessage, major, minor: minor - 0.5 });
+        }
       }
-      const replacement = identity
-        ? replacementByIdentity.get(identity)
-        : undefined;
-      canonicalAndLive.push(replacement ?? message);
     }
-    // A trailing live-only segment is known to come after the last shared
-    // anchor, but that anchor may not be the end of canonical history (for
-    // example, another client may have persisted newer rows). Preserve the
-    // canonical source order before appending the live tail.
-    canonicalAndLive.push(...pending);
+    const replacement = identity
+      ? replacementByIdentity.get(identity)
+      : undefined;
+    entries.push({ message: replacement ?? message, major, minor });
+  }
+  for (const message of skeletonLive) {
+    const identity = messageIdentity(message);
+    const seq = trustedSeqOf(identity);
+    if (seq === undefined) continue;
+    for (const segmentMessage of beforeAnchor.get(identity!) ?? []) {
+      entries.push({ message: segmentMessage, major: seq, minor: -0.5 });
+    }
+    entries.push({ message, major: seq, minor: 0 });
+  }
+  /*
+    一条抢救回来的早期输入，可能排在一段**没加载的历史空档**之前，而它的后继
+    属于新的这一轮 run。那些后继要留在队尾；在已加载窗口之内，尾随步骤则跟着
+    它们的结果走。
+  */
+  const trailingMajor =
+    trailingAnchorSeq !== undefined && trailingAnchorSeq >= firstCanonicalSeq
+      ? trailingAnchorSeq
+      : Number.POSITIVE_INFINITY;
+  for (const message of trailingPending) {
+    entries.push({ message, major: trailingMajor, minor: 0.5 });
+  }
+  for (const message of optimisticMessages) {
+    entries.push({
+      message,
+      major: Number.POSITIVE_INFINITY,
+      minor: ++minorCounter,
+    });
   }
 
-  const merged = dedupeMessagesByIdentity([
-    ...canonicalAndLive,
-    ...optimisticMessages,
-  ]);
+  const ordered = entries
+    .slice()
+    .sort((left, right) => left.major - right.major || left.minor - right.minor)
+    .map((entry) => entry.message);
 
+  const merged = dedupeMessagesByIdentity(ordered);
+
+  /*
+    Pass 4：把内容替换弄丢的排序元数据接回去。缺失或非法的 seq **永远不覆盖**
+    已知位置；胜出那份内容的其余 additional_kwargs、run_id、turn_duration 原样带走。
+  */
   return merged.map((message) => {
     const identity = messageIdentity(message);
-    if (!identity) {
-      return message;
-    }
+    if (!identity) return message;
+    const trustedSeq = trustedSeqOf(identity);
+    const shouldRestoreSeq =
+      trustedSeq !== undefined && trustedMessageSeq(message) !== trustedSeq;
     const shouldRestoreRunId =
       savedRunIds.has(identity) && !getMessageRunId(message);
     const shouldRestoreTurnDuration =
       savedTurnDurations.has(identity) &&
       message.additional_kwargs?.turn_duration === undefined;
-    if (shouldRestoreRunId || shouldRestoreTurnDuration) {
-      return {
-        ...message,
-        ...(shouldRestoreRunId ? { run_id: savedRunIds.get(identity) } : {}),
-        ...(shouldRestoreTurnDuration
-          ? {
-              additional_kwargs: {
-                ...message.additional_kwargs,
-                turn_duration: savedTurnDurations.get(identity),
-              },
-            }
-          : {}),
-      } as Message;
+    if (
+      !shouldRestoreSeq &&
+      !shouldRestoreRunId &&
+      !shouldRestoreTurnDuration
+    ) {
+      return message;
     }
-    return message;
+    return {
+      ...message,
+      ...(shouldRestoreRunId ? { run_id: savedRunIds.get(identity) } : {}),
+      additional_kwargs: {
+        ...message.additional_kwargs,
+        ...(shouldRestoreSeq ? { [MESSAGE_SEQ_KEY]: trustedSeq } : {}),
+        ...(shouldRestoreTurnDuration
+          ? { turn_duration: savedTurnDurations.get(identity) }
+          : {}),
+      },
+    } as Message;
   });
 }
 
@@ -300,8 +413,25 @@ export function resolveTransientHistoryBridge(
     return visibleHistory;
   }
 
+  /*
+    **可信 seq 压过身份锚点**——与 mergeMessages 用的是同一条位置优先级。
+    一条抢救回来、而 seq 已知的消息，落在 feed 给它的位置上，哪怕已加载窗口里
+    没有任何桥接身份与它重叠；没有可信位置的条目才退回下面的锚点编织。
+  */
+  const seqPositioned: Message[] = [];
+  const unpositioned: Message[] = [];
+  for (const message of missing) {
+    if (trustedMessageSeq(message) !== undefined) seqPositioned.push(message);
+    else unpositioned.push(message);
+  }
+  // 先把有位置的行放进去，编织才能把无位置的邻居锚在它们身上，
+  // 而不会被之后的一次插入把顺序反过来。
+  const positionedHistory = insertByTrustedSeq(visibleHistory, seqPositioned);
+  const anchorIdentities = new Set(
+    positionedHistory.map(messageIdentity).filter(isNonEmptyString),
+  );
   const missingByIdentity = new Map(
-    missing.flatMap((message) => {
+    unpositioned.flatMap((message) => {
       const identity = messageIdentity(message);
       return identity ? [[identity, message] as const] : [];
     }),
@@ -316,12 +446,19 @@ export function resolveTransientHistoryBridge(
   );
   let pending: Message[] = [];
   let lastAnchorIdentity: string | undefined;
-  let hasCanonicalAnchor = false;
 
   for (const identity of bridgeOrder) {
-    if (presentIdentities.has(identity)) {
+    if (anchorIdentities.has(identity)) {
       if (pending.length > 0) {
-        if (hasCanonicalAnchor) {
+        /*
+          一个**靠 seq 抢救回来的锚点**保得住它捕获到的前缀，哪怕这一帧还没渲染过它。
+          只有「锚在已加载历史上的**首个**前缀」才需要证明自己没有跨过一段
+          没加载的游标空档——那种证明来自上一帧真渲染过的相对位置。
+        */
+        if (
+          lastAnchorIdentity !== undefined ||
+          !presentIdentities.has(identity)
+        ) {
           beforeAnchor.set(identity, [
             ...(beforeAnchor.get(identity) ?? []),
             ...pending,
@@ -359,7 +496,6 @@ export function resolveTransientHistoryBridge(
       // The sole exception is a prefix whose exact relative position was
       // already committed to the previous UI frame.
       pending = [];
-      hasCanonicalAnchor = true;
       lastAnchorIdentity = identity;
       continue;
     }
@@ -374,13 +510,13 @@ export function resolveTransientHistoryBridge(
   // persistence-gap case: loaded history is older and the rescued live turns
   // belong after it.
   if (!lastAnchorIdentity) {
-    return [...visibleHistory, ...missing];
+    return [...positionedHistory, ...unpositioned];
   }
 
   // A candidate added before its ordering snapshot (or carrying an identity
   // absent from that snapshot) cannot be anchored. Keep it in capture order at
   // the trailing edge of the anchored bridge rather than dropping it.
-  for (const message of missing) {
+  for (const message of unpositioned) {
     const identity = messageIdentity(message);
     if (identity && !emittedMissingIdentities.has(identity)) {
       pending.push(message);
@@ -389,7 +525,7 @@ export function resolveTransientHistoryBridge(
   }
 
   const resolved: Message[] = [];
-  for (const message of visibleHistory) {
+  for (const message of positionedHistory) {
     const identity = messageIdentity(message);
     if (identity) {
       resolved.push(...(beforeAnchor.get(identity) ?? []));

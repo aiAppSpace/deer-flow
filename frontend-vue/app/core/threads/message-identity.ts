@@ -21,6 +21,7 @@
 import { isHiddenFromUIMessage } from "../messages/utils";
 import type { Message } from "../types/message";
 
+import { MESSAGE_SEQ_KEY, isValidMessageSeq } from "./message-seq";
 import type { RunMessage } from "./types";
 
 const INJECTED_USER_MESSAGE_ID_SUFFIX = "__user";
@@ -148,16 +149,64 @@ export function buildVisibleHistoryMessages(
   const visibleRows = messageRows.filter(
     (message) => !supersededRunIds.has(message.run_id),
   );
-  return dedupeMessagesByIdentity([
+  /*
+    同一个身份重复出现时，**内容与位置分别收敛**：最新的可见行给内容，
+    位置留在最早的那条可信 feed 行上——镜像后端 `get_message_seqs` 的
+    earliest-seq-wins，于是重新持久化的更新不会把消息往队尾推。
+    隐藏的控制副本**不贡献可见位置**（只在没有任何可见行带这个身份时兜底）。
+  */
+  const earliestSeqByIdentity = new Map<string, number>();
+  const earliestVisibleSeqByIdentity = new Map<string, number>();
+  for (const row of visibleRows) {
+    const identity = messageIdentity(row.content);
+    if (!identity || !isValidMessageSeq(row.seq)) continue;
+    const known = earliestSeqByIdentity.get(identity);
+    if (known === undefined || row.seq < known) {
+      earliestSeqByIdentity.set(identity, row.seq);
+    }
+    if (!isHiddenFromUIMessage(row.content)) {
+      const knownVisible = earliestVisibleSeqByIdentity.get(identity);
+      if (knownVisible === undefined || row.seq < knownVisible) {
+        earliestVisibleSeqByIdentity.set(identity, row.seq);
+      }
+    }
+  }
+  const deduped = dedupeMessagesByIdentity([
     // Carry the owning run_id onto the content message so historical subtask
     // cards can fetch their persisted step history on expand (#3779). run_id
     // lives on the RunMessage wrapper and would otherwise be dropped here.
+    // seq 同理搭车：它是这条 feed 的排序依据，而合并时要**在消息身上**读到它，
+    // 才能安放一条落在已加载窗口之外的 checkpoint 副本。
     ...visibleRows.map((message) => ({
       ...message.content,
       run_id: message.run_id,
+      additional_kwargs: {
+        ...message.content.additional_kwargs,
+        [MESSAGE_SEQ_KEY]: message.seq,
+      },
       ...(Reflect.get(message, "feedback") === undefined
         ? {}
         : { feedback: Reflect.get(message, "feedback") }),
     })),
   ]);
+  return deduped.map((message) => {
+    const identity = messageIdentity(message);
+    if (!identity) return message;
+    const earliestSeq =
+      earliestVisibleSeqByIdentity.get(identity) ??
+      earliestSeqByIdentity.get(identity);
+    if (
+      earliestSeq === undefined ||
+      message.additional_kwargs?.[MESSAGE_SEQ_KEY] === earliestSeq
+    ) {
+      return message;
+    }
+    return {
+      ...message,
+      additional_kwargs: {
+        ...message.additional_kwargs,
+        [MESSAGE_SEQ_KEY]: earliestSeq,
+      },
+    } as Message;
+  });
 }

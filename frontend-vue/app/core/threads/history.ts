@@ -18,16 +18,13 @@
 
 import { dedupeRunMessagesByIdentity } from "./message-identity";
 import type { RunMessage } from "./types";
+import { isValidMessageSeq } from "./message-seq";
 
 export type ThreadMessagesPageResponse = {
   data: RunMessage[];
   has_more: boolean;
   next_before_seq: number | null;
 };
-
-function isValidThreadMessageSeq(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
-}
 
 /**
  * Validate the sequence fields that history reconciliation and pagination use
@@ -54,7 +51,7 @@ export function parseThreadMessagesPageResponse(
       typeof row === "object" && row !== null
         ? Reflect.get(row, "seq")
         : undefined;
-    if (!isValidThreadMessageSeq(seq)) {
+    if (!isValidMessageSeq(seq)) {
       throw new Error("Thread history returned a row with an invalid seq.");
     }
     if (seenSeqs.has(seq)) {
@@ -64,7 +61,7 @@ export function parseThreadMessagesPageResponse(
   }
 
   if (
-    (hasMore && !isValidThreadMessageSeq(nextBeforeSeq)) ||
+    (hasMore && !isValidMessageSeq(nextBeforeSeq)) ||
     (!hasMore && nextBeforeSeq !== null)
   ) {
     throw new Error(
@@ -139,7 +136,7 @@ export function reconcileThreadHistoryRows(
   const sourceRows = isAuthoritativeComplete
     ? currentRows
     : [...previousRows, ...currentRows];
-  if (sourceRows.some((row) => !isValidThreadMessageSeq(row.seq))) {
+  if (sourceRows.some((row) => !isValidMessageSeq(row.seq))) {
     console.error(
       "Thread history reconciliation received an invalid sequence value.",
     );
