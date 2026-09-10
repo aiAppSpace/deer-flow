@@ -14,7 +14,7 @@ import { formatTimeAgo } from "@/core/utils/datetime";
 
 export function formatThreadUpdatedTime(
   value: string | number | Date | null | undefined,
-  locale?: string,
+  locale: string | undefined,
 ) {
   if (value === null || value === undefined || value === "") return null;
   return formatTimeAgo(value, locale);

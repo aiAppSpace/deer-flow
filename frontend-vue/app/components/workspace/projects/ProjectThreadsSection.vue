@@ -84,7 +84,7 @@ function hrefOf(thread: ProjectThread) {
                 v-if="thread.updated_at"
                 class="text-muted-foreground shrink-0 text-sm"
               >
-                {{ formatTimeAgo(thread.updated_at) }}
+                {{ formatTimeAgo(thread.updated_at, $i18n.locale.value) }}
               </div>
             </div>
           </NuxtLink>

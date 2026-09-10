@@ -137,7 +137,7 @@ export function summariesToMarkdown(
   memory: UserMemory,
   sectionGroups: MemorySectionGroup[],
   labels: MemoryDocumentLabels,
-  locale?: string,
+  locale: string | undefined,
 ): string {
   const parts: string[] = [];
   parts.push(`## ${labels.overview}`);

@@ -29,11 +29,22 @@ describe("formatTimeAgo", () => {
     expect(formatTimeAgo("2026-06-01T00:00:00Z", "en-US")).toBe("3 months ago");
   });
 
-  it("falls back to en-US for an unknown locale", () => {
+  /*
+    `locale` 是**必填**的（类型上是 `string | undefined`，位置上不许省）。
+    上游那份可选，因为它自己会 `getLocaleFromCookie() ?? detectLocale()` 兜底；
+    本仓不能照抄——`detectLocale()` 读 navigator，Nuxt 服务端渲染时读不到，
+    同一次调用会在两端给出不同的话。既然不能兜底就不能让人漏传。
+
+    下面这两个 `undefined` 是**显式写出来的**：它证明的是「显式表示没有 locale
+    时落回 en-US」，而不是「省略参数时落回 en-US」——后者已经编不过了。
+  */
+  it("falls back to en-US for an unknown locale, and for an explicit undefined", () => {
     expect(formatTimeAgo("2026-08-01T00:00:00Z", "fr-FR")).toBe(
       "about 1 month ago",
     );
-    expect(formatTimeAgo("2026-08-01T00:00:00Z")).toBe("about 1 month ago");
+    expect(formatTimeAgo("2026-08-01T00:00:00Z", undefined)).toBe(
+      "about 1 month ago",
+    );
   });
 
   /*
@@ -43,7 +54,7 @@ describe("formatTimeAgo", () => {
   */
   it("returns a neutral placeholder for empty and unparseable input", () => {
     for (const value of ["", "   ", "not-a-date", null, undefined]) {
-      expect(formatTimeAgo(value)).toBe("-");
+      expect(formatTimeAgo(value, "en-US")).toBe("-");
     }
   });
 

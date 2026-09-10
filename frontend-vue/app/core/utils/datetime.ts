@@ -15,6 +15,18 @@
                    Invalid time value）。「缺时间就整块不渲染」是**调用方**的判断，
                    不是这里的——会话列表要那个语义，用 threads/updated-time 的
                    `formatThreadUpdatedTime`。
+
+                   **locale 必填，而上游是可选的。** 上游漏传不出错，因为它自己会
+                   `getLocaleFromCookie() ?? detectLocale()` 兜底；本仓不能照抄那条兜底
+                   ——`detectLocale()` 读 `navigator.language`，Nuxt 在服务端渲染时
+                   读不到，同一次调用会在服务端和客户端给出两句不同的话，直接是
+                   hydration 不一致。既然不能兜底，就不能让人漏传：把参数改成必填，
+                   由类型系统守。想显式表示「就是没有 locale」，传 `undefined`。
+
+                   实测：`ProjectThreadsSection.vue` 就漏传过，于是项目详情页的
+                   相对时间在中文界面里显示成 "3 months ago"。对照台账在
+                   `project-detail/desktop/light/zh-CN` 上抓到了它
+                   （React "3 个月前" / Vue "3 months ago"）。
 */
 
 import { formatDistanceToNow } from "date-fns";
@@ -26,7 +38,7 @@ export function dateFnsLocale(locale: string | undefined) {
 
 export function formatTimeAgo(
   value: string | number | Date | null | undefined,
-  locale?: string,
+  locale: string | undefined,
 ): string {
   const date = value instanceof Date ? value : new Date(value ?? "");
   if (Number.isNaN(date.getTime())) return "-";

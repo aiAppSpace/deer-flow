@@ -779,6 +779,7 @@ export const enUS: Translations = {
     noMessages: "No messages yet",
     startConversation: "Start a conversation to see messages here",
     newChatNotificationTitle: "New Chat",
+    finishedNotificationBody: "Conversation finished",
     branchCreated: "Conversation branch created",
     branchFailed: "Failed to branch conversation.",
     streamReplayGap:

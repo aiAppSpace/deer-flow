@@ -51,6 +51,11 @@ export function useNotifications() {
       window.focus();
       notification.close();
     };
+    // 上游 `core/notification/hooks.ts` 也挂了这一条。通知失败是宿主行为
+    // （权限被撤、系统通知中心拒收），页面上看不见，不记就彻底没有痕迹。
+    notification.onerror = (error) => {
+      console.error("Notification error:", error);
+    };
   }
 
   return {

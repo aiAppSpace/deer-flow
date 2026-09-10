@@ -634,6 +634,7 @@ export interface Translations {
     noMessages: string;
     startConversation: string;
     newChatNotificationTitle: string;
+    finishedNotificationBody: string;
     branchCreated: string;
     branchFailed: string;
     streamReplayGap: string;

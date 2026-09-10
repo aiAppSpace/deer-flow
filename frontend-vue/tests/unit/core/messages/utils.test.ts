@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   extractContentFromMessage,
   extractTextFromMessage,
+  textOfMessage,
   extractReasoningContentFromMessage,
   getBranchableAssistantGroupIds,
   getLatestEditableTurn,
@@ -1038,6 +1039,33 @@ describe("multi-part content with bare-string continuations", () => {
     expect(extractTextFromMessage(geminiMessage)).toBe(
       "First block carrying the signature.\nContinuation streamed as a bare string.",
     );
+  });
+
+  // `textOfMessage` 是给单行消费者的那份（输入框、标题、通知正文）。它和上面那个
+  // 的差别**只有接法**：这里平接，上面换行接。曾经有两份各自为政的本地副本，
+  // 其中 AgentChat.vue 那份认的是 `"text" in part`，于是把 Gemini 这种
+  // 裸字符串 part 整段丢掉——通知正文里少半句话，没有任何报错。
+  test("textOfMessage 平接，并且不丢裸字符串 part", () => {
+    expect(textOfMessage(geminiMessage)).toBe(
+      "First block carrying the signature.Continuation streamed as a bare string.",
+    );
+  });
+
+  test("textOfMessage 对字符串 content 原样返回，不剥 <think>", () => {
+    // 剥 reasoning 是渲染层的事（extractTextFromMessage 做），这一层只取原文。
+    expect(
+      textOfMessage({
+        id: "m",
+        type: "ai",
+        content: "<think>weighing</think>done",
+      } as Message),
+    ).toBe("<think>weighing</think>done");
+  });
+
+  test("textOfMessage 对非字符串非数组的 content 给空串", () => {
+    expect(
+      textOfMessage({ id: "m", type: "ai", content: undefined } as Message),
+    ).toBe("");
   });
 });
 

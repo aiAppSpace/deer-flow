@@ -81,7 +81,8 @@ import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
 import { getAPIClient } from "@/core/api/api-client";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
-import { isHiddenFromUIMessage } from "@/core/messages/utils";
+import { isHiddenFromUIMessage, textOfMessage } from "@/core/messages/utils";
+import { notificationBody } from "@/core/notification/body";
 import type { FileInMessage } from "@/core/messages/utils";
 import {
   buildHumanInputResponseText,
@@ -487,7 +488,10 @@ const stream = useThreadStream({
         return;
       }
       notifications.showNotification(notificationTitle, {
-        body: lastAssistant ? messageText(lastAssistant) : undefined,
+        body: notificationBody(
+          lastAssistant ? textOfMessage(lastAssistant) : "",
+          $i18n.t.value.conversation.finishedNotificationBody,
+        ),
       });
     };
     completionNotificationTimer = setTimeout(
@@ -955,7 +959,7 @@ const autoOpenArtifact = computed(() => {
   );
   if (lastCall.name === "finalize_artifact_write") {
     // React 的 isSuccessfulToolResult：trimStart().startsWith("OK")。
-    return result && messageText(result).trimStart().startsWith("OK")
+    return result && textOfMessage(result).trimStart().startsWith("OK")
       ? path
       : null;
   }
@@ -1126,18 +1130,6 @@ function startAgentChat() {
     `/workspace/agents/${encodeURIComponent(props.agentName)}/chats/new`,
   );
 }
-function messageText(message: Message) {
-  if (typeof message.content === "string") return message.content;
-  if (!Array.isArray(message.content)) return "";
-  return message.content
-    .map((part) =>
-      typeof part === "object" && part !== null && "text" in part
-        ? String(part.text ?? "")
-        : "",
-    )
-    .join("");
-}
-
 function recentConversation(
   messages: readonly Message[] = visibleMessages.value,
 ) {
@@ -1145,7 +1137,7 @@ function recentConversation(
     .filter((message) => message.type === "human" || message.type === "ai")
     .map((message) => ({
       role: message.type === "human" ? "user" : "assistant",
-      content: messageText(message),
+      content: textOfMessage(message),
     }))
     .filter((message) => message.content.trim())
     .slice(-6);

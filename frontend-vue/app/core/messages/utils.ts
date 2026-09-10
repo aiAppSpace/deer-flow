@@ -1,7 +1,7 @@
 /*
   【文件职责】     见下方导出与 JSDoc。
   【架构位置】     L3
-  【主要导出】     MessageGroup / getMessageGroups / getBranchableAssistantGroupIds / EditableTurn / getLatestEditableTurn / groupMessages 等 31 个
+  【主要导出】     MessageGroup / getMessageGroups / getBranchableAssistantGroupIds / EditableTurn / getLatestEditableTurn / groupMessages 等 32 个
   【依赖关系】     见下方 import。
   【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
 */
@@ -482,6 +482,31 @@ export function extractTextFromMessage(message: Message) {
       .trim();
   }
   return "";
+}
+
+/**
+ * 单行消费者要的那份文本：**平接**（`""`），不像 `extractTextFromMessage`
+ * 那样用 `"\n"` 接。上游把这两件事分成两个函数
+ * （`textOfMessage` 平接给输入框/标题/通知，`extractContentFromMessage` 换行接给正文），
+ * 判据写在 `frontend/src/core/threads/utils.ts:63`。
+ *
+ * 也**不剥 `<think>`**：这是给「取一段代表性文字」用的，不是给渲染用的。
+ *
+ * 上游空文本返回 `null`，这里返回 `""`——本文件的既有约定是 `""`，
+ * 而两者在调用点都是 falsy，`if (text)` 的分支走向一样。
+ */
+export function textOfMessage(message: Message): string {
+  if (typeof message.content === "string") return message.content;
+  if (!Array.isArray(message.content)) return "";
+  return message.content
+    .map((part) =>
+      typeof part === "string"
+        ? part
+        : part.type === "text"
+          ? (part.text ?? "")
+          : "",
+    )
+    .join("");
 }
 
 const THINK_OPEN_TAG = "<think>";
