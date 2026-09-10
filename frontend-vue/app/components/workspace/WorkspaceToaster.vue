@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Button } from "@/components/ui/button";
 /*
   【文件职责】     渲染 workspace 唯一的可访问 toast viewport。
   【架构位置】     L3 workspace shell
@@ -124,7 +125,34 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
           class="mr-1 -ml-[3px] size-4 shrink-0"
           aria-hidden="true"
         />
-        <span class="min-w-0 flex-1">{{ item.message }}</span>
+        <span class="min-w-0 flex-1">
+          {{ item.message }}
+          <!--
+            描述是补充说明，**不进 role=alert 的第一时间播报重点**——
+            它和主文案在同一个 live region 里，读屏会依次念出来。
+          -->
+          <span
+            v-if="item.description"
+            class="text-muted-foreground mt-0.5 block text-xs"
+            >{{ item.description }}</span
+          >
+        </span>
+        <!--
+          动作键点完**要把这条提示关掉**：留着的话下一次同类操作会出现两条
+          一模一样的提示，分不清哪条对应哪次。
+        -->
+        <Button
+          v-if="item.action"
+          variant="ghost"
+          size="sm"
+          class="h-auto shrink-0 px-2 py-1 text-xs"
+          @click="
+            item.action.onClick();
+            toast.dismiss(item.id);
+          "
+        >
+          {{ item.action.label }}
+        </Button>
       </li>
     </ol>
   </section>

@@ -49,6 +49,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import ContextUsageBadge from "@/components/workspace/ContextUsageBadge.vue";
+import ThreadArchiveStatus from "@/components/workspace/ThreadArchiveStatus.vue";
 import TodoList from "@/components/workspace/TodoList.vue";
 import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import WorkspacePanels from "@/components/workspace/WorkspacePanels.vue";
@@ -1745,6 +1746,16 @@ onUnmounted(() => {
               只是背后的 useThreadTokenUsage 被关掉，数字落在 "-" 上。本仓此前两支都挂
               `!isDemo`，于是案例页头部整块消失。
             -->
+            <!--
+              归档状态条排在用量指示之前——与上游 chat-page.tsx 的顺序一致
+              （ThreadArchiveStatus 在 TokenUsageIndicator 上面）。
+              未归档时它整块不渲染，所以这里不需要 v-if。
+            -->
+            <ThreadArchiveStatus
+              v-if="routeThreadId"
+              :thread-id="routeThreadId"
+              :metadata="currentThread?.metadata"
+            />
             <TokenUsageIndicator
               v-if="modelCatalog.tokenUsageEnabled.value"
               :thread-id="routeThreadId"

@@ -537,6 +537,15 @@ export interface Translations {
 
   // Chats
   chats: {
+    archivedChats: string;
+    archiveChat: string;
+    restoreChat: string;
+    archiveSuccess: string;
+    restoreSuccess: string;
+    archiveFailed: string;
+    archiveDescription: string;
+    undoArchive: string;
+    noArchivedChats: string;
     searchChats: string;
     loadMoreToSearch: string;
     loadingMore: string;

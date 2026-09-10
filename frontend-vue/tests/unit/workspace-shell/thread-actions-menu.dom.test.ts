@@ -1,4 +1,5 @@
 /* thread action menu owns share/export request and visible failure state. */
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, provide } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,7 +40,26 @@ function mountMenu() {
       return () => h(ThreadActionsMenu, { thread, pinned: false });
     },
   });
-  const wrapper = mount(Host, { attachTo: document.body });
+  /*
+    菜单里的归档项走 Vue Query（useThreadArchiveAction），宿主必须带 QueryClient。
+    不带的话组件在 inject 阶段就崩，报出来是「No 'queryClient' found」——
+    与被测的分享/导出行为毫无关系，很容易被读成别的毛病。
+  */
+  const wrapper = mount(Host, {
+    attachTo: document.body,
+    global: {
+      plugins: [
+        [
+          VueQueryPlugin,
+          {
+            queryClient: new QueryClient({
+              defaultOptions: { queries: { retry: false } },
+            }),
+          },
+        ],
+      ],
+    },
+  });
   return { wrapper, toast };
 }
 
@@ -53,8 +73,13 @@ async function openMenu(wrapper: ReturnType<typeof mount>) {
   这一步不是测试的仪式：它就是这个菜单和一排平级动作的区别。
 */
 async function openExportSubmenu() {
+  /*
+    **按 testid 定位，不要取第一个 sub-trigger。** 这个菜单里现在有两个子菜单
+    （导出、移到项目），取第一个会在菜单顺序变化时静默点到另一个，
+    报出来是「导出项不存在」——2026-09-10 加归档项时就这么撞过一次。
+  */
   const trigger = document.querySelector<HTMLElement>(
-    '[data-slot="dropdown-menu-sub-trigger"]',
+    '[data-testid="thread-export-submenu"]',
   );
   if (!trigger) throw new Error("export submenu trigger not rendered");
   trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));

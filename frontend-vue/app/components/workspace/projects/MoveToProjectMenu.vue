@@ -47,7 +47,7 @@ function handleMove(projectId: string | null) {
 
 <template>
   <DropdownMenuSub>
-    <DropdownMenuSubTrigger>
+    <DropdownMenuSubTrigger data-testid="thread-move-to-project-submenu">
       <FolderInput class="text-muted-foreground" />
       <span>{{ $i18n.t.value.projects.moveToProject }}</span>
     </DropdownMenuSubTrigger>

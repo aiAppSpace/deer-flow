@@ -34,6 +34,15 @@ export type WorkspaceToast = {
   id: number;
   kind: WorkspaceToastKind;
   message: string;
+  /** 主文案下面的一行补充说明，对应 sonner 的 `description`。 */
+  description?: string;
+  /** 提示条右侧的一颗动作键，对应 sonner 的 `action`（归档的「撤销」用它）。 */
+  action?: WorkspaceToastAction;
+};
+
+export type WorkspaceToastAction = {
+  label: string;
+  onClick: () => void;
 };
 
 export interface ToastTimer {
@@ -54,6 +63,13 @@ export interface WorkspaceToastStore {
 export type WorkspaceToastOptions = {
   /** 就地更新这一条；它已经不在了就新增一条。 */
   id?: number;
+  description?: string;
+  /*
+    动作键。**点了之后这条提示要消失**——归档的「撤销」点完还留着，
+    下一次归档会看到两条一模一样的提示，分不清哪条对应哪次操作。
+    消失由 store 负责，调用方只管做事。
+  */
+  action?: WorkspaceToastAction;
 };
 
 const browserTimer: ToastTimer = {
@@ -100,13 +116,30 @@ export function createWorkspaceToastStore(options?: {
       toasts.value.some((item) => item.id === target)
     ) {
       toasts.value = toasts.value.map((item) =>
-        item.id === target ? { ...item, kind, message } : item,
+        item.id === target
+          ? {
+              ...item,
+              kind,
+              message,
+              description: options?.description,
+              action: options?.action,
+            }
+          : item,
       );
       schedule(target);
       return target;
     }
     const id = ++nextId;
-    toasts.value = [...toasts.value, { id, kind, message }];
+    toasts.value = [
+      ...toasts.value,
+      {
+        id,
+        kind,
+        message,
+        description: options?.description,
+        action: options?.action,
+      },
+    ];
     schedule(id);
     return id;
   }

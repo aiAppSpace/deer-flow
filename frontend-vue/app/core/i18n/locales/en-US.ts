@@ -669,6 +669,16 @@ export const enUS: Translations = {
 
   // Chats
   chats: {
+    archivedChats: "Archived",
+    archiveChat: "Archive chat",
+    restoreChat: "Restore chat",
+    archiveSuccess: "Chat archived",
+    restoreSuccess: "Chat restored",
+    archiveFailed: "Failed to update archived chat",
+    archiveDescription:
+      "Archiving keeps messages and files. Running and scheduled tasks continue.",
+    undoArchive: "Undo",
+    noArchivedChats: "No archived chats",
     searchChats: "Search chats",
     loadMoreToSearch: "Load more to search older conversations",
     loadingMore: "Loading more...",

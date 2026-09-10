@@ -1,7 +1,7 @@
 /*
   【文件职责】     见下方导出与 JSDoc。
   【架构位置】     L3
-  【主要导出】     THREAD_PINNED_METADATA_KEY / ChannelThreadSource / pathOfThread / textOfMessage / titleOfThread / documentTitleOfThread / isThreadPinned 等 11 个
+  【主要导出】     THREAD_PINNED_METADATA_KEY / ChannelThreadSource / pathOfThread / textOfMessage / titleOfThread / documentTitleOfThread / isThreadPinned 等 13 个
   【依赖关系】     见下方 import。
   【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
 */
@@ -112,6 +112,19 @@ export function documentTitleOfThread(options: {
         ? "Loading..."
         : options.untitledLabel;
   return `${name} - ${options.appName}`;
+}
+
+/** 会话是否已归档写在这个元数据键上（与 Gateway 的 `deerflow_archived` 同名）。 */
+export const THREAD_ARCHIVED_METADATA_KEY = "deerflow_archived";
+
+/**
+ * 会话是否已归档。
+ *
+ * **只认布尔 `true`**：Gateway 取消归档时写的是 `false` 而不是删键，
+ * 用真值判断会把字符串 `"false"` 之类也算成已归档。
+ */
+export function isThreadArchived(thread: Pick<AgentThread, "metadata">) {
+  return thread.metadata?.[THREAD_ARCHIVED_METADATA_KEY] === true;
 }
 
 /** 会话归属的项目 id 写在这个元数据键上（与 Gateway 的 `deerflow_project_id` 同名）。 */

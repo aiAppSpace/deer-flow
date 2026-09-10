@@ -8,6 +8,7 @@
 */
 import { ref } from "vue";
 import {
+  Archive,
   Download,
   FileJson,
   FileText,
@@ -29,6 +30,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import MoveToProjectMenu from "@/components/workspace/projects/MoveToProjectMenu.vue";
+import { useThreadArchiveAction } from "@/composables/useThreadArchiveAction";
 import { getAPIClient } from "@/core/api/api-client";
 import { writeTextToClipboard } from "@/core/clipboard";
 import { exportThread, type ThreadExportFormat } from "@/core/threads/export";
@@ -52,6 +55,8 @@ const emit = defineEmits<{
   newProjectForThread: [];
   moveToProject: [projectId: string | null];
 }>();
+
+const archiveAction = useThreadArchiveAction();
 const { $i18n } = useNuxtApp();
 const toast = useWorkspaceToast();
 const exporting = ref<ThreadExportFormat | null>(null);
@@ -173,6 +178,12 @@ async function exportConversation(format: ThreadExportFormat) {
       <DropdownMenuItem @select="emit('rename')">
         <Pencil :size="14" /> {{ $i18n.t.value.common.rename }}
       </DropdownMenuItem>
+      <DropdownMenuItem
+        :disabled="archiveAction.isPending.value"
+        @select="archiveAction.setArchived(props.thread.thread_id, true)"
+      >
+        <Archive :size="14" /> {{ $i18n.t.value.chats.archiveChat }}
+      </DropdownMenuItem>
       <MoveToProjectMenu
         :thread="props.thread"
         @new-project="emit('newProjectForThread')"
@@ -186,7 +197,7 @@ async function exportConversation(format: ThreadExportFormat) {
         <Share2 :size="14" /> {{ $i18n.t.value.common.share }}
       </DropdownMenuItem>
       <DropdownMenuSub>
-        <DropdownMenuSubTrigger>
+        <DropdownMenuSubTrigger data-testid="thread-export-submenu">
           <Download :size="14" /> {{ $i18n.t.value.common.export }}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent>
