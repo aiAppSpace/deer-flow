@@ -23,5 +23,10 @@
       "reason": "纯跳转，没有可对照的内容：整页模板就是一个空 div，middleware 立刻 replace 到 /workspace/chats/new，而那一屏本来就在取样面里。"
     }
   ],
-  "pending": []
+  "pending": [
+    {
+      "route": "/workspace/projects/[id]",
+      "reason": "2026-09-10 刚补出来的路由，还没进 tests/e2e-parity/support/scenarios.ts 的场景目录，所以取样面碰不到它。挡路的不是技术问题：这一屏要一个已存在的项目和几条已归属的会话，而对照 mock 的 fixture 里目前既没有 /api/projects 的响应、也没有会话带 deerflow_project_id。补 fixture 与场景是下一步，不是做不了。"
+    }
+  ]
 }

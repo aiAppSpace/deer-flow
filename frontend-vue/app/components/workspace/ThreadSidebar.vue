@@ -24,7 +24,9 @@ import {
 } from "lucide-vue-next";
 
 import WorkspaceChannelsList from "@/components/workspace/channels/WorkspaceChannelsList.vue";
-import ThreadActionsMenu from "@/components/workspace/ThreadActionsMenu.vue";
+import ProjectsSection from "@/components/workspace/projects/ProjectsSection.vue";
+import ProjectMoveDialog from "@/components/workspace/projects/ProjectMoveDialog.vue";
+import ThreadSidebarItem from "@/components/workspace/ThreadSidebarItem.vue";
 import ThreadSidebarShell from "@/components/workspace/ThreadSidebarShell.vue";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
 import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
@@ -47,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
+import { useMoveThreadToProject } from "@/composables/useProjects";
 import { useThreads } from "@/composables/useThreads";
 import { useAgentsApiEnabled } from "@/composables/useWorkspaceFeatures";
 import {
@@ -158,6 +161,21 @@ function isActive(path: string) {
   哪怕它已经掉出上限之外。React 的 RecentChatList 就是这么补的：翻得足够深再点开
   一条老会话，不补的话侧栏里没有任何一行是高亮的，用户看不出自己在哪儿。
 */
+/*
+  移动会话到项目：**mutation 与对话框都由侧栏持有**，不放在会话行的下拉菜单里。
+  菜单在点击后立刻卸载，挂在里面的失败回调会跟着没掉，错误就静默了
+  （上游 move-to-project-menu.tsx 的注释也是这么写的）。
+*/
+const moveToProject = useMoveThreadToProject({
+  onError: (error) =>
+    toast.error(error.message || $i18n.t.value.projects.moveFailed),
+});
+const newProjectForThreadId = ref<string | null>(null);
+
+function requestMoveToProject(threadId: string, projectId: string | null) {
+  moveToProject.mutate({ threadId, projectId });
+}
+
 const sidebarThreads = computed(() => {
   const activeId = route.params.thread_id;
   if (typeof activeId !== "string" || !activeId) {
@@ -527,6 +545,28 @@ function openSettingsDialog(section: "appearance" | "about") {
       <WorkspaceChannelsList v-if="sidebarExpanded" />
 
       <!--
+        项目区排在最近会话之前，与上游 `workspace-sidebar.tsx` 的顺序一致
+        （ProjectsSection 在 RecentChatList 上面）。同样只在展开态渲染：
+        收成图标条时它自己也会靠 group-data-[collapsible=icon] 收起来，
+        但整段不渲染更省一次布局。
+      -->
+      <ProjectsSection
+        v-if="sidebarExpanded"
+        :current-path="route.path"
+        :active-thread-id="
+          typeof route.params.thread_id === 'string'
+            ? route.params.thread_id
+            : null
+        "
+        :title-of="displayThreadTitle"
+        :is-active-path="isActive"
+        :deleting-thread-id="deletingThreadId"
+        @rename-thread="beginRename($event)"
+        @toggle-pin-thread="togglePinned($event)"
+        @delete-thread="removeThread($event)"
+      />
+
+      <!--
         一条会话都没有的时候，标题和列表**都不渲染**——React 的 RecentChatList 在
         threads.length === 0 时直接 return null。留一个空标题加一个空 ul，读屏器会
         念出「最近的对话，列表，0 项」，而屏幕上其实什么都没有。
@@ -570,51 +610,22 @@ function openSettingsDialog(section: "appearance" | "about") {
                 scroll-parent-selector='[data-sidebar="content"]'
               >
                 <template #default="{ thread }">
-                  <li
-                    data-slot="sidebar-menu-item"
-                    data-sidebar="menu-item"
-                    class="group/menu-item relative"
-                  >
-                    <!--
-                      标题包在一个 `min-w-0 truncate` 的 span 里，链接自己是
-                      `w-full ... p-2 pr-8` 的 h-8 行——这是 React 的
-                      SidebarMenuButton 加上 group-has-[menu-action] 的 pr-8。
-                      原来标题是链接的裸文本、操作菜单是同一行的 flex 兄弟，于是
-                      「会话标题」这个可视元素量出来是整行：撑满 203px、高 32px、
-                      用前景色。React 那一份是文字宽度、20px 高、muted 色。
-                    -->
-                    <NuxtLink
-                      data-slot="sidebar-menu-button"
-                      data-sidebar="menu-button"
-                      :to="pathOfThread(thread)"
-                      :data-active="isActive(pathOfThread(thread))"
-                      class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground peer/menu-button flex h-8 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md p-2 pr-8 text-left text-sm whitespace-nowrap"
-                    >
-                      <ThreadChannelIcon
-                        :source="channelSourceOfThread(thread)"
-                      />
-                      <Pin
-                        v-if="threads.isPinned(thread)"
-                        aria-hidden="true"
-                        class="text-muted-foreground size-3.5 shrink-0"
-                      />
-                      <span class="min-w-0 truncate">{{
-                        displayThreadTitle(thread)
-                      }}</span>
-                      <ThreadChannelBadge
-                        :source="channelSourceOfThread(thread)"
-                        class="ml-auto h-5 max-w-14 shrink-0 px-1.5 text-[10px]"
-                      />
-                    </NuxtLink>
-                    <ThreadActionsMenu
-                      :thread="thread"
-                      :pinned="threads.isPinned(thread)"
-                      :deleting="deletingThreadId === thread.thread_id"
-                      @rename="beginRename(thread.thread_id)"
-                      @toggle-pin="togglePinned(thread)"
-                      @delete="removeThread(thread)"
-                    />
-                  </li>
+                  <ThreadSidebarItem
+                    :thread="thread"
+                    :title="displayThreadTitle(thread)"
+                    :is-active="isActive(pathOfThread(thread))"
+                    :pinned="threads.isPinned(thread)"
+                    :deleting="deletingThreadId === thread.thread_id"
+                    @rename="beginRename(thread.thread_id)"
+                    @toggle-pin="togglePinned(thread)"
+                    @delete="removeThread(thread)"
+                    @new-project-for-thread="
+                      newProjectForThreadId = thread.thread_id
+                    "
+                    @move-to-project="
+                      requestMoveToProject(thread.thread_id, $event)
+                    "
+                  />
                 </template>
               </VirtualThreadList>
               <template v-if="threads.hasMore && threads.canLoadMore">
@@ -898,4 +909,11 @@ function openSettingsDialog(section: "appearance" | "about") {
       </form>
     </DialogContent>
   </Dialog>
+  <!--
+    新建项目对话框挂在**下拉菜单之外**：菜单一关就卸载，挂在里面它还没打开就没了。
+  -->
+  <ProjectMoveDialog
+    :thread-id="newProjectForThreadId"
+    @close="newProjectForThreadId = null"
+  />
 </template>

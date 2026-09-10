@@ -1,10 +1,15 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="Row extends { thread_id: string }">
 /*
   【文件职责】     会话列表的虚拟滚动：长列表只渲染视口附近那几行。
   【架构位置】     L3 product UI
   【主要导出】     默认 VirtualThreadList 组件
   【依赖关系】     @tanstack/vue-virtual · core/threads/virtual-list
-  【边界与注意】   对照的是 React 的 VirtualThreadList
+  【边界与注意】   **行类型是泛型的**，只约束「有 thread_id 可做 key」：
+                   行内容全由插槽决定，写死成 `AgentThread` 会把项目详情页那种投影形状
+                   （`/api/projects/{id}/threads` 只返回 thread_id/display_name/metadata/时间）
+                   挡在外面，逼调用方做一次没有意义的类型断言。
+
+                   对照的是 React 的 VirtualThreadList
                    （frontend/src/components/workspace/thread-list-virtualizer.tsx）：
                    同一个 @tanstack 虚拟化器、同一个 60 条阈值、同一个 overscan 8、
                    同一套 scrollMargin 补偿。
@@ -32,14 +37,14 @@ const props = withDefaults(
   defineProps<{
     estimateSize: number;
     gap?: number;
-    items: readonly AgentThread[];
+    items: readonly Row[];
     scrollParentSelector: string;
   }>(),
   { gap: 0 },
 );
 
 defineSlots<{
-  default(props: { thread: AgentThread; index: number }): unknown;
+  default(props: { thread: Row; index: number }): unknown;
 }>();
 
 const root = ref<HTMLElement | null>(null);

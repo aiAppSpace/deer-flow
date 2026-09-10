@@ -123,6 +123,34 @@ export async function patchThreadMetadata(
   return (await response.json()) as ThreadMetadataPatchResponse;
 }
 
+/**
+ * 把会话移进某个项目，或移出（`projectId` 传 `null`）。
+ *
+ * **纯组织关系**：后端明说历史、运行状态与会话文件都不动（RFC v2 §6），
+ * 所以这里不需要连带清理任何本地缓存的会话内容——只有归属元数据变了。
+ */
+export async function moveThreadToProject(
+  threadId: string,
+  projectId: string | null,
+): Promise<ThreadMetadataPatchResponse> {
+  const response = await fetchWithAuth(
+    `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/move`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ project_id: projectId }),
+    },
+  );
+
+  if (!response.ok) {
+    await throwGatewayResponseError(response, "Failed to move conversation.");
+  }
+
+  return (await response.json()) as ThreadMetadataPatchResponse;
+}
+
 export async function compactThreadContext(
   threadId: string,
   options: CompactThreadContextOptions = {},

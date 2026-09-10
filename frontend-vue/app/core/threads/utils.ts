@@ -1,7 +1,7 @@
 /*
   【文件职责】     见下方导出与 JSDoc。
   【架构位置】     L3
-  【主要导出】     THREAD_PINNED_METADATA_KEY / ChannelThreadSource / pathOfThread / textOfMessage / titleOfThread / documentTitleOfThread / isThreadPinned 等 9 个
+  【主要导出】     THREAD_PINNED_METADATA_KEY / ChannelThreadSource / pathOfThread / textOfMessage / titleOfThread / documentTitleOfThread / isThreadPinned 等 11 个
   【依赖关系】     见下方 import。
   【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
 */
@@ -112,6 +112,24 @@ export function documentTitleOfThread(options: {
         ? "Loading..."
         : options.untitledLabel;
   return `${name} - ${options.appName}`;
+}
+
+/** 会话归属的项目 id 写在这个元数据键上（与 Gateway 的 `deerflow_project_id` 同名）。 */
+export const THREAD_PROJECT_METADATA_KEY = "deerflow_project_id";
+
+/**
+ * 会话归属的项目 id；未归属返回 `null`。
+ *
+ * **空串按未归属处理**：Gateway 清空归属时写的是空串而不是删键，
+ * 只判 `typeof === "string"` 会把它当成一个 id 为空的项目，分组时凭空多出一组。
+ */
+export function projectIdOfThread(
+  thread: Pick<AgentThread, "metadata">,
+): string | null {
+  const projectId = thread.metadata?.[THREAD_PROJECT_METADATA_KEY];
+  return typeof projectId === "string" && projectId.length > 0
+    ? projectId
+    : null;
 }
 
 export function isThreadPinned(thread: Pick<AgentThread, "metadata">) {

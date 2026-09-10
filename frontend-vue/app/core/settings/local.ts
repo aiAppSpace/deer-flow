@@ -14,6 +14,9 @@ export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
     mode: undefined,
     reasoning_effort: undefined,
   },
+  projects: {
+    displayMode: "flat",
+  },
 };
 
 export const LOCAL_SETTINGS_KEY = "deerflow.local-settings";
@@ -83,6 +86,14 @@ export interface LocalSettings {
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
     reasoning_effort?: "minimal" | "low" | "medium" | "high";
   };
+  /*
+    项目区的展示方式。**用分组对象而不是 React 那个扁平的 `projectsDisplayMode`**：
+    本仓的 LocalSettings 每一项都是分组对象（notification / tokenUsage / context），
+    为一个标量破例会让后续的项目相关设置无处可放。
+  */
+  projects: {
+    displayMode: "flat" | "grouped";
+  };
 }
 
 function mergeLocalSettings(settings?: Partial<LocalSettings>): LocalSettings {
@@ -99,6 +110,10 @@ function mergeLocalSettings(settings?: Partial<LocalSettings>): LocalSettings {
     notification: {
       ...DEFAULT_LOCAL_SETTINGS.notification,
       ...settings?.notification,
+    },
+    projects: {
+      ...DEFAULT_LOCAL_SETTINGS.projects,
+      ...settings?.projects,
     },
   };
 }

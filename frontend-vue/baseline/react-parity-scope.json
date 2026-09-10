@@ -19,12 +19,10 @@
   "pendingRoutes": {
     "$comment": "React 有、Vue 还没做、但要做的路由。和 exemptRoutes 分成两份，是为了让新出现的上游路由无处可去：它落在两份清单之外会立刻让门禁变红，逼人显式选一边，而不是被顺手塞进豁免里。目标状态是空数组。",
     "routes": [
-      "/artifacts/view",
-      "/workspace/projects/[id]"
+      "/artifacts/view"
     ],
     "$reasons": {
-      "/artifacts/view": "独立产物视窗（上游 2026-09 合并带入）。用途是在新窗口里看一件产物：markdown 渲染成果、html 保持 gateway URL 以维持下载语义、会话过期后回到同一件产物。**什么时候重新问**：与 pending 场景 artifact-viewer-window 同时做——那三条断言就是这条路由的验收。",
-      "/workspace/projects/[id]": "项目详情页（上游 2026-09 合并带入）。本仓的会话页已经认识 `?project=` 预建流程，缺的是项目本身的详情路由。**什么时候重新问**：本仓要暴露项目管理界面时；在那之前会话侧的项目归属不依赖这条路由。"
+      "/artifacts/view": "独立产物视窗（上游 2026-09 合并带入）。用途是在新窗口里看一件产物：markdown 渲染成果、html 保持 gateway URL 以维持下载语义、会话过期后回到同一件产物。**什么时候重新问**：与 pending 场景 artifact-viewer-window 同时做——那三条断言就是这条路由的验收。"
     }
   },
   "contentExemptRoutes": {

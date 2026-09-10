@@ -1,13 +1,28 @@
 /*
   【文件职责】     侧栏 primitive 的公共入口。
   【架构位置】     L2
-  【主要导出】     SidebarTrigger
+  【主要导出】     SidebarTrigger · SidebarGroup · SidebarGroupLabel · SidebarGroupContent ·
+                   SidebarMenu · SidebarMenuItem · SidebarMenuButton · SidebarMenuAction ·
+                   sidebarMenuButtonVariants 等 10 个
   【依赖关系】     同目录 SFC
-  【边界与注意】   上游 `ui/sidebar.tsx` 还导出 Sidebar / SidebarProvider / SidebarMenu 等
-                   **二十余个** primitive（wave 57 实测：导出清单里 24 个名字），本仓暂不移植：侧栏骨架目前由
-                   `components/workspace/ThreadSidebar.vue` 一个组件直接搭出来。
-                   缺的不是能力，是需求——真要拆的时候按上游那份逐个补即可。
-                   先移植 SidebarTrigger 的理由是它**有三个调用点**，手搓副本已经
-                   各长各的了（盒子 32 vs 上游 28、图标三种、opacity 缺失）。
+  【边界与注意】   移植的是上游 `ui/sidebar.tsx` 里的**内容层**。
+                   **外壳层（Sidebar / SidebarProvider / SidebarInset / SidebarRail）不移植**：
+                   本仓的 `components/workspace/ThreadSidebarShell.vue` 已经是它们的等价物
+                   （文件头写明「形状照上游的 `Sidebar`」），再引入一套会变成两个外壳体系。
+
+                   上游那份还有 Badge / Skeleton / Sub* / Separator / Input 若干，
+                   本仓暂时没有调用点，需要时按上游逐个补——**补的时候连 data-* 属性一起抄**，
+                   它们被同目录其它 primitive 的选择器依赖。
 */
 export { default as SidebarTrigger } from "./SidebarTrigger.vue";
+export { default as SidebarGroup } from "./SidebarGroup.vue";
+export { default as SidebarGroupLabel } from "./SidebarGroupLabel.vue";
+export { default as SidebarGroupContent } from "./SidebarGroupContent.vue";
+export { default as SidebarMenu } from "./SidebarMenu.vue";
+export { default as SidebarMenuItem } from "./SidebarMenuItem.vue";
+export { default as SidebarMenuButton } from "./SidebarMenuButton.vue";
+export { default as SidebarMenuAction } from "./SidebarMenuAction.vue";
+export {
+  sidebarMenuButtonVariants,
+  type SidebarMenuButtonVariants,
+} from "./menu-button-variants";

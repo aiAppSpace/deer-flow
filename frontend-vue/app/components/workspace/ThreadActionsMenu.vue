@@ -48,6 +48,9 @@ const emit = defineEmits<{
   rename: [];
   togglePin: [];
   delete: [];
+  /** 新建项目并把本会话移进去——对话框由常驻的上层持有，这里只报事件。 */
+  newProjectForThread: [];
+  moveToProject: [projectId: string | null];
 }>();
 const { $i18n } = useNuxtApp();
 const toast = useWorkspaceToast();
@@ -170,6 +173,11 @@ async function exportConversation(format: ThreadExportFormat) {
       <DropdownMenuItem @select="emit('rename')">
         <Pencil :size="14" /> {{ $i18n.t.value.common.rename }}
       </DropdownMenuItem>
+      <MoveToProjectMenu
+        :thread="props.thread"
+        @new-project="emit('newProjectForThread')"
+        @move-project="emit('moveToProject', $event)"
+      />
       <DropdownMenuItem
         data-testid="thread-share"
         :disabled="sharing"
