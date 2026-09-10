@@ -5,6 +5,27 @@ export interface FeaturesResponse {
   agents_api: { enabled: boolean };
   browser_control?: { enabled: boolean };
   mcp_tasks?: { enabled: boolean };
+  subagent_batches?: {
+    enabled?: boolean;
+    repository_available?: boolean;
+    worker_running?: boolean;
+    max_running?: number;
+  };
+}
+
+/**
+ * subagent 批次的两个**独立**能力。
+ *
+ * 「有没有存储」和「worker 跑没跑」不是一回事：worker 停了，历史批次还应该看得见
+ * （只是不能暂停/恢复/重试），所以入口照出、控制键禁用。合成一个布尔的话，
+ * worker 一停，用户连自己昨天跑的那批结果都翻不出来。
+ *
+ * `enabled` 是老 Gateway 的字段，两个新字段缺席时回落到它。
+ */
+export interface SubagentBatchesCapability {
+  repositoryAvailable: boolean;
+  workerRunning: boolean;
+  maxRunning: number;
 }
 
 export async function fetchFeatures(): Promise<FeaturesResponse> {
@@ -31,4 +52,14 @@ export async function fetchBrowserControlEnabled(): Promise<boolean> {
  */
 export async function fetchMcpTasksEnabled(): Promise<boolean> {
   return (await fetchFeatures()).mcp_tasks?.enabled ?? false;
+}
+
+export async function fetchSubagentBatchesCapability(): Promise<SubagentBatchesCapability> {
+  const feature = (await fetchFeatures()).subagent_batches;
+  const legacyEnabled = feature?.enabled ?? false;
+  return {
+    repositoryAvailable: feature?.repository_available ?? legacyEnabled,
+    workerRunning: feature?.worker_running ?? legacyEnabled,
+    maxRunning: feature?.max_running ?? 0,
+  };
 }

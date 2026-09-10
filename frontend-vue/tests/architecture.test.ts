@@ -335,6 +335,8 @@ const l2Files = [
   "app/components/ui/popover/PopoverContent.vue",
   "app/components/ui/popover/PopoverTrigger.vue",
   "app/components/ui/popover/index.ts",
+  "app/components/ui/progress/Progress.vue",
+  "app/components/ui/progress/index.ts",
   "app/components/ui/reasoning/Reasoning.vue",
   "app/components/ui/reasoning/ReasoningContent.vue",
   "app/components/ui/reasoning/ReasoningTrigger.vue",

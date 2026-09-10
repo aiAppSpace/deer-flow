@@ -51,6 +51,7 @@ import {
 import ContextUsageBadge from "@/components/workspace/ContextUsageBadge.vue";
 import ThreadArchiveStatus from "@/components/workspace/ThreadArchiveStatus.vue";
 import ThreadBackgroundTasks from "@/components/workspace/ThreadBackgroundTasks.vue";
+import ThreadSubagentBatches from "@/components/workspace/ThreadSubagentBatches.vue";
 import TodoList from "@/components/workspace/TodoList.vue";
 import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import WorkspacePanels from "@/components/workspace/WorkspacePanels.vue";
@@ -1764,6 +1765,11 @@ onUnmounted(() => {
               不渲染），不在这里重复判一次——判两处迟早会分叉。
             -->
             <ThreadBackgroundTasks
+              v-if="routeThreadId && !isDemo"
+              :thread-id="routeThreadId"
+            />
+            <!-- 批次紧跟后台任务，与上游 chat-page.tsx 的顺序一致。 -->
+            <ThreadSubagentBatches
               v-if="routeThreadId && !isDemo"
               :thread-id="routeThreadId"
             />

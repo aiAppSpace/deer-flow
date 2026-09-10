@@ -1,7 +1,8 @@
 /*
   【文件职责】     按 feature flag 各自加载 Gateway 的 /api/features，并提供 fail-closed 只读状态。
   【架构位置】     L3 Vue adapter
-  【主要导出】     useAgentsApiEnabled · useBrowserControlEnabled · useMcpTasksEnabled
+  【主要导出】     useAgentsApiEnabled · useBrowserControlEnabled · useMcpTasksEnabled ·
+                   useSubagentBatchesCapability
   【依赖关系】     core/features API · core/agents/feature-cache · Vue lifecycle
   【边界与注意】   **一个 flag 一份状态，不是一份共享状态。** React 用两个独立的
                    React Query key（["features","agents_api"] 与
@@ -29,7 +30,11 @@ import {
   resolveAgentsApiEnabled,
   writeCachedAgentsApiEnabled,
 } from "@/core/agents/feature-cache";
-import { fetchFeatures } from "@/core/features/api";
+import {
+  fetchFeatures,
+  fetchSubagentBatchesCapability,
+  type SubagentBatchesCapability,
+} from "@/core/features/api";
 
 const agentsApiEnabled = ref(true);
 const agentsApiLoaded = ref(false);
@@ -37,9 +42,16 @@ const browserControlEnabled = ref(false);
 const browserControlLoaded = ref(false);
 const mcpTasksEnabled = ref(false);
 const mcpTasksLoaded = ref(false);
+const subagentBatches = ref<SubagentBatchesCapability>({
+  repositoryAvailable: false,
+  workerRunning: false,
+  maxRunning: 0,
+});
+const subagentBatchesLoaded = ref(false);
 let agentsApiInFlight: Promise<void> | null = null;
 let browserControlInFlight: Promise<void> | null = null;
 let mcpTasksInFlight: Promise<void> | null = null;
+let subagentBatchesInFlight: Promise<void> | null = null;
 
 async function loadAgentsApi() {
   const cached = readCachedAgentsApiEnabled();
@@ -74,6 +86,21 @@ async function loadMcpTasks() {
     mcpTasksEnabled.value = false;
   } finally {
     mcpTasksLoaded.value = true;
+  }
+}
+
+async function loadSubagentBatches() {
+  try {
+    subagentBatches.value = await fetchSubagentBatchesCapability();
+  } catch {
+    // fail-closed：两个能力都当没有，入口整块不出。
+    subagentBatches.value = {
+      repositoryAvailable: false,
+      workerRunning: false,
+      maxRunning: 0,
+    };
+  } finally {
+    subagentBatchesLoaded.value = true;
   }
 }
 
@@ -128,5 +155,25 @@ export function useMcpTasksEnabled(options: { enabled?: boolean } = {}) {
     loaded: readonly(mcpTasksLoaded),
     mcpTasksEnabled: readonly(mcpTasksEnabled),
     refresh: refreshMcpTasks,
+  };
+}
+
+function refreshSubagentBatches() {
+  subagentBatchesInFlight ??= loadSubagentBatches().finally(() => {
+    subagentBatchesInFlight = null;
+  });
+  return subagentBatchesInFlight;
+}
+
+export function useSubagentBatchesCapability(
+  options: { enabled?: boolean } = {},
+) {
+  onMounted(() => {
+    if (options.enabled !== false) void refreshSubagentBatches();
+  });
+  return {
+    loaded: readonly(subagentBatchesLoaded),
+    capability: readonly(subagentBatches),
+    refresh: refreshSubagentBatches,
   };
 }
