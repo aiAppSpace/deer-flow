@@ -18,8 +18,8 @@
 | 单测 | 2615 | 2617 全绿 |
 | `make e2e-mock` | 全绿 | 317 passed |
 | `make e2e-backend` | 全绿 | 22 passed |
-| `make e2e-parity` | 121 passed | **121 passed**，台账 NEW=0 / GONE=0 |
-| 对照台账 | 113 场景 / 210 行 | **不变**（这一轮的改动对取样零影响） |
+| `make e2e-parity` | 121 passed | **121 passed** |
+| 对照台账 | 113 场景 / **210** 行 | 113 场景 / **206** 行（零新增） |
 
 台账行数用 `node scripts/parity-ledger-report.mjs` 读，不要引用散文里的数字——
 上一轮交接里写的「232 行」是手工数错的，跑脚本得到的是 **210**。
@@ -65,13 +65,20 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 `useThreadStream` 在 `mode === "run-end"` 那条路径上调它，
 而 `thread-stream.dom.test.ts` 的假 runner 没有这个方法。
 
-### 5. 侧栏当前会话不加粗
+### 5. 侧栏当前会话不加粗（**已修，台账 210 → 206，零新增**）
 
 `ThreadSidebarItem.vue` 手抄了 `sidebarMenuButtonVariants` 的一部分类串，
 漏了同一串里的 `data-[active=true]:font-medium`——**当前这条会话在侧栏里不加粗**，
 而上游加粗。顺带漏的还有键盘焦点环、`hover:text-*`、`active:*` 与过渡。
 同一个仓库里 `ProjectThreadGroup.vue` 用的就是
 `<SidebarMenuButton as-child><NuxtLink>`，只有这一处是手抄的。
+
+为它加的门禁 `primitive-marker-classes`（`ui/` 定义的 `peer/x` / `group/x` 标记类
+不许在 `ui/` 之外被手写）**第一次跑就抓到第二处**：`WorkspaceChannelsList.vue`
+手写了 SidebarGroup / SidebarGroupLabel / SidebarMenu / SidebarMenuItem 四层，
+而上游同一处用的就是这四个 primitive；手写那版少了 `data-slot`、
+`SidebarGroupLabel` 的键盘焦点环与 `[&>svg]:size-4`，还留着一条死类
+`group/menu-item`（全仓没有任何 `group-hover/menu-item` 引用它）。
 
 ## 新增/加宽的门禁（都做过变异验证）
 
@@ -81,9 +88,15 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `playwright-use-options` | 往 `use` 顶层写一个 Playwright 不认识的键——不报错，只是不生效 |
 | `upstream-citations` 扩到 `.vue` | `Foo.vue:行号` 这类引用此前完全不在扫描面里 |
 | `scenario-coverage` 扩到 `states[].steps` | 选择器守卫看不见声明了终态的场景的绝大多数步骤 |
+| `primitive-marker-classes` | `ui/` 之外手写 primitive 的标记类——等于手抄基类，而手抄永远只抄一部分 |
 
 `playwright-use-options` 的判据取 Playwright **自己的类型声明**而不是白名单：
 升级之后哪天 `reducedMotion` 真进了 use 顶层，门禁自己就松开。
+
+**坑 202 的第四次**：`primitive-marker-classes` 写完当天就把
+`WorkspaceChannelsList.vue` 头注释里那句「还留着一条死类 `group/menu-item`」
+报成了违规。**扫源文本的守卫，扫之前一律先剥注释**——这条判据已经写在
+`handwritten-button` 与 `e2e-suite-contract` 的文件头里，写第三条时我还是漏了。
 
 ## 方法上的一条
 
@@ -101,15 +114,12 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `b7b97abc` | `use.reducedMotion` 从来没生效过 + 新门禁 `playwright-use-options` |
 | `cba5f2bd` | 两条守卫的扫描面加宽（`.vue:行号`、`states[].steps`） |
 | `655165b2` | `tests/` 接上类型检查并进 verify（134 → 0） |
+| `4b6d2dc5` | 本报告 + 挂账订正 |
+| （下一条） | 侧栏当前会话不加粗 + 新门禁 `primitive-marker-classes` |
 
 ## 下一轮的起点
 
-1. **侧栏当前会话行的字重**（台账 `thread-title-sync` 的 2 行 + 2 行宽度）：
-   根因已查到——`ThreadSidebarItem.vue` 手抄了 `sidebarMenuButtonVariants` 的
-   一部分类串，漏了 `data-[active=true]:font-medium`；同仓的
-   `ProjectThreadGroup.vue` 用的就是 `<SidebarMenuButton as-child><NuxtLink>`。
-   改法是把手抄那份换成 primitive。
-2. **重命名之后上游会重取、本仓不重取**（`thread-title-sync` 的 2 行
+1. **重命名之后上游会重取、本仓不重取**（`thread-title-sync` 的 2 行
    `requestsOnlyReact`）：哪种对还没判。
-3. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
+2. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
    否则改完没有机器能验证。

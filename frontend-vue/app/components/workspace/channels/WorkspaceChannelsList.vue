@@ -3,7 +3,7 @@
   【文件职责】     侧栏的 IM 渠道分组：一个 provider 一行，一个 Connect/Connected 按钮。
   【架构位置】     L3 product UI
   【主要导出】     默认 WorkspaceChannelsList 组件
-  【依赖关系】     useChannelConnections · channels provider-state · ui/button · workspace toast
+  【依赖关系】     useChannelConnections · channels provider-state · ui/button · ui/sidebar · workspace toast
   【边界与注意】   对照 frontend/src/components/workspace/channels/workspace-channels-list.tsx。
 
                    它和设置页的 ChannelConnections 是**两个**组件，不是一个组件的两种皮肤，
@@ -12,6 +12,13 @@
                    管理员还要能删 provider 配置。此前本仓用一个 variant 参数把两者压在一起，
                    代价是侧栏被迫背上多账号的那套模型：按钮写着「Add account」、容器是
                    article、还要多拉一次 /connections——全是设置页才需要的东西。
+
+                   **外壳走 ui/sidebar 的四个 primitive，不手抄它们的类串**（wave 203）。
+                   手抄那版少了 `data-slot`、`SidebarGroupLabel` 的键盘焦点环与
+                   `[&>svg]:size-4`，还留着一条死类 `group/menu-item`（没有任何
+                   `group-hover/menu-item` 引用它）。上游同一处用的就是
+                   SidebarGroup / SidebarGroupLabel / SidebarMenu / SidebarMenuItem。
+                   门禁：tests/guards/primitive-marker-classes.test.ts。
 
                    连接态读 provider.connection_status，不读 connections。理由见
                    core/channels/state.ts 的头注释：这两个字段同源，而 connection_status
@@ -23,6 +30,12 @@ import { computed, ref } from "vue";
 
 import ChannelProviderIcon from "./ChannelProviderIcon.vue";
 import { Button } from "@/components/ui/button";
+import {
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 import { useAuthSession } from "@/composables/useAuthSession";
 import { useChannelConnections } from "@/composables/useChannelConnections";
 import {
@@ -178,25 +191,17 @@ async function onRuntimeConfigSubmit(
     </div>
   </div>
 
-  <div
+  <SidebarGroup
     v-else-if="
       !channels.error.value && channels.enabled.value && visibleProviders.length
     "
-    data-sidebar="group"
-    class="relative flex w-full min-w-0 flex-col p-2 pt-0"
+    class="pt-0"
   >
-    <div
-      data-sidebar="group-label"
-      class="text-sidebar-foreground/70 flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium"
-    >
-      {{ $i18n.t.value.sidebar.channels }}
-    </div>
-    <ul data-sidebar="menu" class="flex w-full min-w-0 flex-col gap-1">
-      <li
+    <SidebarGroupLabel>{{ $i18n.t.value.sidebar.channels }}</SidebarGroupLabel>
+    <SidebarMenu>
+      <SidebarMenuItem
         v-for="provider in visibleProviders"
         :key="provider.provider"
-        data-sidebar="menu-item"
-        class="group/menu-item relative"
       >
         <div
           class="hover:bg-sidebar-accent flex h-10 items-center gap-2 rounded-md px-2 transition-colors"
@@ -233,9 +238,9 @@ async function onRuntimeConfigSubmit(
             </span>
           </Button>
         </div>
-      </li>
-    </ul>
-  </div>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  </SidebarGroup>
 
   <ChannelRuntimeConfigDialog
     :provider="setupProvider"

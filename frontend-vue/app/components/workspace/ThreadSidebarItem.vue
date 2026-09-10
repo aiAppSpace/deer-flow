@@ -12,6 +12,22 @@
 
                    抽出来的原因是**项目分组也要渲染会话行**：再复制一份标记，
                    上面那段取舍就会在两处各漂各的。
+
+                   **行的样式走 `SidebarMenuButton as-child`，不再手抄类串**
+                   （wave 203）。手抄那版只带了 `data-[active=true]` 的背景色与前景色，
+                   漏了同一串里的 `data-[active=true]:font-medium`——于是**当前这条会话
+                   在侧栏里不加粗**，而上游加粗。对照台账 `thread-title-sync` 上
+                   `text:Renamed title fontWeight React=500 Vue=400` 报的就是它
+                   （宽度那 2.1px 是同一处差异的第二个投影）。
+                   顺带一起回来的还有键盘焦点环（`outline-hidden ring-sidebar-ring
+                   focus-visible:ring-2`）、`hover:text-sidebar-accent-foreground`、
+                   `active:*` 与 `transition-[width,height,padding]`——都是手抄时漏的。
+
+                   `pr-8` 仍然写在调用点：上游那 8px 是
+                   `group-has-data-[sidebar=menu-action]/menu-item:pr-8` 给
+                   `SidebarMenuAction` 让出来的，而本仓的操作菜单是普通
+                   `DropdownMenuTrigger`（理由见 ThreadActionsMenu.vue），
+                   没有 `data-sidebar="menu-action"`，那条选择器不会命中。
 -->
 <script setup lang="ts">
 import { computed } from "vue";
@@ -21,7 +37,7 @@ import { Pin } from "lucide-vue-next";
 import ThreadActionsMenu from "@/components/workspace/ThreadActionsMenu.vue";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
 import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
-import { SidebarMenuItem } from "@/components/ui/sidebar";
+import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import {
   channelSourceOfThread,
   pathOfThread,
@@ -78,41 +94,40 @@ defineEmits<{
 
 <template>
   <SidebarMenuItem>
-    <NuxtLink
-      data-slot="sidebar-menu-button"
-      data-sidebar="menu-button"
-      :to="pathOfThread(props.thread)"
-      :data-active="props.isActive"
-      :aria-label="branchLabel"
-      :title="branchLabel"
-      :data-branch-depth="
-        props.branchEntry && props.branchEntry.depth > 0
-          ? props.branchEntry.depth
-          : undefined
-      "
-      :data-branch-parent-id="props.branchEntry?.parentThread?.thread_id"
-      class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground peer/menu-button flex h-8 w-full min-w-0 items-center gap-2 overflow-hidden rounded-md p-2 pr-8 text-left text-sm whitespace-nowrap"
-    >
-      <span
-        v-if="branchIndentPx !== null"
-        aria-hidden="true"
-        data-testid="thread-branch-stem"
-        class="text-muted-foreground/70 shrink-0 font-mono text-[10px] leading-none"
-        :style="{ marginLeft: `${branchIndentPx}px` }"
-        >{{ props.branchEntry?.isLastSibling ? "└─" : "├─" }}</span
+    <SidebarMenuButton :is-active="props.isActive" as-child>
+      <NuxtLink
+        :to="pathOfThread(props.thread)"
+        :aria-label="branchLabel"
+        :title="branchLabel"
+        :data-branch-depth="
+          props.branchEntry && props.branchEntry.depth > 0
+            ? props.branchEntry.depth
+            : undefined
+        "
+        :data-branch-parent-id="props.branchEntry?.parentThread?.thread_id"
+        class="text-muted-foreground min-w-0 pr-8 whitespace-nowrap"
       >
-      <ThreadChannelIcon :source="channelSourceOfThread(props.thread)" />
-      <Pin
-        v-if="props.pinned"
-        aria-hidden="true"
-        class="text-muted-foreground size-3.5 shrink-0"
-      />
-      <span class="min-w-0 truncate">{{ props.title }}</span>
-      <ThreadChannelBadge
-        :source="channelSourceOfThread(props.thread)"
-        class="ml-auto h-5 max-w-14 shrink-0 px-1.5 text-[10px]"
-      />
-    </NuxtLink>
+        <span
+          v-if="branchIndentPx !== null"
+          aria-hidden="true"
+          data-testid="thread-branch-stem"
+          class="text-muted-foreground/70 shrink-0 font-mono text-[10px] leading-none"
+          :style="{ marginLeft: `${branchIndentPx}px` }"
+          >{{ props.branchEntry?.isLastSibling ? "└─" : "├─" }}</span
+        >
+        <ThreadChannelIcon :source="channelSourceOfThread(props.thread)" />
+        <Pin
+          v-if="props.pinned"
+          aria-hidden="true"
+          class="text-muted-foreground size-3.5 shrink-0"
+        />
+        <span class="min-w-0 truncate">{{ props.title }}</span>
+        <ThreadChannelBadge
+          :source="channelSourceOfThread(props.thread)"
+          class="ml-auto h-5 max-w-14 shrink-0 px-1.5 text-[10px]"
+        />
+      </NuxtLink>
+    </SidebarMenuButton>
     <ThreadActionsMenu
       :thread="props.thread"
       :pinned="props.pinned"

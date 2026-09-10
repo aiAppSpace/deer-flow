@@ -662,10 +662,7 @@
         "POST /api/threads/search"
       ],
       "requestsOnlyVue": [],
-      "geometry": [
-        "text:Renamed title width React=90.9 Vue=88.8 Δ-2.1",
-        "text:Renamed title fontWeight React=500 Vue=400"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -681,10 +678,7 @@
         "POST /api/threads/search"
       ],
       "requestsOnlyVue": [],
-      "geometry": [
-        "text:Renamed title width React=90.9 Vue=88.8 Δ-2.1",
-        "text:Renamed title fontWeight React=500 Vue=400"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],

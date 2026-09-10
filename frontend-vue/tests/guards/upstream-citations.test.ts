@@ -202,10 +202,7 @@ function basenameIndex(roots: string[], exts: string[]): Map<string, string[]> {
  * 按 basename 找，再用**路径后缀**精确化——与上游那一档同一套解析。
  * 找不到候选返回 `null`，与「找到了但行号越界」区分开。
  */
-function resolve(
-  index: Map<string, string[]>,
-  ref: string,
-): string[] | null {
+function resolve(index: Map<string, string[]>, ref: string): string[] | null {
   const base = ref.slice(ref.lastIndexOf("/") + 1);
   const candidates = index.get(base) ?? [];
   const exact = candidates.filter((path) =>

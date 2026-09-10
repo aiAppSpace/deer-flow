@@ -253,9 +253,26 @@ login/setup 页——这些都还没有逐个读代码比对。
   `requestsOnlyReact: GET /api/langgraph/threads/{id}` 与 `POST /api/threads/search`。
   本仓靠乐观缓存更新，上游改完再读一遍。哪种对还没判——先记下读数。
 
-- **侧栏当前会话行的字重**（`thread-title-sync` 量到 2 行）：
-  `text:Renamed title fontWeight React=500 Vue=400`。上游给选中行 `font-medium`，
-  本仓没有。看着像小事，但它是「当前在哪条会话」的唯一视觉线索之一。
+- ~~**侧栏当前会话行的字重**（`thread-title-sync` 量到 2 行）~~ **已修（2026-09-11）。**
+  根因不是「忘了写 `font-medium`」，是 **`ThreadSidebarItem.vue` 手抄了
+  `sidebarMenuButtonVariants` 的一部分类串**——抄了 `data-[active=true]` 的背景色与
+  前景色，漏了同一串里的 `data-[active=true]:font-medium`。一起漏的还有键盘焦点环
+  （`outline-hidden ring-sidebar-ring focus-visible:ring-2`）、
+  `hover:text-sidebar-accent-foreground`、`active:*` 与 `transition-*`。
+  同一个仓库里 `ProjectThreadGroup.vue` 用的就是
+  `<SidebarMenuButton as-child><NuxtLink>`，只有这一处是手抄的。
+
+  **坑 202 的第四次**：这条新守卫写完当天就把 `WorkspaceChannelsList.vue` 头注释里
+  那句「还留着一条死类 `group/menu-item`」报成了违规。**扫源文本的守卫，扫之前一律
+  先剥注释**——这条判据已经写在 `handwritten-button` 与 `e2e-suite-contract` 的
+  文件头里，而我写第三条时还是漏了。
+
+  **新门禁 `primitive-marker-classes`**：`ui/` 定义的那些 `peer/x` / `group/x`
+  标记类不许在 `ui/` 之外被手写出来——写下 `peer/menu-button` 等于宣称「我就是那颗
+  SidebarMenuButton」，而手抄永远只抄一部分。它第一次跑就抓到**第二处**：
+  `WorkspaceChannelsList.vue` 手写了 `SidebarGroup` / `SidebarGroupLabel` /
+  `SidebarMenu` / `SidebarMenuItem` 四层（上游那一处用的是这四个 primitive），
+  其中 `group/menu-item` 还是条死类——没有任何 `group-hover/menu-item` 引用它。
 
 
 - **`topology.spec.ts:112 › react renders the same accessibility tree on two loads` 会偶发红。**
@@ -388,3 +405,4 @@ login/setup 页——这些都还没有逐个读代码比对。
 | `playwright-use-options` | 往 Playwright 的 `use` 顶层写一个它不认识的键——不报错，只是不生效 | 探针实测：`use.reducedMotion` → `matches === false`；`use.contextOptions.reducedMotion` → `true` |
 | `upstream-citations` 扩到 `.vue` | `Foo.vue:行号` 这类引用从来没被验过，而它是本仓组件的主要文件形式 | 仓里 12 处，此前一条都没进扫描面；变异两种失效（越界 / 文件不存在）都能报 |
 | `scenario-coverage` 扩到 `states[].steps` | 选择器守卫只看 `settle`/`steps`，而声明了终态的场景把步骤写在 `states[].steps` 里 | 把一条 `states[].steps` 的选择器换成 `.mutation-probe`，扩之前不响、扩之后报 |
+| `primitive-marker-classes` | `ui/` 之外手写 primitive 的标记类（`peer/menu-button` 之类）——等于手抄基类，而手抄永远只抄一部分 | 第一次跑就抓到两处：侧栏会话行漏 `data-[active=true]:font-medium`、channels 列表手写了四层 sidebar primitive |
