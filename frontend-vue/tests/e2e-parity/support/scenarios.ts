@@ -1632,6 +1632,14 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         value: "Renamed title",
       },
       { kind: "click", target: { role: "button", name: /^(Save|保存)$/ } },
+      /*
+        **等对话框真的关掉再取样。** 「新标题出现」不是终态：那一刻焦点还在
+        往回还（对话框把它交还给触发它的那颗 ⋯ 键），取样早一点就会量到
+        `focus: React=body Vue=button "更多"` 这种**只在一个语言维度上出现**的幻影差异
+        ——实测它在一轮里有、下一轮里没有。语言不对称的差异基本都是取样时机，
+        不是渲染规则（同 chat-thread-init-ordering 那次）。
+      */
+      { kind: "hidden", target: { role: "dialog", name: /^(Rename|重命名)$/ } },
       { kind: "visible", target: { text: "Renamed title" } },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],

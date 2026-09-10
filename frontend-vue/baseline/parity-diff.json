@@ -685,9 +685,7 @@
         "text:Renamed title width React=90.9 Vue=88.8 Δ-2.1",
         "text:Renamed title fontWeight React=500 Vue=400"
       ],
-      "focus": [
-        "React=body Vue=button \"更多\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],
