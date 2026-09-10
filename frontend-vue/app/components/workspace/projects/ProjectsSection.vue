@@ -59,7 +59,8 @@ const emit = defineEmits<{
 
 const { $i18n } = useNuxtApp();
 const toast = useWorkspaceToast();
-const threads = useThreads();
+/* 只读缓存：与侧栏共用同一个 query key，不自己发请求（见 useThreads 的 enabled）。 */
+const threads = useThreads({ enabled: false });
 const { create } = useProjectMutations();
 
 const displayMode = ref(getLocalSettings().projects.displayMode);

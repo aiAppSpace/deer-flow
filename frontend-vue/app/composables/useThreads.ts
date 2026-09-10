@@ -10,7 +10,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/vue-query";
-import { computed, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
+import { computed, reactive, toValue, type MaybeRefOrGetter } from "vue";
 
 import { getAPIClient } from "@/core/api/api-client";
 import { projectKeys } from "@/core/projects/query-keys";
@@ -71,7 +71,17 @@ const THREAD_LIST_PARAMS: InfiniteThreadsParams = {
  * 想看已归档的那份，显式传 `true`。
  */
 export function useThreads(
-  options: { archived?: MaybeRefOrGetter<boolean> } = {},
+  options: {
+    archived?: MaybeRefOrGetter<boolean>;
+    /**
+     * 这个调用点要不要**自己发请求**。缺省要。
+     *
+     * 只读缓存的调用点（`AgentChat.vue` 读 `headerTitle`、`ProjectsSection.vue`
+     * 读分组）传 `false`：它们与侧栏共用同一个 query key，侧栏取回来的数据它们
+     * 直接就能读到，自己再发一次是白发。上游的 chat-page 压根不挂这个查询。
+     */
+    enabled?: MaybeRefOrGetter<boolean>;
+  } = {},
 ) {
   const queryClient = useQueryClient();
   const apiClient = getAPIClient();
@@ -82,9 +92,25 @@ export function useThreads(
   const queryKey = computed(
     () => [...INFINITE_THREADS_QUERY_KEY_PREFIX, params.value] as const,
   );
+  /*
+    **查询自己会跑。**（2026-09-11 改；此前是 `enabled: false` 的手动查询，
+    `eaf9d6a7` 写下时没有留理由。）
+
+    手动查询在这个仓库里是有代价的，而且代价是量出来的：Vue Query 5 对
+    `enabled: false` 的查询，`invalidateQueries` / `refetchQueries`
+    （含 `type: "all"`）**都不会跑 queryFn**，`resetQueries` 更是**把数据清空而不重取**。
+    于是本仓所有针对列表 key 的失效全是空操作，产生过两个真缺陷：
+
+    - `core/threads/archive.ts` 归档时 `resetQueries` 这个 key——探针实测侧栏
+      从 1 条变成 0 条且没有重取，**归档一条会话侧栏就空了**；
+    - run 结束后 `invalidateStoppedThreadCaches` 不重取，对照台账上 4 行
+      `requestsOnlyReact: POST /api/threads/search` 就是它。
+
+    「谁来发第一次请求」因此交回给 Vue Query，调用点只决定**要不要发**。
+  */
   const query = useInfiniteQuery({
     queryKey,
-    enabled: false,
+    enabled: computed(() => toValue(options.enabled) ?? true),
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) =>
       fetchInfiniteThreadsPage(
@@ -126,24 +152,17 @@ export function useThreads(
   });
   const threads = computed(() => view.value.threads);
   const displayedThreads = computed(() => view.value.displayedThreads);
-  let initialLoadRequested = false;
-
+  /**
+   * 现在就再问一次后端。
+   *
+   * 查询自己会发第一次请求、换页签也会跟着 query key 自己重取，所以这里只剩
+   * 「显式重取」这一个用途：`chats/index.vue` 的重试按钮、以及改名之后的收敛。
+   * **`force` 之外什么都不做**——留着这个形参是因为两个调用方的语义不同，
+   * 把「什么都不做」写出来比让调用方去猜好。
+   */
   async function loadInitial(force = false) {
-    if (force || !initialLoadRequested) {
-      initialLoadRequested = true;
-      await query.refetch();
-    }
+    if (force) await query.refetch();
   }
-
-  /*
-    换页签就是换 query key，新 key 名下一页数据都没有。`enabled: false` 的查询
-    不会自己跑，而 `loadInitial` 有一道「只首屏取一次」的守卫——不在这里重置它，
-    切到「已归档」会停在一个永远空的列表上，看起来就像用户一条归档都没有。
-  */
-  watch(params, () => {
-    initialLoadRequested = false;
-    void loadInitial();
-  });
 
   let loadMorePromise: ReturnType<typeof query.fetchNextPage> | null = null;
   function loadMore() {

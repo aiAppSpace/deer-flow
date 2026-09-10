@@ -188,6 +188,17 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ---
 
+## 读台账数字之前先知道这一条（2026-09-11 量出来）
+
+`node scripts/parity-ledger-report.mjs` 打印的「台账 N 行」是**去重之后**的数字：
+它内部用 `Set` 收行，同一条差异出现三次只算一行。真正的门禁
+（`diff.spec.ts` 的 `toEqual(baseline.entries)`）是整棵深比，**看得见重复**。
+
+实测撞上的地方：`chat-thread-init-ordering` 上
+`requestsOnlyReact: POST /api/threads/search` 有 **3 条重复**，修掉两条之后
+报告里的行数**一点没变**（204 → 204），按多重集数才看得出 226 → 224。
+**判「有没有变好」要比基线文件本身，不要只看这个数字。**
+
 ## 对照台账：2026-09-10 收工时的实测状态
 
 数字都用 `baseline/parity-diff.json` 与实跑的 `report.json` 逐行比出来，不是散文估计。

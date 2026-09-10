@@ -83,7 +83,6 @@ onMounted(() => {
     才是同一个行为。
   */
   searchInput.value?.focus();
-  void threads.loadInitial();
   observer = new IntersectionObserver(
     (entries) => {
       if (!isSearching.value && entries.some((entry) => entry.isIntersecting)) {

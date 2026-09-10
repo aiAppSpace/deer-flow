@@ -175,7 +175,8 @@ const props = defineProps<{
 const { $i18n } = useNuxtApp();
 const route = useRoute();
 const router = useRouter();
-const threads = useThreads();
+/* 只读缓存：与侧栏共用同一个 query key，不自己发请求（见 useThreads 的 enabled）。 */
+const threads = useThreads({ enabled: false });
 /*
   workspace 与 showcase 两个 layout 都 provide 了这个 owner，所以这里可以直接 inject。
   上游同一批提示走 sonner 的全局 toast，本仓走这一份；两边都是「一个应用一个 viewport」。

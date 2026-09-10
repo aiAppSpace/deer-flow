@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 
 import { useThreads } from "@/composables/useThreads";
+import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
 import type { AgentThread } from "@/core/threads/types";
 
 const apiClient = vi.hoisted(() => ({
@@ -77,6 +78,47 @@ describe("useThreads server-state owner", () => {
     await threads!.loadMore();
     await flushPromises();
     expect(searchThreadsByArchive).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+    queryClient.clear();
+  });
+
+  /*
+    **归档会 `resetQueries` 这个 key**（core/threads/archive.ts：成员关系变了、
+    旧的分页偏移作废，reset 而不是 invalidate 是对的）。这一条钉的是 reset 之后
+    列表**还会自己回来**。
+
+    此前不会：列表是 `enabled: false` 的手动查询，探针实测 Vue Query 5 对这种查询
+    `resetQueries` **把数据清空而且不重取**——归档一条会话，侧栏当场空了，
+    直到换路由或手动刷新。现有 e2e 没有在归档之后看侧栏，所以门禁全绿。
+  */
+  it("列表被 resetQueries 清空之后会自己重新取回来", async () => {
+    searchThreadsByArchive.mockReset().mockResolvedValue([thread("t-1")]);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let threads: ReturnType<typeof useThreads> | undefined;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          threads = useThreads();
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    );
+
+    await threads!.loadInitial();
+    await flushPromises();
+    expect(threads!.threads).toHaveLength(1);
+
+    await queryClient.resetQueries({
+      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+    });
+    await flushPromises();
+
+    expect(searchThreadsByArchive.mock.calls.length).toBeGreaterThan(1);
+    expect(threads!.threads).toHaveLength(1);
+
     wrapper.unmount();
     queryClient.clear();
   });

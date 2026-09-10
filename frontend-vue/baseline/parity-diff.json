@@ -190,8 +190,6 @@
         "- button \"Edit and rerun\""
       ],
       "requestsOnlyReact": [
-        "POST /api/threads/search",
-        "POST /api/threads/search",
         "POST /api/threads/search"
       ],
       "requestsOnlyVue": [],

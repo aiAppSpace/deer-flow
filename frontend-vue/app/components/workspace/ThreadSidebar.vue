@@ -122,7 +122,6 @@ onMounted(() => {
   restoreFromCookie();
   globalThis.addEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.addEventListener("deerflow:collapse-sidebar", collapseSidebar);
-  void threads.loadInitial();
   observer = new IntersectionObserver(
     (entries) => {
       if (threads.canLoadMore && entries.some((entry) => entry.isIntersecting))
