@@ -2,230 +2,130 @@
   "$comment": "React 与 Vue 在每个对照场景上的双向差异。这份清单只能缩短：修好一条就从这里删一条，新出现一条会让 e2e-parity 立刻红。空数组是目标状态，不是「还没测」。刷新用 make parity-accept——它会逐行比对新旧，**有新增行就拒写**，真要接受得 PARITY_ACCEPT_GROW=1 再跑一次（wave 85 之前这句「只能缩短」没有任何机器在守，accept 是无条件覆盖）。键是 场景/断点/主题/语言；aria* 是可访问性树的双向逐行差异，requests* 是产品 API 请求的多重集差异，geometry 是锚点的盒模型与色板差异。",
   "entries": {
     "chat/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/desktop/dark/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/desktop/dark/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/tablet/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/tablet/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/tablet/dark/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/tablet/dark/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "chat/mobile/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -239,12 +139,8 @@
     "chat/mobile/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -258,12 +154,8 @@
     "chat/mobile/dark/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -277,12 +169,8 @@
     "chat/mobile/dark/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -297,208 +185,120 @@
       "ariaOnlyReact": [
         "- alert",
         "- button \"Copy to clipboard\"",
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Hello",
-        "- text: Projects"
+        "- text: Hello"
       ],
       "ariaOnlyVue": [
         "- alert: New chat - DeerFlow"
       ],
       "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search",
         "POST /api/threads/search",
         "POST /api/threads/search",
         "POST /api/threads/search"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "geometry": [
         "text:Hello from DeerFlow! y React=244 Vue=164 Δ-80"
       ],
       "focus": [],
       "order": [
-        "第 38 个公共节点 React=- button \"Copy to clipboard\" Vue=- paragraph: Hello from DeerFlow!"
+        "第 41 个公共节点 React=- button \"Copy to clipboard\" Vue=- paragraph: Hello from DeerFlow!"
       ],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "button"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
+        "第 18 个公共可 tab 元素 React=button Vue=textarea"
       ]
     },
     "sidebar/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=button(option)"
-      ]
+      "tabOrder": []
     },
     "sidebar/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "thread-history/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
-      "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=button(option)"
-      ]
-    },
-    "thread-history/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- menuitem \"Archive chat\"",
-        "- menuitem \"Move to project\""
-      ],
-      "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/projects?status=active",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "role:menuitem[/^(Delete|删除)$/] y React=520 Vue=399.9 Δ-120.1",
-        "role:menuitem[/^(Export as Markdown|导出为 Markdown)$/] y React=420 Vue=364 Δ-56",
-        "role:menuitem[/^(Rename|重命名)$/] y React=351 Vue=295 Δ-56",
-        "text:First conversation y React=350 Vue=294 Δ-56",
-        "text:Second conversation y React=314 Vue=258 Δ-56"
-      ],
-      "focus": [],
-      "order": [],
-      "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div(menuitem)",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-history/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- menuitem \"归档\"",
-        "- menuitem \"移动到项目\""
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/projects?status=active",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "role:menuitem[/^(Delete|删除)$/] y React=520 Vue=399.9 Δ-120.1",
-        "role:menuitem[/^(Export as Markdown|导出为 Markdown)$/] y React=420 Vue=364 Δ-56",
-        "role:menuitem[/^(Rename|重命名)$/] y React=351 Vue=295 Δ-56",
-        "text:First conversation y React=350 Vue=294 Δ-56",
-        "text:Second conversation y React=314 Vue=258 Δ-56"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div(menuitem)",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "agent-chat/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "agent-chat/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "showcase-public-thread/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -531,127 +331,74 @@
       "tabOrder": []
     },
     "agent-create-name-step/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
     "agent-create-name-step/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
     "agents-feature-disabled#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
     "agents-feature-disabled#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
     "agents-feature-disabled#loading/desktop/light/en-US": {
       "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
         "- button \"New Agent\"",
-        "- button \"New project\"",
-        "- text: Loading...",
-        "- text: Projects"
+        "- text: Loading..."
       ],
       "ariaOnlyVue": [
         "- /url: /workspace/agents/new",
         "- link \"New Agent\":",
         "- status: Loading agents…"
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "button"
       ],
       "tabbablesOnlyVue": [
@@ -661,30 +408,21 @@
     },
     "agents-feature-disabled#loading/desktop/light/zh-CN": {
       "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
         "- button \"新建智能体\"",
-        "- button \"新建项目\"",
-        "- text: 加载中...",
-        "- text: 项目"
+        "- text: 加载中..."
       ],
       "ariaOnlyVue": [
         "- /url: /workspace/agents/new",
         "- link \"新建智能体\":",
         "- status: 正在加载智能体…"
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "button"
       ],
       "tabbablesOnlyVue": [
@@ -695,27 +433,19 @@
     "agents-feature-disabled#gallery/desktop/light/en-US": {
       "ariaOnlyReact": [
         "- combobox \"Default model\"",
-        "- combobox: All enabled subagents",
         "- dialog \"Model settings\":",
-        "- heading \"Model settings\" [level=2]",
-        "- paragraph: Choose which subagents this Custom Agent may invoke. This is enforced by the server.",
-        "- paragraph: Subagent access"
+        "- heading \"Model settings\" [level=2]"
       ],
       "ariaOnlyVue": [
         "- combobox \"Default model\": parity-basic · Unavailable",
         "- dialog \"Model settings · test-agent\":",
         "- heading \"Model settings · test-agent\" [level=2]"
       ],
-      "requestsOnlyReact": [
-        "GET /api/subagents",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
-        "selector:[role=dialog] y React=122.5 Vue=190.1 Δ67.6",
-        "selector:[role=dialog] height React=555 Vue=419.9 Δ-135.1"
+        "selector:[role=dialog] y React=122.5 Vue=125.6 Δ3.1",
+        "selector:[role=dialog] height React=555 Vue=548.8 Δ-6.2"
       ],
       "focus": [
         "React=button Vue=input[number]"
@@ -725,10 +455,7 @@
       "tabbablesOnlyReact": [
         "button",
         "button",
-        "button",
-        "button",
-        "button",
-        "button(combobox)"
+        "button"
       ],
       "tabbablesOnlyVue": [
         "a",
@@ -736,33 +463,25 @@
         "a"
       ],
       "tabOrder": [
-        "第 11 个公共可 tab 元素 React=button Vue=button(combobox)"
+        "第 13 个公共可 tab 元素 React=button Vue=button(combobox)"
       ]
     },
     "agents-feature-disabled#gallery/desktop/light/zh-CN": {
       "ariaOnlyReact": [
         "- combobox \"默认模型\"",
-        "- combobox: 全部已启用子智能体",
         "- dialog \"模型设置\":",
-        "- heading \"模型设置\" [level=2]",
-        "- paragraph: 子智能体权限",
-        "- paragraph: 选择这个 Custom Agent 可以派遣哪些子智能体；服务端会强制执行该范围。"
+        "- heading \"模型设置\" [level=2]"
       ],
       "ariaOnlyVue": [
         "- combobox \"默认模型\": parity-basic · 不可用",
         "- dialog \"模型设置 · test-agent\":",
         "- heading \"模型设置 · test-agent\" [level=2]"
       ],
-      "requestsOnlyReact": [
-        "GET /api/subagents",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
-        "selector:[role=dialog] y React=140.5 Vue=200.1 Δ59.6",
-        "selector:[role=dialog] height React=519 Vue=399.9 Δ-119.1"
+        "selector:[role=dialog] y React=140.5 Vue=143.6 Δ3.1",
+        "selector:[role=dialog] height React=519 Vue=512.9 Δ-6.1"
       ],
       "focus": [
         "React=button Vue=input[number]"
@@ -772,10 +491,7 @@
       "tabbablesOnlyReact": [
         "button",
         "button",
-        "button",
-        "button",
-        "button",
-        "button(combobox)"
+        "button"
       ],
       "tabbablesOnlyVue": [
         "a",
@@ -783,46 +499,28 @@
         "a"
       ],
       "tabOrder": [
-        "第 11 个公共可 tab 元素 React=button Vue=button(combobox)"
+        "第 13 个公共可 tab 元素 React=button Vue=button(combobox)"
       ]
     },
     "browser-feature/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "browser-feature/desktop/light/zh-CN": {
       "ariaOnlyReact": [
         "- button \"Back\"",
         "- button \"Forward\"",
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
         "- heading \"Connecting to live browser…\" [level=3]",
         "- paragraph: Waiting for the first live frame.",
-        "- text: 项目",
         "- textbox \"Enter a URL and press Enter\""
       ],
       "ariaOnlyVue": [
@@ -832,14 +530,8 @@
         "- paragraph: 正在等待第一帧实时画面。",
         "- textbox \"输入网址后按 Enter\""
       ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:heading[/^(Connecting to live browser…|正在连接实时浏览器…)$/] x React=978.1 Vue=991.4 Δ13.3",
         "role:heading[/^(Connecting to live browser…|正在连接实时浏览器…)$/] width React=194.5 Vue=168 Δ-26.5"
@@ -847,338 +539,119 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "sidecar-chat/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) anim=none Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0) anim=none"
       ],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "sidecar-chat/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) anim=none Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0) anim=none"
       ],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-list-pin/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "text:Newest chat y React=314 Vue=258 Δ-56",
-        "text:Older chat y React=350 Vue=294 Δ-56"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-list-pin/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "text:Newest chat y React=314 Vue=258 Δ-56",
-        "text:Older chat y React=350 Vue=294 Δ-56"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-list-pin#mobile-drawer/mobile/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
         "GET /api/features",
-        "POST /api/threads/search",
         "POST /api/threads/search"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "role:button[/^(More|更多)$/] y React=314 Vue=258 Δ-56",
-        "text:Newest chat y React=314 Vue=258 Δ-56"
-      ],
+      "requestsOnlyVue": [],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 19 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-list-infinite-scroll/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- tab \"Archived\"",
-        "- tab \"Recent chats\" [selected]",
-        "- tablist \"Chats\":",
-        "- tabpanel \"Recent chats\":",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "selector:a:not([data-sidebar]):has-text(\"Conversation 001\") y React=216 Vue=160 Δ-56"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
       "focus": [],
       "order": [],
-      "depth": [
-        "- link \"Conversation 001 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 002 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 003 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 004 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 005 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 006 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 007 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 008 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 009 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 010 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 011 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 012 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 013 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 014 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 015 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 016 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 017 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 018 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 019 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 020 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 021 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 022 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 023 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 024 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 025 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 026 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 027 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 028 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 029 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 030 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 031 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 032 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 033 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 034 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 035 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 036 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 037 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 038 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 039 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 040 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 041 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 042 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 043 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 044 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 045 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 046 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 047 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 048 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 049 about 1 year ago\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 050 about 1 year ago\": React 深度 4 / Vue 深度 3"
-      ],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "div(tablist)",
-        "div(tabpanel)"
-      ],
+      "depth": [],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-list-infinite-scroll/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- tab \"已归档\"",
-        "- tab \"近期会话\" [selected]",
-        "- tablist \"对话\":",
-        "- tabpanel \"近期会话\":",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
-      "geometry": [
-        "selector:a:not([data-sidebar]):has-text(\"Conversation 001\") y React=216 Vue=160 Δ-56"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
       "focus": [],
       "order": [],
-      "depth": [
-        "- link \"Conversation 001 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 002 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 003 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 004 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 005 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 006 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 007 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 008 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 009 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 010 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 011 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 012 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 013 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 014 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 015 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 016 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 017 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 018 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 019 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 020 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 021 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 022 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 023 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 024 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 025 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 026 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 027 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 028 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 029 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 030 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 031 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 032 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 033 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 034 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 035 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 036 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 037 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 038 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 039 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 040 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 041 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 042 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 043 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 044 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 045 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 046 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 047 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 048 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 049 大约 1 年前\": React 深度 4 / Vue 深度 3",
-        "- link \"Conversation 050 大约 1 年前\": React 深度 4 / Vue 深度 3"
-      ],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "div(tablist)",
-        "div(tabpanel)"
-      ],
+      "depth": [],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "ui-polish-mobile/mobile/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -1192,12 +665,8 @@
     "ui-polish-mobile/mobile/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -1211,690 +680,396 @@
     "user-message-plain-text/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "user-message-plain-text/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "integrations#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"Account\" Vue=button \"Integrations\""
       ],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"账号\" Vue=button \"集成\""
       ],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#load-failed/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
         "GET /api/integrations/lark/status",
         "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status",
-        "POST /api/threads/search"
+        "GET /api/integrations/lark/status"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"Account\" Vue=button \"Integrations\""
       ],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#load-failed/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
         "GET /api/integrations/lark/status",
         "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status",
-        "POST /api/threads/search"
+        "GET /api/integrations/lark/status"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"账号\" Vue=button \"集成\""
       ],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-load-failed/desktop/light/en-US": {
       "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:",
         "- main: \"Error: boom\""
       ],
       "ariaOnlyVue": [
         "- alert: boom",
         "- main:"
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "text:/boom/ height React=24 Vue=20 Δ-4",
         "text:/boom/ color React=rgba(10,10,10,255) Vue=rgba(231,0,11,255)",
         "text:/boom/ fontSize React=16px Vue=14px"
       ],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-load-failed/desktop/light/zh-CN": {
       "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:",
         "- main: \"Error: boom\""
       ],
       "ariaOnlyVue": [
         "- alert: boom",
         "- main:"
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "text:/boom/ height React=24 Vue=20 Δ-4",
         "text:/boom/ color React=rgba(10,10,10,255) Vue=rgba(231,0,11,255)",
         "text:/boom/ fontSize React=16px Vue=14px"
       ],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Choose File\"",
-        "- button \"Install .skill\"",
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:switch[review] x React=1117 Vue=1121 Δ4",
         "role:switch[review] y React=361.9 Vue=357.8 Δ-4.1",
         "role:switch[review] fontSize React=14px Vue=16px"
       ],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
-        "button",
-        "div[scroll-area-viewport]",
-        "input[file]"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"Choose File\"",
-        "- button \"子智能体\"",
-        "- button \"安装 .skill\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:switch[review] x React=1117 Vue=1121 Δ4",
         "role:switch[review] y React=361.9 Vue=357.8 Δ-4.1",
         "role:switch[review] fontSize React=14px Vue=16px"
       ],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
-        "button",
-        "div[scroll-area-viewport]",
-        "input[file]"
+        "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-loading/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#skills-loading/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#permission-request/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#permission-request/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#change-app/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "integrations#change-app/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "branch-thread#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "branch-thread#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "branch-thread#turn-actions/desktop/light/en-US": {
       "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects",
         "- tooltip \"Branch conversation\""
       ],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "branch-thread#turn-actions/desktop/light/zh-CN": {
       "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目",
         "- tooltip \"分叉\""
       ],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "subtask-card/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "subtask-card/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "artifact-preview/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- radio \"Preview\" [checked]",
-        "- radio \"View source\""
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -1904,22 +1079,10 @@
       "tabOrder": []
     },
     "artifact-preview/mobile/light/en-US": {
-      "ariaOnlyReact": [
-        "- radio \"Preview\" [checked]",
-        "- radio \"View source\""
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -1929,22 +1092,10 @@
       "tabOrder": []
     },
     "artifact-preview/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- radio \"查看原始文件\"",
-        "- radio \"预览\" [checked]"
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -1954,22 +1105,10 @@
       "tabOrder": []
     },
     "artifact-panel-resize/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- radio \"Preview\" [checked]",
-        "- radio \"View source\""
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -1979,22 +1118,10 @@
       "tabOrder": []
     },
     "artifact-panel-resize/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- radio \"查看原始文件\"",
-        "- radio \"预览\" [checked]"
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -2006,22 +1133,14 @@
     "scheduled-tasks#default/desktop/light/en-US": {
       "ariaOnlyReact": [
         "- alert: Uses this thread's conversation history If this thread has an active run at the scheduled time, DeerFlow queues this occurrence and starts it when the thread is available. It fails if the configured queue wait limit is exceeded.",
-        "- button \"Duplicate\"",
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
         "- text: \"Context mode: Reuse thread Thread: thread-1\"",
-        "- text: \"Schedule: Recurring Next run: 07/02/2026, 01:00 AM Last run: 07/01/2026, 01:00 AM Last run id: run-42 Last error: Upstream model timed out\"",
-        "- text: Projects"
+        "- text: \"Schedule: Recurring Next run: 07/02/2026, 01:00 AM Last run: 07/01/2026, 01:00 AM Last run id: run-42 Last error: Upstream model timed out\""
       ],
       "ariaOnlyVue": [
         "- text: \"Context mode: Reuse thread Thread: thread-1 Schedule: Recurring Next run: 07/02/2026, 01:00 AM Last run: 07/01/2026, 01:00 AM Last run id: run-42 Last error: Upstream model timed out\""
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:button[/^(Save edit|保存编辑)$/] y React=1488 Vue=1307.8 Δ-180.2",
         "selector:[data-testid=\"schedule-preset\"] >> nth=1 y React=1328 Vue=1147.9 Δ-180.1",
@@ -2030,35 +1149,21 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "scheduled-tasks#default/desktop/light/zh-CN": {
       "ariaOnlyReact": [
         "- alert: 使用该线程的历史对话 如果触发时该线程正在运行，DeerFlow 会将本次执行排队，并在线程空闲后启动；超过配置的最长等待时间后会标记为失败。",
-        "- button \"复制\"",
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
         "- text: \"上下文模式: 复用线程 线程: thread-1\"",
-        "- text: \"调度: 重复 下次运行: 2026/07/02 01:00 上次运行: 2026/07/01 01:00 上次运行 ID: run-42 上次错误: Upstream model timed out\"",
-        "- text: 项目"
+        "- text: \"调度: 重复 下次运行: 2026/07/02 01:00 上次运行: 2026/07/01 01:00 上次运行 ID: run-42 上次错误: Upstream model timed out\""
       ],
       "ariaOnlyVue": [
         "- text: \"上下文模式: 复用线程 线程: thread-1 调度: 重复 下次运行: 2026/07/02 01:00 上次运行: 2026/07/01 01:00 上次运行 ID: run-42 上次错误: Upstream model timed out\""
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [
         "role:button[/^(Save edit|保存编辑)$/] y React=1412 Vue=1271.8 Δ-140.2",
         "selector:[data-testid=\"schedule-preset\"] >> nth=1 y React=1252 Vue=1111.9 Δ-140.1",
@@ -2067,309 +1172,184 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "scheduled-tasks#load-failed/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
         "GET /api/scheduled-tasks",
         "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks",
-        "POST /api/threads/search"
+        "GET /api/scheduled-tasks"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "scheduled-tasks#load-failed/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
         "GET /api/scheduled-tasks",
         "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks",
-        "POST /api/threads/search"
+        "GET /api/scheduled-tasks"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "settings-notification/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Subagents\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"Account\" Vue=button \"Notification\""
       ],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"Skills\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "settings-notification/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"子智能体\"",
-        "- listitem:"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"账号\" Vue=button \"通知\""
       ],
-      "order": [
-        "第 22 个公共节点 React=- listitem: Vue=- button \"技能\""
-      ],
+      "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": [
-        "第 7 个公共可 tab 元素 React=button Vue=textarea"
+        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "channels#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 14 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "channels#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 14 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "channels#runtime-config/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 14 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "channels#runtime-config/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 14 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "channels#runtime-config-edit/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 14 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "channels#runtime-config-edit/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "button",
-        "button",
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 14 个公共可 tab 元素 React=button Vue=textarea"
-      ]
+      "tabOrder": []
     },
     "thread-history-mermaid#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-history-mermaid#default/desktop/light/zh-CN": {
       "ariaOnlyReact": [
@@ -2379,10 +1359,7 @@
         "- button \"View fullscreen\":",
         "- button \"Zoom in\":",
         "- button \"Zoom out\":",
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- img \"Mermaid chart\":",
-        "- text: 项目"
+        "- img \"Mermaid chart\":"
       ],
       "ariaOnlyVue": [
         "- button \"下载图表\":",
@@ -2393,54 +1370,28 @@
         "- button \"重置缩放与平移\":",
         "- img \"Mermaid 图表\":"
       ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-history-mermaid#download-menu/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "thread-history-mermaid#download-menu/desktop/light/zh-CN": {
       "ariaOnlyReact": [
@@ -2450,10 +1401,7 @@
         "- button \"View fullscreen\":",
         "- button \"Zoom in\":",
         "- button \"Zoom out\":",
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- img \"Mermaid chart\":",
-        "- text: 项目"
+        "- img \"Mermaid chart\":"
       ],
       "ariaOnlyVue": [
         "- button \"下载图表\":",
@@ -2464,197 +1412,105 @@
         "- button \"重置缩放与平移\":",
         "- img \"Mermaid 图表\":"
       ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"Download diagram\" Vue=button \"下载图表\""
       ],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "workspace-changes#reasoning-menu/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "workspace-changes#reasoning-menu/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "workspace-changes#changes-panel/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.mdModified\""
       ],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "workspace-changes#changes-panel/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [
         "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.md修改+1 -1\""
       ],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "streaming-reasoning-order/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Group chats by project\"",
-        "- button \"New project\"",
-        "- text: Projects"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "streaming-reasoning-order/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"按项目分组对话\"",
-        "- button \"新建项目\"",
-        "- text: 项目"
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 6 个公共可 tab 元素 React=button Vue=a"
-      ]
+      "tabOrder": []
     },
     "artifact-stream-state/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/runs/run-00000000-0000-0000-0000-000000000001/artifacts/archive",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -2670,15 +1526,8 @@
       "ariaOnlyVue": [
         "- text: summary.txt Text 文件"
       ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/runs/run-00000000-0000-0000-0000-000000000001/artifacts/archive",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -2688,22 +1537,10 @@
       "tabOrder": []
     },
     "artifact-batched-stream#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- radio \"Preview\" [checked]",
-        "- radio \"View source\""
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -2713,22 +1550,10 @@
       "tabOrder": []
     },
     "artifact-batched-stream#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- radio \"查看原始文件\"",
-        "- radio \"预览\" [checked]"
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -2738,25 +1563,14 @@
       "tabOrder": []
     },
     "artifact-batched-stream#preview-failed/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- radio \"Preview\" [checked]",
-        "- radio \"View source\""
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
         "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
         "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "POST /api/threads/search"
+        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -2766,25 +1580,92 @@
       "tabOrder": []
     },
     "artifact-batched-stream#preview-failed/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- radio \"查看原始文件\"",
-        "- radio \"预览\" [checked]"
-      ],
-      "ariaOnlyVue": [
-        "- radio",
-        "- radio [checked]"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [
-        "GET /api/features",
-        "GET /api/features",
         "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
         "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "POST /api/threads/search"
+        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md"
       ],
-      "requestsOnlyVue": [
-        "POST /api/langgraph/threads/search"
-      ],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "artifact-viewer-window/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "artifact-viewer-window/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "artifact-table-preview/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "artifact-table-preview/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "project-detail/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "project-detail/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
