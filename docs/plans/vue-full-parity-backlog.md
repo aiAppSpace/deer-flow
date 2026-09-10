@@ -223,6 +223,13 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
+- **`topology.spec.ts:112 › react renders the same accessibility tree on two loads` 会偶发红。**
+  实测差异是上游第二次加载多出一颗 `button "Batches"`：`subagent_batches.enabled`
+  这个 feature 标志是异步到的，取样时它到没到决定了那颗按钮在不在。
+  **是上游侧的竞态，与本仓无关**，单独重跑那条 spec 5 条全过。
+  下次再看到它别当回归——判据是「差异只在 React 自己两次之间，本仓的台账是零差异」。
+
+
 - **`chat-thread-init-ordering` 上多出一颗 `button "Edit and rerun"`（3 行）。**
   这是 seq 移植带来的：本仓此前压住了第一个共有锚点之前那条受保护的人类消息，
   现在跟上游一样把它编织出来了（同一轮 6 行旧差异因此消失，含一处 80px 的垂直偏移），
