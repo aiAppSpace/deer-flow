@@ -1,6 +1,6 @@
 # Vue 对齐 React：2026-09-11 第三轮
 
-分支 `main-wc`，`b7b97abc` … `3b45f5c5` 共 7 个提交，全部已提交、**未推送**。
+分支 `main-wc`，`b7b97abc` … `48e9297a` 共 9 个提交，全部已提交、**未推送**。
 
 ## 一句话
 
@@ -117,6 +117,7 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `4b6d2dc5` | 本报告 + 挂账订正 |
 | `b5770d52` | 侧栏当前会话不加粗 + 新门禁 `primitive-marker-classes` |
 | `3b45f5c5` | 改名之后不与服务端收敛；顺带量出「失效对手动查询是空操作」 |
+| `48e9297a` | 归档会把侧栏列表清空——列表查询不该是手动查询 |
 
 ### 6. 改名之后不与服务端收敛（**已修，台账 206 → 204**）
 
@@ -125,10 +126,28 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 `enabled: false` 的手动查询，失效只把它标脏、没有观察者会去重取。
 改成强制重取才真的又问了一次后端。**是台账把这条假绿量出来的。**
 
+### 7. 归档一条会话会把侧栏列表清空（**已修**）
+
+与第 6 条同一个根因，但后果更重：`archive.ts` 对列表 key 调 `resetQueries`，
+而 Vue Query 5 对 `enabled: false` 的查询 **reset 会清空数据且不重取**——
+探针实测侧栏从 1 条变 0 条。现有 e2e 没有在归档之后看侧栏，所以门禁一直全绿。
+修法是把「谁来发第一次请求」交回给 Vue Query（列表查询自己会跑），
+只读缓存的两个调用点显式传 `enabled: false`。
+
+## 读台账数字的一条纪律（这一轮量出来的）
+
+`parity-ledger-report.mjs` 打印的「台账 N 行」是**去重后**的数字（内部用 `Set`）。
+`chat-thread-init-ordering` 上 `POST /api/threads/search` 有 3 条重复，
+修掉两条之后那个数字**一点没变**（204 → 204），按多重集才看得出 226 → 224。
+真正的门禁是 `diff.spec.ts` 的深比，看得见重复。**判有没有变好要比基线文件本身。**
+
 ## 下一轮的起点
 
-1. **`["threads", "search"]` 是个死缓存键**（已量清，判据与执行步骤写在
+1. 台账上还剩两行 `requestsOnlyReact: POST /api/threads/search`
+   （`chat-thread-init-ordering` 1 条、`thread-list-pin#mobile-drawer` 1 条）：
+   上游仍然比本仓多问一次列表，从这里接着查。
+2. **`["threads", "search"]` 是个死缓存键**（已量清，判据与执行步骤写在
    `vue-parity-open-accounts.md`）：本仓没有任何查询拥有它，产品侧 11 处读写失效
    全是空操作；单测绿是因为有几处用例自己造了个生产里不存在的拥有者。
-2. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
+3. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
    否则改完没有机器能验证。

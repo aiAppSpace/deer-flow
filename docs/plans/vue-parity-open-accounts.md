@@ -3,7 +3,7 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-11 新挂一条（**已量出真缺陷，最高优先**）：归档一条会话会把侧栏列表清空
+> ## 2026-09-11 已修：归档一条会话会把侧栏列表清空（`48e9297a`）
 >
 > 根因与「改名之后不与服务端收敛」同一个：**本仓的会话列表查询是 `enabled: false`
 > 的手动查询**（`useThreads` 的 `useInfiniteQuery`，`eaf9d6a7` 写下时没有留任何理由）。
@@ -28,11 +28,14 @@
 > （`chat-thread-init-ordering` 3 行 + `thread-list-pin#mobile-drawer` 1 行）：
 > 一次 run 结束后上游会重取列表，本仓的 `invalidateStoppedThreadCaches` 是空操作。
 >
-> **怎么修**：让列表查询自己会跑（`enabled` 打开），这才是 server-state 库的模型，
-> 上游 `useInfiniteThreads` 也是这样。要注意的是 `useThreads()` 有四个调用点，
-> 其中 `AgentChat.vue` 与 `ProjectsSection.vue` **只读缓存、不该自己发请求**
-> （上游的 chat-page 根本不挂这个查询），所以它们要显式传 `enabled: false`；
-> 侧栏与会话列表页打开。改完的验收判据：上面那 4 行台账消失、且归档之后侧栏还在。
+> **已按这个修法落地**：列表查询自己会跑，`AgentChat.vue` 与 `ProjectsSection.vue`
+> 显式传 `enabled: false`（它们只读缓存，上游的 chat-page 根本不挂这个查询）。
+> 回归测试钉的是「reset 之后列表会自己回来」，做过变异验证。
+>
+> **验收结果**：零新增；`chat-thread-init-ordering` 上那 3 条重复的
+> `POST /api/threads/search` 降到 1 条。**剩下的两行没结清**——
+> `chat-thread-init-ordering` 1 条 + `thread-list-pin#mobile-drawer` 1 条，
+> 上游仍然比本仓多问一次列表。下一轮从这里接着查。
 >
 > ## 2026-09-11 新挂一条（**已量清，等执行**）：`["threads", "search"]` 是一个死缓存键
 >
