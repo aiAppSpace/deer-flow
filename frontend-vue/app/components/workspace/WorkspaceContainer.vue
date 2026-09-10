@@ -14,9 +14,18 @@
                    一遍「导航，面包屑，工作区，对话」。
 
                    面包屑从路径的前两段推出来，与 React 的
-                   `pathname.split("/").slice(1, 3)` 同一份规则；两段都在时**两段都是
-                   链接**（React 的 `segments.length >= 2` 分支），当前页不退化成
-                   BreadcrumbPage。
+                   `pathname.split("/").slice(1, 3)` 同一份规则。
+
+                   **第二段只有在真有 index 路由时才做成链接**，其余渲染成
+                   BreadcrumbPage（`role="link"` + `aria-disabled` 的 span）——
+                   与上游的 `LINKABLE_SECTIONS` 同一张表。这里原来无条件做成链接，
+                   于是项目详情页上那颗「Projects」指向 `/workspace/projects`，
+                   **而这条路由不存在**：点下去是 404。对照台账在
+                   `project-detail` 上量到它（React `link "Projects" [disabled]`
+                   / Vue `link "Projects":` 带 `/url:`）。
+
+                   表在 `core/workspace-shell/breadcrumb.ts`，由门禁与真实路由对账；
+                   加一条 section 时两边一起加。
 
                    GitHub 那个链接刻意**没有可访问名**：React 给它的全部内容是一个
                    aria-hidden 的 svg 加一个 hover tooltip，可访问性树上就是一个匿名
@@ -32,11 +41,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useWorkspaceSidebar } from "@/composables/useWorkspaceSidebar";
+import { isLinkableSection } from "@/core/workspace-shell/breadcrumb";
 
 const route = useRoute();
 const { $i18n } = useNuxtApp();
 
 const segments = computed(() => route.path.split("/").slice(1, 3));
+
+const secondSegmentIsLinkable = computed(() =>
+  isLinkableSection(segments.value[1]),
+);
 
 function nameOfSegment(segment: string | undefined) {
   if (!segment) return $i18n.t.value.common.home;
@@ -91,9 +105,23 @@ const { mobileOpen: sidebarMobileOpen, toggleSidebar } = useWorkspaceSidebar();
               </li>
               <li class="inline-flex items-center gap-1.5">
                 <NuxtLink
+                  v-if="secondSegmentIsLinkable"
                   :to="`/${segments[0]}/${segments[1]}`"
                   class="hover:text-foreground transition-colors"
                   >{{ nameOfSegment(segments[1]) }}</NuxtLink
+                >
+                <!--
+                  上游 BreadcrumbPage（ui/breadcrumb.tsx:52）：span 上带 role="link"
+                  与 aria-disabled，读屏器念得出"这一节是链接但走不了"，
+                  而不是干脆听不出这里有一层。
+                -->
+                <span
+                  v-else
+                  role="link"
+                  aria-disabled="true"
+                  aria-current="page"
+                  class="text-foreground font-normal"
+                  >{{ nameOfSegment(segments[1]) }}</span
                 >
               </li>
             </template>

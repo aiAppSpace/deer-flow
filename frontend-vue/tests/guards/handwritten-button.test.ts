@@ -99,7 +99,6 @@ const ALLOWED: Record<string, [number, string]> = {
     3,
     "streamdown ZoomPan 的放大 / 缩小 / 重置",
   ],
-  "components/ui/button/Button.vue": [1, "Button primitive 本体"],
   "components/workspace/GatewayStatusBanner.vue": [
     2,
     "gateway-offline-banner.tsx:119（退出）；重试那颗是本仓补的出路，同一种写法",
@@ -185,7 +184,7 @@ describe("手写 <button> 的分布", () => {
   /* 形状断言：扫挂了的话下面三条会一起静默通过（坑 176/195）。 */
   it("扫到了 markdown/ 那片按契约永远手写的", () => {
     expect(counts.get("components/markdown/MermaidZoomPan.vue")).toBe(3);
-    expect(counts.get("components/ui/button/Button.vue")).toBe(1);
+    expect(counts.get("components/markdown/MarkdownCopyButton.vue")).toBe(1);
   });
 
   it("没有清单之外的文件在手写 button", () => {

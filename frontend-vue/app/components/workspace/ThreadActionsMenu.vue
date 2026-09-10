@@ -178,17 +178,15 @@ async function exportConversation(format: ThreadExportFormat) {
       <DropdownMenuItem @select="emit('rename')">
         <Pencil /> {{ $i18n.t.value.common.rename }}
       </DropdownMenuItem>
-      <DropdownMenuItem
-        :disabled="archiveAction.isPending.value"
-        @select="archiveAction.setArchived(props.thread.thread_id, true)"
-      >
-        <Archive /> {{ $i18n.t.value.chats.archiveChat }}
-      </DropdownMenuItem>
-      <MoveToProjectMenu
-        :thread="props.thread"
-        @new-project="emit('newProjectForThread')"
-        @move-project="emit('moveToProject', $event)"
-      />
+      <!--
+        **项的顺序照抄上游**（recent-chat-list.tsx:339 起）：
+        置顶 · 重命名 · 分享 · 导出▸ · 归档 · 移到项目▸ · ─── · 删除。
+        本仓原来把归档与移到项目排在分享之前，按"改这条会话本身的"和"分发出去的"
+        分了组——读起来更顺，但**两个应用的第 3 项不是同一件事**，
+        肌肉记忆会点错。对照台账量到过：`thread-history` 上
+        「第 5 个公共节点 React=menuitem "Share" / Vue=menuitem "Archive chat"」，
+        以及导出项的 y 差 64px（正好两项的高度）。
+      -->
       <DropdownMenuItem
         data-testid="thread-share"
         :disabled="sharing"
@@ -218,6 +216,17 @@ async function exportConversation(format: ThreadExportFormat) {
           </DropdownMenuItem>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
+      <DropdownMenuItem
+        :disabled="archiveAction.isPending.value"
+        @select="archiveAction.setArchived(props.thread.thread_id, true)"
+      >
+        <Archive /> {{ $i18n.t.value.chats.archiveChat }}
+      </DropdownMenuItem>
+      <MoveToProjectMenu
+        :thread="props.thread"
+        @new-project="emit('newProjectForThread')"
+        @move-project="emit('moveToProject', $event)"
+      />
       <DropdownMenuSeparator />
       <!--
         **不传 `variant="destructive"`**：上游这颗删除项是普通项

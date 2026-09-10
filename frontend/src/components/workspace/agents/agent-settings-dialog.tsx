@@ -330,7 +330,13 @@ export function AgentSettingsDialog({
                 setSubagentAccess(value as SubagentAccessSelection)
               }
             >
-              <SelectTrigger className="w-full">
+              {/* The visible label above is a plain <p>, not associated with
+                  this control, so the combobox would otherwise reach the
+                  accessibility tree with no name at all (WCAG 4.1.2). */}
+              <SelectTrigger
+                aria-label={t.settings.subagents.bindingTitle}
+                className="w-full"
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

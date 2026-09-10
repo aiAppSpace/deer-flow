@@ -38,9 +38,10 @@ useHead(() => ({ title: artifactViewerTitle(target.value?.filepath) }));
     :thread-id="target.threadId"
     :is-mock="target.isMock"
   />
-  <div v-else class="flex h-screen items-center justify-center p-6">
+  <!-- 上游这一屏用的是 `<main>`（app/artifacts/view/page.tsx），不是 div。 -->
+  <main v-else class="flex h-screen items-center justify-center p-6">
     <p class="text-muted-foreground text-sm">
       {{ $i18n.t.value.artifactPreview.missingTarget }}
     </p>
-  </div>
+  </main>
 </template>
