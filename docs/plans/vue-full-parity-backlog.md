@@ -304,27 +304,53 @@ login/setup 页——这些都还没有逐个读代码比对。
   **这次我差点重查一遍。** 教训记在这里：本仓的挂账分散在三份文档里——
   `vue-parity-open-accounts.md`（逐条判过的账）、`vue-parity-handoff.md`（历轮交接）、
   以及本文件。**查一条台账之前先在这三份里搜一遍关键词。**
-- **`tests/` 整棵树没有类型检查——数字订正：不是 346 条，是 134 条；现在剩 89。**
+- ~~**`tests/` 整棵树没有类型检查**~~ **已清零并接进 `make verify`（2026-09-11）。**
 
   Nuxt 的 tsconfig 只 include `app/**` 与 `tests/nuxt/**`，vitest 又只转译不查类型。
-  **上一轮记的「346 条」是我自己量错的**：那份临时 tsconfig 覆盖了 `include`，
+  上一轮记的「346 条」是我自己量错的：那份临时 tsconfig 覆盖了 `include`，
   把 `.nuxt/nuxt.d.ts` 挤出了程序，于是 165 条 `Cannot find name 'useNuxtApp'`
-  一类的假错。用对的 include（见签入的 `tsconfig.tests.json`）重量是 **134**。
+  一类的假错。用对的 include（签入的 `tsconfig.tests.json`）真实数字是 **134**，
+  分两段清完：134 → 89 → **0**。门禁是 `make typecheck-tests`，已在 verify 的先决条件里
+  （`tests/guards/doc-facts.test.ts` 的 `VERIFY_STEPS` 钉着这件事）。
 
-  2026-09-11 清掉 45 条，剩 **89**，其中已修的四类值得记住——**它们都是真错**，
-  不是「测试脚手架的类型学」：
+  **「测试脚手架的类型学」这个判断本身是错的。** 这 134 条里挖出的真缺陷，
+  按「不修会怎样」排序：
 
-  1. `WebServerEntry` 在联合上分配后塌成 `never`，四份 playwright config 全红；
-  2. `ParityTarget` 的 `name` 写成必填，而两处场景有意只按 role 定位；
-  3. **16 处 `wrapper.get(sel).exists()` 是恒真断言**——`get()` 拿不到就抛，
-     vue-test-utils 因此从它的返回里去掉了 `exists()`。类型在说「这条断言什么都没断」；
-  4. 两个 tooling 测试的注入桩：`.mjs` 的参数类型是从 `fs` 默认值推的，
-     用 JSDoc 把注入契约写清楚即可。
+  1. **`use: { reducedMotion: "reduce" }` 在 Playwright 1.59 里根本不是选项**，
+     写在 `use` 顶层不会报错，只是**安静地不生效**。实测（探针 spec，about:blank +
+     `matchMedia("(prefers-reduced-motion: reduce)").matches`）：顶层 → `false`，
+     `contextOptions.reducedMotion` → `true`。本仓两处这么写过。
+     对照取样那处**没有造成后果**，因为 `diff.spec.ts` 是自己
+     `browser.newContext(PARITY_CONTEXT_OPTIONS)` 开 context 的，而 `newContext`
+     认识这个键——**同一份常量喂两个形状不同的口子**，才是真正看走眼的地方。
+     `tests/e2e/reduced-motion.spec.ts` 更早撞见过同一现象，当时归因成
+     「describe 级选项没传下去」，没找到原因。新门禁
+     `tests/guards/playwright-use-options.test.ts` 从 Playwright **自己的类型声明**
+     里取合法键，所以升级之后哪天它进了 use 顶层，门禁自己松开。
+  2. **e2e 的 agent mock 带着 `system_prompt`**——`AgentResponse`
+     （`backend/app/gateway/routers/agents.py:39`）根本没有这个字段，是 mock
+     自己长出来的键。`MockAgent` 现在就是 `Agent` 本身，`MOCK_AGENTS` /
+     `GALLERY_AGENTS` 同理。
+  3. **`useSidecarSession().submit()` / `submitHumanInput()` 的返回类型被推成字面量
+     `false`**：`accepted` 只在 `onAccepted` 回调里被写，TS 的控制流看不进闭包。
+     而调用方（`MessageList.vue:540`）正是靠这个返回值决定要不要把 pending 撤回来
+     ——类型在说「这个函数永远失败」。已显式标注 `Promise<boolean>`。
+  4. **假 runner 少了 `refreshDurableState`**：`useThreadStream` 在
+     `mode === "run-end"` 那条路径上调它，夹具里那是个不存在的方法。
+  5. **`WebServerEntry` 在联合上分配后塌成 `never`**，四份 playwright config 全红；
+     两处各写了一份，现在只有 `tests/support/playwright-factory.ts` 那一份对的。
+  6. **`scenario-coverage` 的选择器守卫只扫 `settle` 与 `steps`**，
+     而声明了终态的场景把绝大多数步骤写在 `states[].steps` 里——那一片完全透明；
+     顺带它对 `press` 步骤会抛 TypeError（`"selector" in undefined`）。已补齐三种形状。
+  7. **16 处 `wrapper.get(sel).exists()` 是恒真断言**——`get()` 拿不到就抛。
+  8. `ParityTarget` 的 `name` 写成必填，而两处场景有意只按 role 定位。
 
-  剩下的 89 条是长尾：约 55 个文件，每个 1–7 条，要逐个判断
-  （夹具类型、`global.mocks` 只给一半、Playwright 版本的 fixture 类型）。
-  **修完之后把 `typecheck-tests` 接进 `make verify`**，否则它们会长回来。
-  在那之前，别在 `tests/` 里写类型层断言——那等于写了个不会执行的注释。
+  **`config: { globalProperties: { $i18n } }` 这条路走不通**：VTU 那个位置的类型是
+  完整的 `ComponentCustomProperties`（`$route` / `$router` / `$nuxt` … 246 个成员），
+  只塞一个 `$i18n` 天生编译不过。用 `global: { mocks }`，桩取
+  `tests/support/nuxt-i18n.ts` 那一份（`t` 是真的 computed，与插件同形）。
+  仓里还有几十个文件用旧写法，它们走的是 `vi.stubGlobal`（收 any），
+  没有类型在看——**碰到哪个改哪个**，不要为了统一去批量改。
 
   **这条我判错过一次，记在这里免得重蹈**：2026-09-10 有一轮把它当成
   「没有依据的分歧」删了，理由是「没有注释说明，也没有用例钉过它」——
@@ -353,3 +379,12 @@ login/setup 页——这些都还没有逐个读代码比对。
 | `parity-ledger-fields` | 报告脚本的字段表与 `DiffEntry` 漂移 | 脚本停在 5 个字段而类型有 11 个，六档差异一行没算、总数照打 |
 | e2e 独占锁（不是测试，是运行时闸门） | 两轮 e2e 并发互删产物 | 两轮撞在一起产生 3 条假失败，判断它们不是回归花了 25 分钟 |
 | `make build` 的 e2e 闸门（同上） | 构建重写 `.output/`，正在跑的 e2e 的 preview 从那里取文件 | 跑一半时执行 `make verify`，那一轮当场 `500 ENOENT: .output/public/_nuxt/vendor-*.js.br`，13 分钟作废 |
+
+## 2026-09-11 这一轮补的门禁（都做过变异验证）
+
+| 门禁 | 它守的失效方式 | 实测证据 |
+| --- | --- | --- |
+| `make typecheck-tests`（进了 verify） | `tests/` 整棵树没有类型检查，夹具与真契约无声漂移 | 首次运行 134 条；挖出的真缺陷见上面那一节 |
+| `playwright-use-options` | 往 Playwright 的 `use` 顶层写一个它不认识的键——不报错，只是不生效 | 探针实测：`use.reducedMotion` → `matches === false`；`use.contextOptions.reducedMotion` → `true` |
+| `upstream-citations` 扩到 `.vue` | `Foo.vue:行号` 这类引用从来没被验过，而它是本仓组件的主要文件形式 | 仓里 12 处，此前一条都没进扫描面；变异两种失效（越界 / 文件不存在）都能报 |
+| `scenario-coverage` 扩到 `states[].steps` | 选择器守卫只看 `settle`/`steps`，而声明了终态的场景把步骤写在 `states[].steps` 里 | 把一条 `states[].steps` 的选择器换成 `.mutation-probe`，扩之前不响、扩之后报 |
