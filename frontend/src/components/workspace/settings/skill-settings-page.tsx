@@ -157,12 +157,19 @@ function SkillSettingsList({
           </Tabs>
         </div>
         <div className="flex gap-2">
+          {/* The visible Button is the affordance; this input only carries the
+              file dialog. Left in the accessibility tree it is a second,
+              anonymous "button" that does the same thing — so hide it from AT
+              and take it out of the tab order (tabIndex=-1 keeps
+              aria-hidden legal on a focusable element). */}
           <input
             ref={fileInputRef}
             type="file"
             accept=".skill"
             disabled={isArchiveUploadDisabled}
             className="sr-only"
+            aria-hidden="true"
+            tabIndex={-1}
             onChange={handleSkillArchive}
           />
           {isAdmin && (

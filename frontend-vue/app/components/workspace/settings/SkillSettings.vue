@@ -204,16 +204,22 @@ function archiveErrorOptions(cause: unknown) {
         <div class="flex gap-2">
           <!--
             文件选择器是**隐藏的 input**，按钮点它。原生 file input 的外观各浏览器
-            各不相同、也没法按设计系统画；`sr-only` 而不是 `display:none`，
-            读屏器仍然能到达它。
+            各不相同，也没法按设计系统画。
+
+            **它对读屏器不可见。** 承担语义的是下面那颗可见按钮；把这个 input
+            也留在可访问性树里，等于同一件事出现两个控件——本仓此前还给它加了
+            `aria-label`，于是树里有**两个同名的 "Install .skill"**，
+            上游那边则是一个匿名 button。两个都不对，2026-09-10 两边同改成这一条。
+            `tabindex="-1"` 是配套的：`aria-hidden` 不允许加在可聚焦元素上。
           -->
           <input
             ref="archiveInput"
             type="file"
             accept=".skill"
             class="sr-only"
+            aria-hidden="true"
+            tabindex="-1"
             :disabled="!canInstallArchive"
-            :aria-label="t.settings.skills.installFromFile"
             @change="handleArchive"
           />
           <Button

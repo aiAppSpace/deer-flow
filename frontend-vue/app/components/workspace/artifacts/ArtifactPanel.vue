@@ -235,7 +235,19 @@ function resetTransientState() {
   error.value = "";
   loadError.value = "";
   notice.value = "";
-  viewMode.value = "code";
+  /*
+    **初始视图由文件名决定，不由这次加载成不成功决定。**
+    上游 `getArtifactViewState` 的 `initialViewMode` 只看
+    `isSupportPreview`（语言）与 toolResult，两者都是文件名/消息推出来的
+    （artifact-file-detail.tsx:193）。
+
+    这里原来写死 `"code"`，靠加载成功之后那两处赋值改回 preview。后果有两个：
+    加载中先闪一下源码；而加载**失败**时压根改不回来——于是同一个打不开的
+    markdown，上游停在「预览」并在预览区里说明打不开，本仓停在「查看原始文件」。
+    对照台账在 `artifact-batched-stream#preview-failed` 上量到这条
+    （两边选中的那颗 radio 不是同一个）。
+  */
+  viewMode.value = previewAllowed.value ? "preview" : "code";
 }
 
 async function load(full = false) {

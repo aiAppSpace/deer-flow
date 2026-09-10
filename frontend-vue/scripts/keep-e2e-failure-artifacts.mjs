@@ -2,7 +2,8 @@
   【文件职责】     跑一条 e2e 命令；它失败时把失败现场从 `test-results/` 里另存一份。
                    同时**独占**：同一个仓下不许有第二轮 e2e 同时在跑。
   【架构位置】     构建脚本（不进产物）
-  【主要导出】     collectFailureArtifactDirs · archiveFailureArtifacts · acquireRunLock
+  【主要导出】     collectFailureArtifactDirs · collectSuiteReportFiles ·
+                   archiveFailureArtifacts · acquireRunLock
   【依赖关系】     只用 node 内置模块
   【边界与注意】   **为什么要独占**：wave 202 实测，两轮 `make e2e-parity` 撞在一起会
                    **互相拆台**，而且两个方向都走这个文件里的代码——
@@ -36,6 +37,7 @@
 
 import { spawn } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -93,6 +95,41 @@ export function collectFailureArtifactDirs(
   return found;
 }
 
+/**
+ * 套件目录**根上**那些文件——用例产物之外，套件自己写出来的报告。
+ *
+ * 对照套件的 `diff.spec.ts` 把这一次实测的台账写在
+ * `test-results/e2e-parity/report.json`，而它既不在任何用例目录里、
+ * 又活不过下一次运行（Playwright 开跑先清 `outputDir`）。
+ * 实测丢过一份：为了对比"修完之后还剩哪些差异"，隔了一轮再回头找，已经没了。
+ *
+ * 与用例目录不同，这些**复制**而不是搬走：套件文档里写着它在那个路径上，
+ * 搬走会让同一次会话里后面的步骤扑空。反正下一次运行会清掉。
+ */
+export function collectSuiteReportFiles(
+  since = 0,
+  testResultsDir = TEST_RESULTS,
+  {
+    readDir = readdirSync,
+    modifiedAt = (path) => statSync(path).mtimeMs,
+    exists = existsSync,
+  } = {},
+) {
+  if (!exists(testResultsDir)) return [];
+  const found = [];
+  for (const suite of readDir(testResultsDir, { withFileTypes: true })) {
+    if (!suite.isDirectory() || suite.name === "failures") continue;
+    const suiteDir = join(testResultsDir, suite.name);
+    for (const entry of readDir(suiteDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) continue;
+      const path = join(suiteDir, entry.name);
+      if (modifiedAt(path) < since) continue;
+      found.push({ suite: suite.name, file: entry.name });
+    }
+  }
+  return found;
+}
+
 /** 归档目录名。用 UTC 是为了排序即时间序，本机时区变了也不会乱。 */
 export function archiveStampFrom(date) {
   return date.toISOString().replace(/[:.]/g, "-");
@@ -102,6 +139,11 @@ export function archiveFailureArtifacts(since = 0, now = new Date()) {
   const dirs = collectFailureArtifactDirs(since);
   if (dirs.length === 0) return null;
   const destination = join(ARCHIVE_ROOT, archiveStampFrom(now));
+  for (const { suite, file } of collectSuiteReportFiles(since)) {
+    const target = join(destination, suite);
+    mkdirSync(target, { recursive: true });
+    copyFileSync(join(TEST_RESULTS, suite, file), join(target, file));
+  }
   for (const { suite, testCase } of dirs) {
     const target = join(destination, suite);
     mkdirSync(target, { recursive: true });

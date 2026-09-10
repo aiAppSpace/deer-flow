@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   archiveStampFrom,
   collectFailureArtifactDirs,
+  collectSuiteReportFiles,
 } from "../../../scripts/keep-e2e-failure-artifacts.mjs";
 
 type Entry = { name: string; isDirectory: () => boolean };
@@ -97,5 +98,62 @@ describe("失败现场归档：目录名", () => {
     const earlier = archiveStampFrom(new Date("2026-09-09T06:52:20.272Z"));
     const later = archiveStampFrom(new Date("2026-09-09T07:00:00.000Z"));
     expect([later, earlier].sort()).toEqual([earlier, later]);
+  });
+});
+
+/*
+  套件根上的报告文件也要留住：`tests/e2e-parity/diff.spec.ts` 把这一次实测的台账
+  写在套件 outputDir 的根上，它不在任何用例目录里，而 Playwright 下一次开跑先清
+  `outputDir`。
+  实测丢过一份——隔一轮回头想对比"修完还剩哪些差异"，已经没了。
+*/
+describe("失败现场归档：套件自己写的报告", () => {
+  /** 同一棵假树，但这一层看的是**文件**不是目录。 */
+  function fakeTreeWithFiles(
+    layout: Record<string, Record<string, { mtime: number; dir: boolean }>>,
+    root = "/results",
+  ) {
+    const readDir = (path: string) => {
+      if (path === root)
+        return Object.keys(layout).map((name) => dirent(name, true));
+      const suite = path.slice(root.length + 1);
+      return Object.entries(layout[suite] ?? {}).map(([name, meta]) =>
+        dirent(name, meta.dir),
+      );
+    };
+    const modifiedAt = (path: string) => {
+      const [suite, entry] = path.slice(root.length + 1).split("/");
+      return layout[suite!]?.[entry!]?.mtime ?? 0;
+    };
+    return { readDir, modifiedAt, exists: () => true };
+  }
+
+  it("收这一次写出来的报告，不收用例目录", () => {
+    const tree = fakeTreeWithFiles({
+      "e2e-parity": {
+        "report.json": { mtime: 2_000, dir: false },
+        "diff-chromium": { mtime: 2_000, dir: true },
+      },
+    });
+    expect(collectSuiteReportFiles(1_000, "/results", tree)).toEqual([
+      { suite: "e2e-parity", file: "report.json" },
+    ]);
+  });
+
+  it("上一次运行留下的报告不算这一次的", () => {
+    const tree = fakeTreeWithFiles({
+      "e2e-parity": { "report.json": { mtime: 500, dir: false } },
+    });
+    expect(collectSuiteReportFiles(1_000, "/results", tree)).toEqual([]);
+  });
+
+  it("failures/ 目录本身不进扫描面——否则归档会自己套自己", () => {
+    const tree = fakeTreeWithFiles({
+      failures: { "old.json": { mtime: 9_000, dir: false } },
+      "e2e-parity": { "report.json": { mtime: 9_000, dir: false } },
+    });
+    expect(collectSuiteReportFiles(0, "/results", tree)).toEqual([
+      { suite: "e2e-parity", file: "report.json" },
+    ]);
   });
 });

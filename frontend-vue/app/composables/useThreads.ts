@@ -56,19 +56,28 @@ const THREAD_LIST_PARAMS: InfiniteThreadsParams = {
  *
  * `archived` 是**响应式**的：会话列表页有活跃/已归档两个页签，切页签换的是
  * query key 而不是过滤内存里的数组——归档的会话根本不在活跃那份响应里。
- * 不传就是不过滤（侧栏、聊天页都走这一支），与此前的行为逐字相同。
+ *
+ * **不传就是 `false`（只要活跃的），不是"不过滤"。** Gateway 的语义是
+ * 「omitted includes all」（`backend/app/gateway/routers/threads.py:459`），
+ * 所以此前不传的三个消费者——侧栏、聊天页、项目分区——把**已归档的会话
+ * 一起列了出来**。上游在每个调用点各写一次 `archived: false`
+ * （recent-chat-list.tsx:478、projects-section.tsx:156）。
+ *
+ * 这里把它放进默认值而不是照抄到每个调用点，是因为漏写的代价不只是"少了个过滤"：
+ * `archived` 进 query key，漏写的那个消费者会拿到**另一份缓存**，于是多打一次网络、
+ * 而且 AgentChat 的 `upsert` 落不进侧栏那份。三个消费者必须是同一个 key，
+ * 而"必须一致"这件事交给默认值来保证，比交给三处各写一遍可靠。
+ * 想看已归档的那份，显式传 `true`。
  */
 export function useThreads(
-  options: { archived?: MaybeRefOrGetter<boolean | undefined> } = {},
+  options: { archived?: MaybeRefOrGetter<boolean> } = {},
 ) {
   const queryClient = useQueryClient();
   const apiClient = getAPIClient();
-  const params = computed<InfiniteThreadsParams>(() => {
-    const archived = toValue(options.archived);
-    return archived === undefined
-      ? THREAD_LIST_PARAMS
-      : { ...THREAD_LIST_PARAMS, archived };
-  });
+  const params = computed<InfiniteThreadsParams>(() => ({
+    ...THREAD_LIST_PARAMS,
+    archived: toValue(options.archived) ?? false,
+  }));
   const queryKey = computed(
     () => [...INFINITE_THREADS_QUERY_KEY_PREFIX, params.value] as const,
   );
