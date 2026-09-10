@@ -10,7 +10,7 @@ import { fetch } from "@/core/api/fetcher";
 import { readGatewayResponseError } from "@/core/api/errors";
 import { getBackendBaseURL } from "@/core/config";
 
-import type { MCPConfig } from "./types";
+import type { MCPConfig, MCPServerConfig } from "./types";
 
 export class MCPConfigRequestError extends Error {
   readonly status: number;
@@ -90,4 +90,74 @@ export async function updateMCPServerState(
     await readErrorDetail(response, "Failed to update MCP server");
   }
   return response.json() as Promise<MCPConfig>;
+}
+
+/**
+ * 增/改/删一个 server 走的都是这一条：三个端点的形状一样，
+ * 都返回**整份**新配置，调用方直接拿它替换缓存即可。
+ */
+async function mutateMCPServerConfig(
+  path: string,
+  method: "POST" | "PUT" | "DELETE",
+  body: unknown | undefined,
+  fallback: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<MCPConfig> {
+  const request: RequestInit = { method, signal: options.signal };
+  if (body !== undefined) {
+    request.headers = { "Content-Type": "application/json" };
+    request.body = JSON.stringify(body);
+  }
+  const response = await fetch(`${getBackendBaseURL()}${path}`, request);
+  if (!response.ok) {
+    await readErrorDetail(response, fallback);
+  }
+  return (await response.json()) as MCPConfig;
+}
+
+/** 一次可以加多个：粘贴的那段 JSON 里本来就可能有好几个 server。 */
+export function createMCPServers(
+  servers: Record<string, MCPServerConfig>,
+  options: { signal?: AbortSignal } = {},
+) {
+  return mutateMCPServerConfig(
+    "/api/mcp/config/servers",
+    "POST",
+    { mcp_servers: servers },
+    "Failed to add MCP servers",
+    options,
+  );
+}
+
+/**
+ * 改一个已有的 server。
+ *
+ * server 名走**请求体**而不是路径：改名这件事要在一次请求里完成，
+ * 而 PUT 到旧名字的路径上再在体里给新名字，语义是含混的。
+ */
+export function updateMCPServer(
+  serverName: string,
+  server: MCPServerConfig,
+  options: { signal?: AbortSignal } = {},
+) {
+  return mutateMCPServerConfig(
+    "/api/mcp/config/server",
+    "PUT",
+    { server_name: serverName, server },
+    "Failed to update MCP server",
+    options,
+  );
+}
+
+export function deleteMCPServer(
+  serverName: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return mutateMCPServerConfig(
+    `/api/mcp/config/servers/${encodeURIComponent(serverName)}`,
+    "DELETE",
+    undefined,
+    "Failed to delete MCP server",
+    options,
+  );
 }

@@ -30,12 +30,22 @@ const mocks = vi.hoisted(() => ({
   fetchWithAuth: vi.fn(),
   useMCPConfig: vi.fn(),
   useSettingsPermissions: vi.fn(),
+  mcpServerMutate: vi.fn(),
 }));
 
 vi.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetchWithAuth }));
-vi.mock("@/composables/useMCPConfig", () => ({
-  useMCPConfig: mocks.useMCPConfig,
-}));
+vi.mock("@/composables/useMCPConfig", async () => {
+  const { ref: makeRef } = await import("vue");
+  return {
+    useMCPConfig: mocks.useMCPConfig,
+    // 增删改那份 mutation：这一组用例只看开关和空态，给个惰性替身就够。
+    useMCPServerMutations: () => ({
+      mutateAsync: mocks.mcpServerMutate,
+      isPending: makeRef(false),
+      error: makeRef(null),
+    }),
+  };
+});
 vi.mock("@/composables/useSettingsPermissions", () => ({
   useSettingsPermissions: mocks.useSettingsPermissions,
 }));

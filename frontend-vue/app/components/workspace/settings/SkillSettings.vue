@@ -3,13 +3,21 @@
   【文件职责】     复用 composer skill catalog，并按 session role 管理全局 skill 开关。
   【架构位置】     L3 product UI
   【主要导出】     默认 SkillSettings 组件
-  【依赖关系】     useSettingsPermissions · useSkillSettings · ui/tabs · ui/switch
+  【依赖关系】     useSettingsPermissions · useSkillSettings · core/skills/api · ui/tabs · ui/switch
   【边界与注意】   普通用户可读 catalog 但不能 PUT；create-skill 对话入口不是全局启停权限。
+
+                   **本地安装 `.skill` 的三道拦截各说各的话**：扩展名不对、包超过
+                   100 MiB、后端安全扫描给了结论。前两道在前端拦——不让用户传完
+                   100 MiB 才被拒；第三道只有后端知道，它给的是「哪条规则、哪个文件
+                   的哪一行、怎么改」，只留一句「安装失败」等于把这份诊断扔了。
+
+                   装完切到「自定义」页签：包就装在那儿，留在「公共」页签上用户
+                   会以为没装上。
 */
 
 import { computed, ref } from "vue";
 
-import { Sparkles } from "lucide-vue-next";
+import { Loader, Sparkles, Upload } from "lucide-vue-next";
 
 import SettingsSection from "./SettingsSection.vue";
 import { Button } from "@/components/ui/button";
@@ -18,7 +26,13 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
 import { useSettingsPermissions } from "@/composables/useSettingsPermissions";
 import { useSkillSettings } from "@/composables/useSkillSettings";
-import { SkillRequestError } from "@/core/skills/api";
+import {
+  formatSkillSecurityFindings,
+  MAX_SKILL_ARCHIVE_UPLOAD_BYTES,
+  SkillRequestError,
+  uploadSkillArchive,
+} from "@/core/skills/api";
+import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 import type { Skill } from "@/core/skills/type";
 
 const { $i18n } = useNuxtApp();
@@ -62,6 +76,71 @@ async function toggle(skill: Skill, enabled: boolean) {
 async function createSkill() {
   settings.close();
   await navigateTo("/workspace/chats/new?mode=skill");
+}
+
+const toast = useWorkspaceToast();
+const archiveInput = ref<HTMLInputElement | null>(null);
+const uploading = ref(false);
+const canInstallArchive = computed(
+  () => access.canManageSkills.value && !uploading.value,
+);
+
+async function handleArchive(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const archive = input.files?.[0];
+  /*
+    先清空 value：同一个文件连选两次，第二次不会触发 change。
+    **这一条单测覆盖不到**——happy-dom 的 file input value 恒为空串，
+    断言它被清空是恒真的。归 e2e。
+  */
+  input.value = "";
+  if (uploading.value || !archive) return;
+
+  if (!archive.name.toLowerCase().endsWith(".skill")) {
+    toast.error(t.value.settings.skills.invalidArchive);
+    return;
+  }
+  if (archive.size > MAX_SKILL_ARCHIVE_UPLOAD_BYTES) {
+    toast.error(t.value.settings.skills.archiveTooLarge);
+    return;
+  }
+
+  uploading.value = true;
+  try {
+    const result = await uploadSkillArchive(archive);
+    if (result.success) {
+      toast.success(result.message);
+      // 装完切到「自定义」：包就装在那儿。
+      filter.value = "custom";
+      await skills.refetch();
+      return;
+    }
+    toast.error(result.message || t.value.settings.skills.installFailed);
+  } catch (cause) {
+    toast.error(archiveErrorMessage(cause), archiveErrorOptions(cause));
+  } finally {
+    uploading.value = false;
+  }
+}
+
+function archiveErrorMessage(cause: unknown): string {
+  if (cause instanceof SkillRequestError) {
+    if (cause.isAdminRequired) {
+      return t.value.settings.skills.installAdminRequired;
+    }
+    if (cause.status === 413) return t.value.settings.skills.archiveTooLarge;
+    return cause.message;
+  }
+  return cause instanceof Error && cause.message
+    ? cause.message
+    : t.value.settings.skills.installFailed;
+}
+
+/** 安全扫描的结论挂在提示的 description 上，不挤进标题。 */
+function archiveErrorOptions(cause: unknown) {
+  return cause instanceof SkillRequestError && cause.findings.length > 0
+    ? { description: formatSkillSecurityFindings(cause.findings) }
+    : undefined;
 }
 </script>
 
@@ -122,7 +201,37 @@ async function createSkill() {
             </TabsList>
           </Tabs>
         </div>
-        <div>
+        <div class="flex gap-2">
+          <!--
+            文件选择器是**隐藏的 input**，按钮点它。原生 file input 的外观各浏览器
+            各不相同、也没法按设计系统画；`sr-only` 而不是 `display:none`，
+            读屏器仍然能到达它。
+          -->
+          <input
+            ref="archiveInput"
+            type="file"
+            accept=".skill"
+            class="sr-only"
+            :disabled="!canInstallArchive"
+            :aria-label="t.settings.skills.installFromFile"
+            @change="handleArchive"
+          />
+          <Button
+            v-if="access.canManageSkills.value"
+            size="sm"
+            variant="outline"
+            data-testid="install-skill-archive"
+            :disabled="!canInstallArchive"
+            @click="archiveInput?.click()"
+          >
+            <Loader v-if="uploading" class="size-4 animate-spin" />
+            <Upload v-else class="size-4" />
+            {{
+              uploading
+                ? t.settings.skills.installingArchive
+                : t.settings.skills.installFromFile
+            }}
+          </Button>
           <!--
             上游 `skill-settings-page.tsx:94` 是
             `<Button size="sm">` 里放一颗 `<SparklesIcon className="size-4" />`。

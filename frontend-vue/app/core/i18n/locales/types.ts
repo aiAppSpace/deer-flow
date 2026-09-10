@@ -956,6 +956,28 @@ export interface Translations {
       description: string;
       adminRequired: string;
       empty: string;
+      addServer: string;
+      addServerDescription: string;
+      addServerPlaceholder: string;
+      serverDefinitionLabel: string;
+      definitionEmpty: string;
+      definitionInvalidJson: string;
+      definitionRootNotObject: string;
+      definitionNoServers: string;
+      /** 带 `{name}` 占位：报出是哪一条不是对象。 */
+      definitionServerNotObject: string;
+      editServer: string;
+      /** 带 `{name}` 占位。 */
+      editServerDescription: string;
+      editSingleServer: string;
+      /** 带 `{name}` 占位：改名要走「删了重加」，不是在这里改。 */
+      editServerNameMismatch: string;
+      /** 带 `{name}` 占位。 */
+      serverAlreadyExists: string;
+      removeServer: string;
+      /** 带 `{name}` 占位。 */
+      removeServerDescription: string;
+      unnamedServer: string;
     };
     channels: {
       title: string;
@@ -1122,6 +1144,11 @@ export interface Translations {
       emptyButton: string;
       adminRequired: string;
       installAdminRequired: string;
+      installFromFile: string;
+      installingArchive: string;
+      invalidArchive: string;
+      archiveTooLarge: string;
+      installFailed: string;
     };
     notification: {
       title: string;

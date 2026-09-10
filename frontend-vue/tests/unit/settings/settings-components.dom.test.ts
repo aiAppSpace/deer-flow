@@ -34,7 +34,18 @@ vi.mock("@/composables/useSettingsPermissions", () => ({
 vi.mock("@/composables/useSkillSettings", () => ({
   useSkillSettings: skillsFactory,
 }));
-vi.mock("@/composables/useMCPConfig", () => ({ useMCPConfig: mcpFactory }));
+vi.mock("@/composables/useMCPConfig", async () => {
+  const { ref: makeRef } = await import("vue");
+  return {
+    useMCPConfig: mcpFactory,
+    // 增删改那份 mutation：这一组用例只看权限与开关，给个惰性替身就够。
+    useMCPServerMutations: () => ({
+      mutateAsync: vi.fn(),
+      isPending: makeRef(false),
+      error: makeRef(null),
+    }),
+  };
+});
 vi.mock("@/composables/useSettingsDialog", () => ({
   useSettingsDialog: () => ({ close: vi.fn() }),
 }));
@@ -351,7 +362,10 @@ describe("role-aware skill and MCP settings", () => {
       pending: ref(false),
       toggle: vi.fn(),
     });
-    const skill = mount(SkillSettings);
+    const skill = mount(SkillSettings, {
+      // 本地安装 .skill 会弹提示，所以这一屏现在要有 toast owner。
+      global: { provide: { [workspaceToastKey as symbol]: toastStore } },
+    });
     expect(skill.text()).toContain("review");
     expect(skill.get('[role="switch"]').attributes("disabled")).toBeDefined();
     expect(skill.get('[data-testid="skills-admin-required"]').exists()).toBe(
@@ -393,7 +407,10 @@ describe("role-aware skill and MCP settings", () => {
       toggle: mcpToggle,
     });
     // Switch 是受控的：视觉状态只跟随服务端真相，点击只发出请求。
-    const skill = mount(SkillSettings);
+    const skill = mount(SkillSettings, {
+      // 本地安装 .skill 会弹提示，所以这一屏现在要有 toast owner。
+      global: { provide: { [workspaceToastKey as symbol]: toastStore } },
+    });
     await skill.get('[role="switch"]').trigger("click");
     expect(skillToggle).toHaveBeenCalledWith("review", false);
     const tool = mount(ToolSettings);
