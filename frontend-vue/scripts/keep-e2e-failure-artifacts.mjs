@@ -1,9 +1,21 @@
 /*
   【文件职责】     跑一条 e2e 命令；它失败时把失败现场从 `test-results/` 里另存一份。
+                   同时**独占**：同一个仓下不许有第二轮 e2e 同时在跑。
   【架构位置】     构建脚本（不进产物）
-  【主要导出】     collectFailureArtifactDirs · archiveFailureArtifacts
+  【主要导出】     collectFailureArtifactDirs · archiveFailureArtifacts · acquireRunLock
   【依赖关系】     只用 node 内置模块
-  【边界与注意】   **Playwright 每次运行都会先清空 `outputDir`。** wave 197 实测：
+  【边界与注意】   **为什么要独占**：wave 202 实测，两轮 `make e2e-parity` 撞在一起会
+                   **互相拆台**，而且两个方向都走这个文件里的代码——
+                   ① 后开的那轮启动时 Playwright 清空 `test-results/<套件>/`，
+                      先开的那轮正在录的 trace 当场 ENOENT；
+                   ② 先结束的那轮 `archiveFailureArtifacts` 用 `renameSync`
+                      把失败目录**搬走**，后开的那轮 artifacts 被抽走，同样 ENOENT。
+                   两种都表现为 `ENOENT` + 180s 超时，长得像回归；共用 Gateway 的套件
+                   还会互相污染种子数据（那一轮 topology 的种子会话被播种了两遍，
+                   4 条断言收到 8 条）。**判断它们不是回归花了两轮、25 分钟。**
+                   所以这里 fail fast，不排队等——静默等 14 分钟比报错更糟。
+
+                   **Playwright 每次运行都会先清空 `outputDir`。** wave 197 实测：
                    往 `test-results/e2e/` 放一个 marker 文件，跑任意一条用例之后
                    它就没了。而偶发红之后最自然的动作恰恰是**重跑一次看看**——
                    于是 trace / video / 截图在有人看它之前就被自己删掉了。
@@ -26,10 +38,12 @@ import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +51,13 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TEST_RESULTS = join(ROOT, "test-results");
 const ARCHIVE_ROOT = join(TEST_RESULTS, "failures");
+
+/**
+ * 独占锁的位置。放在 `test-results/` **根上**而不是某个套件目录里：
+ * `outputDir` 是 `test-results/<套件>`（见 tests/support/playwright-factory.ts），
+ * Playwright 只清它自己那一层，所以这个文件活得过任何一轮运行。
+ */
+export const RUN_LOCK_PATH = join(TEST_RESULTS, ".e2e-run.lock");
 
 /** 归档保留多少次运行。老的整批删掉——留着的意义是「最近查过的那几次」。 */
 export const ARCHIVE_KEEP_RUNS = 20;
@@ -104,6 +125,101 @@ function pruneArchives() {
   }
 }
 
+/**
+ * 进程还在不在。`EPERM` 算「在」——那是**别的用户**的进程，不是没了；
+ * 当成陈旧锁抢过去，就等于允许并发。
+ */
+export function processIsAlive(
+  pid,
+  kill = (target) => process.kill(target, 0),
+) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    kill(pid);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+
+/**
+ * 抢独占锁。
+ *
+ * 用 `wx` 写文件：**创建即互斥**是文件系统给的原子性，不用自己发明协议。
+ * 撞上已有锁时才去读它——读到的进程没了（崩溃 / 被 kill -9 留下的陈旧锁）就接管，
+ * **只重试一次**：第二次还撞上，说明真有人在同一刻抢到了。
+ *
+ * 返回 `{ acquired, holder, release }`。`release` 只在**文件里还是自己的 pid** 时才删，
+ * 免得删掉接管者的锁。
+ */
+export function acquireRunLock(
+  lockPath = RUN_LOCK_PATH,
+  {
+    pid = process.pid,
+    command = "",
+    startedAt = new Date().toISOString(),
+    ensureDir = (path) => mkdirSync(path, { recursive: true }),
+    writeExclusive = (path, body) => writeFileSync(path, body, { flag: "wx" }),
+    readLock = (path) => readFileSync(path, "utf8"),
+    removeLock = (path) => rmSync(path, { force: true }),
+    isAlive = processIsAlive,
+  } = {},
+) {
+  const mine = { pid, command, startedAt };
+  const body = `${JSON.stringify(mine, null, 2)}\n`;
+
+  const readHolder = () => {
+    try {
+      const parsed = JSON.parse(readLock(lockPath));
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      // 读不出来 / 不是 JSON：半截写坏的锁，没有持有者可言。
+      return null;
+    }
+  };
+
+  const release = () => {
+    if (readHolder()?.pid !== pid) return;
+    removeLock(lockPath);
+  };
+
+  const claim = () => {
+    try {
+      writeExclusive(lockPath, body);
+      return true;
+    } catch (error) {
+      if (error?.code === "EEXIST") return false;
+      throw error;
+    }
+  };
+
+  ensureDir(dirname(lockPath));
+  if (claim()) return { acquired: true, holder: mine, release };
+
+  const holder = readHolder();
+  if (holder && isAlive(holder.pid)) return { acquired: false, holder };
+
+  removeLock(lockPath);
+  if (claim()) return { acquired: true, holder: mine, release };
+  return { acquired: false, holder: readHolder() };
+}
+
+/** 撞锁时打给人看的话。要能直接回答「谁占着、从什么时候、我该干嘛」。 */
+export function describeLockHolder(holder) {
+  const pid = holder?.pid ?? "?";
+  const since = holder?.startedAt ?? "?";
+  const command = holder?.command ? `\n  跑的是 ${holder.command}` : "";
+  return `  持有者 PID ${pid}，从 ${since} 开始${command}`;
+}
+
+const CONCURRENCY_HELP = `并发跑会互相拆台，两个方向都实测过：
+  · 后开的那轮启动时清空 test-results/<套件>/，先开的那轮 trace 当场 ENOENT；
+  · 先结束的那轮把失败目录搬进 failures/，后开的那轮 artifacts 被抽走。
+两种都是 ENOENT + 180s 超时，长得像回归；共用 Gateway 的套件还会互相污染种子数据。
+
+等它跑完再来；那个进程其实已经没了的话，删掉锁文件即可。
+真要并发：E2E_ALLOW_CONCURRENT=1 make <target>`;
+
 function run() {
   const separator = process.argv.indexOf("--");
   const command = separator >= 0 ? process.argv[separator + 1] : undefined;
@@ -117,6 +233,26 @@ function run() {
   }
   // 开跑前记一刻：只有这之后写出来的用例目录才算「这一次的失败现场」。
   const startedAt = Date.now();
+
+  const exclusive = process.env.E2E_ALLOW_CONCURRENT !== "1";
+  const lock = exclusive
+    ? acquireRunLock(RUN_LOCK_PATH, {
+        command: [command, ...args].join(" "),
+      })
+    : null;
+  if (lock && !lock.acquired) {
+    console.error(
+      `\n另一轮 e2e 正在跑，这一轮不启动。\n\n${describeLockHolder(
+        lock.holder,
+      )}\n\n${CONCURRENCY_HELP}\n`,
+    );
+    process.exitCode = 2;
+    return;
+  }
+  // 兜底：异常退出路径也要放锁，否则下一轮会被一把陈旧锁挡住——
+  // `processIsAlive` 能救回来，但那要等到有人真撞上才生效。
+  if (lock) process.once("exit", lock.release);
+
   const child = spawn(command, args, { stdio: "inherit" });
   const forwardSignal = (signal) => {
     if (!child.killed) child.kill(signal);
@@ -130,6 +266,7 @@ function run() {
   });
   child.once("exit", (code) => {
     process.exitCode = code ?? 1;
+    lock?.release();
     if (code === 0) return;
     const archived = archiveFailureArtifacts(startedAt);
     if (archived) {

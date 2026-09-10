@@ -141,6 +141,19 @@ answers `GET /api/v1/auth/me` with a signed-in user, which makes the Vue login
 page bounce to the workspace while React stays put -- two different screens, and
 a diff of them is noise, not a finding.
 
+**One e2e run at a time.** Every suite goes through
+`scripts/keep-e2e-failure-artifacts.mjs`, which takes an exclusive lock at
+`test-results/.e2e-run.lock` and **refuses to start** (exit 2) while another run
+holds it. Two concurrent runs corrupt each other in both directions: the one
+that starts later clears `test-results/<suite>/` out from under the earlier
+one's in-flight trace, and the one that finishes earlier `renameSync`s the
+failure dirs into `failures/` out from under the later one -- both surface as
+`ENOENT` plus a 180s timeout, which reads exactly like a regression. Suites that
+share the Gateway also seed the same thread twice. A lock left behind by a
+crashed run is detected as stale (its PID is gone) and taken over. Override with
+`E2E_ALLOW_CONCURRENT=1` only when you know the two runs cannot touch each
+other.
+
 `make e2e-parity` is in neither either, for a different reason:
 it is the only suite that needs the sibling React app, and this workspace's
 install, build, test and e2e must all work without it (`make standalone-check`
