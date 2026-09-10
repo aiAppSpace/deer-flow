@@ -146,14 +146,27 @@ describe("对照场景覆盖率", () => {
       selector.replaceAll(/=\s*(['"])(?:\\.|(?!\1).)*\1/g, "=…");
     const offenders: string[] = [];
     for (const scenario of PARITY_SCENARIOS) {
-      for (const step of [...scenario.settle, ...(scenario.steps ?? [])]) {
+      /*
+        **三处步骤，一处都不能少。** 此前只扫 `settle` 与 `steps`，而声明了终态的
+        场景把绝大多数步骤写在 `states[].steps` 里——那一片对这条守卫是完全透明的。
+      */
+      const steps = [
+        ...scenario.settle,
+        ...(scenario.steps ?? []),
+        ...(scenario.states ?? []).flatMap((state) => state.steps ?? []),
+      ];
+      for (const step of steps) {
         /*
-          `select-text` 用的是 `scope` 而不是 `target`，此前被 `"target" in step`
-          直接跳过——也就是说这条守卫对划词步骤是不生效的。步骤词汇加了新形状时
-          这里要跟着加，否则守卫会静默地少管一类。
+          三种形状：多数步骤挂 `target`，`select-text` 挂 `scope`，`press` 两个都没有
+          （它打的是键盘，不针对元素）。`select-text` 此前被 `"target" in step`
+          直接跳过——守卫对划词步骤根本不生效；而少了 `press` 这一支，
+          `"selector" in undefined` 会当场抛 TypeError。
+          步骤词汇加新形状时这里要跟着加。
         */
-        const target = "target" in step ? step.target : step.scope;
+        const target =
+          "target" in step ? step.target : "scope" in step ? step.scope : null;
         if (
+          target &&
           "selector" in target &&
           /\.[a-z-]|\[class/i.test(withoutAttributeValues(target.selector))
         ) {

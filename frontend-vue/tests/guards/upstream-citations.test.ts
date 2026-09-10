@@ -91,7 +91,15 @@ function walk(dir: string, exts: string[]): string[] {
   return out;
 }
 
-const CITATION = /([A-Za-z0-9_\-./]+\.(?:tsx|ts))[:：](\d+)/g;
+/*
+  `.vue` 也收（wave 203）。此前只收 `.tsx|.ts`，于是仓里 12 处
+  `Foo.vue:行号` 一条都没被验过——写这条守卫要挡的正是「照着找什么都找不到」，
+  而 `.vue` 是本仓自己组件的**主要**文件形式。
+
+  `.vue` 的分流不看前缀，看扩展名：**上游一个 `.vue` 文件都没有**
+  （下面那条用例把这个前提也钉住了），所以 `.vue:行号` 必然指向本模块。
+*/
+const CITATION = /([A-Za-z0-9_\-./]+\.(?:tsx|ts|vue))[:：](\d+)/g;
 
 /*
   **以 `frontend-vue/` 开头的那些说的是本模块自己，不是上游**（wave 129）。
@@ -178,11 +186,11 @@ function collectCitations(): Citation[] {
   return found;
 }
 
-function upstreamIndex(): Map<string, string[]> {
+function basenameIndex(roots: string[], exts: string[]): Map<string, string[]> {
   const index = new Map<string, string[]>();
-  for (const root of upstreamRoots) {
+  for (const root of roots) {
     if (!existsSync(root)) continue;
-    for (const file of walk(root, [".ts", ".tsx"])) {
+    for (const file of walk(root, exts)) {
       const name = file.slice(file.lastIndexOf("/") + 1);
       index.set(name, [...(index.get(name) ?? []), file]);
     }
@@ -190,11 +198,34 @@ function upstreamIndex(): Map<string, string[]> {
   return index;
 }
 
+/**
+ * 按 basename 找，再用**路径后缀**精确化——与上游那一档同一套解析。
+ * 找不到候选返回 `null`，与「找到了但行号越界」区分开。
+ */
+function resolve(
+  index: Map<string, string[]>,
+  ref: string,
+): string[] | null {
+  const base = ref.slice(ref.lastIndexOf("/") + 1);
+  const candidates = index.get(base) ?? [];
+  const exact = candidates.filter((path) =>
+    path.endsWith(ref.replace(/^\.\//, "")),
+  );
+  const pool = exact.length ? exact : candidates;
+  return pool.length ? pool : null;
+}
+
 describe.skipIf(!upstreamPresent)("本仓写下的上游引用", () => {
   const citations = collectCitations();
   const local = citations.filter((one) => one.ref.startsWith(LOCAL_PREFIX));
-  const upstream = citations.filter((one) => !one.ref.startsWith(LOCAL_PREFIX));
-  const index = upstreamIndex();
+  const localVue = citations.filter(
+    (one) => !one.ref.startsWith(LOCAL_PREFIX) && one.ref.endsWith(".vue"),
+  );
+  const upstream = citations.filter(
+    (one) => !one.ref.startsWith(LOCAL_PREFIX) && !one.ref.endsWith(".vue"),
+  );
+  const index = basenameIndex(upstreamRoots, [".ts", ".tsx"]);
+  const vueIndex = basenameIndex([moduleRoot], [".vue"]);
 
   it("扫到了引用，也扫到了上游文件（两边空掉时不能假绿）", () => {
     // 少了这条，把正则写坏或把上游根写错都会让下面那条静默全绿。
@@ -213,6 +244,16 @@ describe.skipIf(!upstreamPresent)("本仓写下的上游引用", () => {
       不是缺陷）。
     */
     expect(upstream.length).toBeGreaterThan(150);
+    /*
+      `.vue` 走「本模块」那一档的**前提**：上游一个 Vue 文件都没有。
+      这个前提哪天不成立（上游真的开始写 Vue），分流规则就得换，
+      而不是让一批引用悄悄找错地方。
+    */
+    expect(
+      basenameIndex(upstreamRoots, [".vue"]).size,
+      "上游出现了 .vue 文件：`.vue:行号` 不能再无条件当作本模块引用",
+    ).toBe(0);
+    expect(vueIndex.size).toBeGreaterThan(50);
   });
 
   it("引用上游文件行数的地方，数字就是那份文件的实际行数", () => {
@@ -257,14 +298,11 @@ describe.skipIf(!upstreamPresent)("本仓写下的上游引用", () => {
         );
       }
     }
-    for (const citation of upstream) {
-      const base = citation.ref.slice(citation.ref.lastIndexOf("/") + 1);
-      const candidates = index.get(base) ?? [];
-      const exact = candidates.filter((path) =>
-        path.endsWith(citation.ref.replace(/^\.\//, "")),
-      );
-      const pool = exact.length ? exact : candidates;
-      if (!pool.length) {
+    for (const [citation, pool] of [
+      ...upstream.map((one) => [one, resolve(index, one.ref)] as const),
+      ...localVue.map((one) => [one, resolve(vueIndex, one.ref)] as const),
+    ]) {
+      if (!pool) {
         broken.push(
           `${citation.from}:${citation.line} → ${citation.ref} 不存在`,
         );
