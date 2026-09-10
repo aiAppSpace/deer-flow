@@ -1,7 +1,7 @@
 /*
   【文件职责】     按 feature flag 各自加载 Gateway 的 /api/features，并提供 fail-closed 只读状态。
   【架构位置】     L3 Vue adapter
-  【主要导出】     useAgentsApiEnabled · useBrowserControlEnabled
+  【主要导出】     useAgentsApiEnabled · useBrowserControlEnabled · useMcpTasksEnabled
   【依赖关系】     core/features API · core/agents/feature-cache · Vue lifecycle
   【边界与注意】   **一个 flag 一份状态，不是一份共享状态。** React 用两个独立的
                    React Query key（["features","agents_api"] 与
@@ -35,8 +35,11 @@ const agentsApiEnabled = ref(true);
 const agentsApiLoaded = ref(false);
 const browserControlEnabled = ref(false);
 const browserControlLoaded = ref(false);
+const mcpTasksEnabled = ref(false);
+const mcpTasksLoaded = ref(false);
 let agentsApiInFlight: Promise<void> | null = null;
 let browserControlInFlight: Promise<void> | null = null;
+let mcpTasksInFlight: Promise<void> | null = null;
 
 async function loadAgentsApi() {
   const cached = readCachedAgentsApiEnabled();
@@ -62,6 +65,18 @@ async function loadBrowserControl() {
   }
 }
 
+async function loadMcpTasks() {
+  try {
+    const features = await fetchFeatures();
+    mcpTasksEnabled.value = features.mcp_tasks?.enabled ?? false;
+  } catch {
+    // 与 browser_control 同一条 fail-closed：问不到就当没有。
+    mcpTasksEnabled.value = false;
+  } finally {
+    mcpTasksLoaded.value = true;
+  }
+}
+
 function refreshAgentsApi() {
   agentsApiInFlight ??= loadAgentsApi().finally(() => {
     agentsApiInFlight = null;
@@ -74,6 +89,13 @@ function refreshBrowserControl() {
     browserControlInFlight = null;
   });
   return browserControlInFlight;
+}
+
+function refreshMcpTasks() {
+  mcpTasksInFlight ??= loadMcpTasks().finally(() => {
+    mcpTasksInFlight = null;
+  });
+  return mcpTasksInFlight;
 }
 
 export function useAgentsApiEnabled(options: { enabled?: boolean } = {}) {
@@ -95,5 +117,16 @@ export function useBrowserControlEnabled(options: { enabled?: boolean } = {}) {
     loaded: readonly(browserControlLoaded),
     browserControlEnabled: readonly(browserControlEnabled),
     refresh: refreshBrowserControl,
+  };
+}
+
+export function useMcpTasksEnabled(options: { enabled?: boolean } = {}) {
+  onMounted(() => {
+    if (options.enabled !== false) void refreshMcpTasks();
+  });
+  return {
+    loaded: readonly(mcpTasksLoaded),
+    mcpTasksEnabled: readonly(mcpTasksEnabled),
+    refresh: refreshMcpTasks,
   };
 }

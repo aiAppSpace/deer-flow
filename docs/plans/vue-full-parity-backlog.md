@@ -17,8 +17,10 @@
 
 | React 路由 | Vue | 来源 |
 | --- | --- | --- |
-| `/artifacts/view` | **缺** | `frontend/src/app/artifacts/view/page.tsx` 存在，`frontend-vue/app/pages/` 下无对应 |
-| `/workspace/projects/[id]` | **缺** | `frontend/src/app/workspace/projects/[id]/page.tsx` 存在，Vue 无 |
+| `/artifacts/view` | ✅ 已补（`app/pages/artifacts/view.vue`，2026-09-10） | — |
+| `/workspace/projects/[id]` | ✅ 已补（`app/pages/workspace/projects/[id].vue`，2026-09-10） | — |
+
+路由缺口已清零：`baseline/react-parity-scope.json` 的 `pendingRoutes` 现在是空数组。
 
 其余路由两边一一对应（含 `/showcase/[thread_id]`、`/workspace/agents/*`、
 `/workspace/scheduled-tasks`、`/auth/callback`、`/login`、`/setup`）。
@@ -30,10 +32,10 @@ React `components/workspace/chats/chat-page.tsx` 组合的 18 项里，Vue 缺 4
 
 | React | 出处 | Vue |
 | --- | --- | --- |
-| `ThreadArchiveStatus` | #5236 会话归档 | **缺** |
+| `ThreadArchiveStatus` | #5236 会话归档 | ✅ 已补 |
 | `ThreadBackgroundTasks` | #4833 MCP durable task | **缺** |
 | `ThreadSubagentBatches` | #4998 subagent 批量执行 | **缺** |
-| `useProject` / `projectIdOfThread` | #5265 projects | **缺** |
+| `useProject` / `projectIdOfThread` | #5265 projects | ✅ 已补 |
 
 **已核实为「组织方式不同但功能在」的三项**（不要误判成缺口）：
 `GoalStatus` → `frontend-vue/app/components/workspace/GoalStatus.vue`；
@@ -45,18 +47,22 @@ React `components/workspace/chats/chat-page.tsx` 组合的 18 项里，Vue 缺 4
 React 侧栏组合 `WorkspaceHeader / WorkspaceNavChatList / WorkspaceChannelsList /
 ProjectsSection / RecentChatList / WorkspaceNavMenu`。
 Vue 的 `ThreadSidebar.vue` 有 `WorkspaceChannelsList`、`VirtualThreadList`（对应 RecentChatList），
-**缺 `ProjectsSection`**；`ThreadActionsMenu.vue` 里也**没有「移到项目」**
-（React 在 `recent-chat-list.tsx` 里用 `move-to-project-menu.tsx`）。
+`ProjectsSection` 与「移到项目」均已补齐（2026-09-10）。
 
 ## 四、core 模块（读两边 `core/` 的实际目录）
 
 React 有、Vue 没有对应物的（已排除豁免的 `blog`、以及两边都有只是我脚本误判的 `clipboard.ts`）：
 
-`projects`、`subagents`、`subagent-batches`、`background-tasks`、
-`artifacts/delimited-preview*`（4 个文件，含 worker）、`artifacts/viewer`、
-`threads/archive`、`threads/message-order`、`threads/thread-branch-tree`、
-`messages/conversation-outline`、`messages/artifact-archive`、`mcp/parse`、
-`api/static-response`、`dom/render-activity`、`notification`、`static-mode.ts`
+**仍缺**：`subagents`、`subagent-batches`、`background-tasks`、
+`threads/message-order`、`messages/conversation-outline`、`mcp/parse`、
+`api/static-response`、`dom/render-activity`、`notification`。
+
+**已补齐**（2026-09-10）：`projects`、`artifacts/delimited-preview*`（含 worker 与工厂）、
+`artifacts/viewer`（+ `viewer-route`、`query-keys`）、`threads/archive`、
+`threads/thread-branch-tree`、`messages/artifact-archive`。
+
+`static-mode.ts` **不补**：`useProjects.ts` 文件头已记下这条取舍——上游用它在静态演示站
+屏蔽所有 Gateway 请求（23 处贯穿式分支），本仓改由调用方用 `enabled` / `isMock` 在调用点决定。
 
 （`threads/stream-state` 需要再读一遍：Vue 的流式状态折叠可能在别处，别照名字判缺。）
 
@@ -68,10 +74,14 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ## 执行顺序（先做结构性的，避免同一处改两遍）
 
-1. **projects（#5265）** —— 新路由 + 侧栏 section + core 模块 + 会话归属 + 移到项目菜单。
-   它同时是对照台账里最大的一类差异，做完能一次消掉最多噪音。
-2. **thread archive（#5236）** —— 与 1 落在同一批会话列表界面上，紧随其后做。
-3. **artifacts：`/artifacts/view` 视窗（#5056）+ CSV/TSV 表格预览（#5284）+ viewer 模块**
+1. ~~**projects（#5265）**~~ ✅ 2026-09-10（`7510255c`）
+2. ~~**thread archive（#5236）**~~ ✅ 2026-09-10（`0e39d9b4`）
+3. ~~**artifacts：`/artifacts/view` 视窗（#5056）+ CSV/TSV 表格预览（#5284）+ viewer 模块
+   + 归档下载（#5117）**~~ ✅ 2026-09-10（`63116c41`、`bcada492`）
+
+   同一批顺带补的（都属于「历史没对齐」）：会话列表页的归档页签 + 三条空态 + 加载失败重试
+   + 行内恢复键；产物面板视图切换那两颗键的可访问名；从项目里新建会话的项目归属
+   （`?project=` 此前没有任何消费者）；上一轮遗留的 5 个死导入。
 4. **background tasks（#4833）/ subagents（#4887）/ subagent batches（#4998）** —— 三者共用 features 接口
 5. **设置页：MCP server 管理（#5022）、本地安装技能包（#5039）**
 6. **其余零散**：会话大纲导航（#5025）、分支会话标记（#4983）、复制定时任务（#5064）、
@@ -131,3 +141,20 @@ login/setup 页——这些都还没有逐个读代码比对。
 - 本地设置项 `projectsDisplayMode`（`core/settings/local`）
 - `flattenThreadBranches`（`core/threads/thread-branch-tree`）——属于 #4983 分支会话，
   第 26 条依赖它
+
+---
+
+## 进度实测（2026-09-10，跑门禁得出，不是估计）
+
+| 账 | 起点 | 现在 | 怎么量 |
+| --- | --- | --- | --- |
+| `pendingRoutes` | 2 | **0** | `baseline/react-parity-scope.json` |
+| 对照场景 pending | 8 | **6** | `baseline/parity-scenario-coverage.json` |
+| i18n pending key | 179 | **115** | `baseline/upstream-i18n-map.json` |
+| 词典 unused key | 18 | **16** | `baseline/i18n-keys.json`（新增的 24 条 key 全部被引用） |
+| 取样面 pending 路由 | 1 | **1** | `baseline/parity-route-sampling.json`（`/workspace/projects/[id]`，缺 mock fixture） |
+
+**i18n pending 剩下的 115 条集中在四块**（跑一次上面那个 json 的分组统计得出）：
+`subagents` 38、`backgroundTasks` 32、`subagentBatches` 25，其余 20 条散在
+`scheduledTasks`(5)、`skills`(5)、`settings`(4)、`workspace`(3)、`conversation`(2)、`chats`(1)。
+前三块正是执行顺序第 4 条，所以下一批做完这 95 条会一起掉下来。

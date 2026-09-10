@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/tooltip";
 import ContextUsageBadge from "@/components/workspace/ContextUsageBadge.vue";
 import ThreadArchiveStatus from "@/components/workspace/ThreadArchiveStatus.vue";
+import ThreadBackgroundTasks from "@/components/workspace/ThreadBackgroundTasks.vue";
 import TodoList from "@/components/workspace/TodoList.vue";
 import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import WorkspacePanels from "@/components/workspace/WorkspacePanels.vue";
@@ -1754,6 +1755,18 @@ onUnmounted(() => {
             标题变长时缩的是标题，不是这排按钮。
           -->
           <div class="flex shrink-0 items-center gap-2">
+            <!--
+              后台任务排在这一组的最前，与上游 chat-page.tsx 的顺序一致
+              （ThreadBackgroundTasks 在 ThreadScheduledTasksLink 上面）。
+
+              条件是「已有会话、且不是只读案例」：新会话还没有 thread 可查，
+              案例页那边没有 Gateway。能力开关由组件自己看（mcp_tasks 没开就整块
+              不渲染），不在这里重复判一次——判两处迟早会分叉。
+            -->
+            <ThreadBackgroundTasks
+              v-if="routeThreadId && !isDemo"
+              :thread-id="routeThreadId"
+            />
             <!--
               outline / sm 的按钮外观加一段 `hidden sm:inline` 的文字，不是一颗纯图标的
               方按钮：React 的 ThreadScheduledTasksLink 就是
