@@ -91,7 +91,7 @@ Gateway 的语义是「omitted includes all」（`threads.py:459`），而本仓
    比那个条件更强）和 `artifact-table-performance`（条件是"artifact-table-preview
    进目录之后"，已进）。
 2. **`tests/` 整棵树没有类型检查**：Nuxt 的 tsconfig 只收 `app/**` 与 `tests/nuxt/**`，
-   vitest 又只转译不查类型。实测临时开一份 tsconfig 跑 `vue-tsc`：**346 条错误**，
+   vitest 又只转译不查类型。实测（用对的 include）是 **134 条**，2026-09-11 已清到 89，
    绝大多数是测试脚手架的类型学。开它是独立的一轮活。
    **在它开起来之前，别在 `tests/` 里写类型层断言**——那等于写了个不会执行的注释。
 3. **台账里那条 `button "Edit and rerun"`**（3 行，seq 移植的副产物）——

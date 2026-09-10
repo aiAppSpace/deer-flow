@@ -622,11 +622,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "text:Local tools x React=367 Vue=350 Δ-17",
-        "text:Local tools y React=368.3 Vue=364 Δ-4.3",
-        "text:Local tools width React=654 Vue=61.1 Δ-592.9",
-        "text:Local tools height React=21 Vue=16 Δ-5",
-        "text:Local tools fontSize React=14px Vue=12px"
+        "text:Local tools width React=654 Vue=662 Δ8"
       ],
       "focus": [],
       "order": [],
@@ -645,11 +641,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "text:Local tools x React=367 Vue=350 Δ-17",
-        "text:Local tools y React=368.3 Vue=364 Δ-4.3",
-        "text:Local tools width React=654 Vue=61.1 Δ-592.9",
-        "text:Local tools height React=21 Vue=16 Δ-5",
-        "text:Local tools fontSize React=14px Vue=12px"
+        "text:Local tools width React=654 Vue=662 Δ8"
       ],
       "focus": [],
       "order": [],
@@ -693,7 +685,9 @@
         "text:Renamed title width React=90.9 Vue=88.8 Δ-2.1",
         "text:Renamed title fontWeight React=500 Vue=400"
       ],
-      "focus": [],
+      "focus": [
+        "React=body Vue=button \"更多\""
+      ],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],
@@ -1027,11 +1021,7 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:switch[review] x React=1117 Vue=1121 Δ4",
-        "role:switch[review] y React=361.9 Vue=357.8 Δ-4.1",
-        "role:switch[review] fontSize React=14px Vue=16px"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1048,11 +1038,7 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:switch[review] x React=1117 Vue=1121 Δ4",
-        "role:switch[review] y React=361.9 Vue=357.8 Δ-4.1",
-        "role:switch[review] fontSize React=14px Vue=16px"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],

@@ -223,6 +223,12 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
+- **`thread-title-sync/zh-CN` 的 `focus: React=body Vue=button "更多"`（1 行）——疑似取样点不稳。**
+  同一条场景的 en-US 那一维**没有**这条。与 `chat-thread-init-ordering` 那次
+  同一个形状：语言不对称的差异基本都是取样早了一点，不是渲染规则不同。
+  下一轮：先给这条场景的 steps 加一个真终态锚点再看，别直接改代码。
+
+
 - ~~`ui/item` 这一族 primitive 本仓没有~~ **已移植（六个）并改了三个设置页。**
   上游十个导出里，四个设置页只用到六个（Item / ItemMedia / ItemContent /
   ItemTitle / ItemDescription / ItemActions），另外四个（ItemGroup /
@@ -294,21 +300,27 @@ login/setup 页——这些都还没有逐个读代码比对。
   **这次我差点重查一遍。** 教训记在这里：本仓的挂账分散在三份文档里——
   `vue-parity-open-accounts.md`（逐条判过的账）、`vue-parity-handoff.md`（历轮交接）、
   以及本文件。**查一条台账之前先在这三份里搜一遍关键词。**
-- **`tests/` 整棵树没有类型检查。** Nuxt 的 tsconfig 只 include `app/**` 与
-  `tests/nuxt/**`，所以 `make typecheck` 看不见 `tests/`；vitest 只转译不查类型。
-  实测：临时给 `tests/**` + `playwright*.config.ts` 开一份 tsconfig 跑 `vue-tsc`，
-  **346 条错误**，绝大多数是测试脚手架的类型学（`global.mocks` 只给一半、
-  只读夹具、vue-test-utils 的 `DOMWrapper`），不是真 bug。开这道检查是独立的一轮活。
-  在它开起来之前，**别在 `tests/` 里写类型层断言**——那等于写了个不会执行的注释
-  （本轮实测过：改坏字段表两次，`vue-tsc` 都是绿的）。
-- ~~`core/threads/message-order`（435 行）还没逐行读过~~ **已读完并移植**（`a12ae79f`）。
-  四个模块全部结账：`dom/render-activity` 已覆盖、`api/static-response` 属静态整站
-  模式豁免、`core/notification` 的四处差异已修（`03c03848`）、
-  `threads/message-order` 的 **seq 骨架整段缺失**，已补（新增 `core/threads/message-seq.ts`
-  与 17 条用例）。**这一栏现在是空的**——下一轮要找活得换个坐标系。
-- **`focus` 档：`React=button "Account" Vue=当前分区`（6 行）——不是缺陷，是有据的分歧。**
-  本仓接管 `open-auto-focus`，把焦点放到深链指向的那个分区上；上游不接管，
-  Radix 的默认永远落在第一个可聚焦元素（"Account"）。
+- **`tests/` 整棵树没有类型检查——数字订正：不是 346 条，是 134 条；现在剩 89。**
+
+  Nuxt 的 tsconfig 只 include `app/**` 与 `tests/nuxt/**`，vitest 又只转译不查类型。
+  **上一轮记的「346 条」是我自己量错的**：那份临时 tsconfig 覆盖了 `include`，
+  把 `.nuxt/nuxt.d.ts` 挤出了程序，于是 165 条 `Cannot find name 'useNuxtApp'`
+  一类的假错。用对的 include（见签入的 `tsconfig.tests.json`）重量是 **134**。
+
+  2026-09-11 清掉 45 条，剩 **89**，其中已修的四类值得记住——**它们都是真错**，
+  不是「测试脚手架的类型学」：
+
+  1. `WebServerEntry` 在联合上分配后塌成 `never`，四份 playwright config 全红；
+  2. `ParityTarget` 的 `name` 写成必填，而两处场景有意只按 role 定位；
+  3. **16 处 `wrapper.get(sel).exists()` 是恒真断言**——`get()` 拿不到就抛，
+     vue-test-utils 因此从它的返回里去掉了 `exists()`。类型在说「这条断言什么都没断」；
+  4. 两个 tooling 测试的注入桩：`.mjs` 的参数类型是从 `fs` 默认值推的，
+     用 JSDoc 把注入契约写清楚即可。
+
+  剩下的 89 条是长尾：约 55 个文件，每个 1–7 条，要逐个判断
+  （夹具类型、`global.mocks` 只给一半、Playwright 版本的 fixture 类型）。
+  **修完之后把 `typecheck-tests` 接进 `make verify`**，否则它们会长回来。
+  在那之前，别在 `tests/` 里写类型层断言——那等于写了个不会执行的注释。
 
   **这条我判错过一次，记在这里免得重蹈**：2026-09-10 有一轮把它当成
   「没有依据的分歧」删了，理由是「没有注释说明，也没有用例钉过它」——
