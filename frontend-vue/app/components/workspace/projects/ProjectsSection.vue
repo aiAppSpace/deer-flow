@@ -75,8 +75,24 @@ function toggleDisplayMode() {
   });
 }
 
-const { data: activeProjects } = useProjects("active");
-const { data: archivedProjects } = useProjects("archived");
+/*
+  **只在分组模式下取项目列表。**
+
+  平铺是默认模式，而平铺模式下整个分组列表都不渲染——项目列表取回来没人看。
+  上游用的是「把 `useProjects` 放在只有分组模式才渲染的子组件
+  `GroupedProjectList` 里」达到同一效果（projects-section.tsx:152/312）；
+  本仓这一层不拆子组件，改用 `enabled` 表达同一件事。
+
+  差别不是「少两个请求」这么轻：平铺是默认，也就是**每个用户每次打开工作区**
+  都会白发两个。2026-09-10 的对照台账把它读出来了
+  （`GET /api/projects?status=*` 进了 requestsOnlyVue，98 处）。
+*/
+const { data: activeProjects } = useProjects("active", {
+  enabled: groupByProject,
+});
+const { data: archivedProjects } = useProjects("archived", {
+  enabled: groupByProject,
+});
 
 /*
   与 ThreadSidebar 的 `sidebarThreads` 同一条规则：路径上的活动会话即使
