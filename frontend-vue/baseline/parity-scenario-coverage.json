@@ -36,6 +36,7 @@
     "thread-history-mermaid",
     "thread-list-infinite-scroll",
     "thread-list-pin",
+    "thread-ordering",
     "ui-polish-mobile",
     "user-message-plain-text",
     "workspace-changes"
@@ -43,7 +44,6 @@
   "pending": [
     "artifact-table-performance",
     "mcp-settings",
-    "thread-ordering",
     "thread-title-sync"
   ],
   "exempt": [
@@ -62,9 +62,8 @@
     }
   ],
   "$pendingReasons": {
-    "artifact-table-performance": "同上那一面的性能三例（冷 Worker 跑 1MiB CSV、超宽引号记录时主线程不卡、病态解析后还能开下一个 Worker）。**什么时候重新问**：artifact-table-preview 进目录之后——性能例依赖同一套 fixture。",
+    "artifact-table-performance": "上游那三例量的是**性能**（冷 Worker 跑 1MiB CSV 的首表延迟、超宽引号记录时的长任务与心跳间隔、病态解析后还能开下一个 Worker），而对照工厂的坐标系是aria 树 / 几何 / 请求——**表达不了一条时延断言**。所以它不是「取样点还没加」，是**这条 spec 天生不进对照工厂**。**什么时候重新问**：本仓自己补一份镜像 spec 之后（照 reduced-motion 的先例：对照工厂不覆盖、本仓 tests/e2e/ 里带一份，两侧都有机器在守）；届时它进 exempt 还是留在这里，取决于 /artifacts/view 那条路由的豁免状态。",
     "mcp-settings": "编辑单个 MCP server 时不能丢掉 advanced 字段、也不能动到兄弟条目。**什么时候重新问**：本仓 MCP 设置页支持 advanced 字段编辑时。",
-    "thread-ordering": "分页长历史按 feed 顺序渲染并在刷新后保持；提交中途发生压缩仍保序并追加新轮次；自定义 agent 会话在分页与刷新间保持同一顺序。**什么时候重新问**：本仓 MessageList 虚拟化改动时——这三例正是那块最容易回归的地方。",
     "thread-title-sync": "重命名要同步侧栏、头部与 document.title；过期的 metadata 响应不能把旧标题写回来。**什么时候重新问**：下一轮碰 thread-title 时（本仓已有 ThreadTitle，缺的是这两条竞态断言）。"
   }
 }

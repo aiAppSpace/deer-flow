@@ -786,6 +786,93 @@ flowchart TD
 
 export const WORKSPACE_CHANGES_RUN_ID = "00000000-0000-0000-0000-0000000009c1";
 
+/*
+  一份**乱序投递、seq 正确**的长历史，外加两条压缩留下的隐藏摘要行。
+
+  为什么要乱序：两个应用都得按 `seq` 排，而不是按数组投递顺序——本仓的
+  `reconcileThreadHistoryRows` 按 `row.seq` 排，`mergeMessages` 再用 seq 建骨架
+  （2026-09-10 才补上的那一层，见 core/threads/message-seq.ts）。
+  顺序投递的夹具**两条路径都测不出来**：数组顺序恰好等于 seq 顺序时，
+  完全不排也一样绿。
+
+  为什么隐藏摘要行要有：`hide_from_ui` 的行不进渲染，但**它带着 seq**——
+  「隐藏副本不贡献可见位置」正是 seq 收敛里最容易写反的一条。
+
+  只有一页（`has_more: false`）：场景的路由覆盖是**静态 JSON**，同一份应答会喂给
+  每一次 `before_seq` 请求，`has_more: true` 会让列表无限往前翻。
+  上游 `thread-ordering.spec.ts` 的另外两例（翻页后刷新保序、提交中途压缩）
+  因此不在这条场景里，理由记在 docs/plans/vue-full-parity-backlog.md。
+*/
+const ORDERING_TURNS = 8;
+const ORDERING_ROWS = (() => {
+  const rows: { seq: number; content: Record<string, unknown> }[] = [];
+  let seq = 0;
+  for (let turn = 0; turn < ORDERING_TURNS; turn += 1) {
+    rows.push({
+      seq: (seq += 1),
+      content: {
+        type: "human",
+        id: `h-turn-${turn}`,
+        content: `turn-${turn} question`,
+      },
+    });
+    rows.push({
+      seq: (seq += 1),
+      content: {
+        type: "ai",
+        id: `a-turn-${turn}`,
+        content: `turn-${turn} answer`,
+      },
+    });
+    // 每四轮一次压缩，留下一条隐藏摘要行。
+    if (turn === 3 || turn === 6) {
+      rows.push({
+        seq: (seq += 1),
+        content: {
+          type: "ai",
+          id: `summary-${turn}`,
+          name: "summary",
+          content: `context summary after turn-${turn}`,
+          additional_kwargs: { hide_from_ui: true },
+        },
+      });
+    }
+  }
+  /*
+    固定的错排，**不能用 Math.random**：两个应用必须拿到逐字相同的夹具，
+    而且同一条场景两次取样也必须相同（diff.spec 的第二条用例专门在量这件事）。
+    这里把每相邻三条循环左移一位——足以让数组顺序与 seq 顺序不一致，
+    又不至于把整份历史打成看不懂的样子。
+  */
+  const shuffled = [...rows];
+  for (let index = 0; index + 2 < shuffled.length; index += 3) {
+    const [a, b, c] = [
+      shuffled[index]!,
+      shuffled[index + 1]!,
+      shuffled[index + 2]!,
+    ];
+    shuffled[index] = b;
+    shuffled[index + 1] = c;
+    shuffled[index + 2] = a;
+  }
+  return shuffled;
+})();
+
+const ORDERING_PAGE_ROUTE: ParityRouteOverride = {
+  pattern: "**/api/threads/*/messages/page*",
+  json: {
+    data: ORDERING_ROWS.map((row, index) => ({
+      run_id: MOCK_RUN_ID,
+      seq: row.seq,
+      content: row.content,
+      metadata: { caller: "lead_agent" },
+      created_at: `2026-09-08T00:00:${String(index).padStart(2, "0")}Z`,
+    })),
+    has_more: false,
+    next_before_seq: null,
+  },
+};
+
 const HISTORY_THREADS = [
   {
     thread_id: MOCK_THREAD_ID,
@@ -1426,6 +1513,42 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { role: "button", name: /^(More|更多)$/ },
           },
         ],
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
+    id: "thread-ordering",
+    title: "长历史按 feed 顺序渲染",
+    backend: "mock",
+    path: `/workspace/chats/${MOCK_THREAD_ID}`,
+    mock: {
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Ordering conversation",
+          updated_at: "2026-09-08T12:00:00Z",
+        },
+      ],
+    },
+    routes: [ORDERING_PAGE_ROUTE],
+    /*
+      **这条场景压的是 2026-09-10 才补上的那一层**：消息的可信位置（`deerflow_seq`）。
+      在它之前本仓的排序完全靠身份锚点编织，而排序错了不报错，只让用户看到乱序的对话
+      ——没有任何门禁看得见。
+
+      夹具乱序投递、seq 正确（见 ORDERING_ROWS 上方），所以「有没有按 seq 排」
+      两边都会在这一屏上现形。两条 `hide_from_ui` 的摘要行必须不渲染，
+      但它们带着 seq——「隐藏副本不贡献可见位置」是收敛里最容易写反的一条。
+    */
+    settle: [{ kind: "visible", target: { text: "turn-7 answer" } }],
+    steps: [
+      // 第一轮与最后一轮都在（中间由虚拟列表决定渲染多少，两边一致即可）。
+      { kind: "visible", target: { text: "turn-7 question" } },
+      // 压缩摘要是隐藏行，不该出现在正文里。
+      {
+        kind: "hidden",
+        target: { text: "context summary after turn-3" },
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],

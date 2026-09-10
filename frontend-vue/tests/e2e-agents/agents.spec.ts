@@ -266,6 +266,9 @@ test.describe.serial("real Gateway Agent lifecycle", () => {
       model_settings: { temperature: 0, max_tokens: 200000 },
       thinking_enabled: false,
       reasoning_effort: "high",
+      // #4887 的 subagent 访问绑定：`null` = 不限制。这条 PUT 是逐字比的，
+      // 新字段必须写进来——只对上「有没有发出去」等于让「多发了什么」看不见。
+      allowed_subagents: null,
     });
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(card.getByTestId("agent-model")).toHaveText("reasoning-model");

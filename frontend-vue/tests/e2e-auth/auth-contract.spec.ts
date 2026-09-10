@@ -1,4 +1,10 @@
-import { expect, test, type Page, type Request } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Page,
+  type Request,
+  type Route,
+} from "@playwright/test";
 
 import { mockLangGraphAPI } from "../e2e/utils/mock-api";
 
@@ -105,7 +111,15 @@ test("logout and a new login never reuse the previous user's query cache", async
     };
     return route.fulfill({ status: 200, json: { expires_in: 604_800 } });
   });
-  await page.route("**/api/langgraph/threads/search", (route) =>
+  /*
+    **两条搜索端点都要覆盖。** 侧栏给 `useThreads()` 的 `archived` 默认是 `false`
+    （Gateway 的语义是「omitted includes all」，不传会把已归档的一起列出来），
+    而带 `archived` 的那一支只能走 Gateway 原生的 `/api/threads/search`
+    ——LangGraph 的 search 不认这个字段。2026-09-10 改默认值之前，
+    这里只覆盖 SDK 那条就够；改完之后侧栏改打原生那条，这条 route 落空，
+    夹具会话就再也没出现过。
+  */
+  const fulfillThreadSearch = (route: Route) =>
     route.fulfill({
       json: [
         {
@@ -117,8 +131,9 @@ test("logout and a new login never reuse the previous user's query cache", async
           values: { title: currentThread.title },
         },
       ],
-    }),
-  );
+    });
+  await page.route("**/api/langgraph/threads/search", fulfillThreadSearch);
+  await page.route("**/api/threads/search", fulfillThreadSearch);
 
   await page.goto("/workspace/chats/new?settings=account");
   await expect(page.getByText("ADMIN PRIVATE THREAD")).toBeVisible();

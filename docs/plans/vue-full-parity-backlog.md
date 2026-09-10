@@ -224,18 +224,31 @@ login/setup 页——这些都还没有逐个读代码比对。
 ### 还开着的账
 
 - **`chat-thread-init-ordering` 上多出一颗 `button "Edit and rerun"`（3 行）。**
-  这是 **seq 移植带来的**：本仓此前压住了第一个共有锚点之前那条受保护的人类消息，
-  现在跟上游一样把它编织出来了（同一轮里 6 行旧差异因此消失，含一处 80px 的
-  垂直偏移），于是「最新可编辑回合」落在了一个新的位置上，而上游那边没有这颗键。
+  这是 seq 移植带来的：本仓此前压住了第一个共有锚点之前那条受保护的人类消息，
+  现在跟上游一样把它编织出来了（同一轮 6 行旧差异因此消失，含一处 80px 的垂直偏移），
+  于是「最新可编辑回合」落在了一个新的位置上。
 
-  已经读过的：上游 `canEdit`（chat-page.tsx:474）比本仓的 `show-edit`
-  多了 `!isNewThread`、`!isUploading`、`!thread.isLoading`、`!branchThread.isPending`、
-  `!hasGoal`、`!hasOpenHumanInputCard` 六项，其中 `!isMock` 本仓由
-  `interactive="!isDemo"` 覆盖、`!isNewThread` 等价于本仓的 `threadId != null`
-  （两边都在 onStart 里换路由）。**剩下几项本仓的 MessageList 根本拿不到**，
-  所以到底差在哪一项还没测出来。
-  下一轮：在 `chat-thread-init-ordering` 上加一次临时 dump，把两边这几个值打出来
-  ——**在看到那个读数之前不要动代码**（这一轮已经在别的条目上猜错过三次）。
+  **2026-09-10 已实测**（临时 dump 打两边的 aria 树，跑完即撤）：
+
+  ```
+  react:  text: Hello / Copy · text: Hello / Copy · paragraph: Hello from DeerFlow! / Copy
+  vue:    text: Hello / Copy · text: Hello / Copy · **Edit and rerun** · paragraph: … / Copy
+  ```
+
+  两边的消息组**逐条相同**，上游**一颗 `Edit and rerun` 都没有**，本仓在最新那条
+  人类消息上有一颗。所以不是「本仓画重了」，是「上游这一屏上根本不画」。
+
+  已经排除的：`getLatestEditableTurn` 两边同源、`isLoading` 为真时都返回 null，
+  而两边都画出了 `Copy to clipboard`（上游那颗按 `!isLoading` 关），
+  说明**两边都认为这一轮跑完了**；侧栏截图显示新会话已被选中，
+  说明 `onStart` 跑过、上游的 `isNewThread` 已经是 false。
+  上游 `canEdit` 余下的 `!isUploading` / `!branchThread.isPending` / `!hasGoal` /
+  `!hasOpenHumanInputCard` 在这一屏上都不成立。
+
+  **还剩一种可能没测**：上游的 `thread.isLoading`（SDK 的 useStream 维护）
+  在 SSE 连接关闭之前一直为真，而本仓的 `streaming` 在收到终局事件时就翻假——
+  也就是**两边认为「这一轮结束了」的时刻不同**。要坐实它得给上游加一次临时探针
+  （把 `thread.isLoading` 打出来），那是下一轮的活。
 
 - ~~「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」~~
   **不是开着的账——它在 `docs/plans/vue-parity-open-accounts.md` 第 6 条（wave 98）

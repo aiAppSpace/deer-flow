@@ -135,12 +135,23 @@ test.describe("thread list accessibility shape", () => {
     await row.getByRole("button", { name: "More" }).click();
 
     const menu = page.getByRole("menu").first();
+    /*
+      顺序照上游 `recent-chat-list.tsx:339` 起那一段：
+      置顶 · 重命名 · 分享 · 导出▸ · 归档 · 移到项目▸ · ─ · 删除。
+      归档（#5236）与移到项目（#5265）是后补的两项，此前这条期望停在五项上。
+
+      用正则而不是字面量：菜单项是「图标 + 文字」，`textContent` 带着图标后面
+      那个空格（`" Pin chat"`），而「移到项目」那一项的模板不带——
+      钉死字面量等于把这处无关紧要的空白也钉进判据里。
+    */
     await expect(menu.getByRole("menuitem")).toHaveText([
-      "Pin chat",
-      "Rename",
-      "Share",
-      "Export",
-      "Delete",
+      /^\s*Pin chat\s*$/,
+      /^\s*Rename\s*$/,
+      /^\s*Share\s*$/,
+      /^\s*Export\s*$/,
+      /^\s*Archive chat\s*$/,
+      /^\s*Move to project\s*$/,
+      /^\s*Delete\s*$/,
     ]);
     await expect(menu.getByRole("separator")).toHaveCount(1);
 

@@ -9,37 +9,37 @@
     "/": {
       "critical": {
         "files": 31,
-        "raw": 397000,
+        "raw": 401000,
         "brotli": 131200
       },
       "prefetch": {
-        "files": 40,
-        "raw": 793000,
-        "brotli": 215000
+        "files": 62,
+        "raw": 851000,
+        "brotli": 234000
       }
     },
     "/login": {
       "critical": {
         "files": 26,
-        "raw": 367000,
-        "brotli": 121900
+        "raw": 372000,
+        "brotli": 123000
       },
       "prefetch": {
-        "files": 44,
-        "raw": 831000,
-        "brotli": 227000
+        "files": 66,
+        "raw": 888000,
+        "brotli": 245500
       }
     },
     "/workspace/chats/new": {
       "critical": {
-        "files": 36,
-        "raw": 753000,
-        "brotli": 223000
+        "files": 42,
+        "raw": 792000,
+        "brotli": 232000
       },
       "prefetch": {
-        "files": 44,
-        "raw": 831000,
-        "brotli": 227000
+        "files": 66,
+        "raw": 888000,
+        "brotli": 245500
       }
     }
   },

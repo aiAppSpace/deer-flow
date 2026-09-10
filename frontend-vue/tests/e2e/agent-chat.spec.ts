@@ -290,6 +290,13 @@ test.describe("Agent chat", () => {
           model_settings: { temperature: 0, max_tokens: 200000 },
           thinking_enabled: null,
           reasoning_effort: null,
+          /*
+            #4887 的 subagent 访问绑定：`null` = 不限制（上游的
+            `allowedSubagentsFromMode("all")` 也是 null）。这一整条 PUT 是
+            **逐字比**的，所以新字段必须写进来——只对上「有没有发出去」等于
+            让「多发了什么」永远看不见。
+          */
+          allowed_subagents: null,
         },
         agentRequests: expect.arrayContaining([
           "GET /api/agents",

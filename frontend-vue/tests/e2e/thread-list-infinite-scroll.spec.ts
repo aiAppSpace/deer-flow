@@ -86,7 +86,19 @@ test.describe("Thread list infinite scroll (issue #3482)", () => {
     // observer and never interferes with routing.
     let searchRequestCount = 0;
     page.on("request", (request) => {
-      if (request.url().includes("/api/langgraph/threads/search")) {
+      /*
+        数的是 **Gateway 原生的** `/api/threads/search`，不是 SDK 那条
+        `/api/langgraph/threads/search`。会话列表页给 `useThreads()` 传了
+        `archived`（活跃/已归档两个页签），而带 `archived` 的那一支只能走原生路由
+        ——LangGraph 的 search 不认这个字段。2026-09-10 把 `archived` 的默认值
+        改成 `false` 之后，**侧栏与聊天页也一起走了原生那条**，此前这里数的
+        SDK 路由于是恒为 0，用例静默失效。
+      */
+      const url = request.url();
+      if (
+        url.includes("/api/threads/search") ||
+        url.includes("/api/langgraph/threads/search")
+      ) {
         searchRequestCount += 1;
       }
     });

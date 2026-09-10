@@ -19,7 +19,14 @@
                    正文容器不再包 <main>——每个面板自己的 SettingsSection 会包，
                    与 React 的 main 数量一一对应。
 */
-import { computed, defineAsyncComponent, watch, type Component } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  nextTick,
+  ref,
+  watch,
+  type Component,
+} from "vue";
 import {
   Bell,
   Brain,
@@ -104,6 +111,9 @@ const { $i18n } = useNuxtApp();
 const route = useRoute();
 const router = useRouter();
 const settings = useSettingsDialog();
+const sectionButtons = ref<Partial<Record<SettingsSection, HTMLButtonElement>>>(
+  {},
+);
 let routeOwnsDialog = false;
 let focusBeforeOpen: HTMLElement | null = null;
 
@@ -150,17 +160,35 @@ watch(
   },
 );
 
-/*
-  **不覆盖打开时的初始焦点。** 本仓此前接管 `open-auto-focus`，把焦点放到
-  **当前分区**那颗导航键上；上游没有这一手，Radix 的默认落在第一个可聚焦元素
-  （也就是 "Account"）。深链到某个分区时，落在当前分区听起来更好——但那是一处
-  **没有依据的分歧**：既没有注释说明，也没有用例钉过它，而对照台账在
-  `integrations` / `settings-notification` 上把它量了出来
-  （focus: React=button "Account" / Vue=button "Integrations"）。
+function setSectionButton(
+  section: SettingsSection,
+  element: Element | { $el?: Element } | null,
+) {
+  const candidate = element && "$el" in element ? element.$el : element;
+  if (candidate instanceof HTMLButtonElement) {
+    sectionButtons.value[section] = candidate;
+  }
+}
 
-  2026-09-10 实测：去掉这个覆盖之后，reka 的默认焦点**也是 "Account"**——
-  两个 primitive 在这件事上一致，删掉即对齐，不需要另写代码。
+/*
+  **打开时把焦点放在当前分区那颗导航键上**，接管 reka 的 `open-auto-focus`。
+
+  这是本仓**有意**与上游不同的一处，对照台账的 `focus` 档为此记账
+  （React=button "Account" / Vue=当前分区）：上游不接管，Radix 的默认落在第一个
+  可聚焦元素，也就是永远的 "Account"。深链到 `?settings=appearance` 却把焦点丢在
+  "Account" 上，键盘与读屏用户得自己找路——而 URL 已经说了要去哪一屏。
+
+  **两条 e2e 钉着它**：`tests/e2e/workspace-shell.spec.ts` 的
+  「command palette…」与「settings deep link traps focus…」都断言深链之后焦点在
+  "Appearance" 上。2026-09-10 有一轮把它误判成「没有依据的分歧」删掉，
+  当场被这两条用例挡回来——**判据不在 settings-dialog 那几个文件名里，
+  在 workspace-shell 里**。
 */
+function focusInitial(event: Event) {
+  event.preventDefault();
+  void nextTick(() => sectionButtons.value[settings.section.value]?.focus());
+}
+
 function restoreFocus(event: Event) {
   event.preventDefault();
   focusBeforeOpen?.focus({ preventScroll: true });
@@ -193,6 +221,7 @@ function onOpenChange(open: boolean) {
       :close-label="$i18n.t.value.primitives.close"
       :aria-describedby="undefined"
       class="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-5xl md:max-w-6xl"
+      @open-auto-focus="focusInitial"
       @close-auto-focus="restoreFocus"
     >
       <DialogHeader class="gap-1">
@@ -206,6 +235,7 @@ function onOpenChange(open: boolean) {
           <ul class="space-y-1 pr-1">
             <li v-for="item in sections" :key="item.id">
               <button
+                :ref="(element) => setSectionButton(item.id, element)"
                 type="button"
                 :class="
                   cn(
