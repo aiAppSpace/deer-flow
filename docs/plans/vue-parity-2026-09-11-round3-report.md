@@ -19,7 +19,7 @@
 | `make e2e-mock` | 全绿 | 317 passed |
 | `make e2e-backend` | 全绿 | 22 passed |
 | `make e2e-parity` | 121 passed | **121 passed** |
-| 对照台账 | 113 场景 / **210** 行 | 113 场景 / **206** 行（零新增） |
+| 对照台账 | 113 场景 / **210** 行 | 113 场景 / **204** 行（零新增） |
 
 台账行数用 `node scripts/parity-ledger-report.mjs` 读，不要引用散文里的数字——
 上一轮交接里写的「232 行」是手工数错的，跑脚本得到的是 **210**。
@@ -116,10 +116,19 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `655165b2` | `tests/` 接上类型检查并进 verify（134 → 0） |
 | `4b6d2dc5` | 本报告 + 挂账订正 |
 | `b5770d52` | 侧栏当前会话不加粗 + 新门禁 `primitive-marker-classes` |
+| （下一条） | 改名之后不与服务端收敛；顺带量出「失效对手动查询是空操作」 |
+
+### 6. 改名之后不与服务端收敛（**已修，台账 206 → 204**）
+
+上游 `useRenameThread` 三步（cancel 在途 → 写本地 → 让服务端那份成为最终事实），
+本仓只有第二步。**第一版照抄 `invalidateQueries` 时台账一行没动**——本仓的会话列表是
+`enabled: false` 的手动查询，失效只把它标脏、没有观察者会去重取。
+改成强制重取才真的又问了一次后端。**是台账把这条假绿量出来的。**
 
 ## 下一轮的起点
 
-1. **重命名之后上游会重取、本仓不重取**（`thread-title-sync` 的 2 行
-   `requestsOnlyReact`）：哪种对还没判。
+1. **`["threads", "search"]` 是个死缓存键**（已量清，判据与执行步骤写在
+   `vue-parity-open-accounts.md`）：本仓没有任何查询拥有它，产品侧 11 处读写失效
+   全是空操作；单测绿是因为有几处用例自己造了个生产里不存在的拥有者。
 2. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
    否则改完没有机器能验证。

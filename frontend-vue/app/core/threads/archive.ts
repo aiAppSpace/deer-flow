@@ -112,7 +112,7 @@ export function useArchiveThread(options: ArchiveThreadOptions = {}) {
         queryClient.invalidateQueries({ queryKey: ["threads", "search"] }),
         queryClient.invalidateQueries({ queryKey: metadataKey }),
         queryClient.invalidateQueries({
-          queryKey: [...projectKeys.root(), "threads"],
+          queryKey: projectKeys.threadsPrefix(),
         }),
       ]);
 

@@ -23,4 +23,12 @@ export const projectKeys = {
     ["projects", "list", status ?? "all"] as const,
   detail: (projectId: string) => ["projects", "detail", projectId] as const,
   threads: (projectId: string) => ["projects", "threads", projectId] as const,
+  /*
+    只有会话列表这一层的前缀。**上面那条「一律失效 root()」说的是 project 自己的
+    mutation**；改一条会话的标题不是 project mutation，上游那一处
+    （`useRenameThread`，frontend/src/core/threads/hooks.ts:3340）也刻意只失效
+    `[...PROJECTS_QUERY_KEY, "threads"]`——把 list 与 detail 一起标脏会多发
+    两类与这次改动无关的请求。
+  */
+  threadsPrefix: () => ["projects", "threads"] as const,
 };

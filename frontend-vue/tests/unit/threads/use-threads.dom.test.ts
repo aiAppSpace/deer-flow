@@ -81,6 +81,90 @@ describe("useThreads server-state owner", () => {
     queryClient.clear();
   });
 
+  /*
+    改名的三步（cancel 在途 → 本地写 → 让服务端那份收敛）。**第三步是这一轮补的**：
+    此前改完只写本地缓存，服务端把标题规范化过、或者别的设备并发改过名时永远收不回来。
+    上游 `useRenameThread`（frontend/src/core/threads/hooks.ts:3310）三步都做。
+
+    **断言落在「有没有再问一次后端」上，不落在「调了几次 invalidateQueries」上。**
+    第一版就是钉的调用次数，绿得很顺——而真实行为一点没变：本仓的列表查询是
+    `enabled: false` 的手动查询，`invalidateQueries` 只把它标脏，没有观察者会去重取。
+    对照台账那一行 `requestsOnlyReact: POST /api/threads/search` 一行没动，
+    是它把这条假绿量出来的。
+  */
+  it("改名之后要 cancel 在途列表、写本地缓存、再向后端要一次", async () => {
+    /*
+      第二次搜索**故意返回一个不同的标题**：服务端把标题规范化过（trim / 截断）
+      就是这个形状。收敛到它，才说明这一步真的以服务端为准，
+      而不是在重复一遍本地写进去的字符串。
+    */
+    const serverTitle = "Renamed title (server)";
+    searchThreadsByArchive
+      .mockReset()
+      .mockResolvedValueOnce([thread("t-1")])
+      .mockResolvedValue([
+        { ...thread("t-1"), values: { title: serverTitle, messages: [] } },
+      ]);
+    apiClient.threads.updateState.mockReset().mockResolvedValue(undefined);
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const cancelled: unknown[][] = [];
+    const invalidated: unknown[][] = [];
+    vi.spyOn(queryClient, "cancelQueries").mockImplementation(
+      (async (filters?: { queryKey?: unknown[] }) => {
+        cancelled.push(filters?.queryKey ?? []);
+      }) as never,
+    );
+    vi.spyOn(queryClient, "invalidateQueries").mockImplementation(
+      (async (filters?: { queryKey?: unknown[] }) => {
+        invalidated.push(filters?.queryKey ?? []);
+      }) as never,
+    );
+
+    let threads: ReturnType<typeof useThreads> | undefined;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          threads = useThreads();
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    );
+
+    await threads!.loadInitial();
+    await flushPromises();
+    expect(searchThreadsByArchive).toHaveBeenCalledTimes(1);
+
+    const titleNow = () =>
+      threads!.threads.find((row) => row.thread_id === "t-1")?.values.title;
+
+    await threads!.rename("t-1", "Renamed title");
+
+    expect(apiClient.threads.updateState).toHaveBeenCalledWith("t-1", {
+      values: { title: "Renamed title" },
+    });
+    // 在途的列表请求先掐掉，否则它回来时会把旧标题写回缓存。
+    expect(cancelled).toEqual([["threads", "searchInfinite"]]);
+    /*
+      重取**没有被 await**（对话框不等网络就关），所以这一刻界面上是本地写的那个
+      ——这一行钉的就是第 2 步。
+    */
+    expect(titleNow()).toBe("Renamed title");
+
+    await flushPromises();
+
+    // 真的又问了一次后端，而且收敛到了服务端返回的那一份：第 3 步的机器证据。
+    expect(searchThreadsByArchive).toHaveBeenCalledTimes(2);
+    expect(titleNow()).toBe(serverTitle);
+    // 项目页那张 REST 列表是普通 enabled 查询，失效就够。
+    expect(invalidated).toEqual([["projects", "threads"]]);
+
+    wrapper.unmount();
+    queryClient.clear();
+  });
+
   it("filters sidecars and advances the second request by raw backend rows", async () => {
     const rawFirstPage = [
       thread("main-1"),

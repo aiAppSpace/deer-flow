@@ -1,8 +1,58 @@
-# React → Vue 平替：挂账总清单（截至 wave 202，2026-09-09）
+# React → Vue 平替：挂账总清单（截至 2026-09-11 第三轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 新挂一条（**已量清，等执行**）：`["threads", "search"]` 是一个死缓存键
+>
+> 修改名那条账时量出来的：**本仓没有任何查询拥有 `["threads", "search"]`。**
+> 会话列表走的是 `useInfiniteQuery`，key 是 `["threads", "searchInfinite", params]`；
+> 而 `["threads","search"]` 的那个「本该的拥有者」`buildThreadsSearchQueryOptions`
+> （`core/threads/thread-search-query.ts:59`）**在 `app/` 下零调用点**，只有它自己的
+> 单测在用。两个 key 也不会互相前缀匹配（`"search" !== "searchInfinite"`）。
+>
+> 于是所有针对它的操作**都是空操作**：`setQueriesData` 只更新已存在的查询，
+> 没有查询就什么都不做；`invalidateQueries` / `cancelQueries` 同理。产品侧 11 处：
+>
+> | 文件 | 处数 |
+> | --- | --- |
+> | `core/threads/archive.ts` | 3（write / cancel / invalidate）|
+> | `core/threads/cache-invalidation.ts` | 2 |
+> | `composables/useThreadStream.ts` | 2 |
+> | `composables/useThreads.ts` | 1（`updateCachedThread` 的第一半）|
+> | `composables/useProjects.ts` | 1 |
+> | `core/threads/infinite.ts` | 1（`upsertThreadInSearchCache`）|
+> | `core/threads/thread-search-query.ts` | 1（死模块本身）|
+>
+> **而单测是绿的**——因为有几处用例自己 `setQueryData(["threads","search"], …)`
+> 造出一个生产里不存在的拥有者，再断言镜像写入落进去了（`thread-stream.dom.test.ts`、
+> `infinite.test.ts`、`account-settings-auth-boundary.dom.test.ts`）。
+> 这与本仓已经记过的那一次同形：`use-threads.dom.test.ts` 头注释里那句
+> 「这些用例覆盖的是一段不会执行的代码，而且照样全绿」。
+>
+> **怎么执行**：把死键与死模块一起删掉，顺带把那几条「自己造拥有者」的用例改成断言
+> 真正的那个 key。**先量再改**：删之前再跑一次上面的 grep，确认 11 处没有变多。
+> 风险面是零行为改动，台账应当零变化——这一点本身就是它的验收判据。
+>
+> ## 2026-09-11 判一条「不跟」：改名之后上游那次 `GET /api/langgraph/threads/{id}`
+>
+> 台账 `thread-title-sync` 上那一行 `requestsOnlyReact:
+> GET /api/langgraph/threads/00000000-…-0001`（两个语言维度各一行）。
+>
+> **判词：不跟。** 上游那一次请求是 `useThreadMetadata` 这个查询被
+> `useRenameThread` 的 invalidate 触发的——上游的会话头部读的是
+> `threadMetadata.data?.values?.title`（`chat-page.tsx:399`）。
+> 本仓的头部读的是**列表缓存**（`AgentChat.vue` 的 `headerTitle` 直接从
+> `threads.threads` 里找当前这条），没有第二个查询要收敛。为了让请求计数对上而去发
+> 一个**没有任何读者**的请求，是搬运不是对齐（本仓明写的判据：不承重就别写）。
+>
+> **同一轮结清的那一半**：`requestsOnlyReact: POST /api/threads/search` 是真差异，
+> 已修——本仓的 `rename` 此前只写本地缓存，不 cancel、不失效。三步补齐之后
+> （见 `useThreads.ts` 的 `rename`），标题被服务端规范化或别的设备并发改过名时才收敛得回来。
+>
+> **翻案判据**：本仓哪天给会话头部单独开一个 thread-metadata 查询
+> （比如头部要显示列表投影里没有的字段），这一条立刻成立，跟上即可。
+>
 > ## wave 202 新挂一条：**`e2e-agents` 里有一处没人在看的静默失败**
 >
 > 补跑 `e2e-backend`（EXIT=0，22 条）时看到的：`suggest_agent` 每跑必报两次

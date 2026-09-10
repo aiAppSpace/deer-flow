@@ -13,6 +13,7 @@ import {
 import { computed, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
 
 import { getAPIClient } from "@/core/api/api-client";
+import { projectKeys } from "@/core/projects/query-keys";
 import { removeDeletedThreadCaches } from "@/core/threads/cache-invalidation";
 import {
   fetchInfiniteThreadsPage,
@@ -271,16 +272,57 @@ export function useThreads(
     }
   }
 
+  /*
+    改名之后要做的三件事，与上游 `useRenameThread`
+    （frontend/src/core/threads/hooks.ts:3310）同一条：
+
+    1. **先 cancel 在途的列表请求**。改名之前发出的那一个回来时会把旧标题写回缓存
+       ——界面先变对、过一会儿又变回去，而且没有任何报错。上游那行注释
+       （"Prevent pre-rename snapshot requests from restoring the stale title."）
+       说的就是它。
+    2. 本地写一遍，界面立刻更新，不等这一轮网络。
+    3. 再让**服务端存下来的那一份**成为最终事实：标题被服务端规范化（trim / 截断）、
+       或者别的设备并发改过名时，只有这一步能收敛。上游用 `invalidateQueries`；
+       本仓的列表是手动查询，只能强制重取，理由写在第 3 步那段里。
+
+    **本仓此前只有第 2 步**，也就是「改完就相信自己写进缓存的那个字符串」。
+    对照台账 `thread-title-sync` 上的 `requestsOnlyReact: POST /api/threads/search`
+    就是这一步的缺席。
+
+    **没有跟上游的 `GET /api/langgraph/threads/{id}`**：那一条在上游是
+    `useThreadMetadata` 这个查询被 invalidate 触发的，而本仓的会话头部直接读列表缓存
+    （AgentChat.vue 的 `headerTitle`），没有第二个查询要收敛。为了对上一条请求计数
+    去发一个没人读的请求，是搬运不是对齐。判词记在
+    docs/plans/vue-parity-open-accounts.md。
+  */
   async function rename(threadId: string, title: string) {
     await apiClient.threads.updateState(threadId, { values: { title } });
-    const existing = threads.value.find(
-      (thread) => thread.thread_id === threadId,
-    );
-    if (existing)
-      updateCachedThread(threadId, (thread) => ({
-        ...thread,
-        values: { ...thread.values, title },
-      }));
+    await queryClient.cancelQueries({
+      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+    });
+    updateCachedThread(threadId, (thread) => ({
+      ...thread,
+      values: { ...thread.values, title },
+    }));
+    /*
+      **列表这一份必须 `loadInitial(true)`，`invalidateQueries` 对它是空操作。**
+      本仓的列表查询是 `enabled: false` 的手动查询（见上面 `useInfiniteQuery`），
+      失效只会把它标脏，没有观察者会去重取——第一版就是这么写的，
+      对照台账那一行 `requestsOnlyReact: POST /api/threads/search` **一行没动**，
+      是它把这件事量出来的。上游那边列表是普通 enabled 查询，所以 invalidate 就够。
+
+      **不 await**：调用方（ThreadSidebar.vue 的 `confirmRename`）拿 `await` 的结果
+      去关对话框，等重取回来才关等于把一次网络往返压在用户眼前。
+      本地那一步已经把界面改对了，这一步只负责稍后收敛。
+    */
+    void loadInitial(true);
+    /*
+      项目页那张会话列表是 REST 形状（不在 updateCachedThread 的覆盖里），
+      而且是普通 enabled 查询，失效就会重取。
+    */
+    void queryClient.invalidateQueries({
+      queryKey: projectKeys.threadsPrefix(),
+    });
   }
 
   return reactive({

@@ -658,8 +658,7 @@
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
-        "GET /api/langgraph/threads/00000000-0000-0000-0000-000000000001",
-        "POST /api/threads/search"
+        "GET /api/langgraph/threads/00000000-0000-0000-0000-000000000001"
       ],
       "requestsOnlyVue": [],
       "geometry": [],
@@ -674,8 +673,7 @@
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [
-        "GET /api/langgraph/threads/00000000-0000-0000-0000-000000000001",
-        "POST /api/threads/search"
+        "GET /api/langgraph/threads/00000000-0000-0000-0000-000000000001"
       ],
       "requestsOnlyVue": [],
       "geometry": [],
