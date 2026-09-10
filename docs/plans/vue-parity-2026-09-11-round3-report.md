@@ -1,6 +1,6 @@
 # Vue 对齐 React：2026-09-11 第三轮
 
-分支 `main-wc`，`b7b97abc` … （见文末），全部已提交、**未推送**。
+分支 `main-wc`，`b7b97abc` … `b5770d52` 共 5 个提交，全部已提交、**未推送**。
 
 ## 一句话
 
@@ -115,7 +115,7 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `cba5f2bd` | 两条守卫的扫描面加宽（`.vue:行号`、`states[].steps`） |
 | `655165b2` | `tests/` 接上类型检查并进 verify（134 → 0） |
 | `4b6d2dc5` | 本报告 + 挂账订正 |
-| （下一条） | 侧栏当前会话不加粗 + 新门禁 `primitive-marker-classes` |
+| `b5770d52` | 侧栏当前会话不加粗 + 新门禁 `primitive-marker-classes` |
 
 ## 下一轮的起点
 
