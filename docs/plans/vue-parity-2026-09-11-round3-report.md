@@ -1,6 +1,6 @@
 # Vue 对齐 React：2026-09-11 第三轮
 
-分支 `main-wc`，`b7b97abc` … `48e9297a` 共 9 个提交，全部已提交、**未推送**。
+分支 `main-wc`，`b7b97abc` … `10335b5d` 共 11 个提交，全部已提交、**未推送**。
 
 ## 一句话
 
@@ -118,6 +118,7 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `b5770d52` | 侧栏当前会话不加粗 + 新门禁 `primitive-marker-classes` |
 | `3b45f5c5` | 改名之后不与服务端收敛；顺带量出「失效对手动查询是空操作」 |
 | `48e9297a` | 归档会把侧栏列表清空——列表查询不该是手动查询 |
+| `10335b5d` | 删掉没有拥有者的死缓存键 `["threads","search"]`（11 处空操作）|
 
 ### 6. 改名之后不与服务端收敛（**已修，台账 206 → 204**）
 
@@ -143,11 +144,11 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 
 ## 下一轮的起点
 
-1. 台账上还剩两行 `requestsOnlyReact: POST /api/threads/search`
+1. **两个应用的会话列表都不轮询**——IM 建的会话不会自己出现在侧栏。
+   这句产品性质此前只有一条测死代码的用例在「保证」（已删）。
+   要不要真的加轮询是产品决定，先记着。
+2. 台账上还剩两行 `requestsOnlyReact: POST /api/threads/search`
    （`chat-thread-init-ordering` 1 条、`thread-list-pin#mobile-drawer` 1 条）：
    上游仍然比本仓多问一次列表，从这里接着查。
-2. **`["threads", "search"]` 是个死缓存键**（已量清，判据与执行步骤写在
-   `vue-parity-open-accounts.md`）：本仓没有任何查询拥有它，产品侧 11 处读写失效
-   全是空操作；单测绿是因为有几处用例自己造了个生产里不存在的拥有者。
 3. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
    否则改完没有机器能验证。
