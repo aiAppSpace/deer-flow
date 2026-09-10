@@ -43,7 +43,7 @@ const TEXT_LANGUAGES: Readonly<Record<string, string>> = {
   cjs: "javascript",
   cpp: "cpp",
   css: "css",
-  csv: "text",
+  csv: "csv",
   go: "go",
   h: "c",
   hpp: "cpp",
@@ -67,6 +67,7 @@ const TEXT_LANGUAGES: Readonly<Record<string, string>> = {
   sql: "sql",
   toml: "toml",
   ts: "typescript",
+  tsv: "tsv",
   tsx: "tsx",
   txt: "text",
   vue: "vue",
@@ -178,6 +179,20 @@ export function classifyArtifact(
     language: null,
     previewKind: null,
   };
+}
+
+/**
+ * 这门「语言」用哪个字符分列；不是表格就返回 `null`。
+ *
+ * **只认 csv 与 tsv**：把 `.txt` 之类也猜成表格，一份普通文本会被按逗号切成
+ * 一堆无意义的列，而用户看不出发生了什么。要扩展就显式加一条。
+ */
+export function getTabularDelimiter(
+  language: string | null,
+): "," | "\t" | null {
+  if (language === "csv") return ",";
+  if (language === "tsv") return "\t";
+  return null;
 }
 
 export function canLoadArtifactText(policy: ArtifactPolicy) {

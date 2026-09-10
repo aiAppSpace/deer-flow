@@ -59,6 +59,39 @@ describe("decideAuthNavigation", () => {
       }),
     ).toBe("login");
   });
+
+  /*
+    独立产物视窗的路径本身不说明任何事：同一个 `/artifacts/view` 既可能指向公开
+    演示件，也可能指向别人的私有文件。所以「要不要登录」由调用方算好传进来，
+    这里只负责按它执行——路径前缀在这条路由上没有发言权。
+  */
+  it("guarded 的非 workspace 路由同样要登录", () => {
+    expect(
+      decideAuthNavigation({
+        path: "/artifacts/view",
+        authDisabled: false,
+        authenticated: false,
+        guarded: true,
+      }),
+    ).toBe("login");
+    expect(
+      decideAuthNavigation({
+        path: "/artifacts/view",
+        authDisabled: false,
+        authenticated: true,
+        guarded: true,
+      }),
+    ).toBe("allow");
+    // 公开演示件：guarded 为假，未登录也放行。
+    expect(
+      decideAuthNavigation({
+        path: "/artifacts/view",
+        authDisabled: false,
+        authenticated: false,
+        guarded: false,
+      }),
+    ).toBe("allow");
+  });
 });
 
 describe("buildLoginLocation（回跳目标的安全校验）", () => {

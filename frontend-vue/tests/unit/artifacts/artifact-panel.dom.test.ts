@@ -396,6 +396,59 @@ describe("ArtifactPanel", () => {
     admin.wrapper.unmount();
   });
 
+  /*
+    「在新窗口打开」有两个去处，而且**探测只对其中一个做**。
+
+    markdown 与表格进本应用的独立视窗（那里有渲染器）；其余保持 Gateway 原始
+    URL——HTML/SVG 尤其如此，Gateway 是故意把它们作为下载返回的，直接在浏览器里
+    打开等于把活动内容放进本应用的源里执行。
+
+    应用内路由不 probe：probe 探的是「Gateway 上这个 URL 能不能取到」，
+    对一个本地路由既无意义，探失败还会把「产物打不开」这句话说错。
+  */
+  it("opens markdown and tables in the in-app viewer, everything else on the Gateway", async () => {
+    for (const [path, expected] of [
+      ["/mnt/user-data/outputs/report.md", "/artifacts/view?path="],
+      ["/mnt/user-data/outputs/rows.csv", "/artifacts/view?path="],
+      ["/mnt/user-data/outputs/rows.tsv", "/artifacts/view?path="],
+    ] as const) {
+      mocks.load.mockResolvedValue(loaded("# hi"));
+      mocks.probe.mockClear();
+      (globalThis.open as ReturnType<typeof vi.fn>).mockClear();
+      const panel = mountPanel(path);
+      await flushPromises();
+      await panel.wrapper
+        .get("button[aria-label='Open in new window']")
+        .trigger("click");
+      await flushPromises();
+      const url = (globalThis.open as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as string;
+      expect(url, path).toContain(expected);
+      expect(url, path).toContain(encodeURIComponent(path));
+      expect(url, path).toContain("thread_id=thread-1");
+      expect(mocks.probe, path).not.toHaveBeenCalled();
+      panel.wrapper.unmount();
+    }
+
+    // HTML 留在 Gateway，而且这一支要先探。
+    mocks.load.mockResolvedValue(loaded("<p>hi</p>"));
+    mocks.probe.mockClear();
+    mocks.probe.mockResolvedValue(undefined);
+    (globalThis.open as ReturnType<typeof vi.fn>).mockClear();
+    const htmlPanel = mountPanel("/mnt/user-data/outputs/page.html");
+    await flushPromises();
+    await htmlPanel.wrapper
+      .get("button[aria-label='Open in new window']")
+      .trigger("click");
+    await flushPromises();
+    expect(mocks.probe).toHaveBeenCalled();
+    const gatewayUrl = (globalThis.open as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as string;
+    expect(gatewayUrl).toContain("/api/threads/thread-1/artifacts");
+    expect(gatewayUrl).not.toContain("/artifacts/view");
+    htmlPanel.wrapper.unmount();
+  });
+
   it("saves a full formal text artifact with expected_sha256 and resets the draft", async () => {
     const nextSha = "b".repeat(64);
     mocks.load.mockResolvedValue(loaded("server"));

@@ -22,12 +22,16 @@
 */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
+import { ArchiveRestore } from "lucide-vue-next";
+
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
 import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
 import VirtualThreadList from "@/components/workspace/VirtualThreadList.vue";
 import WorkspaceContainer from "@/components/workspace/WorkspaceContainer.vue";
+import { useThreadArchiveAction } from "@/composables/useThreadArchiveAction";
 import { useThreads } from "@/composables/useThreads";
 import {
   channelSourceOfThread,
@@ -46,7 +50,14 @@ const { $i18n } = useNuxtApp();
 useHead(() => ({
   title: `${$i18n.t.value.pages.chats} - ${$i18n.t.value.pages.appName}`,
 }));
-const threads = useThreads();
+/*
+  活跃 / 已归档是**两份不同的服务端结果**，不是同一份列表的两种过滤：归档的会话
+  根本不在活跃那份响应里。所以切页签换的是 query key（见 useThreads 的 archived）。
+*/
+const view = ref<"active" | "archived">("active");
+const archived = computed(() => view.value === "archived");
+const threads = useThreads({ archived });
+const archiveAction = useThreadArchiveAction();
 const search = ref("");
 const isSearching = computed(() => search.value.trim().length > 0);
 const searchInput = ref<HTMLInputElement | null>(null);
@@ -92,8 +103,18 @@ onUnmounted(() => observer?.disconnect());
 
 <template>
   <WorkspaceContainer>
-    <div class="flex size-full flex-col">
-      <header class="flex shrink-0 items-center justify-center pt-8">
+    <Tabs v-model="view" class="flex size-full flex-col">
+      <header
+        class="mx-auto flex w-full max-w-[var(--container-width-md)] shrink-0 flex-col gap-3 pt-8"
+      >
+        <TabsList :aria-label="$i18n.t.value.pages.chats">
+          <TabsTrigger value="active">
+            {{ $i18n.t.value.chats.activeChats }}
+          </TabsTrigger>
+          <TabsTrigger value="archived">
+            {{ $i18n.t.value.chats.archivedChats }}
+          </TabsTrigger>
+        </TabsList>
         <input
           ref="searchInput"
           v-model="search"
@@ -104,53 +125,102 @@ onUnmounted(() => observer?.disconnect());
           class="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 w-full max-w-[var(--container-width-md)] min-w-0 rounded-md border bg-transparent px-3 py-1 text-xl shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
         />
       </header>
-      <main class="min-h-0 flex-1">
-        <ScrollArea class="size-full py-4">
-          <div
-            class="mx-auto flex size-full max-w-[var(--container-width-md)] flex-col"
-          >
-            <VirtualThreadList
-              :estimate-size="76"
-              :items="filtered"
-              scroll-parent-selector='[data-slot="scroll-area-viewport"]'
-            >
-              <template #default="{ thread }">
-                <NuxtLink :to="pathOfThread(thread)">
-                  <div class="flex flex-col gap-2 border-b p-4">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <ThreadChannelIcon
-                        :source="channelSourceOfThread(thread)"
-                      />
-                      <div class="min-w-0 flex-1 truncate">
-                        {{ displayThreadTitle(thread) }}
-                      </div>
-                      <ThreadChannelBadge
-                        :source="channelSourceOfThread(thread)"
-                        class="hidden sm:inline-flex"
-                      />
-                    </div>
-                    <div
-                      v-if="thread.updated_at"
-                      class="text-muted-foreground text-sm"
-                    >
-                      {{ updatedTime(thread.updated_at) }}
-                    </div>
-                  </div>
-                </NuxtLink>
-              </template>
-            </VirtualThreadList>
+      <TabsContent :value="view" class="min-h-0 flex-1">
+        <main class="h-full">
+          <ScrollArea class="size-full py-4">
             <div
-              v-if="threads.hasMore && !isSearching"
-              ref="sentinel"
-              aria-hidden="true"
-              data-testid="chats-page-sentinel"
-              class="h-px w-full"
-            />
-            <div
-              v-if="threads.hasMore && isSearching"
-              class="flex justify-center p-4"
+              class="mx-auto flex size-full max-w-[var(--container-width-md)] flex-col"
             >
               <!--
+                加载失败要给一条出路。此前这一屏对失败**完全没有表示**：列表就是
+                空的，用户分不清「我没有会话」和「没加载上」。
+              -->
+              <div v-if="threads.error" role="alert" class="p-4 text-center">
+                <p>{{ $i18n.t.value.chats.loadChatsFailed }}</p>
+                <Button variant="outline" @click="threads.loadInitial(true)">
+                  {{ $i18n.t.value.chats.retryLoadChats }}
+                </Button>
+              </div>
+              <!--
+                三句空态是三件不同的事：搜不到 / 没有归档的 / 一条会话都没有。
+                用同一句话说，用户不知道要不要清掉搜索框。
+              -->
+              <p
+                v-if="
+                  !threads.loading && !threads.error && filtered.length === 0
+                "
+                role="status"
+                class="text-muted-foreground p-8 text-center"
+              >
+                {{
+                  isSearching
+                    ? $i18n.t.value.chats.noMatchingChats
+                    : archived
+                      ? $i18n.t.value.chats.noArchivedChats
+                      : $i18n.t.value.chats.noActiveChats
+                }}
+              </p>
+              <VirtualThreadList
+                :estimate-size="76"
+                :items="filtered"
+                scroll-parent-selector='[data-slot="scroll-area-viewport"]'
+              >
+                <template #default="{ thread }">
+                  <!--
+                    归档页签下每行多一颗「恢复」。边框挪到这一层：链接只占左半边，
+                    分隔线要横跨整行（上游同形）。
+                  -->
+                  <div class="flex items-center gap-2 border-b">
+                    <NuxtLink class="min-w-0 flex-1" :to="pathOfThread(thread)">
+                      <div class="flex flex-col gap-2 p-4">
+                        <div class="flex min-w-0 items-center gap-2">
+                          <ThreadChannelIcon
+                            :source="channelSourceOfThread(thread)"
+                          />
+                          <div class="min-w-0 flex-1 truncate">
+                            {{ displayThreadTitle(thread) }}
+                          </div>
+                          <ThreadChannelBadge
+                            :source="channelSourceOfThread(thread)"
+                            class="hidden sm:inline-flex"
+                          />
+                        </div>
+                        <div
+                          v-if="thread.updated_at"
+                          class="text-muted-foreground text-sm"
+                        >
+                          {{ updatedTime(thread.updated_at) }}
+                        </div>
+                      </div>
+                    </NuxtLink>
+                    <Button
+                      v-if="archived"
+                      class="mr-4 shrink-0"
+                      variant="outline"
+                      size="sm"
+                      :disabled="archiveAction.isPending.value"
+                      @click="
+                        archiveAction.setArchived(thread.thread_id, false)
+                      "
+                    >
+                      <ArchiveRestore class="size-4" />
+                      {{ $i18n.t.value.chats.restoreChat }}
+                    </Button>
+                  </div>
+                </template>
+              </VirtualThreadList>
+              <div
+                v-if="threads.hasMore && !isSearching"
+                ref="sentinel"
+                aria-hidden="true"
+                data-testid="chats-page-sentinel"
+                class="h-px w-full"
+              />
+              <div
+                v-if="threads.hasMore && isSearching"
+                class="flex justify-center p-4"
+              >
+                <!--
                 上游 `app/workspace/chats/page.tsx:135` 是
                 `<Button variant="outline">`。手写那版把 outline 变体抄了一半：
                 少 `cursor-pointer`（Tailwind 4 的 preflight 不给按钮小手，
@@ -160,22 +230,23 @@ onUnmounted(() => observer?.disconnect());
                 （`dark:bg-input/30 dark:border-input dark:hover:bg-input/50`）
                 一条都没有——深色下这颗键是透明的，上游是浅一档的填色。
               -->
-              <Button
-                variant="outline"
-                data-testid="chats-page-load-more"
-                :disabled="threads.loadingMore"
-                @click="threads.loadMore()"
-              >
-                {{
-                  threads.loadingMore
-                    ? $i18n.t.value.chats.loadingMore
-                    : $i18n.t.value.chats.loadMoreToSearch
-                }}
-              </Button>
+                <Button
+                  variant="outline"
+                  data-testid="chats-page-load-more"
+                  :disabled="threads.loadingMore"
+                  @click="threads.loadMore()"
+                >
+                  {{
+                    threads.loadingMore
+                      ? $i18n.t.value.chats.loadingMore
+                      : $i18n.t.value.chats.loadMoreToSearch
+                  }}
+                </Button>
+              </div>
             </div>
-          </div>
-        </ScrollArea>
-      </main>
-    </div>
+          </ScrollArea>
+        </main>
+      </TabsContent>
+    </Tabs>
   </WorkspaceContainer>
 </template>

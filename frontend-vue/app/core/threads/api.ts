@@ -129,6 +129,73 @@ export async function patchThreadMetadata(
  * **纯组织关系**：后端明说历史、运行状态与会话文件都不动（RFC v2 §6），
  * 所以这里不需要连带清理任何本地缓存的会话内容——只有归属元数据变了。
  */
+/**
+ * 建一条会话行，可选地把它归属到某个项目。
+ *
+ * **这是新会话进项目的唯一通道**——run 请求本身不带项目字段。所以从项目页
+ * 「新建会话」进来之后，第一条消息发出去之前必须先走这里；顺序反了，会话
+ * 就落在项目外面，而用户看到的是自己明明从项目里开的。
+ *
+ * 后端按 `thread_id` 幂等：同一个 id 重试不会建出第二行，所以发送失败后
+ * 用同一个 id 重试是安全的。
+ */
+/**
+ * 按归档状态搜会话，走 Gateway 原生的 `POST /api/threads/search`。
+ *
+ * **为什么不用 SDK 的那个 search**：LangGraph 那条路由不认 `archived`，
+ * 多传一个它不认的字段不会报错，只会被忽略——「已归档」页签因此拿回整份活跃
+ * 列表，而且看起来完全正常。上游为此单开了这个函数（core/threads/api.ts），
+ * 本仓同形。
+ */
+export async function searchThreadsByArchive({
+  archived,
+  metadata,
+  status,
+  limit,
+  offset,
+}: {
+  archived: boolean;
+  metadata?: Record<string, unknown>;
+  status?: string;
+  limit: number;
+  offset: number;
+}): Promise<AgentThread[]> {
+  const response = await fetchWithAuth(
+    `${getBackendBaseURL()}/api/threads/search`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived, metadata, status, limit, offset }),
+    },
+  );
+
+  if (!response.ok) {
+    await throwGatewayResponseError(response, "Failed to load conversations.");
+  }
+
+  return (await response.json()) as AgentThread[];
+}
+
+export async function createThread(
+  threadId: string,
+  projectId?: string,
+): Promise<AgentThread> {
+  const response = await fetchWithAuth(`${getBackendBaseURL()}/api/threads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      thread_id: threadId,
+      ...(projectId ? { project_id: projectId } : {}),
+    }),
+  });
+
+  if (!response.ok) {
+    await throwGatewayResponseError(response, "Failed to create conversation.");
+  }
+
+  return (await response.json()) as AgentThread;
+}
+
 export async function moveThreadToProject(
   threadId: string,
   projectId: string | null,

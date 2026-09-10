@@ -10,7 +10,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/vue-query";
-import { computed, reactive } from "vue";
+import { computed, reactive, toValue, watch, type MaybeRefOrGetter } from "vue";
 
 import { getAPIClient } from "@/core/api/api-client";
 import { removeDeletedThreadCaches } from "@/core/threads/cache-invalidation";
@@ -51,14 +51,27 @@ const THREAD_LIST_PARAMS: InfiniteThreadsParams = {
   select: ["thread_id", "updated_at", "values", "metadata"],
 };
 
-/** The single Vue Query owner for server thread-list state. */
-export function useThreads() {
+/**
+ * The single Vue Query owner for server thread-list state.
+ *
+ * `archived` 是**响应式**的：会话列表页有活跃/已归档两个页签，切页签换的是
+ * query key 而不是过滤内存里的数组——归档的会话根本不在活跃那份响应里。
+ * 不传就是不过滤（侧栏、聊天页都走这一支），与此前的行为逐字相同。
+ */
+export function useThreads(
+  options: { archived?: MaybeRefOrGetter<boolean | undefined> } = {},
+) {
   const queryClient = useQueryClient();
   const apiClient = getAPIClient();
-  const queryKey = [
-    ...INFINITE_THREADS_QUERY_KEY_PREFIX,
-    THREAD_LIST_PARAMS,
-  ] as const;
+  const params = computed<InfiniteThreadsParams>(() => {
+    const archived = toValue(options.archived);
+    return archived === undefined
+      ? THREAD_LIST_PARAMS
+      : { ...THREAD_LIST_PARAMS, archived };
+  });
+  const queryKey = computed(
+    () => [...INFINITE_THREADS_QUERY_KEY_PREFIX, params.value] as const,
+  );
   const query = useInfiniteQuery({
     queryKey,
     enabled: false,
@@ -66,7 +79,7 @@ export function useThreads() {
     queryFn: ({ pageParam, signal }) =>
       fetchInfiniteThreadsPage(
         apiClient,
-        { ...THREAD_LIST_PARAMS, signal },
+        { ...params.value, signal },
         Number(pageParam),
         INFINITE_THREADS_PAGE_SIZE,
       ),
@@ -112,6 +125,16 @@ export function useThreads() {
     }
   }
 
+  /*
+    换页签就是换 query key，新 key 名下一页数据都没有。`enabled: false` 的查询
+    不会自己跑，而 `loadInitial` 有一道「只首屏取一次」的守卫——不在这里重置它，
+    切到「已归档」会停在一个永远空的列表上，看起来就像用户一条归档都没有。
+  */
+  watch(params, () => {
+    initialLoadRequested = false;
+    void loadInitial();
+  });
+
   let loadMorePromise: ReturnType<typeof query.fetchNextPage> | null = null;
   function loadMore() {
     if (
@@ -138,8 +161,8 @@ export function useThreads() {
       );
       return;
     }
-    if (!queryClient.getQueryData(queryKey)) {
-      queryClient.setQueryData(queryKey, {
+    if (!queryClient.getQueryData(queryKey.value)) {
+      queryClient.setQueryData(queryKey.value, {
         pages: [[thread]],
         pageParams: [0],
       });

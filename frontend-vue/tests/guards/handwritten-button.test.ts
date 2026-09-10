@@ -119,6 +119,13 @@ const ALLOWED: Record<string, [number, string]> = {
     "上游 todo-list.tsx:45 是挂 onClick 的 <header>；本仓改成 button 是有意的" +
       "（那是上游的键盘可达性缺陷），外观逐条对齐",
   ],
+  "components/workspace/artifacts/ArtifactTablePreview.vue": [
+    1,
+    "长单元格的展开键：要在 truncate 的一行里当省略文本本身点，" +
+      "Button primitive 的 inline-flex + 内边距会把这行撑开。" +
+      "上游同一颗也是手写的（artifact-table-preview.tsx 的 `max-w-full " +
+      "cursor-pointer truncate text-left underline underline-offset-4`）",
+  ],
   "components/workspace/browser-view/BrowserPanel.vue": [
     2,
     "浏览器面板的两条错误重试，上游没有错误态",

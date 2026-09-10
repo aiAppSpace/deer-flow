@@ -22,6 +22,7 @@ import { Download } from "lucide-vue-next";
 import { buttonVariants } from "@/components/ui/button";
 import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
 import StreamMarkdown from "@/components/markdown/StreamMarkdown.vue";
+import ArtifactTablePreview from "./ArtifactTablePreview.vue";
 import MarkdownLink from "@/components/chat/MarkdownLink.vue";
 import { richContentComponents } from "@/components/markdown/components";
 import {
@@ -29,7 +30,10 @@ import {
   artifactTypeDisplayName,
 } from "@/core/artifacts/display";
 import { extractCitationSources } from "@/core/citations/sources";
-import type { ArtifactPolicy } from "@/core/artifacts/policy";
+import {
+  getTabularDelimiter,
+  type ArtifactPolicy,
+} from "@/core/artifacts/policy";
 import {
   appendHtmlPreviewScrollRestoration,
   collectHtmlPreviewResourceUrls,
@@ -55,6 +59,10 @@ const props = defineProps<{
   downloadUrl?: string;
   viewMode: "code" | "preview";
   htmlPreviewAllowed: boolean;
+  /** 内容被上游截断过——表格要据此丢掉末尾那条残记录。 */
+  truncated?: boolean;
+  /** 区分「哪一份文件」，换文件时表格重置表头选择和翻页。 */
+  identity: string;
 }>();
 
 /* KaTeX 与消息路径同一条规则：内容出现公式才下载。见 core/markdown/math.ts。 */
@@ -117,6 +125,12 @@ const citationSources = computed(() =>
 );
 
 const scrollKey = computed(() => props.filename);
+
+const tabularDelimiter = computed(() =>
+  props.policy.kind === "text"
+    ? getTabularDelimiter(props.policy.language)
+    : null,
+);
 const scrollMessageKey = computed(() =>
   createHtmlPreviewScrollKey(scrollKey.value),
 );
@@ -352,6 +366,24 @@ onBeforeUnmount(() => {
       </a>
     </div>
   </div>
+  <!--
+    表格分支**不看 viewMode 决定挂不挂**，只用 active 控制显隐：切到源码再切回来
+    不该重新解析一遍 1 MiB，用户翻到第几页、勾没勾表头也不该被切换清掉。
+    这与 React 一致（artifact-file-detail.tsx 的挂载条件里 `isTabular ||` 那一段）。
+  -->
+  <template v-else-if="tabularDelimiter">
+    <ArtifactTablePreview
+      :content="content"
+      :delimiter="tabularDelimiter"
+      :truncated="truncated === true"
+      :identity="identity"
+      :active="viewMode === 'preview'"
+    />
+    <pre
+      v-if="viewMode === 'code'"
+      class="min-h-full overflow-auto p-4 font-mono text-xs leading-5 whitespace-pre-wrap"
+      >{{ content }}</pre>
+  </template>
   <div
     v-else-if="viewMode === 'preview' && policy.language === 'markdown'"
     class="size-full overflow-auto px-4 py-3"

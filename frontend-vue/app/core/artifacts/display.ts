@@ -112,3 +112,18 @@ export function artifactTypeDisplayName(filepath: string) {
       return extension.toUpperCase();
   }
 }
+
+/**
+ * 把字节数说成人话：B / KiB / MiB，一位小数。
+ *
+ * 与 React 的同名函数同形（artifact-file-preview.tsx）。两个应用对同一份文件
+ * 必须说出同一句话，所以它有且只有这一份——面板和独立视窗都从这里取。
+ */
+export function formatArtifactBytes(
+  bytes: number | undefined,
+): string | undefined {
+  if (bytes === undefined) return undefined;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}

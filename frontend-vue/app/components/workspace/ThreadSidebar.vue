@@ -18,7 +18,6 @@ import {
   Mail,
   MessageSquarePlus,
   MessagesSquare,
-  Pin,
   Settings,
   Settings2,
 } from "lucide-vue-next";
@@ -28,8 +27,6 @@ import ProjectsSection from "@/components/workspace/projects/ProjectsSection.vue
 import ProjectMoveDialog from "@/components/workspace/projects/ProjectMoveDialog.vue";
 import ThreadSidebarItem from "@/components/workspace/ThreadSidebarItem.vue";
 import ThreadSidebarShell from "@/components/workspace/ThreadSidebarShell.vue";
-import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
-import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
 import VirtualThreadList from "@/components/workspace/VirtualThreadList.vue";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,11 +54,7 @@ import {
   useWorkspaceSidebar,
 } from "@/composables/useWorkspaceSidebar";
 import { ThreadCascadeDeleteError } from "@/core/threads/delete";
-import {
-  channelSourceOfThread,
-  pathOfThread,
-  titleOfThread,
-} from "@/core/threads/utils";
+import { pathOfThread, titleOfThread } from "@/core/threads/utils";
 import type { AgentThread } from "@/core/threads/types";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 

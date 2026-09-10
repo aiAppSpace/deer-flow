@@ -25,6 +25,7 @@ import {
   filterThreadSearchResults,
   type ThreadSearchParams,
 } from "./thread-search-query";
+import { searchThreadsByArchive } from "./api";
 import type { AgentThread, AgentThreadState } from "./types";
 
 export const INFINITE_THREADS_PAGE_SIZE = 50;
@@ -41,7 +42,17 @@ const INFINITE_THREADS_NEXT_PAGE_PARAM = Symbol(
 export type InfiniteThreadsParams = Omit<
   ThreadSearchParams,
   "limit" | "offset"
->;
+> & {
+  /**
+   * 只要活跃的（false）、只要已归档的（true）、还是不过滤（undefined）。
+   *
+   * 一旦给了它，这一页就改走 Gateway 原生的 `POST /api/threads/search`——
+   * LangGraph 的 search 不认这个字段，传过去会被**静默忽略**，于是「已归档」
+   * 页签拿回来的是整份活跃列表。上游同一条分支
+   * （core/threads/hooks.ts 的 `params.archived === undefined ? … : …`）。
+   */
+  archived?: boolean;
+};
 
 type InfiniteThreadsSearchClient = {
   threads: {
@@ -75,11 +86,19 @@ export async function fetchInfiniteThreadsPage(
 
   while (threads.length < pageSize) {
     const currentLimit = pageSize - threads.length;
-    const response = await apiClient.threads.search({
-      ...params,
-      limit: currentLimit,
-      offset,
-    });
+    const response =
+      params.archived === undefined
+        ? await apiClient.threads.search({
+            ...params,
+            limit: currentLimit,
+            offset,
+          })
+        : await searchThreadsByArchive({
+            archived: params.archived,
+            metadata: params.metadata ?? undefined,
+            limit: currentLimit,
+            offset,
+          });
 
     threads.push(...filterThreadSearchResults(response, params));
     offset += response.length;

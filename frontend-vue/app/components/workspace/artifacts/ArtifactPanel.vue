@@ -36,9 +36,12 @@ import {
   canLoadArtifactText,
   canSaveArtifactText,
   classifyArtifact,
+  getTabularDelimiter,
 } from "@/core/artifacts/policy";
 import { canRenderArtifactHtml } from "@/core/artifacts/preview-policy";
 import { urlOfArtifact } from "@/core/artifacts/utils";
+import { formatArtifactBytes } from "@/core/artifacts/display";
+import { resolveArtifactOpenURL } from "@/core/artifacts/viewer";
 import { writeTextToClipboard } from "@/core/clipboard";
 import { installSkill } from "@/core/skills/api";
 import type { Message } from "@/core/types/message";
@@ -171,6 +174,13 @@ const htmlPreviewAllowed = computed(
       toolResult: toolResult.value,
     }),
 );
+const tabularDelimiter = computed(() =>
+  policy.value.kind === "text"
+    ? getTabularDelimiter(policy.value.language)
+    : null,
+);
+const isTabular = computed(() => tabularDelimiter.value !== null);
+
 const previewAllowed = computed(() => {
   if (
     policy.value.kind === "browser-media" ||
@@ -185,6 +195,19 @@ const previewAllowed = computed(() => {
     toolResult.value.trim() !== "OK"
   ) {
     return false;
+  }
+  if (isTabular.value) {
+    /*
+      表格比 markdown/html 多一条：写入**还没完成**时不给预览。
+      流式写入中的 CSV 每一帧都是残的，解析出来的表格会不停变形甚至报错，
+      而这既不是文件的问题也不是用户能处理的问题。等 write 工具回 OK 再说。
+      React 的条件同形（artifact-file-detail.tsx 的 `!isTabular || !isWriteFile ||
+      toolResult?.trim() === "OK"`）。
+    */
+    return (
+      policy.value.source !== "write-file-draft" ||
+      toolResult.value?.trim() === "OK"
+    );
   }
   return policy.value.language === "markdown" || htmlPreviewAllowed.value;
 });
@@ -428,7 +451,31 @@ async function copyArtifact() {
   }
 }
 
+function openInNewWindow(url: string) {
+  const opened = globalThis.open(url, "_blank", "noopener,noreferrer");
+  if (opened) opened.opener = null;
+}
+
+/*
+  「打开」有两个去处：markdown 与表格进本应用的独立视窗（那里有渲染器），
+  其余保持 Gateway 原始 URL——尤其 HTML/SVG，Gateway 是**故意**把它们作为下载
+  返回的。判定在 `resolveArtifactOpenURL` 里，这里只按它的结论走。
+
+  只有去 Gateway 的那一支要先探一下：探的是「这个 URL 能不能取到」，
+  而应用内路由本来就在这个源上，探它既没有意义，失败还会误报成产物打不开。
+*/
 async function runGatewayAction(kind: "open" | "download") {
+  if (kind === "open") {
+    const openUrl = resolveArtifactOpenURL({
+      filepath: policy.value.filepath,
+      threadId: props.threadId,
+      isMock: policy.value.isMock,
+    });
+    if (openUrl !== sourceUrl.value) {
+      openInNewWindow(openUrl);
+      return;
+    }
+  }
   const generation = ++actionGeneration;
   actionController?.abort();
   actionController = new AbortController();
@@ -438,7 +485,7 @@ async function runGatewayAction(kind: "open" | "download") {
     await probeArtifactAction(url, actionController.signal);
     if (disposed || generation !== actionGeneration) return;
     if (kind === "open") {
-      globalThis.open(url, "_blank", "noopener,noreferrer");
+      openInNewWindow(url);
     } else {
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -499,23 +546,12 @@ async function loadFull() {
   }
 }
 
-/*
-  与 React 的 formatArtifactBytes 同形（artifact-file-detail.tsx）：B / KiB / MiB，
-  一位小数。原来这里把原始字节数直接念出来，两个应用同一份文件说出的话完全不同。
-*/
 /** React 的同名兜底：后端没报 previewBytes 时按默认预览窗口显示。 */
 const DEFAULT_PREVIEW_WINDOW = "1 MiB";
 const previewedSize = computed(
   () => formatArtifactBytes(previewBytes.value) ?? DEFAULT_PREVIEW_WINDOW,
 );
 const totalSize = computed(() => formatArtifactBytes(totalBytes.value));
-
-function formatArtifactBytes(bytes: number | undefined) {
-  if (bytes === undefined) return undefined;
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
 
 onBeforeUnmount(() => {
   disposed = true;
@@ -618,9 +654,9 @@ onBeforeUnmount(() => {
           class="mx-auto"
           v-if="
             policy.kind === 'text' &&
-            ['html', 'markdown'].includes(policy.language) &&
+            (isTabular || ['html', 'markdown'].includes(policy.language)) &&
             previewAllowed &&
-            !truncated
+            (!truncated || isTabular)
           "
           type="single"
           variant="outline"
@@ -632,10 +668,16 @@ onBeforeUnmount(() => {
             }
           "
         >
+          <!--
+            两档都只有图标，可访问名必须显式给。React 的这两颗带
+            `aria-label`（artifact-file-detail.tsx），预览那档在表格文件上
+            念的是「表格预览」而不是泛泛的「预览」——用户听得出切过去会看到什么。
+          -->
           <ToggleGroupItem
             value="code"
             single
             :checked="viewMode === 'code'"
+            :aria-label="$i18n.t.value.artifactPreview.viewSource"
             variant="outline"
             size="sm"
           >
@@ -645,6 +687,11 @@ onBeforeUnmount(() => {
             value="preview"
             single
             :checked="viewMode === 'preview'"
+            :aria-label="
+              isTabular
+                ? $i18n.t.value.artifactTable.title
+                : $i18n.t.value.common.preview
+            "
             variant="outline"
             size="sm"
           >
@@ -693,6 +740,7 @@ onBeforeUnmount(() => {
             :can-download="hasGatewayArtifact"
             :can-install="canInstall"
             :installing="installing"
+            :saved-version-hint="isTabular && dirty"
             @edit="beginEdit"
             @save="save"
             @exit="exitEdit"
@@ -804,6 +852,8 @@ onBeforeUnmount(() => {
         :content-url="contentUrl"
         :view-mode="viewMode"
         :html-preview-allowed="htmlPreviewAllowed"
+        :truncated="truncated"
+        :identity="`${threadId}:${policy.filepath}`"
       />
     </div>
   </section>

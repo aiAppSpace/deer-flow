@@ -20,13 +20,27 @@ import {
   decideAuthNavigation,
   isEnabledRuntimeFlag,
 } from "@/core/auth/decision";
+import { ARTIFACT_VIEWER_ROUTE } from "@/core/artifacts/viewer-route";
 import { useQueryClient } from "@tanstack/vue-query";
 
 export default defineNuxtRouteMiddleware(async (to) => {
   const config = useRuntimeConfig();
   const authDisabled = isEnabledRuntimeFlag(config.public.authDisabled);
+  /*
+    独立产物视窗的路径不说明任何事——要不要登录取决于 query 指向谁的文件。
+    判定模块同样是**动态** import 的：它顺带拖着产物分类与演示集，
+    而绝大多数路由（首页在内）永远走不到这里。
+  */
+  let guarded = false;
+  if (to.path === ARTIFACT_VIEWER_ROUTE) {
+    const { parseArtifactViewerQuery, requiresAuthenticatedViewer } =
+      await import("@/core/artifacts/viewer");
+    const target = parseArtifactViewerQuery(to.query);
+    // 目标解析不出来时按「要登录」处理：错误提示本身不该泄漏给未登录的人。
+    guarded = target === null || requiresAuthenticatedViewer(target);
+  }
   let authenticated = false;
-  if (to.path.startsWith("/workspace") && !authDisabled) {
+  if ((to.path.startsWith("/workspace") || guarded) && !authDisabled) {
     /*
       `useQueryClient()` 必须在 `await` **之前**取到。它是 inject 型 composable，
       依赖 Nuxt 的异步上下文；跨过 `await import()` 再调用会拿不到 client，
@@ -51,6 +65,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
     path: to.path,
     authDisabled,
     authenticated,
+    guarded,
   });
   if (decision === "login") {
     // 回跳目标的安全校验在纯函数里（06 §鉴权中间件切成纯函数）：

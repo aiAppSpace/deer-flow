@@ -651,6 +651,28 @@ const MODELS_ROUTE_THINKER_FIRST: ParityRouteOverride = {
 
 const ARTIFACT_PATH = "/artifact-fixtures/report.html";
 
+/** 独立视窗的夹具：视窗只接 markdown 与表格，这里取 markdown 那一支。 */
+const VIEWER_ARTIFACT_PATH = "/artifact-fixtures/standalone.md";
+const VIEWER_ARTIFACT_MARKDOWN =
+  "# Standalone report\n\nOpened in its own window.\n";
+
+/*
+  表格夹具。三行数据各守一件事，改之前先看场景里的注释——
+  少掉哪一行，对应的那个断言就变成恒真。
+*/
+const TABLE_ARTIFACT_PATH = "/artifact-fixtures/rows.csv";
+const TABLE_ARTIFACT_CSV = [
+  "id,name,note",
+  // 带引号的字段里有分隔符：被切开就说明解析器没走引号状态。
+  '1,"Ada, L.","first line',
+  // 超长且带换行：触发「收进对话框」，而不是把整行撑开。
+  'second line of a very long note that runs past the inline limit so the cell has to be expanded to be read in full"',
+  "2,Grace,ok",
+  // 少一列：缺字段要显示成「缺失」。
+  "3,Linus",
+  "",
+].join("\n");
+
 /*
   markdown 预览的正文里**必须**有一条链接和一张图片。
 
@@ -3091,6 +3113,113 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             },
           },
         ],
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  /*
+    独立产物视窗：地址栏里带的就是全部目标（path + thread_id），页面没有侧栏，
+    正文是**渲染成果**而不是源码。
+
+    为什么用一件 markdown 而不是表格：这条场景守的是「视窗本身」——头部那两个
+    出路、标题、以及正文走渲染器而不是 `<pre>`。表格另有自己的场景，混在一起时
+    表格的加载态会把视窗的锚点盖住。
+  */
+  {
+    id: "artifact-viewer-window",
+    title: "独立产物视窗",
+    backend: "mock",
+    path: `/artifacts/view?path=${encodeURIComponent(VIEWER_ARTIFACT_PATH)}&thread_id=${MOCK_THREAD_ID}`,
+    routes: [
+      {
+        pattern: "**/api/threads/*/artifacts/**",
+        contentType: "text/markdown",
+        json: VIEWER_ARTIFACT_MARKDOWN,
+      },
+    ],
+    settle: [
+      {
+        kind: "visible",
+        target: { role: "heading", name: "Standalone report" },
+      },
+    ],
+    steps: [
+      /*
+        打不开也要给得出出路，所以这两个入口不依赖这次加载的结果——
+        它们和正文一起进取样点。
+      */
+      {
+        kind: "visible",
+        target: { role: "link", name: /^(View source|查看原始文件)$/ },
+      },
+      {
+        kind: "visible",
+        target: { role: "link", name: /^(Download|下载)$/ },
+      },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  /*
+    表格预览：这一屏此前一个取样点都没有。
+
+    夹具里那几行是**挑过的**，每一行都在守一件具体的事：
+    - `"Ada, L."` —— 带引号的字段里有分隔符，被切开就说明解析器没走引号状态；
+    - 那条超长带换行的备注 —— 触发「收进对话框」而不是把整行撑开；
+    - 最后一行少一列 —— 缺字段要显示成「缺失」，而不是一个看不出区别的空格。
+  */
+  {
+    id: "artifact-table-preview",
+    title: "CSV 产物的表格预览",
+    backend: "mock",
+    path: `/workspace/chats/${MOCK_THREAD_ID}`,
+    mock: {
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Table artifact",
+          updated_at: "2026-06-05T12:00:00Z",
+          artifacts: [TABLE_ARTIFACT_PATH],
+          messages: [
+            {
+              type: "human",
+              id: "msg-human-table",
+              content: [{ type: "text", text: "Export the rows as CSV" }],
+            },
+            {
+              type: "ai",
+              id: "msg-ai-table",
+              content: "Exported the rows.",
+            },
+          ],
+        },
+      ],
+    },
+    routes: [
+      {
+        pattern: "**/api/threads/*/artifacts/**",
+        contentType: "text/csv",
+        json: TABLE_ARTIFACT_CSV,
+      },
+    ],
+    settle: [{ kind: "visible", target: { testId: "artifact-trigger" } }],
+    steps: [
+      { kind: "click", target: { testId: "artifact-trigger" } },
+      { kind: "visible", target: { text: "rows.csv" } },
+      { kind: "click", target: { text: "rows.csv" } },
+      { kind: "visible", target: { testId: "artifact-table-preview" } },
+      // 表头来自首行，带分隔符的字段没有被切开。
+      { kind: "visible", target: { role: "columnheader", name: "name" } },
+      { kind: "visible", target: { text: "Ada, L." } },
+      // 缺字段明说，不是留一个看不出区别的空格。
+      { kind: "visible", target: { text: /^(Missing|缺失)$/ } },
+      // 长内容收进对话框，表格里不铺开。
+      {
+        kind: "click",
+        target: { role: "button", name: /row 1, column 3|第 1 行、第 3 列/ },
+      },
+      {
+        kind: "visible",
+        target: { role: "textbox", name: /^(Cell value|单元格内容)$/ },
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],

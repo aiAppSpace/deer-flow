@@ -74,7 +74,8 @@ import { useWorkspaceSidebar } from "@/composables/useWorkspaceSidebar";
 import { useModels } from "@/composables/useModels";
 import { useThreadSettings } from "@/composables/useThreadSettings";
 import { useThreadTokenUsage } from "@/composables/useThreadTokenUsage";
-import { branchThreadFromTurn } from "@/core/threads/api";
+import { branchThreadFromTurn, createThread } from "@/core/threads/api";
+import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
 import { getAPIClient } from "@/core/api/api-client";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
@@ -1259,6 +1260,37 @@ watch(
   },
 );
 
+/*
+  从项目里开的新会话，要在**第一条消息发出去之前**归属到那个项目。
+
+  这是新会话进项目的唯一通道——run 请求本身不带项目字段。顺序反了或者这一步
+  失败了还照发，会话就落在项目外面，而用户是从项目里点进来的，看到的结果和
+  他做的事对不上。所以失败时抛出：这条消息不发，让用户重试。
+
+  后端按 thread_id 幂等，重试同一条消息不会建出第二行。与上游同形
+  （chat-page.tsx 的 ensureProjectThread）。
+*/
+const projectParam = computed(() => {
+  const raw = route.query.project;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === "string" && value.trim() ? value : null;
+});
+
+async function ensureProjectMembership(threadId: string) {
+  const projectId = projectParam.value;
+  if (!projectId) return;
+  try {
+    await createThread(threadId, projectId);
+    void queryClient.invalidateQueries({
+      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+    });
+  } catch (error) {
+    // 项目在页面打开之后被删/归档了也走这里。
+    toast.error($i18n.t.value.projects.projectUnavailable);
+    throw error;
+  }
+}
+
 async function ensureThread() {
   if (isDemo.value)
     throw new Error($i18n.t.value.common.notAvailableInDemoMode);
@@ -1296,6 +1328,7 @@ async function send(
   mainTailRequest.value += 1;
   try {
     const targetThreadId = await ensureThread();
+    await ensureProjectMembership(targetThreadId);
     const quotes = [...sidecar.conversationQuotes.value];
     const contexts = quotes.map((quote) => quote.context);
     const accepted = await stream.sendMessage(

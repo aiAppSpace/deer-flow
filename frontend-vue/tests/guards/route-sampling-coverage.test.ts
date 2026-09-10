@@ -72,12 +72,20 @@ function stripComments(text: string): string {
     .replaceAll(/(^|\s)\/\/[^\n]*/g, "$1");
 }
 
-/** 场景里出现过的 `path:`，去掉查询串。 */
+/**
+ * 场景里出现过的 `path:`，去掉查询串。
+ *
+ * **模板字符串也要认。** 场景里一多半的路径长这样：
+ * `` `/workspace/chats/${MOCK_THREAD_ID}` `` ——只扫双引号的话，这些屏一条都不算
+ * 取样过，而门禁会照样绿（它们恰好也被别的字面量路径顺带匹配上了）。
+ * `${…}` 整体替换成一个不含 `/` 的占位段，正好落进 routeMatcher 的 `[^/]+`。
+ */
 function sampledPaths(): string[] {
   return scenarioFiles.flatMap((file) => {
     const source = stripComments(readFileSync(file, "utf8"));
-    return [...source.matchAll(/path:\s*"([^"]+)"/g)].map(
-      (match) => match[1]!.split("?")[0]!,
+    return [...source.matchAll(/path:\s*(?:"([^"]+)"|`([^`]+)`)/g)].map(
+      (match) =>
+        (match[1] ?? match[2]!).replaceAll(/\$\{[^}]*\}/g, "-").split("?")[0]!,
     );
   });
 }

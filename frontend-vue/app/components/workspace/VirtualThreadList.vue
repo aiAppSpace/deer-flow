@@ -31,7 +31,6 @@ import {
   calculateScrollMargin,
   VIRTUALIZATION_THRESHOLD,
 } from "@/core/threads/virtual-list";
-import type { AgentThread } from "@/core/threads/types";
 
 const props = withDefaults(
   defineProps<{

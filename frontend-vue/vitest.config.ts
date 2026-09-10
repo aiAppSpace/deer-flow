@@ -10,7 +10,7 @@
                    其余一律 node——node 最快，DOM 环境约贵 3 倍。
                    加 project 时必须同步 node 的 exclude，否则一个文件会被跑两遍。
                    node/dom 两个 project 不经过 Nuxt，拿不到 Nuxt 注入的路径别名，
-                   所以 `@` 要在这里显式补上。
+                   所以 `@` 和 `#shared` 要在这里显式补上。
 
                    dom project 额外挂 `@vitejs/plugin-vue`：M3 起有组件测试要 mount `.vue`，
                    而不经过 Nuxt 就没人编译 SFC（表现是 vite 报「invalid JS syntax」）。
@@ -27,12 +27,15 @@ import { defineVitestProject } from "@nuxt/test-utils/config";
 
 /** 与 .nuxt/tsconfig.app.json 的 `"@/*": ["../app/*"]` 保持一致。 */
 const appDir = fileURLToPath(new URL("app", import.meta.url));
+/** Nuxt 自带的 `#shared`；node/dom 不经过 Nuxt，同样要显式补。 */
+const sharedDir = fileURLToPath(new URL("shared", import.meta.url));
+const alias = { "@": appDir, "#shared": sharedDir };
 
 export default defineConfig({
   test: {
     projects: [
       defineProject({
-        resolve: { alias: { "@": appDir } },
+        resolve: { alias },
         test: {
           name: "node",
           environment: "node",
@@ -45,7 +48,7 @@ export default defineConfig({
       }),
       defineProject({
         plugins: [vue()],
-        resolve: { alias: { "@": appDir } },
+        resolve: { alias },
         test: {
           // 迁移过来的 core 测试里有一批用 DOM 全局（Response、FormData、
           // localStorage…）但不碰 React，happy-dom 就够，不必上 Nuxt 环境。

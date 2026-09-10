@@ -18,12 +18,8 @@
   },
   "pendingRoutes": {
     "$comment": "React 有、Vue 还没做、但要做的路由。和 exemptRoutes 分成两份，是为了让新出现的上游路由无处可去：它落在两份清单之外会立刻让门禁变红，逼人显式选一边，而不是被顺手塞进豁免里。目标状态是空数组。",
-    "routes": [
-      "/artifacts/view"
-    ],
-    "$reasons": {
-      "/artifacts/view": "独立产物视窗（上游 2026-09 合并带入）。用途是在新窗口里看一件产物：markdown 渲染成果、html 保持 gateway URL 以维持下载语义、会话过期后回到同一件产物。**什么时候重新问**：与 pending 场景 artifact-viewer-window 同时做——那三条断言就是这条路由的验收。"
-    }
+    "routes": [],
+    "$reasons": {}
   },
   "contentExemptRoutes": {
     "$comment": "两边都有这条路由，但渲染内容双向不比对。/ 是营销落地页：Vue 保留自己的入口页，既不复刻 React 的 Header/Hero/CaseStudy/Skills/Sandbox/WhatsNew/Community/Footer，也不因为「React 没有这个 UI」被反向清理删掉。断言是每一条都必须同时存在于两边的路由集合里——只要有一边没了，这条豁免就已经过期。",

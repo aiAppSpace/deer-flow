@@ -161,6 +161,29 @@ export interface Translations {
     loadFullFile: string;
     loadingFullFile: string;
     previewFailed: string;
+    viewSource: string;
+    missingTarget: string;
+  };
+
+  artifactTable: {
+    title: string;
+    header: string;
+    column: (index: number) => string;
+    total: (count: number) => string;
+    sample: (count: number) => string;
+    range: (start: number, end: number, limited: boolean) => string;
+    columnsLimited: string;
+    uneven: string;
+    empty: string;
+    incomplete: string;
+    failed: string;
+    retry: string;
+    previous: string;
+    next: string;
+    cell: (row: number, column: number) => string;
+    cellValue: string;
+    missing: string;
+    savedVersion: string;
   };
 
   // Citations
@@ -537,6 +560,8 @@ export interface Translations {
 
   // Chats
   chats: {
+    noActiveChats: string;
+    activeChats: string;
     archivedChats: string;
     archiveChat: string;
     restoreChat: string;
@@ -546,6 +571,9 @@ export interface Translations {
     archiveDescription: string;
     undoArchive: string;
     noArchivedChats: string;
+    noMatchingChats: string;
+    loadChatsFailed: string;
+    retryLoadChats: string;
     searchChats: string;
     loadMoreToSearch: string;
     loadingMore: string;

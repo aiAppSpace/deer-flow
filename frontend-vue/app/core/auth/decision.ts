@@ -38,8 +38,16 @@ export function decideAuthNavigation(input: {
   path: string;
   authDisabled: boolean;
   authenticated: boolean;
+  /**
+   * `/workspace` 之外、但这一次访问确实要登录的路由。
+   *
+   * 独立产物视窗是唯一一个：它的路径本身不说明任何事，要不要登录取决于
+   * query 里指向的是谁的文件——公开演示件放行，别的都要登录。那个判定住在
+   * `core/artifacts/viewer.ts`，这里只接受它的结论。
+   */
+  guarded?: boolean;
 }): AuthNavigation {
-  if (!input.path.startsWith("/workspace")) {
+  if (!input.guarded && !input.path.startsWith("/workspace")) {
     return "allow";
   }
   return input.authDisabled || input.authenticated ? "allow" : "login";

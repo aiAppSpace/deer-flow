@@ -32,25 +32,47 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-const props = defineProps<{
-  canEdit: boolean;
-  editing: boolean;
-  dirty: boolean;
-  conflict: boolean;
-  streaming: boolean;
-  saving: boolean;
-  canCopy: boolean;
-  copyDisabled: boolean;
-  canOpen: boolean;
-  canDownload: boolean;
-  canInstall: boolean;
-  installing: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    canEdit: boolean;
+    editing: boolean;
+    dirty: boolean;
+    conflict: boolean;
+    streaming: boolean;
+    saving: boolean;
+    canCopy: boolean;
+    copyDisabled: boolean;
+    canOpen: boolean;
+    canDownload: boolean;
+    canInstall: boolean;
+    installing: boolean;
+    /**
+     * 「打开」和「下载」拿到的是**已保存的那一份**。
+     *
+     * 表格预览是唯一会让人误会的场合：草稿改了几行，预览里也确实是改过的样子，
+     * 但这两颗键给的是服务器上那份。上游只在 `isTabular && isDirty` 时把这两颗的
+     * tooltip 换成这句提醒（artifact-file-detail.tsx）——别的类型不换，因为
+     * 那边预览与草稿本来就长得不一样，看得出来。
+     *
+     * 给默认值而不是设成必填：`mount()` 的 props 不走严格检查，写成必填也拦不住
+     * 漏传，那样只会得到一个「静默 undefined」——不如让默认行为就是不提示。
+     */
+    savedVersionHint?: boolean;
+  }>(),
+  { savedVersionHint: false },
+);
 const { $i18n } = useNuxtApp();
 /*
   保存键的名字随状态变（上游把 tooltip 原样写进 sr-only，所以两处是同一句）。
   抽成 computed 是因为模板里要用两次——写两遍迟早分叉。
 */
+/** 打开/下载这两颗的 tooltip：见 `savedVersionHint` 那段。 */
+function gatewayTooltip(fallback: string): string {
+  return props.savedVersionHint
+    ? $i18n.t.value.artifactTable.savedVersion
+    : fallback;
+}
+
 const saveLabel = computed(() =>
   props.streaming
     ? $i18n.t.value.artifactEditing.runInProgress
@@ -212,7 +234,9 @@ const emit = defineEmits<{
         <SquareArrowOutUpRight :size="16" />
       </Button>
     </TooltipTrigger>
-    <TooltipContent>{{ $i18n.t.value.common.openInNewWindow }}</TooltipContent>
+    <TooltipContent>{{
+      gatewayTooltip($i18n.t.value.common.openInNewWindow)
+    }}</TooltipContent>
   </Tooltip>
   <!--
     复制在截断或空内容时是**禁用**，不是消失——React 渲染它并传 disabled
@@ -250,6 +274,8 @@ const emit = defineEmits<{
         <Download :size="16" />
       </Button>
     </TooltipTrigger>
-    <TooltipContent>{{ $i18n.t.value.common.download }}</TooltipContent>
+    <TooltipContent>{{
+      gatewayTooltip($i18n.t.value.common.download)
+    }}</TooltipContent>
   </Tooltip>
 </template>

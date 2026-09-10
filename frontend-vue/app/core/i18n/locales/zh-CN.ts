@@ -194,6 +194,30 @@ export const zhCN: Translations = {
     loadFullFile: "加载完整文件",
     loadingFullFile: "正在加载完整文件...",
     previewFailed: "无法预览此文件，但仍可下载原始文件。",
+    viewSource: "查看原始文件",
+    missingTarget: "该链接没有指明要展示哪个文件。",
+  },
+
+  artifactTable: {
+    title: "表格预览",
+    header: "首行作为表头",
+    column: (index) => `列 ${index}`,
+    total: (count) => `共 ${count} 行`,
+    sample: (count) => `预览前 ${count} 行`,
+    range: (start, end, limited) =>
+      `${limited ? "预览 " : ""}${start}\u2013${end} 行`,
+    columnsLimited: "仅展示预览样本的前 50 列。",
+    uneven: "部分行的字段数量不同，缺失字段已标记。",
+    empty: "文件为空。",
+    incomplete: "当前预览范围内没有完整记录，请查看源码或下载文件。",
+    failed: "无法可靠预览此表格，请查看源码或下载文件。",
+    retry: "重新预览",
+    previous: "上一页",
+    next: "下一页",
+    cell: (row, column) => `查看第 ${row} 行、第 ${column} 列`,
+    cellValue: "单元格内容",
+    missing: "缺失",
+    savedVersion: "打开或下载的是已保存文件，当前草稿尚未保存。",
   },
 
   // Citations
@@ -633,6 +657,8 @@ export const zhCN: Translations = {
 
   // Chats
   chats: {
+    noActiveChats: "暂无近期会话",
+    activeChats: "近期会话",
     archivedChats: "已归档",
     archiveChat: "归档",
     restoreChat: "恢复",
@@ -643,6 +669,9 @@ export const zhCN: Translations = {
       "归档会保留消息和文件，不会停止运行中的任务或暂停定时任务。",
     undoArchive: "撤销",
     noArchivedChats: "暂无已归档会话",
+    noMatchingChats: "已加载的会话中没有匹配结果",
+    loadChatsFailed: "加载会话失败",
+    retryLoadChats: "重试",
     searchChats: "搜索对话",
     loadMoreToSearch: "加载更多以搜索更早的对话",
     loadingMore: "正在加载...",
