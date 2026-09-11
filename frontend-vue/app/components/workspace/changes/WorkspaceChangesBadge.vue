@@ -254,9 +254,16 @@ function statusIconClass(file: WorkspaceFileChange) {
   </div>
 
   <Sheet v-model:open="open">
+    <!--
+      `sm:max-w-[900px]` 而不是 `sm:max-w-none`（上游
+      workspace-change-panel.tsx:67）。**今天两者渲染一模一样**——
+      宽度本来就是 `min(92vw,900px)`，封顶封在同一个数上，读数零变化。
+      照抄的理由不是量出来的：两个 token 的语义不同（封顶 vs 不封顶），
+      哪天上游动了那个 `w-[...]`，`max-w-none` 会安静地跟着走偏。
+    -->
     <SheetContent
       v-if="summary"
-      class="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-none"
+      class="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-[900px]"
       :close-label="$i18n.t.value.primitives.close"
     >
       <!--
@@ -281,7 +288,13 @@ function statusIconClass(file: WorkspaceFileChange) {
           }}
         </SheetDescription>
       </SheetHeader>
-      <div class="min-h-0 flex-1 overflow-y-auto p-5">
+      <!--
+        纵向内边距是 `py-4` 不是 `p-5`（上游 workspace-change-panel.tsx:85 的
+        `px-5 py-4`）。差的这 4px 会把面板里**每一行**往下推 4px；
+        2026-09-12 给 diff 三行挂上锚点时当场量到 `y Δ4`，在那之前
+        这一整块面板里只有一个 heading 锚点，而它在 header 里、量不到这一处。
+      -->
+      <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <p
           v-if="detailOwner.loading.value"
           class="text-muted-foreground text-sm"
