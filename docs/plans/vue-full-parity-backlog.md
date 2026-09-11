@@ -153,7 +153,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ---
 
-## 进度实测（2026-09-12 第七轮收工现场量，每一格都写了怎么量的）
+## 进度实测（2026-09-12 第八轮收工现场量，每一格都写了怎么量的）
 
 | 账 | 起点 | 现在 | 怎么量 |
 | --- | --- | --- | --- |
@@ -162,7 +162,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 | i18n pending key | 179 | **0** | `baseline/upstream-i18n-map.json` 的 `pending.keys` |
 | 词典 key / unused | — | **1139 / 15** | `baseline/i18n-keys.json` 的 `total` / `unusedTotal` |
 | 取样面 pending 路由 | 1 | **0** | `baseline/parity-route-sampling.json` 的 `pending` |
-| 台账 | 330 | **159 唯一行 / 179 多重集 / 137 场景-维度**（第七轮把 `Edit and rerun` 那三行从根因清了）| 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
+| 台账 | 330 | **159 唯一行 / 179 多重集 / 138 场景-维度**（第八轮给 `project-detail` 补窄屏，三维全 0 行）| 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
 | 产品 SFC | — | **267**（另有 2 个 `__m0` fixture 排除、0 个未扫） | `node frontend-vue/scripts/i18n-source-guard.mjs --inventory` |
 
 **三张 pending 表全空。** i18n 那张归零意味着：上游词典里的每一条，本仓要么同名有、
