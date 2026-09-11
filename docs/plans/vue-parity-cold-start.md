@@ -12,11 +12,11 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-12 01:00 实测，不是估计）**：
+**接手时的状态（2026-09-12 第四轮收工实测，不是估计）**：
 
 - 工作区干净；**本地领先 `origin/main-wc` 三百多个提交、全部未推送**
   （没有收到过推送指令；要推就先问用户）。
-- 对照台账 **154 唯一行 / 170 多重集 / 129 个场景-维度**。
+- 对照台账 **137 唯一行 / 153 多重集 / 131 个场景-维度**。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
 
@@ -45,12 +45,13 @@ EOF
 
 ## 这个阶段的工作性质（先读完再动手）
 
-**「台账还剩多少行」已经不能当坐标系了。** 2026-09-11 那一轮把台账上的
-**每一行都判过了**：154 行里 **87 行是三条早就判过的账**
-（`div[scroll-area-viewport]` 47 行 + 它在 `tabOrder` 上的投影、`retry: false` 18 行、
-另两条请求层各 2 行），**20 行是窄屏那个开着的工单**，剩下的逐条写了判词与翻案判据。
-所以行数涨落本身不说明好坏——**它涨是因为取样面变大了**（那一轮新开了
-`dark` 与 `mobile` 两个维度）。
+**「台账还剩多少行」已经不能当坐标系了。** 2026-09-12 收工时 **137 行逐条都有判词**，
+而且分布极不均匀：**95 行**是 `div[scroll-area-viewport]` 那一笔判过的账
+（含它在 `tabOrder` 上的投影）、**12 行**是请求层那一族（`retry` 等），
+剩下 **30 行**是 tooltip 播报节点、写死英文、焦点落点这几类早就判过的。
+**窄屏那个开着的工单 2026-09-12 已经结清**（那 18 行没了）。
+所以行数涨落本身不说明好坏——**它涨常常是因为取样面变大了**（2026-09-11 新开
+`dark` 与 `mobile` 两个维度；09-12 给 diff 三档挂锚点，当场逼出一处 4px）。
 
 **这一阶段真正有货的是三类**，按性价比排：
 
@@ -145,24 +146,38 @@ EOF
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-# 2026-09-12 实测读数（每一条都是那一轮真跑出来的，不是抄的）
-make -C <abs>/frontend-vue verify         # exit 0；320 文件 / 2636 单测；词典 1139 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # 3 passed（diff.spec 约 11 分钟）；台账 154 唯一行 / 129 场景-维度
-make -C <abs>/frontend-vue e2e-mock       # 317 passed
-make -C <abs>/frontend-vue e2e-backend    # 22 passed（需要 backend 的 uv 环境）
+# 2026-09-12 第四轮收工实测（每一条都是那一轮真跑出来的，不是抄的）
+make -C <abs>/frontend-vue verify         # exit 0；321 文件 / 2639 单测；词典 1139 key / 15 unused；产品 SFC 267
+make -C <abs>/frontend-vue e2e-parity     # **139 passed**（整条 15.8 分钟，其中 diff.spec 10.9 分钟）
+                                          #  台账 137 唯一行 / 153 多重集 / 131 场景-维度
+                                          #  （此处此前写「3 passed」——那是只跑 diff.spec.ts 的数字，
+                                          #    整个套件还有 scenarios.spec 的每场景-维度一条 + topology）
+make -C <abs>/frontend-vue e2e-mock       # 318 passed（273 + 22 + 15 + 2 + 6）
+make -C <abs>/frontend-vue e2e-backend    # 22 passed（2+5+2+3+3+5+1+1；需要 backend 的 uv 环境）
 make -C <abs>/frontend-vue parity-accept  # 只能让台账变短；要变长得 PARITY_ACCEPT_GROW=1
                                           #  并在提交说明里逐行解释
-make -C <abs>/frontend-vue standalone-sim # exit 0
+make -C <abs>/frontend-vue standalone-sim # exit 0（跑过 15 / 未跑 5 / 红 0）
 make -C <abs>/frontend-vue e2e-visual     # 8 passed（只有 -darwin 基线，本机门禁）
-make -C <abs>/frontend-vue asset-budget   # exit 0
-make -C <abs>/frontend-vue icon-parity    # 0 处待核、0 条 ⚠
-make -C <abs>/frontend-vue audit          # **预期红**，分诊写在 Makefile 的 audit 上方
+make -C <abs>/frontend-vue asset-budget   # ⛔ **红，而且是存量**（四条预算全超；证过因果：
+                                          #  把本轮动过的文件换回 HEAD 重量，读数只差 16 字节）
+                                          #  挂账写在 vue-parity-open-accounts.md 顶部
+make -C <abs>/frontend-vue icon-parity    # exit 0；**1 处待核（`Unplug` 只有 Vue 用）**
+                                          #  ——同一条挂账；此处此前写「0 处待核」是过期的
+make -C <abs>/frontend-vue audit          # 棘轮（wave 202 起分诊在 baseline/audit-triage.json）；
+                                          #  实测 exit 0，20 条 / 7 个包逐条表过态
 make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口）
 ```
 
+> **这一轮的一条教训**：上面这块读数**本身也会过期**，而且过期得毫无迹象——
+> 2026-09-12 逐条真跑之前，`asset-budget` 与 `icon-parity` 两条都记着 exit 0 / 0 处待核，
+> 实际一条红着、一条挂着一处待核。**九条全跑一次比抄一次贵得多，但也只有它算数。**
+
 **动过 `frontend/` 就必须加跑 React 三条**（这一阶段几乎每轮都会动它）：
 `python3 scripts/pnpm.py --dir frontend check`（0）/ `test`（**1354**）/
-`test:e2e`（要用 3002 端口的绕法，写在交接文档「React 的 test:e2e 绕法」那一段）。
+`test:e2e`（**188 passed**，2026-09-12 实测；要用 3002 端口的绕法，
+写在交接文档「React 的 test:e2e 绕法」那一段。实操上不必自己 `next build` +
+`next start`——直接 `PLAYWRIGHT_BASE_URL=http://localhost:3002 SKIP_ENV_VALIDATION=1
+pnpm exec playwright test`，config 会照这个 URL 的端口自己起 webServer）。
 
 **一轮的典型节奏**（2026-09-11 那轮 14 笔提交都是这么走的）：
 `PARITY_ONLY=<场景id> make e2e-parity`（约 5 分钟，单场景 + 两侧完整请求序列转储）
@@ -271,21 +286,40 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-11/12）做了什么，下一轮从哪接
+## 上一轮（2026-09-12 第四轮）做了什么，下一轮从哪接
 
-**14 个提交，`6ab3cfb3` … `38ed4513`。台账 330 → 154 唯一行。**
-逐条判词在 `vue-parity-open-accounts.md` 顶部那一串 2026-09-11 条目，
-收工报告在 `docs/plans/vue-parity-2026-09-11-round3-report.md`。
+**台账 154 → 137 唯一行（170 → 153 多重集），场景-维度 129 → 131。**
+逐条判词在 `vue-parity-open-accounts.md` 顶部那两条 2026-09-12 条目。
 
-**下一轮最该先拿的三件（按顺序）**：
+1. **窄屏那两簇结清**：`integrations#change-app` / `#permission-request` 各 11 → 2 行，
+   `integrations` 全场景 86 → 68。根因是**内边距在窄屏下没有降档**——375px 屏上
+   对话框 343 宽，面板 `p-6` + 这一页独有的 Card `px-6` + 状态盒 `p-3` 吃掉 208px，
+   内容列只剩 167px，而里面那颗 `Re-register in browser` 按钮的 min-content 是 191.1px。
+   两边同改成 `p-4 sm:p-6` + `px-4 sm:px-6`（`sm` 以上逐字不变）。
+2. **diff 三档进取样面 + `workspace-changes` 补一维 dark**：挂上三个锚点之后确认了
+   上一轮那处 `dark:text-*-300` 修法成立（颜色两边逐值相同），**同时当场报出 9 行 `y Δ4`**
+   ——面板正文上游是 `px-5 py-4`、本仓写成 `p-5`。本仓改齐，9 行归零。
+3. **两个应用各加一条 375px 零溢出用例** + 一条锚点守卫
+   （`tests/unit/parity/workspace-diff-anchors.test.ts`）。负向验证全部逐条做过。
 
-1. **窄屏那个开着的工单**（`vue-full-parity-backlog.md` 里「剩下的两簇」那一节）。
-   `integrations#change-app` 与 `#permission-request` 各 11 行，
-   **四条假设已经逐个实测排除，写在工单里，别重走**。
-   下一步是写一个**真正走到 change-app 状态**的探针，比对两边 `App ID` 输入的
-   父链宽度，找出是哪一层开始差 25px。
-2. **继续开取样维度**：照 `DARK_DIMENSION` 的注释，给别的带错误态的场景各补一维
-   `dark`；窄屏同理。**一个场景补一维就够。**
+**下一轮最该先拿的（按顺序）**：
+
+0. **两条这一轮量出来的存量挂账**（详情在 `vue-parity-open-accounts.md` 顶部第一条）：
+   ① `asset-budget` 四条预算全超，**证过因果不是本轮造成的**——查清 vendor-ui 涨的
+   57 KiB 出自哪一次改动（建议按提交二分），再决定拆包还是抬预算；
+   ② `icon-parity` 剩的那 1 处待核 `Unplug` 是**一处 Vue 独有的产品面**
+   （每条 connection 一颗 Disconnect，上游整页没有 per-connection 动作），
+   按双向规则要判「两边同加」还是「删掉本仓这颗」。
+1. **继续开取样维度。** 131 个场景-维度里非 desktop 的仍然只有 `chat`（跑满矩阵）、
+   `artifact-preview` / `thread-list-pin#mobile-drawer` / `ui-polish-mobile` / `integrations`；
+   dark 只有 `chat` 与 `integrations` / `workspace-changes`。
+   照同一条纪律（**一个场景补一维就够**）继续开——2026-09-11 开 `mobile` 当场量出
+   上游一颗点不到的控件，09-12 挂三个锚点当场量出 4px，**这条方向连着两轮都有货**。
+   现成的候选：`channels`（设置页，有连接失败分支 → dark）、
+   `scheduled-tasks`（整页表单 + 列表，从没被窄屏看过 → mobile）。
+2. **`chat-thread-init-ordering` 那 3 行 `button "Edit and rerun"`。**
+   backlog 写着「先加临时 dump 看读数，别猜」，而它一直没人做——**这是台账上
+   最后一条判词里带「先怀疑」的行**。
 3. **`ui/input-group` 没有移植**：三个 composer（`ChatComposer` /
    `AgentBootstrapComposer` / `SidecarPanel`）的输入框上游走
    `PromptInputTextarea → InputGroupTextarea → <Textarea>`，本仓整块外壳是手写的。
@@ -294,26 +328,32 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ### 上一轮踩出来的、下一轮直接用的四条
 
-1. **只在一个语言维度报差异 = 一侧没翻译。** 这一条这一轮用了三次、三次都命中
-   （mermaid 工具条、浏览器面板、产物面板的「JPG file」——全是上游写死的英文）。
-2. **`hit=off-screen` 不等于「够不着」。** `hit` 用的是探针那一刻的**视口**矩形，
-   竖直滚出去也记 `off-screen`。只有在**同一行的 `x` 也超出视口宽度**时，
-   才能读成「横向够不着」。我因此误判过一次，订正写在挂账文档里。
-3. **探针要限定作用域。** `querySelector('[data-slot="scroll-area-viewport"]')`
-   会抓到页面上**第一个**（聊天页欢迎建议行那个 ScrollArea），不是对话框里的。
-   必须 `dialog.querySelector(...)`。我因此把一个错读数当真读数用了一轮。
-4. **量不出效果的改动不要留。** 这一轮有两处改完读数一行没动
-   （`min-w-0`、给 ScrollArea 加 `[&>div]:block`），
-   一处还原、一处留下但把注释改成实话（「它不是这条的根因」）。
+1. **否定结论同样要先证明变异生效。** 上一轮那张「四条死路」表的第四条
+   （「给 ScrollArea 加 `[&>div]:block`，读数 86 → 86」）是**假阴性**：Radix 把
+   `min-width:100%; display:table` 写成**内联样式**（`dist/index.mjs:130`），
+   Tailwind 生成的普通 CSS 规则顶不掉它。**那次变异从来没生效，读数不动什么都没证明。**
+   「我这一步真的生效了吗」此前只用在**拿不到东西**的探针上，这一轮证明它对
+   **「量到了、但没变化」**同样适用。
+2. **一档尺子报 0 行，先问「这一块有锚点吗」。** 上一轮给 diff 三档补 `dark:` 变体时
+   台账零反应，看着像「修法不影响对照」，实际是那一整块面板只有一个 heading 锚点。
+   补上锚点当场报出一处存在很久的 4px。
+3. **`getByText("字符串")` 是大小写不敏感的子串匹配**，会把外层容器一起匹配上，
+   而 `sampleGeometry` 取 `.first()`——于是量到的是整块而不是那一行。
+   文本锚点一律写**锚定整行的正则**。
+4. **「两边都坏、坏法不同」台账只报得出「不一样」。** 窄屏那两簇就是：上游让
+   shrink-to-fit 把面板撑出栅格，本仓把内容裁掉，两种坏法各自自洽。
+   **接上一块新表面之后那一句「这一块本身对不对」，要靠各自的用例回答**，
+   而且断言要把两种坏法都盖住（这一轮写成 `panelOverflow` + `cardOverflow` 两个读数）。
 
 ### 一条方法学（这一轮最值钱的）
 
-**「等到某个不变量成立」的取样步骤，比「等某个元素消失」强。**
-`thread-title-sync` 的 `focus` 行抖了很多轮、方向还会翻，旧判词是「取样点不稳」。
-把最后一步从「等对话框消失」换成 `visible: button:focus`（等到有一颗按钮拿到焦点）之后，
-抖动消失、**两边先后稳定超时**——它盖住的是一条两个应用都有的真缺陷：
-重命名对话框关掉之后焦点掉回 `body`。
-代价是真有缺陷时会**硬红而不是悄悄漂移**，这正是要的。
+**先量 min-content，再谈内边距。** 窄屏溢出的形状是「可用宽度 < 内容的固有最小宽度」，
+而 `getBoundingClientRect()` 量到的是**已经被压过的结果**，两边都看不出谁在撑。
+探针写法：`el.style.width = "min-content"` 量一次再还原，逐层打印——
+一屏之内就能读出「撑宽面板的是哪一颗按钮」。
+**顺带一条**：`overflow-wrap: break-word`（Tailwind `break-words`）**不减小 min-content**，
+所以「加了 `break-words` 就不会撑宽」是错的；能减小的是 `overflow-wrap: anywhere`
+与 `word-break: break-all`。
 
 ## 下一轮可以挑的活（按性价比排）
 

@@ -1,7 +1,146 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-11 第三轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第四轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> ## 2026-09-12 收工时发现两条门禁**一直红着**，都不是这一轮造成的
+>
+> 这一轮把九条门禁逐条真跑了一遍（上一轮的读数块写着两条 exit 0）。**两条是红的**，
+> 而且都能证明与本轮改动无关。**记在这里是因为「一条长期红着又没人看的门禁等于不存在」。**
+>
+> ### 一、`icon-parity`：`ChevronLeft` 的豁免过期了（**已修**）+ `Unplug` 只有 Vue 用（**开着**）
+>
+> 门禁 `exit 1` 的那一半是**过期豁免**：`VERIFIED` 里 `ChevronLeft` 的理由写的是
+> 「上游 `ai-elements/message.tsx` 的 `MessageBranchPrevious`，`MessageBranch*` 零消费者」
+> ——那是 wave 75 的事实。现在**两边都在用**它（`artifact-table-preview.tsx` 与
+> `ArtifactTablePreview.vue` 的翻页键），于是它根本不会再进「只有一边用」那张表，
+> 这条豁免是死配置。按 stale 提示回去看过一遍、删掉，门禁回到 exit 0。
+>
+> **剩下的 1 处待核是真的**：`Unplug` **只有 Vue 用**。
+> 本仓 `ChannelConnections.vue:459` 给**每一条 connection** 画了一颗「Disconnect」
+> （`Unplug` 图标 + `channels.disconnect` / `disconnectAccount` 两条词条），
+> 而上游那一页**没有任何 per-connection 动作**——它只在 `ItemDescription` 里写一句
+> `connectedAs(...)`，动作列只有 Modify / Connect /（管理员）删 provider 配置。
+> 上游词典里也**没有** `disconnect` / `disconnectAccount` 这两条（grep 过）。
+>
+> **它是 2026-09-11 那一轮之后才现形的**：在 `0f97c803` 之前上游也用 `UnplugIcon`
+> （画在 provider 级那颗「Disconnect」上），两边的图标集合因此**恰好**相交；
+> 那一轮把上游那颗键改成「删 provider 配置」并去掉图标之后，巧合结束。
+> **也就是说这处 Vue 独有的产品面一直都在，只是此前被一个巧合盖住了。**
+>
+> **下一轮要判的是产品面的有无，不是图标**：按双向规则要么两边同加
+> （per-connection 撤销是个真能力：一个账号连错了，今天上游只能删掉整个 provider 配置），
+> 要么删掉本仓这一颗。**翻案判据**：上游哪天自己加了 per-connection 动作。
+>
+> ### 二、`asset-budget` 四条预算全超（**开着，且不是这一轮**）
+>
+> ```
+> - vendor-ui.totalRaw:      740601 > 683000
+> - vendor-ui.totalGzip:     223015 > 205000
+> - vendor-ui.maxRaw:        318499 > 305000
+> - all-client-js.totalGzip: 3415750 > 3400000
+> ```
+>
+> **证过因果**：把本轮动过的三份 `app/` 文件换回 HEAD 版本重新构建再量一次，
+> 四条照样超，读数只差 **16 字节**（740585 / 223012 / 318490 / 3415736）——
+> 本轮那几个 Tailwind class 与注释在 JS 侧根本不计。
+> **所以这是存量**，最可能来自 2026-09-10 那次上游合并（Projects 侧栏段、CSV 预览、
+> 新 features 调用方都进来了）。
+>
+> **不要顺手抬数字**：`route-payload` 那条「抬到实测值以上」的做法有前提
+> （量的是用户真下载了多少、而且要写清抬了多少）；这四条是**增量告警**，
+> 抬之前先答出「哪一次改动让 vendor-ui 涨了 57 KiB」。
+> 建议的查法：`git log --oneline` 挑几个点，各跑一次 `make asset-budget` 二分。
+> **翻案判据**：查清增量来源之后，要么拆包、要么抬预算并在 `$measured` 里写明原因。
+
+> ## 2026-09-12 窄屏那两簇结清：**上一轮排除掉的第四条假设是对的，它只是没生效**
+>
+> `integrations#change-app` 与 `#permission-request` 各 11 行 → **各 2 行**
+> （剩下的 2 行是 `div[scroll-area-viewport]` 那笔老账 + 它在 `tabOrder` 上的投影）。
+> `integrations` 全场景 **86 → 68**；台账 **154 → 137 唯一行**。
+>
+> **先记一条方法上的翻案**，因为它比结论值钱：backlog 里那张「四条死路」表的第四条写着
+>
+> | Radix 的 `display:table` 撑宽了面板 | **测了，无效**：给设置面板的 ScrollArea 加 `[&>div]:block` 覆盖掉它，读数 86 → 86，一行没动 |
+>
+> **这条假设是对的，那次实验是假阴性。** Radix 把 `min-width:100%; display:table`
+> 写成**内联样式**（`@radix-ui/react-scroll-area@1.2.10` 的 `dist/index.mjs:130`），
+> 而 Tailwind 的 `[&>div]:block` 生成的是一条普通 CSS 规则——**内联样式赢**。
+> 那个变异从来没有生效过，于是「读数一行没动」这件事什么都没有证明。
+> **这是「探针拿不到东西时先问『我这一步真的生效了吗』」的又一例**，
+> 只不过这次被骗的是一条**否定**结论：否定结论同样要先证明变异生效。
+>
+> **父链量出来的读数**（375×812，`change-app` 终态，`App ID` 输入往上逐层）：
+>
+> | 层 | React | Vue |
+> | --- | --- | --- |
+> | `div.grid`（对话框主栅格） | w=293 client=293 **scroll=318** | w=293 client=293 scroll=293 |
+> | `[data-slot=scroll-area]` | **318.2**（比格子宽 25.2） | 293 |
+> | viewport 里那层 | `min-width:100%; display:table` → 316.2 | 普通 block → 291 |
+> | `[data-slot=card]` | 268.2（scroll 266） | 243（**scroll 264**） |
+> | `role:textbox[App ID]` | 192.2 | 167 |
+>
+> **两边都是坏的，只是坏法不同**：上游让 shrink-to-fit 把整个面板撑出栅格格子
+> （右边那 25px 吃掉对话框的右内边距），本仓把内容裁掉。
+> **台账只报得出「宽度不一样」，报不出「这一块本身对不对」**——两种坏法各自自洽。
+>
+> **真正的根因是内边距在窄屏下没有降档。** 逐层量 min-content（两边逐值相同）：
+>
+> ```
+> card 268.2 · card-content 266.2 · box「Authorization scope」218.2 · box「Switch to a different Lark app」217.1
+> button「Re-register in browser」191.1   ← 撑宽面板的就是它
+> p「…Examples: calendar:calendar.event:read」192.2
+> ```
+>
+> 而 375px 屏上给到的内容列只有 **167px**：对话框 343 → 面板 `p-6` → 这一页独有的
+> Card `px-6` → 状态盒 `p-3`，三层内边距在一块 375px 的屏上吃掉 **208px**。
+> 没有任何内边距方案能把一颗 191px 的按钮塞进 167px，**这不是一行一行修得完的表象**。
+>
+> **修法（两边同改）**：面板 `p-6` → `p-4 sm:p-6`，集成页 Card 的 header/content
+> `px-6` → `px-4 sm:px-6`。`sm` 以上逐字不变，所以桌面维度与视觉基线一格没动。
+> 修完两边内容列都是 **199px**，卡片 min-content 252.2 ≤ 259，全链零溢出。
+>
+> **两边各钉一条用例**（这是 wave 88 那条「接上新表面之后要另问一句『这一块本身对不对』」
+> 的兑现）：375px 下断言 `panelOverflow == 0 && cardOverflow == 0`。
+> 两个读数缺一不可——**上游那种坏法只让 `panelOverflow` 响，本仓那种只让 `cardOverflow` 响**。
+> 负向验证 2×2 逐条做过：
+>
+> | 变异 | React | Vue |
+> | --- | --- | --- |
+> | 只还原面板内边距 | `panelOverflow 9 / cardOverflow 6` 红 | `cardOverflow 15` 红 |
+> | 只还原 Card 内边距 | `panelOverflow 9` 红 | `cardOverflow 7` 红 |
+>
+> 两处改动各自承重，**没有一处是顺手加的**。
+>
+> ## 2026-09-12 给 diff 三档挂上锚点——**当场量出一处 4px，而且它一直在**
+>
+> 上一轮在本仓补上上游那三个 `dark:text-*-300`（diff 的增/删/hunk 三档）时，
+> **台账一行都没反应**。原因不是修对了，是**那一块根本没有锚点**：
+> `workspace-changes#changes-panel` 整块面板此前只有一个 heading 锚点。
+>
+> 这一轮给三档各挂一个锚点（文本取自夹具里的 diff：`+Ready` / `-Draft` / hunk 头），
+> 并按 `DARK_DIMENSION` 的纪律给这个场景补一维 dark。**结果两件事**：
+>
+> 1. **颜色两边逐值相同**，深色下三档都正确翻到 `*-300`（探针打过四组读数：
+>    `+Ready` 浅色 `rgba(0,122,85)` → 深色 `rgba(94,233,181)`）。
+>    上一轮那处修法确认成立，**而且从现在起有机器守着**。
+> 2. **当场报出 9 行 `y Δ4`**（三行 diff × 三个维度）。逐层量下去，分岔在
+>    面板正文那一层：上游 `px-5 py-4`（padTop 16），本仓写的是 `p-5`（padTop 20）。
+>    **这 4px 把面板里每一行都往下推**，而在挂锚点之前唯一的锚点在 header 里、量不到它。
+>    本仓改成 `px-5 py-4`（上游没坏，照抄），9 行归零。
+>
+> **锚点自己也要有人守。** 锚点一旦指不到东西，两边都记 `null`、`diffGeometry` 直接跳过
+> ——台账 0 行、没有任何用例会红（线索 131 的形状）。新增
+> `tests/unit/parity/workspace-diff-anchors.test.ts`：每个文本锚点必须**恰好**命中夹具
+> diff 里的一行，且 addition / deletion / hunk 三档**各被盖住一次**（归类走产品代码自己的
+> `getWorkspaceChangeLineClass`，不重写一份）。**判据不是「有三个锚点」**——那只是把一个
+> 数字写死在两处。两处变异都红：改掉夹具里那一行 → 2 条红；拿掉 hunk 锚点 → 1 条红。
+>
+> 顺带把同一份文件里最后一处 class 分叉对齐：`SheetContent` 上游是
+> `sm:max-w-[900px]`、本仓写的是 `sm:max-w-none`。**今天两者渲染一模一样**
+> （宽度本来就是 `min(92vw,900px)`，封顶封在同一个数上），**读数零变化**——
+> 留下它的理由不是量出来的，是两个 token 语义不同，上游哪天动了那个 `w-[...]`，
+> `max-w-none` 会安静地跟着走偏。这一条按「量不出效果的改动」的规矩**如实写在这里**。
 
 > ## 2026-09-11 重命名之后焦点掉回文档顶部——**两个应用都是，而且是新加的取样步骤逼出来的**
 >

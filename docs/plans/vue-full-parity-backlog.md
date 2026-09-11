@@ -153,7 +153,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ---
 
-## 进度实测（2026-09-12 现场量，每一格都写了怎么量的）
+## 进度实测（2026-09-12 第四轮收工现场量，每一格都写了怎么量的）
 
 | 账 | 起点 | 现在 | 怎么量 |
 | --- | --- | --- | --- |
@@ -162,7 +162,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 | i18n pending key | 179 | **0** | `baseline/upstream-i18n-map.json` 的 `pending.keys` |
 | 词典 key / unused | — | **1139 / 15** | `baseline/i18n-keys.json` 的 `total` / `unusedTotal` |
 | 取样面 pending 路由 | 1 | **0** | `baseline/parity-route-sampling.json` 的 `pending` |
-| 台账 | 330 | **154 唯一行 / 170 多重集 / 129 场景-维度** | 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
+| 台账 | 330 | **137 唯一行 / 153 多重集 / 131 场景-维度** | 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
 | 产品 SFC | — | **267**（另有 2 个 `__m0` fixture 排除、0 个未扫） | `node frontend-vue/scripts/i18n-source-guard.mjs --inventory` |
 
 **三张 pending 表全空。** i18n 那张归零意味着：上游词典里的每一条，本仓要么同名有、
@@ -265,7 +265,7 @@ reka 的 viewport 没有这层，所以本仓那一侧看不出来——**两边
 `min-w-0` 试过了，**对这条无效**（读数一行没动）；六处还是补上了，
 因为它与上游 `channels-settings-page.tsx:187` 一致，且是同一种失效的潜伏版本。
 
-### 剩下的两簇（`change-app` 11 行 + `permission-request` 11 行）：**四条死路已经排除，别重走**
+### ~~剩下的两簇（`change-app` 11 行 + `permission-request` 11 行）~~ —— **2026-09-12 结清**
 
 读数解出来了：**上游 Docs+Drive 在同一行，本仓 Drive 换到下一行**
 （Drive 的 y 比 Docs 多 40）——本仓的芯片更宽，或者说**上游的面板更宽**
@@ -283,24 +283,23 @@ reka 的 viewport 没有这层，所以本仓那一侧看不出来——**两边
 | 芯片尺寸不同 | **不是**：两边 `Button` 的 `sm` 档逐字相同（`h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5`） |
 | 芯片容器不同 | **不是**：两边都是 `flex flex-wrap gap-2`，`Input` 的容器都是 `space-y-2` |
 | 长串没加换行类 | **不是**：两边 `StatusItem` 的 value 都写了 `break-words` |
-| Radix 的 `display:table` 撑宽了面板 | **测了，无效**：给设置面板的 ScrollArea 加 `[&>div]:block` 覆盖掉它，`PARITY_ONLY=integrations` 读数 **86 → 86**，一行没动。那个改动已还原 |
+| Radix 的 `display:table` 撑宽了面板 | ⚠️ **这一行是错的，2026-09-12 已推翻**：原文写「测了，无效：给设置面板的 ScrollArea 加 `[&>div]:block` 覆盖掉它，读数 86 → 86，一行没动」。**那次变异从来没生效**——Radix 把 `min-width:100%; display:table` 写成**内联样式**（`dist/index.mjs:130`），Tailwind 生成的普通 CSS 规则顶不掉它。假设本身是对的，读数不动什么都没证明。**教训：否定结论同样要先证明变异生效。** |
 
 **已知为真的**：默认态下两边面板**完全一致**（探针实测：对话框 343、viewport clientWidth
 291、scrollWidth 291、超宽元素 0 个）。所以差异**只存在于「已连接 Lark」那两个状态**，
 是那两个状态里的内容造成的。
 
-**下一步该怎么做**：写一个探针**真正走到 change-app 那个状态**
-（把 `**/api/integrations/lark/status` 路由到 `scenarios.ts` 里 `integrations` 那份
-夹具的 JSON，然后点开「切换 App」——我那次失败是因为按钮的可访问名没匹配上，
-**先去读真实文案**），再对比两边 `App ID` 输入的父链宽度，找出是哪一层开始差 25px。
-探针的写法照 `vue-parity-open-accounts.md` 里记的那两个（焦点探针、宽度探针）。
-
-**还有一条一定要记住的探针纪律**：`querySelector('[data-slot="scroll-area-viewport"]')`
-会抓到**页面上第一个**——聊天页欢迎建议行那个 ScrollArea，不是对话框里的。
-必须限定在 `[role=dialog]` 里面查，否则读出来的数全是错的（我第一次就这么错了一轮）。
+**2026-09-12 做完了，结论在 `vue-parity-open-accounts.md` 顶部那一条。** 一句话：
+探针走到 change-app 之后逐层量父链，分岔在 `[data-slot=scroll-area]` 那一层
+（上游 318.2 / 本仓 293，格子只有 293）；再逐层量 min-content，撑宽面板的是
+`Re-register in browser` 那颗按钮（191.1px）与 scope 示例那句 `<p>`（192.2px），
+而 375px 屏上内容列只有 167px——**三层内边距在窄屏下没有降档**。
+两边同改成 `p-4 sm:p-6` + `px-4 sm:px-6`，两簇各 11 → 2 行，`integrations` 86 → 68。
+两个应用各加了一条 375px 零溢出的用例（负向验证 2×2 全红）。
 
 这一维带进来的行已经接受进基线（判词是「已确认是缺陷，工单在这里」），
 所以**修好之后台账会自己缩短**，不需要再开一次逃生口。
+**2026-09-12 实测这句话成立**：修完直接 accept，18 行自己没了。
 
 
 ### ~~手写 `<input>` / `<textarea>` 没有任何守卫~~ **2026-09-11 当轮做掉了**
