@@ -951,6 +951,29 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         kind: "hidden",
         target: { role: "button", name: /load more/i },
       },
+      /*
+        **输入框那块外壳本身此前从来不是锚点。**
+
+        这一屏的锚点只有 `textarea`（与那条 `hidden`），也就是说几何档量的是
+        **控件**，而**包着它的那块面板**——圆角、两层半透明底、模糊、阴影、
+        焦点环——一格都没被量过。上游那块由
+        `ai-elements/prompt-input.tsx` → `ui/input-group.tsx` 拼出来，
+        本仓是一份手写的 `ComposerSurface.vue`（**本仓没有移植 `ui/input-group`**，
+        工单在 backlog）。也就是说：**这里是两边实现方式差最远、而尺子最看不见的一块。**
+
+        `[data-slot="input-group"]` 是两边共有的结构坐标（上游 `InputGroup`
+        写死这个 `data-slot`，本仓 `ComposerSurface` 照抄），这一屏上只有一份
+        （新会话页只有一个输入框），而且与语言、主题、断点都无关
+        ——第八轮那条教训：**跨语言正则锚点会在某一种语言下多匹配一份，
+        结构坐标不会。**
+
+        这个场景**跑满 12 维矩阵**，所以挂在这里的收益最大：深色下那两层
+        半透明底的合成、窄屏下的圆角与内边距，一次全进取样面。
+      */
+      {
+        kind: "visible",
+        target: { selector: '[data-slot="input-group"]' },
+      },
     ],
     // 这一条跑满矩阵，用来证明维度机制真的生效；其余场景先跑默认维度，
     // 全矩阵留给比对层按需要展开，避免现在就把套件时间乘以十二。
