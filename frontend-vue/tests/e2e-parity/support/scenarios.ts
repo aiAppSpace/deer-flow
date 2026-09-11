@@ -2985,6 +2985,49 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           },
         ],
       },
+      /*
+        **设置对话框里的渠道面板**（`ChannelConnections.vue`）——这一屏此前一行台账
+        都没有，而它是本仓与上游**形态本来就不同**的地方：侧栏一行一个按钮只说
+        「连没连上」，设置页要列出同一个 provider 下的每个账号、逐个断开、
+        管理员还要能删 provider 配置。没有取样点的后果很具体：上一轮把
+        `ui/item` 一族移进来、改好了三个设置页，唯独这一页**不敢改**——
+        改完没有任何机器能证明它变好还是变坏。
+
+        **走的是上游自己那条路**：`frontend/tests/e2e/channels.spec.ts:96` 的
+        「sidebar and settings expose channel connections」就是这三次点击
+        （设置和更多 → 设置 → 渠道），所以这一段不是我造的导航，是照着它抄的。
+
+        锚点两条，都与语言无关：
+        - `[role=dialog]`——面板本身的盒子，几何差异全落在它上面；
+        - `role=button name=/^(Modify|修改)$/`——只在设置页这一侧出现
+          （侧栏那一侧是 Connect/Connected），所以不会误落到背后的侧栏上。
+          上游同一处断言的也是它（`dialog.getByRole("button", { name: "Modify" })`）。
+      */
+      {
+        id: "settings-panel",
+        steps: [
+          {
+            kind: "click",
+            target: {
+              role: "button",
+              name: /^(Settings and more|设置和更多)$/,
+            },
+          },
+          {
+            kind: "click",
+            target: { role: "menuitem", name: /^(Settings|设置)$/ },
+          },
+          {
+            kind: "click",
+            target: { role: "button", name: /^(Channels|渠道)$/ },
+          },
+          { kind: "visible", target: { selector: "[role=dialog]" } },
+          {
+            kind: "visible",
+            target: { role: "button", name: /^(Modify|修改)$/ },
+          },
+        ],
+      },
     ],
     dimensions: [
       DEFAULT_DIMENSION,
