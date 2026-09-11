@@ -351,6 +351,44 @@ describe("connect button label", () => {
   });
 
   /*
+    **「为什么连不上」必须写在描述里**，不能只挂在按钮的 title 上——
+    悬停才出现的东西在触摸设备上根本看不到，读屏器读到这一行时也不会念。
+    上游 `channels-settings-page.tsx:189` 把它拼进 `ItemDescription`；
+    对照台账 `channels#settings-panel` 上那条 `ariaOnlyReact: - paragraph: … 原因`
+    报的就是本仓少了这一截。
+  */
+  it("不可用时把原因拼进描述，不只放在按钮 title 里", () => {
+    const owner = createOwner(
+      [
+        provider({
+          connection_status: "not_connected",
+          unavailable_reason: "WeChat runtime is not running.",
+        }),
+      ],
+      [],
+    );
+    expect(mountSettings(owner).wrapper.text()).toContain(
+      "WeChat runtime is not running.",
+    );
+  });
+
+  /*
+    **只拼后端明说的原因，不拼「未配置 / 停用」**——上游那一行是裸字段，
+    回落那套只喂按钮 title。第一版我把回落也拼进描述，单场景实测当场多出一行
+    （Feishu 是 `configured: false`，本仓给它拼上「未配置」而上游没有）。
+    状态本身在名字旁边那颗徽标里已经说过一次。
+  */
+  it("没有后端原因时描述里不拼状态词", () => {
+    const owner = createOwner(
+      [provider({ configured: false, connection_status: "not_connected" })],
+      [],
+    );
+    const description = mountSettings(owner).wrapper.get("p.text-xs").text();
+
+    expect(description).toBe(enUS.channels.descriptions.slack);
+  });
+
+  /*
     有 binding row 时这颗键要留着——多账号是本仓设置页独有的能力，
     「添加账号」在那种形状下是真操作，不能被上面那条一起砍掉。
   */

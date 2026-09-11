@@ -1143,11 +1143,10 @@
     "workspaceChanges.truncatedUnavailable",
     "workspaceChanges.viewChanges"
   ],
-  "unusedTotal": 16,
+  "unusedTotal": 15,
   "unusedKeys": [
     "agents.agentCreatedPendingRefresh",
     "agents.saveRequested",
-    "channels.connectedAs",
     "conversation.startConversation",
     "home.blog",
     "inputBox.voiceInputStop",

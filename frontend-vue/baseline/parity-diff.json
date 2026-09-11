@@ -1497,8 +1497,7 @@
       "ariaOnlyReact": [
         "- button \"Disconnect\"",
         "- button \"Disconnect\"",
-        "- button \"Disconnect\"",
-        "- paragraph: WeChat iLink messages through your DeerFlow bot. WeChat runtime is not running."
+        "- button \"Disconnect\""
       ],
       "ariaOnlyVue": [
         "- 'button \"Remove provider configuration: Buzz\"': Remove provider configuration",
@@ -1527,14 +1526,12 @@
         "- paragraph: No channel accounts yet.",
         "- paragraph: No channel accounts yet.",
         "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: WeChat iLink messages through your DeerFlow bot."
+        "- paragraph: No channel accounts yet."
       ],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "role:button[/^(Modify|修改)$/] x React=933 Vue=861.7 Δ-71.3",
-        "role:button[/^(Modify|修改)$/] width React=89.5 Vue=71.5 Δ-18"
+        "role:button[/^(Modify|修改)$/] x React=933 Vue=843.7 Δ-89.3"
       ],
       "focus": [],
       "order": [
@@ -1546,6 +1543,7 @@
         "- paragraph: Feishu and Lark messages through your DeerFlow app. React 深度 2 / Vue 深度 3",
         "- paragraph: Slack workspace messages and mentions. React 深度 2 / Vue 深度 3",
         "- paragraph: Telegram direct messages through your DeerFlow bot. React 深度 2 / Vue 深度 3",
+        "- paragraph: WeChat iLink messages through your DeerFlow bot. WeChat runtime is not running. React 深度 2 / Vue 深度 3",
         "- paragraph: WeCom messages through your DeerFlow AI bot. React 深度 2 / Vue 深度 3",
         "- text: Buzz Connected React 深度 2 / Vue 深度 3",
         "- text: DingTalk Connected React 深度 2 / Vue 深度 3",
@@ -1572,7 +1570,6 @@
         "- button \"断开连接\"",
         "- button \"断开连接\"",
         "- button \"断开连接\"",
-        "- paragraph: 通过 DeerFlow Bot 接收微信 iLink 消息。 WeChat runtime is not running.",
         "- paragraph: 通过 DeerFlow 智能体接收 Buzz 频道消息和私聊。"
       ],
       "ariaOnlyVue": [
@@ -1603,14 +1600,12 @@
         "- paragraph: 尚无渠道账号。",
         "- paragraph: 尚无渠道账号。",
         "- paragraph: 尚无渠道账号。",
-        "- paragraph: 通过 DeerFlow Agent 接收 Buzz 渠道消息和私聊。",
-        "- paragraph: 通过 DeerFlow Bot 接收微信 iLink 消息。"
+        "- paragraph: 通过 DeerFlow Agent 接收 Buzz 渠道消息和私聊。"
       ],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [
-        "role:button[/^(Modify|修改)$/] x React=969 Vue=963.3 Δ-5.7",
-        "role:button[/^(Modify|修改)$/] width React=72 Vue=54 Δ-18"
+        "role:button[/^(Modify|修改)$/] x React=969 Vue=945.3 Δ-23.7"
       ],
       "focus": [],
       "order": [
@@ -1620,6 +1615,7 @@
         "- paragraph: 接收 Slack 工作区消息和提及。 React 深度 2 / Vue 深度 3",
         "- paragraph: 通过 DeerFlow AI Bot 接收企业微信消息。 React 深度 2 / Vue 深度 3",
         "- paragraph: 通过 DeerFlow Bot 接收 Telegram 私聊消息。 React 深度 2 / Vue 深度 3",
+        "- paragraph: 通过 DeerFlow Bot 接收微信 iLink 消息。 WeChat runtime is not running. React 深度 2 / Vue 深度 3",
         "- paragraph: 通过 DeerFlow Bot 接收钉钉 Stream Push 消息。 React 深度 2 / Vue 深度 3",
         "- paragraph: 通过 DeerFlow 应用接收飞书和 Lark 消息。 React 深度 2 / Vue 深度 3",
         "- text: Buzz 已连接 React 深度 2 / Vue 深度 3",

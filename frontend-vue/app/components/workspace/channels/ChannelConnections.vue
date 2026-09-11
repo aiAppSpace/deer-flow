@@ -136,6 +136,41 @@ function providerConnected(view: ChannelProviderView) {
   return getChannelProviderStatusKey(view) === "connected";
 }
 
+/*
+  **为什么不可用要写进描述里，而不是只挂在按钮的 title 上。**
+
+  上游 `channels-settings-page.tsx:189` 的 `ItemDescription` 是三截拼起来的：
+  渠道描述 + 已连接时的「已连接为 X」 + 未连接时的不可用原因。本仓原来只有第一截，
+  后两截一个都没有：**「为什么连不上」只存在于按钮的 `title` 里**——悬停才出现，
+  触摸设备上根本看不到，读屏器也不会在读到这一行时念出来。
+  对照台账 `channels#settings-panel` 上那条
+  `ariaOnlyReact: - paragraph: WeChat iLink messages … WeChat runtime is not running.`
+  报的就是它：同一段落上游多带着原因，本仓没有。
+
+  **只拼后端明说的 `unavailable_reason`，不做「停用 / 未配置」的回落。**
+  上游那一行写的就是裸字段（`!isConnected && provider.unavailable_reason`），
+  回落那套 (`getProviderUnavailableReason`) 只喂给按钮的 `title`。
+  第一版我把回落也拼进了描述，单场景实测当场多出一行——
+  Feishu 是 `configured: false`，本仓给它拼上「未配置」而上游没有。
+  状态本身在名字旁边那颗徽标里已经说过一次了（`providerStatusLabel`）。
+*/
+function providerDescription(view: ChannelProviderView) {
+  const { provider } = view;
+  const base =
+    text.value.descriptions[provider.provider] ?? provider.display_name;
+  if (providerConnected(view)) {
+    const connection = view.connections.find(
+      (candidate) => candidate.status === "connected",
+    );
+    return connection
+      ? `${base} ${text.value.connectedAs(getChannelConnectionLabel(connection))}`
+      : base;
+  }
+  return provider.unavailable_reason
+    ? `${base} ${provider.unavailable_reason}`
+    : base;
+}
+
 function beginSetup(provider: ChannelProvider) {
   editing.value = provider;
   actionError.value = null;
@@ -343,10 +378,7 @@ function showConnectAction(view: ChannelProviderView) {
               </Badge>
             </div>
             <p class="text-muted-foreground text-xs">
-              {{
-                text.descriptions[view.provider.provider] ??
-                view.provider.display_name
-              }}
+              {{ providerDescription(view) }}
             </p>
           </div>
           <div class="flex shrink-0 flex-wrap justify-end gap-1">
@@ -390,6 +422,18 @@ function showConnectAction(view: ChannelProviderView) {
               :disabled="channels.isProviderPending(view.provider.provider)"
               @click="beginSetup(view.provider)"
             >
+              <!--
+                上游那颗 Modify 是带图标的（`channels-settings-page.tsx:211`：
+                请求在飞时 `LoaderCircleIcon`，否则 `PlugIcon`）。少这颗图标，
+                按钮比上游窄 18px——对照台账上
+                `geometry: role:button[Modify] width React=89.5 Vue=71.5 Δ-18`
+                量的就是它；而且「正在改配置」除了置灰之外没有任何提示。
+              -->
+              <LoaderCircle
+                v-if="channels.isProviderPending(view.provider.provider)"
+                class="animate-spin"
+              />
+              <Plug v-else />
               {{ text.modify }}
             </Button>
             <Button
