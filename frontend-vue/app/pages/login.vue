@@ -311,7 +311,7 @@ onMounted(() => {
             <span>{{ $i18n.t.value.login.rememberMeDescription }}</span>
           </span>
         </label>
-        <p v-if="error" role="alert" class="text-sm text-red-500">
+        <p v-if="error" role="alert" class="text-destructive text-sm">
           {{ error }}
         </p>
         <Button type="submit" class="w-full" :disabled="loading">

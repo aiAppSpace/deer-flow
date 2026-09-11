@@ -196,7 +196,7 @@ function save() {
         >
           {{ $i18n.t.value.agents.settingsModelsLoading }}
         </p>
-        <p v-if="modelError" role="alert" class="text-sm text-red-600">
+        <p v-if="modelError" role="alert" class="text-destructive text-sm">
           {{ modelError }}
         </p>
 
@@ -475,7 +475,7 @@ function save() {
         <p
           v-if="validationError || submitError"
           role="alert"
-          class="text-sm text-red-600"
+          class="text-destructive text-sm"
         >
           {{ validationError || submitError }}
         </p>

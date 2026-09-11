@@ -114,7 +114,8 @@ const view = computed(() => buildAgentCardViewModel(props.agent));
       ② 设置键画的是**文字字符 `⚙`**、删除键是 `×`——不是图标组件，
          字形随系统 emoji 字体变，尺寸也不受 `[&_svg]:size-4` 那条控制；
       ③ 删除键用 `text-red-600`（固定色）而不是 `text-destructive`
-         （CSS 变量，深色主题下跟着变）。
+         （CSS 变量，深色主题下跟着变）。**2026-09-11 全仓统一**：错误文案与
+         破坏性动作一律走 `text-destructive`，固定红只留给 diff 增删与状态色。
 
       聊天那颗是 `NuxtLink`：上游原来是一颗 `onClick={router.push(...)}` 的按钮，
       而链接能中键打开、能新标签页打开、能复制地址——**功能相同、交互更好**，

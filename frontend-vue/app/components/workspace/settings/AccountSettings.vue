@@ -173,7 +173,7 @@ async function logout() {
           minlength="8"
           :placeholder="$i18n.t.value.settings.account.confirmNewPassword"
         />
-        <p v-if="error" role="alert" class="text-sm text-red-500">
+        <p v-if="error" role="alert" class="text-destructive text-sm">
           {{ error }}
         </p>
         <p v-if="message" role="status" class="text-sm text-green-500">

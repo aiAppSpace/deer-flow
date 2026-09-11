@@ -171,7 +171,7 @@ function archiveErrorOptions(cause: unknown) {
         错误行是 `role="alert"`、措辞不带前缀：上游原来是个没有 role 的 `<div>`
         （读屏器不会主动念），还硬编码了一个 `Error: ` 前缀（中文界面上也是英文），
         而且画成普通正文（16px、前景色）而不是错误。**2026-09-11 两边同改**，
-        上游那一支换成了同形的 `<p role="alert" className="text-sm text-red-600">`。
+        上游那一支换成了同形的 `<p role="alert" className="text-sm text-destructive">`。
 
         **wave 134 把 `loading` 那一支也接上并对齐了**：上游
         `skill-settings-page.tsx:44` 是 `isLoading ? 只画一句 Loading : …`，
@@ -268,7 +268,7 @@ function archiveErrorOptions(cause: unknown) {
       <p
         v-else-if="access.permissions.value.state === 'unavailable'"
         role="alert"
-        class="rounded-md bg-red-50 p-3 text-sm text-red-700"
+        class="bg-destructive/10 text-destructive rounded-md p-3 text-sm"
         data-testid="settings-session-unavailable"
       >
         {{ t.settings.sessionUnavailable }}
@@ -294,13 +294,17 @@ function archiveErrorOptions(cause: unknown) {
         >
           {{ t.common.loading }}
         </div>
-        <p v-if="skills.error.value" role="alert" class="text-sm text-red-600">
+        <p
+          v-if="skills.error.value"
+          role="alert"
+          class="text-destructive text-sm"
+        >
           {{ errorMessage(skills.error.value) }}
         </p>
         <p
           v-if="actionError"
           role="alert"
-          class="text-sm text-red-600"
+          class="text-destructive text-sm"
           data-testid="skill-action-error"
         >
           {{ actionError }}

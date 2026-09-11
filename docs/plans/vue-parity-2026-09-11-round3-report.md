@@ -78,6 +78,13 @@
 1. **`ui/input-group` 没有移植**：三个 composer（ChatComposer / AgentBootstrapComposer /
    SidecarPanel）的输入框上游走 `PromptInputTextarea → InputGroupTextarea → <Textarea>`，
    本仓整块外壳是手写的。工单在 `vue-full-parity-backlog.md`。
-2. **`text-red-600` 与 `text-destructive` 两边都在混用**（本仓 36/36，上游 12/31）——
-   固定色在深色主题下不跟随。该统一，而且是两边同改。
-3. **取样面**：台账只覆盖 115 个场景，而「天生看不见的八类」里还有没接上来的表面。
+2. ~~`text-red-600` 与 `text-destructive` 两边都在混用~~ **当轮做掉了**：
+   错误文案两边一律 `text-destructive`（23 处），浅红底提示盒换成
+   `bg-destructive/10`（6 处），diff 增删与状态色照抄上游不动；
+   顺带补上本仓 diff 三档缺的 `dark:` 变体。**这套差异只在深色主题下现形，
+   而对照工厂只跑浅色维度——台账永远报不出它**，所以它也是「台账之外还有活」的样本。
+3. **取样面**：维度机制支持 `dark`，但**只有 `chat` 一个场景跑满矩阵**，
+   其余只跑 `desktop/light/{en-US,zh-CN}`——而这一轮的「红色两套」全长在设置页与
+   错误态上，那些场景一个都没开 dark，台账因此照不到。
+   把带错误态的几个场景各加一个 dark 维度是现成的下一步（代价是每加一维就多一遍
+   两侧取样）。`vue-full-parity-backlog.md` 的「天生看不见的八类」里还有别的。

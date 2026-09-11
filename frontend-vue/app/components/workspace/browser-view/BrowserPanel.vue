@@ -586,7 +586,7 @@ onBeforeUnmount(() => {
     <p
       v-if="alertMessage"
       role="alert"
-      class="bg-red-50 px-3 py-2 text-sm text-red-700"
+      class="bg-destructive/10 text-destructive px-3 py-2 text-sm"
     >
       {{ alertMessage }}
       <button

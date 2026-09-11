@@ -378,7 +378,7 @@ async function confirmDelete() {
       <p
         v-else-if="owner.error.value"
         role="alert"
-        class="text-sm text-red-600"
+        class="text-destructive text-sm"
       >
         {{ errorMessage(owner.error.value, t.settings.memory.empty) }}
       </p>
@@ -485,10 +485,10 @@ async function confirmDelete() {
               {{ t.settings.memory.clearAll }}
             </Button>
           </div>
-          <p v-if="importError" role="alert" class="text-sm text-red-600">
+          <p v-if="importError" role="alert" class="text-destructive text-sm">
             {{ importError }}
           </p>
-          <p v-if="pageError" role="alert" class="text-sm text-red-600">
+          <p v-if="pageError" role="alert" class="text-destructive text-sm">
             {{ pageError }}
           </p>
         </div>
@@ -682,7 +682,7 @@ async function confirmDelete() {
         }}
       </div>
     </div>
-    <p v-if="importError" role="alert" class="text-sm text-red-600">
+    <p v-if="importError" role="alert" class="text-destructive text-sm">
       {{ importError }}
     </p>
   </SettingsActionDialog>
@@ -699,7 +699,7 @@ async function confirmDelete() {
     @cancel="!owner.clear.isPending.value && (clearDialogOpen = false)"
     @confirm="confirmClear"
   >
-    <p v-if="clearError" role="alert" class="text-sm text-red-600">
+    <p v-if="clearError" role="alert" class="text-destructive text-sm">
       {{ clearError }}
     </p>
   </SettingsActionDialog>
@@ -722,7 +722,7 @@ async function confirmDelete() {
       </div>
       {{ truncateMemoryFact(factToDelete.content) }}
     </div>
-    <p v-if="deleteError" role="alert" class="text-sm text-red-600">
+    <p v-if="deleteError" role="alert" class="text-destructive text-sm">
       {{ deleteError }}
     </p>
   </SettingsActionDialog>
@@ -781,7 +781,7 @@ async function confirmDelete() {
     <p class="text-muted-foreground text-xs">
       {{ t.settings.memory.factConfidenceHint }}
     </p>
-    <p v-if="factFormError" role="alert" class="text-sm text-red-600">
+    <p v-if="factFormError" role="alert" class="text-destructive text-sm">
       {{ factFormError }}
     </p>
   </SettingsActionDialog>

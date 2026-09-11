@@ -346,7 +346,7 @@ function showConnectAction(view: ChannelProviderView) {
       <p
         v-if="channels.error.value || actionError"
         role="alert"
-        class="px-2 text-sm text-red-600"
+        class="text-destructive px-2 text-sm"
       >
         {{ actionError || channels.error.value?.message }}
       </p>
@@ -471,7 +471,8 @@ function showConnectAction(view: ChannelProviderView) {
 
           手写那版：一颗图标都没有（所以「正在连接」除了置灰之外没有任何提示）、
           一条 hover 都没有、连接键用的是**描边**而不是实心（用户看不出这一排里
-          哪一颗是主操作）、清配置那颗写死 `text-red-600` 而不是 destructive token。
+          哪一颗是主操作）、清配置那颗写死 `text-red-600` 而不是 destructive token
+              （2026-09-11 已全仓统一）。
 
           `removeProviderConfig` 是本仓独有的管理员操作（上游没有这颗键），
           所以它没有可抄的上游形状；这里只把它接进同一套 Button 规格。

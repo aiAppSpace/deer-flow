@@ -272,7 +272,7 @@ export default function SetupPage() {
               checked={rememberMe}
               onCheckedChange={setRememberMe}
             />
-            {error && <p className="ms-1 text-sm text-red-500">{error}</p>}
+            {error && <p className="text-destructive ms-1 text-sm">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Creating account…" : "Create Admin Account"}
             </Button>
@@ -338,7 +338,7 @@ export default function SetupPage() {
             checked={rememberMe}
             onCheckedChange={setRememberMe}
           />
-          {error && <p className="text-sm text-red-500">{error}</p>}
+          {error && <p className="text-destructive text-sm">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Setting up…" : "Complete Setup"}
           </Button>

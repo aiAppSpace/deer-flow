@@ -312,7 +312,7 @@ onMounted(() => {
             <span>{{ $i18n.t.value.login.rememberMeDescription }}</span>
           </span>
         </label>
-        <p v-if="error" role="alert" class="text-sm text-red-500">
+        <p v-if="error" role="alert" class="text-destructive text-sm">
           {{ error }}
         </p>
         <!-- 上游 `(auth)/setup/page.tsx:276` 是 `<Button type="submit" className="w-full">`。 -->

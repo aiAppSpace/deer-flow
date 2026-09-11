@@ -190,7 +190,7 @@ async function remove(agent: Agent) {
         <p
           v-if="listError || (!editing && actionError)"
           role="alert"
-          class="mb-4 text-sm text-red-600"
+          class="text-destructive mb-4 text-sm"
         >
           {{ listError || actionError }}
         </p>

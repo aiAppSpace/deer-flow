@@ -103,11 +103,20 @@ function errorMessage(error: unknown) {
     : $i18n.t.value.workspaceChanges.loadFailed;
 }
 
+/*
+  **三档都要带 `dark:` 变体**（上游 `workspace-change-panel.tsx:235`）。
+  `text-emerald-700` / `text-red-700` / `text-sky-700` 是给浅色底配的深色字；
+  深色主题下底还是那层 `/10` 的半透明色、字却仍然是 700 档——
+  **深字压在深底上**，diff 基本读不出来。上游三档各带一个 `dark:text-*-300`，
+  本仓三档一个都没有。
+*/
 function lineClass(line: string) {
   const type = getWorkspaceChangeLineClass(line);
-  if (type === "addition") return "bg-emerald-500/10 text-emerald-700";
-  if (type === "deletion") return "bg-red-500/10 text-red-700";
-  if (type === "hunk") return "bg-sky-500/10 text-sky-700";
+  if (type === "addition")
+    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (type === "deletion")
+    return "bg-red-500/10 text-red-700 dark:text-red-300";
+  if (type === "hunk") return "bg-sky-500/10 text-sky-700 dark:text-sky-300";
   if (type === "meta") return "text-muted-foreground";
   return "text-foreground";
 }

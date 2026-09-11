@@ -62,6 +62,6 @@
     }
   ],
   "$pendingReasons": {
-    "artifact-table-performance": "上游那三例量的是**性能**（冷 Worker 跑 1MiB CSV 的首表延迟、超宽引号记录时的长任务与心跳间隔、病态解析后还能开下一个 Worker），而对照工厂的坐标系是aria 树 / 几何 / 请求——**表达不了一条时延断言**。所以它不是「取样点还没加」，是**这条 spec 天生不进对照工厂**。**什么时候重新问**：本仓自己补一份镜像 spec 之后（照 reduced-motion 的先例：对照工厂不覆盖、本仓 tests/e2e/ 里带一份，两侧都有机器在守）；届时它进 exempt 还是留在这里，取决于 /artifacts/view 那条路由的豁免状态。"
+    "artifact-table-performance": "上游那三例量的是**性能**（冷 Worker 跑 1MiB CSV 的首表延迟、超宽引号记录时的长任务与心跳间隔、病态解析后还能开下一个 Worker），而对照工厂的坐标系是 aria 树 / 几何 / 请求——**表达不了一条时延断言**。所以它不是「取样点还没加」，是**这条 spec 天生不进对照工厂**。**镜像 spec 已经有了**（`tests/e2e/artifact-table-performance.spec.ts`，2026-09-10 起在 `make e2e-mock` 里跑，照 reduced-motion 的先例两侧各带一份），所以原来那条「什么时候重新问」的条件已经满足；2026-09-11 复核的结论是**仍然留在 pending，不进 exempt**：exempt 的每一条都要写出它所在的路由、而那条路由必须已经在 `react-parity-scope.json` 的 `exemptRoutes` 里，而 `/artifacts/view` 是本仓做出来了的产品路由（reduced-motion 能进 exempt 是因为它落在 `/`，`/` 本来就在那份清单里）。**下次不必再问「镜像 spec 有没有」了**——要变，得先有人决定豁免 `/artifacts/view`。"
   }
 }

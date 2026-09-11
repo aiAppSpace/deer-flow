@@ -703,7 +703,7 @@ async function confirmDelete() {
       <p
         v-if="session.fileError.value || session.errorMessage.value"
         role="status"
-        class="px-2 text-xs text-red-600"
+        class="text-destructive px-2 text-xs"
       >
         {{ session.fileError.value || session.errorMessage.value }}
       </p>

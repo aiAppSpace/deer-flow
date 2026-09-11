@@ -228,7 +228,7 @@ async function toggle(name: string, enabled: boolean) {
       <p
         v-else-if="access.permissions.value.state === 'unavailable'"
         role="alert"
-        class="rounded-md bg-red-50 p-3 text-sm text-red-700"
+        class="bg-destructive/10 text-destructive rounded-md p-3 text-sm"
         data-testid="settings-session-unavailable"
       >
         {{ t.settings.sessionUnavailable }}
@@ -249,14 +249,14 @@ async function toggle(name: string, enabled: boolean) {
         <p
           v-else-if="mcp.error.value"
           role="alert"
-          class="rounded-md bg-red-50 p-3 text-sm text-red-700"
+          class="bg-destructive/10 text-destructive rounded-md p-3 text-sm"
         >
           {{ errorMessage(mcp.error.value) }}
         </p>
         <p
           v-if="actionError"
           role="alert"
-          class="rounded-md bg-red-50 p-3 text-sm text-red-700"
+          class="bg-destructive/10 text-destructive rounded-md p-3 text-sm"
           data-testid="mcp-action-error"
         >
           {{ actionError }}

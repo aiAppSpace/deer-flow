@@ -130,7 +130,7 @@ export function AccountSettingsPage() {
             {/* Live regions: without them the result of the submit is only
                 visible, so a screen-reader user gets no feedback at all. */}
             {error && (
-              <p className="text-sm text-red-500" role="alert">
+              <p className="text-destructive text-sm" role="alert">
                 {error}
               </p>
             )}

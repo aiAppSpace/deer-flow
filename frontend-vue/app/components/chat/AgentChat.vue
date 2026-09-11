@@ -2055,7 +2055,7 @@ onUnmounted(() => {
             v-if="bootstrap && creation.status.value === 'error'"
             data-testid="agent-creation-error"
             role="alert"
-            class="absolute right-4 bottom-36 left-4 z-40 mx-auto max-w-xl rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 shadow"
+            class="bg-destructive/10 text-destructive absolute right-4 bottom-36 left-4 z-40 mx-auto max-w-xl rounded-lg px-4 py-3 text-sm shadow"
           >
             <strong>{{ $i18n.t.value.agents.creationError }}:</strong>
             {{ creation.error.value }}

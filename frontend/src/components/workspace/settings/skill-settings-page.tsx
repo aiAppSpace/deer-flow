@@ -63,7 +63,7 @@ export function SkillSettingsPage({ onClose }: { onClose?: () => void } = {}) {
           prefix stayed English under zh-CN. It also rendered as ordinary body
           text (16px, foreground) rather than as an error.
         */
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-destructive text-sm">
           {error.message}
         </p>
       ) : (

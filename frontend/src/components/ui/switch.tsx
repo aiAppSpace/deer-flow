@@ -13,7 +13,7 @@ function Switch({
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-                // `cursor-pointer` is explicit: Tailwind 4's preflight does not give
+        // `cursor-pointer` is explicit: Tailwind 4's preflight does not give
         // buttons a pointer cursor, so without it a switch reads as
         // non-interactive under the mouse even though it toggles on click.
         "peer data-[state=checked]:bg-primary data-[state=unchecked]:bg-input focus-visible:border-ring focus-visible:ring-ring/50 dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 cursor-pointer items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50",
