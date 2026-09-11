@@ -260,9 +260,39 @@ reka 的 viewport 没有这层，所以本仓那一侧看不出来——**两边
 `min-w-0` 试过了，**对这条无效**（读数一行没动）；六处还是补上了，
 因为它与上游 `channels-settings-page.tsx:187` 一致，且是同一种失效的潜伏版本。
 
-`permission-request` 那一簇**两边的 `hit` 都不是 `self`**（React 命中 span/span/button，
-本仓命中 div/div(dialog)/p）——芯片中心点上盖着别的东西，两边盖的还不是同一个。
-**这一条需要探针，别接着猜。**
+### 剩下的两簇（`change-app` 11 行 + `permission-request` 11 行）：**四条死路已经排除，别重走**
+
+读数解出来了：**上游 Docs+Drive 在同一行，本仓 Drive 换到下一行**
+（Drive 的 y 比 Docs 多 40）——本仓的芯片更宽，或者说**上游的面板更宽**
+（同一簇里 `role:textbox[App ID] width React=192.2 Vue=167 Δ-25.2`）。
+`y Δ79~275` 全是这处差异往下累积的位移；三行 `hit`（React 命中 span/span/button、
+本仓命中 div/div(dialog)/p）**不是独立缺陷**——`hit` 用的是探针那一刻的视口矩形，
+这些元素在文档 y≈1842~2001 处、面板滚动位置又不同，命中的自然是各自那一点上画着的东西。
+（判据见 `vue-parity-open-accounts.md`：`hit=off-screen` 只有在同一行的 `x` 也超出
+视口宽度时才读成「横向够不着」。）
+
+**2026-09-11 逐条排除掉的四条**（每条都实测过，不要重试）：
+
+| 假设 | 结果 |
+| --- | --- |
+| 芯片尺寸不同 | **不是**：两边 `Button` 的 `sm` 档逐字相同（`h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5`） |
+| 芯片容器不同 | **不是**：两边都是 `flex flex-wrap gap-2`，`Input` 的容器都是 `space-y-2` |
+| 长串没加换行类 | **不是**：两边 `StatusItem` 的 value 都写了 `break-words` |
+| Radix 的 `display:table` 撑宽了面板 | **测了，无效**：给设置面板的 ScrollArea 加 `[&>div]:block` 覆盖掉它，`PARITY_ONLY=integrations` 读数 **86 → 86**，一行没动。那个改动已还原 |
+
+**已知为真的**：默认态下两边面板**完全一致**（探针实测：对话框 343、viewport clientWidth
+291、scrollWidth 291、超宽元素 0 个）。所以差异**只存在于「已连接 Lark」那两个状态**，
+是那两个状态里的内容造成的。
+
+**下一步该怎么做**：写一个探针**真正走到 change-app 那个状态**
+（把 `**/api/integrations/lark/status` 路由到 `scenarios.ts` 里 `integrations` 那份
+夹具的 JSON，然后点开「切换 App」——我那次失败是因为按钮的可访问名没匹配上，
+**先去读真实文案**），再对比两边 `App ID` 输入的父链宽度，找出是哪一层开始差 25px。
+探针的写法照 `vue-parity-open-accounts.md` 里记的那两个（焦点探针、宽度探针）。
+
+**还有一条一定要记住的探针纪律**：`querySelector('[data-slot="scroll-area-viewport"]')`
+会抓到**页面上第一个**——聊天页欢迎建议行那个 ScrollArea，不是对话框里的。
+必须限定在 `[role=dialog]` 里面查，否则读出来的数全是错的（我第一次就这么错了一轮）。
 
 这一维带进来的行已经接受进基线（判词是「已确认是缺陷，工单在这里」），
 所以**修好之后台账会自己缩短**，不需要再开一次逃生口。
