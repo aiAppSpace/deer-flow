@@ -19,6 +19,7 @@
 >
 > 到这一轮为止，台账 **330 → 108 行**。把判过的账刨掉之后**真正还开着的只有 19 行**，
 > 逐条列在这里——目标是让「台账还剩多少行」这个数字**不再需要解释**。
+> **写完这一节时，台账上没有任何一行是「还没判」的。**
 >
 > ### 一条差异、47 行投影：`div[scroll-area-viewport]`
 >
@@ -48,7 +49,7 @@
 > | `thread-history` ×2：`tabbablesOnlyReact: div(menuitem)` | **不跟**：子菜单展开时 Radix 比 reka 多留一个 `tabindex=0` 的菜单项（父级触发器）。菜单的漫游焦点是 primitive 自己的实现细节，两边的键盘操作都走方向键而不是 Tab。**翻案判据**：哪一边的菜单出现真正的键盘不可达。 |
 > | `chat-thread-init-ordering` ×5（en-US 独有） | **先怀疑取样时机**——这条形状本轮已经立过判据（语言维度不对称的差异不会是渲染规则）。其中 `alert` 空 vs `alert: New chat - DeerFlow` 是 Next 的路由播报器（wave 102 量过：1×1 裁剪、内容是上一拍的 `document.title`）；`button "Edit and rerun"` 那 3 行是 seq 移植的副产物，backlog 里记着「先加临时 dump 看读数，别猜」。 |
 > | `sidecar-chat` ×2：分栏把手的点击区 4px vs 16px | wave 146 判过：**保留本仓这一侧**（WCAG 2.5.8 目标尺寸）。 |
-> | `workspace-changes#changes-panel` ×2：`focus: React=button "Close" Vue=第一个文件行` | **还没判**——下一轮的第一条。 |
+> | `workspace-changes#changes-panel` ×2：`focus: React=button "Close" Vue=第一个文件行` | **不跟**：**两边都没有接管 `onOpenAutoFocus`**（逐份确认：上游 `ui/sheet.tsx` 与 `workspace-change-panel.tsx` 里一处都没有；本仓 `SheetContent.vue` 只把事件**转发**出去、`WorkspaceChangesBadge.vue` 没有监听），所以这不是任何一侧的产品决定，是 Radix 与 reka 的**默认落点不同**。两边的文件行都是 `<Collapsible>` 的 `CollapsibleTrigger`（一颗 button），关闭键在两边也都排在 `{children}` 之后——**我没有再往下探「为什么 Radix 落在关闭键上」**，那需要在场景里加一次 `document.activeElement` 转储。**翻案判据**：哪一边开始显式接管 `onOpenAutoFocus`（那时两边一起接管），或者 primitive 改了默认。 |
 >
 > ## 2026-09-11 产物面板的「JPG file」也是写死的英文
 >
