@@ -153,22 +153,27 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ---
 
-## 进度实测（2026-09-10，跑门禁得出，不是估计）
+## 进度实测（2026-09-12 现场量，每一格都写了怎么量的）
 
 | 账 | 起点 | 现在 | 怎么量 |
 | --- | --- | --- | --- |
-| `pendingRoutes` | 2 | **0** | `baseline/react-parity-scope.json` |
-| 对照场景 pending | 8 | **5** | `baseline/parity-scenario-coverage.json` |
-| i18n pending key | 179 | **0** | `baseline/upstream-i18n-map.json` |
-| 词典 unused key | 18 | **16** | `baseline/i18n-keys.json`（这一轮新增的 key 全部被引用） |
-| 取样面 pending 路由 | 1 | **0** | `baseline/parity-route-sampling.json` |
+| `pendingRoutes` | 2 | **0** | `baseline/react-parity-scope.json` 的 `pendingRoutes.routes` |
+| 对照场景 pending | 8 | **1** | `baseline/parity-scenario-coverage.json` 的 `pending` |
+| i18n pending key | 179 | **0** | `baseline/upstream-i18n-map.json` 的 `pending.keys` |
+| 词典 key / unused | — | **1139 / 15** | `baseline/i18n-keys.json` 的 `total` / `unusedTotal` |
+| 取样面 pending 路由 | 1 | **0** | `baseline/parity-route-sampling.json` 的 `pending` |
+| 台账 | 330 | **154 唯一行 / 170 多重集 / 129 场景-维度** | 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
+| 产品 SFC | — | **267**（另有 2 个 `__m0` fixture 排除、0 个未扫） | `node frontend-vue/scripts/i18n-source-guard.mjs --inventory` |
 
 **三张 pending 表全空。** i18n 那张归零意味着：上游词典里的每一条，本仓要么同名有、
-要么在那 4 条手工判过的别名里——没有第三种情况。
+要么在那几条手工判过的别名里——没有第三种情况。
 
-对照场景 pending 剩 5 条：`artifact-table-performance`（性能三例，依赖 e2e 跑真 Worker）、
-`background-tasks`、`mcp-settings`、`thread-ordering`、`thread-title-sync`。
-**功能都已经做了**，缺的是对照目录里的场景——那是取样面的活，不是功能缺口。
+**对照场景 pending 只剩 1 条**：`artifact-table-performance`。它**不是取样面的活**
+——那三例量的是时延与长任务，对照工厂的坐标系（aria / 几何 / 请求）表达不了；
+本仓已经带了一份镜像 spec（`tests/e2e/artifact-table-performance.spec.ts`），
+所以「什么时候重新问」那个条件**已经满足**，2026-09-11 复核的结论是
+**仍然留在 pending、不进 exempt**（exempt 要求那条路由已在 `exemptRoutes` 里，
+而 `/artifacts/view` 是本仓做出来了的产品路由）。理由原文在那份基线的 `$pendingReasons`。
 
 ## 这一轮顺带修掉的三处门禁盲区
 

@@ -14,11 +14,28 @@
 
 **接手时的状态（2026-09-12 01:00 实测，不是估计）**：
 
-- HEAD = `38ed4513`，工作区干净；
-- **本地领先 `origin/main-wc` 304 个提交，全部未推送**（没有收到过推送指令；
-  要推就先问用户）；
-- 对照台账 **154 唯一行 / 129 个场景-维度**
-  （`node frontend-vue/scripts/parity-ledger-report.mjs` 量，别引用散文数字）。
+- 工作区干净；**本地领先 `origin/main-wc` 三百多个提交、全部未推送**
+  （没有收到过推送指令；要推就先问用户）。
+- 对照台账 **154 唯一行 / 170 多重集 / 129 个场景-维度**。
+
+**这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
+
+```bash
+cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow
+git rev-parse --short HEAD && git status --short && git rev-list --count origin/main-wc..HEAD
+python3 - <<'EOF'
+import json
+d = json.load(open("frontend-vue/baseline/parity-diff.json"))["entries"]
+rows = {f"{k}·{f}:{x}" for k, v in d.items() for f, r in v.items()
+        if isinstance(r, list) for x in r}
+print("场景-维度", len(d), "唯一行", len(rows))
+k = json.load(open("frontend-vue/baseline/i18n-keys.json"))
+print("词典", k["total"], "key /", k["unusedTotal"], "unused")
+EOF
+```
+
+（`frontend-vue/scripts/parity-ledger-report.mjs` 也能报，但它**要有上一次 e2e-parity
+的运行产物**才跑得出来；签入的基线是随时可数的，所以上面直接数基线。）
 
 > **远端布局**（2026-09-09 换过一次家）：
 > `origin` = `https://github.com/aiAppSpace/deer-flow.git`（**私有**，工作副本，往这里推）；
@@ -73,7 +90,7 @@
 - **默认只改 `frontend-vue/`。** 例外只有一种：**上游自己是坏的**——
   那时按「业界主流做法两边同改」，`frontend/` 与 `frontend-vue/` 同一条提交里改，
   再单独一条 chore 提交把 `frontend-vue/baseline/upstream-marker.json` 推到那条 fix
-  （`make -C frontend-vue upstream-accept`）。**动过 `frontend/` 的至今是二十三轮**（wave 138 动了：模型设置对话框的可访问名，marker 已推到 `7f97efd1`），
+  （`make -C frontend-vue upstream-accept`）。**动过 `frontend/` 已经是常态**（2026-09-11 那一轮 14 笔里大半都动了它——这一阶段的缺陷大半在上游），
   别传这个数字，用 `git log --format='%h %ci %s' --since=2026-08-25 -- frontend/src frontend/tests` 量。
 - **不要中途提问。** 取舍自己定，写进提交说明。分歧的兜底判据是**按业界主流做法**。
 - **每轮收工写交接文档 + 一页纸清单 + 记忆，然后自动开下一轮**，
@@ -163,12 +180,13 @@ make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口�
 `node frontend-vue/scripts/icon-parity.mjs` 在仓库根下按 cwd 找不到 `../frontend/src`，
 会打一句「跳过」然后 **exit 0**——那一行「0 处待核」看起来照样成立（线索 239）。
 
-动过 `frontend/` 的话再加 React 三条：
-`python3 scripts/pnpm.py --dir frontend check`（0）/ `test`（**1034**）/
-`test:e2e`（**146**，要用 3002 端口的绕法，写在交接文档「React 的 test:e2e 绕法」那一段）。
+（React 那三条写在上面的门禁块里，读数以那里为准。`test:e2e` 要用 3002 端口的绕法，
+写在交接文档「React 的 test:e2e 绕法」那一段。）
 
-产品 SFC **218 / 总 220**；新增 SFC 要同步改三处数字（`tests/unit/i18n/source-guard.test.ts`
-的 `toHaveLength`、`I18N_INVENTORY.md` 的两句、`tests/architecture.test.ts` 的 `l2Files` 按字母序）。
+产品 SFC **267 / 总 269**（2026-09-12 实测；数字由 `I18N_INVENTORY.md` 与
+`tests/unit/i18n/source-guard.test.ts` 双向钉住，别抄这里的散文——以那两处为准）。
+新增 SFC 要同步改三处：`source-guard.test.ts` 的 `toHaveLength`、
+`I18N_INVENTORY.md` 的两句、`tests/architecture.test.ts` 的 `l2Files`（按字母序）。
 
 ### 跑门禁的操作纪律（都踩过）
 
@@ -341,7 +359,11 @@ wave 94 的焦点档第一版 17 行里有 **10 行是描述器的噪声**。
 **「其中几行是它自己造的」**（wave 94：17 行里 10 行是描述器噪声）与
 **「其中几行是别的档已经报过的」**（wave 96：114 行里约 48 行是重复，线索 255）。
 
-### C. 把「写下来当规则用、却没人守」的话变成守卫 —— **现在最有货，先挑这条**
+### C. 把「写下来当规则用、却没人守」的话变成守卫 —— **一直有货，但 2026-09-12 起排第二**
+
+> 排序见本文件开头「这个阶段的工作性质」那一节：**第一位是「把取样面往没人看过的维度开一扇窗」**
+> ——2026-09-11 开 `mobile` 当场量出上游一颗手机上点不到的控件，开 `dark` 则给
+> 「固定红 vs destructive token」那一类装上了守卫。下面这一节的方法本身没变。
 
 wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这个阶段的缺口
 几乎全是这个形状。**判据三条**，缺一条就别急着补表：
