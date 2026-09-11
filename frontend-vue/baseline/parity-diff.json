@@ -2095,6 +2095,19 @@
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
+    },
+    "project-detail/mobile/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
     }
   }
 }
