@@ -16,15 +16,21 @@
                    把三目写成恒真也照样绿。
 */
 
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BrowserPanel from "@/components/workspace/browser-view/BrowserPanel.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 
+const navigateResult = vi.hoisted(() =>
+  vi.fn<
+    () => Promise<{ url: string; title: string; screenshot: string | null }>
+  >(),
+);
+
 vi.mock("@tanstack/vue-query", () => ({
-  useMutation: () => ({ mutateAsync: vi.fn(), isPending: ref(false) }),
+  useMutation: () => ({ mutateAsync: navigateResult, isPending: ref(false) }),
 }));
 
 vi.mock("@/components/workspace/browser-view/useBrowserStream", async () => {
@@ -90,6 +96,38 @@ describe("BrowserPanel empty state", () => {
     expect(wrapper.get("h3").text()).toBe(enUS.browser.noFrame);
     expect(wrapper.text()).toContain(enUS.browser.noFrameDescription);
     expect(wrapper.text()).not.toContain(enUS.browser.connectingFrame);
+  });
+
+  /*
+    **导航成功、但一张图都没截到**——这一支原来什么都不说：`localFrame` 置空、
+    面板变白，空状态照旧写着「暂无浏览器活动 / 在上方输入网址…」，
+    而用户刚刚就是输完网址按了回车。上游这一支有话说（`toast.warning`），
+    只是这个面板整体不走 toast（理由在 BrowserPanel.vue 的文件头），
+    所以同一句话放进空状态的说明位。
+
+    负向验证：把 `navigatedWithoutFrame.value = nextFrame === null` 去掉，
+    这条立刻红（说明位退回 noFrameDescription）。
+  */
+  it("导航成功却没有截图时，空状态说明换成那句话而不是「输入网址」", async () => {
+    navigateResult.mockResolvedValue({
+      url: "https://example.com/",
+      title: "Example",
+      screenshot: null,
+    });
+    const wrapper = mountPanel();
+    await wrapper
+      .get(`button[title='${enUS.browser.stopLiveControl}']`)
+      .trigger("click");
+    await wrapper
+      .get(`input[placeholder='${enUS.browser.urlPlaceholder}']`)
+      .setValue("https://example.com");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain(enUS.browser.navigatedNoScreenshot);
+    expect(wrapper.text()).not.toContain(enUS.browser.noFrameDescription);
+    // 不是错误：那条 role="alert" 不许出现。
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
   });
 
   it("keeps the stage on its own layer so the frame sits on neutral-900", () => {

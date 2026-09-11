@@ -107,6 +107,17 @@ const surface = ref<HTMLImageElement | null>(null);
 const stage = ref<HTMLElement | null>(null);
 const browserPanel = ref<HTMLElement | null>(null);
 const restError = ref<string | null>(null);
+/*
+  **「导航成功、但一张图都没截到」要说出来。**
+
+  REST 导航回来 `screenshot` 为空时，本仓把 `localFrame` 置空、面板变空白，
+  然后空状态照常写着「暂无浏览器活动 / 在上方输入网址…」——用户刚刚输完网址、
+  按了回车、导航也确实成功了，界面却让他再输一次。上游这一支有话说
+  （`browser-view-panel.tsx` 的 `toast.warning`），只是走的是 toast，
+  而这个面板整体不走 toast（理由在文件头）。所以换个出口：**同一句话放进空状态的
+  说明位**——那正是用户此刻在看的地方。它不是错误，所以不进 `role="alert"` 那条。
+*/
+const navigatedWithoutFrame = ref(false);
 const retryTarget = ref<string | null>(null);
 const composing = ref(false);
 const liveNavigating = ref(false);
@@ -221,6 +232,7 @@ async function navigateRest(target: string) {
   restController = controller;
   retryTarget.value = target;
   restError.value = null;
+  navigatedWithoutFrame.value = false;
   try {
     const result = await restMutation.mutateAsync({
       threadId: props.threadId,
@@ -244,6 +256,7 @@ async function navigateRest(target: string) {
         }
       : null;
     localFrame.value = nextFrame;
+    navigatedWithoutFrame.value = nextFrame === null;
     if (nextFrame) emit("frame", nextFrame);
   } catch (cause) {
     if (controller.signal.aborted || generation !== restGeneration) return;
@@ -421,6 +434,7 @@ watch(
     url.value = nextUrl;
     retryTarget.value = null;
     restError.value = null;
+    navigatedWithoutFrame.value = false;
   },
 );
 
@@ -633,7 +647,9 @@ onBeforeUnmount(() => {
           :description="
             requestedLive
               ? $i18n.t.value.browser.connectingFrameDescription
-              : $i18n.t.value.browser.noFrameDescription
+              : navigatedWithoutFrame
+                ? $i18n.t.value.browser.navigatedNoScreenshot
+                : $i18n.t.value.browser.noFrameDescription
           "
         >
           <template #icon><Monitor /></template>

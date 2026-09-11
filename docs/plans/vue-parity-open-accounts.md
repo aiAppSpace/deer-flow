@@ -3,6 +3,73 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 中文界面里的一片英文：**全在 React 那一侧**
+>
+> 台账上有三个场景**只在 zh-CN 维度报差异、en-US 维度一行都没有**
+> （`thread-history-mermaid#default` 14 行、`#download-menu` 15 行、`browser-feature` 12 行）。
+> 这个形状本身就是判据：**两边渲染的是同一棵树，只是其中一侧没翻译。**
+> 逐条查下来，没翻译的那一侧全是 React。
+>
+> **一、整个 markdown 面的控件都停在英文（两个场景各 7 行 + 1 行 focus）。**
+> React 的 markdown 渲染器是 `streamdown`，代码块复制、表格导出菜单、mermaid 工具条、
+> 外链确认这些**可见控件全部由它画**。它自带 `defaultTranslations`（英文）
+> 并**开放 `translations` prop**——而本仓从来没有传过。于是中文界面下这一整片是英文。
+>
+> 修法：在 `ai-elements/streamdown.tsx` 这个唯一的收口处
+> （`ClipboardSafeStreamdown`）把词典里的 `markdown` 命名空间传下去。
+> **en-US 的值逐字抄 streamdown 2.5.0 的 `defaultTranslations`**，所以英文构建一字不变
+> ——这一点很重要：如果英文值写得「更好」，en-US 维度会当场冒出一批新行。
+>
+> 代价是 `SafeStreamdown` 现在读 context 了，3 个测试文件 28 条用例要套上 i18n。
+> 两个 `.ts` 文件里用的是 `I18nContext.Provider` 而不是 `I18nProvider`：
+> React 19 的类型不允许 `createElement(Provider, props, child)` 这种写法带必填 children，
+> 而 eslint 又禁止把 children 写进 props——Context.Provider 的 children 是可选的，两边都过。
+>
+> **`Zoom in` / `Zoom out` / `Reset zoom and pan` / `img "Mermaid chart"` 这 4 条跟不了。**
+> 它们**写死在 streamdown 的产物里**，不在 `StreamdownTranslations` 的 29 个 key 之内
+> （实测：`grep` 得到的字面量在 `chunk-*.js` 里，而 `defaultTranslations` 里没有对应 key）。
+> 本仓的 mermaid 是自己实现的（`MermaidChart.vue` / `MermaidZoomPan.vue` / …），
+> 翻译是对的。**判词：不跟。** 为了对齐一个第三方库写死的英文而把本仓的中文改回英文，
+> 是拿真实用户的体验换一个指标。**翻案判据**：streamdown 把这 4 条加进
+> `StreamdownTranslations`，或者 React 侧换成自己的 mermaid 渲染。
+> 读数：`thread-history-mermaid` 两个状态 **14/15 → 8 / 8**（en-US 两个状态都是 0）。
+>
+> **二、浏览器面板整条工具条写死英文（5 行 aria + 2 行 geometry）。**
+> `browser-view-panel.tsx` 里 `title="Back"` / `title="Forward"` /
+> `placeholder="Enter a URL and press Enter"` / `"Connecting to live browser…"` /
+> `"Waiting for the first live frame."` 等等全是字面量。本仓早有一个完整的 `browser`
+> 命名空间，React 侧一个都没有。同一个文件里**上一轮已经用同样的方式修过一处**
+> （面板标题那句注释：「This panel label was a hardcoded literal while `common.browser`
+> sat unused in the dictionary, so zh-CN rendered "Browser" here.」）——这次是把剩下的补完。
+>
+> 那 2 行 geometry 是同一处的投影：标题 `Connecting to live browser…` 与
+> 「正在连接实时浏览器…」字数不同，宽度差 26.5px。翻译对上之后自然消失。
+>
+> **三、两条门禁当场把「加词典」变成了一次对账。**
+> 本仓有两条守卫在读**上游的词典**：`vue-only-keys.test.ts`（本仓独有的块清单）
+> 与 `upstream-key-coverage.test.ts`（上游每一条 key 要么本仓同名有、要么落进
+> ALIASES / movedByUpstream / pending 三个桶）。给上游加了 `browser` 与 `markdown`
+> 两个块之后两条一起红，各逼出一个决定：
+>
+> - `browser` / `markdown` 从 `VUE_ONLY_BLOCKS` 里拿掉——它们不再是本仓独有的。
+> - `markdown.close` **不进词典**：它标的是对话框关闭键，而本仓对这类
+>   primitive 可访问名的规矩是「两个应用念同一句英文」（`primitives.*`，
+>   I18N_INVENTORY 有说明）。不传这一条，streamdown 就用自己的默认值 "Close"，
+>   与本仓 `primitives.close` 一字不差。传了反而会造出一处新的分叉。
+> - `browser.navigatedNoScreenshot` **在本仓补实现**，而不是塞进 `pending`：
+>   那一桶的 `$comment` 写着「目标状态是空数组，2026-09-10 达成」，往回塞是开倒车。
+>   本仓这一支原来**什么都不说**——REST 导航成功但 `screenshot` 为空时把
+>   `localFrame` 置空、面板变白，空状态照旧写着「在上方输入网址…」，
+>   而用户刚刚就是输完网址按了回车。上游走 toast，本仓的浏览器面板整体不走 toast
+>   （文件头记着这条分叉），所以同一句话放进**空状态的说明位**——那正是用户此刻
+>   在看的地方；它不是错误，不进 `role="alert"` 那条。带一条做过变异验证的组件测试。
+>
+> **四、顺手补上本仓自己 `markdown` 命名空间里 7 条没翻的**
+> （`copyLink` / `copied` / `openLink` / `downloadImage` / `imageNotAvailable` /
+> `openExternalLink` / `externalLinkWarning`）。这一组当初是照 streamdown 的默认值抄进来的，
+> 只翻了一半，`MarkdownLinkSafetyModal.vue` 那个对话框因此半中半英。
+> 两边词典的 `markdown`（28 条共有）与 `browser`（11 条共有）现在**逐字相同**。
+>
 > ## 2026-09-11 `channels#settings-panel` 从 53/54 行清到 2/2：那颗 `Disconnect` 是**上游的缺陷**
 >
 > 这一屏原来是全台账最厚的一处。拆成几类逐条查，**最后一类不是「本仓欠上游」，

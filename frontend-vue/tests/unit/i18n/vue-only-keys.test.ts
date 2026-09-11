@@ -36,10 +36,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /** 上游词典里没有的顶层块。改这份清单等于做一次决定，不是顺手。 */
+/*
+  `browser` 与 `markdown` 在 2026-09-11 之前是本仓独有的两个块。它们不再独有，
+  是因为**上游那两片界面在中文下是英文**：浏览器面板整条工具条写死字面量，
+  markdown 面的控件全部由 `streamdown` 画而上游从来没给它传 `translations`。
+  两边同改之后上游有了同名的块，所以从这张表里拿掉。
+*/
 const VUE_ONLY_BLOCKS = [
   "artifacts",
-  "browser",
-  "markdown",
   "marketing",
   "messages",
   "navigation",

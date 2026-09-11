@@ -1518,6 +1518,7 @@ export const enUS: Translations = {
     noFrameDescription:
       "Enter a URL above or let the agent browse — the live view will appear here.",
     navigationFailedFallback: "Browser navigation failed.",
+    navigatedNoScreenshot: "Navigated, but no screenshot could be captured.",
   },
   artifacts: {
     actions: {

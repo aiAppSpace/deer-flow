@@ -5,14 +5,33 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { artifactMarkdownPlugins } from "@/components/workspace/artifacts/markdown-preview-plugins";
 import { ArtifactLink } from "@/components/workspace/citations/artifact-link";
 import { createMarkdownLinkComponent } from "@/components/workspace/messages/markdown-link";
+import { clientTranslations } from "@/core/i18n/client-translations";
+import { I18nContext } from "@/core/i18n/context";
 import {
   SafeStreamdown,
   streamdownPlugins,
   toStreamdownComponents,
 } from "@/core/streamdown";
 
-function renderArtifactMarkdown(content: string) {
+/*
+  `SafeStreamdown` reads the dictionary now (it passes `translations` down to
+  Streamdown so the copy/table/diagram controls are not stuck in English), so
+  it has to render under the app's provider like any other product component.
+*/
+const i18nValue = {
+  locale: "en-US" as const,
+  setLocale: () => undefined,
+  t: clientTranslations["en-US"],
+};
+
+function renderUnderI18n(element: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
+    createElement(I18nContext.Provider, { value: i18nValue }, element),
+  );
+}
+
+function renderArtifactMarkdown(content: string) {
+  return renderUnderI18n(
     createElement(
       SafeStreamdown,
       {
@@ -25,7 +44,7 @@ function renderArtifactMarkdown(content: string) {
 }
 
 function renderSharedMarkdown(content: string) {
-  return renderToStaticMarkup(
+  return renderUnderI18n(
     createElement(SafeStreamdown, streamdownPlugins, content),
   );
 }
@@ -33,7 +52,7 @@ function renderSharedMarkdown(content: string) {
 // Mirrors the memory settings page: shared preset plus the safe link
 // component it passes for stored/LLM-generated summary content.
 function renderMemorySummaryMarkdown(content: string) {
-  return renderToStaticMarkup(
+  return renderUnderI18n(
     createElement(
       SafeStreamdown,
       {

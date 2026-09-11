@@ -1218,6 +1218,7 @@ export interface Translations {
     noFrame: string;
     noFrameDescription: string;
     navigationFailedFallback: string;
+    navigatedNoScreenshot: string;
   };
 
   artifacts: {

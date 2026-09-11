@@ -5,6 +5,7 @@ import { Streamdown } from "streamdown";
 
 import { stripLeakedSystemTags } from "@/core/streamdown/preprocess";
 import { installClipboardFallback } from "@/core/clipboard";
+import { useI18n } from "@/core/i18n/hooks";
 
 export type ClipboardSafeStreamdownProps = ComponentProps<typeof Streamdown>;
 
@@ -56,8 +57,10 @@ class StreamdownFallbackBoundary extends Component<
 
 export function ClipboardSafeStreamdown({
   children,
+  translations,
   ...props
 }: ClipboardSafeStreamdownProps) {
+  const { t } = useI18n();
   // Strip leaked system-internal tags (<memory>, <system-reminder>, etc.)
   // that would cause React to log "unrecognized tag" console errors when
   // the markdown renderer passes them through as raw HTML.
@@ -66,7 +69,27 @@ export function ClipboardSafeStreamdown({
 
   return (
     <StreamdownFallbackBoundary raw={sanitizedChildren}>
-      <Streamdown {...props}>{sanitizedChildren}</Streamdown>
+      {/*
+        Streamdown owns the visible controls on every message: the code-block
+        copy button, the table copy/download menus, the mermaid toolbar and the
+        external-link confirmation. It ships those strings in English and takes
+        a `translations` prop, but nothing here was passing it — so the whole
+        markdown surface stayed English under zh-CN. The dictionary's en-US
+        values are streamdown 2.5.0's own defaults verbatim, so this is a no-op
+        for the English build.
+
+        Zoom in / Zoom out / Reset zoom and pan / the diagram's alt text are
+        *not* in `StreamdownTranslations`; they are hardcoded inside the
+        library and stay English until it exposes them.
+
+        `close` is deliberately left out of the dictionary so streamdown keeps
+        its own "Close": that is a dialog-primitive affordance, and this repo's
+        rule for those is that both apps announce the same English string
+        (see `primitives.*` in the Vue app's I18N_INVENTORY).
+      */}
+      <Streamdown translations={{ ...t.markdown, ...translations }} {...props}>
+        {sanitizedChildren}
+      </Streamdown>
     </StreamdownFallbackBoundary>
   );
 }

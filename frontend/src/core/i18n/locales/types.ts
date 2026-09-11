@@ -653,6 +653,53 @@ export interface Translations {
   };
 
   // Page titles (document title)
+
+  browser: {
+    panelTitle: string;
+    live: string;
+    back: string;
+    forward: string;
+    urlPlaceholder: string;
+    stopLiveControl: string;
+    takeLiveControl: string;
+    connectingFrame: string;
+    connectingFrameDescription: string;
+    noFrame: string;
+    noFrameDescription: string;
+    navigatedNoScreenshot: string;
+  };
+
+  markdown: {
+    copied: string;
+    copyCode: string;
+    copyLink: string;
+    copyTable: string;
+    copyTableAsCsv: string;
+    copyTableAsMarkdown: string;
+    copyTableAsTsv: string;
+    downloadDiagram: string;
+    downloadDiagramAsMmd: string;
+    downloadDiagramAsPng: string;
+    downloadDiagramAsSvg: string;
+    downloadFile: string;
+    downloadImage: string;
+    downloadTable: string;
+    downloadTableAsCsv: string;
+    downloadTableAsMarkdown: string;
+    exitFullscreen: string;
+    externalLinkWarning: string;
+    imageNotAvailable: string;
+    mermaidFormatMmd: string;
+    mermaidFormatPng: string;
+    mermaidFormatSvg: string;
+    openExternalLink: string;
+    openLink: string;
+    tableFormatCsv: string;
+    tableFormatMarkdown: string;
+    tableFormatTsv: string;
+    viewFullscreen: string;
+  };
+
   pages: {
     appName: string;
     chats: string;

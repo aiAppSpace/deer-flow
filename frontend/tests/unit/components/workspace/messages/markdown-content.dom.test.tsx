@@ -2,6 +2,19 @@ import { afterEach, describe, expect, it, rs } from "@rstest/core";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 
 import { MarkdownContent } from "@/components/workspace/messages/markdown-content";
+import { I18nProvider } from "@/core/i18n/context";
+
+/*
+  Streamdown now gets its control labels from the dictionary, so MarkdownContent
+  renders under the app's provider like any other product component.
+*/
+function Markdown(props: React.ComponentProps<typeof MarkdownContent>) {
+  return (
+    <I18nProvider initialLocale="en-US">
+      <MarkdownContent {...props} />
+    </I18nProvider>
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -13,7 +26,7 @@ describe("MarkdownContent bounded streaming cadence", () => {
     rs.useFakeTimers();
     const content = "x".repeat(200);
     const { container, rerender } = render(
-      <MarkdownContent content={content} isLoading={true} />,
+      <Markdown content={content} isLoading={true} />,
     );
 
     expect(container.textContent).toBe("");
@@ -33,9 +46,7 @@ describe("MarkdownContent bounded streaming cadence", () => {
     });
     expect(container.textContent).toHaveLength(firstCommitLength);
 
-    act(() =>
-      rerender(<MarkdownContent content={content} isLoading={false} />),
-    );
+    act(() => rerender(<Markdown content={content} isLoading={false} />));
     expect(container.textContent).toBe(content);
   });
 });
@@ -43,7 +54,7 @@ describe("MarkdownContent bounded streaming cadence", () => {
 describe("MarkdownContent streaming list transitions (DOM)", () => {
   it("reveals the same list item with marker animation when content arrives", async () => {
     const { container, rerender } = render(
-      <MarkdownContent content={"1. First\n\n2."} isLoading={true} />,
+      <Markdown content={"1. First\n\n2."} isLoading={true} />,
     );
     const initialItems = container.querySelectorAll<HTMLLIElement>(
       '[data-streamdown="list-item"]',
@@ -54,9 +65,7 @@ describe("MarkdownContent streaming list transitions (DOM)", () => {
     expect(pendingItem.hidden).toBe(true);
     expect(pendingItem.hasAttribute("data-streaming-list-item")).toBe(false);
 
-    rerender(
-      <MarkdownContent content={"1. First\n\n2. Second"} isLoading={true} />,
-    );
+    rerender(<Markdown content={"1. First\n\n2. Second"} isLoading={true} />);
 
     await waitFor(() => {
       expect(pendingItem.textContent).toContain("Second");

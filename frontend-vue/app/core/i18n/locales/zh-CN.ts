@@ -1441,6 +1441,7 @@ export const zhCN: Translations = {
     noFrameDescription:
       "在上方输入网址，或让智能体自己浏览——实时画面会显示在这里。",
     navigationFailedFallback: "浏览器导航失败。",
+    navigatedNoScreenshot: "已完成导航，但没能截到图。",
   },
   artifacts: {
     actions: {
@@ -1488,13 +1489,13 @@ export const zhCN: Translations = {
   },
   markdown: {
     downloadFile: "下载文件",
-    downloadImage: "Download image",
-    imageNotAvailable: "Image not available",
-    openExternalLink: "Open external link?",
-    externalLinkWarning: "You're about to visit an external website.",
-    copyLink: "Copy link",
-    copied: "Copied",
-    openLink: "Open link",
+    downloadImage: "下载图片",
+    imageNotAvailable: "图片不可用",
+    openExternalLink: "要打开外部链接吗？",
+    externalLinkWarning: "你即将访问一个外部网站。",
+    copyLink: "复制链接",
+    copied: "已复制",
+    openLink: "打开链接",
     copyCode: "复制代码",
     copyTable: "复制表格",
     copyTableAsMarkdown: "复制表格为 Markdown",

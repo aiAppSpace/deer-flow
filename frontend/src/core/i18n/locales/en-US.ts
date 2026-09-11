@@ -787,6 +787,67 @@ export const enUS: Translations = {
     connectedAs: (name: string) => `Connected as ${name}.`,
   },
 
+  /*
+    Browser view panel. Every string below was a hardcoded English literal in
+    `browser-view-panel.tsx`, so the zh-CN build rendered an English toolbar
+    inside an otherwise Chinese workspace. The Vue app already carries the same
+    namespace, and the panel label right above this comment's consumer was
+    fixed the same way in an earlier pass.
+  */
+  browser: {
+    panelTitle: "Browser view",
+    live: "Live",
+    back: "Back",
+    forward: "Forward",
+    urlPlaceholder: "Enter a URL and press Enter",
+    stopLiveControl: "Stop live control",
+    takeLiveControl: "Take live control",
+    connectingFrame: "Connecting to live browser…",
+    connectingFrameDescription: "Waiting for the first live frame.",
+    noFrame: "No browser activity yet",
+    noFrameDescription:
+      "Enter a URL above or let the agent browse — the live view will appear here.",
+    navigatedNoScreenshot: "Navigated, but no screenshot could be captured.",
+  },
+
+  /*
+    Streamdown's own controls (code copy, table export, mermaid toolbar, link
+    safety). The library ships `defaultTranslations` in English and takes a
+    `translations` prop; nothing was passing it, so every one of these stayed
+    English in zh-CN. The English values here are streamdown 2.5.0's defaults
+    verbatim, so the en-US build is unchanged.
+  */
+  markdown: {
+    copied: "Copied",
+    copyCode: "Copy Code",
+    copyLink: "Copy link",
+    copyTable: "Copy table",
+    copyTableAsCsv: "Copy table as CSV",
+    copyTableAsMarkdown: "Copy table as Markdown",
+    copyTableAsTsv: "Copy table as TSV",
+    downloadDiagram: "Download diagram",
+    downloadDiagramAsMmd: "Download diagram as MMD",
+    downloadDiagramAsPng: "Download diagram as PNG",
+    downloadDiagramAsSvg: "Download diagram as SVG",
+    downloadFile: "Download file",
+    downloadImage: "Download image",
+    downloadTable: "Download table",
+    downloadTableAsCsv: "Download table as CSV",
+    downloadTableAsMarkdown: "Download table as Markdown",
+    exitFullscreen: "Exit fullscreen",
+    externalLinkWarning: "You're about to visit an external website.",
+    imageNotAvailable: "Image not available",
+    mermaidFormatMmd: "MMD",
+    mermaidFormatPng: "PNG",
+    mermaidFormatSvg: "SVG",
+    openExternalLink: "Open external link?",
+    openLink: "Open link",
+    tableFormatCsv: "CSV",
+    tableFormatMarkdown: "Markdown",
+    tableFormatTsv: "TSV",
+    viewFullscreen: "View fullscreen",
+  },
+
   // Page titles (document title)
   pages: {
     appName: "DeerFlow",

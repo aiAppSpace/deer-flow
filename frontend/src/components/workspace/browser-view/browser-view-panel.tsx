@@ -188,7 +188,7 @@ export function BrowserViewPanel({
         });
       } else {
         setUrlInput(result.url);
-        toast.warning("Navigated, but no screenshot could be captured.");
+        toast.warning(t.browser.navigatedNoScreenshot);
       }
       browserView?.openPanel();
     } catch (error) {
@@ -357,7 +357,7 @@ export function BrowserViewPanel({
             className="shrink-0"
             disabled={!live}
             onClick={() => sendInput({ type: "back" })}
-            title="Back"
+            title={t.browser.back}
           >
             <ArrowLeftIcon />
           </Button>
@@ -367,7 +367,7 @@ export function BrowserViewPanel({
             className="shrink-0"
             disabled={!live}
             onClick={() => sendInput({ type: "forward" })}
-            title="Forward"
+            title={t.browser.forward}
           >
             <ArrowRightIcon />
           </Button>
@@ -398,7 +398,7 @@ export function BrowserViewPanel({
               // bar; stop the panel + global shortcut handlers from swallowing.
               event.stopPropagation();
             }}
-            placeholder="Enter a URL and press Enter"
+            placeholder={t.browser.urlPlaceholder}
             spellCheck={false}
             autoComplete="off"
             className="h-8 pl-7 text-xs"
@@ -412,10 +412,10 @@ export function BrowserViewPanel({
           variant={live ? "default" : "ghost"}
           className="shrink-0 gap-1"
           onClick={() => setLive((prev) => !prev)}
-          title={live ? "Stop live control" : "Take live control"}
+          title={live ? t.browser.stopLiveControl : t.browser.takeLiveControl}
         >
           <RadioIcon className="size-3.5" />
-          {live ? (status === "open" ? "Live" : "…") : "Live"}
+          {live && status !== "open" ? "…" : t.browser.live}
         </Button>
         {/* The close button had no accessible name at all: XIcon is
             aria-hidden and there was neither an aria-label nor a title, so a
@@ -446,7 +446,7 @@ export function BrowserViewPanel({
               ref={surfaceRef}
               className="absolute inset-0 h-full w-full cursor-default object-contain object-center"
               src={displayUrl}
-              alt={frame?.title ?? "Browser view"}
+              alt={frame?.title ?? t.browser.panelTitle}
               draggable={false}
               onClick={(event) => forwardMouse("click", event)}
             />
@@ -454,13 +454,11 @@ export function BrowserViewPanel({
             <ConversationEmptyState
               className="absolute inset-0 m-auto h-fit"
               icon={<MonitorIcon />}
-              title={
-                live ? "Connecting to live browser…" : "No browser activity yet"
-              }
+              title={live ? t.browser.connectingFrame : t.browser.noFrame}
               description={
                 live
-                  ? "Waiting for the first live frame."
-                  : "Enter a URL above or let the agent browse — the live view will appear here."
+                  ? t.browser.connectingFrameDescription
+                  : t.browser.noFrameDescription
               }
             />
           )}

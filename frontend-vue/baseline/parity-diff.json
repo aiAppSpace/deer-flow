@@ -507,26 +507,11 @@
       "tabOrder": []
     },
     "browser-feature/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"Back\"",
-        "- button \"Forward\"",
-        "- heading \"Connecting to live browser…\" [level=3]",
-        "- paragraph: Waiting for the first live frame.",
-        "- textbox \"Enter a URL and press Enter\""
-      ],
-      "ariaOnlyVue": [
-        "- button \"前进\"",
-        "- button \"后退\"",
-        "- heading \"正在连接实时浏览器…\" [level=3]",
-        "- paragraph: 正在等待第一帧实时画面。",
-        "- textbox \"输入网址后按 Enter\""
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:heading[/^(Connecting to live browser…|正在连接实时浏览器…)$/] x React=978.1 Vue=991.4 Δ13.3",
-        "role:heading[/^(Connecting to live browser…|正在连接实时浏览器…)$/] width React=194.5 Vue=168 Δ-26.5"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1542,18 +1527,12 @@
     },
     "thread-history-mermaid#default/desktop/light/zh-CN": {
       "ariaOnlyReact": [
-        "- button \"Copy Code\":",
-        "- button \"Download diagram\":",
         "- button \"Reset zoom and pan\":",
-        "- button \"View fullscreen\":",
         "- button \"Zoom in\":",
         "- button \"Zoom out\":",
         "- img \"Mermaid chart\":"
       ],
       "ariaOnlyVue": [
-        "- button \"下载图表\":",
-        "- button \"全屏查看\":",
-        "- button \"复制代码\":",
         "- button \"放大\":",
         "- button \"缩小\":",
         "- button \"重置缩放与平移\":",
@@ -1584,18 +1563,12 @@
     },
     "thread-history-mermaid#download-menu/desktop/light/zh-CN": {
       "ariaOnlyReact": [
-        "- button \"Copy Code\":",
-        "- button \"Download diagram\":",
         "- button \"Reset zoom and pan\":",
-        "- button \"View fullscreen\":",
         "- button \"Zoom in\":",
         "- button \"Zoom out\":",
         "- img \"Mermaid chart\":"
       ],
       "ariaOnlyVue": [
-        "- button \"下载图表\":",
-        "- button \"全屏查看\":",
-        "- button \"复制代码\":",
         "- button \"放大\":",
         "- button \"缩小\":",
         "- button \"重置缩放与平移\":",
@@ -1604,9 +1577,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Download diagram\" Vue=button \"下载图表\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],

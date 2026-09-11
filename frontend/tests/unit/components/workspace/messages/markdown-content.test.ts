@@ -3,14 +3,28 @@ import { createElement, type ImgHTMLAttributes } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { MarkdownContent } from "@/components/workspace/messages/markdown-content";
+import { clientTranslations } from "@/core/i18n/client-translations";
+import { I18nContext } from "@/core/i18n/context";
 
 function renderMarkdown(
   content: string,
   isLoading: boolean,
   options: Partial<Parameters<typeof MarkdownContent>[0]> = {},
 ) {
+  // Streamdown now gets its control labels from the dictionary, so this
+  // renders under the app's provider like any other product component.
   return renderToStaticMarkup(
-    createElement(MarkdownContent, { content, isLoading, ...options }),
+    createElement(
+      I18nContext.Provider,
+      {
+        value: {
+          locale: "en-US" as const,
+          setLocale: () => undefined,
+          t: clientTranslations["en-US"],
+        },
+      },
+      createElement(MarkdownContent, { content, isLoading, ...options }),
+    ),
   );
 }
 
