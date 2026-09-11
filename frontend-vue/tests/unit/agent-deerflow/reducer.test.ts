@@ -40,6 +40,8 @@ import type { DeerFlowThreadState } from "@/core/agent-deerflow/reducer";
 import {
   createDeerFlowEventReducer,
   EMPTY_DEERFLOW_THREAD_STATE,
+  isSyntheticValuesMessageId,
+  SYNTHETIC_VALUES_ID_PREFIX,
 } from "@/core/agent-deerflow/reducer";
 
 const GOLDEN_TRACE = fileURLToPath(
@@ -479,5 +481,64 @@ describe("合成载荷（逐条隔离 reducer 规则）", () => {
       { createId: () => "x", now: () => 0 },
     );
     expect(actions[0]?.type).toBe("error");
+  });
+});
+
+/*
+  **位置键不是服务端 id。** `values` 里没有 id 的消息在存储里只能按位置对齐，
+  于是 reducer 编一个 `values-<index>`——而它随后就坐在 `AgentMessage.id` 上，
+  与真 id 长得一模一样。2026-09-12 量到的后果是一颗点了会失败的
+  「编辑并重新运行」（读数与判据写在 reducer.ts 的那段注释与 MessageList.vue 的调用点）。
+
+  这一组钉的是**判据本身**：认得出自己编的键，也不能把真 id 误判成编的。
+*/
+describe("values 快照里的位置键", () => {
+  it("reducer 给没有 id 的消息编的就是这个前缀 + 序号", () => {
+    const reducer = createDeerFlowEventReducer();
+    const actions = reducer(
+      {
+        event: "values",
+        data: JSON.stringify({
+          messages: [
+            { type: "human", content: "Hello" },
+            { type: "ai", id: "msg-ai-1", content: "Hi" },
+          ],
+        }),
+      },
+      {
+        state: {},
+        messageIds: [],
+        messages: {},
+        session: { status: "idle" },
+        lastActivityAt: 0,
+      },
+      { createId: () => "x", now: () => 0 },
+    );
+    const ids = actions.flatMap((action) =>
+      action.type === "upsert-message" ? [action.message.id] : [],
+    );
+    expect(ids).toContain(`${SYNTHETIC_VALUES_ID_PREFIX}0`);
+    expect(ids).toContain("msg-ai-1");
+  });
+
+  it("判据认得出编出来的键", () => {
+    expect(isSyntheticValuesMessageId("values-0")).toBe(true);
+    expect(isSyntheticValuesMessageId("values-12")).toBe(true);
+  });
+
+  /*
+    **收紧到「前缀 + 纯数字」的理由就在这几条**：松一格（只判前缀）会把下面这些
+    真 id 误挡成不可编辑，而那是一个静默的功能缺失——按钮不见了，没有任何报错。
+  */
+  it("判据不把真 id 误判成编出来的", () => {
+    for (const id of [
+      "values-abc",
+      "values-0-real",
+      "values-",
+      "msg-human-1",
+      "",
+      undefined,
+    ])
+      expect(isSyntheticValuesMessageId(id)).toBe(false);
   });
 });

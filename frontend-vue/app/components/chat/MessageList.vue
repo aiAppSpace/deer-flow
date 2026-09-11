@@ -49,6 +49,7 @@ import WorkspaceChangesBadge from "@/components/workspace/changes/WorkspaceChang
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
 import { Button } from "@/components/ui/button";
 import { richContentComponents } from "@/components/markdown/components";
+import { isSyntheticValuesMessageId } from "@/core/agent-deerflow/reducer";
 import { resolveMessageImageURL } from "@/core/artifacts/utils";
 import { extractCitationSources } from "@/core/citations/sources";
 import {
@@ -314,9 +315,26 @@ async function selectChapter(chapterId: string) {
 const branchable = computed(() =>
   getBranchableAssistantGroupIds(groups.value, props.streaming),
 );
-const editable = computed(() =>
-  getLatestEditableTurn(groups.value, props.streaming),
-);
+/*
+  **编辑并重新运行要的是服务端 id，不是存储键。**
+
+  `values` 快照里没有 id 的消息由 reducer 编一个位置键（`values-<index>`），
+  而那个键在 `AgentMessage.id` 上与真 id 长得一模一样。2026-09-12 实测：
+  用户刚发出的那条 human 消息在 mock 回显的 `values` 里就没有 id
+  （两个应用发出去的 POST 体逐字相同，都不带 id），于是本仓给它编了 `values-0`，
+  `getLatestEditableTurn` 认为这一轮可编辑，画出了「编辑并重新运行」——
+  **点下去会把 `values-0` 交给 `POST /runs/edit-regenerate/prepare`，服务端解析不了。**
+
+  判据放在调用点而不是 `getLatestEditableTurn` 里：那支工具与上游逐字同源，
+  而**上游没有这个分支**（它的 `stream_mode` 里没有 `values`，实测
+  上游 `["messages-tuple","updates","custom"]` / 本仓多一个 `"values"`）。
+  把一条只有本仓才需要的判据塞进共享工具，下一次对照就会把两边判成分叉。
+*/
+const editable = computed(() => {
+  const turn = getLatestEditableTurn(groups.value, props.streaming);
+  if (!turn) return null;
+  return isSyntheticValuesMessageId(turn.humanMessage.id) ? null : turn;
+});
 /*
   「最新的 assistant 回合」是**按类型往回找**的，不是「最后一个组」。上游
   message-list.tsx:597 的 latestAssistantGroupId 从尾部倒着扫，只认
