@@ -3904,7 +3904,45 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     steps: [
       // 归属这个项目的会话在，不归属的不在。
       { kind: "visible", target: { text: "Sources for Q3" } },
+      /*
+        **动作列也要有锚点。** 上面那两个锚点都是夹具里的**文字**，
+        几何档因此只量得到两个文本节点——而窄屏下最容易出事的是动作列
+        （`integrations` 那一轮量出来的形状就是一颗按钮撑宽整页）。
+
+        **锚点按 href 定位，不按可访问名。** 第一版写的是
+        `role: link, name: /^(New chat|新建对话)$/`，**它在 en-US 桌面维度上
+        匹配到两份**：侧栏那颗「新建会话」的英文文案恰好也是 `New chat`
+        （`sidebar.newChat`），而中文不是（`新对话` vs `新建对话`）。
+        `sampleGeometry` 取 `.first()`，于是那一维量的是**侧栏那颗**、
+        另外两维量的是**页头这颗**——实测报出一行
+        `fontWeight React=400 Vue=500`，而且只在那一个维度报。
+        **那不是产品差异，是锚点匹配到了不同的东西**（wave 131 那三问：
+        它在每个维度上都成立吗、它在这一屏上只有一份吗、不止一份时是不是同一个东西）。
+
+        href 是两边逐字相同的结构坐标
+        （上游 `newProjectChatPath()` 与本仓模板都拼
+        `/workspace/chats/new?project=<id>`），而且整页只有这一处。
+      */
+      {
+        kind: "visible",
+        target: {
+          selector: `a[href*="/workspace/chats/new?project="]`,
+        },
+      },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    /*
+      **窄屏这一维给的是第二个「整页」样本。** 第六轮给 `scheduled-tasks` 补
+      mobile 时零差异，那只说明那一页是干净的，不说明这条方向空了——
+      非 desktop 的场景到这一轮为止仍然只有六个。
+      这一页的形状与那一页不同：它是**标题 + 动作列 + 一张会话列表**，
+      窄屏下最容易出事的是动作列挤出去（`integrations` 那一轮的形状）。
+
+      与 ZH/DARK 同一条纪律：一个场景补一维就够。
+    */
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      { viewport: "mobile", theme: "light", locale: "en-US" },
+    ],
   },
 ];
