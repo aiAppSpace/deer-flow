@@ -153,7 +153,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ---
 
-## 进度实测（2026-09-12 第六轮收工现场量，每一格都写了怎么量的）
+## 进度实测（2026-09-12 第七轮收工现场量，每一格都写了怎么量的）
 
 | 账 | 起点 | 现在 | 怎么量 |
 | --- | --- | --- | --- |
@@ -162,7 +162,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 | i18n pending key | 179 | **0** | `baseline/upstream-i18n-map.json` 的 `pending.keys` |
 | 词典 key / unused | — | **1139 / 15** | `baseline/i18n-keys.json` 的 `total` / `unusedTotal` |
 | 取样面 pending 路由 | 1 | **0** | `baseline/parity-route-sampling.json` 的 `pending` |
-| 台账 | 330 | **162 唯一行 / 182 多重集 / 137 场景-维度**（第五、六两轮各开了一块新取样面，涨的行全部属于判过的账）| 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
+| 台账 | 330 | **159 唯一行 / 179 多重集 / 137 场景-维度**（第七轮把 `Edit and rerun` 那三行从根因清了）| 数 `baseline/parity-diff.json` 的 `entries`（`parity-ledger-report.mjs` 要有上一次运行产物才跑得出来，签入基线是随时可数的） |
 | 产品 SFC | — | **267**（另有 2 个 `__m0` fixture 排除、0 个未扫） | `node frontend-vue/scripts/i18n-source-guard.mjs --inventory` |
 
 **三张 pending 表全空。** i18n 那张归零意味着：上游词典里的每一条，本仓要么同名有、
@@ -414,7 +414,7 @@ token 与 `h-9` 的统一高度——**同一个对话框里另外三颗 Select 
   下次再看到它别当回归——判据是「差异只在 React 自己两次之间，本仓的台账是零差异」。
 
 
-- **`chat-thread-init-ordering` 上多出一颗 `button "Edit and rerun"`（3 行）。**
+- ~~**`chat-thread-init-ordering` 上多出一颗 `button "Edit and rerun"`（3 行）。**~~ **2026-09-12 第七轮结清**
   这是 seq 移植带来的：本仓此前压住了第一个共有锚点之前那条受保护的人类消息，
   现在跟上游一样把它编织出来了（同一轮 6 行旧差异因此消失，含一处 80px 的垂直偏移），
   于是「最新可编辑回合」落在了一个新的位置上。
@@ -436,10 +436,18 @@ token 与 `h-9` 的统一高度——**同一个对话框里另外三颗 Select 
   上游 `canEdit` 余下的 `!isUploading` / `!branchThread.isPending` / `!hasGoal` /
   `!hasOpenHumanInputCard` 在这一屏上都不成立。
 
-  **还剩一种可能没测**：上游的 `thread.isLoading`（SDK 的 useStream 维护）
-  在 SSE 连接关闭之前一直为真，而本仓的 `streaming` 在收到终局事件时就翻假——
-  也就是**两边认为「这一轮结束了」的时刻不同**。要坐实它得给上游加一次临时探针
-  （把 `thread.isLoading` 打出来），那是下一轮的活。
+  ~~**还剩一种可能没测**：上游的 `thread.isLoading`（SDK 的 useStream 维护）
+  在 SSE 连接关闭之前一直为真，而本仓的 `streaming` 在收到终局事件时就翻假。~~
+
+  **⚠️ 这个假设 2026-09-12 第七轮被探针证伪了**（原文划掉保留）：上游的
+  `thread.isLoading` 实测是 **false**，`canEdit` / `replayActionBusy` / handler
+  四个闸门全是开的，唯独 `latestEditableHumanMessageId` 解析成 `null`。
+  **真根因是一个字段**：两边消息组逐条相同，只有第二条 human 的 `id` 不同——
+  上游 `null`、本仓 `values-0`。那是本仓 `reduceValues` 给**没有 id 的 `values`
+  消息**编的位置键（上游根本不订 `values`：实测两边 `stream_mode` 差这一项）。
+  也就是说本仓画的是一颗**点了会失败**的按钮（`values-0` 交给
+  `edit-regenerate/prepare`，服务端解析不了）。
+  修法与三条负向验证写在 `vue-parity-open-accounts.md` 顶部那一条。
 
 - ~~「第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button」~~
   **不是开着的账——它在 `docs/plans/vue-parity-open-accounts.md` 第 6 条（wave 98）

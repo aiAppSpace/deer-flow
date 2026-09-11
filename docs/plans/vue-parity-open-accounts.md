@@ -1,7 +1,87 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第六轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第七轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> ## 2026-09-12 第七轮：**台账上最后一条带「先怀疑」的判词结清了**——而它底下是一颗点了会失败的按钮
+>
+> `chat-thread-init-ordering` 的 3 行 `button "Edit and rerun"` 挂了很多轮，
+> backlog 里写着「还剩一种可能没测：上游的 `thread.isLoading` 在 SSE 关掉之前一直为真」
+> 以及「先加临时 dump 看读数，别猜」。这一轮照做了，**那个假设被证伪**，
+> 真根因在另一个地方。
+>
+> ### 一、临时探针量到的（两边各往 `document.body.dataset.probe` 写一份，跑完即撤）
+>
+> ```
+> REACT  editButtons=0  isLoading=false  canEdit=true  replayActionBusy=false
+>                       latestEditableHumanMessageId=null  hasHandler=true
+> VUE    editButtons=1  streaming=false  editableId=values-0
+> ```
+>
+> **上游那四个闸门全是开的**——`isLoading` 是 `false`，不是 backlog 猜的 `true`。
+> 唯独 `latestEditableHumanMessageId` 解析成了 `null`。
+>
+> 再把消息本身打出来，两边的组**逐条相同**，只差一个字段：
+>
+> | | human#1 | human#2 | assistant |
+> | --- | --- | --- | --- |
+> | 上游 | `id=null` | **`id=null`** | `id=msg-ai-1` |
+> | 本仓 | `id=null` | **`id="values-0"`** | `id=msg-ai-1` |
+>
+> `getLatestEditableTurn` 两边逐字同源，它要求 human 消息**有 id**
+> （`messages.find(m => m.type === "human" && m.id)`）。上游两条都没有 → `null`；
+> 本仓第二条有 → 可编辑。
+>
+> ### 二、`values-0` 从哪来：**两边 POST 的消息都不带 id，差的是 `stream_mode`**
+>
+> 把两边的 run POST 体打出来，`input.messages` **逐字相同、都没有 `id`**。
+> 差在这里：
+>
+> ```
+> 上游 stream_mode: ["messages-tuple","updates","custom"]
+> 本仓 stream_mode: ["values","messages-tuple","updates","custom"]
+> ```
+>
+> mock 原样回显 POST 体，于是那条没有 id 的 human 消息出现在 `values` 帧里。
+> 本仓的 `reduceValues`（`app/core/agent-deerflow/reducer.ts`）按位置给它编了一个键：
+>
+> ```ts
+> (typeof message.id === "string" && message.id) || `values-${index}`
+> ```
+>
+> **这个键随后就坐在 `AgentMessage.id` 上，与真 id 长得一模一样。**
+> 上游没有这条分支，因为它压根不订 `values`。
+>
+> ### 三、判词：**本仓是坏的**——那颗按钮点下去会失败
+>
+> 「编辑并重新运行」要把消息 id 交给 `POST /runs/edit-regenerate/prepare`。
+> `values-0` 是客户端为了在存储里对齐位置而编的，**服务端解析不了**。
+> 也就是说这不是「本仓多画了一颗按钮」，是**本仓画了一颗点了会失败的按钮**。
+>
+> 修法（只动 `frontend-vue/`）：把前缀与判据收进 reducer 一处导出
+> （`SYNTHETIC_VALUES_ID_PREFIX` / `isSyntheticValuesMessageId`），
+> 调用点 `MessageList.vue` 用它把这类 id 挡在可编辑之外。
+> **判据放在调用点而不是 `getLatestEditableTurn` 里**：那支工具与上游逐字同源，
+> 把一条只有本仓才需要的判据塞进去，下一次基类对照就会把两边判成分叉。
+> 判据收紧到「前缀 + 纯数字」——只判前缀会把真 id 误挡成不可编辑，
+> 而那是一个**静默的功能缺失**（按钮消失，没有任何报错）。
+>
+> **读数：`chat-thread-init-ordering` 5 行 → 2 行**，剩下的 2 行是早就判过的
+> Next 路由播报器那一对。**台账上再没有一条判词里带「先怀疑」。**
+>
+> 负向验证三条，各红在该红的地方：
+>
+> | 变异 | 结果 |
+> | --- | --- |
+> | 拿掉调用点那道闸（保持可编译） | 台账 2 → **5 行**，三行原样回来 |
+> | 判据永远返回 false | 「判据认得出编出来的键」红 |
+> | 判据放松成只判前缀 | 「判据不把真 id 误判成编出来的」红 |
+>
+> **一条留给下一轮的事实**：`message-adapt.ts` 的文件头写着
+> 「13 个 checkpoint fixture 的 516 条消息**全部**带 id」——也就是说真 Gateway
+> 的 `values` 里不该出现没有 id 的消息，这条位置键是给病态输入兜底的。
+> 本轮这个样本来自 mock 回显自己的 POST 体。**修它仍然是对的**
+> （一个点了会失败的按钮不该画出来），但别把它读成「生产上天天发生」。
 
 > ## 2026-09-12 第六轮：**这一轮的货是一条否定结论和一次判词订正**
 >

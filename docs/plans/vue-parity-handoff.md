@@ -8,18 +8,19 @@
 
 ---
 
-## 当前状态（2026-09-12 第六轮收工）
+## 当前状态（2026-09-12 第七轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
 >
 > - 工作区干净，**本地领先 `origin/main-wc` 三百多个提交、未推送**
 >   （精确值现场量：`git rev-list --count origin/main-wc..HEAD`）；
-> - 对照台账 **162 唯一行 / 137 个场景-维度**（数 `baseline/parity-diff.json` 的
+> - 对照台账 **159 唯一行 / 137 个场景-维度**（数 `baseline/parity-diff.json` 的
 >   `entries`；量法写在冷启动文档里）；
-> - **「台账还剩多少行」已经不能当坐标系**：162 行里 **99 行**是
+> - **「台账还剩多少行」已经不能当坐标系**：159 行里 **99 行**是
 >   `div[scroll-area-viewport]` 那一笔判过的账（含它在 `tabOrder` 上的投影）、
->   **20 行**是请求层那几条（`retry` 与抽屉挂载拓扑两族），剩下 43 行逐条有判词，
+>   **20 行**是请求层那几条（`retry` 与抽屉挂载拓扑两族），剩下 40 行逐条有判词
+>   （**第七轮起没有一条判词里带「先怀疑」**），
 >   而且第三到第六轮**每一轮都主动把台账做大了**（新开 `dark` / `mobile` 维度、
 >   给 diff 三档挂锚点、把 `channels` 的「已连接」那一支接进来、
 >   给 `scheduled-tasks` 补窄屏与深色）——**窄屏那个工单与两条红门禁都已结清**。
@@ -29,6 +30,35 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第七轮）做了什么
+
+**台账上最后一条判词里带「先怀疑」的行结清了，而它底下是一颗点了会失败的按钮。**
+
+`chat-thread-init-ordering` 的 3 行 `button "Edit and rerun"` 挂了很多轮。
+backlog 的假设是「上游的 `thread.isLoading` 在 SSE 关掉之前一直为真」——
+**探针把它证伪了**：上游 `isLoading=false`、`canEdit=true`、`replayActionBusy=false`、
+handler 也在，唯独 `latestEditableHumanMessageId` 解析成 `null`。
+
+再把消息打出来，两边的组逐条相同，只差一个字段：第二条 human 的 `id`
+上游是 `null`、本仓是 `values-0`。而 `getLatestEditableTurn`（两边逐字同源）
+要求 human 消息**有 id**。
+
+`values-0` 的来路也量清楚了：**两边 POST 的 `input.messages` 逐字相同、都不带 id**，
+差的是 `stream_mode`——上游 `["messages-tuple","updates","custom"]`，
+本仓多一个 `"values"`。mock 原样回显 POST 体，那条没有 id 的消息因此出现在
+`values` 帧里，本仓的 `reduceValues` 按位置给它编了一个键 `values-<index>`，
+**而这个键随后就坐在 `AgentMessage.id` 上，与真 id 长得一模一样**。
+
+判词：**本仓是坏的**。「编辑并重新运行」要把 id 交给
+`POST /runs/edit-regenerate/prepare`，`values-0` 服务端解析不了。
+修法只动 `frontend-vue/`：前缀与判据收进 reducer 一处导出，调用点
+`MessageList.vue` 用它把这类 id 挡在可编辑之外；判据收紧到「前缀 + 纯数字」。
+**判据放在调用点而不是共享工具里**——那支工具与上游逐字同源。
+
+读数 **5 行 → 2 行**（剩下两行是判过的 Next 路由播报器那一对）。
+负向验证三条：拿掉调用点那道闸 → 台账 2 → 5；判据永远 false → 一条单测红；
+判据放松成只判前缀 → 另一条单测红。
 
 ## 上一轮（2026-09-12 第六轮）做了什么
 
