@@ -188,9 +188,17 @@ function archiveErrorOptions(cause: unknown) {
         只由技能清单的 loading/error 决定。放在里面等于让 header 多等一个上游
         没有的 gate；放在外面之后，两个应用画出 header 的条件逐字相同。
       -->
+      <!--
+        `flex-wrap`：375px 下标签与右边那两颗键并排放不下。本仓这一侧看不出问题
+        （reka 的 ScrollArea viewport 没有包装层，内容被约束在 100% 宽），
+        但上游那一侧会——Radix 的 viewport 把子节点包进
+        `min-width:100%; display:table`，而 table 盒取的是**收缩到适合**的宽度，
+        于是放不下的一行不会溢出裁掉，而是把整个面板撑得比对话框还宽，
+        下面每一行都跟着按那个宽度排。两边同改，保持这一行逐字相同。
+      -->
       <header
         v-if="!skills.error.value && !skills.loading.value"
-        class="flex justify-between"
+        class="flex flex-wrap justify-between gap-2"
       >
         <div class="flex gap-2">
           <Tabs v-model="filter">
@@ -328,7 +336,7 @@ function archiveErrorOptions(cause: unknown) {
             class="w-full"
             :data-testid="`skill-${skill.name}`"
           >
-            <ItemContent>
+            <ItemContent class="min-w-0">
               <ItemTitle>
                 <div class="flex items-center gap-2">{{ skill.name }}</div>
               </ItemTitle>

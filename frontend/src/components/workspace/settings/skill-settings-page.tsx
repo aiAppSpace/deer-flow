@@ -151,7 +151,18 @@ function SkillSettingsList({
   };
   return (
     <div className="flex w-full flex-col gap-4">
-      <header className="flex justify-between">
+      {/*
+        flex-wrap: the tabs and the two action buttons do not fit side by side
+        at 375px. Radix's ScrollArea viewport wraps its children in
+        `min-width:100%; display:table` (react-scroll-area/dist/index.mjs:130),
+        and a table box takes its *shrink-to-fit* width — so a row that does not
+        fit does not overflow-and-clip, it makes the whole panel wider than the
+        dialog. Every row below then lays out at that wider width: the skill
+        switch was measured at x=395.5 in a 375px viewport, past the clip edge,
+        with the hit probe unable to reach it. reka's viewport has no such
+        wrapper, which is why only this app was affected.
+      */}
+      <header className="flex flex-wrap justify-between gap-2">
         <div className="flex gap-2">
           {/* #5039 made this controlled (`value`, not `defaultValue`) so
               installing a local archive can switch the tab for you. */}
@@ -209,7 +220,14 @@ function SkillSettingsList({
       {filteredSkills.length > 0 &&
         filteredSkills.map((skill) => (
           <Item className="w-full" variant="outline" key={skill.name}>
-            <ItemContent>
+            {/*
+              min-w-0 so the row can shrink below its content width, matching
+              the channels row (channels-settings-page.tsx:187). This is not
+              what pushed the switch off-screen at 375px — see the header above
+              for that — but a flex item that cannot shrink is a latent version
+              of the same failure.
+            */}
+            <ItemContent className="min-w-0">
               <ItemTitle>
                 <div className="flex items-center gap-2">{skill.name}</div>
               </ItemTitle>

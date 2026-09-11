@@ -139,7 +139,7 @@ async function confirmDelete() {
           variant="outline"
           :data-testid="`subagent-${subagent.name}`"
         >
-          <ItemContent>
+          <ItemContent class="min-w-0">
             <ItemTitle class="flex flex-wrap items-center gap-2">
               <span>{{ subagent.display_name ?? subagent.name }}</span>
               <Badge variant="outline">{{ sourceLabel(subagent) }}</Badge>

@@ -308,7 +308,7 @@ async function toggle(name: string, enabled: boolean) {
           class="w-full"
           :data-testid="`mcp-${String(name)}`"
         >
-          <ItemContent>
+          <ItemContent class="min-w-0">
             <ItemTitle>
               <div class="flex items-center gap-2">
                 <div>{{ displayServerName(String(name)) }}</div>

@@ -1673,6 +1673,22 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       */
       { kind: "hidden", target: { role: "dialog", name: /^(Rename|重命名)$/ } },
       { kind: "visible", target: { text: "Renamed title" } },
+      /*
+        **「对话框消失」也还不是终态。** 2026-09-11 这条幻影差异**又出现了一次，
+        而且方向反了**——上一次记的是 `focus: React=body Vue=button "更多"`，
+        这次量到的是 `React=button "More" Vue=body`。**方向会翻，就是竞态的签名**：
+        谁恰好在焦点归还的中途被取样谁就输。
+
+        对话框关掉之后还有两拍：primitive 把焦点交还给触发它的那颗 ⋯ 键，
+        而列表**因为标题变了会重渲染一次**。等到「有一颗按钮拿到焦点」为止，
+        这两拍就都过去了。
+
+        用 `button:focus` 而不是按名字等那颗 ⋯ 键：可访问名随语言变，而这里要等的
+        是「焦点落回某颗按钮」这件事本身，与是哪一颗无关。
+        **要是哪一边真的把焦点丢在 body 上，这一步会超时**——那正是该被看见的缺陷，
+        不该被一个「等一会儿」盖过去。
+      */
+      { kind: "visible", target: { selector: "button:focus" } },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },

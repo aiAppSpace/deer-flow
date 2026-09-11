@@ -207,7 +207,7 @@ function MCPServerList({
           const displayName = displayServerName(name);
           return (
             <Item className="w-full" variant="outline" key={name}>
-              <ItemContent>
+              <ItemContent className="min-w-0">
                 <ItemTitle>
                   <div className="flex items-center gap-2">
                     <div>{displayName}</div>

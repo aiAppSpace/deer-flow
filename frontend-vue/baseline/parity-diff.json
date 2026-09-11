@@ -1051,10 +1051,7 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:switch[review] x React=395.5 Vue=260 Δ-135.5",
-        "role:switch[review] hit React=off-screen Vue=self"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],

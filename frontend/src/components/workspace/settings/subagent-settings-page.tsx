@@ -173,7 +173,7 @@ export function SubagentSettingsPage() {
                 variant="outline"
                 key={`${subagent.source}-${subagent.name}`}
               >
-                <ItemContent>
+                <ItemContent className="min-w-0">
                   <ItemTitle className="flex flex-wrap items-center gap-2">
                     <span>{subagent.display_name ?? subagent.name}</span>
                     <Badge variant="outline">

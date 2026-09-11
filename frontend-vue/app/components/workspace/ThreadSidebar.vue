@@ -287,6 +287,51 @@ function beginRename(threadId: string) {
   const thread = threads.threads.find((item) => item.thread_id === threadId);
   renameThreadId.value = threadId;
   renameTitle.value = thread ? displayThreadTitle(thread) : "";
+  /* 关闭时要按它把焦点还回去；`renameThreadId` 在对话框关掉之前就被清空了。 */
+  renamingThreadId = threadId;
+}
+
+/*
+  **对话框关掉之后要把焦点还回去。**
+
+  这个对话框是**程序化打开的，没有 `DialogTrigger`**（⋯ 菜单里选「重命名」才开），
+  而 reka 的 `close-auto-focus` 默认把焦点还给 trigger——没有 trigger 就**什么都不做**，
+  焦点留在 `body` 上。上游那一侧不会：Radix 的 FocusScope 在挂载时存下
+  `document.activeElement`、卸载时还回去，与有没有 trigger 无关。
+  后果是键盘用户改完标题**焦点掉回文档顶部**，要从头 Tab 一遍才能回到会话列表。
+
+  **它此前一直表现为「幻影差异」**：台账上 `focus: React=… Vue=…` 一轮有一轮没有、
+  方向还会翻（记过 `React=body Vue=button "更多"`，2026-09-11 量到
+  `React=button "More" Vue=body`）。原因是取样点停在「对话框消失」，那一刻两边
+  都还在焦点归还的中途。把场景最后一步换成「等到有一颗按钮拿到焦点」之后，
+  它从抖动变成了稳定复现。
+
+  **不存元素引用，关闭时按 id 现查**（三次实测换来的做法）：
+  先试过「在 `open-auto-focus` 那一拍存下当时的焦点」——不行，菜单关闭与对话框挂载
+  在同一拍，谁先谁后由组件更新顺序决定；也试过「让 ⋯ 菜单先把焦点交回触发器」
+  ——探针显示点开 ⋯ 之后焦点落在 `div[role=menu]` 上、随后直接被对话框接管，那句
+  `focus()` 根本不起作用。探针同时量到：**重命名之后那颗 ⋯ 键仍然在 DOM 里、
+  仍然连着、`tabIndex=0`**，所以按 id 现查是稳的，也不怕那一行重渲染。
+*/
+let renamingThreadId: string | null = null;
+
+function moreButtonOf(threadId: string) {
+  const link = document.querySelector<HTMLAnchorElement>(
+    `a[href$="/chats/${threadId}"]`,
+  );
+  const row = link?.closest('[data-sidebar="menu-item"]');
+  return row?.querySelector("button") ?? null;
+}
+
+function restoreFocusAfterRename(event: Event) {
+  const threadId = renamingThreadId;
+  renamingThreadId = null;
+  if (!threadId) return;
+  const trigger = moreButtonOf(threadId);
+  /* 找不到就别拦——让 primitive 走默认路径，比把焦点钉在空处强。 */
+  if (!trigger) return;
+  event.preventDefault();
+  trigger.focus({ preventScroll: true });
 }
 
 /*
@@ -912,6 +957,7 @@ function openSettingsDialog(section: "appearance" | "about") {
     <DialogContent
       class="sm:max-w-sm"
       :close-label="$i18n.t.value.primitives.close"
+      @close-auto-focus="restoreFocusAfterRename"
     >
       <!--
         标题、输入框的名字来源和"没有描述"都照 React 的重命名对话框：标题是

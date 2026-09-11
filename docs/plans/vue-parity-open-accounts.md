@@ -3,7 +3,79 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-11 窄屏第一次进取样面：**两个应用各有一颗够不着的控件**
+> ## 2026-09-11 重命名之后焦点掉回文档顶部——**两个应用都是，而且是新加的取样步骤逼出来的**
+>
+> 台账上 `thread-title-sync` 的 `focus` 行**一轮有一轮没有、方向还会翻**
+> （记过 `React=body Vue=button "更多"`，这次量到 `React=button "More" Vue=body`）。
+> 原来的判词是「取样点不稳」，处理办法是加一条 `hidden: dialog[Rename]`。
+> **那个判词只对了一半**：取样点确实不稳，但它盖住的是一条真缺陷。
+>
+> 把场景最后一步换成**「等到有一颗按钮拿到焦点」**（`visible: button:focus`）之后，
+> 抖动消失了，两边先后**稳定超时**——先是本仓，修完本仓换成上游。
+> 然后各写一个临时 e2e 探针读 `document.activeElement`，量到的是同一件事：
+>
+> | | 修之前 | 修之后 |
+> | --- | --- | --- |
+> | 本仓 | `body`（1.3 秒后仍是） | `button "More"` |
+> | 上游 | `body`（1.3 秒后仍是） | `button "More"` |
+>
+> **根因两边同源**：重命名对话框**没有 `DialogTrigger`**（从 ⋯ 菜单里选「重命名」才开）。
+> reka 的 `close-auto-focus` 默认还给 trigger——没有 trigger 就什么都不做；
+> Radix 的 FocusScope 存的是「打开前谁有焦点」，而**打开那一刻焦点还在即将卸载的菜单里**
+> （探针量到点开 ⋯ 之后焦点落在 `div[role=menu]` 上），于是它也还不回去。
+> 键盘用户改完标题掉回文档顶部，要从头 Tab 一遍。
+>
+> **修法：归还给那颗 ⋯ 键，不是「打开前谁有焦点」。** 探针同时量到那颗键在重命名之后
+> **仍在 DOM 里、仍连着、`tabIndex=0`**，所以它是稳的目标。本仓按线程 id 现查
+> （对话框由上层持有，中继链有 5 层，穿元素引用太吵，而且引用跨不过重渲染）；
+> 上游那一侧对话框就在行组件里，直接用 `ref`。
+>
+> **两次没修好的尝试，写在代码注释里**（都是猜的，都被实测推翻）：
+> ① 在 `open-auto-focus` 那一拍存下当时的焦点——菜单关闭与对话框挂载在同一拍，
+> 谁先谁后由组件更新顺序决定；② 让 ⋯ 菜单先把焦点交回触发器再报事件——
+> 探针显示那句 `focus()` 随后就被对话框接管，**量不出效果，所以那一版撤掉了**。
+>
+> **方法上的一条**：`visible: button:focus` 这种「等到某个不变量成立」的步骤，
+> 比「等某个元素消失」强——后者只能等到中间态，前者等到的是终态。
+> 它的代价是**真有缺陷时会硬红而不是悄悄漂移**，这正是要的。
+>
+> ## 2026-09-11 那颗够不着的开关：**根因在 Radix 的 ScrollArea，不在行里**
+>
+> **先记两次错判**，因为它们各自省下的时间比结论本身多：
+>
+> 1. **误读 `hit=off-screen`。** 我把 `integrations#change-app` 上
+>    `role:button[Re-register in browser] hit Vue=off-screen` 也读成「本仓那颗跑出视口」。
+>    **不对**：`hit` 用的是**探针那一刻的视口矩形**（`capture.ts:392`，
+>    `cx/cy` 取自 `getBoundingClientRect()`，超出 `innerWidth/innerHeight` 就记
+>    `off-screen`），**竖直滚出去也算**。那一行的 `x` 两边相同、只有 `y` 差 274.9——
+>    它在 y≈3250，375×812 的视口里本来就看不到。
+>    **判据**：`hit=off-screen` 只有在同一行的 `x` 也超出视口宽度时才读成「横向够不着」。
+> 2. **根因猜成了 `min-w-0`。** 六处 `ItemContent` 补上 `min-w-0` 之后**读数一行没动**
+>    （88 → 88，开关还在 x=395.5）。那六处留着（与上游
+>    `channels-settings-page.tsx:187` 一致，本身是对的），但它不是这条的根因。
+>
+> **真根因**：Radix 的 ScrollArea 把子节点包进
+> `<div style="min-width:100%; display:table">`（`@radix-ui/react-scroll-area@1.2.10`
+> 的 `dist/index.mjs:130`），而 **`display:table` 取的是「收缩到适合」的宽度**——
+> 放不下的一行**不会溢出被裁掉，而是把整个面板撑得比对话框还宽**，
+> 下面每一行都跟着按那个宽度排。**reka 的 viewport 没有这层包装**，
+> 内容被约束在 100%，所以同样的 markup 只有上游那一侧坏。
+>
+> 撑宽它的是技能页的 header：`flex justify-between` 里左边 Tabs、右边两颗键
+> （安装 .skill / 创建技能），375px 下并排放不下。两边同改成
+> `flex flex-wrap justify-between gap-2`。
+>
+> **实测：`integrations#skills/mobile` 4 → 2 行**，`x Δ-135.5` 与 `hit React=off-screen`
+> 双双消失；桌面维度一行没动（总数 88 → 86，正好是那两行）。
+>
+> **还开着的两簇**（工单在 backlog）：`integrations#change-app` 11 行与
+> `permission-request` 11 行。后者三颗权限芯片两边折行点不同
+> （React 的 Docs 在 x=104、Drive 在 169.6 同一行；本仓 Docs 在 211、Drive 换行到 104），
+> 而且**两边的 `hit` 都不是 `self`**（React 命中 span/span/button，本仓命中
+> div/div(dialog)/p）——那说明芯片中心点上盖着别的东西，**两边盖的还不是同一个**。
+> 这一条需要探针，别接着猜。
+>
+> ## 2026-09-11 窄屏第一次进取样面：**上游有一颗够不着的控件**
 >
 > 122 个场景-维度里 **110 个是 desktop**；非 desktop 的只有 `chat`（跑满矩阵）、
 > `thread-list-pin#mobile-drawer` 与 `ui-polish-mobile` 三个。
@@ -14,8 +86,17 @@
 >
 > | 行 | 读数 | 说明 |
 > | --- | --- | --- |
-> | `integrations#skills` | `role:switch[review] x React=395.5 Vue=260`、**`hit React=off-screen`** | **上游的技能开关在 375px 下跑出了视口**：x=395.5 > 375，命中测试返回 off-screen。手机上点不到那颗开关。 |
-> | `integrations#change-app` | `role:button[Re-register in browser] hit React=div **Vue=off-screen**` | **本仓那颗「在浏览器重新注册」跑出了视口**——同一类缺陷，方向相反。 |
+> | `integrations#skills` | `role:switch[review] x React=395.5 Vue=260`、**`hit React=off-screen`** | **上游的技能开关在 375px 下横向跑出了视口**：x=395.5 > 375（x 是把祖先滚动加回去的坐标，而这条链上没有横向滚动容器，所以它就是视口 x），`hit` 也确认拿不到指针。手机上点不到那颗开关。 |
+>
+> **一条自己立刻推翻的判断，留在这里免得下一轮照着错的查**：我最初把
+> `integrations#change-app` 的 `role:button[Re-register in browser] hit Vue=off-screen`
+> 也读成了「本仓那颗跑出视口」。**不对。** 那一行的 `x` 两边相同（没进 diff），
+> 只有 `y` 差 274.9；而 `hit` 用的是**探针那一刻的视口矩形**
+> （`capture.ts:392`：`cx/cy` 取自 `getBoundingClientRect()`，超出 `innerWidth/innerHeight`
+> 就记 `off-screen`），**竖直方向滚出去也算**。那颗按钮在 y≈3250 处，
+> 375×812 的视口里本来就看不到——它是「内容更高、于是被滚出去了」的结果，
+> 不是一个够不着的控件。**判据**：`hit=off-screen` 只有在同一行的 `x` 也超出视口宽度时
+> 才能读成「横向够不着」；只有 `y` 不同时，它是位移的投影。
 >
 > 另外 `integrations#permission-request` 上三颗权限芯片（Calendar / Docs / Drive）
 > 的 x/y 与命中目标两边都不一样（`Docs` 的 x 差 107、`Drive` 差 -65.6，

@@ -139,6 +139,22 @@ export function ThreadSidebarItem({
   const archiveAction = useThreadArchiveAction();
 
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  /*
+    Send focus back to this row's "More" button when the rename dialog closes.
+
+    The dialog has no DialogTrigger — it is opened from the dropdown menu — so
+    Radix's FocusScope has nothing to restore to: measured with a probe, focus
+    ends up on <body> and stays there, both right after the dialog hides and a
+    second later. A keyboard user who renames a chat is dropped at the top of
+    the document and has to tab all the way back.
+
+    Restoring to the trigger element (rather than to whatever had focus when the
+    dialog opened) is deliberate: at open time focus is still inside the menu
+    that is about to unmount, so that element is gone by the time we would need
+    it. The button itself survives the rename — the row re-renders with a new
+    title but keeps the same element.
+  */
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
   const [renameValue, setRenameValue] = useState("");
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
 
@@ -324,6 +340,7 @@ export function ThreadSidebarItem({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
+              ref={moreButtonRef}
               showOnHover
               className="bg-background/50 hover:bg-background after:left-0!"
             >
@@ -417,7 +434,19 @@ export function ThreadSidebarItem({
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          className="sm:max-w-[425px]"
+          onCloseAutoFocus={(event) => {
+            const trigger = moreButtonRef.current;
+            // Nothing to restore to: let Radix take its default path rather
+            // than pinning focus on a node that is no longer in the document.
+            if (!trigger?.isConnected) {
+              return;
+            }
+            event.preventDefault();
+            trigger.focus({ preventScroll: true });
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{t.common.rename}</DialogTitle>
           </DialogHeader>

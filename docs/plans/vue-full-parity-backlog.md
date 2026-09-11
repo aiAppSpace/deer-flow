@@ -238,15 +238,31 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 给 `integrations` 加了一维 `mobile/light/en-US`（375×812）之后当场现形：
 
-- **上游**：`integrations#skills` 那颗技能开关 `x=395.5`（视口 375），
-  命中测试返回 **off-screen**——手机上点不到。
-- **本仓**：`integrations#change-app` 那颗「在浏览器重新注册」同样 **off-screen**。
+- ~~上游那颗技能开关 `x=395.5`、命中 off-screen~~ **已修**：根因是 Radix 的 ScrollArea
+  把子节点包进 `min-width:100%; display:table`，table 盒取收缩到适合的宽度，
+  于是放不下的 header 把整个面板撑宽、下面每行跟着排。两边同改成
+  `flex flex-wrap justify-between gap-2`，实测那一屏 4 → 2 行。
+- ~~本仓那颗「在浏览器重新注册」同样 off-screen~~ **误读，已订正**：那一行的 `x`
+  两边相同，只有 `y` 差 274.9，而 `hit` 用的是探针那一刻的**视口**矩形，
+  竖直滚出去也记 `off-screen`。它是位移的投影，不是够不着的控件。
+  判据写在 `vue-parity-open-accounts.md` 对应那一节。
 - 两边 `integrations#permission-request` 上三颗权限芯片的折行方式不同
   （`Docs` 的 x 差 107、`Drive` 差 -65.6，命中目标分别落在 span / div(dialog) / button / p 上）。
 
-**修的时候先看这一条**：`Item` 是 `flex-wrap` 的，`ItemActions` 被挤出容器通常是因为
-**`ItemContent` 少了 `min-w-0`**——`channels` 那一轮上游那一行写的就是
-`<ItemContent className="min-w-0">`，而技能行与 MCP 行两边都没写。
+**修的时候先看这一条**（2026-09-11 实测，不是猜的）：
+**上游那一侧的窄屏溢出，根因几乎总在 `display:table` 那层包装**——
+Radix 的 ScrollArea viewport 把子节点包进 `min-width:100%; display:table`，
+table 盒取**收缩到适合**的宽度，所以「放不下」不会变成「溢出被裁」，
+而是**把整个面板撑宽**，下面每一行跟着按那个宽度排。找那一屏里
+**放不下的那一行**（通常是 header 那种 `flex justify-between`），给它 `flex-wrap`。
+reka 的 viewport 没有这层，所以本仓那一侧看不出来——**两边同改**才能保持这一行逐字相同。
+
+`min-w-0` 试过了，**对这条无效**（读数一行没动）；六处还是补上了，
+因为它与上游 `channels-settings-page.tsx:187` 一致，且是同一种失效的潜伏版本。
+
+`permission-request` 那一簇**两边的 `hit` 都不是 `self`**（React 命中 span/span/button，
+本仓命中 div/div(dialog)/p）——芯片中心点上盖着别的东西，两边盖的还不是同一个。
+**这一条需要探针，别接着猜。**
 
 这一维带进来的行已经接受进基线（判词是「已确认是缺陷，工单在这里」），
 所以**修好之后台账会自己缩短**，不需要再开一次逃生口。
@@ -299,7 +315,13 @@ token 与 `h-9` 的统一高度——**同一个对话框里另外三颗 Select 
 而**本仓没有移植 `ui/input-group`**，整块 composer 外壳是手写的。
 
 
-- ~~`thread-title-sync/zh-CN` 的 `focus` 幻影差异~~ **已确认是取样点不稳，并修好。**
+- ~~`thread-title-sync/zh-CN` 的 `focus` 幻影差异~~ **判词只对了一半，2026-09-11 订正：
+  取样点确实不稳，但它盖住的是一条两个应用都有的真缺陷**（重命名对话框关掉之后
+  焦点掉回 `body`）。把最后一步换成 `visible: button:focus` 之后抖动消失、两边先后
+  稳定超时，探针逐一量过。详见 `vue-parity-open-accounts.md` 对应那一节。
+  下面这段是当时的原话，留着看判据是怎么被推进的：
+
+  ~~已确认是取样点不稳，并修好。~~
   它在一轮里有、下一轮里没有，而且只在一个语言维度上出现。根因是 steps 停在
   「新标题出现」——那一刻焦点还在往回还（对话框把它交还给触发它的那颗 ⋯ 键）。
   加一条 `hidden: dialog[Rename]` 之后那一行消失，零新增。
