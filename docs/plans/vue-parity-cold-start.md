@@ -8,44 +8,50 @@
 
 ## 开工指令（整段贴给新窗口）
 
-你接手一个已经跑了 **202 轮**的长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐
-`frontend/`（Next.js/React），目标是「移走 `frontend/` 之后 Vue 仍能自足」。
-仓库在 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，
-分支 `main-wc`，**接手时 HEAD 是 wave 201 的文档提交，已推到
-`origin/main-wc`，本地与远端齐平**。
+你接手一个长期任务：把 `frontend-vue/`（Nuxt/Vue）对齐 `frontend/`（Next.js/React），
+目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
+`/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-> **远端换过一次家（2026-09-09）。** 原来的 `YanivWang/deer-flow` 消失了，
-> `origin` 一度被指向上游 `bytedance/deer-flow`（无写权限，推不上去）。
-> 现在的布局是常规的两个远端：
->
-> - `origin` = `https://github.com/aiAppSpace/deer-flow.git`（**私有**，工作副本，往这里推）
-> - `upstream` = `https://github.com/bytedance/deer-flow.git`（上游，只取不推）
->
-> 旧文档与旧提交说明里出现的 `YanivWang/deer-flow` 都是指这份工作副本的前身。
+**接手时的状态（2026-09-12 01:00 实测，不是估计）**：
 
-**这个阶段的工作性质已经变了，先知道这一点再动手**：产品面的差异基本清完了
-（台账**实测 103 行 / 95 个取样点**——`node frontend-vue/scripts/parity-ledger-report.mjs` 量，
-别引用散文；**三张 pending 表 wave 200 起全是空的**，一页纸清单原来那句「真正还开着的 4 条」是历史文本——wave 157 把 tooltip 那条判决关闭了——
-只剩一条 `chat-thread-init-ordering` 是真的还欠着——**wave 158 修掉两处根因（`aria` 20/20 达标），
-wave 159 把 `requests` 那一档也查到根因、并权衡后决定不改**，接着做就看
-`frontend-vue/baseline/parity-scenario-coverage.json` 的 `$pendingReasons`），
-现在最有货的不是「再找一处 UI 差异」，而是
-**「找出一句写下来、当规则用、却没有任何机器在守的话」**——
-wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句，
-到 wave 157 为止已经十七句（wave 154 浮层层级、155 拓扑表端口、156 仓库地图、
-**157 那一句最值得记：`AGENTS.md` 写着 provisioner 是 optional，而裸 `docker compose up`
-会无条件启动它——用户机器上它崩溃重启了 4370 次，三天没人知道**）（wave 145 那一句最值得记：**「基类不一致的每一条都要在 DECLARED 里有名有姓」——而 7 个最高频组件根本进不了那个集合**）：
-「A 会自愈」「两边差 18px」「这几份是手工维护的」「仍然在外面的两类」
-「pending 只能变短」「凡是能机械算出来的都在这里对一遍」
-「tests/ 有意不在范围里」「顺序天然测不出来，只能靠人盯着两边看」
-「`retry: false` 与上游一致」（wave 128）
-「这两个锚点钉住的是编辑表单」「那条 key 上游词典里也有 → 才算共有分支」
-「守住本仓写下的、**对上游的** `文件:行号` 引用」（三句都在 wave 129）。
-**在被撞之前，没有任何门禁会因此变红。**
+- HEAD = `38ed4513`，工作区干净；
+- **本地领先 `origin/main-wc` 304 个提交，全部未推送**（没有收到过推送指令；
+  要推就先问用户）；
+- 对照台账 **154 唯一行 / 129 个场景-维度**
+  （`node frontend-vue/scripts/parity-ledger-report.mjs` 量，别引用散文数字）。
 
-**wave 106 又补了一条配套判据**：同一个形状**可以不长成一张表**——
-`gen-contract-constants.mjs` 那处是三个 `readContract("…")` 调用点，
-只 grep `const [A-Z_]+ =` 会漏掉。要问的是「**这段代码凭什么认为自己盖全了**」。
+> **远端布局**（2026-09-09 换过一次家）：
+> `origin` = `https://github.com/aiAppSpace/deer-flow.git`（**私有**，工作副本，往这里推）；
+> `upstream` = `https://github.com/bytedance/deer-flow.git`（上游，只取不推）。
+> 旧文档里出现的 `YanivWang/deer-flow` 是这份工作副本的前身。
+> **硬禁令：不要删任何远程 fork**——fork 关系删了建不回来，要换指向用 `git remote set-url`。
+
+## 这个阶段的工作性质（先读完再动手）
+
+**「台账还剩多少行」已经不能当坐标系了。** 2026-09-11 那一轮把台账上的
+**每一行都判过了**：154 行里 **87 行是三条早就判过的账**
+（`div[scroll-area-viewport]` 47 行 + 它在 `tabOrder` 上的投影、`retry: false` 18 行、
+另两条请求层各 2 行），**20 行是窄屏那个开着的工单**，剩下的逐条写了判词与翻案判据。
+所以行数涨落本身不说明好坏——**它涨是因为取样面变大了**（那一轮新开了
+`dark` 与 `mobile` 两个维度）。
+
+**这一阶段真正有货的是三类**，按性价比排：
+
+1. **把取样面往没人看过的维度开一扇窗。** 2026-09-11 实测：
+   - 开 `dark`（只给 `integrations`）→ **零条新差异**，但从此有机器守着
+     「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
+   - 开 `mobile`（同样只给 `integrations`）→ **当场量出上游一颗够不着的控件**
+     （技能开关在 375px 下 `x=395.5`，手机上点不到）。
+   - **129 个场景-维度里仍有 110 个是 desktop**，非 desktop 的只有 `chat`（跑满矩阵）、
+     `thread-list-pin#mobile-drawer`、`ui-polish-mobile` 与新开的 `integrations`。
+     照同一条纪律（**一个场景补一维就够**，主题/断点/语言三轴正交）继续开，
+     是现在最划算的一条。
+2. **把「写下来当规则用、却没人守」的话变成守卫。** 这条一直有货，判据见下面 C 节。
+   2026-09-11 新增一道：`handwritten-input`（手写 `<input>`/`<textarea>` 绕过
+   `ui/input`——在它之前，把 primitive 的基类抄成本地常量不会让任何门禁变红）。
+3. **上游的缺陷。** 2026-09-11 那一轮修掉的 16 处用户可见缺陷里**大半在上游**，
+   包括一颗叫 "Disconnect"、实际删掉整个部署渠道配置、而且对所有人可见的按钮。
+   判据是「修 React 自身缺陷是已授权的例外，做法是两边同改」。
 
 ### 第一步：按这个顺序读，不要跳
 
@@ -122,18 +128,30 @@ wave 101~106 连着六轮都是这个形状，之后又连着撞出来好几句�
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-make -C <abs>/frontend-vue verify          # exit 0；267 文件 / 2219 单测；词典 942 key / 18 unused
-make -C <abs>/frontend-vue standalone-sim  # exit 0；跑过 15 / 未跑 5 / 红 0（wave 116 起跑整套 vitest）
-make -C <abs>/frontend-vue e2e-parity      # 98 passed（--list 报 97 tests in 3 files；旧读数记的 96 漏了 topology.spec.ts 一条）；台账 202 行 / 90 样本
-make -C <abs>/frontend-vue e2e-mock        # 265 + 22 + 15 + 2 + 6
-make -C <abs>/frontend-vue e2e-visual      # 8 passed（只有 -darwin 基线，本机门禁）
-make -C <abs>/frontend-vue asset-budget    # exit 0
-make -C <abs>/frontend-vue e2e-backend     # 2+5+2+3+3+5+1+1（需要 backend 的 uv 环境）
-make -C <abs>/frontend-vue icon-parity     # 0 处待核、**0 条 ⚠**（wave 111 起 stale 会 exit 1）
-make -C <abs>/frontend-vue audit           # **预期红 14**，分诊写在 Makefile 的 audit 上方
-make -C <abs>/frontend-vue e2e-external   # 3 passed（它**不在任何聚合入口**，
-                                          #  也一直不在这张清单里；wave 107 跑了一次，绿）
+# 2026-09-12 实测读数（每一条都是那一轮真跑出来的，不是抄的）
+make -C <abs>/frontend-vue verify         # exit 0；320 文件 / 2636 单测；词典 1139 key / 15 unused
+make -C <abs>/frontend-vue e2e-parity     # 3 passed（diff.spec 约 11 分钟）；台账 154 唯一行 / 129 场景-维度
+make -C <abs>/frontend-vue e2e-mock       # 317 passed
+make -C <abs>/frontend-vue e2e-backend    # 22 passed（需要 backend 的 uv 环境）
+make -C <abs>/frontend-vue parity-accept  # 只能让台账变短；要变长得 PARITY_ACCEPT_GROW=1
+                                          #  并在提交说明里逐行解释
+make -C <abs>/frontend-vue standalone-sim # exit 0
+make -C <abs>/frontend-vue e2e-visual     # 8 passed（只有 -darwin 基线，本机门禁）
+make -C <abs>/frontend-vue asset-budget   # exit 0
+make -C <abs>/frontend-vue icon-parity    # 0 处待核、0 条 ⚠
+make -C <abs>/frontend-vue audit          # **预期红**，分诊写在 Makefile 的 audit 上方
+make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口）
 ```
+
+**动过 `frontend/` 就必须加跑 React 三条**（这一阶段几乎每轮都会动它）：
+`python3 scripts/pnpm.py --dir frontend check`（0）/ `test`（**1354**）/
+`test:e2e`（要用 3002 端口的绕法，写在交接文档「React 的 test:e2e 绕法」那一段）。
+
+**一轮的典型节奏**（2026-09-11 那轮 14 笔提交都是这么走的）：
+`PARITY_ONLY=<场景id> make e2e-parity`（约 5 分钟，单场景 + 两侧完整请求序列转储）
+量一次 → 改 → 再量一次确认 → 然后才跑
+`verify` → `e2e-mock` → `e2e-backend` → `parity-accept` 全套（约 40 分钟）→ 提交。
+**别跳过单场景那一步**：它 5 分钟换掉一次 40 分钟的盲跑。
 
 **读门禁输出不要只 grep 最后一行**（wave 111）：`icon-parity` 的 stale 警告
 （`⚠ VERIFIED 表里这几条已经不再出现`）在「共 0 处待核」**上面**，而它此前只
@@ -234,6 +252,50 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
   `12 路并发 import 的实际状态码：[...]`（wave 102 补的），**不要直接重跑**。
 
 ---
+
+## 上一轮（2026-09-11/12）做了什么，下一轮从哪接
+
+**14 个提交，`6ab3cfb3` … `38ed4513`。台账 330 → 154 唯一行。**
+逐条判词在 `vue-parity-open-accounts.md` 顶部那一串 2026-09-11 条目，
+收工报告在 `docs/plans/vue-parity-2026-09-11-round3-report.md`。
+
+**下一轮最该先拿的三件（按顺序）**：
+
+1. **窄屏那个开着的工单**（`vue-full-parity-backlog.md` 里「剩下的两簇」那一节）。
+   `integrations#change-app` 与 `#permission-request` 各 11 行，
+   **四条假设已经逐个实测排除，写在工单里，别重走**。
+   下一步是写一个**真正走到 change-app 状态**的探针，比对两边 `App ID` 输入的
+   父链宽度，找出是哪一层开始差 25px。
+2. **继续开取样维度**：照 `DARK_DIMENSION` 的注释，给别的带错误态的场景各补一维
+   `dark`；窄屏同理。**一个场景补一维就够。**
+3. **`ui/input-group` 没有移植**：三个 composer（`ChatComposer` /
+   `AgentBootstrapComposer` / `SidecarPanel`）的输入框上游走
+   `PromptInputTextarea → InputGroupTextarea → <Textarea>`，本仓整块外壳是手写的。
+   工单在 backlog。**注意这是高流量组件**，动它之前先确认台账上它现在是 0 行
+   （也就是说没有可观测差异在推动这次重构，它是结构卫生）。
+
+### 上一轮踩出来的、下一轮直接用的四条
+
+1. **只在一个语言维度报差异 = 一侧没翻译。** 这一条这一轮用了三次、三次都命中
+   （mermaid 工具条、浏览器面板、产物面板的「JPG file」——全是上游写死的英文）。
+2. **`hit=off-screen` 不等于「够不着」。** `hit` 用的是探针那一刻的**视口**矩形，
+   竖直滚出去也记 `off-screen`。只有在**同一行的 `x` 也超出视口宽度**时，
+   才能读成「横向够不着」。我因此误判过一次，订正写在挂账文档里。
+3. **探针要限定作用域。** `querySelector('[data-slot="scroll-area-viewport"]')`
+   会抓到页面上**第一个**（聊天页欢迎建议行那个 ScrollArea），不是对话框里的。
+   必须 `dialog.querySelector(...)`。我因此把一个错读数当真读数用了一轮。
+4. **量不出效果的改动不要留。** 这一轮有两处改完读数一行没动
+   （`min-w-0`、给 ScrollArea 加 `[&>div]:block`），
+   一处还原、一处留下但把注释改成实话（「它不是这条的根因」）。
+
+### 一条方法学（这一轮最值钱的）
+
+**「等到某个不变量成立」的取样步骤，比「等某个元素消失」强。**
+`thread-title-sync` 的 `focus` 行抖了很多轮、方向还会翻，旧判词是「取样点不稳」。
+把最后一步从「等对话框消失」换成 `visible: button:focus`（等到有一颗按钮拿到焦点）之后，
+抖动消失、**两边先后稳定超时**——它盖住的是一条两个应用都有的真缺陷：
+重命名对话框关掉之后焦点掉回 `body`。
+代价是真有缺陷时会**硬红而不是悄悄漂移**，这正是要的。
 
 ## 下一轮可以挑的活（按性价比排）
 
