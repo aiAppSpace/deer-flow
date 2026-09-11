@@ -1632,6 +1632,61 @@
         "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
+    "channels#settings-panel-connected/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [
+        "- button \"Add account\"",
+        "- heading \"Connected accounts\" [level=4]",
+        "- text: parity-account Connected"
+      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "text:/parity-account/ y React=753 Vue=736.9 Δ-16.1",
+        "text:/parity-account/ width React=265.1 Vue=258.4 Δ-6.7"
+      ],
+      "focus": [],
+      "order": [
+        "第 47 个公共节点 React=- button \"Modify\" Vue=- button \"Disconnect parity-account\": Disconnect"
+      ],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "div[scroll-area-viewport]"
+      ],
+      "tabbablesOnlyVue": [
+        "button"
+      ],
+      "tabOrder": [
+        "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
+      ]
+    },
+    "channels#settings-panel-connected/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [
+        "- button \"添加账号\"",
+        "- heading \"已连接账号\" [level=4]",
+        "- text: parity-account 已连接"
+      ],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [
+        "text:/parity-account/ y React=711 Vue=694.9 Δ-16.1"
+      ],
+      "focus": [],
+      "order": [
+        "第 47 个公共节点 React=- button \"修改\" Vue=- button \"断开 parity-account\": 断开连接"
+      ],
+      "depth": [],
+      "tabbablesOnlyReact": [
+        "div[scroll-area-viewport]"
+      ],
+      "tabbablesOnlyVue": [
+        "button"
+      ],
+      "tabOrder": [
+        "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
+      ]
+    },
     "thread-history-mermaid#default/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
