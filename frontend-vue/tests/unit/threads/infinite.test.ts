@@ -300,6 +300,42 @@ describe("upsertThreadInInfiniteCache", () => {
     expect(ids).toEqual(["a", "b"]);
     expect(cache?.pages[0]?.[0]?.values.title).toBe("Old title");
   });
+
+  /*
+    **插进去之后还要问一次服务端。**
+
+    带 `archived` 过滤的那几份缓存，成员关系是服务端说了算：一条刚建出来的 thread
+    身上没有归档元数据（上游同一处的注释）。上游在这里**只失效、不插**；本仓两样
+    都做，理由写在 `upsertThreadInInfiniteCache` 上——不插的话 `useThreads.upsert()`
+    永远判它是「新行」，这一轮 run 里会一路级联地失效下去
+    （单场景实测：只失效那版 React 4 次 / 本仓 6 次；插 + 失效之后 4 : 4）。
+  */
+  test("插完还会失效带 archived 过滤的那几份，交给服务端确认成员关系", () => {
+    const client = new QueryClient();
+    const filteredKey = [
+      ...INFINITE_THREADS_QUERY_KEY_PREFIX,
+      { archived: false },
+    ];
+    client.setQueryData(filteredKey, {
+      pages: [[makeThread("a")]],
+      pageParams: [0],
+    });
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+
+    upsertThreadInInfiniteCache(client, makeThread("new"));
+
+    // 本地立刻可见——不插的话 upsert() 会把它一直当成新行。
+    expect(
+      client
+        .getQueryData<InfiniteData<AgentThread[]>>(filteredKey)
+        ?.pages[0]?.map((t) => t.thread_id),
+    ).toEqual(["new", "a"]);
+    // 同时问一次服务端，且**只问带过滤的那几份**。
+    const filteredCalls = invalidate.mock.calls.filter(
+      ([filters]) => filters?.predicate,
+    );
+    expect(filteredCalls).toHaveLength(1);
+  });
 });
 
 describe("invalidateStoppedThreadCaches", () => {

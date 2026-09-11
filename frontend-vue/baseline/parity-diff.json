@@ -189,9 +189,7 @@
         "- alert: New chat - DeerFlow",
         "- button \"Edit and rerun\""
       ],
-      "requestsOnlyReact": [
-        "POST /api/threads/search"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],

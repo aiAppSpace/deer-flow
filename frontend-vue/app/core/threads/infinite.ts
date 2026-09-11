@@ -181,6 +181,20 @@ function mergeExistingThread(
   };
 }
 
+/**
+ * 列表缓存的 key 里带不带 `archived` 过滤。
+ *
+ * 带过滤的那几份，**成员关系是服务端说了算**：一条刚建出来的 thread 身上没有归档
+ * 元数据，本地插进「只看未归档」的列表是在替服务端猜（上游同一处的注释：
+ * "Run-created snapshots do not carry archive metadata"）。
+ */
+function hasArchiveFilter({ queryKey }: { queryKey: readonly unknown[] }) {
+  return (
+    typeof (queryKey[2] as InfiniteThreadsParams | undefined)?.archived ===
+    "boolean"
+  );
+}
+
 export function upsertThreadInInfiniteCache(
   queryClient: QueryClient,
   thread: AgentThread,
@@ -216,4 +230,22 @@ export function upsertThreadInInfiniteCache(
       };
     },
   );
+  /*
+    插完还要问一次服务端：本地这一条是**猜**的成员关系（见 hasArchiveFilter）。
+    上游在这里只失效、**不**乐观插入（`hooks.ts:1281`）。
+
+    **本仓不能照抄那一半**，实测过：`useThreads` 的 `upsert()` 是靠「这条在不在
+    当前视图里」来分「新行 / 已有行」的——不插进本地缓存，视图里就永远没有它，
+    于是这一轮 run 里后面每一次 `upsert` 都再判一次「新行」、再失效一次，级联出去。
+    单场景实测：只失效那版 React 4 次 / 本仓 **6 次**，方向反了过来。
+    插 + 失效之后是 React 4 次 / 本仓 4 次。
+
+    插进去也不会猜错成员关系：**走到这个函数的只有「刚建出来的 thread」那条路**
+    （`useThreads.upsert()` 的 else 支），而新建的 thread 不可能已归档；
+    真要有出入，紧跟着这次失效带回来的服务端那一份会纠正它。
+  */
+  void queryClient.invalidateQueries({
+    queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+    predicate: hasArchiveFilter,
+  });
 }
