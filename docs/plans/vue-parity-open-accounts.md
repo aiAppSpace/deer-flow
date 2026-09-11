@@ -3,6 +3,53 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 `mcp-settings` 的 `width Δ8`：两颗图标键差了一档尺寸
+>
+> `text:Local tools width React=654 Vue=662 Δ8`。整行的结构两边逐层相同
+> （`Item variant="outline"` + ItemContent/ItemTitle/ItemDescription/ItemActions），
+> 差的是动作列里那两颗图标键：上游 `size="icon"`（36px），本仓 `size="icon-sm"`（32px）。
+> 两颗一共窄 8px，动作列窄了描述列就宽了 8px——**`Δ8` 就是这么来的**。
+> 改成与上游同一档。
+>
+> **顺带修掉上游的一处 WCAG 4.1.2**：同一行里那颗 `Switch` 上游**没有任何可访问名**
+> （本仓一直有 `:aria-label="String(name)"`），读屏器只念得出「switch」，
+> 说不出是哪一个 server 的。两边同改。
+>
+> ## 2026-09-11 台账剩下的每一行都判掉了（收口）
+>
+> 到这一轮为止，台账 **330 → 108 行**。把判过的账刨掉之后**真正还开着的只有 19 行**，
+> 逐条列在这里——目标是让「台账还剩多少行」这个数字**不再需要解释**。
+>
+> ### 一条差异、47 行投影：`div[scroll-area-viewport]`
+>
+> wave 98 判过「不跟」：上游把欢迎建议行套在 `ai-elements/suggestion` 的
+> `Suggestions` 里，那是一个横向 `ScrollBar` 写着 `className="hidden"` 的 ScrollArea，
+> **永远不会真滚动**，只多一个键盘停靠点；本仓用 `flex-wrap` 的普通容器，什么都没少。
+> 2026-09-11 复核：上游那个 `hidden` 还在，`Suggestions` 里那层 flex 容器
+> **两边都是 `flex-wrap`**（所以上游那个 ScrollArea 也确实不会横向滚）。原判有效。
+>
+> **它占了台账的 43%**（47 行 `tabbablesOnlyReact` + 21 行 `tabOrder` 投影，
+> 分布在 47 个以聊天页为底的场景上——设置对话框是盖在聊天页上的，
+> 底下那一行建议芯片一直在 DOM 里）。读台账数字时先把这一条减掉。
+>
+> ### 三条请求层的账（22 行）
+>
+> - `retry: false`（wave 128，18 行）：同一次 500，上游发 3 次、本仓 1 次。
+>   TanStack 默认重试**不分错误码**。
+> - `thread-list-pin#mobile-drawer` 的 2 行（2026-09-11 判）：查询挂在抽屉里还是外面。
+> - `thread-title-sync` 的 2 行：重命名之后上游重取、本仓靠乐观缓存。
+>
+> ### 真正还开着的 19 行
+>
+> | 行 | 判词 |
+> | --- | --- |
+> | `thread-history-mermaid` ×16（zh-CN）：`Zoom in` / `Zoom out` / `Reset zoom and pan` / `img "Mermaid chart"` | **不跟**：写死在 streamdown 2.5.0 的产物里，不在 `StreamdownTranslations` 的 29 个 key 之内。本仓的 mermaid 是自己实现的，翻译是对的。**翻案判据**：streamdown 把这 4 条加进 `StreamdownTranslations`，或上游换成自己的 mermaid 渲染。 |
+> | `branch-thread#turn-actions` ×2：`tooltip "Branch conversation"` 只在上游的 aria 树里 | **不跟**：Radix 与 reka 都把 `role="tooltip"` 挂在一个 `VisuallyHidden` 节点上、都给触发器盖 `aria-describedby`（逐份读过 `TooltipContentImpl.js` 与 radix 的 `dist/index.mjs`），**读屏器行为等价**；差的是 Playwright 快照怎么渲染两份形状相近但不同的 primitive。**翻案判据**：reka 把 `role="tooltip"` 挪到可见内容上。 |
+> | `thread-history` ×2：`tabbablesOnlyReact: div(menuitem)` | **不跟**：子菜单展开时 Radix 比 reka 多留一个 `tabindex=0` 的菜单项（父级触发器）。菜单的漫游焦点是 primitive 自己的实现细节，两边的键盘操作都走方向键而不是 Tab。**翻案判据**：哪一边的菜单出现真正的键盘不可达。 |
+> | `chat-thread-init-ordering` ×5（en-US 独有） | **先怀疑取样时机**——这条形状本轮已经立过判据（语言维度不对称的差异不会是渲染规则）。其中 `alert` 空 vs `alert: New chat - DeerFlow` 是 Next 的路由播报器（wave 102 量过：1×1 裁剪、内容是上一拍的 `document.title`）；`button "Edit and rerun"` 那 3 行是 seq 移植的副产物，backlog 里记着「先加临时 dump 看读数，别猜」。 |
+> | `sidecar-chat` ×2：分栏把手的点击区 4px vs 16px | wave 146 判过：**保留本仓这一侧**（WCAG 2.5.8 目标尺寸）。 |
+> | `workspace-changes#changes-panel` ×2：`focus: React=button "Close" Vue=第一个文件行` | **还没判**——下一轮的第一条。 |
+>
 > ## 2026-09-11 产物面板的「JPG file」也是写死的英文
 >
 > 台账上只剩两条 zh-CN 专有的行（`showcase-public-thread` 与 `artifact-stream-state`

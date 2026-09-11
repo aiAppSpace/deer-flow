@@ -295,6 +295,11 @@ async function toggle(name: string, enabled: boolean) {
           且被 `min-w-0` 挤扁——对照台账在 `mcp-settings` 上量到
           `fontSize 14px vs 12px`、`width 654 vs 61.1`。差的不是几个 class，
           是「卡片」与「分隔线行」两种 treatment。
+
+          **两颗图标键用 `size="icon"` 而不是 `icon-sm`**（上游
+          `tool-settings-page.tsx:228/238`）：`icon` 是 36px、`icon-sm` 是 32px，
+          两颗一共窄 8px，动作列窄了描述列就宽了 8px——对照台账上那条
+          `text:Local tools width React=654 Vue=662 Δ8` 量的就是它。
         -->
         <Item
           v-for="(server, name) in mcp.config.value?.mcp_servers ?? {}"
@@ -323,7 +328,7 @@ async function toggle(name: string, enabled: boolean) {
             />
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               :aria-label="`${t.common.edit} ${displayServerName(String(name))}`"
               :disabled="!access.canManageMcp.value || servers.isPending.value"
               @click="openEditEditor(String(name), server)"
@@ -332,7 +337,7 @@ async function toggle(name: string, enabled: boolean) {
             </Button>
             <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               :aria-label="`${t.common.delete} ${displayServerName(String(name))}`"
               :disabled="!access.canManageMcp.value || servers.isPending.value"
               @click="pendingRemoval = String(name)"

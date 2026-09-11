@@ -218,7 +218,13 @@ function MCPServerList({
                 </ItemDescription>
               </ItemContent>
               <ItemActions className="gap-1">
+                {/*
+                  A switch needs an accessible name: this one had none, so a
+                  screen reader announced only "switch" with no way to tell
+                  which server it belongs to (WCAG 4.1.2).
+                */}
                 <Switch
+                  aria-label={name}
                   checked={config.enabled}
                   disabled={readOnly || isMutating}
                   onCheckedChange={(checked) =>
