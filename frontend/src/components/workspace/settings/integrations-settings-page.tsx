@@ -631,7 +631,14 @@ function LarkIntegrationCard() {
 
   return (
     <Card>
-      <CardHeader>
+      {/*
+        This is the only settings page wrapped in a Card, so below sm its
+        px-6 stacks on top of the panel padding and the status boxes inside:
+        the content column came out at 167px on a 375px screen, narrower
+        than the "Re-register in browser" button (191px) and the OAuth scope
+        example, both of which then overflowed. sm+ is unchanged.
+      */}
+      <CardHeader className="px-4 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="bg-primary/10 text-primary rounded-lg p-2">
             <PlugZapIcon className="size-5" />
@@ -657,7 +664,7 @@ function LarkIntegrationCard() {
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 px-4 sm:px-6">
         {isLoading ? (
           <div className="text-muted-foreground text-sm">
             {t.common.loading}

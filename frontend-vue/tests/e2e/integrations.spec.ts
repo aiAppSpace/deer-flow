@@ -514,4 +514,69 @@ test.describe("Integrations settings", () => {
       });
     await popup.close();
   });
+
+  /*
+    **窄屏下这一屏两边都是坏的**（2026-09-12 量出来），而对照台账看不见它：
+    台账钉的是「两个应用一不一致」，而这里两边坏的**方式**不同——
+    Radix 的 ScrollArea 把子节点包进 `min-width:100%; display:table`，
+    shrink-to-fit 于是把整个面板撑出栅格格子 25.2px；reka 没有那层包装，
+    本仓改成把内容裁掉。两种坏法各自自洽，所以几何档只报得出「宽度不一样」，
+    报不出「这一块本身对不对」。
+
+    根因是内边距在窄屏下没有降档：375px 屏上对话框 343 宽，面板 p-6 再叠
+    这一页独有的 Card px-6 与状态盒 p-3，内容列只剩 **167px**——比里面的
+    「在浏览器重新注册」按钮（min-content **191.1px**）和那句带
+    `calendar:calendar.event:read` 的 scope 示例（**192.2px**）都窄。
+
+    断言写成「溢出量」而不是「宽度等于某个数」：数值会随字体与文案变，
+    而「装不装得下」不会。两侧各一条，因为两边的坏法落在不同的层上：
+    `panelOverflow` 抓上游那种撑出格子，`cardOverflow` 抓本仓这种裁掉。
+  */
+  test("the settings panel fits inside the dialog on a 375px screen", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    mockLangGraphAPI(page);
+    await page.route("**/api/integrations/lark/status", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(configuredLarkStatus()),
+      }),
+    );
+
+    const dialog = await openSettingsDialog(
+      page,
+      "/workspace/chats/new?settings=integrations",
+    );
+    await dialog.getByRole("button", { name: "Change Lark app" }).click();
+    await expect(dialog.getByLabel("App ID")).toBeVisible();
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const dialogEl = document.querySelector("[role=dialog]");
+            const panel = dialogEl?.querySelector<HTMLElement>(
+              '[data-slot="scroll-area"]',
+            );
+            const card =
+              dialogEl?.querySelector<HTMLElement>('[data-slot="card"]');
+            if (!panel?.parentElement || !card) return { missing: true };
+            const over = (value: number) => Math.max(0, Math.round(value));
+            return {
+              panelOverflow: over(
+                panel.getBoundingClientRect().width -
+                  panel.parentElement.clientWidth,
+              ),
+              cardOverflow: over(card.scrollWidth - card.clientWidth),
+            };
+          }),
+        {
+          message:
+            "panelOverflow>0 = 面板被撑出了栅格格子；cardOverflow>0 = 卡片里的东西被裁掉了",
+        },
+      )
+      .toEqual({ panelOverflow: 0, cardOverflow: 0 });
+  });
 });

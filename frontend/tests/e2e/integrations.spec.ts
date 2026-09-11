@@ -473,4 +473,73 @@ test.describe("Integrations settings", () => {
       });
     await popup.close();
   });
+
+  /*
+    Below sm this screen is broken in both apps, and the React/Vue parity
+    ledger cannot see it: the ledger pins "do the two apps agree", and here
+    they disagree only about *how* they break. Radix's ScrollArea wraps its
+    children in `min-width:100%; display:table`, so shrink-to-fit pushes the
+    whole panel 25.2px past its grid track; reka has no such wrapper, so the
+    Vue side clips instead. Each failure mode is internally consistent, which
+    is why the geometry lane could only report "these widths differ".
+
+    The cause is padding that never steps down on narrow screens: on a 375px
+    screen the dialog is 343 wide, and the panel's p-6 plus this page's Card
+    px-6 plus the status boxes' p-3 left a 167px content column — narrower
+    than the "Re-register in browser" button (min-content 191.1px) and the
+    scope example carrying `calendar:calendar.event:read` (192.2px).
+
+    Asserting overflow rather than an exact width: the numbers move with fonts
+    and copy, "does it fit" does not. Both readings are kept because the two
+    apps break at different layers — panelOverflow catches the Radix side,
+    cardOverflow the clipped side.
+  */
+  test("the settings panel fits inside the dialog on a 375px screen", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    mockLangGraphAPI(page);
+    await page.route("**/api/integrations/lark/status", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(configuredLarkStatus()),
+      }),
+    );
+
+    await page.goto("/workspace/chats/new?settings=integrations");
+    const dialog = page.getByRole("dialog", { name: "Settings" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Change Lark app" }).click();
+    await expect(dialog.getByLabel("App ID")).toBeVisible();
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const dialogEl = document.querySelector("[role=dialog]");
+            const panel = dialogEl?.querySelector<HTMLElement>(
+              '[data-slot="scroll-area"]',
+            );
+            const card = dialogEl?.querySelector<HTMLElement>(
+              '[data-slot="card"]',
+            );
+            if (!panel?.parentElement || !card) return { missing: true };
+            const over = (value: number) => Math.max(0, Math.round(value));
+            return {
+              panelOverflow: over(
+                panel.getBoundingClientRect().width -
+                  panel.parentElement.clientWidth,
+              ),
+              cardOverflow: over(card.scrollWidth - card.clientWidth),
+            };
+          }),
+        {
+          message:
+            "panelOverflow>0 means the panel was pushed out of its grid track; " +
+            "cardOverflow>0 means content inside the card is clipped",
+        },
+      )
+      .toEqual({ panelOverflow: 0, cardOverflow: 0 });
+  });
 });

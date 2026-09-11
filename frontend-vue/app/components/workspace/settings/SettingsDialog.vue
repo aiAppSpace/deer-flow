@@ -7,7 +7,7 @@
   【边界与注意】   useSettingsDialog 是唯一 UI owner；各 Query owner 保持在子面板内。
 
                    外壳的骨架逐行对照 React settings-dialog.tsx：可见的标题+描述、
-                   220px 的 <nav><ul><li>、右侧 ScrollArea 里 space-y-8 p-6 的容器。
+                   220px 的 <nav><ul><li>、右侧 ScrollArea 里 space-y-8 p-4 sm:p-6 的容器。
                    九个 section 共用这一个外壳，所以这里每改一处，e2e-settings、
                    e2e-channels 与 e2e-visual 的两张设置截图都要一起跑。
 
@@ -254,7 +254,12 @@ function onOpenChange(open: boolean) {
           </ul>
         </nav>
         <ScrollArea class="h-full min-h-0 rounded-lg border">
-          <div class="space-y-8 p-6">
+          <!--
+            窄屏（<sm）下对话框只有 343px 宽，这一层自己的内边距再加上集成页那张卡的
+            px-6，内容列只剩 167px——比它里面的按钮与 OAuth scope 示例还窄，于是溢出。
+            小屏降一档；sm 以上仍是桌面那一版量过的 24px。
+          -->
+          <div class="space-y-8 p-4 sm:p-6">
             <AccountSettings v-if="settings.section.value === 'account'" />
             <AppearanceSettings
               v-else-if="settings.section.value === 'appearance'"

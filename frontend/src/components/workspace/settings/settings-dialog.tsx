@@ -247,7 +247,14 @@ export function SettingsDialog(props: SettingsDialogProps) {
             </ul>
           </nav>
           <ScrollArea className="h-full min-h-0 rounded-lg border">
-            <div className="space-y-8 p-6">
+            {/*
+              Below sm the dialog is 343px wide and this panel's own padding
+              plus a nested card's px-6 left the integrations column at 167px
+              — narrower than the buttons and OAuth-scope examples inside it,
+              which then overflowed. Step the padding down on small screens;
+              sm+ keeps the 24px the desktop layout was measured at.
+            */}
+            <div className="space-y-8 p-4 sm:p-6">
               {activeSection === "account" && <AccountSettingsPage />}
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}

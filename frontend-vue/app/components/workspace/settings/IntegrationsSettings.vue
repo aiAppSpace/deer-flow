@@ -677,7 +677,12 @@ onUnmounted(() => {
     :description="copy.settings.integrations.description"
   >
     <Card>
-      <CardHeader>
+      <!--
+        设置页里只有这一页包了 Card，于是窄屏（<sm）下它的 px-6 叠在面板内边距和
+        里面那几个状态盒上：375px 屏上内容列只剩 167px，比「在浏览器重新注册」
+        那颗按钮（191px）和 OAuth scope 示例都窄，两者当场溢出。sm 以上不变。
+      -->
+      <CardHeader class="px-4 sm:px-6">
         <div class="flex items-center gap-3">
           <div class="bg-primary/10 text-primary rounded-lg p-2">
             <PlugZap class="size-5" />
@@ -699,7 +704,7 @@ onUnmounted(() => {
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent class="space-y-4">
+      <CardContent class="space-y-4 px-4 sm:px-6">
         <div v-if="loading" class="text-muted-foreground text-sm">
           {{ copy.common.loading }}
         </div>
