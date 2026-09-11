@@ -761,6 +761,8 @@ export const enUS: Translations = {
     connect: "Connect",
     modify: "Modify",
     reconnect: "Reconnect",
+    disconnect: "Disconnect",
+    disconnectAccount: (name: string) => `Disconnect ${name}`,
     removeProviderConfig: "Remove provider configuration",
     connected: "Connected",
     notConnected: "Not connected",

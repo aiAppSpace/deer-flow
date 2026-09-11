@@ -454,4 +454,62 @@ test.describe("IM channels", () => {
     );
     await expect(setupDialog.getByLabel("App secret")).toHaveValue("********");
   });
+
+  /*
+    Unbinding your own account had no control at all before 2026-09-12: the
+    backend exposes DELETE /channels/connections/{id} and this app already
+    shipped useDisconnectChannelConnection, but nothing rendered it. The only
+    disconnect-ish button on the page is admin-only and wipes the whole
+    deployment's provider runtime config, so a user who connected an IM
+    account had no way to undo it.
+  */
+  test("a connected account can be disconnected from settings", async ({
+    page,
+  }) => {
+    mockLangGraphAPI(page);
+    mockChannelsAPI(page);
+
+    void page.route("**/api/channels/connections", (route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          connections: [
+            {
+              id: "conn-1",
+              provider: "dingtalk",
+              status: "connected",
+              external_account_id: "acct-1",
+              external_account_name: "alice",
+              workspace_id: null,
+              workspace_name: null,
+              scopes: [],
+              metadata: {},
+            },
+          ],
+        }),
+      });
+    });
+
+    let deleted: string | null = null;
+    void page.route("**/api/channels/connections/conn-1", (route) => {
+      deleted = route.request().method();
+      return route.fulfill({ status: 204, body: "" });
+    });
+
+    await page.goto("/workspace/chats/new?settings=channels");
+
+    const dialog = page.getByRole("dialog", { name: "Settings" });
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+    // The account name reaches the row through the description copy.
+    await expect(dialog.getByText("Connected as alice")).toBeVisible();
+
+    const disconnect = dialog.getByRole("button", {
+      name: "Disconnect alice",
+    });
+    await expect(disconnect).toBeVisible();
+    await disconnect.click();
+
+    await expect.poll(() => deleted).toBe("DELETE");
+  });
 });

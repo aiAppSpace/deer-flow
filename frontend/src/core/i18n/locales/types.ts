@@ -636,6 +636,8 @@ export interface Translations {
     connect: string;
     modify: string;
     reconnect: string;
+    disconnect: string;
+    disconnectAccount: (name: string) => string;
     removeProviderConfig: string;
     connected: string;
     notConnected: string;

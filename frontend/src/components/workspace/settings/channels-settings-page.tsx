@@ -5,6 +5,7 @@ import {
   CheckCircle2Icon,
   LoaderCircleIcon,
   PlugIcon,
+  UnplugIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import {
   useChannelConnections,
   useChannelProviders,
   useConnectChannelProvider,
+  useDisconnectChannelConnection,
   useDisconnectChannelProvider,
 } from "@/core/channels/hooks";
 import {
@@ -125,6 +127,7 @@ function ChannelProviderItem({
   const connectMutation = useConnectChannelProvider();
   const configureMutation = useConfigureChannelProvider();
   const disconnectProviderMutation = useDisconnectChannelProvider();
+  const disconnectConnectionMutation = useDisconnectChannelConnection();
   const [setupOpen, setSetupOpen] = useState(false);
   const runtimeAvailable = provider.configured && !provider.unavailable_reason;
   const isConnected =
@@ -143,6 +146,9 @@ function ChannelProviderItem({
   const isDisconnecting =
     disconnectProviderMutation.isPending &&
     disconnectProviderMutation.variables === provider.provider;
+  const isDisconnectingConnection =
+    disconnectConnectionMutation.isPending &&
+    disconnectConnectionMutation.variables === connection?.id;
   const connectionLabel = connection ? getConnectionLabel(connection) : null;
   const statusLabel = getStatusLabel(provider, connection, t);
   const unavailableReason = getProviderUnavailableReason(provider, t);
@@ -207,22 +213,75 @@ function ChannelProviderItem({
         </ItemContent>
         <ItemActions className="ml-auto">
           {isConnected ? (
-            canEditRuntimeConfig ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isConnecting || isDisconnecting}
-                onClick={() => setSetupOpen(true)}
-              >
-                {isConnecting ? (
-                  <LoaderCircleIcon className="animate-spin" />
-                ) : (
-                  <PlugIcon />
-                )}
-                {t.channels.modify}
-              </Button>
-            ) : null
+            <>
+              {canEditRuntimeConfig ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isConnecting || isDisconnecting}
+                  onClick={() => setSetupOpen(true)}
+                >
+                  {isConnecting ? (
+                    <LoaderCircleIcon className="animate-spin" />
+                  ) : (
+                    <PlugIcon />
+                  )}
+                  {t.channels.modify}
+                </Button>
+              ) : null}
+              {/*
+                Unbinding your own account had no control at all: the backend
+                exposes DELETE /channels/connections/{id} and this app already
+                shipped useDisconnectChannelConnection — with zero consumers.
+                The only disconnect-ish button on this page is admin-only and
+                deletes the whole deployment's provider runtime config, so a
+                user who connected an IM account could not undo it.
+
+                Same shape as the Vue side (outline / sm / Unplug icon /
+                spinner while pending, accessible name naming the account).
+                The multi-account list that app renders stays out of scope
+                here: this row only ever shows one connection per provider.
+
+                Success/failure goes through toasts, matching the provider
+                removal button right below it. The Vue side reports both
+                inline instead — that is this page's own local convention
+                over there and predates this button; each app stays
+                consistent with itself rather than importing the other's.
+              */}
+              {connection && connection.status !== "revoked" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isConnecting || isDisconnectingConnection}
+                  aria-label={t.channels.disconnectAccount(
+                    connectionLabel ?? connection.id,
+                  )}
+                  onClick={() => {
+                    void disconnectConnectionMutation
+                      .mutateAsync(connection.id)
+                      .then(() => {
+                        toast.success(t.channels.revoked);
+                      })
+                      .catch((error) => {
+                        toast.error(
+                          error instanceof Error
+                            ? error.message
+                            : t.channels.unavailable,
+                        );
+                      });
+                  }}
+                >
+                  {isDisconnectingConnection ? (
+                    <LoaderCircleIcon className="animate-spin" />
+                  ) : (
+                    <UnplugIcon />
+                  )}
+                  {t.channels.disconnect}
+                </Button>
+              ) : null}
+            </>
           ) : (
             <>
               {provider.configured && canEditRuntimeConfig ? (
