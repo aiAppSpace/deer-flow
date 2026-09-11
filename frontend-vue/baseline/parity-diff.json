@@ -1187,17 +1187,7 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:button[/^(Calendar|日历)$/] y React=1842 Vue=1921.2 Δ79.2",
-        "role:button[/^(Calendar|日历)$/] hit React=span Vue=div",
-        "role:button[/^(Docs|文档)$/] x React=104 Vue=211 Δ107",
-        "role:button[/^(Docs|文档)$/] y React=1882 Vue=1961.2 Δ79.2",
-        "role:button[/^(Docs|文档)$/] hit React=span Vue=div(dialog)",
-        "role:button[/^(Drive|云空间)$/] x React=169.6 Vue=104 Δ-65.6",
-        "role:button[/^(Drive|云空间)$/] y React=1882 Vue=2001.2 Δ119.2",
-        "role:button[/^(Drive|云空间)$/] hit React=button Vue=p",
-        "role:button[/^(Request permissions|申请新权限)$/] y React=2479 Vue=2718.1 Δ239.1"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1265,17 +1255,7 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:button[/^(Feishu|飞书)$/] y React=2744 Vue=3003 Δ259",
-        "role:button[/^(Re-register in browser|在浏览器重新注册)$/] y React=2976 Vue=3250.9 Δ274.9",
-        "role:button[/^(Re-register in browser|在浏览器重新注册)$/] hit React=div Vue=off-screen",
-        "role:button[/^(Switch app|切换 App)$/] y React=2936 Vue=3210.9 Δ274.9",
-        "role:button[/^Lark$/] y React=2744 Vue=3003 Δ259",
-        "role:textbox[App ID] y React=2788 Vue=3047 Δ259",
-        "role:textbox[App ID] width React=192.2 Vue=167 Δ-25.2",
-        "text:/^(Switch to a different Lark app|切换到其他飞书 App)$/ y React=2588 Vue=2827.1 Δ239.1",
-        "text:/^(Switch to a different Lark app|切换到其他飞书 App)$/ width React=192.2 Vue=167 Δ-25.2"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1750,6 +1730,19 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
+    "workspace-changes#reasoning-menu/desktop/dark/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
     "workspace-changes#changes-panel/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
@@ -1773,6 +1766,21 @@
       "geometry": [],
       "focus": [
         "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.md修改+1 -1\""
+      ],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "workspace-changes#changes-panel/desktop/dark/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "geometry": [],
+      "focus": [
+        "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.mdModified\""
       ],
       "order": [],
       "depth": [],
