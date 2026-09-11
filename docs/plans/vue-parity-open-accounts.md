@@ -3,8 +3,33 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-11 挂着（**试过一版、量出来更差、已回退**）：`chat-thread-init-ordering`
-> 上那一行 `requestsOnlyReact: POST /api/threads/search`
+> ## 2026-09-11 判一条「不跟」：`thread-list-pin#mobile-drawer` 上那两行
+> （`POST /api/threads/search` 与 `GET /api/features` 各多一次）
+>
+> 单场景实测：React ×2 / 本仓 ×1（search），React ×3 / 本仓 ×2（features）。
+>
+> **判词：不跟。** 差别是**查询挂在哪一层**，不是行为：
+>
+> - 上游窄屏的 `Sidebar` 走 shadcn `Sheet`（Radix Dialog，没有 `forceMount`），
+>   抽屉关着时内容**不挂载**；`useInfiniteThreads` 与 features 查询就住在那棵子树里，
+>   所以「点开抽屉」＝ 一次挂载 ＝ 各多取一次。
+> - 本仓 `useThreads()` 写在 `ThreadSidebar.vue:65`，也就是 Sheet 的**外面**
+>   （`ThreadSidebarShell` 只拿 `<slot>`），查询自始至终只有一个观察者，
+>   点开抽屉不产生任何请求。
+>
+> 两边**渲染结果一致**（这一档的 aria 差异只剩早就判过的 `scroll-area-viewport`），
+> 本仓做的网络工作严格更少。要对上这两次，得把查询搬进抽屉子树、让桌面与移动端
+> 各成一个查询所有者——那是在模仿**挂载拓扑**，不是在对齐行为。
+>
+> **唯一的行为细节**：上游点开抽屉会顺带重取一次列表，本仓不会（它的查询没卸载过）。
+> 正常使用下没有差别——run 生命周期本来就会失效列表，而 `48e9297a` 之后那些失效
+> 真的会触发重取了。
+>
+> **翻案判据**：本仓哪天把侧栏内容改成随抽屉条件挂载（或加上会让列表变旧的长驻页面），
+> 这一条重新成立。
+>
+> ## 2026-09-11 已修：`chat-thread-init-ordering` 上那行
+> `requestsOnlyReact: POST /api/threads/search`（`5cc426e3`）
 >
 > 用新加的 `PARITY_ONLY=<场景id> make e2e-parity`（单场景 + 两边完整请求序列转储，
 > 4 分钟一轮）量清了**位置**：
@@ -25,9 +50,11 @@
 > 才失效」也没降下来（仍是 6）——多半是失效之后重取还没落地，下一次 upsert 又判成
 > 「不在列表里」，级联出去。**已回退，不留一个把台账变长的改动。**
 >
-> **下一步怎么查**：先列清本仓一次 run 里 `upsert` / `upsertCreated` 的**全部调用点
-> 与触发顺序**，与上游逐个对；有了那张表再动 `upsertThreadInInfiniteCache`。
-> 工具已经就位（`PARITY_ONLY` + 请求序列转储）。
+> **按这条路查完了**：列清调用点之后根因很清楚——上游一次 run 只调一次
+> `upsertThreadInInfiniteCache`，而本仓的 `upsert()` 靠「在不在视图里」分新旧行。
+> 上一版跟着上游「只失效不插」，视图里永远没有那一行，于是后面每次 `upsert`
+> 都再判一次新行、再失效一次（级联，6 : 4）。**插 + 失效**之后 4 : 4，
+> 请求差集空，台账 204 → 203 零新增。
 >
 > ## 2026-09-11 已修：归档一条会话会把侧栏列表清空（`48e9297a`）
 >

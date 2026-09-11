@@ -1,6 +1,6 @@
 # Vue 对齐 React：2026-09-11 第三轮
 
-分支 `main-wc`，`b7b97abc` … `2190a9d0` 共 14 个提交，全部已提交、**未推送**。
+分支 `main-wc`，`b7b97abc` 起共 17 个提交，全部已提交、**未推送**。
 
 ## 一句话
 
@@ -19,7 +19,7 @@
 | `make e2e-mock` | 全绿 | 317 passed |
 | `make e2e-backend` | 全绿 | 22 passed |
 | `make e2e-parity` | 121 passed | **121 passed** |
-| 对照台账 | 113 场景 / **210** 行 | 113 场景 / **204** 行（零新增） |
+| 对照台账 | 113 场景 / **210** 行 | 113 场景 / **203** 行（零新增） |
 
 台账行数用 `node scripts/parity-ledger-report.mjs` 读，不要引用散文里的数字——
 上一轮交接里写的「232 行」是手工数错的，跑脚本得到的是 **210**。
@@ -120,6 +120,7 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 | `48e9297a` | 归档会把侧栏列表清空——列表查询不该是手动查询 |
 | `10335b5d` | 删掉没有拥有者的死缓存键 `["threads","search"]`（11 处空操作）|
 | `2190a9d0` | `PARITY_ONLY` 单场景诊断口 + 两边请求序列转储 |
+| `5cc426e3` | 建完 thread 要问一次服务端（台账 204 → 203）|
 
 ### 6. 改名之后不与服务端收敛（**已修，台账 206 → 204**）
 
@@ -160,8 +161,9 @@ test.use({ contextOptions: { reducedMotion: "reduce" } })  → true
 1. **两个应用的会话列表都不轮询**——IM 建的会话不会自己出现在侧栏。
    这句产品性质此前只有一条测死代码的用例在「保证」（已删）。
    要不要真的加轮询是产品决定，先记着。
-2. 台账上还剩两行 `requestsOnlyReact: POST /api/threads/search`
-   （`chat-thread-init-ordering` 1 条、`thread-list-pin#mobile-drawer` 1 条）：
-   上游仍然比本仓多问一次列表，从这里接着查。
+2. ~~台账上还剩两行 `requestsOnlyReact: POST /api/threads/search`~~ **两条都结了**：
+   `chat-thread-init-ordering` 那条已修（`5cc426e3`）；
+   `thread-list-pin#mobile-drawer` 那条判「不跟」——差别是查询挂在 Sheet 里还是外面，
+   本仓做的网络工作严格更少，判词与翻案判据在 `vue-parity-open-accounts.md`。
 3. `ChannelConnections.vue` 的 `ui/item` 移植——**先给 channels 设置页加取样点**，
    否则改完没有机器能验证。
