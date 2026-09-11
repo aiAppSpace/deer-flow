@@ -3,6 +3,34 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 记一条判据：`thread-list-infinite-scroll` 那条 spec 再红时怎么判
+>
+> **这是我自己引入又修掉的竞态，留下判据免得下次当成偶发。**
+>
+> 症状：`sidebar recent chats loads more threads when scrolling to the bottom`
+> **等满 15 秒超时**（正常 1–2 秒跑完），第 51 条永远不出现。
+>
+> 根因：侧栏的 IntersectionObserver 回调里写的是
+> `if (threads.canLoadMore && entries.some(isIntersecting))`。
+> 列表还空的时候哨兵本来就在视口内，回调触发一次、被 `canLoadMore === false`
+> 挡掉；此后哨兵**一直可见，不会再有 intersection 事件**，于是首屏数据到了也
+> 永远不翻页。`scrollIntoViewIfNeeded` 对已在视口内的元素不滚动，也不产生新事件。
+>
+> 为什么现在才露出来：`onMounted` 里原来有一句 `void threads.loadInitial()` 排在
+> 建观察者之前，时序上遮住了它；列表查询改成自己会跑（`48e9297a`，`enabled` 打开）
+> 之后那句删掉了。
+>
+> 修法：**观察者只记「哨兵在不在视口里」这个状态，翻页交给 `watch`**
+> （`ThreadSidebar.vue` 与 `chats/index.vue` 两处同改）。
+> 「一次性事件 + 依赖异步状态的守卫」本来就是脆的形状。
+>
+> **没有为它写测试**，理由写在这里而不是含糊过去：挂载 `ThreadSidebar` 要 mock
+> router / i18n / projects / useThreads 一大片，而这条竞态在 e2e 里也复现不稳
+> （实测重跑 3 遍 9 条全过、整套 e2e-mock 再跑一遍 272 条全绿，只在那一次红）。
+> 所以判据写在这里 + 代码注释里。**再看到这条 spec 红，先对症状**：
+> 是不是 15 秒超时、是不是第二页永远不来——是的话先看这两处观察者有没有被改回
+> 「在回调里判守卫」。
+>
 > ## 2026-09-11 判一条「不跟」：`thread-list-pin#mobile-drawer` 上那两行
 > （`POST /api/threads/search` 与 `GET /api/features` 各多一次）
 >

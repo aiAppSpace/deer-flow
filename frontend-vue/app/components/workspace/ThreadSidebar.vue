@@ -97,6 +97,8 @@ const deleteError = ref<string | null>(null);
 const failedDeleteThread = ref<AgentThread | null>(null);
 const deletingThreadId = ref<string | null>(null);
 let observer: IntersectionObserver | null = null;
+/** 哨兵在不在视口里。见下面观察者那段注释：它必须是状态，不能只当事件用。 */
+const sentinelVisible = ref(false);
 
 const displayThreadTitle = (thread: Parameters<typeof titleOfThread>[0]) =>
   titleOfThread(thread, $i18n.t.value.pages.untitled);
@@ -122,14 +124,31 @@ onMounted(() => {
   restoreFromCookie();
   globalThis.addEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.addEventListener("deerflow:collapse-sidebar", collapseSidebar);
+  /*
+    **观察者只记「哨兵在不在视口里」这个状态，翻页交给 watch。**
+
+    写成「在回调里直接判 canLoadMore」是错的，而且错得很隐蔽：列表还空的时候
+    哨兵本来就在视口内，回调触发一次、被 `canLoadMore === false` 挡掉；此后哨兵
+    一直可见，**不会再有 intersection 事件**，于是首屏数据到了也永远不翻页。
+    `scrollIntoViewIfNeeded` 对已在视口内的元素不滚动，也就不产生新事件——
+    e2e `thread-list-infinite-scroll.spec.ts` 那条等满 15 秒超时就是这个形状。
+
+    以前 `onMounted` 里有一句 `void threads.loadInitial()` 排在建观察者之前，
+    时序上遮住了它；列表查询改成自己会跑（`enabled` 打开）之后那句没了，它就露出来了。
+    **一次性事件 + 依赖异步状态的守卫**本来就是脆的，改成状态 + watch 才是对的形状。
+
+    `loadMore()` 自己有在途守卫，重复触发安全。
+  */
   observer = new IntersectionObserver(
     (entries) => {
-      if (threads.canLoadMore && entries.some((entry) => entry.isIntersecting))
-        void threads.loadMore();
+      sentinelVisible.value = entries.some((entry) => entry.isIntersecting);
     },
     { rootMargin: "120px 0px 120px 0px" },
   );
   if (sentinel.value) observer.observe(sentinel.value);
+});
+watch([sentinelVisible, () => threads.canLoadMore], ([visible, canLoad]) => {
+  if (visible && canLoad) void threads.loadMore();
 });
 onUnmounted(() => {
   narrowMedia?.removeEventListener("change", syncNarrow);

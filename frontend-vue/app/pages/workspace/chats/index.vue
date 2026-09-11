@@ -63,6 +63,8 @@ const isSearching = computed(() => search.value.trim().length > 0);
 const searchInput = ref<HTMLInputElement | null>(null);
 const sentinel = ref<HTMLElement | null>(null);
 let observer: IntersectionObserver | null = null;
+/** 哨兵在不在视口里。见下面观察者那段注释。 */
+const sentinelVisible = ref(false);
 const displayThreadTitle = (thread: Parameters<typeof titleOfThread>[0]) =>
   titleOfThread(thread, $i18n.t.value.pages.untitled);
 const filtered = computed(() => {
@@ -83,15 +85,21 @@ onMounted(() => {
     才是同一个行为。
   */
   searchInput.value?.focus();
+  /*
+    观察者只记状态，翻页交给 watch——理由与 ThreadSidebar 那处同一条：
+    列表还空时哨兵就在视口内，一次性事件被守卫挡掉之后不会再来，
+    首屏数据到了也永远不翻页。
+  */
   observer = new IntersectionObserver(
     (entries) => {
-      if (!isSearching.value && entries.some((entry) => entry.isIntersecting)) {
-        void threads.loadMore();
-      }
+      sentinelVisible.value = entries.some((entry) => entry.isIntersecting);
     },
     { rootMargin: "200px 0px 200px 0px" },
   );
   if (sentinel.value) observer.observe(sentinel.value);
+});
+watch([sentinelVisible, () => threads.canLoadMore], ([visible, canLoad]) => {
+  if (visible && canLoad && !isSearching.value) void threads.loadMore();
 });
 watch(sentinel, (element, previous) => {
   if (previous) observer?.unobserve(previous);
