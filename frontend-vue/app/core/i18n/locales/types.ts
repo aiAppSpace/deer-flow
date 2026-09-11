@@ -710,7 +710,6 @@ export interface Translations {
     unavailable: string;
     unavailableShort: string;
     accounts: string;
-    noAccounts: string;
     removeProviderConfig: string;
     removeProviderTitle: (name: string) => string;
     removeProviderDescription: string;

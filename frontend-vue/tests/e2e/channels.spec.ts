@@ -585,7 +585,15 @@ test.describe("IM channels", () => {
     await expect(settings.getByTestId("channel-status-slack")).toHaveText(
       "Connected",
     );
-    await expect(settings.getByText("No channel accounts yet.")).toBeVisible();
+    /*
+      这种形状下**一行 binding row 都没有**，所以账号列表整块不渲染——
+      「已连接」的徽标底下再挂一句「尚无渠道账号」是自相矛盾的，
+      理由写在 ChannelConnections.vue 那个 `v-if="view.connections.length > 0"`
+      的注释里。原来这里断言的是那句空态文案可见，现在断言它整块不存在。
+    */
+    await expect(
+      settings.getByRole("heading", { name: "Connected accounts" }),
+    ).toHaveCount(0);
   });
 
   /*

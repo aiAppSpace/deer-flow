@@ -858,7 +858,6 @@ export const enUS: Translations = {
     unavailable: "Channel connections are unavailable right now.",
     unavailableShort: "Unavailable",
     accounts: "Connected accounts",
-    noAccounts: "No channel accounts yet.",
     removeProviderConfig: "Remove provider configuration",
     removeProviderTitle: (name: string) =>
       `Remove ${name} provider configuration?`,

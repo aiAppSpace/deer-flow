@@ -3,13 +3,17 @@
   【文件职责】     设置页的 channel 面板：每个 provider 的账号列表、连接、配置与管理员删除。
   【架构位置】     L3 product UI
   【主要导出】     默认 ChannelConnections 组件
-  【依赖关系】     useChannelConnections · auth session · ChannelRuntimeConfigDialog · ui/dialog · ui/alert-dialog
+  【依赖关系】     useChannelConnections · auth session · ChannelRuntimeConfigDialog · ui/item · ui/dialog · ui/alert-dialog
   【边界与注意】   侧栏是另一个组件（WorkspaceChannelsList.vue），不要再把两者合成一个 variant——
                    理由写在那个文件的头注释里。
 
                    这里比 React 的 channels-settings-page.tsx 多出多账号列表、逐账号断开与
                    管理员删 provider 配置三件事，是刻意保留的：tests/e2e-channels/channels.spec.ts
-                   拿真实 Gateway 钉住了这条生命周期。
+                   拿真实 Gateway 钉住了这条生命周期。**但多出来的东西只在真用得上时出现**——
+                   一行 binding row 都没有时账号列表整块不渲染，那张卡片就与上游逐层同形。
+
+                   卡片本体走 `ui/item`（与上游 channels-settings-page.tsx:167 同一族组件），
+                   不要改回手写的 article + 两层 flex：那样每一行可见元素都比上游深一层。
 
                    connections 是这个面板的状态真相（一个 provider 可以挂多个账号，
                    provider.connection_status 只能表达其中最新的一行）；一行都没有时
@@ -40,6 +44,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
 import {
   Dialog,
   DialogContent,
@@ -339,17 +351,36 @@ function showConnectAction(view: ChannelProviderView) {
         {{ actionError || channels.error.value?.message }}
       </p>
 
-      <article
+      <!--
+        **一张 provider 卡片 = 一个 `ui/item`，不是手写的 article + 两层 flex。**
+
+        上游 `channels-settings-page.tsx:167` 这张卡片整个是
+        `<Item variant="outline" className="w-full items-start">` 加
+        `ItemMedia / ItemContent / ItemTitle / ItemDescription / ItemActions`
+        五个槽位；本仓原来是 `<article>` 套一层 `div.flex` 再手写四个容器，
+        **比上游整整深一层**——对照台账 `channels#settings-panel` 上那 13 行
+        `depth: … React=2 Vue=3` 报的就是它，每一行可见元素都多背一层。
+
+        `ui/item` 这一族本仓早就移植好了（`ui/item/`，逐字搬自上游），
+        ToolSettings / SkillSettings / SubagentSettings 三个设置面板已经在用；
+        这里是最后一处还在手写的。顺带把媒体列换成上游的
+        `ItemMedia variant="icon"`（带边框的 8×8 底座，图标 `size-5`），
+        原来那颗图标是裸的。
+      -->
+      <Item
         v-for="view in channels.providerViews.value"
         :key="view.provider.provider"
-        class="border-border border-b py-3 last:border-0"
+        variant="outline"
+        class="w-full items-start"
         :data-testid="`channel-provider-${view.provider.provider}`"
       >
-        <div class="flex items-center justify-between gap-3">
+        <ItemMedia variant="icon" class="bg-background">
           <ChannelProviderIcon
             :provider="view.provider.provider"
-            class="shrink-0"
+            class="size-5"
           />
+        </ItemMedia>
+        <ItemContent class="min-w-0">
           <!--
             状态是一颗**带图标的徽标，挨着渠道名**，不是描述下面一行裸文字。
             上游 `channels-settings-page.tsx:181`：
@@ -362,138 +393,163 @@ function showConnectAction(view: ChannelProviderView) {
             位置也在描述下面而不是名字旁边。`icon-parity` 的字形档是唯一报出
             `CircleAlert` 的地方——可访问性树里图标不出现，文字两边又一样。
           -->
-          <div class="min-w-0 flex-1">
-            <div class="flex w-full items-center gap-2">
-              <span class="truncate text-sm font-medium">
-                {{ view.provider.display_name }}
-              </span>
-              <Badge
-                :variant="providerConnected(view) ? 'default' : 'outline'"
-                :class="providerConnected(view) ? '' : 'text-muted-foreground'"
-                :data-testid="`channel-status-${view.provider.provider}`"
+          <ItemTitle class="w-full">
+            <span class="truncate">{{ view.provider.display_name }}</span>
+            <Badge
+              :variant="providerConnected(view) ? 'default' : 'outline'"
+              :class="providerConnected(view) ? '' : 'text-muted-foreground'"
+              :data-testid="`channel-status-${view.provider.provider}`"
+            >
+              <CircleCheck v-if="providerConnected(view)" />
+              <CircleAlert v-else />
+              {{ providerStatusLabel(view) }}
+            </Badge>
+          </ItemTitle>
+          <ItemDescription class="line-clamp-none">
+            {{ providerDescription(view) }}
+          </ItemDescription>
+
+          <!--
+            **账号列表只在真有 binding row 时才存在。**
+
+            这一整块（「已连接账号」标题 + 每个账号一行）是本仓独有的：上游一个
+            provider 只认一条 connection，没有列表这个概念。留着是对的——
+            多账号与逐账号断开被 tests/e2e-channels/channels.spec.ts 拿真 Gateway 钉着。
+
+            但本仓原来**无条件渲染**它，于是 7 个 provider 每个都挂一句
+            「尚无渠道账号。」：对一个连配都没配的 provider 说「它还没有账号」
+            是零信息的噪音，面板被撑到上游的三倍高；更糟的是
+            `DEER_FLOW_AUTH_DISABLED=1` 下配好且跑起来的 provider **本来就不该有**
+            binding row（每条渠道消息都路由到默认用户，理由原文在
+            core/channels/state.ts 的文件头），那时候同一张卡片上边徽标写着
+            「已连接」、下边写着「尚无渠道账号」——自相矛盾，与 `showConnectAction`
+            要挡的是同一种病。空态那句文案连同 `channels.noAccounts` 一起删掉了。
+          -->
+          <div v-if="view.connections.length > 0" class="mt-3 w-full space-y-2">
+            <h4 class="text-xs font-medium">{{ text.accounts }}</h4>
+            <div
+              v-for="connection in view.connections"
+              :key="connection.id"
+              class="bg-muted/40 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+              :data-testid="`channel-connection-${connection.id}`"
+            >
+              <div class="min-w-0">
+                <div class="truncate text-xs font-medium">
+                  {{ getChannelConnectionLabel(connection) }}
+                </div>
+                <div class="text-muted-foreground text-xs">
+                  {{ statusLabel(connection.status) }}
+                </div>
+              </div>
+              <Button
+                v-if="connection.status !== 'revoked'"
+                type="button"
+                variant="outline"
+                size="sm"
+                :disabled="channels.isConnectionPending(connection.id)"
+                :aria-label="
+                  text.disconnectAccount(getChannelConnectionLabel(connection))
+                "
+                @click="disconnectConnection(connection)"
               >
-                <CircleCheck v-if="providerConnected(view)" />
-                <CircleAlert v-else />
-                {{ providerStatusLabel(view) }}
-              </Badge>
+                <LoaderCircle
+                  v-if="channels.isConnectionPending(connection.id)"
+                  class="animate-spin"
+                />
+                <Unplug v-else />
+                {{ text.disconnect }}
+              </Button>
             </div>
-            <p class="text-muted-foreground text-xs">
-              {{ providerDescription(view) }}
-            </p>
           </div>
-          <div class="flex shrink-0 flex-wrap justify-end gap-1">
+        </ItemContent>
+        <!--
+          上游 `channels-settings-page.tsx:199` 这一排全走 Button：连接键是
+          **默认（实心 primary）变体**，modify / disconnect 是
+          `variant="outline"`，三颗都是 `size="sm"`，而且**每颗都带一颗图标**
+          （`PlugIcon` / `UnplugIcon`，请求在飞的时候换成会转的
+          `LoaderCircleIcon`）。
+
+          手写那版：一颗图标都没有（所以「正在连接」除了置灰之外没有任何提示）、
+          一条 hover 都没有、连接键用的是**描边**而不是实心（用户看不出这一排里
+          哪一颗是主操作）、清配置那颗写死 `text-red-600` 而不是 destructive token。
+
+          `removeProviderConfig` 是本仓独有的管理员操作（上游没有这颗键），
+          所以它没有可抄的上游形状；这里只把它接进同一套 Button 规格。
+          `flex-wrap justify-end` 也是为它加的：上游这一排最多两颗，本仓是三颗。
+        -->
+        <ItemActions class="ml-auto flex-wrap justify-end">
+          <!--
+            **这一排的顺序是「修改 → 主操作 → 移除配置」，与上游一致。**
+            上游 `channels-settings-page.tsx:200/252` 两个分支都是 Modify 排在前、
+            那一档的状态操作（Disconnect / Connect）排在后——右对齐的一排里，
+            主操作在最右是通行做法。本仓原来把 Connect 排在 Modify 前面，
+            对照台账上 `order: 第 34 个公共节点 React=button "Modify" Vue=button "Connect"`
+            报的就是它，键盘 tab 的落点顺序也跟着反了。
+          -->
+          <Button
+            v-if="
+              view.provider.configured &&
+              providerCanEditRuntimeConfig(view.provider)
+            "
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="channels.isProviderPending(view.provider.provider)"
+            @click="beginSetup(view.provider)"
+          >
             <!--
-              上游 `channels-settings-page.tsx:199` 这一排全走 Button：连接键是
-              **默认（实心 primary）变体**，modify / disconnect 是
-              `variant="outline"`，三颗都是 `size="sm"`，而且**每颗都带一颗图标**
-              （`PlugIcon` / `UnplugIcon`，请求在飞的时候换成会转的
-              `LoaderCircleIcon`）。
-
-              手写那版：一颗图标都没有（所以「正在连接」除了置灰之外没有任何提示）、
-              一条 hover 都没有、连接键用的是**描边**而不是实心（用户看不出这一排里
-              哪一颗是主操作）、清配置那颗写死 `text-red-600` 而不是 destructive token。
-
-              `removeProviderConfig` 是本仓独有的管理员操作（上游没有这颗键），
-              所以它没有可抄的上游形状；这里只把它接进同一套 Button 规格。
+              上游那颗 Modify 是带图标的（`channels-settings-page.tsx:211`：
+              请求在飞时 `LoaderCircleIcon`，否则 `PlugIcon`）。少这颗图标，
+              按钮比上游窄 18px——对照台账上
+              `geometry: role:button[Modify] width React=89.5 Vue=71.5 Δ-18`
+              量的就是它；而且「正在改配置」除了置灰之外没有任何提示。
             -->
-            <Button
-              v-if="showConnectAction(view)"
-              type="button"
-              size="sm"
-              :disabled="channels.isProviderPending(view.provider.provider)"
-              :title="view.provider.unavailable_reason || undefined"
-              @click="connectProvider(view.provider)"
-            >
-              <LoaderCircle
-                v-if="channels.isProviderPending(view.provider.provider)"
-                class="animate-spin"
-              />
-              <Plug v-else />
-              {{ connectLabel(view) }}
-            </Button>
-            <Button
-              v-if="
-                view.provider.configured &&
-                providerCanEditRuntimeConfig(view.provider)
-              "
-              type="button"
-              variant="outline"
-              size="sm"
-              :disabled="channels.isProviderPending(view.provider.provider)"
-              @click="beginSetup(view.provider)"
-            >
-              <!--
-                上游那颗 Modify 是带图标的（`channels-settings-page.tsx:211`：
-                请求在飞时 `LoaderCircleIcon`，否则 `PlugIcon`）。少这颗图标，
-                按钮比上游窄 18px——对照台账上
-                `geometry: role:button[Modify] width React=89.5 Vue=71.5 Δ-18`
-                量的就是它；而且「正在改配置」除了置灰之外没有任何提示。
-              -->
-              <LoaderCircle
-                v-if="channels.isProviderPending(view.provider.provider)"
-                class="animate-spin"
-              />
-              <Plug v-else />
-              {{ text.modify }}
-            </Button>
-            <Button
-              v-if="isAdmin && view.provider.configured"
-              type="button"
-              variant="outline"
-              size="sm"
-              class="text-destructive hover:text-destructive"
-              :disabled="channels.isProviderPending(view.provider.provider)"
-              :aria-label="`${text.removeProviderConfig}: ${view.provider.display_name}`"
-              @click="removingProvider = view.provider"
-            >
-              {{ text.removeProviderConfig }}
-            </Button>
-          </div>
-        </div>
-
-        <div class="mt-3 space-y-2 pl-8">
-          <h4 class="text-xs font-medium">{{ text.accounts }}</h4>
-          <p
-            v-if="view.connections.length === 0"
-            class="text-muted-foreground text-xs"
+            <LoaderCircle
+              v-if="channels.isProviderPending(view.provider.provider)"
+              class="animate-spin"
+            />
+            <Plug v-else />
+            {{ text.modify }}
+          </Button>
+          <Button
+            v-if="showConnectAction(view)"
+            type="button"
+            size="sm"
+            :disabled="channels.isProviderPending(view.provider.provider)"
+            :title="view.provider.unavailable_reason || undefined"
+            @click="connectProvider(view.provider)"
           >
-            {{ text.noAccounts }}
-          </p>
-          <div
-            v-for="connection in view.connections"
-            :key="connection.id"
-            class="bg-muted/40 flex items-center justify-between gap-3 rounded-md px-3 py-2"
-            :data-testid="`channel-connection-${connection.id}`"
+            <LoaderCircle
+              v-if="channels.isProviderPending(view.provider.provider)"
+              class="animate-spin"
+            />
+            <Plug v-else />
+            {{ connectLabel(view) }}
+          </Button>
+          <Button
+            v-if="isAdmin && view.provider.configured"
+            type="button"
+            variant="outline"
+            size="sm"
+            class="text-destructive hover:text-destructive"
+            :disabled="channels.isProviderPending(view.provider.provider)"
+            :aria-label="`${text.removeProviderConfig}: ${view.provider.display_name}`"
+            @click="removingProvider = view.provider"
           >
-            <div class="min-w-0">
-              <div class="truncate text-xs font-medium">
-                {{ getChannelConnectionLabel(connection) }}
-              </div>
-              <div class="text-muted-foreground text-xs">
-                {{ statusLabel(connection.status) }}
-              </div>
-            </div>
-            <Button
-              v-if="connection.status !== 'revoked'"
-              type="button"
-              variant="outline"
-              size="sm"
-              :disabled="channels.isConnectionPending(connection.id)"
-              :aria-label="
-                text.disconnectAccount(getChannelConnectionLabel(connection))
-              "
-              @click="disconnectConnection(connection)"
-            >
-              <LoaderCircle
-                v-if="channels.isConnectionPending(connection.id)"
-                class="animate-spin"
-              />
-              <Unplug v-else />
-              {{ text.disconnect }}
-            </Button>
-          </div>
-        </div>
-      </article>
+            <!--
+              请求在飞时给一颗会转的图标（与这一排另外两颗同一条纪律），
+              但**闲时不挂静态图标**：这颗键在两个应用里都没有可抄的图标语义——
+              `Unplug`（上游那颗改名前用的）说的是「断开我的连接」，
+              而这个端点删的是整个部署的 provider 运行时配置。
+            -->
+            <LoaderCircle
+              v-if="channels.isProviderPending(view.provider.provider)"
+              class="animate-spin"
+            />
+            {{ text.removeProviderConfig }}
+          </Button>
+        </ItemActions>
+      </Item>
     </div>
   </SettingsSection>
 

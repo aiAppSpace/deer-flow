@@ -4,7 +4,7 @@
   【主要导出】     无；Vitest cases
   【依赖关系】     WorkspaceChannelsList.vue · i18n · mocked composable owner
   【边界与注意】   对照 frontend/src/components/workspace/channels/workspace-channels-list.tsx。
-                   列表语义（ul/li）与设置页的 article 不是同一件事，别为了省一个组件把它们合回去。
+                   列表语义（ul/li）与设置页那张 `ui/item` 卡片不是同一件事，别为了省一个组件把它们合回去。
 */
 
 import { mount } from "@vue/test-utils";

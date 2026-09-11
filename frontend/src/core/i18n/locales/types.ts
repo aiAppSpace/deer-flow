@@ -634,7 +634,7 @@ export interface Translations {
     connect: string;
     modify: string;
     reconnect: string;
-    disconnect: string;
+    removeProviderConfig: string;
     connected: string;
     notConnected: string;
     pending: string;

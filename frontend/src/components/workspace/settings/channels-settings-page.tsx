@@ -5,7 +5,6 @@ import {
   CheckCircle2Icon,
   LoaderCircleIcon,
   PlugIcon,
-  UnplugIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -20,6 +19,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@/components/ui/item";
+import { useAuth } from "@/core/auth/AuthProvider";
 import {
   useConfigureChannelProvider,
   useChannelConnections,
@@ -113,6 +113,15 @@ function ChannelProviderItem({
   connection?: ChannelConnection;
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  /*
+    `DELETE /channels/{provider}/runtime-config` 在 Gateway 那边第一句就是
+    `await require_admin_user(...)`（channel_connections.py:571）。这颗键原来对
+    **所有人**渲染，非管理员点下去拿到 403，toast 只说
+    "Failed to disconnect {provider}"——用户看不出这是权限问题。
+    同一目录下 skill / subagent / integrations 三个设置页早就用的是这一行判据。
+  */
+  const isAdmin = user?.system_role === "admin";
   const connectMutation = useConnectChannelProvider();
   const configureMutation = useConfigureChannelProvider();
   const disconnectProviderMutation = useDisconnectChannelProvider();
@@ -198,51 +207,22 @@ function ChannelProviderItem({
         </ItemContent>
         <ItemActions className="ml-auto">
           {isConnected ? (
-            <>
-              {canEditRuntimeConfig ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={isConnecting || isDisconnecting}
-                  onClick={() => setSetupOpen(true)}
-                >
-                  {isConnecting ? (
-                    <LoaderCircleIcon className="animate-spin" />
-                  ) : (
-                    <PlugIcon />
-                  )}
-                  {t.channels.modify}
-                </Button>
-              ) : null}
+            canEditRuntimeConfig ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={isDisconnecting}
-                onClick={() => {
-                  void disconnectProviderMutation
-                    .mutateAsync(provider.provider)
-                    .then(() => {
-                      toast.success(t.channels.revoked);
-                    })
-                    .catch((error) => {
-                      toast.error(
-                        error instanceof Error
-                          ? error.message
-                          : t.channels.unavailable,
-                      );
-                    });
-                }}
+                disabled={isConnecting || isDisconnecting}
+                onClick={() => setSetupOpen(true)}
               >
-                {isDisconnecting ? (
+                {isConnecting ? (
                   <LoaderCircleIcon className="animate-spin" />
                 ) : (
-                  <UnplugIcon />
+                  <PlugIcon />
                 )}
-                {t.channels.disconnect}
+                {t.channels.modify}
               </Button>
-            </>
+            ) : null
           ) : (
             <>
               {provider.configured && canEditRuntimeConfig ? (
@@ -253,6 +233,16 @@ function ChannelProviderItem({
                   disabled={isConnecting || isDisconnecting}
                   onClick={() => setSetupOpen(true)}
                 >
+                  {/*
+                    同一颗 Modify 在两个分支里本来一个带图标、一个不带，于是
+                    provider 连上之后这颗键会自己宽出 18px。两个分支的变体和尺寸
+                    完全相同，差别只有图标——是漏写不是设计。
+                  */}
+                  {isConnecting ? (
+                    <LoaderCircleIcon className="animate-spin" />
+                  ) : (
+                    <PlugIcon />
+                  )}
                   {t.channels.modify}
                 </Button>
               ) : null}
@@ -286,6 +276,53 @@ function ChannelProviderItem({
               </Button>
             </>
           )}
+          {/*
+            这颗键原来叫 "Disconnect"，排在已连接分支里，对所有人渲染，点下去
+            没有任何确认。它打的是 `DELETE /channels/{provider}/runtime-config`
+            ——Gateway 那一条会**停掉整个部署的这条渠道运行时、把所有人的
+            connection 行一并吊销、再删掉 provider 的运行时配置**
+            （channel_connections.py:570 起），而且第一句就是
+            `await require_admin_user(...)`。
+
+            三件事都是错的：名字说的是「断开我的连接」而它删的是部署级配置；
+            给非管理员渲染只能换来一个 403 和一句读不懂的 toast；
+            这一档只有已连接的 provider 才有，于是 app secret 填错、
+            永远连不上的 provider **没有任何办法清掉**。
+
+            改成与 Vue 侧同一颗键：管理员限定、按「配过就能清」渲染、
+            文案说实话。**确认对话框没有跟过来**——React 侧没有 alert-dialog
+            这个 primitive，为一颗键引进一个新 primitive 超出了「只做小改」的
+            边界；Vue 侧有（ChannelConnections.vue 的 AlertDialog）。
+          */}
+          {isAdmin && provider.configured ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={isDisconnecting}
+              aria-label={`${t.channels.removeProviderConfig}: ${provider.display_name}`}
+              onClick={() => {
+                void disconnectProviderMutation
+                  .mutateAsync(provider.provider)
+                  .then(() => {
+                    toast.success(t.channels.revoked);
+                  })
+                  .catch((error) => {
+                    toast.error(
+                      error instanceof Error
+                        ? error.message
+                        : t.channels.unavailable,
+                    );
+                  });
+              }}
+            >
+              {isDisconnecting ? (
+                <LoaderCircleIcon className="animate-spin" />
+              ) : null}
+              {t.channels.removeProviderConfig}
+            </Button>
+          ) : null}
         </ItemActions>
       </Item>
       <ChannelRuntimeConfigDialog

@@ -815,7 +815,6 @@ export const zhCN: Translations = {
     unavailable: "当前无法使用渠道连接。",
     unavailableShort: "不可用",
     accounts: "已连接账号",
-    noAccounts: "尚无渠道账号。",
     removeProviderConfig: "移除 Provider 配置",
     removeProviderTitle: (name: string) => `移除 ${name} Provider 配置？`,
     removeProviderDescription:
@@ -834,7 +833,7 @@ export const zhCN: Translations = {
     saveAndConnect: "保存并连接",
     saveChanges: "保存修改",
     descriptions: {
-      buzz: "通过 DeerFlow Agent 接收 Buzz 渠道消息和私聊。",
+      buzz: "通过 DeerFlow 智能体接收 Buzz 频道消息和私聊。",
       telegram: "通过 DeerFlow Bot 接收 Telegram 私聊消息。",
       slack: "接收 Slack 工作区消息和提及。",
       discord: "通过 DeerFlow Bot 接收 Discord 服务器消息。",

@@ -383,7 +383,9 @@ describe("connect button label", () => {
       [provider({ configured: false, connection_status: "not_connected" })],
       [],
     );
-    const description = mountSettings(owner).wrapper.get("p.text-xs").text();
+    const description = mountSettings(owner)
+      .wrapper.get("[data-slot=item-description]")
+      .text();
 
     expect(description).toBe(enUS.channels.descriptions.slack);
   });
@@ -402,5 +404,37 @@ describe("connect button label", () => {
       .map((button) => button.text());
 
     expect(labels).toContain(enUS.channels.addAccount);
+  });
+});
+
+/*
+  账号列表是本仓设置页独有的一块（上游一个 provider 只认一条 connection，
+  没有列表这个概念）。留着是对的，但它**只在真有 binding row 时才该存在**。
+
+  原来是无条件渲染：7 个 provider 每个都挂一句「尚无渠道账号。」——对一个连配都没配的
+  provider 说「它还没有账号」是零信息的噪音；`DEER_FLOW_AUTH_DISABLED=1` 下更糟，
+  provider 明明已连接（每条渠道消息都路由到默认用户，本来就不会有 binding row），
+  同一张卡片上边徽标写「已连接」、下边写「尚无渠道账号」。
+  对照台账 `channels#settings-panel` 上那 21 行 `ariaOnlyVue` 报的就是这一块。
+*/
+describe("账号列表", () => {
+  it("一行 binding row 都没有时，整块不渲染", () => {
+    const owner = createOwner(
+      [provider({ connection_status: "connected" })],
+      [],
+    );
+    const { wrapper } = mountSettings(owner);
+
+    // 标题也要一起消失——只藏空态那句话的话，留下的是一个空标题。
+    expect(wrapper.text()).not.toContain(enUS.channels.accounts);
+  });
+
+  it("有 binding row 时照常出标题与每一行", () => {
+    const { wrapper } = mountSettings();
+
+    expect(wrapper.text()).toContain(enUS.channels.accounts);
+    expect(
+      wrapper.findAll('[data-testid^="channel-connection-"]').length,
+    ).toBeGreaterThan(0);
   });
 });

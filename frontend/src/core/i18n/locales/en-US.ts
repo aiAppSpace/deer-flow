@@ -759,7 +759,7 @@ export const enUS: Translations = {
     connect: "Connect",
     modify: "Modify",
     reconnect: "Reconnect",
-    disconnect: "Disconnect",
+    removeProviderConfig: "Remove provider configuration",
     connected: "Connected",
     notConnected: "Not connected",
     pending: "Pending",

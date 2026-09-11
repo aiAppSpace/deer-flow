@@ -3,6 +3,67 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 `channels#settings-panel` 从 53/54 行清到 2/2：那颗 `Disconnect` 是**上游的缺陷**
+>
+> 这一屏原来是全台账最厚的一处。拆成几类逐条查，**最后一类不是「本仓欠上游」，
+> 是反过来**——所以记在这里，它同时是「React 自身缺陷」这条已授权例外的又一个样本。
+>
+> **一、卡片本体没走 `ui/item`（13 行 `depth: React=2 Vue=3`）。**
+> 上游整张卡片是 `<Item variant="outline">` 加五个槽位；本仓手写 `<article>` 套一层
+> `div.flex` 再手写四个容器，**每一行可见元素都比上游深一层**。`ui/item` 这一族本仓
+> 早就逐字移植好了、三个兄弟设置页都在用，这里是最后一处还在手写的。换过去之后
+> `depth` 整档归零。
+>
+> **二、账号列表无条件渲染（21 行）。** 「已连接账号 / 尚无渠道账号。」这一块是本仓
+> 独有的（上游一个 provider 只认一条 connection），留着是对的——多账号与逐账号断开被
+> `tests/e2e-channels/channels.spec.ts` 拿真 Gateway 钉着。但它原来**对 7 个 provider
+> 全部渲染**：对一个连配都没配的 provider 说「它还没有账号」是零信息；更糟的是
+> `DEER_FLOW_AUTH_DISABLED=1` 下配好且跑起来的 provider 本来就不该有 binding row，
+> 于是同一张卡片上边徽标写「已连接」、下边写「尚无渠道账号」。改成
+> `v-if="view.connections.length > 0"`，空态那句文案（`channels.noAccounts`）一并删掉。
+>
+> **三、动作条顺序反了（1 行 `order` + tab 落点）。** 上游两个分支都是
+> Modify 在前、那一档的状态操作在后（右对齐的一排里主操作在最右是通行做法），
+> 本仓把 Connect 排在了 Modify 前面。
+>
+> **四、`Disconnect` ×3（React-only）对 `Remove provider configuration` ×6（Vue-only）
+> ——查下去发现是同一个端点，而上游那一侧是错的。**
+>
+> 两边打的都是 `DELETE /api/channels/{provider}/runtime-config`。后端那条
+> （`backend/app/gateway/routers/channel_connections.py:570`）做三件事：
+> 停掉整个部署的这条渠道运行时、**把所有人的 connection 行一并吊销**、删掉 provider
+> 的运行时配置；而且函数第一句就是 `await require_admin_user(...)`。
+>
+> 上游把它叫 "Disconnect"、**对所有人渲染**、点下去没有任何确认，而且只在
+> `isConnected` 那一档才有。三件事都是错的：
+>
+> - 名字说的是「断开我的连接」，它删的是部署级配置；
+> - 非管理员点下去只能拿到 403 和一句 `Failed to disconnect {provider}`，看不出是权限；
+> - app secret 填错、永远连不上的 provider **没有任何办法清掉**。
+>
+> 本仓这一侧本来就是对的（管理员限定 + AlertDialog 确认 + 说实话的文案），
+> 所以**两边同改 = 只改 React**：`isAdmin` 判据是同目录下 skill / subagent /
+> integrations 三个设置页早就在用的那一行，渲染条件改成「配过就能清」，
+> 词条 `channels.disconnect` 改名 `channels.removeProviderConfig`（React 侧它只有
+> 这一个消费点）。**确认对话框没有跟过去**：React 侧没有 alert-dialog 这个 primitive，
+> 为一颗键引进一个新 primitive 越过了「frontend/ 只做小改」的边界。
+>
+> 顺带修掉上游同一个文件里的另一处不一致：同一颗 Modify 在已连接分支带 `PlugIcon`、
+> 未连接分支不带，于是 provider 连上之后这颗键自己宽出 18px。两个分支的变体与尺寸
+> 完全相同，是漏写不是设计。
+>
+> **五、`channels.descriptions.buzz` 的中文是本仓独有的一版**（2 行）：上游
+> 「通过 DeerFlow 智能体接收 Buzz 频道消息和私聊。」，本仓「通过 DeerFlow Agent 接收
+> Buzz 渠道消息和私聊。」。另外 7 条描述**逐字相同**，而「智能体」在本仓中文词典里
+> 出现 58 次——这一行是孤例漂移，不是术语选择。照上游改回。
+>
+> **读数（单场景实测，`PARITY_ONLY=channels make e2e-parity`）**：
+> `channels#settings-panel` **53 → 2（en-US）/ 54 → 2（zh-CN）**，
+> `depth`、`geometry`、`order`、`ariaOnlyReact`、`ariaOnlyVue`、`tabbablesOnlyVue`
+> 六档全部归零。剩下的 2 行两个语言一样，都是 wave 98 就判过「不跟」的
+> `div[scroll-area-viewport]`（上游那条 `ScrollBar className="hidden"` 永远不滚动，
+> 只多一个键盘停靠点），以及它在 `tabOrder` 上的同一处投影。
+>
 > ## 2026-09-11 记一条判据：`thread-list-infinite-scroll` 那条 spec 再红时怎么判
 >
 > **这是我自己引入又修掉的竞态，留下判据免得下次当成偶发。**

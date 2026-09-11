@@ -1494,146 +1494,35 @@
       "tabOrder": []
     },
     "channels#settings-panel/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"Disconnect\"",
-        "- button \"Disconnect\"",
-        "- button \"Disconnect\""
-      ],
-      "ariaOnlyVue": [
-        "- 'button \"Remove provider configuration: Buzz\"': Remove provider configuration",
-        "- 'button \"Remove provider configuration: DingTalk\"': Remove provider configuration",
-        "- 'button \"Remove provider configuration: Slack\"': Remove provider configuration",
-        "- 'button \"Remove provider configuration: Telegram\"': Remove provider configuration",
-        "- 'button \"Remove provider configuration: WeChat\"': Remove provider configuration",
-        "- 'button \"Remove provider configuration: WeCom\"': Remove provider configuration",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- heading \"Connected accounts\" [level=4]",
-        "- heading \"Connected accounts\" [level=4]",
-        "- heading \"Connected accounts\" [level=4]",
-        "- heading \"Connected accounts\" [level=4]",
-        "- heading \"Connected accounts\" [level=4]",
-        "- heading \"Connected accounts\" [level=4]",
-        "- heading \"Connected accounts\" [level=4]",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet.",
-        "- paragraph: No channel accounts yet."
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:button[/^(Modify|修改)$/] x React=933 Vue=843.7 Δ-89.3"
-      ],
+      "geometry": [],
       "focus": [],
-      "order": [
-        "第 34 个公共节点 React=- button \"Modify\" Vue=- button \"Connect\""
-      ],
-      "depth": [
-        "- paragraph: Buzz channels and direct messages through your DeerFlow agent. React 深度 2 / Vue 深度 3",
-        "- paragraph: DingTalk Stream Push messages through your DeerFlow bot. React 深度 2 / Vue 深度 3",
-        "- paragraph: Feishu and Lark messages through your DeerFlow app. React 深度 2 / Vue 深度 3",
-        "- paragraph: Slack workspace messages and mentions. React 深度 2 / Vue 深度 3",
-        "- paragraph: Telegram direct messages through your DeerFlow bot. React 深度 2 / Vue 深度 3",
-        "- paragraph: WeChat iLink messages through your DeerFlow bot. WeChat runtime is not running. React 深度 2 / Vue 深度 3",
-        "- paragraph: WeCom messages through your DeerFlow AI bot. React 深度 2 / Vue 深度 3",
-        "- text: Buzz Connected React 深度 2 / Vue 深度 3",
-        "- text: DingTalk Connected React 深度 2 / Vue 深度 3",
-        "- text: Feishu Not configured React 深度 2 / Vue 深度 3",
-        "- text: Slack Connected React 深度 2 / Vue 深度 3",
-        "- text: Telegram Not connected React 深度 2 / Vue 深度 3",
-        "- text: WeChat Unavailable React 深度 2 / Vue 深度 3",
-        "- text: WeCom Disconnected React 深度 2 / Vue 深度 3"
-      ],
+      "order": [],
+      "depth": [],
       "tabbablesOnlyReact": [
         "div[scroll-area-viewport]"
       ],
-      "tabbablesOnlyVue": [
-        "button",
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyVue": [],
       "tabOrder": [
         "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]
     },
     "channels#settings-panel/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"断开连接\"",
-        "- button \"断开连接\"",
-        "- button \"断开连接\"",
-        "- paragraph: 通过 DeerFlow 智能体接收 Buzz 频道消息和私聊。"
-      ],
-      "ariaOnlyVue": [
-        "- 'button \"移除 Provider 配置: Buzz\"': 移除 Provider 配置",
-        "- 'button \"移除 Provider 配置: DingTalk\"': 移除 Provider 配置",
-        "- 'button \"移除 Provider 配置: Slack\"': 移除 Provider 配置",
-        "- 'button \"移除 Provider 配置: Telegram\"': 移除 Provider 配置",
-        "- 'button \"移除 Provider 配置: WeChat\"': 移除 Provider 配置",
-        "- 'button \"移除 Provider 配置: WeCom\"': 移除 Provider 配置",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- article:",
-        "- heading \"已连接账号\" [level=4]",
-        "- heading \"已连接账号\" [level=4]",
-        "- heading \"已连接账号\" [level=4]",
-        "- heading \"已连接账号\" [level=4]",
-        "- heading \"已连接账号\" [level=4]",
-        "- heading \"已连接账号\" [level=4]",
-        "- heading \"已连接账号\" [level=4]",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 尚无渠道账号。",
-        "- paragraph: 通过 DeerFlow Agent 接收 Buzz 渠道消息和私聊。"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:button[/^(Modify|修改)$/] x React=969 Vue=945.3 Δ-23.7"
-      ],
+      "geometry": [],
       "focus": [],
-      "order": [
-        "第 33 个公共节点 React=- button \"修改\" Vue=- button \"连接\""
-      ],
-      "depth": [
-        "- paragraph: 接收 Slack 工作区消息和提及。 React 深度 2 / Vue 深度 3",
-        "- paragraph: 通过 DeerFlow AI Bot 接收企业微信消息。 React 深度 2 / Vue 深度 3",
-        "- paragraph: 通过 DeerFlow Bot 接收 Telegram 私聊消息。 React 深度 2 / Vue 深度 3",
-        "- paragraph: 通过 DeerFlow Bot 接收微信 iLink 消息。 WeChat runtime is not running. React 深度 2 / Vue 深度 3",
-        "- paragraph: 通过 DeerFlow Bot 接收钉钉 Stream Push 消息。 React 深度 2 / Vue 深度 3",
-        "- paragraph: 通过 DeerFlow 应用接收飞书和 Lark 消息。 React 深度 2 / Vue 深度 3",
-        "- text: Buzz 已连接 React 深度 2 / Vue 深度 3",
-        "- text: DingTalk 已连接 React 深度 2 / Vue 深度 3",
-        "- text: Feishu 未配置 React 深度 2 / Vue 深度 3",
-        "- text: Slack 已连接 React 深度 2 / Vue 深度 3",
-        "- text: Telegram 未连接 React 深度 2 / Vue 深度 3",
-        "- text: WeChat 不可用 React 深度 2 / Vue 深度 3",
-        "- text: WeCom 已断开 React 深度 2 / Vue 深度 3"
-      ],
+      "order": [],
+      "depth": [],
       "tabbablesOnlyReact": [
         "div[scroll-area-viewport]"
       ],
-      "tabbablesOnlyVue": [
-        "button",
-        "button",
-        "button"
-      ],
+      "tabbablesOnlyVue": [],
       "tabOrder": [
         "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
       ]

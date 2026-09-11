@@ -724,7 +724,7 @@ export const zhCN: Translations = {
     connect: "连接",
     modify: "修改",
     reconnect: "重新连接",
-    disconnect: "断开连接",
+    removeProviderConfig: "移除 Provider 配置",
     connected: "已连接",
     notConnected: "未连接",
     pending: "待完成",
