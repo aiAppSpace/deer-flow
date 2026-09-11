@@ -656,6 +656,12 @@ export interface Translations {
 
   // Page titles (document title)
 
+  artifacts: {
+    previewTitle: string;
+    fileTypeLabel: (type: string) => string;
+    cannotPreview: string;
+    installFailed: string;
+  };
   browser: {
     panelTitle: string;
     live: string;

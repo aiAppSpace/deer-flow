@@ -796,6 +796,20 @@ export const enUS: Translations = {
     namespace, and the panel label right above this comment's consumer was
     fixed the same way in an earlier pass.
   */
+
+  /*
+    Artifact viewer strings. These were hardcoded English literals in
+    `artifacts/artifact-file-list.tsx`, `artifact-file-preview.tsx` and
+    `artifact-file-detail.tsx`, so the zh-CN build rendered "JPG file" and
+    "This file type cannot be previewed in the browser." inside an otherwise
+    Chinese workspace. The Vue app already carries the same namespace.
+  */
+  artifacts: {
+    previewTitle: "Artifact preview",
+    fileTypeLabel: (type: string) => `${type} file`,
+    cannotPreview: "This file type cannot be previewed in the browser.",
+    installFailed: "Install failed",
+  },
   browser: {
     panelTitle: "Browser view",
     live: "Live",

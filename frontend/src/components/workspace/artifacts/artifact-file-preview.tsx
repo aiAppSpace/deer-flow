@@ -17,6 +17,7 @@ import {
 } from "@/core/artifacts/preview";
 import { urlOfArtifact } from "@/core/artifacts/utils";
 import { extractCitationSources } from "@/core/citations/sources";
+import { useI18n } from "@/core/i18n/hooks";
 import {
   SafeStreamdown,
   toStreamdownComponents,
@@ -142,6 +143,7 @@ export function ArtifactFilePreview({
   truncated?: boolean;
   active?: boolean;
 }) {
+  const { t } = useI18n();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const scrollPositionRef = useRef({ x: 0, y: 0 });
   const scrollMessageKey = useMemo(
@@ -321,7 +323,7 @@ export function ArtifactFilePreview({
       <iframe
         ref={iframeRef}
         className="size-full"
-        title="Artifact preview"
+        title={t.artifacts.previewTitle}
         // allow-scripts is needed for the scroll-restoration injected
         // script (appendHtmlPreviewScrollRestoration) which communicates
         // via postMessage. allow-same-origin is deliberately omitted: the
@@ -361,7 +363,6 @@ function scrollCoordinate(value: unknown) {
     : undefined;
 }
 
-
 function shouldInlineHtmlPreviewResource(resourceUrl: string) {
   try {
     const parsed = new URL(resourceUrl, globalThis.location?.href);
@@ -388,7 +389,9 @@ function blobToDataUrl(blob: Blob) {
       reject(new Error("Failed to read HTML preview resource."));
     };
     reader.onerror = () => {
-      reject(reader.error ?? new Error("Failed to read HTML preview resource."));
+      reject(
+        reader.error ?? new Error("Failed to read HTML preview resource."),
+      );
     };
     reader.readAsDataURL(blob);
   });

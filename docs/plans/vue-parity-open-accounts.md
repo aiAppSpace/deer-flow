@@ -3,6 +3,29 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 产物面板的「JPG file」也是写死的英文
+>
+> 台账上只剩两条 zh-CN 专有的行（`showcase-public-thread` 与 `artifact-stream-state`
+> 各 2 行）：`- text: doraemon-moe-comic.jpg JPG file` 对
+> `JPG 文件`、`summary.txt Text file` 对 `Text 文件`。
+> **又是那个形状**——只在中文维度报差异、英文维度一行都没有，所以两边渲染的是
+> 同一棵树，只是一侧没翻译。
+>
+> 上游 `artifacts/artifact-file-list.tsx:187` 与 `artifact-file-preview.tsx:99` 写的是
+> `{ext} file` 字面量，同一个文件里还有
+> `"This file type cannot be previewed in the browser."`、iframe 的
+> `title="Artifact preview"`、以及两处 `toast.error("Failed to install skill")`
+> ——**上游的 `artifacts` 面板整块都没有进它自己的词典**。本仓一直有一个
+> `artifacts` 命名空间（`fileTypeLabel` / `cannotPreview` / `previewTitle` /
+> `installFailed` 都在里面），`ArtifactFileCards.vue` 的头注释里还点名了那句写死的英文。
+>
+> 两边同改：上游补上同名的 `artifacts` 块（只取本仓这四条），
+> `vue-only-keys` 的 `VUE_ONLY_BLOCKS` 里把 `artifacts` 拿掉。
+>
+> **`placeholder="Select a file"` 不在这一批里**：它对应的是本仓
+> `primitives.selectAFile`，而 `primitives.*` 那一组的规矩本来就是
+> 「上游写死英文、两个应用念同一句」，两边现在念的就是同一句。
+>
 > ## 2026-09-11 `integrations` 46 → 34、`scheduled-tasks#default` 14 → 0
 >
 > 两族一起记，因为**剩下的全是早就判过的两条账**。

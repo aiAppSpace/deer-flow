@@ -30,9 +30,10 @@
                    （AgentChat.vue:164），只靠 isAdmin 会让只读案例页长出一颗写入按钮。
                    `!isMock` 补的就是这条，与 ArtifactPanel 的详情视图同一个判据。
 
-                   失败提示用 `artifacts.installFailed` 而不是上游写死的英文
-                   "Failed to install skill"：本仓的详情视图早就用这条词条了，
-                   同一个动作在两处说不同的话更糟。
+                   失败提示用 `artifacts.installFailed`：本仓的详情视图早就用这条词条了，
+                   同一个动作在两处说不同的话更糟。上游那两处原本写死英文
+                   "Failed to install skill"（中文界面上也是英文），**2026-09-11 两边同改**，
+                   上游也有了同名的 `artifacts` 命名空间。
 
                    toast 走 `useWorkspaceToast()`（**没有 provider 会抛**）。两个消费点
                    分别在 workspace layout 与 showcase layout 下，两者都 provide 了；

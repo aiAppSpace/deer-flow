@@ -305,12 +305,8 @@
       "tabOrder": []
     },
     "showcase-public-thread/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- text: doraemon-moe-comic.jpg JPG file"
-      ],
-      "ariaOnlyVue": [
-        "- text: doraemon-moe-comic.jpg JPG 文件"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
@@ -1562,12 +1558,8 @@
       "tabOrder": []
     },
     "artifact-stream-state/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- text: summary.txt Text file"
-      ],
-      "ariaOnlyVue": [
-        "- text: summary.txt Text 文件"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],

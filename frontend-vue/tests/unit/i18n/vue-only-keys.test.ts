@@ -41,9 +41,13 @@ import { describe, expect, it } from "vitest";
   是因为**上游那两片界面在中文下是英文**：浏览器面板整条工具条写死字面量，
   markdown 面的控件全部由 `streamdown` 画而上游从来没给它传 `translations`。
   两边同改之后上游有了同名的块，所以从这张表里拿掉。
+
+  `artifacts` 同一天也走了这条路：上游的产物面板里 `"{ext} file"`、
+  「这种文件类型无法在浏览器里预览。」与 iframe 的 `title` 都是写死的英文字面量，
+  中文界面上照样是英文。两边同改之后上游也有了这个块（只是本仓这一份更全，
+  上游只用到其中四条）。
 */
 const VUE_ONLY_BLOCKS = [
-  "artifacts",
   "marketing",
   "messages",
   "navigation",

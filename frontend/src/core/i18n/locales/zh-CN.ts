@@ -756,6 +756,12 @@ export const zhCN: Translations = {
 
   // Page titles (document title)
 
+  artifacts: {
+    previewTitle: "产物预览",
+    fileTypeLabel: (type: string) => `${type} 文件`,
+    cannotPreview: "这种文件类型无法在浏览器里预览。",
+    installFailed: "安装失败",
+  },
   browser: {
     panelTitle: "浏览器视图",
     live: "实时",

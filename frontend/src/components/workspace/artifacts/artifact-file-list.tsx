@@ -95,14 +95,14 @@ export function ArtifactFileList({
         if (result.success) {
           toast.success(result.message);
         } else {
-          toast.error(result.message || "Failed to install skill");
+          toast.error(result.message || t.artifacts.installFailed);
         }
       } catch (error) {
         console.error("Failed to install skill:", error);
         if (error instanceof SkillRequestError && error.isAdminRequired) {
           toast.error(t.settings.skills.installAdminRequired);
         } else {
-          toast.error("Failed to install skill");
+          toast.error(t.artifacts.installFailed);
         }
       } finally {
         setInstallingFile(null);
@@ -184,7 +184,7 @@ export function ArtifactFileList({
                 </div>
               </CardTitle>
               <CardDescription className="min-w-0 pl-8 text-xs">
-                {getFileExtensionDisplayName(file)} file
+                {t.artifacts.fileTypeLabel(getFileExtensionDisplayName(file))}
               </CardDescription>
               <CardAction className="row-span-1 self-center">
                 {file.endsWith(".skill") && isAdmin && (

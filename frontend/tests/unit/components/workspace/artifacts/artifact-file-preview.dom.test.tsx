@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, rs } from "@rstest/core";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import { ArtifactFilePreview } from "@/components/workspace/artifacts/artifact-file-preview";
+import { I18nProvider } from "@/core/i18n/context";
 
 /*
   The preview iframe is sandboxed without `allow-same-origin`, so the document
@@ -24,13 +25,17 @@ let capturedHtml = "";
 let fetchCalls: string[] = [];
 
 function mount(content: string) {
+  // The iframe title comes from the dictionary now, so this renders under the
+  // app's provider like any other product component.
   return render(
-    <ArtifactFilePreview
-      content={content}
-      language="html"
-      scrollKey="artifact-1"
-      url={ARTIFACT_URL}
-    />,
+    <I18nProvider initialLocale="en-US">
+      <ArtifactFilePreview
+        content={content}
+        language="html"
+        scrollKey="artifact-1"
+        url={ARTIFACT_URL}
+      />
+    </I18nProvider>,
   );
 }
 
@@ -54,20 +59,25 @@ beforeEach(() => {
   );
   rs.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
 
-  rs.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
-    const requested =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url;
-    fetchCalls.push(requested);
-    return Promise.resolve(
-      new Response(new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }), {
-        status: 200,
-      }),
-    );
-  });
+  rs.spyOn(globalThis, "fetch").mockImplementation(
+    (input: RequestInfo | URL) => {
+      const requested =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      fetchCalls.push(requested);
+      return Promise.resolve(
+        new Response(
+          new Blob([new Uint8Array([1, 2, 3])], { type: "image/png" }),
+          {
+            status: 200,
+          },
+        ),
+      );
+    },
+  );
 });
 
 describe("ArtifactFilePreview html resources", () => {

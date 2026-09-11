@@ -380,14 +380,14 @@ export function ArtifactFileDetail({
       if (result.success) {
         toast.success(result.message);
       } else {
-        toast.error(result.message ?? "Failed to install skill");
+        toast.error(result.message ?? t.artifacts.installFailed);
       }
     } catch (error) {
       console.error("Failed to install skill:", error);
       if (error instanceof SkillRequestError && error.isAdminRequired) {
         toast.error(t.settings.skills.installAdminRequired);
       } else {
-        toast.error("Failed to install skill");
+        toast.error(t.artifacts.installFailed);
       }
     } finally {
       setIsInstalling(false);
