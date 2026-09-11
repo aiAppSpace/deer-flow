@@ -371,8 +371,11 @@ const VERIFIED = {
   ArrowDown:
     "ConversationScrollButton；`grep -rn ConversationScrollButton` 除定义处零命中",
   Book: "ai-elements/sources.tsx 整份零消费者",
-  ChevronLeft:
-    "ai-elements/message.tsx 的 MessageBranchPrevious，MessageBranch* 零消费者",
+  // —— ChevronLeft 2026-09-12 删掉：`stale` 报它「已经不再出现」，回去看过一遍——
+  // wave 75 记的理由是「上游 ai-elements/message.tsx 的 MessageBranchPrevious，
+  // MessageBranch* 零消费者」，那时它确实只有上游用。现在**两边都在用**
+  // （`artifact-table-preview.tsx` 与 `ArtifactTablePreview.vue` 的翻页键），
+  // 于是它压根不会再进「只有一边用」那张表，这条豁免是死配置。
   ThumbsUp:
     "message-list-item.tsx 的点赞；渲染条件 feedback!==undefined，没有一处传它",
   ThumbsDown: "同 ThumbsUp",
