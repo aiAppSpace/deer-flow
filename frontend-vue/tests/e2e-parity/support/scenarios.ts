@@ -2893,9 +2893,27 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
       },
     ],
+    /*
+      **窄屏这一维给的是「整页」这个形状。** 2026-09-11 给 `integrations` 开 mobile
+      当场量出上游一颗手机上点不到的控件，但那是**对话框**里的叠放；
+      窄屏取样此前一个**整页**样本都没有（非 desktop 的只有 `chat`、`artifact-preview`、
+      `thread-list-pin#mobile-drawer`、`ui-polish-mobile` 与 `integrations`）。
+      这一页是这个仓库里表单最密的一屏——预设、时区、cron、上下文模式四组控件
+      加一张任务列表加一块运行历史，两个应用各写各的窄屏排布。
+
+      与 ZH/DARK 同一条纪律：**一个场景补一维就够**（断点轴与语言/主题轴正交）。
+
+      **深色那一维给的是 `load-failed`**：它是这一页唯一一支**真的把错误画出来**
+      的终态（`scheduled-task-load-error`），而两边都写的是 `text-destructive`
+      ——浅色下 `--destructive` 与 `red-600` 同值、看不出谁用的是 token，
+      只有深色才现形（见 `DARK_DIMENSION` 的说明）。这一维报 0 行是**算出来的 0**：
+      锚点是那个 testid，几何档会把它的 `color` 一起取走。
+    */
     dimensions: [
       DEFAULT_DIMENSION,
       { viewport: "desktop", theme: "light", locale: "zh-CN" },
+      { viewport: "mobile", theme: "light", locale: "en-US" },
+      DARK_DIMENSION,
     ],
   },
   {
