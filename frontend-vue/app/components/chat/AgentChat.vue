@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AuroraText from "@/components/ui/effects/AuroraText.vue";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -1968,10 +1969,17 @@ onUnmounted(() => {
             v-if="editState"
             class="border-border bg-background absolute right-0 bottom-36 left-0 z-40 mx-auto w-full max-w-xl rounded-xl border p-3 shadow-lg"
           >
-            <textarea
+            <!--
+              走 `ui/textarea`，不要手写。上游这一处是
+              `message-list-item.tsx:525` 的 `<Textarea autoFocus className="min-h-24 resize-y">`。
+              手写那版丢掉的是焦点环（`focus-visible:ring-[3px]`）、无效态
+              （`aria-invalid:`）、禁用态样式与深色主题 token，而且**打开就自动聚焦**
+              这一条也没有：用户点「编辑」之后还得再点一次输入框才能改。
+            -->
+            <Textarea
               v-model="editState.text"
-              rows="3"
-              class="border-input w-full rounded-md border p-2"
+              autofocus
+              class="min-h-24 resize-y"
             />
             <!--
               「改完重跑会丢掉这一轮之后的消息」这句提醒，上游写在输入框与两颗按钮

@@ -30,6 +30,8 @@ import ScheduledTaskScheduleInput from "./ScheduledTaskScheduleInput.vue";
 import { Copy } from "lucide-vue-next";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   formatScheduledTaskTimestamp,
   SCHEDULED_TASK_NONE,
@@ -79,10 +81,6 @@ const threadLine = computed(() =>
     ? `${labels.value.detail.thread}: ${props.task.thread_id ?? SCHEDULED_TASK_NONE}`
     : `${labels.value.detail.lastThread}: ${props.task.last_thread_id ?? SCHEDULED_TASK_NONE}`,
 );
-const editInputClass =
-  "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] md:text-sm";
-const editTextareaClass =
-  "border-input placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm";
 </script>
 
 <template>
@@ -126,24 +124,24 @@ const editTextareaClass =
       class="flex flex-col gap-2 rounded-lg border p-3"
       data-testid="scheduled-task-edit-form"
     >
-      <input
+      <!--
+        走 `ui/input` / `ui/textarea`，不要手写：上游同一处是
+        `app/workspace/scheduled-tasks/page.tsx:533/538` 的 `<Input>` 与 `<Textarea>`。
+        这里原来把 primitive 的整串基类抄成了两个本地常量（还漏了 `aria-invalid:`
+        与 `disabled:` 两段），primitive 一改就悄悄分叉。
+      -->
+      <Input
         data-testid="scheduled-task-title"
-        :class="editInputClass"
-        :value="editDraft.title"
+        :model-value="editDraft.title"
         :placeholder="labels.edit.titlePlaceholder"
-        @input="
-          patchDraft({ title: ($event.target as HTMLInputElement).value })
-        "
+        @update:model-value="patchDraft({ title: $event })"
       />
-      <textarea
+      <Textarea
         data-testid="scheduled-task-prompt"
         rows="4"
-        :class="editTextareaClass"
-        :value="editDraft.prompt"
+        :model-value="editDraft.prompt"
         :placeholder="labels.edit.promptPlaceholder"
-        @input="
-          patchDraft({ prompt: ($event.target as HTMLTextAreaElement).value })
-        "
+        @update:model-value="patchDraft({ prompt: $event })"
       />
       <ScheduledTaskScheduleInput
         :key="task.id"

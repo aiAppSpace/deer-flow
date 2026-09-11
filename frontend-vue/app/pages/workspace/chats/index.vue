@@ -26,6 +26,7 @@ import { ArchiveRestore } from "lucide-vue-next";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
 import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
@@ -60,7 +61,11 @@ const threads = useThreads({ archived });
 const archiveAction = useThreadArchiveAction();
 const search = ref("");
 const isSearching = computed(() => search.value.trim().length > 0);
-const searchInput = ref<HTMLInputElement | null>(null);
+/*
+  `<Input>` 是组件，模板 ref 拿到的是组件实例；它的根节点就是那个 `<input>`，
+  所以聚焦走 `$el`。
+*/
+const searchInput = ref<{ $el: HTMLInputElement } | null>(null);
 const sentinel = ref<HTMLElement | null>(null);
 let observer: IntersectionObserver | null = null;
 /** 哨兵在不在视口里。见下面观察者那段注释。 */
@@ -84,7 +89,7 @@ onMounted(() => {
     React 用的是 `autoFocus` prop，两种进入方式都会聚焦——挂载后显式 focus 一次，
     才是同一个行为。
   */
-  searchInput.value?.focus();
+  searchInput.value?.$el.focus();
   /*
     观察者只记状态，翻页交给 watch——理由与 ThreadSidebar 那处同一条：
     列表还空时哨兵就在视口内，一次性事件被守卫挡掉之后不会再来，
@@ -122,14 +127,20 @@ onUnmounted(() => observer?.disconnect());
             {{ $i18n.t.value.chats.archivedChats }}
           </TabsTrigger>
         </TabsList>
-        <input
+        <!--
+          走 `ui/input`（上游同一处也是 `<Input type="search" className="h-12 …">`，
+          `app/workspace/chats/page.tsx:107`）。这里原来是**把 primitive 的整串基类
+          抄进 `class`**、连 `data-slot="input"` 都手写了——今天看着一样，
+          `Input.vue` 一改就悄悄分叉，而且抄的那份已经漏了 `aria-invalid:`
+          与 `disabled:` 两段。
+        -->
+        <Input
           ref="searchInput"
           v-model="search"
           type="search"
-          data-slot="input"
           autofocus
           :placeholder="$i18n.t.value.chats.searchChats"
-          class="placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 h-12 w-full max-w-[var(--container-width-md)] min-w-0 rounded-md border bg-transparent px-3 py-1 text-xl shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]"
+          class="h-12 max-w-[var(--container-width-md)] text-xl"
         />
       </header>
       <TabsContent :value="view" class="min-h-0 flex-1">

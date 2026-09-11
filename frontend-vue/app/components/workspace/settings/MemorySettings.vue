@@ -12,6 +12,7 @@ import { Download, PenLine, Plus, Trash2, Upload } from "lucide-vue-next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import SettingsActionDialog from "@/components/workspace/settings/SettingsActionDialog.vue";
 import SettingsSection from "@/components/workspace/settings/SettingsSection.vue";
@@ -742,10 +743,16 @@ async function confirmDelete() {
   >
     <label class="block space-y-1 text-sm">
       <span>{{ t.settings.memory.factContentLabel }}</span>
-      <textarea
+      <!--
+        这三个字段走 `ui/textarea` / `ui/input`，不要手写：上游同一处是
+        `memory-settings-page.tsx:807/829/849` 的 `<Textarea>` 与两颗 `<Input>`。
+        手写那版丢掉的是焦点环、无效态（`aria-invalid:`）、禁用态样式、
+        深色主题 token 与 `h-9` 的统一高度——同一个对话框上方那颗搜索框早就是
+        `<Input>` 了，只有这三个不是。
+      -->
+      <Textarea
         v-model="factForm.content"
         rows="4"
-        class="border-input w-full rounded-md border p-2"
         :placeholder="t.settings.memory.factContentPlaceholder"
         data-testid="memory-fact-content"
       />
@@ -753,22 +760,20 @@ async function confirmDelete() {
     <div class="grid gap-3 sm:grid-cols-2">
       <label class="block space-y-1 text-sm">
         <span>{{ t.settings.memory.factCategoryLabel }}</span>
-        <input
+        <Input
           v-model="factForm.category"
-          class="border-input w-full rounded-md border px-3 py-2"
           :placeholder="t.settings.memory.factCategoryPlaceholder"
           data-testid="memory-fact-category"
         />
       </label>
       <label class="block space-y-1 text-sm">
         <span>{{ t.settings.memory.factConfidenceLabel }}</span>
-        <input
+        <Input
           v-model="factForm.confidence"
           type="number"
           min="0"
           max="1"
           step="0.01"
-          class="border-input w-full rounded-md border px-3 py-2"
           data-testid="memory-fact-confidence"
         />
       </label>

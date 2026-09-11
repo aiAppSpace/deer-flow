@@ -29,6 +29,7 @@ import ThreadSidebarItem from "@/components/workspace/ThreadSidebarItem.vue";
 import ThreadSidebarShell from "@/components/workspace/ThreadSidebarShell.vue";
 import VirtualThreadList from "@/components/workspace/VirtualThreadList.vue";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -922,10 +923,14 @@ function openSettingsDialog(section: "appearance" | "about") {
         <DialogHeader>
           <DialogTitle>{{ $i18n.t.value.common.rename }}</DialogTitle>
         </DialogHeader>
-        <input
+        <!--
+          走 `ui/input`，不要手写。上游这一处是 `recent-chat-list.tsx:425` 的 `<Input>`。
+          手写那版丢掉的是焦点环、无效态、禁用态样式、深色主题 token
+          与 `h-9` 的统一高度。
+        -->
+        <Input
           v-model="renameTitle"
           :placeholder="$i18n.t.value.common.rename"
-          class="border-input w-full rounded-md border px-3 py-2"
         />
         <DialogFooter>
           <Button variant="outline" @click="renameThreadId = null">

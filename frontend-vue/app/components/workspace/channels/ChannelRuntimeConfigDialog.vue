@@ -22,6 +22,7 @@ import { LoaderCircle } from "lucide-vue-next";
 import { computed, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -106,7 +107,14 @@ function fieldId(field: { name: string }) {
             >
               {{ field.label }}
             </label>
-            <input
+            <!--
+              走 `ui/input`（上游同一处也是 `<Input>`，
+              `channel-runtime-config-dialog.tsx:113`）。这里原来是**把 primitive
+              的整串基类抄进 `class`**——今天看起来一样，但 `Input.vue` 一改就悄悄分叉，
+              而且抄的那一份已经漏了 `aria-invalid:` 与 `placeholder:` / `selection:`
+              那几段。
+            -->
+            <Input
               :id="fieldId(field)"
               v-model="values[field.name]"
               type="text"
@@ -119,7 +127,6 @@ function fieldId(field: { name: string }) {
               :data-bwignore="field.type === 'password' ? 'true' : undefined"
               :data-form-type="field.type === 'password' ? 'other' : undefined"
               :data-lpignore="field.type === 'password' ? 'true' : undefined"
-              class="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
               :class="field.type === 'password' ? 'channel-secret-input' : ''"
             />
           </div>

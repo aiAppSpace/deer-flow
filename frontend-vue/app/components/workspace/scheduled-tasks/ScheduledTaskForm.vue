@@ -25,6 +25,8 @@ import { TriangleAlert } from "lucide-vue-next";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   applyScheduledTaskRecipe,
   isScheduledTaskDraftComplete,
@@ -67,10 +69,6 @@ function applyRecipe(recipe: Recipe) {
 const submitDisabled = computed(
   () => props.pending || !isScheduledTaskDraftComplete(props.draft),
 );
-const inputClass =
-  "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] md:text-sm";
-const textareaClass =
-  "border-input placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:ring-ring/50 dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] md:text-sm";
 </script>
 
 <template>
@@ -123,12 +121,11 @@ const textareaClass =
     </div>
 
     <template v-if="draft.contextMode === 'reuse_thread'">
-      <input
+      <Input
         data-testid="scheduled-task-thread-id"
-        :class="inputClass"
-        :value="draft.threadId"
+        :model-value="draft.threadId"
         :placeholder="labels.context.threadIdPlaceholder"
-        @input="patch({ threadId: ($event.target as HTMLInputElement).value })"
+        @update:model-value="patch({ threadId: $event })"
       />
       <!--
         复用同一条会话意味着每次运行都往那条会话里追加上下文，跑久了会越来越长、
@@ -146,20 +143,24 @@ const textareaClass =
         </AlertDescription>
       </Alert>
     </template>
-    <input
+    <!--
+      这三个字段走 `ui/input` / `ui/textarea`，不要手写：上游同一处是
+      `app/workspace/scheduled-tasks/page.tsx:289/300/306` 的 `<Input>` 与 `<Textarea>`。
+      本仓原来把 primitive 的整串基类抄成了两个本地常量，**而且抄的那份已经漏了
+      `aria-invalid:` 与 `disabled:` 两段**；primitive 一改，那几份副本就悄悄分叉。
+    -->
+    <Input
       data-testid="scheduled-task-title"
-      :class="inputClass"
-      :value="draft.title"
+      :model-value="draft.title"
       :placeholder="labels.create.taskTitle"
-      @input="patch({ title: ($event.target as HTMLInputElement).value })"
+      @update:model-value="patch({ title: $event })"
     />
-    <textarea
+    <Textarea
       data-testid="scheduled-task-prompt"
       rows="4"
-      :class="textareaClass"
-      :value="draft.prompt"
+      :model-value="draft.prompt"
       :placeholder="labels.create.prompt"
-      @input="patch({ prompt: ($event.target as HTMLTextAreaElement).value })"
+      @update:model-value="patch({ prompt: $event })"
     />
     <ScheduledTaskScheduleInput
       :key="scheduleNonce"

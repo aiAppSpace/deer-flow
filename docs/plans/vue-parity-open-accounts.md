@@ -3,6 +3,47 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 手写 `<input>` / `<textarea>`：**7 份文件，其中三份把 primitive 的基类抄成了本地常量**
+>
+> 起因是上一笔留下的两行几何（`AgentSettingsDialog` 的两个数字输入）。顺着它盘了一遍
+> `app/components` + `app/pages`：**19 份文件在手写**。逐条回上游对之后分成两半——
+> 上游同样手写的照抄不动，上游走 `ui/input` / `ui/textarea` 的全部改过来。
+>
+> **改掉的 7 份**（上游那一处都是 primitive）：
+>
+> | 本仓 | 上游那一处 |
+> | --- | --- |
+> | `AgentChat.vue` 的消息编辑框 | `message-list-item.tsx:525` 的 `<Textarea autoFocus className="min-h-24 resize-y">` |
+> | `ThreadSidebar.vue` 的重命名框 | `recent-chat-list.tsx:425` 的 `<Input>` |
+> | `ChannelRuntimeConfigDialog.vue` 的凭据框 | `channel-runtime-config-dialog.tsx:113` 的 `<Input>` |
+> | `MemorySettings.vue` 的三处 | `memory-settings-page.tsx:807/829/849` |
+> | `chats/index.vue` 的搜索框 | `app/workspace/chats/page.tsx:107` |
+> | `ScheduledTaskForm.vue` / `ScheduledTaskDetail.vue` / `ScheduledTaskScheduleInput.vue` 共 10 处 | `scheduled-tasks/page.tsx:289/300/306/533/538` 与 `scheduled-task-schedule-input.tsx:240/253/287/301/319` |
+>
+> 其中**三份是把 primitive 的整串基类抄成了本地常量**（`inputClass` / `textareaClass` /
+> `editInputClass` / `editTextareaClass`），还有两份直接抄进了 `class=`（`chats/index.vue`
+> 连 `data-slot="input"` 都手写了）。**抄的那几份都已经漏了 `aria-invalid:` 与 `disabled:`
+> 两段**——也就是说无效态和禁用态在这些字段上一直是不生效的。
+>
+> **顺带修掉两个行为缺陷**：`AgentChat.vue` 的编辑框上游带 `autoFocus`，本仓没有
+> （点「编辑」之后还得再点一次输入框）；`chats/index.vue` 的搜索框重复传了一个
+> 与基类一模一样的 `w-full`，被 `primitive-class-overrides` 当场拦下。
+>
+> **留下的 12 份 16 处逐条注明了上游写法**，写进新的 `tests/guards/handwritten-input.test.ts`
+> （`handwritten-button` 的同胞，双向清单：清单外的报错，清单里已经不存在的也报错）。
+> 里面最值得记的一条是三个 composer 的输入框：上游走
+> `PromptInputTextarea → InputGroupTextarea → <Textarea>`，而**本仓没有移植
+> `ui/input-group`**，整块 composer 外壳都是手写的——那是独立的一笔账。
+>
+> **一个自己踩的坑，记在这里**：给 `MemorySettings.vue` 补 `Textarea` 导入的那段脚本
+> 写的是「文件里没有 `ui/textarea` 才加导入」，而我刚插进去的**注释里就写着
+> `ui/textarea`**——于是导入没加上，`<Textarea>` 退回成 Nuxt 自动导入解析不到的标签、
+> 被当成普通 `<textarea>` 渲染，`v-model` 变成两个没人接的属性。
+> `vue-tsc` 放行（Nuxt 生成的组件类型里有它），是那条 DOM 单测抓住的：
+> 对话框上写着「Fact content cannot be empty.」而 DOM 里的值明明是 "Zero"。
+> **这与守卫注释被自己扫到是同一个形状**（[[deerflow-guard-strip-comments]]）：
+> 「文件里有没有这个字符串」这种判据，在一份**刚被自己写进说明文字**的文件上永远不可靠。
+>
 > ## 2026-09-11 `agents-feature-disabled` 三个状态 **32 行 → 0**
 >
 > 台账上最厚的一处（`#gallery` 16×2，`#loading` 7×2）。四类差异，**三类的根因都在上游**。

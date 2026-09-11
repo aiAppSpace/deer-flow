@@ -234,7 +234,7 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
-### 下一笔开着的账：**手写 `<input>` / `<textarea>` 没有任何守卫**（2026-09-11 盘出来）
+### ~~手写 `<input>` / `<textarea>` 没有任何守卫~~ **2026-09-11 当轮做掉了**
 
 起因是 `agents-feature-disabled#gallery` 上那两行
 `[role=dialog] height Δ-6.2 / y Δ3.1`（对话框居中，高度差一半就是纵向偏移）。
@@ -269,6 +269,16 @@ token 与 `h-9` 的统一高度——**同一个对话框里另外三颗 Select 
 
 做法照 `handwritten-button` 那一份：先逐条对上游、把该改的改掉，**剩下的写进双向清单
 并逐条注明「上游那处是什么」**，清单里有、实际没有的条目同样报错。
+
+**结果**：7 份文件改成 primitive（19 份 → 12 份、约 30 处 → 16 处），
+守卫落在 `tests/guards/handwritten-input.test.ts`，做过变异验证。
+三份把基类抄成本地常量的（`inputClass` / `textareaClass` / `editInputClass` …）
+**抄的那几份都漏了 `aria-invalid:` 与 `disabled:`**——无效态与禁用态在那些字段上
+一直不生效。逐条判词在 `vue-parity-open-accounts.md`。
+
+**这一笔同时开出下一笔**：三个 composer（`ChatComposer` / `AgentBootstrapComposer` /
+`SidecarPanel`）的输入框上游走 `PromptInputTextarea → InputGroupTextarea → <Textarea>`，
+而**本仓没有移植 `ui/input-group`**，整块 composer 外壳是手写的。
 
 
 - ~~`thread-title-sync/zh-CN` 的 `focus` 幻影差异~~ **已确认是取样点不稳，并修好。**

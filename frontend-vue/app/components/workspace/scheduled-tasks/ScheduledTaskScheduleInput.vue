@@ -25,6 +25,7 @@
 import { computed, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -175,8 +176,6 @@ const preview = computed(() =>
     scheduleLocale.value,
   ),
 );
-const inputClass =
-  "placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] md:text-sm";
 </script>
 
 <template>
@@ -219,28 +218,28 @@ const inputClass =
         </SelectContent>
       </Select>
 
-      <input
+      <!--
+        这一屏的五个输入全走 `ui/input`，不要手写：上游同一处是
+        `scheduled-task-schedule-input.tsx:240/253/287/301/319` 的 `<Input>`。
+        本仓原来把 primitive 的整串基类抄成了一个本地常量（还漏了 `aria-invalid:`
+        与 `disabled:` 两段），primitive 一改就悄悄分叉。
+      -->
+      <Input
         v-if="preset === 'hourly'"
         type="number"
         min="0"
         max="59"
-        :class="inputClass"
-        :value="parts.minute ?? 0"
+        :model-value="parts.minute ?? 0"
         :aria-label="labels.fields.minute"
-        @input="
-          updateParts({
-            minute: Number(($event.target as HTMLInputElement).value),
-          })
-        "
+        @update:model-value="updateParts({ minute: Number($event) })"
       />
 
-      <input
+      <Input
         v-if="preset === 'daily' || preset === 'weekly' || preset === 'monthly'"
         type="time"
-        :class="inputClass"
-        :value="timeValue"
+        :model-value="timeValue"
         :aria-label="labels.fields.time"
-        @input="setTime(($event.target as HTMLInputElement).value)"
+        @update:model-value="setTime($event)"
       />
 
       <div v-if="preset === 'weekly'" class="flex flex-wrap gap-1">
@@ -259,31 +258,23 @@ const inputClass =
         </Button>
       </div>
 
-      <input
+      <Input
         v-if="preset === 'monthly'"
         type="number"
         min="1"
         max="31"
-        :class="inputClass"
-        :value="parts.dayOfMonth ?? 1"
+        :model-value="parts.dayOfMonth ?? 1"
         :aria-label="labels.fields.dayOfMonth"
-        @input="
-          updateParts({
-            dayOfMonth: Number(($event.target as HTMLInputElement).value),
-          })
-        "
+        @update:model-value="updateParts({ dayOfMonth: Number($event) })"
       />
 
       <div v-if="preset === 'custom'" class="flex flex-col gap-1">
-        <input
+        <Input
           data-testid="scheduled-task-custom-cron"
-          :class="inputClass"
-          :value="parts.raw ?? ''"
+          :model-value="parts.raw ?? ''"
           :placeholder="labels.fields.cronPlaceholder"
           :aria-label="labels.fields.cron"
-          @input="
-            updateParts({ raw: ($event.target as HTMLInputElement).value })
-          "
+          @update:model-value="updateParts({ raw: $event })"
         />
         <a
           href="https://crontab.guru/"
@@ -295,14 +286,13 @@ const inputClass =
         </a>
       </div>
     </template>
-    <input
+    <Input
       v-else
       data-testid="scheduled-task-run-at"
       type="datetime-local"
-      :class="inputClass"
-      :value="runAtLocal"
+      :model-value="runAtLocal"
       :aria-label="labels.fields.runAt"
-      @input="runAtLocal = ($event.target as HTMLInputElement).value"
+      @update:model-value="runAtLocal = $event"
     />
 
     <Select v-model="timezone">
