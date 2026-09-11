@@ -144,10 +144,12 @@ async function remove(agent: Agent) {
           进取样面时几何档当场报出 `width Δ-22.6 / height Δ4 / fontSize 16px vs 14px`。
           （同一份代码库里 `SkillSettings.vue` 那颗「创建技能」早就记着同一条教训。）
 
-          **元素仍然是 `<a>` 而不是 `<button>`**：这是一个「点了就跳到某个 URL」的控件，
+          **元素是 `<a>` 而不是 `<button>`**：这是一个「点了就跳到某个 URL」的控件，
           业界主流写法是链接——可以中键新标签页打开、可以复制链接、读屏器念成链接。
-          上游那颗 `<Button onClick={router.push}>` 三样都做不到。这处差异有意留在台账里
-          （aria 与可 tab 元素各两行），**翻案判据**：上游给导航类按钮上了 `asChild`。
+          上游原来那颗 `<Button onClick={router.push}>` 三样都做不到；
+          **2026-09-11 上游已按同一条改成 `<Button asChild><Link>`**
+          （`agent-gallery.tsx` 的两处入口与 `agent-card.tsx` 的聊天键一起），
+          这条翻案判据就是那一轮兑现的，台账上那 4 行随之清零。
 
           **加了图标之后不要再拿它的文本当对照锚点**：Vue 模板会在 `<Plus />` 与插值之间
           留一个空白文本节点，`textContent` 是 `" New Agent "`，而上游 JSX 里图标与文字
@@ -173,9 +175,10 @@ async function remove(agent: Agent) {
           wave 135 第一次让这一屏进取样面，几何档当场报出
           `height React=160 Vue=24 Δ-136` 与 `fontSize React=14px Vue=16px`。
 
-          **保留本仓的 `role="status"` 与那条更具体的文案**（上游用的是通用的
-          `t.common.loading`，本仓有一条自己的 `agents.loading`「正在加载智能体…」）
-          ——那两处差异有意留在台账里，各自有翻案判据。
+          **`role="status"` 与那条更具体的文案**（`agents.loading`「正在加载智能体…」）
+          原来只有本仓有：上游是一个没有 role 的 `<div>` 加通用的 `t.common.loading`，
+          读屏器既听不到「在加载」，也听不出在加载什么。**2026-09-11 两边同改**，
+          上游补了 `role="status"` 与同名的 `agents.loading`。
         -->
         <p
           v-if="!features.loaded.value || agentCatalog.loading.value"

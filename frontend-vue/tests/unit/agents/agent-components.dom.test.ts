@@ -391,4 +391,21 @@ describe("AgentSettingsDialog", () => {
     expect(locked.length).toBeGreaterThan(0);
     expect(locked.every((button) => button.disabled)).toBe(true);
   });
+
+  /*
+    **清单还在取 ≠ 这颗选择器不能用。** 灰掉它会把「这个 agent 现在跑在哪个模型上」
+    一起藏了（而那正是打开这个对话框要看的），还会把对话框的初始焦点推到温度那个
+    数字输入框上——一个 spinbutton，方向键当场改值。对照台账上那行
+    `focus: React=button Vue=input[number]` 报的就是它。
+
+    负向验证：把 `:disabled="pending"` 改回 `pending || modelsLoading`，这条立刻红。
+  */
+  it("模型清单还在取的时候，模型选择器仍然可用", async () => {
+    await mountSettings({ agent, models: [], modelsLoading: true });
+    const trigger = inDialog('[data-testid="agent-settings-model"]');
+
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
+    // 「在取清单」这件事仍然说得出来，只是不靠灰掉控件来说。
+    expect(inDialog('[role="status"]').textContent).toBeTruthy();
+  });
 });

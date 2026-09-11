@@ -9,6 +9,7 @@
 import { computed, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -167,7 +168,7 @@ function save() {
       @escape-key-down="pending && $event.preventDefault()"
       @pointer-down-outside="$event.preventDefault()"
     >
-      <form novalidate class="grid gap-4" @submit.prevent="save">
+      <form novalidate class="space-y-4 py-1" @submit.prevent="save">
         <DialogHeader>
           <!--
             **不要在这里再写一次 `text-lg`**（wave 139）。`DialogTitle` 这颗 primitive
@@ -199,11 +200,24 @@ function save() {
           {{ modelError }}
         </p>
 
-        <div class="space-y-1 text-sm">
-          <span id="agent-settings-model-label" class="block">
+        <div class="space-y-1.5">
+          <span id="agent-settings-model-label" class="text-sm font-medium">
             {{ $i18n.t.value.agents.settingsModel }}
           </span>
-          <Select v-model="model" :disabled="pending || modelsLoading">
+          <!--
+            **清单还在取的时候不要把这颗选择器禁掉**（只认 `pending`，也就是正在保存）。
+
+            两个原因。一是信息：这颗选择器**任何时候都有东西可显示**——agent 当前的
+            模型（不在清单里时走上面那条 disabled 项）或者「用全局默认」；灰掉它等于
+            把「这个 agent 现在跑在哪个模型上」一起藏了，而那正是打开这个对话框要看的。
+            清单在取这件事上面那条 `role="status"` 已经说了。
+
+            二是焦点：对话框打开时把焦点交给第一个可聚焦的后代。这颗禁掉之后**焦点落到
+            温度那个数字输入框上**——一个 spinbutton，方向键会当场改掉温度值。
+            对照台账 `agents-feature-disabled#gallery` 上那行
+            `focus: React=button Vue=input[number]` 报的就是它。
+          -->
+          <Select v-model="model" :disabled="pending">
             <SelectTrigger
               class="w-full"
               data-testid="agent-settings-model"
@@ -244,18 +258,33 @@ function save() {
           改成与同一个对话框里那三个 Select 一样的写法（`id` + `aria-labelledby`），
           这份文件内部也就只剩一种命名方式了。
         -->
-        <div class="block text-sm">
-          <span id="agent-settings-temperature-label" class="block">
+        <!--
+          **这两个数字输入原来是手写的 `<input class="border-input … px-3 py-2">`。**
+          仓里有 `ui/input`（与上游 `ui/input.tsx` 同源），手写那一版丢掉的是
+          焦点环（`focus-visible:ring-[3px]`）、无效态（`aria-invalid:`）、
+          禁用态的样式、深色主题的 token 与 `h-9` 的统一高度——**同一个对话框里
+          另外三颗 Select 用的都是 primitive 的高度**，只有这两个不是。
+          对照台账上 `[role=dialog] height Δ-6.2 / y Δ3.1`（对话框居中，高度差一半
+          就是纵向偏移）量的就是这一片盒模型差。
+
+          温度那颗**还缺一个 placeholder**：上游写的是 `t.agents.settingsInherit`
+          （「继承」）——空着的时候用户看不出这是「跟随全局」还是「还没填」。
+        -->
+        <div class="space-y-1.5">
+          <span
+            id="agent-settings-temperature-label"
+            class="text-sm font-medium"
+          >
             {{ $i18n.t.value.agents.settingsTemperature }}
           </span>
-          <input
+          <Input
             v-model="temperature"
             data-testid="agent-settings-temperature"
             type="number"
             min="0"
             max="2"
             step="0.1"
-            class="border-input mt-1 w-full rounded-md border px-3 py-2"
+            :placeholder="$i18n.t.value.agents.settingsInherit"
             :disabled="pending"
             aria-labelledby="agent-settings-temperature-label"
             aria-describedby="agent-settings-temperature-hint"
@@ -269,30 +298,33 @@ function save() {
           -->
           <p
             id="agent-settings-temperature-hint"
-            class="text-muted-foreground mt-1 text-xs"
+            class="text-muted-foreground text-xs"
           >
             {{ $i18n.t.value.agents.settingsTemperatureHint }}
           </p>
         </div>
-        <div class="block text-sm">
-          <span id="agent-settings-max-tokens-label" class="block">
+        <div class="space-y-1.5">
+          <span
+            id="agent-settings-max-tokens-label"
+            class="text-sm font-medium"
+          >
             {{ $i18n.t.value.agents.settingsMaxTokens }}
           </span>
-          <input
+          <Input
             v-model="maxTokens"
             data-testid="agent-settings-max-tokens"
             type="number"
             min="1"
             max="200000"
-            class="border-input mt-1 w-full rounded-md border px-3 py-2"
+            step="1"
             :placeholder="$i18n.t.value.agents.settingsMaxTokensPlaceholder"
             :disabled="pending"
             aria-labelledby="agent-settings-max-tokens-label"
           />
         </div>
 
-        <div v-if="supportsThinking" class="space-y-1 text-sm">
-          <span id="agent-settings-thinking-label" class="block">
+        <div v-if="supportsThinking" class="space-y-1.5">
+          <span id="agent-settings-thinking-label" class="text-sm font-medium">
             {{ $i18n.t.value.agents.settingsThinking }}
           </span>
           <Select v-model="thinking" :disabled="pending">
@@ -317,8 +349,8 @@ function save() {
           </Select>
         </div>
 
-        <div v-if="supportsReasoning" class="space-y-1 text-sm">
-          <span id="agent-settings-reasoning-label" class="block">
+        <div v-if="supportsReasoning" class="space-y-1.5">
+          <span id="agent-settings-reasoning-label" class="text-sm font-medium">
             {{ $i18n.t.value.agents.settingsReasoningEffort }}
           </span>
           <Select v-model="reasoningEffort" :disabled="pending">

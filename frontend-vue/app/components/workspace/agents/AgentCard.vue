@@ -116,9 +116,11 @@ const view = computed(() => buildAgentCardViewModel(props.agent));
       ③ 删除键用 `text-red-600`（固定色）而不是 `text-destructive`
          （CSS 变量，深色主题下跟着变）。
 
-      聊天那颗保留 `NuxtLink`：上游是一颗 `onClick={router.push(...)}` 的按钮，
+      聊天那颗是 `NuxtLink`：上游原来是一颗 `onClick={router.push(...)}` 的按钮，
       而链接能中键打开、能新标签页打开、能复制地址——**功能相同、交互更好**，
       所以只把外观对齐（裸调 buttonVariants，它的导出口已经内置 cn 合并）。
+      **2026-09-11 上游已同改**成 `<Button asChild><Link>`（顺带把 agent 名
+      encodeURIComponent——上游原来是裸拼进路径的）。
     -->
     <div class="mt-auto flex gap-2 pt-5">
       <NuxtLink

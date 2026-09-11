@@ -526,6 +526,8 @@ export interface Translations {
     settingsDescription: string;
     settingsModel: string;
     settingsModelDefault: string;
+    settingsModelUnavailable: string;
+    loading: string;
     settingsTemperature: string;
     settingsTemperatureHint: string;
     settingsMaxTokens: string;

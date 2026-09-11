@@ -1,7 +1,7 @@
 "use client";
 
 import { BotIcon, PlusIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { useAgents } from "@/core/agents";
@@ -12,11 +12,6 @@ import { AgentCard } from "./agent-card";
 export function AgentGallery() {
   const { t } = useI18n();
   const { agents, isLoading } = useAgents();
-  const router = useRouter();
-
-  const handleNewAgent = () => {
-    router.push("/workspace/agents/new");
-  };
 
   return (
     <div className="flex size-full flex-col">
@@ -28,17 +23,33 @@ export function AgentGallery() {
             {t.agents.description}
           </p>
         </div>
-        <Button onClick={handleNewAgent}>
-          <PlusIcon className="mr-1.5 h-4 w-4" />
-          {t.agents.newAgent}
+        {/*
+          "New Agent" goes to a URL, so it is a link. As a <button
+          onClick={router.push(...)}> it could not be middle-clicked, opened in
+          a new tab or have its address copied, and a screen reader announced it
+          as a button. Same change as the card's chat action.
+        */}
+        <Button asChild>
+          <Link href="/workspace/agents/new">
+            <PlusIcon className="mr-1.5 h-4 w-4" />
+            {t.agents.newAgent}
+          </Link>
         </Button>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
+        {/*
+          The loading placeholder is a live region: without role="status" a
+          screen reader never hears that the gallery is fetching, and the
+          generic "Loading..." does not say what is loading.
+        */}
         {isLoading ? (
-          <div className="text-muted-foreground flex h-40 items-center justify-center text-sm">
-            {t.common.loading}
+          <div
+            role="status"
+            className="text-muted-foreground flex h-40 items-center justify-center text-sm"
+          >
+            {t.agents.loading}
           </div>
         ) : agents.length === 0 ? (
           <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
@@ -51,9 +62,11 @@ export function AgentGallery() {
                 {t.agents.emptyDescription}
               </p>
             </div>
-            <Button variant="outline" className="mt-2" onClick={handleNewAgent}>
-              <PlusIcon className="mr-1.5 h-4 w-4" />
-              {t.agents.newAgent}
+            <Button variant="outline" className="mt-2" asChild>
+              <Link href="/workspace/agents/new">
+                <PlusIcon className="mr-1.5 h-4 w-4" />
+                {t.agents.newAgent}
+              </Link>
             </Button>
           </div>
         ) : (

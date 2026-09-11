@@ -234,6 +234,43 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
+### 下一笔开着的账：**手写 `<input>` / `<textarea>` 没有任何守卫**（2026-09-11 盘出来）
+
+起因是 `agents-feature-disabled#gallery` 上那两行
+`[role=dialog] height Δ-6.2 / y Δ3.1`（对话框居中，高度差一半就是纵向偏移）。
+根因是 `AgentSettingsDialog.vue` 里温度与最大 token 两个数字输入**是手写的**
+`<input class="border-input … px-3 py-2">`，而上游用的是 `ui/input`。手写那一版丢掉的是
+焦点环（`focus-visible:ring-[3px]`）、无效态（`aria-invalid:`）、禁用态样式、深色主题
+token 与 `h-9` 的统一高度——**同一个对话框里另外三颗 Select 走的都是 primitive 的高度**，
+只有这两个不是。改成 `<Input>` 之后那两行清零。
+
+仓里有 `handwritten-button` 守卫（双向清单 + 逐条写明「上游那处是什么」），
+**却没有 input/textarea 的对应物**。上面这处缺陷因此一路活到今天，
+而且改回去不会让任何门禁变红。
+
+盘点（`app/components` + `app/pages`，注释剥掉后按开标签数）：**19 份文件**。
+先分三类，再逐条去上游对：
+
+- **照抄不动**（上游同样手写，或天生就该是裸元素）：
+  两个 composer 的 `data-slot="input-group-control"` textarea
+  （`ChatComposer.vue` / `AgentBootstrapComposer.vue` / `SidecarPanel.vue`，
+  上游 `ai-elements/prompt-input.tsx` 也手写）、四个隐藏 file input
+  （`ChatComposer` / `SidecarPanel` / `MemorySettings` / `SkillSettings`）、
+  六个 checkbox（`HumanInputCard` / `ArtifactTablePreview` / `AgentSettingsDialog` ×2 /
+  `login.vue` / `setup.vue`）。
+- **要改**（上游走 `ui/input` / `ui/textarea`，本仓手写）：
+  `AgentChat.vue` 的编辑框、`ThreadSidebar.vue` 的重命名框、
+  `ArtifactTablePreview.vue` 的单元格只读框、`ChannelRuntimeConfigDialog.vue` 的凭据框、
+  `MemorySettings.vue` 的三处、`chats/index.vue` 的搜索框
+  （它把 Input 的 class 串整段抄进了 `class`，连 `data-slot="input"` 都手写了）。
+- **要先看上游有没有对应物**：`scheduled-tasks/` 那三份（`ScheduledTaskDetail` /
+  `ScheduledTaskForm` / `ScheduledTaskScheduleInput` 共 10 处，走的是本仓自己的
+  `inputClass` / `textareaClass` 常量）。
+
+做法照 `handwritten-button` 那一份：先逐条对上游、把该改的改掉，**剩下的写进双向清单
+并逐条注明「上游那处是什么」**，清单里有、实际没有的条目同样报错。
+
+
 - ~~`thread-title-sync/zh-CN` 的 `focus` 幻影差异~~ **已确认是取样点不稳，并修好。**
   它在一轮里有、下一轮里没有，而且只在一个语言维度上出现。根因是 steps 停在
   「新标题出现」——那一刻焦点还在往回还（对话框把它交还给触发它的那颗 ⋯ 键）。

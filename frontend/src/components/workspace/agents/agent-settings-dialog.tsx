@@ -89,6 +89,9 @@ export function AgentSettingsDialog({
 
   // The resolved profile gates which controls are meaningful: thinking and
   // reasoning-effort only apply when the selected model advertises support.
+  const unknownCurrentModel =
+    agent.model !== null && !models.some((m) => m.name === agent.model);
+
   // When the agent inherits the global default model, fall back to the
   // effective default (models[0]) so the controls are not hidden for it.
   const selectedModel = useMemo(
@@ -160,7 +163,15 @@ export function AgentSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t.agents.settingsTitle}</DialogTitle>
+          {/*
+            Name the subject. This dialog is modal, so the card it was opened
+            from is no longer visible, and the description only says "this
+            agent" — with several agents on the page the title alone did not
+            say which one is being edited.
+          */}
+          <DialogTitle>
+            {t.agents.settingsTitle} · {agent.name}
+          </DialogTitle>
           <DialogDescription>{t.agents.settingsDescription}</DialogDescription>
         </DialogHeader>
 
@@ -192,6 +203,19 @@ export function AgentSettingsDialog({
                 <SelectItem value={DEFAULT_MODEL_VALUE}>
                   {t.agents.settingsModelDefault}
                 </SelectItem>
+                {/*
+                  An agent can be pinned to a model the gateway no longer
+                  serves (renamed, removed, or provider disabled). Radix renders
+                  nothing for a value with no matching item, so the select went
+                  *blank* — the dialog did not say which model the agent is on,
+                  and saving silently rewrote it. Keep the current value as a
+                  disabled option instead.
+                */}
+                {unknownCurrentModel ? (
+                  <SelectItem value={agent.model!} disabled>
+                    {agent.model} · {t.agents.settingsModelUnavailable}
+                  </SelectItem>
+                ) : null}
                 {models.map((m) => (
                   <SelectItem key={m.name} value={m.name}>
                     {m.display_name || m.name}

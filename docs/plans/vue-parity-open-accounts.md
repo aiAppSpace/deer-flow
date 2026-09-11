@@ -3,6 +3,53 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 `agents-feature-disabled` 三个状态 **32 行 → 0**
+>
+> 台账上最厚的一处（`#gallery` 16×2，`#loading` 7×2）。四类差异，**三类的根因都在上游**。
+>
+> **一、导航控件写成了按钮（`#loading` 4 行、`#gallery` 3 行）。**
+> 「新建智能体」与卡片上的「聊天」都是「点了就跳到某个 URL」的控件，本仓写的是
+> `<NuxtLink :class="buttonVariants()">`，上游写的是 `<Button onClick={router.push(...)}>`。
+> 按钮不能中键打开、不能新标签页打开、不能复制地址，读屏器还念成按钮（WCAG 4.1.2）。
+> 本仓那两处的注释里早就写着翻案判据「上游哪天给导航类按钮上了 `asChild`」——
+> 这一轮就是去把它兑现：上游三处入口改成 `<Button asChild><Link>`
+> （顺带把 agent 名 `encodeURIComponent`，上游原来是裸拼进路径的）。
+>
+> **二、加载占位没有 role、文案也不说在加载什么（`#loading` 2 行）。**
+> 上游是一个没有 role 的 `<div>` 加通用的 `t.common.loading`（"Loading..."），
+> 读屏器既听不到「在加载」，也听不出在加载什么。本仓早就是
+> `role="status"` + `agents.loading`（「正在加载智能体…」）。两边同改，上游补上同名 key。
+>
+> **三、对话框的两处信息缺失（`#gallery` 5 行）。**
+> - 标题只写「模型设置」：这是个模态框，打开之后那张卡片已经看不见了，
+>   而说明文字只说「这个 agent」——页面上有好几个 agent 时，标题不说是哪一个。
+>   两边统一成「模型设置 · <agent 名>」。
+> - **agent 绑的模型不在清单里时，上游那颗选择器是空白的**：Radix 对找不到对应项的
+>   值不渲染任何东西，于是对话框说不出这个 agent 现在跑在哪个模型上，
+>   一按保存还会把它悄悄改掉。本仓早有一条 disabled 的兜底项（`<模型> · 不可用`），
+>   照搬到上游。
+>
+> **四、剩下的两行几何是本仓自己的缺陷（`#gallery` 2 行）。**
+> `[role=dialog] height React=555 Vue=548.8 Δ-6.2`、`y Δ3.1`（居中，高度差一半就是偏移）。
+> 根因：温度与最大 token 两个数字输入**是手写的** `<input class="border-input … px-3 py-2">`,
+> 而上游用 `ui/input`。手写那版丢掉焦点环、无效态、禁用态样式、深色 token 与 `h-9`
+> 统一高度——**同一个对话框里另外三颗 Select 走的都是 primitive 的高度**，只有这两个不是。
+> 顺带补上温度那颗缺的 `placeholder`（上游是 `settingsInherit`「继承」：空着的时候
+> 用户看不出这是「跟随全局」还是「还没填」），并把字段块的容器与标签
+> （`space-y-1.5` + `text-sm font-medium`）按上游对齐。
+>
+> **附带清掉一行 focus 差异**：`focus: React=button Vue=input[number]`。
+> 本仓的模型选择器写的是 `:disabled="pending || modelsLoading"`，而清单是**打开对话框
+> 才取**的——于是对话框打开那一刻它是禁用的，焦点越过它落到温度那个 spinbutton 上，
+> 方向键会当场改掉温度值。判据：这颗选择器**任何时候都有东西可显示**
+> （当前模型，或「用全局默认」），灰掉它等于把「这个 agent 现在跑在哪个模型上」一起藏了，
+> 而那正是打开这个对话框要看的；「清单在取」由上面那条 `role="status"` 负责说。
+> 改成只认 `pending`（正在保存）。
+>
+> **这一笔同时开出一条新账**：仓里有 `handwritten-button` 守卫，**却没有 input/textarea
+> 的对应物**——上面那处盒模型缺陷因此一路活到今天，改回去也不会让任何门禁变红。
+> 盘点是 19 份文件，工单写在 `vue-full-parity-backlog.md` 的「还开着的账」。
+>
 > ## 2026-09-11 中文界面里的一片英文：**全在 React 那一侧**
 >
 > 台账上有三个场景**只在 zh-CN 维度报差异、en-US 维度一行都没有**

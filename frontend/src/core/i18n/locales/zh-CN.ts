@@ -612,6 +612,8 @@ export const zhCN: Translations = {
       "为该智能体选择默认模型和生成参数，修改在下一条消息生效。",
     settingsModel: "默认模型",
     settingsModelDefault: "使用全局默认",
+    settingsModelUnavailable: "不可用",
+    loading: "正在加载智能体…",
     settingsTemperature: "温度",
     settingsTemperatureHint: "0 = 确定性输出，越高越发散（0–2）。",
     settingsMaxTokens: "最大输出 token",

@@ -645,6 +645,8 @@ export const enUS: Translations = {
       "Choose the default model and generation parameters for this agent. Changes take effect on the next message.",
     settingsModel: "Default model",
     settingsModelDefault: "Use global default",
+    settingsModelUnavailable: "Unavailable",
+    loading: "Loading agents…",
     settingsTemperature: "Temperature",
     settingsTemperatureHint: "0 = deterministic, higher = more creative (0–2).",
     settingsMaxTokens: "Max output tokens",

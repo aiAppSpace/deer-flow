@@ -374,124 +374,56 @@
       "tabOrder": []
     },
     "agents-feature-disabled#loading/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- button \"New Agent\"",
-        "- text: Loading..."
-      ],
-      "ariaOnlyVue": [
-        "- /url: /workspace/agents/new",
-        "- link \"New Agent\":",
-        "- status: Loading agents…"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button"
-      ],
-      "tabbablesOnlyVue": [
-        "a"
-      ],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
       "tabOrder": []
     },
     "agents-feature-disabled#loading/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"新建智能体\"",
-        "- text: 加载中..."
-      ],
-      "ariaOnlyVue": [
-        "- /url: /workspace/agents/new",
-        "- link \"新建智能体\":",
-        "- status: 正在加载智能体…"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button"
-      ],
-      "tabbablesOnlyVue": [
-        "a"
-      ],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
       "tabOrder": []
     },
     "agents-feature-disabled#gallery/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- combobox \"Default model\"",
-        "- dialog \"Model settings\":",
-        "- heading \"Model settings\" [level=2]"
-      ],
-      "ariaOnlyVue": [
-        "- combobox \"Default model\": parity-basic · Unavailable",
-        "- dialog \"Model settings · test-agent\":",
-        "- heading \"Model settings · test-agent\" [level=2]"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "selector:[role=dialog] y React=122.5 Vue=125.6 Δ3.1",
-        "selector:[role=dialog] height React=555 Vue=548.8 Δ-6.2"
-      ],
-      "focus": [
-        "React=button Vue=input[number]"
-      ],
+      "geometry": [],
+      "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button"
-      ],
-      "tabbablesOnlyVue": [
-        "a",
-        "a",
-        "a"
-      ],
-      "tabOrder": [
-        "第 13 个公共可 tab 元素 React=button Vue=button(combobox)"
-      ]
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
     },
     "agents-feature-disabled#gallery/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- combobox \"默认模型\"",
-        "- dialog \"模型设置\":",
-        "- heading \"模型设置\" [level=2]"
-      ],
-      "ariaOnlyVue": [
-        "- combobox \"默认模型\": parity-basic · 不可用",
-        "- dialog \"模型设置 · test-agent\":",
-        "- heading \"模型设置 · test-agent\" [level=2]"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "selector:[role=dialog] y React=140.5 Vue=143.6 Δ3.1",
-        "selector:[role=dialog] height React=519 Vue=512.9 Δ-6.1"
-      ],
-      "focus": [
-        "React=button Vue=input[number]"
-      ],
+      "geometry": [],
+      "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "button",
-        "button",
-        "button"
-      ],
-      "tabbablesOnlyVue": [
-        "a",
-        "a",
-        "a"
-      ],
-      "tabOrder": [
-        "第 13 个公共可 tab 元素 React=button Vue=button(combobox)"
-      ]
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
     },
     "browser-feature/desktop/light/en-US": {
       "ariaOnlyReact": [],

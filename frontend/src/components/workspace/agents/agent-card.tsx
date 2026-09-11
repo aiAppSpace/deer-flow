@@ -6,7 +6,7 @@ import {
   Settings2Icon,
   Trash2Icon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { type ComponentProps, type ReactElement, useState } from "react";
 import { toast } from "sonner";
 
@@ -109,14 +109,9 @@ function TruncatedBadge({
 
 export function AgentCard({ agent }: AgentCardProps) {
   const { t } = useI18n();
-  const router = useRouter();
   const deleteAgent = useDeleteAgent();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  function handleChat() {
-    router.push(`/workspace/agents/${agent.name}/chats/new`);
-  }
 
   async function handleDelete() {
     try {
@@ -186,9 +181,20 @@ export function AgentCard({ agent }: AgentCardProps) {
         )}
 
         <CardFooter className="mt-auto flex items-center justify-between gap-2 pt-3">
-          <Button size="sm" className="flex-1" onClick={handleChat}>
-            <MessageSquareIcon className="mr-1.5 h-3.5 w-3.5" />
-            {t.agents.chat}
+          {/*
+            This was a <button onClick={router.push(...)}>. Navigation belongs
+            in a link: a button cannot be middle-clicked, opened in a new tab,
+            or have its address copied, and a screen reader announces it as a
+            button rather than a link (WCAG 4.1.2). The agent name also went
+            into the path unencoded.
+          */}
+          <Button size="sm" className="flex-1" asChild>
+            <Link
+              href={`/workspace/agents/${encodeURIComponent(agent.name)}/chats/new`}
+            >
+              <MessageSquareIcon className="mr-1.5 h-3.5 w-3.5" />
+              {t.agents.chat}
+            </Link>
           </Button>
           <div className="flex gap-1">
             <Button
