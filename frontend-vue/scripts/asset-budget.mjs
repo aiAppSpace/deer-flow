@@ -86,15 +86,48 @@ const budgets = {
     重定一次，不是为了绕过——是因为这条数字量的就是「有多少 chunk 碰过 Reka」，
     改走 primitive 必然让它涨，而那正是这一轮想要的方向。
   */
-  "vendor-ui": { totalRaw: 683_000, totalGzip: 205_000, maxRaw: 305_000 },
+  /*
+    2026-09-12 第四轮重定一次。实测 raw 740,601 / gzip 223,015 / maxRaw 318,499
+    ——**三项全超**（旧值 683,000 / 205,000 / 305,000 定于 wave 72，实测基数是
+    650,516 / 195,402 / 288,648）。抬之前把该问的都问了，逐条写在这里：
+
+    ① **是不是重复打包了？** 不是。逐个 chunk 搜 Reka 的内部字面量：
+       `dismissableLayer.pointerDownOutside` 只出现在 1 个 chunk、
+       `focusScope.autoFocusOnMount` 只出现在 1 个——分块规则没失效。
+    ② **用户下载的字节涨了吗？** 没有。面向用户的那条门禁
+       （`tests/e2e/route-payload.spec.ts` + `baseline/route-payload-budget.json`）
+       2026-09-12 实测 5 条全绿，三条路由都在各自预算内，
+       重量级渲染器也仍然不在关键路径上。
+    ③ **那涨的是什么？** **带这个名字的 chunk 从 10 个变成 20 个。**
+       这一格按 chunk 名字归属字节，而名字的判据是「chunk 里任意一个模块 id
+       命中 `reka-ui|splitpanes`」——2026-09-11 那一轮把手写行换成 `ui/item`、
+       把三处手搓模态换成 `ui/dialog`、把手写 `<input>` 换成 `ui/input`、
+       搬来 Tabs 的 variant 体系，**每一处都让又一个产品 chunk 碰到 Reka**；
+       再加上 2026-09-10 合上游带进来的 Projects / CSV 预览等新面。
+       **这正是这一格会涨的那个方向**，见上面那段「装不出谁的字节」。
+    ④ **`maxRaw` 那一个是什么？** 318,499 那个 chunk 里 `artifact` 出现 72 次、
+       `sidecar` 71 次，`splitpanes` 只出现 1 次——**它是工作区那块产品代码**，
+       只因为含着 splitpanes 才叫这个名字。也就是说 `vendor-ui.maxRaw`
+       **根本不是一个关于 Reka 的读数**，别照着它去拆 Reka。
+
+    **为什么红了这么久没人知道**：这一格不在 `verify` 里，文件头写着它是
+    「CI 的独立一步」——而这条分支三百多个提交从来没推过，**CI 一次都没跑过**。
+    线索 194 的又一例：一条只活在 CI 里、而 CI 永远不会跑到的门禁等于不存在。
+    2026-09-12 起冷启动文档的收工门禁块里记的是它的真实状态。
+  */
+  "vendor-ui": { totalRaw: 778_000, totalGzip: 234_000, maxRaw: 335_000 },
 };
 // 整包天花板同步抬高，抬的正好是 CodeMirror 那 542.7 KiB / 195.0 KiB：
 // 实测 raw 14_305_757 / gzip 3_292_309 / maxRaw 779_847 / maxGzip 230_136。
 // 不抬的话 gzip 只剩 7_691 字节余量，下一次无关改动就会撞线，
 // 而撞线的原因和被记录的原因对不上——那种门禁只会教人抬数字。
+// 2026-09-12：`totalGzip` 实测 3,415,750，超 15,750 字节（**0.46%**）。
+// 另外三项都还在预算内（raw 14,660,198 / maxRaw 779,878 / maxGzip 230,093），
+// 也就是说整包没有突然长出一块，是上面 vendor-ui 那一段说的同一件事按比例摊到了总数上。
+// 只抬这一项，按实测 + 约 5%。
 const overallBudget = {
   totalRaw: 14_800_000,
-  totalGzip: 3_400_000,
+  totalGzip: 3_580_000,
   maxRaw: 800_000,
   maxGzip: 240_000,
 };
