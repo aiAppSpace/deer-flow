@@ -71,6 +71,25 @@ export const ZH_DIMENSION: ParityDimension = {
 };
 
 /**
+ * 默认维度的深色孪生。
+ *
+ * **只跑浅色，等于把「固定色 vs token」整类排除在取样之外**（2026-09-11 量出来的）。
+ * `--destructive` 在浅色是 `oklch(0.577 0.245 27.325)`——**与 `red-600` 同一个值**，
+ * 所以浅色下两种写法一模一样；深色下 token 提亮到 `oklch(0.704 …)` 而固定档原地不动。
+ * 那一轮在两个应用里一共改了 29 处这种红（错误文案 23 处 + 浅红底提示盒 6 处），
+ * 外加本仓 diff 三档缺的 `dark:` 变体——**台账一行都没报**，因为红全长在设置页与
+ * 错误态上，而那些场景一个都没开 dark。
+ *
+ * 与 ZH_DIMENSION 同一条纪律：**一个场景补一维就够**（主题轴与语言/断点轴正交）。
+ * 先只给**带错误态的场景**加，因为那是这一类差异的高发区；全矩阵仍然只有 `chat` 跑。
+ */
+export const DARK_DIMENSION: ParityDimension = {
+  viewport: "desktop",
+  theme: "dark",
+  locale: "en-US",
+};
+
+/**
  * 定位方式。四种都是两个应用共有的表达，没有第五种。
  */
 export type ParityTarget =
@@ -2249,6 +2268,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     dimensions: [
       DEFAULT_DIMENSION,
       { viewport: "desktop", theme: "light", locale: "zh-CN" },
+      /*
+        这个场景有两支错误态（`load-failed` / `skills-load-failed`），
+        而错误态正是「固定红 vs destructive token」的高发区——见 DARK_DIMENSION
+        的说明。加这一维，是为了让 2026-09-11 那一轮的修法有机器守着。
+      */
+      DARK_DIMENSION,
     ],
   },
   {
