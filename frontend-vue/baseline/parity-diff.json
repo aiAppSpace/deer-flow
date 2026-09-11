@@ -1514,9 +1514,6 @@
         "- article:",
         "- article:",
         "- article:",
-        "- button \"Connect\"",
-        "- button \"Connect\"",
-        "- button \"Connect\"",
         "- heading \"Connected accounts\" [level=4]",
         "- heading \"Connected accounts\" [level=4]",
         "- heading \"Connected accounts\" [level=4]",
@@ -1537,12 +1534,11 @@
       "requestsOnlyVue": [],
       "geometry": [
         "role:button[/^(Modify|修改)$/] x React=933 Vue=861.7 Δ-71.3",
-        "role:button[/^(Modify|修改)$/] y React=297 Vue=302.9 Δ5.9",
         "role:button[/^(Modify|修改)$/] width React=89.5 Vue=71.5 Δ-18"
       ],
       "focus": [],
       "order": [
-        "第 31 个公共节点 React=- button \"Modify\" Vue=- button \"Connect\""
+        "第 34 个公共节点 React=- button \"Modify\" Vue=- button \"Connect\""
       ],
       "depth": [
         "- paragraph: Buzz channels and direct messages through your DeerFlow agent. React 深度 2 / Vue 深度 3",
@@ -1563,9 +1559,6 @@
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [
-        "button",
-        "button",
-        "button",
         "button",
         "button",
         "button"
@@ -1596,9 +1589,6 @@
         "- article:",
         "- article:",
         "- article:",
-        "- button \"连接\"",
-        "- button \"连接\"",
-        "- button \"连接\"",
         "- heading \"已连接账号\" [level=4]",
         "- heading \"已连接账号\" [level=4]",
         "- heading \"已连接账号\" [level=4]",
@@ -1624,7 +1614,7 @@
       ],
       "focus": [],
       "order": [
-        "第 30 个公共节点 React=- button \"修改\" Vue=- button \"连接\""
+        "第 33 个公共节点 React=- button \"修改\" Vue=- button \"连接\""
       ],
       "depth": [
         "- paragraph: 接收 Slack 工作区消息和提及。 React 深度 2 / Vue 深度 3",
@@ -1644,9 +1634,6 @@
         "div[scroll-area-viewport]"
       ],
       "tabbablesOnlyVue": [
-        "button",
-        "button",
-        "button",
         "button",
         "button",
         "button"

@@ -233,6 +233,10 @@ function closeConnectDialog() {
   `connection`（它只看第一条）：本仓一个 provider 可以挂多个账号，
   「还有活着的账号」优先于「有一条被吊销了」。
 */
+/**
+ * 主操作那颗键的文案。三档都只关于 **binding row**：有活着的行 → 添加账号、
+ * 只剩吊销的行 → 重新连接、一行都没有 → 连接。
+ */
 function connectLabel(view: ChannelProviderView) {
   if (
     view.connections.some(
@@ -245,6 +249,28 @@ function connectLabel(view: ChannelProviderView) {
   return view.connections.some((connection) => connection.status === "revoked")
     ? text.value.reconnect
     : text.value.connect;
+}
+
+/*
+  **这颗主操作键要不要渲染。**
+
+  `DEER_FLOW_AUTH_DISABLED=1`（本仓默认的本地跑法）下每条渠道消息都路由到默认用户，
+  配好且跑起来的 provider **没有也不需要**任何 binding row，后端直接回
+  `connection_status="connected"`（理由原文在 core/channels/state.ts 的文件头）。
+  这种形状下这颗键点下去只会走一遍毫无意义的绑定流程，而它旁边的状态图标
+  （走 `providerConnected`，会回落到 connection_status）正画着绿勾「已连接」——
+  同一行自相矛盾。上游在已连接态**根本不渲染这颗键**
+  （`channels-settings-page.tsx:200` 的 `isConnected ? (Modify + Disconnect) : …`）。
+
+  **不能只改文案**：第一版把它换成「添加账号」，台账上那 3 行
+  `ariaOnlyVue: button "Connect"` 原样变成 3 行 `button "Add account"`——
+  行数一行没少，只是换了个名字。门禁当场拒写，这条判据是它给的。
+
+  有 binding row 时保留：多账号是本仓设置页独有的能力（上游没有这个概念），
+  「添加账号」在那种形状下是真操作。
+*/
+function showConnectAction(view: ChannelProviderView) {
+  return view.connections.length > 0 || !providerConnected(view);
 }
 </script>
 
@@ -339,6 +365,7 @@ function connectLabel(view: ChannelProviderView) {
               所以它没有可抄的上游形状；这里只把它接进同一套 Button 规格。
             -->
             <Button
+              v-if="showConnectAction(view)"
               type="button"
               size="sm"
               :disabled="channels.isProviderPending(view.provider.provider)"

@@ -314,4 +314,55 @@ describe("connect button label", () => {
     // 还有活着的账号时是「添加账号」，吊销的那条不该把它顶掉。
     expect(mountSettings().wrapper.text()).toContain(enUS.channels.addAccount);
   });
+
+  /*
+    **一行 binding row 都没有、但 provider 自己说已连接**——这正是
+    `DEER_FLOW_AUTH_DISABLED=1`（本仓默认的本地跑法）下的形状：每条渠道消息都路由到
+    默认用户，配好且跑起来的 provider 没有也不需要 binding row，后端直接回
+    `connection_status="connected"`（理由原文在 core/channels/state.ts 的文件头）。
+
+    只看 `connections` 的那一版在这里让同一行自相矛盾：状态图标画绿勾「已连接」，
+    按钮却写「连接」。对照台账 `channels#settings-panel` 上
+    `ariaOnlyVue: button "Connect" ×3` 报的就是它。
+    **侧栏那次已经踩过同一条**，这一页是第二次。
+  */
+  it("provider 说已连接、却一行账号都没有时，主操作键根本不渲染", () => {
+    const owner = createOwner(
+      [provider({ connection_status: "connected" })],
+      [],
+    );
+    const { wrapper } = mountSettings(owner);
+    /*
+      断言落在**按钮本身**，不是整屏文字：面板标题里就有 "Connect IM accounts…"，
+      状态词又是 "Connected"，拿整屏做 `not.toContain("Connect")` 永远为假
+      （第一版就是这么写的，报的是标题那一句）。
+
+      三档文案**都不许出现**：只把「连接」换成「添加账号」不算修好——
+      上游在已连接态压根不渲染这颗键，换名字只会让台账上那几行换个名字继续在
+      （对照工厂的 accept 门禁当场拒写，那一版就是这么被挡回来的）。
+    */
+    const labels = wrapper.findAll("button").map((button) => button.text());
+
+    expect(labels).not.toContain(enUS.channels.connect);
+    expect(labels).not.toContain(enUS.channels.addAccount);
+    expect(labels).not.toContain(enUS.channels.reconnect);
+    // 其余动作照旧：可编辑运行时配置的 provider 仍然有「修改」。
+    expect(labels).toContain(enUS.channels.modify);
+  });
+
+  /*
+    有 binding row 时这颗键要留着——多账号是本仓设置页独有的能力，
+    「添加账号」在那种形状下是真操作，不能被上面那条一起砍掉。
+  */
+  it("已连接且有账号行时，仍然给「添加账号」", () => {
+    const owner = createOwner(
+      [provider({ connection_status: "connected" })],
+      [connection("connection-live", "connected", "Live")],
+    );
+    const labels = mountSettings(owner)
+      .wrapper.findAll("button")
+      .map((button) => button.text());
+
+    expect(labels).toContain(enUS.channels.addAccount);
+  });
 });
