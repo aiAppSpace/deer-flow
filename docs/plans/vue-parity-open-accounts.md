@@ -1,7 +1,71 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第八轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第九轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> ## 2026-09-12 第九轮：**`ui/input-group` 判「不移植」——先把它接进取样面，再用读数说话**
+>
+> backlog 上挂着一笔「本仓没有移植 `ui/input-group`，整块 composer 外壳是手写的」，
+> 工单自己写着「**动它之前先确认台账上它现在是 0 行**（也就是说没有可观测差异在
+> 推动这次重构，它是结构卫生）」。这一轮照做了，然后**把这句话反过来用**：
+> 既然没有读数在推动，那就先**造一个读数**，再决定要不要动。
+>
+> ### 一、先确认前提（台账上确实是 0 行）
+>
+> ```
+> chat（跑满 12 维）               每维 1 行，全部是 div[scroll-area-viewport]
+> agent-chat / sidecar-chat        1 行（scroll-area-viewport / 分栏把手，都判过）
+> user-message-plain-text          0
+> agent-create-name-step           0
+> ```
+>
+> ### 二、再核实「手写」到底手写了什么
+>
+> 上游那块是 `ai-elements/prompt-input.tsx` → `ui/input-group.tsx`；
+> **但调用点把它改了形**：`input-box.tsx:2265` 传的是
+> `bg-background/85 relative z-10 rounded-2xl backdrop-blur-sm transition-all
+> duration-300 ease-out *:data-[slot='input-group']:rounded-2xl`
+> ——最后那一条把 InputGroup 从 `rounded-md` 顶成 `rounded-2xl`。
+>
+> 本仓 `ComposerSurface.vue` 逐条对得上：`role="group"`、`data-slot="input-group"`、
+> `group/input-group`、`border-input/50`、`bg-white/80`、`dark:bg-background/80`、
+> `rounded-2xl`、`backdrop-blur-sm`、`z-10`、`shadow-xs`，以及焦点环那三条
+> `has-[[data-slot=input-group-control]:focus-visible]:*`。
+> **它是量着抄的，不是另起炉灶**——文件头里还留着 wave 67 那次 15px 位移的实测记录。
+>
+> ### 三、把它接进取样面（这一轮真正的产出）
+>
+> `[data-slot="input-group"]` 是**两边共有的结构坐标**（上游 `InputGroup` 写死这个
+> `data-slot`，本仓照抄），挂在**跑满 12 维矩阵**的 `chat` 上。
+> 用结构坐标而不是可访问名，是第八轮那条教训的直接应用。
+>
+> **读数：12 个维度零新增行。** 而且这个 0 是**算出来的**——探针实测：
+>
+> ```
+> REACT desktop/light/en-US  matches=1  x=479.5 y=244 576×116 bg=rgba(255,255,255,204)
+> VUE   desktop/light/en-US  matches=1  x=479.5 y=244 576×116 bg=rgba(255,255,255,204)
+> REACT desktop/dark/en-US   matches=1  bg=rgba(31,31,29,204) fontWeight=300
+> VUE   desktop/dark/en-US   matches=1  bg=rgba(31,31,29,204) fontWeight=300
+> REACT mobile/dark/zh-CN    matches=1  x=12 y=198 351×116
+> VUE   mobile/dark/zh-CN    matches=1  x=12 y=198 351×116
+> ```
+>
+> 每屏只匹配一份、样本非空、**两边逐位相同**。
+>
+> ### 四、判词：**不移植**，并把边界写清楚
+>
+> 移植 `ui/input-group` 是一次高流量组件的重写，而**没有任何读数在推动它**；
+> 本仓那块外壳有实测依据、有文件头记录，重写只会把那些依据一起扔掉。
+> 记忆里那条「不做搬运式移植」说的正是这种情况。
+>
+> **但这个结论有边界，写下来免得下一轮把它读成「这块已经全对了」**：
+> 几何档量的是位置 / 尺寸 / 前景色 / 背景色 / 字号 / 字重 / opacity / 命中 / 伪元素，
+> **不量 `border-radius`、`box-shadow`、`backdrop-filter`**。
+> 形状类的漂移目前**没有任何机器看得见**。
+>
+> **翻案判据两条**：① 给几何档加 `borderRadius`
+> （变异论证是现成的：把 `rounded-2xl` 改成 `rounded-md`，现有各档一条都不响）；
+> ② 上游改了 InputGroup 的语义（那时这块外壳会静默走偏，而 12 维的锚点会先红）。
 
 > ## 2026-09-12 第八轮：**同一条正则在一种语言下匹配两份、在另一种语言下只匹配一份**
 >

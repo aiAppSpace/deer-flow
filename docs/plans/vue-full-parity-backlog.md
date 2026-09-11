@@ -344,9 +344,31 @@ token 与 `h-9` 的统一高度——**同一个对话框里另外三颗 Select 
 **抄的那几份都漏了 `aria-invalid:` 与 `disabled:`**——无效态与禁用态在那些字段上
 一直不生效。逐条判词在 `vue-parity-open-accounts.md`。
 
-**这一笔同时开出下一笔**：三个 composer（`ChatComposer` / `AgentBootstrapComposer` /
+~~**这一笔同时开出下一笔**：三个 composer（`ChatComposer` / `AgentBootstrapComposer` /
 `SidecarPanel`）的输入框上游走 `PromptInputTextarea → InputGroupTextarea → <Textarea>`，
-而**本仓没有移植 `ui/input-group`**，整块 composer 外壳是手写的。
+而**本仓没有移植 `ui/input-group`**，整块 composer 外壳是手写的。~~
+**2026-09-12 第九轮量完了，结论是「不移植」**，理由逐条如下（不是嫌麻烦）：
+
+- **没有任何可观测差异在推动它**：三个 composer 面在台账上本来就是 0 行
+  （`chat` 跑满 12 维、`agent-chat` / `sidecar-chat` / `user-message-plain-text` /
+  `agent-create-name-step` 都是 0，剩下的两条是早就判过的
+  `div[scroll-area-viewport]` 与分栏把手）。
+- **本仓那块外壳是量着抄的，不是另起炉灶**：上游调用点
+  （`input-box.tsx:2265`）用 `*:data-[slot='input-group']:rounded-2xl` 把 InputGroup
+  顶成 `rounded-2xl`，再叠 `bg-background/85 backdrop-blur-sm z-10`；
+  本仓 `ComposerSurface.vue` 逐条对得上，`role="group"` / `data-slot="input-group"` /
+  焦点环的 `has-[[data-slot=input-group-control]:focus-visible]` 也照抄。
+- **这一轮把它接进了取样面**：`[data-slot="input-group"]` 是两边共有的结构坐标，
+  挂在跑满 12 维的 `chat` 上。**12 个维度零新增行**，而且这个 0 是算出来的——
+  探针实测每屏只匹配一份、样本非空，且两边逐位相同
+  （桌面浅色 x=479.5 y=244 576×116 `rgba(255,255,255,204)`；
+  深色 `rgba(31,31,29,204)` fontWeight 300；窄屏 x=12 y=198 351×116）。
+
+**这个结论的边界要说清楚**：几何档量的是位置/尺寸/前景色/背景色/字号/字重/
+opacity/命中/伪元素，**不量 `border-radius`、`box-shadow`、`backdrop-filter`**。
+也就是说「形状类」的漂移目前没有任何机器看得见——**翻案判据**：
+哪天给几何档加上 `borderRadius`（变异论证是现成的：把 `rounded-2xl` 改成
+`rounded-md`，现有各档一条都不响），或者上游把 InputGroup 的语义改了。
 
 
 - ~~`thread-title-sync/zh-CN` 的 `focus` 幻影差异~~ **判词只对了一半，2026-09-11 订正：
