@@ -3077,6 +3077,84 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           },
         ],
       },
+      /*
+        **「真的绑上了一个账号」那一支**（2026-09-12）。
+
+        场景的 `routes` 给的是 `{ connections: [] }`——也就是说这个域里
+        **「已连接」那一整块从来没被取样过**，而台账对它报 0 行只说明没取样。
+        （`connection_status: "connected"` 只是 provider 那一层的状态位；
+        真正长东西的是 `/api/channels/connections` 返回的那份列表。）
+
+        喂一条真的 connection 之后两边各画什么，是这一支要量的：
+        上游把列表**收敛成每个 provider 一条**（`connectionByProvider`），
+        只在 `ItemDescription` 里写一句 `connectedAs(...)`；本仓画一块
+        「已连接账号」列表，每行带一颗 Disconnect（`ChannelConnections.vue`
+        的注释说这块是本仓独有的、且「留着是对的」——那句判词此前没有任何机器在验）。
+
+        锚点用夹具自己给的账号名（`parity-account`）：不进词典、两种语言逐字相同，
+        而且这一屏上只有一处（两边各渲染一次，React 在 connectedAs 那句里、
+        本仓在账号行里）。
+
+        **这一支留在台账里的行，逐条的判词**（2026-09-12 实测 22 行 → 修掉上游那颗
+        Disconnect 之后 17 行）：
+
+        - `ariaOnlyVue: button "Add account"` / `heading "Connected accounts"` /
+          `text: parity-account Connected` —— **本仓独有的多账号绑定块**。
+          上游一个 provider 只认一条 connection（`connectionByProvider` 把列表
+          收敛成一条），没有列表这个概念；本仓画「已连接账号」列表，主操作键
+          因此多出「添加账号」这一档。判词：**保留本仓这一侧**，理由写在
+          `ChannelConnections.vue` 那段注释里（后端 `/connections` 本来就返回列表，
+          多账号与逐账号断开被 `tests/e2e-channels/channels.spec.ts` 拿真 Gateway 钉着）。
+          **翻案判据**：上游哪天自己长出 per-provider 的连接列表。
+        - `geometry text:/parity-account/ y Δ-16.1 / width Δ-6.7` —— **这个锚点在
+          两边落在结构不同的节点上**（React 是 ItemDescription 里那句
+          `Connected as …`，本仓是账号行里的名字），所以它的几何行量的不是同一个东西，
+          是上面那条结构差异的投影，不是独立缺陷。留着锚点是因为它是唯一能证明
+          「已连接那一支真的渲染出来了」的夹具串。
+        - `order` 那一行 —— 同上：本仓的 Disconnect 在账号行里、上游的在动作列里。
+      */
+      {
+        id: "settings-panel-connected",
+        routes: [
+          {
+            pattern: "**/api/channels/connections",
+            json: {
+              connections: [
+                {
+                  id: "conn-parity-1",
+                  provider: "dingtalk",
+                  status: "connected",
+                  external_account_id: "acct-1",
+                  external_account_name: "parity-account",
+                  workspace_id: null,
+                  workspace_name: null,
+                  scopes: [],
+                  metadata: {},
+                },
+              ],
+            },
+          },
+        ],
+        steps: [
+          {
+            kind: "click",
+            target: {
+              role: "button",
+              name: /^(Settings and more|设置和更多)$/,
+            },
+          },
+          {
+            kind: "click",
+            target: { role: "menuitem", name: /^(Settings|设置)$/ },
+          },
+          {
+            kind: "click",
+            target: { role: "button", name: /^(Channels|渠道)$/ },
+          },
+          { kind: "visible", target: { selector: "[role=dialog]" } },
+          { kind: "visible", target: { text: /parity-account/ } },
+        ],
+      },
     ],
     dimensions: [
       DEFAULT_DIMENSION,
