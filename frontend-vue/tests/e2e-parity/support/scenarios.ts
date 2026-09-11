@@ -2274,6 +2274,14 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         的说明。加这一维，是为了让 2026-09-11 那一轮的修法有机器守着。
       */
       DARK_DIMENSION,
+      /*
+        **窄屏的设置对话框此前没有任何机器看过。** 122 个场景-维度里 110 个是
+        desktop，非 desktop 的只有 `chat`（跑满矩阵）、`thread-list-pin#mobile-drawer`
+        与 `ui-polish-mobile` 三个——而设置对话框在上游是
+        `md:grid-cols-[220px_minmax(0,1fr)]`，**窄屏下导航与内容要叠起来**，
+        两个应用各写各的。这一维就是去看那一叠对不对得上。
+      */
+      { viewport: "mobile", theme: "light", locale: "en-US" },
     ],
   },
   {

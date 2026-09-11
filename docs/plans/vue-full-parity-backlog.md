@@ -234,6 +234,24 @@ login/setup 页——这些都还没有逐个读代码比对。
 
 ### 还开着的账
 
+### 下一笔开着的账：**窄屏下的设置对话框，两个应用各有一颗够不着的控件**（2026-09-11 量出来）
+
+给 `integrations` 加了一维 `mobile/light/en-US`（375×812）之后当场现形：
+
+- **上游**：`integrations#skills` 那颗技能开关 `x=395.5`（视口 375），
+  命中测试返回 **off-screen**——手机上点不到。
+- **本仓**：`integrations#change-app` 那颗「在浏览器重新注册」同样 **off-screen**。
+- 两边 `integrations#permission-request` 上三颗权限芯片的折行方式不同
+  （`Docs` 的 x 差 107、`Drive` 差 -65.6，命中目标分别落在 span / div(dialog) / button / p 上）。
+
+**修的时候先看这一条**：`Item` 是 `flex-wrap` 的，`ItemActions` 被挤出容器通常是因为
+**`ItemContent` 少了 `min-w-0`**——`channels` 那一轮上游那一行写的就是
+`<ItemContent className="min-w-0">`，而技能行与 MCP 行两边都没写。
+
+这一维带进来的行已经接受进基线（判词是「已确认是缺陷，工单在这里」），
+所以**修好之后台账会自己缩短**，不需要再开一次逃生口。
+
+
 ### ~~手写 `<input>` / `<textarea>` 没有任何守卫~~ **2026-09-11 当轮做掉了**
 
 起因是 `agents-feature-disabled#gallery` 上那两行
