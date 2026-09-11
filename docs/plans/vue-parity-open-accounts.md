@@ -1,9 +1,81 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第四轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第五轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-12 收工时发现两条门禁**一直红着**，都不是这一轮造成的
+> ## 2026-09-12 第五轮：**上游的用户解绑不了自己的 IM 账号**——两条存量挂账都结了
+>
+> 上一轮挂的两条（`icon-parity` 的 `Unplug`、`asset-budget` 四条预算全超）这一轮都处理完了。
+> **第一条不是图标问题，顺着它挖出一处真缺陷。**
+>
+> ### 一、`channels` 的「已连接」那一支**从来没被取样过**
+>
+> `icon-parity` 报「`Unplug` 只有 Vue 用」，回源码看：本仓的渠道设置页给每一条
+> connection 画一颗 Disconnect，上游那一页没有任何 per-connection 动作。
+> **而台账对 `channels` 报 0 行**——因为场景喂的是 `{ connections: [] }`，
+> 「已连接」那一整块两个应用都没渲染过。**「量不出差异」在这里的准确含义是「没取样」。**
+>
+> 给 `channels` 加一个 `settings-panel-connected` 终态（喂一条真的 connection，
+> 锚点用夹具给的账号名 `parity-account`——不进词典、两种语言逐字相同）。
+> **一比就是 22 行**（每语言 11 行）。
+>
+> ### 二、判词：**上游是坏的，两边同改**
+>
+> 逐条问过 wave 73 那条判据「这处不改，React 自己是不是也是坏的？」：
+>
+> - 后端有 `DELETE /api/channels/connections/{id}`（`channel_connections.py:554`，204）；
+> - 上游**已经写好了** `useDisconnectChannelConnection`（`core/channels/hooks.ts:107`），
+>   **零消费者**——`grep` 全仓只有定义处；
+> - 上游那一页唯一一颗「断开」是**管理员限定、删的是整个部署的 provider 运行时配置**
+>   （2026-09-11 那一轮刚改过它的名字与门控）。
+>
+> **也就是说：用户能把自己的 IM 账号绑上去，却没有任何办法解绑。** 这是缺陷，不是风格。
+> 修法是把已有的 hook 接上一颗键（outline / sm / `UnplugIcon` / 在飞时转圈 /
+> 可访问名念出账号名），与本仓那一颗同形；**多账号列表那个概念不跟过来**——
+> 上游这一行本来就只认一条 connection（`connectionByProvider`），
+> 引进列表属于「引入新概念」，越过了「只做小改」的边界。
+> 两边词典各补 `channels.disconnect` / `channels.disconnectAccount`。
+>
+> **读数：22 → 17 行**（Disconnect 那一行连同它带来的 `tabbablesOnlyVue` 与
+> `width Δ-133.3` 一起清掉；`width` 从 Δ-133.3 收到 Δ-6.7）。
+> **`icon-parity` 因此从「1 处待核」回到 0 处待核**——是从根因清的，不是加豁免。
+>
+> **剩下的 17 行逐条有判词**（写在场景注释里）：本仓独有的多账号绑定块
+> （「已连接账号」标题 + 账号行 + 主操作键的「添加账号」档）、以及它带来的两行几何投影。
+> **那个账号名锚点在两边落在结构不同的节点上**（上游是 `Connected as …` 那句描述，
+> 本仓是账号行里的名字），所以它的几何行量的不是同一个东西——留着锚点是因为
+> 它是唯一能证明「已连接那一支真的渲染出来了」的夹具串。
+> **翻案判据**：上游哪天自己长出 per-provider 的连接列表。
+>
+> **一次不算数的负向验证**（记下来免得下一轮重踩）：第一版变异把渲染条件写成
+> `{false && connection && …}`，**Next 构建直接失败**，报出来是
+> `Process from config.webServer was not able to start`——那不是「用例红了」，
+> 是用例根本没跑（wave 69 那条「变异必须保持文件可编译」）。
+> 换成把条件反过来（`status === "revoked"`）才拿到真红：
+> 失败点精确停在 `expect(disconnect).toBeVisible()`。
+>
+> ### 三、`asset-budget`：查清楚了，是存量，按这份文件自己的先例重定
+>
+> 抬数字之前把该问的都问了，逐条写在 `scripts/asset-budget.mjs` 的注释里：
+>
+> 1. **不是重复打包**：Reka 的内部字面量 `dismissableLayer.pointerDownOutside`、
+>    `focusScope.autoFocusOnMount` 各只出现在 1 个 chunk 里；
+> 2. **用户下载的字节没涨**：`route-payload.spec.ts` 5 条全绿，三条路由都在预算内，
+>    重量级渲染器仍不在关键路径上；
+> 3. **涨的是「带这个名字的 chunk 从 10 个变成 20 个」**——这一格按 chunk 名字归属字节，
+>    判据是「chunk 里任意一个模块 id 命中 `reka-ui|splitpanes`」，
+>    而 2026-09-11 那一轮把手写行换成 `ui/item`、手搓模态换成 `ui/dialog`、
+>    手写 `<input>` 换成 `ui/input`、搬来 Tabs variant——**每一处都让又一个产品 chunk
+>    碰到 Reka**；再加上 2026-09-10 合上游带进来的新面；
+> 4. **`maxRaw` 那一个根本不是 Reka 的读数**：318,499 那个 chunk 里 `artifact` 出现 72 次、
+>    `sidecar` 71 次、`splitpanes` 只有 1 次——它是工作区那块产品代码，
+>    只因为含着 splitpanes 才叫这个名字。
+>
+> **为什么红了这么久没人知道**：它不在 `verify` 里，文件头写着「CI 的独立一步」
+> ——而这条分支三百多个提交**从来没推过，CI 一次都没跑过**。
+> 线索 194 的又一例：一条只活在 CI 里、而 CI 永远跑不到的门禁等于不存在。
+
+> ## 2026-09-12 收工时发现两条门禁**一直红着**，都不是这一轮造成的 —— **两条都在第五轮结清了，见上一条**
 >
 > 这一轮把九条门禁逐条真跑了一遍（上一轮的读数块写着两条 exit 0）。**两条是红的**，
 > 而且都能证明与本轮改动无关。**记在这里是因为「一条长期红着又没人看的门禁等于不存在」。**

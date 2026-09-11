@@ -12,11 +12,11 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-12 第四轮收工实测，不是估计）**：
+**接手时的状态（2026-09-12 第五轮收工实测，不是估计）**：
 
 - 工作区干净；**本地领先 `origin/main-wc` 三百多个提交、全部未推送**
   （没有收到过推送指令；要推就先问用户）。
-- 对照台账 **137 唯一行 / 153 多重集 / 131 个场景-维度**。
+- 对照台账 **154 唯一行 / 170 多重集 / 133 个场景-维度**。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
 
@@ -45,13 +45,16 @@ EOF
 
 ## 这个阶段的工作性质（先读完再动手）
 
-**「台账还剩多少行」已经不能当坐标系了。** 2026-09-12 收工时 **137 行逐条都有判词**，
-而且分布极不均匀：**95 行**是 `div[scroll-area-viewport]` 那一笔判过的账
+**「台账还剩多少行」已经不能当坐标系了。** 第五轮收工时 **154 行逐条都有判词**，
+而且分布极不均匀：**99 行**是 `div[scroll-area-viewport]` 那一笔判过的账
 （含它在 `tabOrder` 上的投影）、**12 行**是请求层那一族（`retry` 等），
-剩下 **30 行**是 tooltip 播报节点、写死英文、焦点落点这几类早就判过的。
-**窄屏那个开着的工单 2026-09-12 已经结清**（那 18 行没了）。
-所以行数涨落本身不说明好坏——**它涨常常是因为取样面变大了**（2026-09-11 新开
-`dark` 与 `mobile` 两个维度；09-12 给 diff 三档挂锚点，当场逼出一处 4px）。
+剩下 **43 行**是 tooltip 播报节点、写死英文、焦点落点、以及本仓独有的多账号绑定块
+这几类早就判过的。
+所以行数涨落本身不说明好坏——**连着三轮它都是因为取样面变大而涨的**：
+09-11 新开 `dark` 与 `mobile` 两维（当场量出上游一颗手机上点不到的控件）、
+第四轮给 diff 三档挂锚点（当场逼出一处 4px）、
+第五轮把 `channels` 的「已连接」那一支接进来（当场逼出「上游的用户解绑不了自己的
+IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下的那些大得多。**
 
 **这一阶段真正有货的是三类**，按性价比排：
 
@@ -146,10 +149,10 @@ EOF
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-# 2026-09-12 第四轮收工实测（每一条都是那一轮真跑出来的，不是抄的）
+# 2026-09-12 第五轮收工实测（每一条都是那一轮真跑出来的，不是抄的）
 make -C <abs>/frontend-vue verify         # exit 0；321 文件 / 2639 单测；词典 1139 key / 15 unused；产品 SFC 267
-make -C <abs>/frontend-vue e2e-parity     # **139 passed**（整条 15.8 分钟，其中 diff.spec 10.9 分钟）
-                                          #  台账 137 唯一行 / 153 多重集 / 131 场景-维度
+make -C <abs>/frontend-vue e2e-parity     # **141 passed**（整条 16.0 分钟，其中 diff.spec 10.8 分钟）
+                                          #  台账 154 唯一行 / 170 多重集 / 133 场景-维度
                                           #  （此处此前写「3 passed」——那是只跑 diff.spec.ts 的数字，
                                           #    整个套件还有 scenarios.spec 的每场景-维度一条 + topology）
 make -C <abs>/frontend-vue e2e-mock       # 318 passed（273 + 22 + 15 + 2 + 6）
@@ -158,23 +161,21 @@ make -C <abs>/frontend-vue parity-accept  # 只能让台账变短；要变长得
                                           #  并在提交说明里逐行解释
 make -C <abs>/frontend-vue standalone-sim # exit 0（跑过 15 / 未跑 5 / 红 0）
 make -C <abs>/frontend-vue e2e-visual     # 8 passed（只有 -darwin 基线，本机门禁）
-make -C <abs>/frontend-vue asset-budget   # ⛔ **红，而且是存量**（四条预算全超；证过因果：
-                                          #  把本轮动过的文件换回 HEAD 重量，读数只差 16 字节）
-                                          #  挂账写在 vue-parity-open-accounts.md 顶部
-make -C <abs>/frontend-vue icon-parity    # exit 0；**1 处待核（`Unplug` 只有 Vue 用）**
-                                          #  ——同一条挂账；此处此前写「0 处待核」是过期的
+make -C <abs>/frontend-vue asset-budget   # exit 0（第五轮查清是存量并重定预算，四条依据写在脚本注释里）
+make -C <abs>/frontend-vue icon-parity    # exit 0、**0 处待核**（第五轮把 `Unplug` 那处从根因清掉）
 make -C <abs>/frontend-vue audit          # 棘轮（wave 202 起分诊在 baseline/audit-triage.json）；
                                           #  实测 exit 0，20 条 / 7 个包逐条表过态
 make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口）
 ```
 
-> **这一轮的一条教训**：上面这块读数**本身也会过期**，而且过期得毫无迹象——
-> 2026-09-12 逐条真跑之前，`asset-budget` 与 `icon-parity` 两条都记着 exit 0 / 0 处待核，
-> 实际一条红着、一条挂着一处待核。**九条全跑一次比抄一次贵得多，但也只有它算数。**
+> **第四轮踩出来的一条教训，留在这里**：上面这块读数**本身也会过期**，而且过期得
+> 毫无迹象——第四轮逐条真跑之前，`asset-budget` 与 `icon-parity` 两条都记着
+> exit 0 / 0 处待核，实际一条红着、一条挂着一处待核（第五轮已把两条都结清）。
+> **九条全跑一次比抄一次贵得多，但也只有它算数。**
 
 **动过 `frontend/` 就必须加跑 React 三条**（这一阶段几乎每轮都会动它）：
 `python3 scripts/pnpm.py --dir frontend check`（0）/ `test`（**1354**）/
-`test:e2e`（**188 passed**，2026-09-12 实测；要用 3002 端口的绕法，
+`test:e2e`（**189 passed**，2026-09-12 第五轮实测；要用 3002 端口的绕法，
 写在交接文档「React 的 test:e2e 绕法」那一段。实操上不必自己 `next build` +
 `next start`——直接 `PLAYWRIGHT_BASE_URL=http://localhost:3002 SKIP_ENV_VALIDATION=1
 pnpm exec playwright test`，config 会照这个 URL 的端口自己起 webServer）。
@@ -286,47 +287,53 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-12 第四轮）做了什么，下一轮从哪接
+## 上一轮（2026-09-12 第五轮）做了什么，下一轮从哪接
 
-**台账 154 → 137 唯一行（170 → 153 多重集），场景-维度 129 → 131。**
-逐条判词在 `vue-parity-open-accounts.md` 顶部那两条 2026-09-12 条目。
+**第四轮挂的两条存量都结了，其中一条挖出一处真缺陷。**
+台账 137 → 154 唯一行、131 → 133 场景-维度——**涨的 17 行全部是新接上的取样面**
+（`channels` 的「已连接」终态），逐条判词写在场景注释里。
 
-1. **窄屏那两簇结清**：`integrations#change-app` / `#permission-request` 各 11 → 2 行，
-   `integrations` 全场景 86 → 68。根因是**内边距在窄屏下没有降档**——375px 屏上
-   对话框 343 宽，面板 `p-6` + 这一页独有的 Card `px-6` + 状态盒 `p-3` 吃掉 208px，
-   内容列只剩 167px，而里面那颗 `Re-register in browser` 按钮的 min-content 是 191.1px。
-   两边同改成 `p-4 sm:p-6` + `px-4 sm:px-6`（`sm` 以上逐字不变）。
-2. **diff 三档进取样面 + `workspace-changes` 补一维 dark**：挂上三个锚点之后确认了
-   上一轮那处 `dark:text-*-300` 修法成立（颜色两边逐值相同），**同时当场报出 9 行 `y Δ4`**
-   ——面板正文上游是 `px-5 py-4`、本仓写成 `p-5`。本仓改齐，9 行归零。
-3. **两个应用各加一条 375px 零溢出用例** + 一条锚点守卫
-   （`tests/unit/parity/workspace-diff-anchors.test.ts`）。负向验证全部逐条做过。
+1. **`icon-parity` 那条「`Unplug` 只有 Vue 用」不是图标问题。** 顺着它发现
+   `channels` 场景喂的是 `{ connections: [] }`——**「已连接」那一整块从来没被取样过**。
+   补一个 `settings-panel-connected` 终态，一比 22 行；再按 wave 73 的判据问
+   「这处不改 React 自己是不是也坏的」，答案是**坏的**：后端有
+   `DELETE /channels/connections/{id}`，上游连 `useDisconnectChannelConnection`
+   都写好了却**零消费者**，而那一页唯一一颗「断开」是管理员限定、删整个部署的配置
+   ——**用户能绑上去却没法解绑**。两边同改接上一颗同形的键，22 → 17 行，
+   `icon-parity` 从根因回到 0 处待核。
+2. **`asset-budget` 查清是存量**（不是重复打包、用户下载没涨、涨的是「带这个名字的
+   chunk 从 10 个变成 20 个」），按这份脚本自己的先例重定预算并把四条依据写进注释。
+   **它红了这么久没人知道的原因**：它只活在 CI 里，而这条分支从来没推过。
 
 **下一轮最该先拿的（按顺序）**：
 
-0. **两条这一轮量出来的存量挂账**（详情在 `vue-parity-open-accounts.md` 顶部第一条）：
-   ① `asset-budget` 四条预算全超，**证过因果不是本轮造成的**——查清 vendor-ui 涨的
-   57 KiB 出自哪一次改动（建议按提交二分），再决定拆包还是抬预算；
-   ② `icon-parity` 剩的那 1 处待核 `Unplug` 是**一处 Vue 独有的产品面**
-   （每条 connection 一颗 Disconnect，上游整页没有 per-connection 动作），
-   按双向规则要判「两边同加」还是「删掉本仓这颗」。
-1. **继续开取样维度。** 131 个场景-维度里非 desktop 的仍然只有 `chat`（跑满矩阵）、
-   `artifact-preview` / `thread-list-pin#mobile-drawer` / `ui-polish-mobile` / `integrations`；
-   dark 只有 `chat` 与 `integrations` / `workspace-changes`。
-   照同一条纪律（**一个场景补一维就够**）继续开——2026-09-11 开 `mobile` 当场量出
-   上游一颗点不到的控件，09-12 挂三个锚点当场量出 4px，**这条方向连着两轮都有货**。
-   现成的候选：`channels`（设置页，有连接失败分支 → dark）、
-   `scheduled-tasks`（整页表单 + 列表，从没被窄屏看过 → mobile）。
+1. **继续开取样维度——这条方向连着三轮都有货，而且每次的货都比台账上剩下的那些大。**
+   133 个场景-维度里非 desktop 的仍然只有 `chat`（跑满矩阵）、`artifact-preview`、
+   `thread-list-pin#mobile-drawer`、`ui-polish-mobile`、`integrations`；
+   dark 只有 `chat` / `integrations` / `workspace-changes`。
+   **现成的两类候选**：
+   ① 给带错误态的场景补 dark（`channels` 的连接失败、`scheduled-tasks`）；
+   ② 给整页场景补 mobile（`scheduled-tasks` 的表单 + 列表从没被窄屏看过）；
+   ③ **仿照这一轮，去找「夹具把某一支喂空了」的场景**——那是「台账 0 行」最常见的
+   假来源，判据是「这个域里有哪一支的夹具是空数组 / 空对象」。
 2. **`chat-thread-init-ordering` 那 3 行 `button "Edit and rerun"`。**
-   backlog 写着「先加临时 dump 看读数，别猜」，而它一直没人做——**这是台账上
-   最后一条判词里带「先怀疑」的行**。
-3. **`ui/input-group` 没有移植**：三个 composer（`ChatComposer` /
-   `AgentBootstrapComposer` / `SidecarPanel`）的输入框上游走
+   backlog 写着「先加临时 dump 看读数，别猜」，一直没人做。
+3. **`ui/input-group` 没有移植**：三个 composer 的输入框上游走
    `PromptInputTextarea → InputGroupTextarea → <Textarea>`，本仓整块外壳是手写的。
-   工单在 backlog。**注意这是高流量组件**，动它之前先确认台账上它现在是 0 行
-   （也就是说没有可观测差异在推动这次重构，它是结构卫生）。
+   工单在 backlog。**注意这是高流量组件**，动它之前先确认台账上它现在是 0 行。
 
-### 上一轮踩出来的、下一轮直接用的四条
+### 第五轮踩出来的两条
+
+1. **「台账 0 行」要先问「夹具把这一支喂空了吗」。** `channels` 报 0 行不是因为两边一致，
+   是因为 `{ connections: [] }`——**已连接那一整块两个应用都没渲染过**。
+   这是「量不出差异 = 这些取样点上量不出」那句话的最便宜的一种反例，
+   而且**一查一个准**：夹具里的空数组/空对象就是线索。
+2. **变异必须保持文件可编译**（wave 69 那条，这一轮又踩了一次）。
+   把渲染条件写成 `{false && … ? … : null}` 之后 Next 构建直接失败，
+   报出来是 `Process from config.webServer was not able to start`——
+   **那不是「用例红了」，是用例根本没跑**。换成把条件反过来才拿到真红。
+
+### 第四轮踩出来的四条（仍然有效）
 
 1. **否定结论同样要先证明变异生效。** 上一轮那张「四条死路」表的第四条
    （「给 ScrollArea 加 `[&>div]:block`，读数 86 → 86」）是**假阴性**：Radix 把
@@ -345,7 +352,7 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
    **接上一块新表面之后那一句「这一块本身对不对」，要靠各自的用例回答**，
    而且断言要把两种坏法都盖住（这一轮写成 `panelOverflow` + `cardOverflow` 两个读数）。
 
-### 一条方法学（这一轮最值钱的）
+### 一条方法学（第四轮最值钱的）
 
 **先量 min-content，再谈内边距。** 窄屏溢出的形状是「可用宽度 < 内容的固有最小宽度」，
 而 `getBoundingClientRect()` 量到的是**已经被压过的结果**，两边都看不出谁在撑。
@@ -372,7 +379,14 @@ wave 93 查明**是过期的**——四个能展开的控件都已经在取样�
 ```
 
 `addAttachments` 是操作系统文件对话框，取样够不着。
-**别再从这条方向找活了**；下面 B / C 两条还在。
+
+> **⚠️ 这一节的结论 2026-09-12 第五轮被部分推翻了**（保留原文，按「就地标注」的规矩）。
+> 原话是「别再从这条方向找活了」，而第五轮正是从这条方向找到这一阶段最大的一处缺陷。
+> **被推翻的是那张表的坐标系**：它数的是「哪些控件点一下才出现」，
+> 而漏掉了另一种同样常见的「没取样」——**夹具把某一支喂空了**。
+> `channels` 场景的 `{ connections: [] }` 让「已连接」那一整块两个应用都没渲染过，
+> 台账因此对它报 0 行。**新判据：一个域收工前，除了问「哪些东西点一下才出现」，
+> 还要问「这个域的夹具里有没有空数组 / 空对象」。**
 
 ### B. 给现成的尺子加一档
 
