@@ -3309,10 +3309,36 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
               name: /(workspace changes|工作区变更)/i,
             },
           },
+          /*
+            **diff 的三档配色此前一格都没被量过。**
+
+            文件行是 `<Collapsible defaultOpen={hasDiff}>`（两边同形），所以这三行
+            在面板一打开就已经画出来了——不需要再点一次，缺的只是锚点。
+            2026-09-11 那一轮在本仓补上上游那三个 `dark:text-*-300` 时，
+            台账一行都没反应，正是因为这里：**没有锚点，就没有颜色样本。**
+
+            三行各挑一档（addition / deletion / hunk），因为三档各是一条独立的
+            class 串——只挂一行，另外两档塌了照样全绿。
+
+            锚点文本取自**夹具里的 diff**（`-Draft` / `+Ready` / hunk 头），
+            不进任何词典，两种语言逐字相同（坑 242）。
+            写成**锚定整行的正则**而不是裸字符串：`getByText("+Ready")` 是
+            大小写不敏感的子串匹配，会把外层那个 `<pre>` 一起匹配上，
+            于是 `.first()` 量到的是整块 diff 而不是那一行（坑 274）。
+          */
+          { kind: "visible", target: { text: /^\+Ready$/ } },
+          { kind: "visible", target: { text: /^-Draft$/ } },
+          { kind: "visible", target: { text: /^@@ -1,2 \+1,2 @@$/ } },
         ],
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    /*
+      深色维度给的是上面那三行 diff。**这三档的差别只在深色下现形**：
+      底是 `bg-*-500/10` 的半透明色、字是 `text-*-700`，浅色下读得出来，
+      深色下如果少了 `dark:text-*-300` 就是深字压深底。
+      与 `integrations` 同一条纪律——一个场景补一维就够。
+    */
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   {
     id: "streaming-reasoning-order",
