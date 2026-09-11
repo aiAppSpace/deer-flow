@@ -75,6 +75,51 @@ function task(): ScheduledTask {
   } as unknown as ScheduledTask;
 }
 
+function mountDetail(contextMode: "fresh_thread_per_run" | "reuse_thread") {
+  return mount(ScheduledTaskDetail, {
+    props: {
+      task: { ...task(), context_mode: contextMode },
+      editDraft: createScheduledTaskDraft(),
+      runs: [],
+      runsHasMore: false,
+      runsLoadingMore: false,
+      editing: false,
+      updatePending: false,
+    } as never,
+  });
+}
+
+/*
+  **详情里也要有这条提醒**（上游 `app/workspace/scheduled-tasks/page.tsx:507`）。
+  本仓原来只在新建表单里画它——一条任务建完之后，再回来看它的人永远看不到
+  「每次运行都往同一条会话里追加上下文，跑久了会越来越长、也越来越贵」，
+  而那正是想改掉它的人要知道的。
+
+  负向验证：把 `ScheduledTaskDetail.vue` 里那个 `v-if="task.context_mode === 'reuse_thread'"`
+  的 Alert 删掉，第二条立刻红。
+*/
+describe("详情里的复用提醒", () => {
+  it("每次新开会话的任务不出现", () => {
+    const wrapper = mountDetail("fresh_thread_per_run");
+    expect(
+      wrapper
+        .find('[data-testid="scheduled-task-detail-reuse-notice"]')
+        .exists(),
+    ).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("复用同一条会话的任务出现，标题和说明都在", () => {
+    const wrapper = mountDetail("reuse_thread");
+    const text = wrapper
+      .get('[data-testid="scheduled-task-detail-reuse-notice"]')
+      .text();
+    expect(text).toContain(labels.context.reuseNoticeTitle);
+    expect(text).toContain(labels.context.reuseNoticeDescription);
+    wrapper.unmount();
+  });
+});
+
 describe("详情里的「复制」", () => {
   it("点了只发事件，由页面决定怎么预填", () => {
     const wrapper = mount(ScheduledTaskDetail, {

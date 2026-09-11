@@ -57,7 +57,15 @@ export function SkillSettingsPage({ onClose }: { onClose?: () => void } = {}) {
           {t.settings.skills.adminRequired}
         </div>
       ) : error ? (
-        <div>Error: {error.message}</div>
+        /*
+          A failed load has to announce itself: this was a bare <div> with no
+          role, so a screen reader never heard it, and the hardcoded "Error: "
+          prefix stayed English under zh-CN. It also rendered as ordinary body
+          text (16px, foreground) rather than as an error.
+        */
+        <p role="alert" className="text-sm text-red-600">
+          {error.message}
+        </p>
       ) : (
         <SkillSettingsList skills={skills} onClose={onClose} />
       )}

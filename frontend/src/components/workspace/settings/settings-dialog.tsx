@@ -13,7 +13,7 @@ import {
   WrenchIcon,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   Dialog,
@@ -119,6 +119,23 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const { t } = useI18n();
   const [activeSection, setActiveSection] =
     useState<SettingsSection>(defaultSection);
+  /*
+    Put the initial focus on the nav button for the section that is actually
+    open. Radix's default lands on the first focusable element, which is always
+    "Account" — so deep-linking to `?settings=appearance` opened that page with
+    the focus parked somewhere else, and a keyboard or screen-reader user had to
+    find their way there although the URL already said where to go.
+  */
+  const sectionButtons = useRef(
+    new Map<SettingsSection, HTMLButtonElement | null>(),
+  );
+  const focusActiveSection = useCallback(
+    (event: Event) => {
+      event.preventDefault();
+      sectionButtons.current.get(activeSection)?.focus();
+    },
+    [activeSection],
+  );
 
   useEffect(() => {
     // When opening the dialog, ensure the active section follows the caller's intent.
@@ -190,6 +207,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       <DialogContent
         className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-5xl md:max-w-6xl"
         aria-describedby={undefined}
+        onOpenAutoFocus={focusActiveSection}
       >
         <DialogHeader className="gap-1">
           <DialogTitle>{t.settings.title}</DialogTitle>
@@ -206,6 +224,12 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   <li key={id}>
                     <button
                       type="button"
+                      ref={(element) => {
+                        sectionButtons.current.set(
+                          id as SettingsSection,
+                          element,
+                        );
+                      }}
                       onClick={() => setActiveSection(id as SettingsSection)}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",

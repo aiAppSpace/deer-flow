@@ -168,9 +168,10 @@ function archiveErrorOptions(cause: unknown) {
         `button "Create skill"` 都只在本仓，外加几何、tab 序与可 tab 元素的连带差异）。
         一屏拿不到数据、却还留着一颗指向同一个后端的「创建」按钮，不是更好的做法。
 
-        **保留的是本仓更好的那两点**：错误行是 `role="alert"`（上游是个没有 role 的
-        `<div>`，读屏器不会主动念），措辞走词典（上游硬编码 `Error: ` 前缀，
-        中文界面上也是英文）。这两处差异**有意留在台账里**，各自有翻案判据。
+        错误行是 `role="alert"`、措辞不带前缀：上游原来是个没有 role 的 `<div>`
+        （读屏器不会主动念），还硬编码了一个 `Error: ` 前缀（中文界面上也是英文），
+        而且画成普通正文（16px、前景色）而不是错误。**2026-09-11 两边同改**，
+        上游那一支换成了同形的 `<p role="alert" className="text-sm text-red-600">`。
 
         **wave 134 把 `loading` 那一支也接上并对齐了**：上游
         `skill-settings-page.tsx:44` 是 `isLoading ? 只画一句 Loading : …`，

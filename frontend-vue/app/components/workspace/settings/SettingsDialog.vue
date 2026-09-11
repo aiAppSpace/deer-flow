@@ -173,10 +173,10 @@ function setSectionButton(
 /*
   **打开时把焦点放在当前分区那颗导航键上**，接管 reka 的 `open-auto-focus`。
 
-  这是本仓**有意**与上游不同的一处，对照台账的 `focus` 档为此记账
-  （React=button "Account" / Vue=当前分区）：上游不接管，Radix 的默认落在第一个
-  可聚焦元素，也就是永远的 "Account"。深链到 `?settings=appearance` 却把焦点丢在
-  "Account" 上，键盘与读屏用户得自己找路——而 URL 已经说了要去哪一屏。
+  上游原来不接管，Radix 的默认落在第一个可聚焦元素，也就是永远的 "Account"。
+  深链到 `?settings=appearance` 却把焦点丢在 "Account" 上，键盘与读屏用户得自己找路
+  ——而 URL 已经说了要去哪一屏。**2026-09-11 两边同改**：上游
+  `settings-dialog.tsx` 也接上了 `onOpenAutoFocus`，对照台账 `focus` 档上那两行随之清零。
 
   **两条 e2e 钉着它**：`tests/e2e/workspace-shell.spec.ts` 的
   「command palette…」与「settings deep link traps focus…」都断言深链之后焦点在

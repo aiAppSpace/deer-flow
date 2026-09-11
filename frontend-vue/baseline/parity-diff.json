@@ -789,9 +789,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Account\" Vue=button \"Integrations\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -808,9 +806,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"账号\" Vue=button \"集成\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -831,9 +827,7 @@
       ],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Account\" Vue=button \"Integrations\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -854,9 +848,7 @@
       ],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"账号\" Vue=button \"集成\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -868,20 +860,11 @@
       ]
     },
     "integrations#skills-load-failed/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- main: \"Error: boom\""
-      ],
-      "ariaOnlyVue": [
-        "- alert: boom",
-        "- main:"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "text:/boom/ height React=24 Vue=20 Δ-4",
-        "text:/boom/ color React=rgba(10,10,10,255) Vue=rgba(231,0,11,255)",
-        "text:/boom/ fontSize React=16px Vue=14px"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -894,20 +877,11 @@
       ]
     },
     "integrations#skills-load-failed/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- main: \"Error: boom\""
-      ],
-      "ariaOnlyVue": [
-        "- alert: boom",
-        "- main:"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "text:/boom/ height React=24 Vue=20 Δ-4",
-        "text:/boom/ color React=rgba(10,10,10,255) Vue=rgba(231,0,11,255)",
-        "text:/boom/ fontSize React=16px Vue=14px"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1203,21 +1177,11 @@
       "tabOrder": []
     },
     "scheduled-tasks#default/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- alert: Uses this thread's conversation history If this thread has an active run at the scheduled time, DeerFlow queues this occurrence and starts it when the thread is available. It fails if the configured queue wait limit is exceeded.",
-        "- text: \"Context mode: Reuse thread Thread: thread-1\"",
-        "- text: \"Schedule: Recurring Next run: 07/02/2026, 01:00 AM Last run: 07/01/2026, 01:00 AM Last run id: run-42 Last error: Upstream model timed out\""
-      ],
-      "ariaOnlyVue": [
-        "- text: \"Context mode: Reuse thread Thread: thread-1 Schedule: Recurring Next run: 07/02/2026, 01:00 AM Last run: 07/01/2026, 01:00 AM Last run id: run-42 Last error: Upstream model timed out\""
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:button[/^(Save edit|保存编辑)$/] y React=1488 Vue=1307.8 Δ-180.2",
-        "selector:[data-testid=\"schedule-preset\"] >> nth=1 y React=1328 Vue=1147.9 Δ-180.1",
-        "selector:[data-testid=\"schedule-timezone\"] >> nth=1 y React=1416 Vue=1235.9 Δ-180.1"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1226,21 +1190,11 @@
       "tabOrder": []
     },
     "scheduled-tasks#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- alert: 使用该线程的历史对话 如果触发时该线程正在运行，DeerFlow 会将本次执行排队，并在线程空闲后启动；超过配置的最长等待时间后会标记为失败。",
-        "- text: \"上下文模式: 复用线程 线程: thread-1\"",
-        "- text: \"调度: 重复 下次运行: 2026/07/02 01:00 上次运行: 2026/07/01 01:00 上次运行 ID: run-42 上次错误: Upstream model timed out\""
-      ],
-      "ariaOnlyVue": [
-        "- text: \"上下文模式: 复用线程 线程: thread-1 调度: 重复 下次运行: 2026/07/02 01:00 上次运行: 2026/07/01 01:00 上次运行 ID: run-42 上次错误: Upstream model timed out\""
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
-      "geometry": [
-        "role:button[/^(Save edit|保存编辑)$/] y React=1412 Vue=1271.8 Δ-140.2",
-        "selector:[data-testid=\"schedule-preset\"] >> nth=1 y React=1252 Vue=1111.9 Δ-140.1",
-        "selector:[data-testid=\"schedule-timezone\"] >> nth=1 y React=1340 Vue=1199.9 Δ-140.1"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -1288,9 +1242,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Account\" Vue=button \"Notification\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
@@ -1307,9 +1259,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
-      "focus": [
-        "React=button \"账号\" Vue=button \"通知\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [

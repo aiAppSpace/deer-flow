@@ -27,9 +27,10 @@ import { computed } from "vue";
 
 import ScheduledTaskRunList from "./ScheduledTaskRunList.vue";
 import ScheduledTaskScheduleInput from "./ScheduledTaskScheduleInput.vue";
-import { Copy } from "lucide-vue-next";
+import { Copy, TriangleAlert } from "lucide-vue-next";
 
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -100,6 +101,29 @@ const threadLine = computed(() =>
       }}
     </div>
     <div class="text-muted-foreground text-sm">{{ threadLine }}</div>
+    <!--
+      **复用同一条会话的那条提醒，详情里也要有**（上游
+      `app/workspace/scheduled-tasks/page.tsx:507` 的 `ReuseThreadNotice`，
+      位置就在这两行之间）。本仓原来只在**新建表单**里画它——于是一条任务建完之后，
+      再回来看它的人永远看不到「每次运行都往同一条会话里追加上下文，跑久了会越来越长、
+      也越来越贵」这句话，而那正是想改掉它的人要知道的。
+      对照台账 `scheduled-tasks#default` 上那条 `ariaOnlyReact: - alert: …`
+      与三行 `y Δ-180` 报的就是它（缺这一块，下面的一切都上移了）。
+
+      样式与表单里那一处同源：**提醒不是错误**，所以是 Alert 的默认变体加暖色，
+      不是 destructive。
+    -->
+    <Alert
+      v-if="task.context_mode === 'reuse_thread'"
+      class="border-amber-500/50 bg-amber-500/10"
+      data-testid="scheduled-task-detail-reuse-notice"
+    >
+      <TriangleAlert class="text-amber-600 dark:text-amber-400" />
+      <AlertTitle>{{ labels.context.reuseNoticeTitle }}</AlertTitle>
+      <AlertDescription>
+        {{ labels.context.reuseNoticeDescription }}
+      </AlertDescription>
+    </Alert>
     <div class="text-muted-foreground text-sm">
       {{ labels.detail.schedule }}:
       {{ labels.scheduleType[task.schedule_type] }}

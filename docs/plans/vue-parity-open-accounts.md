@@ -3,6 +3,34 @@
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
+> ## 2026-09-11 `integrations` 46 → 34、`scheduled-tasks#default` 14 → 0
+>
+> 两族一起记，因为**剩下的全是早就判过的两条账**。
+>
+> **一、技能清单取数失败那一行（10 行）。** 上游画的是 `<div>Error: {message}</div>`：
+> 没有 role（读屏器不会主动念）、硬编码一个 `Error: ` 英文前缀（中文界面上也是英文）、
+> 画成普通正文（16px、前景色）而不是错误。本仓一直是
+> `<p role="alert" class="text-sm text-red-600">{message}</p>`。
+> `SkillSettings.vue` 的注释里写着「这两处差异有意留在台账里，各自有翻案判据」——
+> **这一轮把翻案判据兑现了**：上游换成同形的一行。
+>
+> **二、设置对话框打开时的初始焦点（4 行）。** 上游不接管 Radix 的
+> `onOpenAutoFocus`，默认落在第一个可聚焦元素——**永远是 "Account"**。
+> 深链到 `?settings=appearance` 却把焦点丢在 "Account" 上，键盘与读屏用户得自己找路，
+> 而 URL 已经说了要去哪一屏。本仓早就接管了（`SettingsDialog.vue` 的 `focusInitial`，
+> 两条 e2e 钉着）。这一轮上游也接上了：一个 `ref` 表 + `onOpenAutoFocus`。
+>
+> **三、定时任务详情里缺了「复用会话」的提醒（14 行）。** 上游
+> `scheduled-tasks/page.tsx:507` 在详情的「会话」那一行下面画 `ReuseThreadNotice`；
+> 本仓**只在新建表单里画它**——一条任务建完之后，再回来看它的人永远看不到
+> 「每次运行都往同一条会话里追加上下文，跑久了会越来越长、也越来越贵」，
+> 而那正是想改掉它的人要知道的。台账上那条 `ariaOnlyReact: - alert: …` 加三行
+> `y Δ-180`（缺这一块，下面的一切都上移了）报的就是它。补上，带两条做过变异验证的单测。
+>
+> **剩下的 34 + 6 行全是两条判过的账**：
+> `div[scroll-area-viewport]`（wave 98，×28）与 `retry: false`（wave 128，×9）。
+> `integrations` 与 `scheduled-tasks` 两族到此清完。
+>
 > ## 2026-09-11 手写 `<input>` / `<textarea>`：**7 份文件，其中三份把 primitive 的基类抄成了本地常量**
 >
 > 起因是上一笔留下的两行几何（`AgentSettingsDialog` 的两个数字输入）。顺着它盘了一遍
