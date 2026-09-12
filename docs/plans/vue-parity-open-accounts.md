@@ -1,9 +1,72 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十二轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十三轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-12 第十二轮：**同一个缺陷可以在取样面上「正负相消」**
+> ## 2026-09-12 第十三轮：**一句写在注释里的全仓规则，可以一轮都没人守**
+>
+> 按第十二轮定下的起手式做方向 C：grep 注释里的「不要 / 必须 / 照抄」断言，
+> 逐条问「有没有门禁真的在守它」。断言面 346 条 / 165 份文件，
+> 收窄成**点名了具体 token 的**那些（只有这种可能被扫描器验证）→ 131 条 / 87 份。
+>
+> ### 一、第一条：**「破坏性动作一律走 `text-destructive`，固定红只留给 diff 增删与状态色」**
+>
+> 这句话写在 `AgentCard.vue:118` 的一句注释里，**全仓生效、零门禁**。
+> 判据从「红」扩到整块调色板之后当场出货——**本仓用了三种上游从没用过的固定色**：
+>
+> | 处 | 本仓写的 | 上游同一处 | 深色下 |
+> | --- | --- | --- | --- |
+> | `AgentChat.vue` 重试状态浮块 | `bg-blue-50 text-blue-700` | `toast(e.message)`（形态是判过的分歧，颜色不是） | **没有 `dark:`**，一块浅蓝方块浮在暗背景上 |
+> | `AgentChat.vue` 发送失败浮块 | `bg-amber-50 text-amber-700` | 同上 | 同上 |
+> | `ToolSettings.vue` / `SkillSettings.vue`「需要管理员」 | `rounded-md bg-amber-50 p-3 text-amber-800` | `<div className="text-muted-foreground text-sm">`，**根本没有框** | 同上 |
+> | `TodoList.vue` 完成勾 | lucide `Check` + `text-emerald-600` | `ai-elements/queue.tsx` 的 **CSS 圆点**，没有勾 | 同上 |
+>
+> **`SkillSettings.vue` 那一处是第十二轮那个形状的又一例**：紧挨着的下一行注释就写着
+> 「`<div>` 不是 `<p>`：上游那一句是 `text-muted-foreground text-sm`」——
+> 而它只落到了 loading 那一行，adminRequired 那一行还是琥珀框。
+>
+> 改法：浮块的**形态**是判过的分歧（注释写明为什么不走 toaster），只换颜色——
+> 重试是中性状态走 `bg-popover text-popover-foreground`（与侧栏那颗 CSS tooltip 同一套），
+> 发送失败是错误走本仓既有的 `bg-destructive/10 text-destructive`
+> （同 `settings-session-unavailable`）；两处「需要管理员」照抄上游；
+> TodoList 的**指示器与文字类串**照抄 `QueueItemIndicator` / `QueueItemContent`。
+>
+> ### 二、做成守卫：`tests/guards/invented-palette-colors.test.ts`
+>
+> **判据是「本仓 ⊆ 上游」，不是「不许用固定色」**：diff 增删、状态色、落地页装饰
+> 上游自己就写固定值，禁掉要一张几十条的豁免表（坑 180）。而本轮实测的缺陷
+> **全是「本仓自己发明的那一档」**——允许集从上游读出来，不手抄。
+> **色号不能放宽到色系**：上游用 `text-red-500`，历史三处缺陷写的是 `text-red-600`
+> （`AgentCard` 删除键 / `MemorySettings` 清空键 / `ChannelConnections` 清配置，
+> 注释里还留着病历）；按色系比，那三处一处都报不出来。
+>
+> **反向那一半是算出来的、不是豁免表**（坑 268）：上游多出来的每个固定色，
+> 出现点必须落在 `components/landing/**`（落地页双向豁免）或本仓
+> `app/components/ui/<同名>` 不存在的 primitive 里——实测 `ui/terminal.tsx`
+> 只被 landing 消费、`ai-elements/web-preview.tsx` **上游零消费者**。
+>
+> ### 三、第二条：**「菜单项渲染成 `<div>`，不要在调用点传 `as="button"`」**
+>
+> 写在 `DropdownMenuItem.vue` 的注释里，背后是 wave 145 的实测代价：
+> `<button>` 的 `width:auto` 解析成 fit-content（`display:flex` 也改不了），
+> 线程行 ⋯ 菜单的「删除」项 **React=182 / Vue=81.8**（中文 68），菜单本身两边都是 192。
+> 全仓量：126 个 primitive 名字、**0 处违规**——规则今天成立而没人守。
+> 做成 `tests/guards/primitive-as-override.test.ts` 把这个 0 钉住。
+> **`as-child` 不在判据里**（它不换标签，是把属性合并到调用点已经写出的元素上），
+> 而**上游根本没有 `as` 这个出口**（shadcn 只收 `asChild`）——
+> 也就是说传 `as` 的调用点，上游同一处一定走的是别的路径。
+>
+> ### 四、本轮新开的账：**TodoList 的列表体容器层**
+>
+> 指示器与文字已经对齐，**容器那一层还没有**：上游是定高 `h-28` ＋ 高度过渡 ＋
+> `ScrollArea` ＋ 条目 `hover:bg-muted`（`todo-list.tsx:77` + `ai-elements/queue.tsx`），
+> 本仓是 `v-if` 整块摘掉 ＋ `space-y-1 p-3`。没有当轮做，理由有两条：
+> 它会动到折叠动画（`h-0 → h-28` 的过渡 vs 整块不渲染），
+> 而且**这一屏至今没有任何对照锚点**——改完没有跨应用读数可以验。
+> **下一轮的起手式**：先给 todos 造一个夹具挂进取样面（现有 `PARITY_SCENARIOS`
+> 里没有任何 `values.todos`），量到读数再改。
+>
+**同一个缺陷可以在取样面上「正负相消」**
 >
 > 这一轮按第十一轮写下的清单做「形状 + 尺寸被手抄」那一档，扫出的东西比预期重：
 > 侧栏那四颗菜单键**把「当前项加粗」抄反了**，而台账**四个锚点全绿**。

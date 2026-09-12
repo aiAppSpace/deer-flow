@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第十二轮收工）
+## 当前状态（2026-09-12 第十三轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,102 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十三轮）做了什么
+
+**按第十二轮定下的起手式做方向 C：grep 注释里的断言，逐条问「有没有门禁真的在守它」。
+第一条就是一句全仓生效、零门禁、而且已经被违反了四处的规则。**
+
+### 怎么收窄的
+
+断言面：`不要|必须|不许|一律|禁止|只能|别再|不得` 共 **346 条 / 165 份文件**——
+直接做要一张大豁免表。收窄成**点名了具体 token（反引号里的类 / 属性 / 组件 / API）
+的那些**，因为只有这种才可能被扫描器验证：**131 条 / 87 份**。
+逐族看过去，「走 `ui/input` / `ui/textarea`，不要手写」那一族（6 份文件）
+已经由 `handwritten-input` 守着（它同时扫 `<input>` 与 `<textarea>`），跳过。
+
+### 第一条：固定调色板颜色
+
+`AgentCard.vue:118`：「破坏性动作一律走 `text-destructive`，固定红只留给 diff 增删与状态色。」
+把判据从「红」扩到整块 Tailwind 调色板之后，**本仓用了三种上游从没用过的固定色**，
+而且**每一种都没有 `dark:` 变体**：
+
+| 处 | 本仓 | 上游同一处 |
+| --- | --- | --- |
+| `AgentChat.vue` 重试浮块 | `bg-blue-50 text-blue-700` | `toast(e.message)`（`core/threads/hooks.ts:1776`） |
+| `AgentChat.vue` 发送失败浮块 | `bg-amber-50 text-amber-700` | 同上（sidecar 那条走 `toast.error`） |
+| `ToolSettings.vue` + `SkillSettings.vue` | `rounded-md bg-amber-50 p-3 text-amber-800` | `<div className="text-muted-foreground text-sm">` |
+| `TodoList.vue` 完成勾 | lucide `Check` + `text-emerald-600` | `QueueItemIndicator` 的 CSS 圆点 |
+
+两个浮块的**形态**是判过的分歧（注释写明「正在重试是一段持续为真的状态，不是一次
+播报」），**颜色没判过**。改成 token：重试走 `bg-popover text-popover-foreground`，
+发送失败走本仓既有的错误提示写法 `bg-destructive/10 text-destructive`。
+
+`SkillSettings.vue` 那一处是第十二轮那个形状的又一例：紧挨着的下一行注释写着
+「`<div>` 不是 `<p>`：上游那一句是 `text-muted-foreground text-sm`」，
+**而它只落到了 loading 那一行**。
+
+改动前后的读数（静态集合比，两边都剥注释）：
+**本仓有而上游没有的固定色 3 种 → 0 种**（本仓 40 种 / 83 处 → 37 种 / 74 处）。
+
+### 第二条：`as=` 不许换掉 primitive 的标签
+
+`DropdownMenuItem.vue`：「菜单项渲染成 `<div>`，不要在调用点传 `as="button"`。」
+背后是 wave 145 的实测代价：`<button>` 的 `width:auto` 解析成 fit-content
+（`display:flex` 改不了），线程行 ⋯ 菜单的「删除」项 **React=182 / Vue=81.8**，
+而菜单本身两边都是 192。全仓量：126 个 primitive 名字、**0 处违规**。
+
+### 两道新门
+
+- `tests/guards/invented-palette-colors.test.ts`——**本仓 ⊆ 上游**，允许集从上游读出来。
+  色号不放宽到色系（历史三处缺陷写的是 `red-600`，上游用的是 `red-500`，
+  按色系比一处都报不出来）。反向那一半是**算出来的**：上游多出来的每个色，
+  出现点必须落在 `components/landing/**` 或本仓没有同名 primitive 的文件里。
+  **反向那一条不限于 `ui/`**：第一版只查 `app/components/ui/<同名>` 是否存在，
+  那样上游**产品面**文件里的固定色会整类漏在判据之外；现在比的是本仓 `app/**`
+  里有没有任何同名文件（两边都归一成「去掉连字符的小写」，上游 kebab、本仓 Pascal）。
+
+  它引用 `../frontend`，所以要在 `scripts/lib/cross-app-by-design.mjs` 里登记
+  ——`standalone-check` 当场把这条漏登记报了出来（门禁互相咬住的一个实例）。
+- `tests/guards/primitive-as-override.test.ts`——`ui/` 之外不许给 primitive 传 `as=`；
+  `as-child` 不在判据里（它不换标签），而**上游根本没有 `as` 这个出口**（shadcn 只收 `asChild`）。
+
+### 负向验证（10 条，各红在该红的地方）
+
+| # | 变异 | 该响的 |
+| --- | --- | --- |
+| N1 | 把琥珀框写回 `ToolSettings` | invented-palette「上游全仓没用过这个固定色」 |
+| N2 | 本仓多出一个 `Terminal.vue`（**不在 `ui/` 下**） | invented-palette 反向：报出 `ui/terminal.tsx` 的三个色 |
+| N2' | 本仓多出一个 `WebPreview.vue` | 同上：kebab ↔ Pascal 归一生效，报出 `web-preview.tsx` |
+| N3 | 把正则里的 `red` 去掉（尺子自己坏掉） | 形状断言「本仓少了 text-red-500」 |
+| N4 | 完成态圆点配色写错 | todo 三态断言 |
+| N5 | 文字丢掉 `line-clamp-1` | 同上 |
+| N6 | 把 lucide 图标加回去 | `li svg` 数量必须为 0 |
+| N7 | 给一个 `DropdownMenuItem` 传 `as="button"` | primitive-as-override |
+| N8 | 给同一处传 `as-child`（**不该**报） | 保持全绿 |
+
+### 一次负载抖动，按规矩证明了它是抖动
+
+整套 `e2e-mock` 报了 1 failed：`thread-list-infinite-scroll.spec.ts:56`
+（侧栏最近对话滚到底加载下一页），22 秒超时没等到 `Conversation 051`。
+**那一屏是第十二轮改过的面**（recent-chats 那一组换成了 `SidebarGroup` /
+`SidebarGroupContent` / `SidebarMenu`），所以不能当成理所当然的抖动。
+
+三条证据合起来判它是抖动，不是回归：
+① 孤立复跑同一份 spec **3 passed，那一条只用了 1.8s**（套件里是 22s 超时）；
+② 第十二轮那次 `e2e-mock` 跑的**就是已经改过侧栏的工作树**，273 全绿；
+③ 第十三轮没有任何改动落在侧栏。
+随后在空闲机器上整套复跑一遍坐实：**318 passed 全绿**。
+
+**坑**：`scrollIntoViewIfNeeded` + IntersectionObserver 这类用例对负载敏感，
+当时机器上还并行着别的项目的 `vue-tsc`。
+
+### 换尺子不换判词（又一次）
+
+`message-surfaces.dom.test.ts` 里那条 todo 断言取的是 `li … span` 的**第一个**、
+只查一个 `line-through`。指示器从图标换成圆点之后，那把尺子当场指到了圆点身上。
+改成按三态各取 `span:first-child` / `span:last-child` 分别比，类串照抄上游
+`ai-elements/queue.tsx`，再加一条 `li svg` 数量为 0。
 
 ## 上一轮（2026-09-12 第十二轮）做了什么
 
