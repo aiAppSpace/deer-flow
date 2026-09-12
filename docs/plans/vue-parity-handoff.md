@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第十三轮收工）
+## 当前状态（2026-09-12 第十四轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,82 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十四轮）做了什么
+
+**接着筛方向 C 的 131 条断言。这一轮最值钱的一条是：「已经有门禁在守」这句话
+本身也要核——四条排队的里，三条确有门禁，一条的门禁只盖了三分之一。**
+
+### 一、`MarkdownIcon.vue`：自称的门禁只盖了 3 / 9
+
+头注释写着「不是 lucide，也不许换成 lucide……**DOM 等价 gate 会逐属性红**」。
+实测 golden 夹具里只对得上 9 条路径里的 3 条（`CopyIcon` / `DownloadIcon` /
+`Maximize2Icon`）；另外 6 条是**只在交互态才出现**的图标——`CheckIcon`（复制后的
+瞬时态）、`ExternalLinkIcon`（外链弹窗）、`RotateCcw` / `X` / `ZoomIn` / `ZoomOut`
+（mermaid 全屏控件）——夹具是录制静态 markdown DOM 的，它们一次都没进去过。
+**线索 229 的同一形状**：判据由一个看不见新东西的数字撑着。
+
+补的门：`tests/guards/markdown-icon-paths.test.ts`，9 条路径**逐字**比上游装的
+streamdown 产物（`frontend/node_modules/streamdown/dist/*.js`）。实测 9/9 全中。
+**不写死 chunk 文件名**——那串 hash 每次构建都会变，写死等于把判据钉在某一次安装上。
+外框与 path 的 8 个属性两头比（本仓有 + 上游产物里也有，少了后半句坐标系变了不会响）。
+
+**写下来的边界**：不钉「名字 ↔ 路径的对应」。上游产物压缩过，图标组件只剩 `jt`
+这类标识符，名字拿不到；把两条路径对调这道门不会响。形状断言里那条「9 条路径
+互不相同」挡住了其中一半（表里抄重一条）。
+
+### 二、坑 72：一个不报错的 Vue 陷阱，规则只写在两份注释里
+
+`Textarea.vue` / `Collapsible.vue`：「`modelValue` / `update:open` **必须显式声明并
+显式 emit**，靠 fallthrough 是不行的」。`renderComponentRoot` 在合并 `$attrs` 之前跑
+`filterModelListeners`：凡是 `onUpdate:<key>` 且本组件**声明了同名 prop**，就从
+fallthrough 里剔掉——不报警告、不报错，**只是永远收不到事件**。
+「声明了 prop 却不 emit」因此比「什么都不声明」更糟。
+
+全仓量：**59 处 `v-model` 调用点、9 个 primitive、0 违规**。
+`tests/guards/v-model-emits-declared.test.ts` 把这个 0 钉住。
+
+**判据从调用点出发而不是从 primitive 出发**：「声明了 prop P 就必须 emit `update:P`」
+是错的（`class` / `readonly` 这些单向 prop 当然不该 emit，按那条要几十条豁免）。
+**只有被 `v-model` 绑过的那个 key 才落进陷阱。**
+两种写法分开判：内联字面量 props 能逐条比 `update:<key>`；
+`defineProps<DialogRootProps>()` 这种类型引用（reka 三件套）两边名字都在别的包里、
+这里看不见，所以只要求「有 `defineEmits<`」。Trigger / Close / Group 那类**本来就没有
+emits** 的 reka 包装从不被 `v-model` 绑，天然不在取样面里——**不是豁免，是判据没覆盖到**。
+
+### 三、逐条核过、确有门禁的（不是采信自称）
+
+| 断言 | 守它的是谁 |
+| --- | --- |
+| `layouts/viewer.vue`「这一层不许出现 landmark」 | 对照台账：`artifact-viewer-window` 就在 `/artifacts/view` 上，aria 档会报出多出来的 `main:` |
+| `endpoints.ts`「endpoint 只能出现在这一层」 | `architecture.test.ts` 的「没有具体 endpoint 或 /api/ 路径」 |
+| `coalesce.ts`「**两层**都不许退化成尾部防抖」 | 两层各有用例：`tests/unit/threads/coalesce.test.ts:39` 与 `packages/agent-core/tests/store.test.ts:287` |
+| `AgentSettingsDialog`「不要再写一次 `text-lg`」 | `primitive-class-overrides.test.ts`（为这个坑而建） |
+| 「走 `ui/input` / `ui/textarea`，不要手写」一族 6 份 | `handwritten-input.test.ts`（同时扫 `<input>` 与 `<textarea>`） |
+
+### 四、量过、判「不做门」的两条（连同理由一起记账）
+
+- **`BrowserPanel`「不要给它 aria-label」**：全仓 6 处输入控件同时写了 `aria-label`
+  与 `placeholder`，多数正当。判据会退化成 6 条豁免表（坑 180），
+  而真正的判据「上游同一处有没有 aria-label」不可机械求解。
+  **顺带一条线索**：现有 `browser-control.spec.ts` 按 placeholder **属性**找元素，
+  加了 `aria-label` 照样过——那条规则的**可访问名**其实没被钉住。
+- **`MessageList`「多根模板必须自己接 attrs」**：19 份用 `inheritAttrs: false`，
+  **19 份都接了**（4 份走 `useAttrs()`，第一次量漏了它们——**量法本身也要负向验证**）。
+  不做门的理由：判据分不出「真的接回来了」和「import 了没用」，而后者正是失效方式之一。
+
+### 负向验证（5 条）
+
+| # | 变异 | 该响的 |
+| --- | --- | --- |
+| N1 | 把 `CheckIcon` 的路径换成 lucide 的 | markdown-icon-paths「上游产物里找不到这条路径」 |
+| N2 | `viewBox` 改成 `0 0 24 24` | 同上：外框属性那条 |
+| N3 | 把 `DownloadIcon` 写成 `CopyIcon` 的路径 | 形状断言「9 条路径互不相同」（8 ≠ 9） |
+| N4 | `Textarea` 的内联 emits 改成别的 key | v-model-emits「调用点绑了这个 key，primitive 的 emits 里却没有」 |
+| N5 | `Dialog` 整个去掉 `defineEmits` | v-model-emits「坑 72」，报出 10 个调用点 |
+
+**这一轮没有改任何产品代码**（只加两道门 + `cross-app-by-design` 登记），
+所以台账不可能动，没有跑 17 分钟的对照复量——理由写在这里，不是漏跑。
 
 ## 上一轮（2026-09-12 第十三轮）做了什么
 

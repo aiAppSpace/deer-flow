@@ -12,7 +12,7 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-12 第十三轮收工实测，不是估计）**：
+**接手时的状态（2026-09-12 第十四轮收工实测，不是估计）**：
 
 - 工作区干净；**本地领先 `origin/main-wc` 三百多个提交、全部未推送**
   （没有收到过推送指令；要推就先问用户）。
@@ -151,10 +151,11 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-# 2026-09-12 第十三轮收工实测（每一条都是那一轮真跑出来的，不是抄的；
-# 第十三轮改了 Vue 组件，所以 verify / e2e-parity / e2e-mock / e2e-visual / icon-parity 都真跑了；
+# 2026-09-12 第十四轮收工实测（每一条都是真跑出来的，不是抄的；
+# 第十四轮**没有改任何产品代码**（只加两道门），所以只跑 verify——台账不可能动；
+# e2e-parity / e2e-mock / e2e-visual / icon-parity 是第十三轮真跑的；
 # 其余读数是第五 / 七轮真跑的，第五轮九条全绿）
-make -C <abs>/frontend-vue verify         # exit 0；**325 文件 / 2656** 单测；词典 1139 key / 15 unused
+make -C <abs>/frontend-vue verify         # exit 0；**327 文件 / 2662** 单测；词典 1139 key / 15 unused
 make -C <abs>/frontend-vue e2e-parity     # **146 passed**（整条 17.3 分钟）
                                           #  台账 159 唯一行 / 179 多重集 / 138 场景-维度
                                           #  （第十二、十三两轮基线文件都一个字节没动；
@@ -301,46 +302,46 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-12 第十三轮）做了什么，下一轮从哪接
+## 上一轮（2026-09-12 第十四轮）做了什么，下一轮从哪接
 
-**按第十二轮定下的起手式做方向 C：grep 注释里的「不要 / 必须 / 照抄」断言，
-逐条问「有没有门禁真的在守它」。第一条就是一句全仓生效、零门禁、
-而且已经被违反了四处的规则**——`AgentCard.vue:118`「破坏性动作一律走
-`text-destructive`，固定红只留给 diff 增删与状态色」。
+**接着筛方向 C 的 131 条断言。这一轮最值钱的一条是：「已经有门禁在守」这句话
+本身也要核。** 四条排队的逐条核过——三条确有门禁（landmark 由对照台账守、
+`/api/` 由 `architecture.test.ts` 守、「两层都不许退化成尾部防抖」**两层各有一条用例**），
+**一条的门禁只盖了三分之一**：`MarkdownIcon.vue` 说「DOM 等价 gate 会逐属性红」，
+而 golden 夹具里只对得上 9 条路径里的 3 条——另外 6 条是只在交互态才出现的图标
+（复制后的瞬时勾、外链弹窗、mermaid 全屏控件），录静态 markdown DOM 的夹具永远录不到。
 
-把判据从「红」扩到整块 Tailwind 调色板，读数是：**本仓用了 3 种上游从没用过的
-固定色，每一种都没有 `dark:` 变体**——`AgentChat` 的两个浮块（`bg-blue-50` /
-`bg-amber-50`）、`ToolSettings` + `SkillSettings` 的「需要管理员」琥珀框
-（上游那一处是 `<div className="text-muted-foreground text-sm">`，**根本没有框**）、
-`TodoList` 的绿色完成勾（上游是 `ai-elements/queue.tsx` 的 CSS 圆点）。
-改完 **3 种 → 0 种**。
-
-第二条是 `DropdownMenuItem.vue` 的「不要在调用点传 `as="button"`」——
-背后有 wave 145 的实测代价（菜单项 React=182 / Vue=81.8，因为 `<button>` 的
-`width:auto` 是 fit-content），全仓 126 个 primitive 名字、**0 处违规**、没人守。
-
-两道新门：`invented-palette-colors`（本仓 ⊆ 上游，允许集从上游读出来，
-反向那一半是算出来的）与 `primitive-as-override`（`as-child` 不在判据里）。
-负向验证 8 条。**新门引用了 `../frontend`，`standalone-check` 当场把「没在
-`cross-app-by-design.mjs` 里登记」报了出来**——门禁互相咬住的一个实例。
+补的门：`markdown-icon-paths`（9 条路径逐字比上游装的 streamdown 产物，
+**不写死 chunk 文件名**）与 `v-model-emits-declared`（坑 72 的棘轮：
+59 处 `v-model` 调用点、9 个 primitive、0 违规）。负向验证 5 条。
+**这一轮没有改任何产品代码**，所以没跑对照复量——理由写在交接文档里。
 
 **下一轮最该先拿的（按顺序）**：
 
-1. **方向 C 继续——这一轮只筛完了 131 条里的前两族。** 判据与起手式都已磨好
-   （见下面那一节的第六条）。还没筛的几族：`layouts/viewer.vue` 的
-   「这一层不许出现 landmark」、`MarkdownIcon.vue` 的「不是 lucide 也不许换成
-   lucide」、`core/agent-deerflow/endpoints.ts` 的「endpoint 只能出现在这一层」、
-   `core/threads/coalesce.ts` 的「两层都不许退化成尾部防抖」。
-   **每条先问「有没有门禁真的在守它」，再问「它在这份文件里是不是处处成立」**
-   ——这一轮两次都是第二问出的货。
-2. **给 todos 造夹具、挂进取样面，再改 TodoList 的容器层**（本轮新开的账）。
-   现有 `PARITY_SCENARIOS` 里**没有任何 `values.todos`**，所以这一屏至今零锚点；
-   容器层要改的是定高 `h-28` ＋ 高度过渡 ＋ ScrollArea ＋ 条目 `hover:bg-muted`，
-   会动到折叠动画——**没有读数不要动**。
-3. **把「正负相消」回扫现有取样面**（第十二轮留下的第二件，原样有效）：
-   产品面只有四份文件在写状态条件类，已列名在下面。
+1. **方向 C 继续。** 131 条里已筛掉的：`ui/input`/`ui/textarea` 一族（6 份）、
+   固定色、`as="button"`、landmark、`/api/` 分层、尾部防抖、`text-lg` 重复、
+   markdown 图标、`v-model` emits。**还没筛的**先按「点名了 token」再筛一遍，
+   重点看**跨多个文件同形**的那些（这两轮出货的都是这种）。
+2. **给 todos 造夹具、挂进取样面，再改 TodoList 的容器层**（第十三轮开的账，原样有效）。
+3. **把「正负相消」回扫现有取样面**（第十二轮开的账，原样有效）。
 
-### 第十三轮踩出来的两条
+### 第十四轮踩出来的三条
+
+1. **「已经有门禁在守」这句话本身也要核。** 一份文件的注释可以准确地点出
+   「哪道门在守我」，而那道门**只盖了一部分**——`MarkdownIcon` 那 9 条路径里
+   夹具只录得到 3 条，因为另外 6 条只在交互态出现。
+   **问法**：不是「有没有门禁」，而是「那道门的取样面盖得到这一条吗」。
+2. **量法本身也要负向验证。** 这一轮两次量错：一次把 `Dialog` 这种
+   `defineProps<DialogRootProps>()` 的类型引用当成「没声明 prop」，
+   一次把 4 份用 `useAttrs()` 的文件当成「没接 attrs」。
+   两次都是**正则看不见的那一半**被当成了 0——线索「算出来的 0 vs 没算的 0」
+   不只对台账成立，对一次性的勘察脚本同样成立。
+3. **判据要从「会出事的那一侧」出发。** 坑 72 的正确判据不是
+   「声明了 prop P 就必须 emit `update:P`」（那会把 `class` / `readonly` 一起收进来、
+   需要几十条豁免），而是「**被 `v-model` 绑过的那个 key**」——
+   陷阱只在那一侧成立。判据选对了，豁免表自己就没了。
+
+### 第十三轮踩出来的两条（仍然有效）
 
 1. **一句写在注释里的全仓规则，可以一轮都没人守，而且可以已经被违反了四处。**
    「破坏性动作一律走 token」这句话在仓里躺了很多轮，期间**三处历史缺陷的病历
@@ -591,13 +592,21 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > 然后逐条问两句：**「有没有门禁真的在守它」**，以及
 > **「它在这份文件里是不是处处成立」**——第十三轮两次出货都出在第二问。
 >
-> **已经筛掉的**：「走 `ui/input` / `ui/textarea`，不要手写」那一族 6 份文件
-> 由 `handwritten-input` 守着（它同时扫 `<input>` 与 `<textarea>`）；
-> 「破坏性动作一律走 token」与「不要传 `as="button"`」第十三轮已做成门禁。
-> **还没筛的**：`layouts/viewer.vue` 的「这一层不许出现 landmark」、
-> `MarkdownIcon.vue` 的「不是 lucide 也不许换成 lucide」、
-> `core/agent-deerflow/endpoints.ts` 的「endpoint 只能出现在这一层」、
-> `core/threads/coalesce.ts` 的「两层都不许退化成尾部防抖」。
+> **第十四轮又加了一问**（它自己踩出来的）：不是「有没有门禁」，
+> 而是**「那道门的取样面盖得到这一条吗」**——`MarkdownIcon` 的注释准确地点出了
+> 守它的是 DOM 等价 gate，而那道门只盖得到 9 条路径里的 3 条。
+>
+> **已经筛掉的**：「走 `ui/input` / `ui/textarea`，不要手写」一族 6 份
+> （`handwritten-input` 同时扫 `<input>` 与 `<textarea>`）；
+> 「破坏性动作一律走 token」「不要传 `as="button"`」（第十三轮成门）；
+> landmark（对照台账）、`/api/` 分层（`architecture.test.ts`）、
+> 尾部防抖（两层各一条用例）、`text-lg` 重复（`primitive-class-overrides`）；
+> markdown 图标路径、`v-model` emits（第十四轮成门）。
+> **量过判「不做门」的**：`aria-label` + `placeholder` 同在（6 处，多数正当，
+> 判据会退化成豁免表）、`inheritAttrs: false` 必须接 attrs（19/19 成立，
+> 但判据分不出「真接回来了」和「import 了没用」）——两条的理由都写在挂账清单里。
+> **还没筛的**：把剩下的按「点名了 token」再过一遍，
+> 重点看**跨多个文件同形**的那些——这两轮出货的都是这种。
 
 **wave 129 又磨出第五条，专门筛「锚点」这类东西**（线索 274）：
 

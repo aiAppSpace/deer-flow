@@ -1,9 +1,71 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十三轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十四轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-12 第十三轮：**一句写在注释里的全仓规则，可以一轮都没人守**
+> ## 2026-09-12 第十四轮：**「已经有门禁在守」这句话本身也要核**
+>
+> 接着筛方向 C 的 131 条断言。这一轮四条排队的**逐条核过**，
+> 三条确有门禁、一条的门禁**只盖了三分之一**。
+>
+> ### 一、`MarkdownIcon.vue`：自称的门禁只盖了 3 / 9
+>
+> 那份文件的头注释写着「不是 lucide，也不许换成 lucide……换成 lucide 的同名图标，
+> 路径数据、stroke 画法、外框尺寸全都不一样——**DOM 等价 gate 会逐属性红**」。
+> 实测：golden 夹具 `tests/fixtures/react-markdown-dom.json` 里**只对得上 3 条**
+> （`CopyIcon` / `DownloadIcon` / `Maximize2Icon`）。另外 6 条——`CheckIcon`（复制后的
+> 瞬时态）、`ExternalLinkIcon`（外链弹窗）、`RotateCcw` / `X` / `ZoomIn` / `ZoomOut`
+> （mermaid 全屏控件）——**在夹具里一次都没出现过**，那句「会逐属性红」对它们不成立。
+> 线索 229 的同一形状：判据由一个看不见新东西的数字撑着。
+>
+> 补的门 `tests/guards/markdown-icon-paths.test.ts`：9 条路径**逐字**比上游装的
+> streamdown 产物（上游不用图标库，把它们内联在 dist 里，那是唯一出处），
+> 外框与 path 的 8 个属性也两头比。实测 **9 / 9 全中**。
+> **不写死 chunk 文件名**（`chunk-BO2N2NFS.js` 那串 hash 每次构建都会变），扫整个 `dist/*.js`。
+>
+> **写下来的边界**：这条判据**不钉「名字 ↔ 路径的对应」**——上游产物是压缩过的，
+> 图标组件只剩 `jt` 这类标识符，名字拿不到。把 `CopyIcon` 与 `DownloadIcon` 的路径
+> 对调，这道门不会响（夹具覆盖的 3 条会被 DOM 等价 gate 逮到，其余 6 条目前无人守）。
+> 顺带挡住一半：「9 条路径互不相同」这条形状断言能逮到「表里抄重了一条」。
+>
+> ### 二、坑 72：一个不报错的 Vue 陷阱，规则只写在两份注释里
+>
+> `Textarea.vue` / `Collapsible.vue` 写着「`modelValue` / `update:open` **必须显式声明
+> 并显式 emit**，靠 fallthrough 是不行的」。理由是 `renderComponentRoot` 在合并
+> `$attrs` 之前跑 `filterModelListeners`：凡是 `onUpdate:<key>` 且本组件**声明了同名
+> prop**，就从 fallthrough 里剔掉——**不报警告、不报错，只是永远收不到事件**。
+> 也就是说「声明了 prop 却不 emit」比「什么都不声明」更糟。
+>
+> 全仓量：**59 处 `v-model` 调用点、落在 9 个 primitive 上、0 违规**。
+> 做成 `tests/guards/v-model-emits-declared.test.ts` 把这个 0 钉住。
+>
+> **判据为什么从调用点出发**：「声明了 prop P 就必须 emit `update:P`」是错的——
+> `class` / `language` / `readonly` 这些单向 prop 当然不该 emit，按那条要一张几十条的
+> 豁免表（坑 180）。**只有被 `v-model` 绑过的那个 key 才落进陷阱。**
+>
+> ### 三、逐条核过、确有门禁的三条
+>
+> | 断言 | 守它的是谁 |
+> | --- | --- |
+> | `layouts/viewer.vue`「这一层不许出现 landmark」 | 对照台账——`artifact-viewer-window` 场景就在 `/artifacts/view` 上，aria 档会报出多出来的 `main:` |
+> | `endpoints.ts`「endpoint 只能出现在这一层」 | `tests/architecture.test.ts` 的「没有具体 endpoint 或 /api/ 路径」，扫的是 L1 内核 |
+> | `coalesce.ts`「**两层**都不许退化成尾部防抖」 | **两层各有一条用例**：L3 `tests/unit/threads/coalesce.test.ts:39`、L1 `packages/agent-core/tests/store.test.ts:287` |
+> | `AgentSettingsDialog`「不要再写一次 `text-lg`」 | `primitive-class-overrides.test.ts`（它就是为这个坑建的） |
+> | 「走 `ui/input` / `ui/textarea`，不要手写」一族 6 份 | `handwritten-input.test.ts`（同时扫 `<input>` 与 `<textarea>`） |
+>
+> ### 四、量过、判「不做门」的两条
+>
+> - **`BrowserPanel`「不要给它 aria-label」**：全仓有 **6 处**输入控件同时写了
+>   `aria-label` 与 `placeholder`，而其中多数是正当的（名字用 label、提示用 placeholder）。
+>   判据会退化成一张 6 条的豁免表（坑 180）。真正的判据是「上游同一处有没有 aria-label」，
+>   **那个不可机械求解**。顺带记下：现有的 `browser-control.spec.ts` 按 placeholder
+>   **属性**找元素，加了 `aria-label` 照样过——**可访问名没被钉住**。
+> - **`MessageList`「多根模板必须自己接 attrs」**：全仓 19 份用 `inheritAttrs: false`，
+>   **19 份都接了**（4 份走 `useAttrs()` 而不是 `v-bind="$attrs"`，第一次量漏了它们）。
+>   不做门的理由：判据分不出「真的接回来了」和「`useAttrs` import 了没用」，
+>   而真正的失效方式正是后者的一种。要做得先想清楚怎么量「真的接回来了」。
+>
+**一句写在注释里的全仓规则，可以一轮都没人守**
 >
 > 按第十二轮定下的起手式做方向 C：grep 注释里的「不要 / 必须 / 照抄」断言，
 > 逐条问「有没有门禁真的在守它」。断言面 346 条 / 165 份文件，
