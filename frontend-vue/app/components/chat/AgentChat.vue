@@ -2241,14 +2241,46 @@ onUnmounted(() => {
                   <X class="size-4" />
                 </Button>
               </div>
-              <TodoList
+              <!--
+                **待办面板外面有两层定位容器，欢迎态与常规态不同**
+                （上游 `chats/chat-page.tsx:517`，agent 页 `[thread_id]/page.tsx:405`
+                是同一份）：外层 `right-0 left-0 z-0` ＋ 欢迎态 `absolute -top-4`，
+                内层 `right-0 bottom-0 left-0 flex flex-col` ＋ 欢迎态 `absolute`。
+
+                本仓此前**一层包裹都没有**，只给了 `mb-2`（上游没有的外边距），
+                于是欢迎态下这块排进正常流、被 Welcome 那一块压住。
+                2026-09-12 第十八轮把这一屏接进对照取样面时，
+                **两个语言维同时卡在「点不动那颗折叠头」**：
+                Playwright 报的是 `<div class="mx-auto flex … text-center sm:px-8">
+                subtree intercepts pointer events`——那正是 Welcome 的根。
+                「名字对、位置对、尺寸对，却点不动」就是几何档 `hit` 那一格
+                想守的形状，这次它以「步骤超时」的方式先现形了。
+
+                调用点的 class 也照上游：`bg-background/5`（半透明，配
+                TodoList 自己的 `backdrop-blur-sm`），不是本仓原来的 `mb-2`。
+
+                **`GoalStatus` 没有跟着搬过来**：上游把它和 TodoList 放在同一层
+                （`{activeGoal && <GoalStatus/>}`），本仓的在 `ChatComposer.vue` 里。
+                那是另一处判过的位置差异，单独记在挂账清单里。
+              -->
+              <div
                 v-if="
                   authoritativeTodos.length &&
                   !(bootstrap && creation.status.value === 'created')
                 "
-                :todos="authoritativeTodos"
-                class="mb-2"
-              />
+                class="right-0 left-0 z-0"
+                :class="isWelcomeMode ? 'absolute -top-4' : 'relative'"
+              >
+                <div
+                  class="right-0 bottom-0 left-0 flex flex-col"
+                  :class="isWelcomeMode ? 'absolute' : 'relative'"
+                >
+                  <TodoList
+                    :todos="authoritativeTodos"
+                    class="bg-background/5"
+                  />
+                </div>
+              </div>
               <!--
                 创建 agent 还没建出来的这一步，上游用的是裸的
                 `PromptInput` + `PromptInputTextarea` + `PromptInputSubmit`

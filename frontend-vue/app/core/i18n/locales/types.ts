@@ -53,6 +53,7 @@ export interface Translations {
     stop: string;
     skillSuggestions: string;
     modelSelector: string;
+    todos: string;
     selectAFile: string;
     commandPalette: string;
     commandPaletteDescription: string;

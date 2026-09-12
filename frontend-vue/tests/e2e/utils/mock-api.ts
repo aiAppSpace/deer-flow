@@ -53,6 +53,18 @@ export type MockThread = {
   messages?: unknown[];
   artifacts?: string[];
   goal?: Record<string, unknown> | null;
+  /*
+    真后端的 channel values 里有 `todos`（`app/core/threads/types.ts` 的
+    `AgentThread["values"]`），产品也读它——而这份 mock 在 2026-09-12
+    第十八轮之前**从来不吐它**，于是任何 `backend: "mock"` 的用例都看不见
+    待办列表那一屏。与上面 `threadChannelValues` 注释里记的
+    「此前 GET /threads/{id} 复用了 search 的投影，比真后端少了 messages
+    与 artifacts」是同一种保真度缺口。
+  */
+  todos?: {
+    content?: string;
+    status?: "pending" | "in_progress" | "completed";
+  }[];
 };
 
 /*
@@ -472,6 +484,7 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         ])
       : [],
     artifacts: thread?.artifacts ?? [],
+    todos: thread?.todos ?? [],
   });
 
   const threadGetResult = (thread: MockThread) => ({
@@ -1283,23 +1296,17 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         contentType: "application/json",
         body: JSON.stringify([
           {
-            values: {
-              title: matchingThread.title ?? "Untitled",
-              goal: matchingThread.goal ?? null,
-              messages: matchingThread.messages ?? [
-                {
-                  type: "human",
-                  id: `msg-human-${matchingThread.thread_id}`,
-                  content: [{ type: "text", text: "Previous question" }],
-                },
-                {
-                  type: "ai",
-                  id: `msg-ai-${matchingThread.thread_id}`,
-                  content: `Response in thread ${matchingThread.title ?? matchingThread.thread_id}`,
-                },
-              ],
-              artifacts: matchingThread.artifacts ?? [],
-            },
+            /*
+              **走 `threadChannelValues`，不要在这里再抄一份。**
+              这里原来是手抄的第三份 channel values，而它已经漂了：
+              2026-09-12 第十八轮给 mock 补 `todos` 时，`GET /threads/{id}`
+              与 `/state` 两处都跟上了，**只有这里没有**——于是
+              `useStream` 从 `/history` 水合的那一侧（上游）看不见待办列表，
+              而读 `/state` 的那一侧（本仓）看得见。一个字段两种行为，
+              对照场景当场卡在「React 没能到达」。
+              这正是 `threadChannelValues` 的注释想防的那件事。
+            */
+            values: threadChannelValues(matchingThread),
             next: [],
             metadata: {},
             created_at: "2025-01-01T00:00:00Z",

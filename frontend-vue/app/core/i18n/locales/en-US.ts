@@ -80,6 +80,14 @@ export const enUS: Translations = {
     stop: "Stop",
     skillSuggestions: "Skill suggestions",
     modelSelector: "Model Selector",
+    /*
+      上游 `todo-list.tsx:65` 的 `<div>To-dos</div>`——**写死英文、不是词条**，
+      所以两种语言都是同一串（同 `close` / `toggleSidebar` 那几条的做法）。
+      本仓此前把它和图标挤在同一个 span 里，文本节点因此不是元素的唯一子节点、
+      i18n 源守卫扫不到；2026-09-12 第十八轮照上游把文字单独一层之后它就现形了
+      ——**那个 24px 的几何差和这条词条是同一处改动的两面**。
+    */
+    todos: "To-dos",
     /* 上游 artifact-file-detail.tsx:415 的 `<SelectValue placeholder="Select a file" />`，同样写死英文、同样不进它自己的词典。 */
     selectAFile: "Select a file",
     /*

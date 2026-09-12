@@ -1793,6 +1793,61 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
   {
+    /*
+      **待办列表这一屏在第十八轮之前一次都没被取样过**，而且不是「漏挂锚点」
+      那么轻——**夹具根本喂不出来**：`tests/e2e/utils/mock-api.ts` 的
+      `threadChannelValues` 里没有 `todos`，于是任何 `backend: "mock"` 的
+      用例看到的 `values.todos` 恒为 undefined，`TodoList` 的 `v-if` 永远不成立。
+      第十八轮先把那个字段补进 mock（真后端一直返回它），这一屏才有得比。
+
+      **三种状态各喂一条**：上游的条目指示器与文字在 pending / in_progress /
+      completed 三档各有自己的配色（`ai-elements/queue.tsx` 的 QueueItemIndicator
+      与 QueueItemContent，加 `todo-list.tsx:88/95` 两句调用点补色），
+      只喂一条的话另外两档塌了照样全绿（同 workspace-diff-anchors 的判据）。
+
+      锚点按**文字内容**定位而不是按 role：两个应用的列表项都没有可访问名
+      （指示器是 `aria-hidden` 的纯装饰，文字在一个裸 span 里），
+      而这三串文字是夹具自己给的，不随语言变——两个语言维下都成立。
+
+      **外壳那一层不能用 `data-testid="thread-todos"`**：那是本仓独有的，
+      上游 `todo-list.tsx` 一个 testid 都没有（第十八轮写这个场景时先按 testid
+      挂，核了一遍上游才发现——**锚点要两边都成立，不是本仓有就行**，
+      坑 214 的同一条）。改用折叠头里那句 `To-dos`：**两个应用都写死英文**
+      （不是词条，见 TodoList.vue 与 todo-list.tsx:65），所以它在两个语言维下
+      都是同一串，也天然只有一份。
+    */
+    id: "thread-todos",
+    title: "会话里的待办列表",
+    backend: "mock",
+    path: `/workspace/chats/${MOCK_THREAD_ID}`,
+    mock: {
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Todo work",
+          todos: [
+            { content: "PARITY-TODO-PENDING", status: "pending" },
+            { content: "PARITY-TODO-RUNNING", status: "in_progress" },
+            { content: "PARITY-TODO-DONE", status: "completed" },
+          ],
+        },
+      ],
+    },
+    settle: [{ kind: "visible", target: { text: "To-dos" } }],
+    /*
+      折叠头默认是收起的（两个应用都是），列表体要点一下才出现——
+      所以这里必须有一步 click。按可访问名点：那颗按钮的内容就是
+      图标 + `To-dos`，两边的可访问名都是这一串（写死英文，不随语言变）。
+    */
+    steps: [
+      { kind: "click", target: { role: "button", name: "To-dos" } },
+      { kind: "visible", target: { text: "PARITY-TODO-PENDING" } },
+      { kind: "visible", target: { text: "PARITY-TODO-RUNNING" } },
+      { kind: "visible", target: { text: "PARITY-TODO-DONE" } },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
+  {
     id: "background-tasks",
     title: "当前会话的后台任务抽屉",
     backend: "mock",

@@ -78,6 +78,8 @@ export const zhCN: Translations = {
     stop: "Stop",
     skillSuggestions: "Skill suggestions",
     modelSelector: "Model Selector",
+    /* 上游写死英文（todo-list.tsx:65），两种语言同一串。 */
+    todos: "To-dos",
     selectAFile: "Select a file",
     commandPalette: "Command Palette",
     commandPaletteDescription: "Search for a command to run...",
