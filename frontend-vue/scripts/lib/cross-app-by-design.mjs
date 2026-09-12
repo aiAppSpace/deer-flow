@@ -66,6 +66,10 @@ export const CROSS_APP_BY_DESIGN = {
     kind: "test",
     note: "逐个对比两个应用同名 primitive 的基类字符串；坐标系是上游的 `components/ui/**`，缺席时整组 describe.skipIf 跳过（并且 reactBases() 在缺席时直接返回空表，因为 skipIf 跳过的是用例不是收集，见 wave 83）。",
   },
+  "tests/guards/markdown-icon-paths.test.ts": {
+    kind: "test",
+    note: "钉 `MarkdownIcon.vue` 那 9 条 SVG 路径逐字来自上游装的 streamdown 产物（上游不用图标库，把它们内联在 dist 里，那是唯一出处）；**不写死 chunk 文件名**，扫整个 `dist/*.js`；缺席时整组 describe.skipIf 跳过。",
+  },
   "tests/guards/invented-palette-colors.test.ts": {
     kind: "test",
     note: "「本仓不许自造上游没用过的固定调色板颜色」的守卫，**允许集是从上游读出来的**（手抄一份白名单等于把判据钉死在某一天）；缺席时整组 describe.skipIf 跳过。",
