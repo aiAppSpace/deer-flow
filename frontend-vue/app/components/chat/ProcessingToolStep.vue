@@ -249,16 +249,26 @@ const browserPreviewURL = computed(() => {
         v-if="name === 'web_search' && webSearchResults.length"
         class="flex flex-wrap items-center gap-2 overflow-x-hidden"
       >
-        <a
+        <!--
+          **第四颗同族的芯片**（2026-09-12 第十一轮补的）。
+
+          第十轮修掉三颗时漏了它——不是判据不同，是**没有任何锚点落在这一颗上**，
+          `borderRadius` 那一档因此报不出来。全仓扫「变体色对出现在非 `ui/` 文件里」
+          才把它翻出来。**这就是「读数只覆盖取样点」那句话的一个具体样本。**
+
+          上游同一处是 `<ChainOfThoughtSearchResult><a …>{title}</a></ChainOfThoughtSearchResult>`
+          （`message-group.tsx:726`），层次与 `web_fetch` 那一支一样：Badge 里套链接。
+        -->
+        <Badge
           v-for="item in webSearchResults"
           :key="item.url"
-          :href="item.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="bg-secondary text-secondary-foreground rounded-md px-2 py-0.5 text-xs font-normal"
+          variant="secondary"
+          class="gap-1 px-2 py-0.5 text-xs font-normal"
         >
-          {{ item.title }}
-        </a>
+          <a :href="item.url" target="_blank" rel="noopener noreferrer">
+            {{ item.title }}
+          </a>
+        </Badge>
       </div>
 
       <div
@@ -285,7 +295,7 @@ const browserPreviewURL = computed(() => {
       </div>
 
       <!--
-        **这三处都走 `ui/badge`，不是手写的 span。**
+        **这一族都走 `ui/badge`，不是手写的 span。**
 
         上游这一族全部是 `ChainOfThoughtSearchResult`
         （`ai-elements/chain-of-thought.tsx:183`），而它就是

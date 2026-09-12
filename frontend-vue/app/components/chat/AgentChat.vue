@@ -2115,19 +2115,35 @@ onUnmounted(() => {
                   {{ creation.agent.value.name }} ·
                   {{ creation.agent.value.description }}
                 </p>
+                <!--
+                  **这两颗走 `ui/button`，不是手写的链接样式。**
+
+                  上游 `agents/new/page.tsx:427/436` 是两颗 `<Button>`
+                  （第二颗 `variant="outline"`），点下去 `router.push`。
+                  本仓这里用的是 `NuxtLink`——**导航用链接是对的**（点了就跳走的
+                  控件不该是按钮，2026-09-11 那一轮刚为此改过 agents 那一屏），
+                  所以保留链接语义、用 `as-child` 把按钮的样式与状态套上去。
+
+                  手抄那一版丢掉的（对着 `buttonVariants` 逐条）：
+                  `font-medium`、`hover:bg-primary/90`、`focus-visible:*` 那三条焦点环、
+                  `h-9`（改成了 `py-2`）、`px-4`（写的是 `px-3`）、
+                  `inline-flex items-center justify-center`、`gap-2`、
+                  `whitespace-nowrap`、`cursor-pointer`、`transition-all`、
+                  以及 `disabled:*` 与 `aria-invalid:*` 两组状态。
+                -->
                 <div class="mt-5 flex flex-wrap justify-center gap-2">
-                  <NuxtLink
-                    :to="`/workspace/agents/${encodeURIComponent(creation.agent.value.name)}/chats/new`"
-                    class="bg-primary text-primary-foreground rounded-md px-3 py-2 text-sm"
-                  >
-                    {{ $i18n.t.value.agents.startChatting }}
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/workspace/agents"
-                    class="rounded-md border px-3 py-2 text-sm"
-                  >
-                    {{ $i18n.t.value.agents.backToGallery }}
-                  </NuxtLink>
+                  <Button as-child>
+                    <NuxtLink
+                      :to="`/workspace/agents/${encodeURIComponent(creation.agent.value.name)}/chats/new`"
+                    >
+                      {{ $i18n.t.value.agents.startChatting }}
+                    </NuxtLink>
+                  </Button>
+                  <Button variant="outline" as-child>
+                    <NuxtLink to="/workspace/agents">
+                      {{ $i18n.t.value.agents.backToGallery }}
+                    </NuxtLink>
+                  </Button>
                 </div>
               </section>
               <!--
