@@ -36,8 +36,22 @@ describe("icon-parity 自己的形状断言", () => {
     expect(source).toMatch(/ri\.size < \d+ \|\| vi\.size < \d+/);
   });
 
+  /*
+    **尺子换过一次（2026-09-12 第十七轮）。** 原来这一条断言的是源码里含有
+    「这是顾问工具，不进任何门禁」这句话——而 `icon-parity.mjs` 自己的文件头
+    **专门标注过那句话从 wave 111 起就是假的**（豁免表过期或形状断言不成立时
+    它会红，它就是一道门禁）。也就是说这道门在**钉住一句仓库已经宣布作废的话**：
+    它今天能过，只因为脚本把那句假话引在了纠正段里；谁把纠正段整理掉，它就红，
+    而红的原因与它想守的事毫无关系。
+
+    判据换成**真正要守的那件事**：缺上游时走的是「打印一行 + `exit(0)`」，
+    而不是让任何入口变红。钉三样——分支条件、那句提示、以及 `exit(0)` 本身。
+  */
   it("上游缺席时退出 0，不让任何入口变红", () => {
-    expect(source).toContain("这是顾问工具，不进任何门禁");
+    expect(source).toMatch(
+      /if\s*\(!existsSync\(reactRoot\)\s*\|\|\s*!existsSync\(REACT_DTS\)\)/,
+    );
+    expect(source).toContain("跳过：找不到上游");
     expect(source).toContain("process.exit(0)");
   });
 

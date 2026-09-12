@@ -822,7 +822,7 @@ function openSettingsDialog(section: "appearance" | "about") {
                 data-size="lg"
                 data-testid="workspace-nav-menu-trigger"
                 :aria-label="$i18n.t.value.workspace.settingsAndMore"
-                class="peer/menu-button hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground flex items-center gap-2 overflow-hidden rounded-md text-left text-sm"
+                class="peer/menu-button hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground ring-sidebar-ring active:bg-sidebar-accent active:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground flex items-center gap-2 overflow-hidden rounded-md text-left text-sm outline-hidden transition-[width,height,padding] focus-visible:ring-2"
                 :class="
                   sidebarExpanded ? 'h-12 w-full p-2' : 'size-8 shrink-0 p-0'
                 "

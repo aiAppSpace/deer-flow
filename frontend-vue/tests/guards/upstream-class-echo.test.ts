@@ -275,6 +275,96 @@ describe("照抄上游的 class 串", () => {
   });
 
   /*
+    **footer 那颗设置键是全仓唯一一处「有判词的手抄 primitive」**（wave 74）：
+    上游是 `<DropdownMenuTrigger asChild><SidebarMenuButton size="lg">`，
+    而本仓手写一个 `<button>`，理由写在 `ThreadSidebar.vue` 那段注释里
+    （坑 62：两层 as-child 之后留在 DOM 上的 `data-slot` 是最外层那个；
+    收起态本仓走自己的 `sidebarExpanded` 分支而不是 `data-collapsible`）。
+
+    **手抄就会抄漏，这一处抄漏了 8 条**（2026-09-12 第十七轮量出来）：
+    `outline-hidden` / `ring-sidebar-ring` / `focus-visible:ring-2`
+    ——**这颗按钮没有键盘焦点环，而上游有**；
+    `transition-[width,height,padding]`（展开/收起不过渡）、
+    `active:*` 两条、`data-[state=open]:hover:*` 两条。
+    与第十二轮修掉的那四颗导航键**同一个根因、同一份 cva**——
+    那一轮跳过这一颗是因为 wave 74 的豁免，而**那条豁免说的是
+    `peer/menu-button` 与收起态尺寸，不是焦点环**。
+
+    所以这一条把它**逐条对着 cva 比**，只放过下面那几条**在本仓结构下哑掉**的，
+    每一条写清为什么哑。判据落在 cva 上而不是一份手抄的期望串：
+    primitive 改了变体，这里自己跟着变。
+  */
+  it("footer 设置键逐条覆盖 SidebarMenuButton 的 cva（除了哑掉的那几条）", () => {
+    const cva = stripped("components/ui/sidebar/menu-button-variants.ts");
+    const tokens = (pattern: RegExp) =>
+      (pattern.exec(cva)?.[1] ?? "").split(/\s+/).filter(Boolean);
+    const want = new Set([
+      ...tokens(/cva\(\s*\n?\s*"([^"]+)"/),
+      ...tokens(/lg:\s*"([^"]+)"/),
+      ...tokens(/default:\s*"(hover:bg-sidebar-accent[^"]*)"/),
+    ]);
+
+    /** 在本仓这处结构下注定不成立的，逐条写清为什么。 */
+    const INERT: Record<string, string> = {
+      "[&>svg]:size-4":
+        "图标不是 button 的直接子节点（外面还有一层 div），且已显式 :size=16",
+      "[&>svg]:shrink-0": "同上，已在图标上显式写 shrink-0",
+      "[&>span:last-child]:truncate": "文字 span 也不是直接子节点",
+      "data-[active=true]:bg-sidebar-accent": "这颗触发器永远不是「当前项」",
+      "data-[active=true]:text-sidebar-accent-foreground": "同上",
+      "data-[active=true]:font-medium": "同上",
+      "disabled:pointer-events-none": "它从不 disabled",
+      "disabled:opacity-50": "同上",
+      "aria-disabled:pointer-events-none": "同上",
+      "aria-disabled:opacity-50": "同上",
+      "group-data-[collapsible=icon]:size-8!":
+        "wave 74：本仓收起态走 sidebarExpanded 分支，没有 data-collapsible",
+      "group-data-[collapsible=icon]:p-2!": "同上",
+      "group-data-[collapsible=icon]:p-0!": "同上",
+      "group-has-data-[sidebar=menu-action]/menu-item:pr-8":
+        "footer 那个 li 里没有 menu-action",
+      "w-full": "只在展开态成立，由 :class 的 sidebarExpanded 分支给",
+      "h-12": "同上",
+      "p-2": "同上",
+      "text-left": "文字那一层 div 自己带",
+      "text-sm": "同上",
+      flex: "本仓写在静态串里（已有）",
+    };
+
+    const source = stripped("components/workspace/ThreadSidebar.vue");
+    const at = source.indexOf('data-testid="workspace-nav-menu-trigger"');
+    expect(at, "找不到 footer 设置键").toBeGreaterThan(-1);
+    const tag = source.slice(
+      source.lastIndexOf("<button", at),
+      source.indexOf("\n              >", at),
+    );
+    const mine = new Set(
+      [
+        ...[...tag.matchAll(/class="([^"]+)"/g)].map((m) => m[1]!),
+        ...[...tag.matchAll(/'([^']+)'/g)].map((m) => m[1]!),
+      ].flatMap((chunk) => chunk.split(/\s+/)),
+    );
+
+    // 形状断言：cva 解析坏了会让下面那条静默全绿（坑 176/195）。
+    expect(want.size).toBeGreaterThan(25);
+    expect(want.has("focus-visible:ring-2")).toBe(true);
+
+    const missing = [...want]
+      .filter((t) => !mine.has(t) && !(t in INERT))
+      .sort();
+    expect(
+      missing,
+      "footer 设置键是 wave 74 判过的手抄例外，而手抄永远只抄一部分——" +
+        "第十七轮实测它漏掉了键盘焦点环。补上，或者进 INERT 并写清它在本仓为什么哑。",
+    ).toEqual([]);
+
+    const stale = Object.keys(INERT)
+      .filter((t) => !want.has(t))
+      .sort();
+    expect(stale, "INERT 里的条目 cva 已经没有了，删掉它").toEqual([]);
+  });
+
+  /*
     上游 workspace-nav-chat-list.tsx:56 的禁用「Agents」入口：外层
     `cursor-not-allowed`，按钮 `text-muted-foreground/50` + SidebarMenuButton
     cva 自带的 `aria-disabled:pointer-events-none aria-disabled:opacity-50`。
