@@ -1,9 +1,66 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十七轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十八轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-12 第十七轮：**一次没生效的变异，和「守卫没问题」长得一模一样**
+> ## 2026-09-12 第十八轮：**一屏没进过取样面，五处差异谁也说不出来**
+>
+> 结清第十三轮挂的那笔账：给 todos 造夹具、挂进取样面、量到读数再改 TodoList。
+> 整个循环走完——**挂锚点 → 22 行 → 逐行追到根因 → 照上游补 → 22 行归零**。
+>
+> ### 一、夹具根本喂不出这一屏（两处保真度缺口）
+>
+> 1. **mock 从来不吐 `values.todos`**。真后端一直返回它（`core/threads/types.ts`
+>    的 `AgentThread["values"]` 里就有），产品也读它——而
+>    `tests/e2e/utils/mock-api.ts` 的 `threadChannelValues` 里没有这个键，
+>    于是**任何 `backend: "mock"` 的用例都看不见待办列表那一屏**。
+> 2. **`/history` 那条路由自己手抄了第三份 channel values，并且已经漂了。**
+>    补 `todos` 时 `GET /threads/{id}` 与 `/state` 都跟上了，只有它没有。
+>    后果不是「少一个字段」，是**同一个字段两种行为**：本仓读 `/state` 看得见，
+>    上游用 SDK 的 `useStream` 从 `/history` 水合、看不见——对照场景当场卡在
+>    「React 没能到达」，而在此之前没有任何机器说得出这两条路由已经不一致。
+>    做成门禁 `tests/guards/mock-channel-values.test.ts`（负向 2 条）。
+>    **这正是 `threadChannelValues` 自己的注释想防的那件事**
+>    （「抽成一个函数，就是为了让这条后端事实在 mock 里也是结构性的」）。
+>
+> ### 二、锚点踩的一次：本仓有不等于两边都有
+>
+> 第一版 settle 用 `data-testid="thread-todos"`——**那是本仓独有的**，
+> 上游 `todo-list.tsx` 一个 testid 都没有，于是 React 侧必然超时。
+> 改用折叠头里那句 `To-dos`：两个应用都写死英文（不是词条），两个语言维下同一串。
+> **锚点要两边都成立，不是本仓有就行**（坑 214 的同一条）。
+>
+> ### 三、三处真差异，逐行追得到
+>
+> | 台账那一行 | Δ | 根因 |
+> | --- | --- | --- |
+> | （步骤超时：`subtree intercepts pointer events`） | — | **待办面板一层定位包裹都没有**。上游有两层（`right-0 left-0 z-0` ＋ 欢迎态 `absolute -top-4`，内层再一层 `absolute`），本仓只给了 `mb-2`，于是欢迎态下它排进正常流、被 Welcome 块压住。「名字对、位置对、尺寸对，却点不动」正是 `hit` 那一格守的形状，这次它以**步骤超时**先现形 |
+> | `text:To-dos x Δ-24 / width Δ+24` | 图标 16 + gap 8 | 上游把标题文字单独放一个 `<div>`，本仓和图标挤在同一个 `<span>`——`getByText` 把图标一起框了进去 |
+> | 三条待办 `x Δ-12 / width Δ+24`、`y` 每行差 8 | `px-3` 两侧 / `py-1` 上下 | `<li>` 缺上游 `QueueItem` 的 `group hover:bg-muted flex flex-col gap-1 rounded-md px-3 py-1 text-sm`，指示器与文字还少包一层 `flex items-center gap-2` |
+>
+> 容器层一并照上游补齐：`rounded-t-xl border border-b-0`（只圆上两角、无下边框，
+> 因为它贴着 composer 顶边坐）、`origin-bottom translate-y-4`、`backdrop-blur-sm`、
+> `transition-all duration-200 ease-out`；列表体从 `v-if` 整块摘掉改成常驻
+> `<main>` ＋ `h-0 ↔ h-28` 高度过渡 ＋ `ScrollArea` ＋ `max-h-40`。
+>
+> ### 四、本轮最值钱的一条：同一处结构问题的两个投影
+>
+> 把标题文字照上游单独放一层之后，**i18n 源守卫立刻报了 `To-dos`**
+> ——而**旧写法它扫不到**：那时文本节点是元素的兄弟，不是唯一子节点。
+>
+> 也就是说，那个 24px 的几何差和「这串英文没进词典」是**同一个结构问题的两个投影**，
+> 一个由对照工厂看见、一个由 i18n 守卫看见，而**在把结构改对之前，两道门都是绿的**。
+> 按仓里既有约定处理（上游写死英文的名字走 `primitives.*`，两种语言同一串，
+> 与 `close` / `toggleSidebar` 同一做法）。
+>
+> ### 五、留下的一笔
+>
+> **`GoalStatus` 的位置**：上游把它和 TodoList 放在同一层包裹里
+> （`{activeGoal && <GoalStatus/>}`），本仓的在 `ChatComposer.vue` 里。
+> 这一轮没动它——搬它要动 composer 的结构，而**目前没有任何场景同时喂 goal 与 todos**，
+> 改完没有读数可以验。下一轮要动的话，起手式是先给夹具补 `goal`。
+>
+**一次没生效的变异，和「守卫没问题」长得一模一样**
 >
 > 接着第十六轮的表往下填，把 78 条负向断言按「**有没有历史标记**」再筛一次
 > ——只留还在当现在时用的（29 条），逐条核。

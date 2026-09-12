@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第十七轮收工）
+## 当前状态（2026-09-12 第十八轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,53 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十八轮）做了什么
+
+**结清第十三轮挂的那笔账：给 todos 造夹具、挂进取样面、量到读数再改。
+整个循环走完——22 行 → 逐行追到根因 → 照上游补 → 归零。**
+
+### 一、夹具根本喂不出这一屏
+
+- **mock 从来不吐 `values.todos`**：真后端一直返回它、产品也读它，而
+  `threadChannelValues` 里没有这个键——**任何 `backend: "mock"` 的用例都看不见这一屏**。
+- **`/history` 手抄了第三份 channel values，并且已经漂了**：补 `todos` 时
+  `GET /threads/{id}` 与 `/state` 都跟上，只有它没有。后果是**同一个字段两种行为**
+  ——本仓读 `/state` 看得见、上游用 `useStream` 从 `/history` 水合看不见，
+  对照场景卡在「React 没能到达」。做成门禁 `mock-channel-values`（负向 2 条）。
+
+### 二、锚点踩的一次
+
+第一版 settle 用 `data-testid="thread-todos"`——**那是本仓独有的**，
+上游 `todo-list.tsx` 一个 testid 都没有。改用两边都写死英文的 `To-dos`。
+**锚点要两边都成立，不是本仓有就行。**
+
+### 三、三处真差异
+
+| 读数 | Δ 的来源 | 改法 |
+| --- | --- | --- |
+| 步骤超时：`subtree intercepts pointer events` | 待办面板**一层定位包裹都没有**，欢迎态下被 Welcome 块压住 | 补上游那两层（`right-0 left-0 z-0` ＋ 欢迎态 `absolute -top-4` / 内层 `absolute`），调用点 class 从 `mb-2` 改成上游的 `bg-background/5` |
+| `text:To-dos x Δ-24 / width Δ+24` | 图标 16 + gap 8 | 标题文字照上游单独放一个 `<div>` |
+| 待办 `x Δ-12 / width Δ+24`、`y` 每行差 8 | `px-3` 两侧 / `py-1` 上下 | `<li>` 补上游 `QueueItem` 的类串，指示器与文字再包一层 `flex items-center gap-2` |
+
+容器层一并补齐：`rounded-t-xl border-b-0` / `translate-y-4` / `backdrop-blur-sm` /
+`transition-all`；列表体从 `v-if` 改成常驻 `<main>` ＋ `h-0 ↔ h-28` 过渡 ＋
+`ScrollArea` ＋ `max-h-40`。
+
+### 四、同一处结构问题的两个投影（本轮最值钱的一条）
+
+把标题文字单独放一层之后，**i18n 源守卫立刻报了 `To-dos`**——而**旧写法它扫不到**：
+那时文本节点是元素的兄弟而不是唯一子节点。
+
+也就是说，24px 的几何差和「这串英文没进词典」是**同一个结构问题的两个投影**，
+一个由对照工厂看见、一个由 i18n 守卫看见，而**在把结构改对之前两道门都是绿的**。
+按既有约定走 `primitives.todos`（两种语言同一串，同 `close` / `toggleSidebar`）。
+
+### 五、留下的一笔
+
+`GoalStatus` 的位置：上游把它和 TodoList 放在同一层包裹里，本仓的在
+`ChatComposer.vue`。没动——搬它要改 composer 的结构，而**目前没有任何场景同时喂
+goal 与 todos**，改完没有读数可以验。起手式是先给夹具补 `goal`。
 
 ## 上一轮（2026-09-12 第十七轮）做了什么
 
