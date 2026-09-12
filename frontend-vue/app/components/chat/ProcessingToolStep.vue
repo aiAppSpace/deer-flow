@@ -21,6 +21,7 @@ import {
 } from "lucide-vue-next";
 
 import CodeBlock from "@/components/markdown/CodeBlock.vue";
+import { Badge } from "@/components/ui/badge";
 import {
   buildWriteFileArtifactURL,
   resolveArtifactURL,
@@ -283,30 +284,56 @@ const browserPreviewURL = computed(() => {
         </a>
       </div>
 
-      <a
+      <!--
+        **这三处都走 `ui/badge`，不是手写的 span。**
+
+        上游这一族全部是 `ChainOfThoughtSearchResult`
+        （`ai-elements/chain-of-thought.tsx:183`），而它就是
+        `<Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs font-normal">`。
+        本仓原来手抄了它的**外观**（`bg-secondary text-secondary-foreground inline-flex
+        rounded-md px-2 py-0.5 text-xs font-normal`），抄丢的东西在 2026-09-12 第十轮
+        被新加的 `borderRadius` 档当场量出来：**上游是 `rounded-full`
+        （Tailwind v4 的 `calc(infinity*1px)`，computed 3.35544e+07px），
+        本仓是 `rounded-md`（8px）**——一个纯形状差异，位置、尺寸、颜色、字号、
+        字重、命中各档**一条都不响**，所以它在此之前没有任何机器看得见。
+
+        手抄那一版同时丢掉的还有：`border`、`w-fit`、`whitespace-nowrap`、`shrink-0`、
+        `gap-1`、`items-center justify-center`、`overflow-hidden`、
+        `focus-visible:*` 与 `aria-invalid:*` 那两组状态、`transition-[color,box-shadow]`。
+
+        `web_fetch` 这一支上游是**Badge 里套一个 `<a>`**（chain-of-thought 那颗
+        badge 本身不是控件，链接才是），不是把链接本身当 badge 用——照抄这一层。
+      -->
+      <Badge
         v-else-if="name === 'web_fetch' && webFetchTarget"
-        :href="webFetchTarget.url"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="bg-secondary text-secondary-foreground inline-flex rounded-md px-2 py-0.5 text-xs font-normal"
+        variant="secondary"
+        class="gap-1 px-2 py-0.5 text-xs font-normal"
       >
-        {{ webFetchTarget.title }}
-      </a>
+        <a
+          :href="webFetchTarget.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="cursor-pointer"
+        >
+          {{ webFetchTarget.title }}
+        </a>
+      </Badge>
 
-      <span
+      <Badge
         v-else-if="(name === 'ls' || name === 'read_file') && filePath"
-        class="bg-secondary text-secondary-foreground inline-flex rounded-md px-2 py-0.5 text-xs font-normal"
+        variant="secondary"
+        class="cursor-pointer gap-1 px-2 py-0.5 text-xs font-normal"
       >
         {{ filePath }}
-      </span>
+      </Badge>
 
-      <span
+      <Badge
         v-else-if="filePath && icon === NotebookPen"
-        class="bg-secondary text-secondary-foreground inline-flex max-w-full rounded-md px-2 py-0.5 text-xs font-normal break-all"
-        :class="artifactTarget ? 'cursor-pointer' : undefined"
+        variant="secondary"
+        class="cursor-pointer gap-1 px-2 py-0.5 text-xs font-normal"
       >
         {{ filePath }}
-      </span>
+      </Badge>
 
       <CodeBlock
         v-else-if="name === 'bash' && textArg('command')"
