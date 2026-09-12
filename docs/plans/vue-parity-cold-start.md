@@ -12,11 +12,12 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-12 第九轮收工实测，不是估计）**：
+**接手时的状态（2026-09-12 第十二轮收工实测，不是估计）**：
 
 - 工作区干净；**本地领先 `origin/main-wc` 三百多个提交、全部未推送**
   （没有收到过推送指令；要推就先问用户）。
-- 对照台账 **159 唯一行 / 179 多重集 / 138 个场景-维度**。
+- 对照台账 **159 唯一行 / 179 多重集 / 138 个场景-维度**（第十二轮新增的
+  4 行当轮修完归零，基线一个字节没动）。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
 
@@ -150,12 +151,14 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-# 2026-09-12 第九轮收工实测（每一条都是那一轮真跑出来的，不是抄的；
-# 第九轮只动 scenarios.ts + 文档（台账一个字节没动），按节奏只跑 verify 与 e2e-parity，
+# 2026-09-12 第十二轮收工实测（每一条都是那一轮真跑出来的，不是抄的；
+# 第十二轮改了 Vue 组件，所以 verify / e2e-parity / e2e-mock / icon-parity 都真跑了；
 # 其余读数是第五 / 七轮真跑的，第五轮九条全绿）
-make -C <abs>/frontend-vue verify         # exit 0；321 文件 / **2642** 单测；词典 1139 key / 15 unused；产品 SFC 267
-make -C <abs>/frontend-vue e2e-parity     # **146 passed**（整条 16.6 分钟）
+make -C <abs>/frontend-vue verify         # exit 0；**323 文件 / 2651** 单测；词典 1139 key / 15 unused
+make -C <abs>/frontend-vue e2e-parity     # **146 passed**（整条 17.5 分钟）
                                           #  台账 159 唯一行 / 179 多重集 / 138 场景-维度
+                                          #  （第十二轮新挂的两个锚点报出 4 行，当轮修完归零，
+                                          #    基线文件一个字节没动——不需要 parity-accept）
                                           #  （此处此前写「3 passed」——那是只跑 diff.spec.ts 的数字，
                                           #    整个套件还有 scenarios.spec 的每场景-维度一条 + topology）
 make -C <abs>/frontend-vue e2e-mock       # 318 passed（273 + 22 + 15 + 2 + 6）
@@ -164,8 +167,12 @@ make -C <abs>/frontend-vue parity-accept  # 只能让台账变短；要变长得
                                           #  并在提交说明里逐行解释
 make -C <abs>/frontend-vue standalone-sim # exit 0（跑过 15 / 未跑 5 / 红 0）
 make -C <abs>/frontend-vue e2e-visual     # 8 passed（只有 -darwin 基线，本机门禁）
+                                          #  **第十二轮的教训**：这一档改完侧栏字重仍然全绿，
+                                          #  而那**不是**「侧栏没变」的证据——它是 fullPage +
+                                          #  maxDiffPixelRatio 0.01，一个词的字重差远在容差内。
+                                          #  证据在对照档：那 4 行 fontWeight 从有到无。
 make -C <abs>/frontend-vue asset-budget   # exit 0（第五轮查清是存量并重定预算，四条依据写在脚本注释里）
-make -C <abs>/frontend-vue icon-parity    # exit 0、**0 处待核**（第五轮把 `Unplug` 那处从根因清掉）
+make -C <abs>/frontend-vue icon-parity    # exit 0、**0 处待核**（第十二轮复跑；第五轮把 `Unplug` 那处从根因清掉）
 make -C <abs>/frontend-vue audit          # 棘轮（wave 202 起分诊在 baseline/audit-triage.json）；
                                           #  实测 exit 0，20 条 / 7 个包逐条表过态
 make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口）
@@ -290,35 +297,87 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-12 第十一轮）做了什么，下一轮从哪接
+## 上一轮（2026-09-12 第十二轮）做了什么，下一轮从哪接
 
-**按第十轮写下的清单全仓扫「手抄 primitive 外观」，第一条就打脸**：
-`ProcessingToolStep.vue` 里还有**第 4 颗**芯片是手抄的，第十轮没修到——
-不是判据不同，是**没有任何锚点落在它上面**。
-这是「读数只覆盖取样点」的具体样本：**「手抄 primitive」是分布式缺陷**。
+**按第十一轮写下的清单做「形状 + 尺寸被手抄」那一档，扫出来的东西比预期重**：
+侧栏那四颗菜单键（新建对话 / Chats / Agents / 定时任务）**把「当前项加粗」抄反了**
+——上游是 `SidebarMenuButton` cva 的 `data-[active=true]:font-medium`，
+本仓在新建对话那颗上抄成了**无条件** `font-medium`，另外三颗**干脆没有**；
+一起漏掉的还有键盘焦点环、长标题截断、`hover:`/`active:` 字色、`w-full`、过渡。
+与 wave 199 的 `ThreadSidebarItem`（「侧栏当前会话不加粗」）同一份 cva、同一个根因。
 
-扫描面从 31 收窄到 8（只取 `badgeVariants` / `buttonVariants` 里**真正声明过**的
-三对变体色，而且色对清单是**从 variants.ts 读出来的**）。
-8 处逐条对上游：**改 2**（第 4 颗芯片 → Badge；`AgentChat` 那两颗
-「开始对话 / 返回画廊」→ `Button as-child` 套 `NuxtLink`，保留链接语义）、
-**照抄不动 4**（上游逐字相同地手写）、**留 3 并写进清单**。
-新守卫 `tests/guards/handwritten-variant-colors.test.ts`（双向、零豁免，负向验证两条）。
+**而台账在这四颗上一直是绿的**——`sidebar` 场景**本来就有两个锚点**落在
+`a[href='/workspace/chats']` / `a[href='/workspace/agents']` 上，字重档从 wave 140
+就在采样，基线里是 0 行。原因是那个场景停在 `/workspace/chats/new`：新建对话
+**正好激活**（上游 500 撞上本仓的无条件 500），其余三颗两边都不激活（都是 400）。
+**四个锚点全绿，四颗按钮全抄漏。** 换到 `/workspace/agents/new` 当场反着报 4 行。
+
+顺手扫出第二处：`WorkspaceChannelsList.vue` 的 **loading 支**还在手抄
+`Skeleton` / `SidebarGroup` / `SidebarGroupLabel`——wave 203 的注释写着「不手抄」，
+但它**只换了「已加载」那一支**。这是第三次同一形状（见下面第十二轮那三条）。
+
+改法：这两处的组/菜单/菜单项/菜单键四层全部换回 `ui/sidebar` 的 primitive。
+新守卫 `tests/guards/handwritten-primitive-slots.test.ts`（`ui/` 之外不许手写
+primitive 的 `data-slot`，**零豁免**）。
+另有两把过期的尺子就地换掉（`sidebar-skeleton` 与 `upstream-class-echo`，见下）。
+负向验证 7 条，逐条红在该红的地方（表在交接文档里；其中一条是做负向验证时
+当场补上的尺子洞——`toContain("<SidebarGroup")` 会被 `<SidebarGroupLabel` 前缀命中）。
 
 **下一轮最该先拿的（按顺序）**：
 
-1. **同一形状再往外推一层：`ui/` 下别的 primitive 有没有被手抄。**
-   这一轮的判据只覆盖**颜色**那一半（`bg-* text-*-foreground` 对），
-   而 wave 141 那次是**基类整串**被抄成本地常量。两者合起来还缺一块：
-   **「形状 + 尺寸」被手抄**（`rounded-full` / `h-9` / `size-4` 这类）。
-   起手式：`borderRadius` 那一档已经证明它能看见形状差异——
-   **先看现在还有哪些 primitive 有独特的 `rounded-*`**（Badge 的 `rounded-full`、
-   Avatar、Skeleton…），再 grep 那几个值出现在非 `ui/` 文件里的地方。
-2. **方向 C（把散文里的断言变成守卫）**：下面那一节列着还没筛的几条。
-   第四到第十一轮这条只在第十一轮动过一次，而它在 wave 101~106 连着五轮都有货。
-3. **继续开维度**——边际收益在下降，挑之前先答一句
-   「这一屏上有什么东西会挤出去 / 会在深色下现形 / 形状会不会不一样」。
+1. **方向 C（把散文里的断言变成守卫）**——下面那一节列着还没筛的几条。
+   第四到第十二轮这条只动过两次，而它在 wave 101~106 连着五轮都有货。
+   **这一轮的经历给它加了权**：`WorkspaceChannelsList` 那条「不手抄它们的类串」
+   就是一句写在注释里、没人守的话，于是它只对文件的一半成立。
+   **起手式改成：先 grep 注释里那些「不要 / 必须 / 照抄」的断言，再逐条问
+   「有没有门禁真的在守它」。**
+2. **把「正负相消」这条判据回扫一遍现有取样面。** 本轮证明了一个由**状态**
+   决定的差异，可以在只取样一种状态的屏上正负相消。**现有 138 个场景-维度里，
+   有哪些锚点量的是「带状态的控件」而这个场景只有一种状态？**
+   起手式（现场数过，非 `ui/` 的产品面只有四份文件在写状态条件类）：
 
-### 第十一轮踩出来的两条
+   ```bash
+   grep -rlE 'data-\[(active|state|selected)=' frontend-vue/app/components --include='*.vue' | grep -v /ui/
+   # → ThreadActionsMenu.vue · ThreadSidebar.vue · ThreadSidebarItem.vue · ArtifactPanel.vue
+   ```
+
+   逐条问「这个条件类的两种取值，是不是各有一个场景-维度覆盖到」。
+   **`ui/` 里那些（`data-[state=open/closed]` 共 73 处）另算**：
+   它们由 primitive 给，两边同源，风险在调用点而不在定义处。
+3. **继续开维度**——边际收益在下降（第六/八/九轮都是 0 行），挑之前先答一句
+   「这一屏上有什么东西会挤出去 / 会在深色下现形 / 形状会不会不一样」。
+   只剩 `agents` 画廊没有窄屏维。
+
+### 第十二轮踩出来的三条
+
+1. **「锚点全绿」不等于「这一处没问题」——还要问「这一屏是不是恰好把差异藏起来了」。**
+   一个由**状态**决定的差异，在只取样一种状态的屏上会**正负相消**：
+   本仓无条件 500 撞上上游激活态 500，本仓无 500 撞上上游非激活 400，
+   四个锚点全部「对上」。**取样面的覆盖率要按「状态×锚点」算，不是按「锚点」算。**
+2. **「修了有锚点的那一支，没锚点的那一支跟着漏」这是第三次。**
+   第十轮三颗芯片 → 第十一轮同一份文件第四颗 → 本轮 `WorkspaceChannelsList`
+   的 loading 支。**修一处「手抄」时，先问这个组件还有几条分支没有锚点。**
+3. **「不许手写」是比「必须抄全」更好的判据。** 后者听起来宽容，实际把抄本
+   正当化，然后要求改 primitive 的人同时去改所有抄本——而守卫只在**下一次**跑的
+   时候才说他漏了哪份。不许手写让漂移不可能，而且**零豁免**：
+   写不了 `data-slot` 的地方，就是该用 primitive 的地方。
+   （代价为零的前提是「那颗 primitive 存在」；不存在的那 11 处单独记了账。）
+
+### 第十二轮的一条操作经验：**换尺子不换判词**
+
+这一轮改完，两份既有测试报红，**判词都对、尺子都过期了**：
+
+- `sidebar-skeleton.test.ts` grep 两份骨架文件的**源文本**找 `data-slot="…"`，
+  而 slot 现在由 primitive 提供——**渲染结果照样有，源文本里没有了**；
+- `upstream-class-echo.test.ts` 比的是**调用点抄本**里的 `aria-disabled:*`，
+  而那两条本来就是从 cva 抄来的，改走 primitive 之后抄本没了。
+
+两处都是坑 131 的形状（尺子测的不是它守的那件事）。修法不是删用例、也不是
+放宽断言，而是**把尺子指到新的事实上，并且两头都断言**：
+「调用点用了那颗 primitive」**加上**「那颗 primitive 自己真的声明了这个 slot /
+真的带着这两条 class」——少了后半句，改错映射或者从 cva 删掉那两条都不会响。
+
+### 第十一轮踩出来的两条（仍然有效）
 
 1. **台账证明不了「没有手抄 primitive」——它只证明取样点上两边一样。**
    第十轮用 `borderRadius` 抓到三颗，修完看起来干净了；全仓一扫，同一份文件里
@@ -501,6 +560,18 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
   ④ `gen-contract-constants.mjs` 的「唯一阻断的一层」只对点名的三份契约成立；
   ⑤ **唯一的活违规**：`【主要导出】` 里写「等 N 个」的 9 份文件，
   `app/core/threads/utils.ts` 写着「等 8 个」而实际 9 个，从 2026-08-31 起全绿至今。
+
+**第十二轮磨出第六条，也是它的一个现成起手式**（这一轮撞出来的）：
+
+> **一句写在注释里的「不 / 必须 / 照抄」，往往只对它当时改的那一半成立。**
+> `WorkspaceChannelsList.vue` 的头注释写着「外壳走 ui/sidebar 的四个 primitive，
+> **不手抄它们的类串**」——而写下这句话的那一轮**只换了「已加载」那一支**，
+> loading 那一支原样手抄着三颗 primitive，注释与代码整整一轮不符。
+>
+> **起手式**：`grep -rn '不要\|必须\|照抄\|不许\|一律' frontend-vue/app --include=*.vue`
+> 把注释里的断言捞出来，逐条问「有没有门禁真的在守它」。
+> 有门禁的跳过；没有的，先确认这条断言**在这份文件里是不是处处成立**
+> ——不成立的那一处就是这一轮的活。
 
 **wave 129 又磨出第五条，专门筛「锚点」这类东西**（线索 274）：
 

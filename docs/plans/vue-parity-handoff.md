@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第十一轮收工）
+## 当前状态（2026-09-12 第十二轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,122 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十二轮）做了什么
+
+**做第十一轮清单上的「形状 + 尺寸被手抄」那一档，扫出侧栏四颗菜单键
+把「当前项加粗」抄反了——而台账在那四颗上一直是绿的。**
+
+### 缺陷
+
+两个应用的侧栏菜单键（新建对话 / Chats / Agents / 定时任务）上游都是
+`<SidebarMenuButton asChild><Link className="text-muted-foreground">`
+（`workspace-header.tsx:54` + `workspace-nav-chat-list.tsx:27/37/78`），
+激活态由 cva 的 `data-[active=true]:{bg,text,font-medium}` 三条给。
+本仓那四颗是摊平的裸 `<a>`，自己写 `data-slot="sidebar-menu-button"` 加手抄的类串，
+把 `data-[active=true]:font-medium` 抄成了**无条件** `font-medium`（新建对话那颗），
+另外三颗**没有这一条**；一起漏掉的还有键盘焦点环
+（`outline-hidden ring-sidebar-ring focus-visible:ring-2`）、
+长标题截断（`[&>span:last-child]:truncate` + `overflow-hidden`）、
+`hover:text-sidebar-accent-foreground`、`active:*`、`w-full`、
+`transition-[width,height,padding]`，定时任务那颗还少
+`data-[active=true]:text-sidebar-accent-foreground`。
+与 wave 199 的 `ThreadSidebarItem`（「侧栏当前会话不加粗」）同一份 cva、同一个根因。
+
+### 台账为什么是绿的（本轮最值钱的一条）
+
+`sidebar` 场景**已经有两个锚点**落在 `a[href='/workspace/chats']` /
+`a[href='/workspace/agents']` 上，字重档从 wave 140 就在采样，基线里 **0 行**。
+那个场景停在 `/workspace/chats/new`：新建对话**正好激活**，上游 cva 给 500，
+本仓无条件 500，**撞上了**；其余三颗两边都不激活，都是 400，**也对上**。
+**四个锚点全绿，四颗按钮全抄漏。**
+
+换一条路径同时踩反两边。锚点挂到 `agent-create-name-step`
+（`/workspace/agents/new`，只有两个桌面语言维，两边侧栏都在），
+改动前读数（两种语言各 2 行、方向相反）：
+
+```
+agent-create-name-step/desktop/light/{en-US,zh-CN}  geometry:
+  selector:[data-sidebar='sidebar'] a[href='/workspace/agents']    fontWeight React=500 Vue=400
+  selector:[data-sidebar='sidebar'] a[href='/workspace/chats/new'] fontWeight React=400 Vue=500
+```
+
+锚点按 href 写不按名字写：这个场景有两个语言维，而 `sidebar.newChat` /
+`sidebar.agents` 两条词条都随语言变（坑 214 / wave 129 的同一条）。
+
+### 第二处：修了有锚点的那一支，没锚点的那一支跟着漏
+
+`WorkspaceChannelsList.vue` 的头注释写着「外壳走 ui/sidebar 的四个 primitive，
+不手抄它们的类串（wave 203）」——而 wave 203 **只换了「已加载」那一支**。
+**loading 那一支**原样留着：三块占位方块手抄 `ui/skeleton` 的
+`bg-accent animate-pulse rounded-md`，外面两层各自手抄 `SidebarGroup` 与
+`SidebarGroupLabel`。上游那一支是 `<SidebarGroup><SidebarGroupLabel>` +
+三颗 `<Skeleton className="h-8 w-full" />`。
+
+**第三次同一形状**：第十轮三颗芯片 → 第十一轮同一份文件第四颗 → 本轮 loading 支。
+
+### 改法与守卫
+
+两处的组 / 菜单 / 菜单项 / 菜单键四层全部换回 `ui/sidebar` 的 primitive
+（`ThreadSidebar.vue`：四颗链接键 + 一颗禁用态按钮 + 两个 `SidebarGroup` +
+最近对话那一组的 label/content + 四处 `ul` 与五处 `li`——**改完这份文件里
+一个裸 `<ul>` / `<li>` 都没有了**；
+`WorkspaceChannelsList.vue` 的 loading 支）。
+外壳那四层（header / content / footer / rail）仍然手写——`ui/sidebar` 里
+**没有**这四颗 primitive，本仓的侧栏容器是 `ThreadSidebarShell.vue`。
+
+新守卫 `tests/guards/handwritten-primitive-slots.test.ts`：
+**`ui/` 之外不许手写 primitive 自己的 `data-slot` 值**，零豁免。
+它是 `primitive-marker-classes` 的孪生——那条守**标记类**（`peer/menu-button`），
+这条守**身份属性**（`data-slot`），两者答的是同一个问题「谁在扮演那颗 primitive」，
+而侧栏这一片两种方式都用过。
+
+**判据为什么是「不许手写」而不是「必须抄全」**：后者把抄本正当化，然后要求改
+primitive 的人同时去改所有抄本，而守卫只在下一次跑的时候才说他漏了哪份。
+不许手写让漂移不可能，代价为零——写不了 `data-slot` 的地方就是该用 primitive 的地方。
+`data-sidebar` 故意不在判据里：外壳那四层没有 primitive 可走，而手写就得带上它。
+
+### 换尺子不换判词（两处）
+
+改完有两份既有测试报红，**判词都对、尺子都过期了**（坑 131 的形状）：
+
+- `tests/unit/workspace-shell/sidebar-skeleton.test.ts` grep 两份骨架文件的
+  **源文本**找 `data-slot="…"`——slot 现在由 primitive 提供，**渲染结果照样有**。
+  改成按表分两类：`ui/sidebar` 里没有 primitive 的五颗比 literal，
+  有 primitive 的比「那颗组件被用上了」**并且回头验证那颗 primitive 真的声明了这个 slot**。
+- `tests/guards/upstream-class-echo.test.ts` 的「禁用 Agents 入口」比的是
+  **调用点抄本**里的 `aria-disabled:*`——那两条本来就是从 cva 抄来的。
+  改成两头比：调用点必须是 `SidebarMenuButton` 且带 `text-muted-foreground/50`，
+  **而那两条要在 cva 里真的存在**。少了后半句，谁把它们从 cva 删掉都不会响。
+
+另外 `handwritten-button` 的 ThreadSidebar 条目 4 → 3（禁用入口那颗改走 primitive），
+`primitive-marker-classes` 的 `group/menu-item` 豁免过期被**反向检查**报出来并删掉。
+
+### 负向验证（7 条，各红在该红的地方）
+
+| # | 变异 | 该响的 |
+| --- | --- | --- |
+| N1 | 调用点把 `<SidebarGroupLabel>` 换成 `<div>` | sidebar-skeleton「得由 SidebarGroupLabel 带上」 |
+| N2 | `SidebarGroupLabel.vue` 自己改掉 slot 名 | sidebar-skeleton「自己并没有声明」 |
+| N3 | 调用点去掉 `text-muted-foreground/50` | upstream-class-echo「半透明那一档是调用点给的」 |
+| N4 | cva 删掉 `aria-disabled:opacity-50` | upstream-class-echo「cva 少了」 |
+| N5 | 禁用入口改回手写 `<button>` | upstream-class-echo「要走 SidebarMenuButton」 |
+| N6 | 把一处 `<SidebarMenuItem>` 改回手写 `data-slot` 的 `<li>` | 新守卫报出 `ThreadSidebar.vue:507 → sidebar-menu-item` |
+| N7 | **只**删掉两个 `<SidebarGroup>` 容器、保留 Label / Content | sidebar-skeleton「sidebar-group 得由 SidebarGroup 带上」 |
+
+N7 是做负向验证时**当场补上的一个洞**：第一版判据写的是
+`toContain("<" + primitive)`，而 `<SidebarGroup` 会被 `<SidebarGroupLabel`
+**前缀命中**——组容器整个删掉那一条也不会响。收紧成 `new RegExp(\`<${primitive}[\\s>]\`)`
+之后这个变异才红。**尺子自己也要被变异一次。**
+
+### 量过、判「无账」的
+
+- `ThreadSidebar.vue` 其余 13 处手写 slot 的类串：**逐字一致**，只有 group-label
+  那一处漂了 10 个 token，而那 10 个在本仓全是哑的（标签不可聚焦、无 svg 子节点、
+  收起态走 `v-if` 而不是 `data-collapsible=icon`）；
+- 本仓手写、上游 `ui/` 拥有而本仓 `ui/` 没有的 slot 共 11 处
+  （侧栏外壳 5 / composer 4 / separator 1），各自判过；
+- 面包屑（本仓手写、上游走 `ui/breadcrumb`）：twMerge 之后两边等价。
 
 ## 上一轮（2026-09-12 第十一轮）做了什么
 

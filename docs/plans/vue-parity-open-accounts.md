@@ -1,7 +1,95 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十一轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十二轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> ## 2026-09-12 第十二轮：**同一个缺陷可以在取样面上「正负相消」**
+>
+> 这一轮按第十一轮写下的清单做「形状 + 尺寸被手抄」那一档，扫出的东西比预期重：
+> 侧栏那四颗菜单键**把「当前项加粗」抄反了**，而台账**四个锚点全绿**。
+>
+> ### 一、缺陷本身
+>
+> 两个应用的侧栏菜单键（新建对话 / Chats / Agents / 定时任务）上游都是
+> `<SidebarMenuButton asChild><Link className="text-muted-foreground">`，
+> 激活态由 cva 的三条 `data-[active=true]:{bg,text,font-medium}` 给。
+> 本仓那四颗是**摊平的裸 `<a>`**，自己写 `data-slot="sidebar-menu-button"` 加一串手抄的类。
+> 逐 token 对下来漏掉的是：
+>
+> | 漏的 | 后果 |
+> | --- | --- |
+> | `data-[active=true]:font-medium` → 抄成**无条件** `font-medium`（新建对话那颗），另外三颗**干脆没有** | **「当前这一项加粗」在本仓是反的** |
+> | `outline-hidden ring-sidebar-ring focus-visible:ring-2` | 四颗都**没有键盘焦点环** |
+> | `[&>span:last-child]:truncate` + `overflow-hidden` | 长标题不截断 |
+> | `hover:text-sidebar-accent-foreground` / `active:*` | 悬停/按下不变字色 |
+> | `transition-[width,height,padding]` / `w-full` / `p-2`（写成 `px-2`） | 过渡与盒子 |
+> | 定时任务那颗还少 `data-[active=true]:text-sidebar-accent-foreground` | 激活时字色不变 |
+>
+> 与 wave 199 的 `ThreadSidebarItem.vue`（「侧栏当前会话不加粗」）**同一个根因、同一份 cva**——
+> 那次修的是会话行，这次是它上面那四颗导航键。
+>
+> ### 二、台账为什么一直是绿的（本轮最值钱的一条）
+>
+> `sidebar` 场景**已经有两个锚点**落在 `a[href='/workspace/chats']` /
+> `a[href='/workspace/agents']` 上，字重档从 wave 140 就在采样，
+> 而这两条在基线里是 **0 行**。原因是那个场景停在 `/workspace/chats/new`：
+>
+> - 新建对话那颗**正好是激活态** → 上游 `font-medium` 生效 = 500，
+>   本仓无条件 `font-medium` = 500，**撞上了**；
+> - 其余三颗两边都不激活 → 都是 400，**也对上**。
+>
+> **四个锚点全绿，四颗按钮全抄漏。**
+>
+> 换一条路径就当场现形：`/workspace/agents/new` 同时踩反两边——
+> 新建对话不激活（上游 400 / 本仓 500）、Agents 激活（上游 500 / 本仓 400）。
+> 锚点挂到 `agent-create-name-step` 上，**两种语言各 2 行、方向相反、同一个根因**：
+>
+> ```
+> agent-create-name-step/desktop/light/{en-US,zh-CN}  geometry:
+>   selector:[data-sidebar='sidebar'] a[href='/workspace/agents']    fontWeight React=500 Vue=400
+>   selector:[data-sidebar='sidebar'] a[href='/workspace/chats/new'] fontWeight React=400 Vue=500
+> ```
+>
+> **判据：「锚点全绿」不等于「这一处没问题」，还要问「这一屏是不是恰好把差异藏起来了」。**
+> 一个由**状态**决定的差异，在只取样一种状态的屏上可以正负相消。
+>
+> ### 三、顺手扫出的第二处：修了有锚点的那一支，没锚点的那一支跟着漏
+>
+> `WorkspaceChannelsList.vue` 的头注释写着「外壳走 ui/sidebar 的四个 primitive，
+> 不手抄它们的类串（wave 203）」——而 wave 203 **只换了「已加载」那一支**，
+> **loading 那一支原样留着**：三块占位方块手抄 `ui/skeleton`，外面两层各自手抄
+> `SidebarGroup` 与 `SidebarGroupLabel`（同样漏掉那 10 个 token）。
+>
+> 这是**第三次**同一形状（第十轮三颗芯片 → 第十一轮同一文件第四颗 → 本轮 loading 支）。
+> **修一处「手抄」时，先问这个组件还有几条分支没有锚点。**
+>
+> ### 四、做成守卫：`tests/guards/handwritten-primitive-slots.test.ts`
+>
+> `primitive-marker-classes` 的孪生：那条守**标记类**（`peer/menu-button`），
+> 这条守**身份属性**（`data-slot`）。两者答同一个问题——「谁在扮演那颗 primitive」，
+> 而侧栏这一片两种方式都用过。
+>
+> **判据是「不许手写」而不是「必须抄全」**：后者把抄本正当化，然后要求改 primitive
+> 的人同时去改所有抄本，而守卫只在**下一次**跑的时候才说他漏了哪份。
+> 不许手写则让漂移不可能，**零豁免**，代价为零——写不了 `data-slot` 的地方
+> 就是该用 primitive 的地方。
+>
+> **`data-sidebar` 故意不在判据里**：侧栏外壳（header / content / footer / rail）在
+> `ui/sidebar` 里没有 primitive，只能手写，而手写就得带上 `data-sidebar`。
+>
+> 负向验证 **7 条**（表在 `vue-parity-handoff.md`）。其中一条是**做负向验证时当场
+> 补上的尺子洞**：`toContain("<SidebarGroup")` 会被 `<SidebarGroupLabel` 前缀命中，
+> 组容器整个删掉都不会响——**尺子自己也要被变异一次**。
+>
+> ### 五、本轮量过、判「无账」的
+>
+> | 量的 | 结果 |
+> | --- | --- |
+> | `ThreadSidebar.vue` 其余 13 处手写 slot 的类串 | **逐字一致**，只有 group-label 那一处漂了 10 个 token（且本仓全部是哑的：标签不可聚焦、无 svg 子节点、收起态走 `v-if`） |
+> | 本仓手写、上游 `ui/` 拥有而本仓 `ui/` 没有的 slot | 11 处：侧栏外壳 5 / composer 4 / separator 1 ——各自判过（separator 那处 twMerge 后与上游等价；composer 外壳第九、十轮量过 12 维） |
+> | 面包屑（本仓手写、上游走 `ui/breadcrumb`） | twMerge 之后两边等价（`inline-flex` 被调用点的 `hidden` 顶掉） |
+> | `ThreadActionsMenu` / `WorkspaceChangesBadge` / `BrowserPanel` 三处形状相近 | 第一处此前判过并写明「没跟的两条为什么不跟」，后两处是通用写法的巧合 |
+>
 
 > ## 2026-09-12 第十一轮：**「手抄 primitive」是分布式缺陷——台账只看得见有锚点的那几处**
 >
