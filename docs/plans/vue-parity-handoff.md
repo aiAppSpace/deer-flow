@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第十四轮收工）
+## 当前状态（2026-09-12 第十五轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,70 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十五轮）做了什么
+
+**把「必须原样输出 `data-size`」这条断言一路推到「死选择器」，
+在 `ui/dropdown-menu` 里量出一条写着却永远不成立的类。**
+
+### 怎么筛到它的
+
+第十四轮定的口径是「按点名的 token 聚类，重点看跨多个文件同形的」。
+全量断言按 token 聚类后，**被 ≥2 份文件点名的有 16 个**，
+其中 `ui/input` / `ui/textarea` / `$attrs` / `renderComponentRoot` 已在前两轮成门。
+剩下最有货相的是 `data-size`——`Item.vue` 与 `SidebarMenuButton.vue` 各自写着
+「`data-variant` / `data-size` **必须原样输出**：兄弟 primitive 靠它定位」。
+
+推广开来就是：**类串里写了 `data-[X]:`，X 就得真的会出现在 DOM 上。**
+
+### 读数
+
+`ui/` 里被选择的 `data-*` 共 14 个：本仓包装层自己写 7 个
+（`slot` `variant` `size` `side` `active` `spacing` `sidebar`）、
+**reka 运行时打** 5 个（`state` `disabled` `highlighted` `orientation` `placeholder`）、
+**两边都没有** 2 个：`inset` 与 `collapsible`。
+
+- **`inset` 是真死的**：三颗 dropdown primitive 的基类里都带着 `data-[inset]:pl-8`
+  （基类逐字照上游，`primitive-base-classes` 还盯着），而本仓没有任何出口能打
+  `data-inset`——`inset` 是 shadcn 层的 prop（`ui/dropdown-menu.tsx:74/156/212`），
+  reka 没有这个概念。补上 prop（Label / Item / SubTrigger 三颗）。
+- **`collapsible` 是 wave 74 判过的分歧**（侧栏收起态走 `useWorkspaceSidebar` 的
+  `collapsed` ref，外壳在 `ThreadSidebarShell.vue`、不在 `ui/` 里），进豁免表并注明出处。
+
+### 那条 DOM 用例刚写完就付清了成本
+
+第一版绑的是 `:data-inset="props.inset"`。**Vue 的布尔 prop 不传时被转成 `false`**，
+而 `data-[inset]:pl-8` 编译成 `[data-inset]{…}`——**按属性存在匹配**，
+`data-inset="false"` 照样命中：照直绑会让**每一项都缩进 8px**。
+改成 `props.inset || undefined`。上游 React 在 `inset={false}` 时确实会打出
+`data-inset="false"` 并因此缩进，那是它的 quirk；**两边调用点都是零消费者**，
+本仓取「不打」，理由写在 `DropdownMenuLabel.vue` 的文件头。
+
+**判据落在渲染结果上，不落在源码文本上**：源码里有 `:data-inset` 不等于属性真的到了
+DOM——`useForwardProps` 会把未知 prop 原样转发，`inset` 不从 `delegated` 里剥掉的话，
+reka 会额外打一个裸 `inset` 属性。那条用例因此同时钉「`data-inset` 在」与「裸 `inset` 不在」。
+
+### 新门：`tests/guards/dead-data-selectors.test.ts`
+
+**两个来源缺一不可**：只查本仓包装层会把 reka 打的那五个全报成死选择器——
+那正是第一版量法犯的错（第十四轮的教训：**正则看不见的那一半会被当成 0**）。
+第二个来源直接去 `node_modules/reka-ui/dist` 里查，不维护手抄名单。
+形状断言里 `rekaSource.length > 100_000` 就是为它设的：**尺子读空时先红的是它**。
+
+### 负向验证（3 条）
+
+| # | 变异 | 该响的 |
+| --- | --- | --- |
+| N1 | 撤掉三颗的 `:data-inset` 出口 | 「每一条 data-[X] 都有人把 X 打到 DOM 上」报 `inset` |
+| N2 | 把 reka 那一路的路径写错（尺子自己坏掉） | **形状断言先红**（`expected 0 to be greater than 100000`），而不是一片假红 |
+| N3 | `ALLOWED` 里塞一条已经有人打的（`state`） | 反向那条报 `state` |
+
+### 为什么这一轮仍然跑了对照复量
+
+改动在**所有现有调用点上是可证的空操作**（两边都零调用点传 `inset`；
+`props.inset || undefined` 在不传时不打属性）。仍然跑，是因为
+**这一段里我自己的量法已经错过两次**（第十四轮两次把「正则看不见的一半」当成 0）——
+证明可以是错的，读数不会。
 
 ## 上一轮（2026-09-12 第十四轮）做了什么
 

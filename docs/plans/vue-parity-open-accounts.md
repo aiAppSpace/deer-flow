@@ -1,9 +1,58 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十四轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十五轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-12 第十四轮：**「已经有门禁在守」这句话本身也要核**
+> ## 2026-09-12 第十五轮：**一条写着却永远不成立的选择器，比没写更糟**
+>
+> 按第十四轮定下的口径接着筛：把断言按**它点名的 token** 聚类，
+> 只看**被 ≥2 份文件点名**的那些（跨文件同形 = 这两轮出货的形状）。
+> 16 个里，`ui/input` / `ui/textarea` / `$attrs` / `renderComponentRoot` 已在前两轮成门；
+> 剩下最有货相的是 **`data-size`**——`Item.vue` 与 `SidebarMenuButton.vue` 各自断言
+> 「`data-variant` / `data-size` **必须原样输出**：兄弟 primitive 靠它定位」。
+>
+> ### 一、判据一路推到「死选择器」
+>
+> 「必须原样输出」推广开来就是：**类串里写了 `data-[X]:`，X 就得真的会出现在 DOM 上**。
+> 全仓量下来 `ui/` 里被选择的 `data-*` 有 14 个，其中：
+>
+> | 来源 | 有哪些 |
+> | --- | --- |
+> | 本仓包装层自己写 | `slot` `variant` `size` `side` `active` `spacing` `sidebar` |
+> | **reka 运行时打上** | `state` `disabled` `highlighted` `orientation` `placeholder` |
+> | **两边都没有（死）** | **`inset`** · `collapsible` |
+>
+> **`inset` 是真死的**：三颗 dropdown primitive 的基类里都带着 `data-[inset]:pl-8`
+> （基类逐字照上游，`primitive-base-classes` 还盯着），而本仓**没有任何出口**能把
+> `data-inset` 打上去——`inset` 是 shadcn 层的 prop（`ui/dropdown-menu.tsx:74/156/212`），
+> reka 没有这个概念。补上那个 prop（Label / Item / SubTrigger 三颗）之后这条才活。
+> `collapsible` 是 wave 74 判过的分歧（本仓侧栏收起态走自己的 ref），进豁免表并注明出处。
+>
+> ### 二、这条用例刚写完就付清了成本
+>
+> 第一版写的是 `:data-inset="props.inset"`。**Vue 的布尔 prop 不传时会被转成 `false`**，
+> 而 `data-[inset]:pl-8` 编译出来是 `[data-inset]{…}`——**按属性存在匹配**，
+> `data-inset="false"` 照样命中。也就是说照直绑会让**每一项都缩进 8px**。
+> 改成 `props.inset || undefined`。
+> （上游 React 在 `inset={false}` 时确实会打出 `data-inset="false"` 并因此缩进，
+> 那是它的 quirk；两边调用点都是**零消费者**，本仓取「不打」，理由写在文件头。）
+>
+> **判据落在渲染结果上，不落在源码文本上**：源码里有 `:data-inset` 不等于属性真的
+> 到了 DOM——`useForwardProps` 会把未知 prop 原样转发，`inset` 不从 `delegated` 里剥掉
+> 的话，reka 会额外打一个裸 `inset` 属性。那条 DOM 用例因此同时钉两件事。
+>
+> ### 三、做成守卫：`tests/guards/dead-data-selectors.test.ts`
+>
+> **两个来源缺一不可**：只查本仓包装层会把 reka 打的那五个全报成死选择器
+> ——那正是第一版量法犯的错（第十四轮的教训：**正则看不见的那一半会被当成 0**）。
+> 第二个来源直接去 `node_modules/reka-ui/dist` 里查，**不维护手抄名单**。
+> 形状断言里那条 `rekaSource.length > 100_000` 就是为它设的：尺子读空时**先红的是它**，
+> 而不是一片假红。
+>
+> 负向验证 3 条：撤掉 `inset` 的出口 → 报 `inset`；把 reka 那一路的路径写错 →
+> 形状断言先红；`ALLOWED` 里塞一条已经有人打的 → 反向那条红。
+>
+**「已经有门禁在守」这句话本身也要核**
 >
 > 接着筛方向 C 的 131 条断言。这一轮四条排队的**逐条核过**，
 > 三条确有门禁、一条的门禁**只盖了三分之一**。

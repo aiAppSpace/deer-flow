@@ -12,7 +12,7 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-12 第十四轮收工实测，不是估计）**：
+**接手时的状态（2026-09-12 第十五轮收工实测，不是估计）**：
 
 - 工作区干净；**本地领先 `origin/main-wc` 三百多个提交、全部未推送**
   （没有收到过推送指令；要推就先问用户）。
@@ -151,11 +151,11 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
 
 ```bash
-# 2026-09-12 第十四轮收工实测（每一条都是真跑出来的，不是抄的；
-# 第十四轮**没有改任何产品代码**（只加两道门），所以只跑 verify——台账不可能动；
-# e2e-parity / e2e-mock / e2e-visual / icon-parity 是第十三轮真跑的；
+# 2026-09-12 第十五轮收工实测（每一条都是真跑出来的，不是抄的；
+# 第十五轮动了 ui/dropdown-menu，所以 verify / e2e-mock / e2e-parity 都真跑了；
+# e2e-visual / icon-parity 是第十三轮真跑的；
 # 其余读数是第五 / 七轮真跑的，第五轮九条全绿）
-make -C <abs>/frontend-vue verify         # exit 0；**327 文件 / 2662** 单测；词典 1139 key / 15 unused
+make -C <abs>/frontend-vue verify         # exit 0；**328 文件 / 2666** 单测；词典 1139 key / 15 unused
 make -C <abs>/frontend-vue e2e-parity     # **146 passed**（整条 17.3 分钟）
                                           #  台账 159 唯一行 / 179 多重集 / 138 场景-维度
                                           #  （第十二、十三两轮基线文件都一个字节没动；
@@ -302,30 +302,51 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-12 第十四轮）做了什么，下一轮从哪接
+## 上一轮（2026-09-12 第十五轮）做了什么，下一轮从哪接
 
-**接着筛方向 C 的 131 条断言。这一轮最值钱的一条是：「已经有门禁在守」这句话
-本身也要核。** 四条排队的逐条核过——三条确有门禁（landmark 由对照台账守、
-`/api/` 由 `architecture.test.ts` 守、「两层都不许退化成尾部防抖」**两层各有一条用例**），
-**一条的门禁只盖了三分之一**：`MarkdownIcon.vue` 说「DOM 等价 gate 会逐属性红」，
-而 golden 夹具里只对得上 9 条路径里的 3 条——另外 6 条是只在交互态才出现的图标
-（复制后的瞬时勾、外链弹窗、mermaid 全屏控件），录静态 markdown DOM 的夹具永远录不到。
+**把「`data-variant` / `data-size` 必须原样输出」这条断言一路推到
+「类串里写了 `data-[X]:`，X 就得真的会出现在 DOM 上」，量出一条真死的选择器。**
 
-补的门：`markdown-icon-paths`（9 条路径逐字比上游装的 streamdown 产物，
-**不写死 chunk 文件名**）与 `v-model-emits-declared`（坑 72 的棘轮：
-59 处 `v-model` 调用点、9 个 primitive、0 违规）。负向验证 5 条。
-**这一轮没有改任何产品代码**，所以没跑对照复量——理由写在交接文档里。
+筛法用第十四轮定的口径：把断言按**它点名的 token** 聚类，只看**被 ≥2 份文件点名**的
+（跨文件同形 = 这三轮出货的形状）。16 个里四个已成门，`data-size` 这一族推广后出货。
+
+读数：`ui/` 里被选择的 `data-*` 共 14 个——本仓包装层写 7 个、**reka 运行时打 5 个**、
+两边都没有 2 个。其中 **`inset` 是真死的**：三颗 dropdown primitive 的基类里都带着
+`data-[inset]:pl-8`（基类逐字照上游），而 `inset` 是 shadcn 层的 prop、reka 没有这个
+概念，本仓没有任何出口能打上去。补上 prop 之后这条才活；`collapsible` 是 wave 74
+判过的分歧，进豁免表并注明出处。
+
+**那条 DOM 用例刚写完就付清了成本**：第一版绑 `:data-inset="props.inset"`，
+而 Vue 的布尔 prop 不传时被转成 `false`，`data-[inset]` 又是**按属性存在匹配**
+——照直绑会让每一项都缩进 8px。改成 `props.inset || undefined`。
+
+新门 `dead-data-selectors`（两个来源缺一不可，第二个直接查 `node_modules/reka-ui/dist`，
+不维护手抄名单）。负向验证 3 条。
 
 **下一轮最该先拿的（按顺序）**：
 
-1. **方向 C 继续。** 131 条里已筛掉的：`ui/input`/`ui/textarea` 一族（6 份）、
-   固定色、`as="button"`、landmark、`/api/` 分层、尾部防抖、`text-lg` 重复、
-   markdown 图标、`v-model` emits。**还没筛的**先按「点名了 token」再筛一遍，
-   重点看**跨多个文件同形**的那些（这两轮出货的都是这种）。
-2. **给 todos 造夹具、挂进取样面，再改 TodoList 的容器层**（第十三轮开的账，原样有效）。
-3. **把「正负相消」回扫现有取样面**（第十二轮开的账，原样有效）。
+1. **方向 C 继续。** 按 token 聚类的 16 个里还剩几族没筛：
+   `values`（4 份，流协议）、`formatInput`/`[\s-]`/`MiniMax M3`（2 份，
+   command-score 的分词 quirk）、`unknown`/`content`（类型契约）。
+   **先问它们是不是已经由单测守着**——`values` 那几条多半是，
+   但按第十四轮的教训，**要核那道门的取样面盖不盖得到**。
+2. **给 todos 造夹具、挂进取样面，再改 TodoList 的容器层**（第十三轮的账，原样有效）。
+3. **把「正负相消」回扫现有取样面**（第十二轮的账，原样有效）。
 
-### 第十四轮踩出来的三条
+### 第十五轮踩出来的两条
+
+1. **一条写着却永远不成立的选择器，比没写更糟**——它让下一个人以为这件事有人管。
+   找它的判据可以完全机械化：**类串里选了 `data-[X]`，就得有人把 X 打到 DOM 上**，
+   而「有人」有两个来源（本仓包装层 / 底层库运行时），**只查一个会把另一个整片
+   报成死的**。这与第十四轮那条「正则看不见的一半被当成 0」是同一件事，
+   只是这次它出现在**判据**里而不是勘察脚本里。
+2. **Vue 的布尔 prop 不传时是 `false`，不是 `undefined`；而 `data-[X]` 按属性存在匹配。**
+   两件事撞在一起，`:data-x="props.x"` 会让**每一个**元素命中那条选择器。
+   要打成「不传就没有」，必须显式 `|| undefined`。
+   （上游 React 那边 `undefined` 才省略属性、`false` 会渲染成 `"false"`——
+   也就是说这个坑上游也有，只是它零消费者。）
+
+### 第十四轮踩出来的三条（仍然有效）
 
 1. **「已经有门禁在守」这句话本身也要核。** 一份文件的注释可以准确地点出
    「哪道门在守我」，而那道门**只盖了一部分**——`MarkdownIcon` 那 9 条路径里
@@ -605,8 +626,21 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > **量过判「不做门」的**：`aria-label` + `placeholder` 同在（6 处，多数正当，
 > 判据会退化成豁免表）、`inheritAttrs: false` 必须接 attrs（19/19 成立，
 > 但判据分不出「真接回来了」和「import 了没用」）——两条的理由都写在挂账清单里。
-> **还没筛的**：把剩下的按「点名了 token」再过一遍，
-> 重点看**跨多个文件同形**的那些——这两轮出货的都是这种。
+> **第十五轮把这一步机械化了**：把断言按**它点名的 token** 聚类，
+> 只看**被 ≥2 份文件点名**的那些——16 个，一眼看完。
+>
+> ```bash
+> # 见 vue-parity-handoff.md 第十五轮那节；要点是把 token 当聚类键，
+> # 同一个 token 被多份文件的断言点名 = 跨文件同形 = 三轮出货的形状
+> ```
+>
+> **16 个里已成门的**：`ui/input` / `ui/textarea` / `<Input>` / `<Textarea>`
+> （handwritten-input）、`$attrs` / `renderComponentRoot`（v-model-emits-declared）、
+> `data-size` / `data-variant`（dead-data-selectors）。
+> **还剩的几族**：`values`（4 份，流协议）、`formatInput` / `[\s-]` / `MiniMax M3`
+> （2 份，command-score 的分词 quirk）、`unknown` / `content`（类型契约）、
+> `group-has-[[data-slot=item-description]]/item:`（ui/item 内部）。
+> 先问它们是不是已经由单测守着——**并且按第十四轮的教训，核那道门的取样面盖不盖得到**。
 
 **wave 129 又磨出第五条，专门筛「锚点」这类东西**（线索 274）：
 
