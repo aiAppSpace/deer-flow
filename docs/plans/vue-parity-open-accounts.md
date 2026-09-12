@@ -1,7 +1,63 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十一轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> ## 2026-09-12 第十一轮：**「手抄 primitive」是分布式缺陷——台账只看得见有锚点的那几处**
+>
+> 第十轮用新加的 `borderRadius` 档抓到 `ProcessingToolStep.vue` 三颗芯片手抄了
+> `ui/badge`，当轮修掉。这一轮按既定清单全仓扫同一形状，**结果第一条就打脸**：
+>
+> ### 一、同一份文件里还有第 4 颗
+>
+> `ProcessingToolStep.vue` 的 web_search 结果链也是手抄的
+> （`bg-secondary text-secondary-foreground rounded-md px-2 py-0.5 text-xs font-normal`），
+> 第十轮没修到它——**不是判据不同，是没有任何锚点落在这一颗上**。
+> 上游同一处是 `<ChainOfThoughtSearchResult><a …></ChainOfThoughtSearchResult>`
+> （`message-group.tsx:726`），层次与 `web_fetch` 那一支一样。
+>
+> **这就是「读数只覆盖取样点」那句话的一个具体样本**：
+> 台账能证明「这几个点上两边一样」，但**「手抄 primitive」是分布式的**——
+> 它长在哪里，哪里就得恰好有个锚点才看得见。
+>
+> ### 二、扫描面怎么收窄的（否则就要一张几十条的豁免表）
+>
+> 第一版按「变体色对 + 主题色对」扫，31 处，绝大多数是**主题 token 的正常用法**
+> （横幅、toast、面板的 `bg-muted text-muted-foreground` / `bg-popover …`），
+> 上游同样直接写。**要豁免表就说明判据没选对**（坑 180）。
+>
+> 收窄成**只取 `badgeVariants` / `buttonVariants` 里真正声明过的那几对**
+> （`bg-primary text-primary-foreground` / `bg-secondary text-secondary-foreground` /
+> `bg-destructive text-white`），**31 → 8**。而且那份色对清单是**从两个
+> `variants.ts` 里读出来的，不是手抄的**——primitive 改了变体，扫描面自己跟着变。
+>
+> ### 三、8 处逐条对上游的结果
+>
+> | 处 | 上游那处是什么 | 判 |
+> | --- | --- | --- |
+> | `ProcessingToolStep.vue` web_search 链 | `ChainOfThoughtSearchResult`（Badge） | **改**（本轮） |
+> | `AgentChat.vue` 「开始对话 / 返回画廊」 | `agents/new/page.tsx:427/436` 两颗 `<Button>` | **改**（本轮） |
+> | `HumanInputCard.vue` 选项卡选中态 | `human-input-card.tsx:188` **逐字相同地手写** | 照抄不动 |
+> | `ThreadBackgroundTasks.vue` 计数圆点 | `thread-background-tasks.tsx:69` 逐字相同 | 照抄不动 |
+> | `ThreadSubagentBatches.vue` 计数圆点 | `thread-subagent-batches.tsx:75` 逐字相同 | 照抄不动 |
+> | `SettingsDialog.vue` 导航选中态 | `settings-dialog.tsx:237` 逐字相同 | 照抄不动 |
+> | `MarkdownLink.vue` 引用角标 | 上游那一层由 streamdown 自己渲染，没有可对的调用点 | 留，写进清单 |
+> | `MarkdownLinkSafetyModal.vue` 主操作 | **上游没有这个组件**（弹窗在 streamdown 包内部） | 留，写进清单 |
+> | `pages/__m0/visual.vue` | 视觉基线夹具页，**不是产品面** | 留，写进清单 |
+>
+> `AgentChat.vue` 那两颗**保留链接语义**（`Button as-child` 套 `NuxtLink`）：
+> 点了就跳走的控件不该是按钮——2026-09-11 那一轮刚为此改过 agents 那一屏。
+> 手抄那版对着 `buttonVariants` 逐条丢掉的是：`font-medium`、`hover:bg-primary/90`、
+> 三条 `focus-visible:*`、`h-9`（写成 `py-2`）、`px-4`（写成 `px-3`）、
+> `inline-flex items-center justify-center`、`gap-2`、`whitespace-nowrap`、
+> `cursor-pointer`、`transition-all`、`disabled:*` 与 `aria-invalid:*`。
+>
+> ### 四、做成守卫：`tests/guards/handwritten-variant-colors.test.ts`
+>
+> `handwritten-button` / `handwritten-input` 的第三个同胞，判据同源、**双向**、零豁免。
+> **它补的洞正好是台账补不了的那个**：这条判据不依赖取样点。
+> 负向验证两条：把第 4 颗改回手写 → 「没有清单之外的文件」红；
+> 把清单里一条处数改错 → 「处数对不上」红。
 
 > ## 2026-09-12 第十轮：**给几何档加 `borderRadius`，第一次跑就抓到一处形状差异**
 >
