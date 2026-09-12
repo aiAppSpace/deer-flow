@@ -20,6 +20,15 @@
                    SidebarGroup / SidebarGroupLabel / SidebarMenu / SidebarMenuItem。
                    门禁：tests/guards/primitive-marker-classes.test.ts。
 
+                   **wave 203 只换了「已加载」那一支，loading 那一支原样留着**
+                   ——2026-09-12 第十二轮全仓扫 `animate-pulse` 时才发现：
+                   三块占位方块手抄的是 `ui/skeleton` 的 `bg-accent animate-pulse rounded-md`，
+                   外面两层又各自手抄了一遍 SidebarGroup 与 SidebarGroupLabel
+                   （同样漏掉那 10 个 token）。上游那一支是
+                   `<SidebarGroup><SidebarGroupLabel>` + 三颗 `<Skeleton className="h-8 w-full" />`。
+                   与第十轮修三颗芯片、第十一轮在同一份文件里找到第四颗**同形**：
+                   修的是「有锚点的那一支」，没锚点的那一支跟着漏掉。
+
                    连接态读 provider.connection_status，不读 connections。理由见
                    core/channels/state.ts 的头注释：这两个字段同源，而 connection_status
                    多带了 auth 关闭部署下「配好即已连接、没有 binding row」这个事实。
@@ -36,6 +45,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthSession } from "@/composables/useAuthSession";
 import { useChannelConnections } from "@/composables/useChannelConnections";
 import {
@@ -171,25 +181,12 @@ async function onRuntimeConfigSubmit(
 </script>
 
 <template>
-  <div
-    v-if="isLoading"
-    data-sidebar="group"
-    class="relative flex w-full min-w-0 flex-col p-2 pt-0"
-  >
-    <div
-      data-sidebar="group-label"
-      class="text-sidebar-foreground/70 flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium"
-    >
-      {{ $i18n.t.value.sidebar.channels }}
-    </div>
+  <SidebarGroup v-if="isLoading" class="pt-0">
+    <SidebarGroupLabel>{{ $i18n.t.value.sidebar.channels }}</SidebarGroupLabel>
     <div class="space-y-2 px-2 py-1">
-      <div
-        v-for="row in 3"
-        :key="row"
-        class="bg-accent h-8 w-full animate-pulse rounded-md"
-      />
+      <Skeleton v-for="row in 3" :key="row" class="h-8 w-full" />
     </div>
-  </div>
+  </SidebarGroup>
 
   <SidebarGroup
     v-else-if="

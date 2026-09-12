@@ -3,8 +3,27 @@
   【文件职责】     DeerFlow thread 导航、搜索、分页、重命名与移动端侧栏。
   【架构位置】     L3
   【主要导出】     默认 ThreadSidebar 组件
-  【依赖关系】     threads store/API · workspace routes · ui/dialog · ui/dropdown-menu
+  【依赖关系】     threads store/API · workspace routes · ui/dialog · ui/dropdown-menu · ui/sidebar
   【边界与注意】   业务导航壳，不属于通用 agent UI 契约。
+
+                   **组/菜单/菜单项/菜单键这四层走 `ui/sidebar` 的 primitive，
+                   不手抄它们的类串**（2026-09-12 第十二轮）。此前这一片是摊平的
+                   裸 `div`/`ul`/`li`/`a`，自己写上 `data-slot="sidebar-*"` 和一串
+                   手抄的类。逐 token 比下来，外壳那几层**逐字一致**，
+                   而四颗菜单键抄漏了一大截：
+                   `w-full` / `overflow-hidden` / `[&>span:last-child]:truncate`（长标题不截断）/
+                   `outline-hidden ring-sidebar-ring focus-visible:ring-2`（**没有键盘焦点环**）/
+                   `hover:text-sidebar-accent-foreground` / `active:*` /
+                   `transition-[width,height,padding]`，
+                   以及最要命的一条：`data-[active=true]:font-medium` 在「新建对话」
+                   那颗上被抄成了**无条件** `font-medium`，另外三颗干脆没有——
+                   于是「当前这一项加粗」这件事本仓是**反着**的。
+                   与 `ThreadSidebarItem.vue`（wave 199）同一个根因、同一份 cva。
+
+                   外壳那四层（header / content / footer / rail）仍然手写：
+                   `ui/sidebar` 里**没有**这四颗 primitive，本仓的侧栏容器是
+                   `ThreadSidebarShell.vue`。门禁：tests/guards/handwritten-primitive-slots.test.ts
+                   只管 `ui/` 里确实存在的那些 slot。
 */
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import {
@@ -45,7 +64,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
 import { useMoveThreadToProject } from "@/composables/useProjects";
 import { useThreads } from "@/composables/useThreads";
@@ -476,28 +503,26 @@ function openSettingsDialog(section: "appearance" | "about") {
         原来两块是平级兄弟、靠第一组 ul 的 pt-2 凑出这 8px，凑得出位置凑不出结构——
         侧栏一旦要整体滚动，靠 padding 拼出来的间距会跟着一起错位。
       -->
-      <ul
-        data-slot="sidebar-menu"
-        data-sidebar="menu"
-        class="flex w-full min-w-0 flex-col gap-1 text-sm"
-      >
-        <li data-slot="sidebar-menu-item" data-sidebar="menu-item">
-          <NuxtLink
-            data-slot="sidebar-menu-button"
-            data-sidebar="menu-button"
-            to="/workspace/chats/new"
-            :data-active="isActive('/workspace/chats/new')"
-            class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground flex h-8 items-center gap-2 rounded-md px-2 font-medium"
-            :title="collapsed ? $i18n.t.value.sidebar.newChat : undefined"
-            @click="startNewChat"
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            as-child
+            :is-active="isActive('/workspace/chats/new')"
           >
-            <MessageSquarePlus :size="16" class="shrink-0" />
-            <span v-if="sidebarExpanded">{{
-              $i18n.t.value.sidebar.newChat
-            }}</span>
-          </NuxtLink>
-        </li>
-      </ul>
+            <NuxtLink
+              to="/workspace/chats/new"
+              class="text-muted-foreground"
+              :title="collapsed ? $i18n.t.value.sidebar.newChat : undefined"
+              @click="startNewChat"
+            >
+              <MessageSquarePlus :size="16" class="shrink-0" />
+              <span v-if="sidebarExpanded">{{
+                $i18n.t.value.sidebar.newChat
+              }}</span>
+            </NuxtLink>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
     </div>
     <!--
       导航、渠道、最近的对话住在**同一个可滚动容器**里，组与组之间 gap-2——这是
@@ -513,49 +538,45 @@ function openSettingsDialog(section: "appearance" | "about") {
       data-sidebar="content"
       class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto"
     >
-      <div
-        data-slot="sidebar-group"
-        data-sidebar="group"
-        class="relative flex w-full min-w-0 flex-col p-2 pt-1"
-      >
-        <ul
-          data-slot="sidebar-menu"
-          data-sidebar="menu"
-          class="flex w-full min-w-0 flex-col gap-1 text-sm"
-        >
-          <li data-slot="sidebar-menu-item" data-sidebar="menu-item">
-            <NuxtLink
-              data-slot="sidebar-menu-button"
-              data-sidebar="menu-button"
-              class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground flex h-8 items-center gap-2 rounded-md px-2"
-              :data-active="
+      <SidebarGroup class="pt-1">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="
                 route.path.startsWith('/workspace/chats') &&
                 !isActive('/workspace/chats/new')
               "
-              to="/workspace/chats"
-              :title="collapsed ? $i18n.t.value.sidebar.chats : undefined"
             >
-              <MessagesSquare :size="16" class="shrink-0" />
-              <span v-if="sidebarExpanded">{{
-                $i18n.t.value.sidebar.chats
-              }}</span>
-            </NuxtLink>
-          </li>
-          <li data-slot="sidebar-menu-item" data-sidebar="menu-item">
-            <NuxtLink
+              <NuxtLink
+                class="text-muted-foreground"
+                to="/workspace/chats"
+                :title="collapsed ? $i18n.t.value.sidebar.chats : undefined"
+              >
+                <MessagesSquare :size="16" class="shrink-0" />
+                <span v-if="sidebarExpanded">{{
+                  $i18n.t.value.sidebar.chats
+                }}</span>
+              </NuxtLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
               v-if="features.agentsApiEnabled.value"
-              data-slot="sidebar-menu-button"
-              data-sidebar="menu-button"
-              class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground flex h-8 items-center gap-2 rounded-md px-2"
-              :data-active="route.path.startsWith('/workspace/agents')"
-              to="/workspace/agents"
-              :title="collapsed ? $i18n.t.value.sidebar.agents : undefined"
+              as-child
+              :is-active="route.path.startsWith('/workspace/agents')"
             >
-              <Bot :size="16" class="shrink-0" />
-              <span v-if="sidebarExpanded">{{
-                $i18n.t.value.sidebar.agents
-              }}</span>
-            </NuxtLink>
+              <NuxtLink
+                class="text-muted-foreground"
+                to="/workspace/agents"
+                :title="collapsed ? $i18n.t.value.sidebar.agents : undefined"
+              >
+                <Bot :size="16" class="shrink-0" />
+                <span v-if="sidebarExpanded">{{
+                  $i18n.t.value.sidebar.agents
+                }}</span>
+              </NuxtLink>
+            </SidebarMenuButton>
             <!--
               禁用那一支的**外观**照上游 workspace-nav-chat-list.tsx:56 抄三条：
               ① 包裹层 `cursor-not-allowed`——上游明写在这一层（还留了注释说明
@@ -566,18 +587,18 @@ function openSettingsDialog(section: "appearance" | "about") {
               ③ 颜色是 `text-muted-foreground/50`（半透明），不是全实的 muted。
             -->
             <div v-else class="group relative block w-full cursor-not-allowed">
-              <button
+              <SidebarMenuButton
                 type="button"
+                class="text-muted-foreground/50"
                 :aria-label="$i18n.t.value.sidebar.agents"
                 aria-disabled="true"
                 aria-describedby="agents-disabled-description"
-                class="text-muted-foreground/50 hover:bg-sidebar-accent flex h-8 w-full items-center gap-2 rounded-md px-2 aria-disabled:pointer-events-none aria-disabled:opacity-50"
               >
                 <Bot :size="16" class="shrink-0" />
                 <span v-if="sidebarExpanded">{{
                   $i18n.t.value.sidebar.agents
                 }}</span>
-              </button>
+              </SidebarMenuButton>
               <span id="agents-disabled-description" class="sr-only">{{
                 $i18n.t.value.sidebar.agentsDisabledTooltip
               }}</span>
@@ -593,26 +614,28 @@ function openSettingsDialog(section: "appearance" | "about") {
                 >{{ $i18n.t.value.sidebar.agentsDisabledTooltip }}</span
               >
             </div>
-          </li>
-          <li data-slot="sidebar-menu-item" data-sidebar="menu-item">
-            <NuxtLink
-              data-slot="sidebar-menu-button"
-              data-sidebar="menu-button"
-              to="/workspace/scheduled-tasks"
-              class="text-muted-foreground hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent flex h-8 items-center gap-2 rounded-md px-2"
-              :data-active="route.path.startsWith('/workspace/scheduled-tasks')"
-              :title="
-                collapsed ? $i18n.t.value.sidebar.scheduledTasks : undefined
-              "
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              as-child
+              :is-active="route.path.startsWith('/workspace/scheduled-tasks')"
             >
-              <CalendarClock :size="16" class="shrink-0" />
-              <span v-if="sidebarExpanded">{{
-                $i18n.t.value.sidebar.scheduledTasks
-              }}</span>
-            </NuxtLink>
-          </li>
-        </ul>
-      </div>
+              <NuxtLink
+                to="/workspace/scheduled-tasks"
+                class="text-muted-foreground"
+                :title="
+                  collapsed ? $i18n.t.value.sidebar.scheduledTasks : undefined
+                "
+              >
+                <CalendarClock :size="16" class="shrink-0" />
+                <span v-if="sidebarExpanded">{{
+                  $i18n.t.value.sidebar.scheduledTasks
+                }}</span>
+              </NuxtLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarGroup>
 
       <WorkspaceChannelsList v-if="sidebarExpanded" />
 
@@ -643,29 +666,12 @@ function openSettingsDialog(section: "appearance" | "about") {
         threads.length === 0 时直接 return null。留一个空标题加一个空 ul，读屏器会
         念出「最近的对话，列表，0 项」，而屏幕上其实什么都没有。
       -->
-      <div
-        v-if="sidebarExpanded && sidebarRows.length"
-        data-slot="sidebar-group"
-        data-sidebar="group"
-        class="relative flex w-full min-w-0 flex-col p-2"
-      >
-        <div
-          data-slot="sidebar-group-label"
-          data-sidebar="group-label"
-          class="text-sidebar-foreground/70 flex h-8 shrink-0 items-center rounded-md px-2 text-xs font-medium"
-        >
+      <SidebarGroup v-if="sidebarExpanded && sidebarRows.length">
+        <SidebarGroupLabel>
           {{ $i18n.t.value.sidebar.recentChats }}
-        </div>
-        <div
-          data-slot="sidebar-group-content"
-          data-sidebar="group-content"
-          class="w-full text-sm"
-        >
-          <ul
-            data-slot="sidebar-menu"
-            data-sidebar="menu"
-            class="flex w-full min-w-0 flex-col gap-1"
-          >
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
             <!--
               按钮和哨兵是 ul 的**非 li 子节点**，与 React 一样：它们不是列表项，
               包进 li 会让读屏器把「加载更早的对话」念成第 51 个会话。哨兵还要
@@ -734,9 +740,9 @@ function openSettingsDialog(section: "appearance" | "about") {
                 />
               </template>
             </div>
-          </ul>
-        </div>
-      </div>
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
     </div>
     <div
       v-if="sidebarExpanded && deleteError"
@@ -767,16 +773,8 @@ function openSettingsDialog(section: "appearance" | "about") {
       data-sidebar="footer"
       class="mt-auto flex flex-col gap-2 p-2"
     >
-      <ul
-        data-slot="sidebar-menu"
-        data-sidebar="menu"
-        class="flex w-full min-w-0 flex-col gap-1"
-      >
-        <li
-          data-slot="sidebar-menu-item"
-          data-sidebar="menu-item"
-          class="group/menu-item relative"
-        >
+      <SidebarMenu>
+        <SidebarMenuItem>
           <DropdownMenu v-model:open="settingsOpen">
             <DropdownMenuTrigger>
               <!--
@@ -918,8 +916,8 @@ function openSettingsDialog(section: "appearance" | "about") {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </li>
-      </ul>
+        </SidebarMenuItem>
+      </SidebarMenu>
     </div>
     <!--
       SidebarRail：一条贴着侧栏右缘、宽 16px 的拖拽热区，点一下也能收起/展开。

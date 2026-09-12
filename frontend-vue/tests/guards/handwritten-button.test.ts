@@ -108,10 +108,12 @@ const ALLOWED: Record<string, [number, string]> = {
     "ui/sidebar.tsx 的 SidebarMenuAction，上游也手写",
   ],
   "components/workspace/ThreadSidebar.vue": [
-    4,
-    "ui/sidebar.tsx 的 SidebarMenuButton ×2 / SidebarRail；" +
-      "删除失败的重试链接同 recent-chat-list.tsx:468。**窄屏遮罩那颗 wave 148 " +
-      "没了**：抽屉换成 ui/sheet 之后遮罩由 DialogOverlay 承担",
+    3,
+    "ui/sidebar.tsx 的 SidebarMenuButton（footer 那颗，坑 62 的两层 as-child）" +
+      " / SidebarRail；删除失败的重试链接同 recent-chat-list.tsx:468。" +
+      "**窄屏遮罩那颗 wave 148 没了**：抽屉换成 ui/sheet 之后遮罩由 DialogOverlay 承担。" +
+      "**禁用的 Agents 入口那颗第十二轮没了**：它改走 `SidebarMenuButton`——" +
+      "手写那版的 `aria-disabled:*` 两条本来就是从那颗 cva 抄来的",
   ],
   "components/workspace/TodoList.vue": [
     1,

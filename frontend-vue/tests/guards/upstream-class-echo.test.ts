@@ -279,20 +279,39 @@ describe("照抄上游的 class 串", () => {
     `cursor-not-allowed`，按钮 `text-muted-foreground/50` + SidebarMenuButton
     cva 自带的 `aria-disabled:pointer-events-none aria-disabled:opacity-50`。
     本仓原来一条都没有，于是这个点不动的入口**还会跟着鼠标高亮**。
+
+    **第十二轮换了尺子，判词没变。** 那两条 `aria-disabled:*` 原来是从 cva
+    **抄**到调用点上的，这条用例也就照着抄本比；现在这一处改走
+    `SidebarMenuButton`，抄本没了，再比调用点的 class 串只会比出一个假红
+    （坑 131：尺子测的不是它守的那件事）。改成分两头比：
+    调用点必须是那颗 primitive 且带着 `text-muted-foreground/50`，
+    **而那两条 `aria-disabled:*` 要在 cva 里真的存在**——
+    少了后半句，谁把它们从 cva 删掉这条用例都不会响。
   */
   it("禁用的 Agents 入口不高亮、不接指针、半透明", () => {
     const source = stripped("components/workspace/ThreadSidebar.vue");
-    const button = classOfTagContaining(
-      source,
-      'aria-describedby="agents-disabled-description"',
-    ).split(/\s+/);
-    for (const token of [
+    const at = source.indexOf('aria-describedby="agents-disabled-description"');
+    expect(at, "找不到禁用入口").toBeGreaterThan(-1);
+    const tag = source.slice(
+      source.lastIndexOf("<", at),
+      source.indexOf(">", at),
+    );
+    expect(tag, "禁用入口要走 SidebarMenuButton，不要手写它的类串").toContain(
+      "<SidebarMenuButton",
+    );
+    expect(tag, "半透明那一档是调用点给的").toContain(
       "text-muted-foreground/50",
+    );
+    expect(source, "外层的 cursor-not-allowed 上游明写在这一层").toContain(
+      "cursor-not-allowed",
+    );
+
+    const cva = stripped("components/ui/sidebar/menu-button-variants.ts");
+    for (const token of [
       "aria-disabled:pointer-events-none",
       "aria-disabled:opacity-50",
     ]) {
-      expect(button, `禁用入口少了 ${token}`).toContain(token);
+      expect(cva, `SidebarMenuButton 的 cva 少了 ${token}`).toContain(token);
     }
-    expect(source).toContain("cursor-not-allowed");
   });
 });

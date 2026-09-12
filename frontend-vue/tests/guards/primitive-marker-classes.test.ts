@@ -25,6 +25,11 @@
                    **双向**：`ALLOWED` 里有、实际没有的条目同样报错——过期豁免会被
                    下一个读者当成「这里还有活没干」（同 handwritten-button 的坑 186）。
 
+                   **`group/menu-item` 那条豁免在第十二轮被删掉了**，删它的过程
+                   正是这条守卫想要的：侧栏那几块整体换回 `SidebarMenuItem` 之后，
+                   标记类跟着回到 primitive 里，反向检查当场把过期条目报了出来。
+                   `peer/menu-button` 留着——它那一处是 wave 74 判过的真例外。
+
                    **扫之前先剥注释**（坑 202 的第四次）：这条守卫写完当天就把
                    `WorkspaceChannelsList.vue` 头注释里那句「还留着一条死类
                    `group/menu-item`」报成了违规——说明文字被当成代码。
@@ -46,7 +51,6 @@ const uiDir = join(appDir, "components/ui");
  */
 const ALLOWED: Record<string, [string, string][]> = {
   "components/workspace/ThreadSidebar.vue": [
-    ["group/menu-item", "footer 那颗设置键的 li：与下面那颗按钮同一处例外。"],
     [
       "peer/menu-button",
       '上游是 `<DropdownMenuTrigger asChild><SidebarMenuButton size="lg">`，' +

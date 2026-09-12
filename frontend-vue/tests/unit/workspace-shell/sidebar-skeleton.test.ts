@@ -29,27 +29,58 @@ const template = source
   .replace(/<!--[\s\S]*?-->/g, "")
   .replace(/\/\*[\s\S]*?\*\//g, "");
 
+/*
+  每个骨架 slot 在**渲染结果**里从哪来。
+
+  上游每个骨架 primitive 都同时写 data-slot 与 data-sidebar，本仓此前一个都没有——
+  这是合同差异不是渲染差异，但合同差异正是「下一次谁想按 slot 选元素时才发现对不上」
+  的那种。
+
+  **第十二轮换了尺子，判词没变。** 原来这一条 grep 的是两份骨架文件的源文本，
+  而第十二轮把 group / menu / menu-item / menu-button 四层换回了 `ui/sidebar` 的
+  primitive：slot 照样出现在**渲染结果**里，源文本里却没有了，于是这条用例报了
+  一次假红（坑 131 的同一形状——尺子测的不是它守的那件事）。
+
+  现在分两类各自比：`ui/sidebar` 里**没有**对应 primitive 的那五颗只能本地写，
+  比 literal；有 primitive 的比「那颗组件被用上了」，而且**回头验证那颗 primitive
+  自己真的声明了这个 slot**——少了后半句，改错映射这条用例不会响。
+  本地写不了那几颗：`handwritten-primitive-slots` 这道门不允许。
+*/
+const SKELETON_SLOTS: Record<string, string | null> = {
+  "sidebar-inner": null,
+  "sidebar-header": null,
+  "sidebar-content": null,
+  "sidebar-footer": null,
+  "sidebar-rail": null,
+  "sidebar-group": "SidebarGroup",
+  "sidebar-group-label": "SidebarGroupLabel",
+  "sidebar-group-content": "SidebarGroupContent",
+  "sidebar-menu": "SidebarMenu",
+  "sidebar-menu-item": "SidebarMenuItem",
+  "sidebar-menu-button": "SidebarMenuButton",
+};
+
 describe("侧栏骨架与上游 ui/sidebar.tsx 的结构合同", () => {
-  /*
-    上游每个骨架 primitive 都同时写 data-slot 与 data-sidebar，本仓此前**一个
-    data-slot 都没有**。目前没有选择器消费它，所以这是合同差异不是渲染差异——
-    但合同差异正是"下一次谁想按 slot 选元素时才发现对不上"的那种。
-  */
   it("carries every upstream data-slot the sidebar skeleton defines", () => {
-    for (const slot of [
-      "sidebar-inner",
-      "sidebar-header",
-      "sidebar-content",
-      "sidebar-group",
-      "sidebar-group-label",
-      "sidebar-group-content",
-      "sidebar-menu",
-      "sidebar-menu-item",
-      "sidebar-menu-button",
-      "sidebar-footer",
-      "sidebar-rail",
-    ]) {
-      expect(template, slot).toContain(`data-slot="${slot}"`);
+    for (const [slot, primitive] of Object.entries(SKELETON_SLOTS)) {
+      if (primitive === null) {
+        expect(template, `${slot} 得由骨架自己写`).toContain(
+          `data-slot="${slot}"`,
+        );
+        continue;
+      }
+      /* `[\s>]` 是必须的：`<SidebarGroup` 会被 `<SidebarGroupLabel` 前缀命中，
+         那样组容器整个删掉这一条也不会响。 */
+      expect(template, `${slot} 得由 ${primitive} 带上`).toMatch(
+        new RegExp(`<${primitive}[\\s>]`),
+      );
+      const source = readFileSync(
+        resolve(process.cwd(), `app/components/ui/sidebar/${primitive}.vue`),
+        "utf8",
+      );
+      expect(source, `${primitive} 自己并没有声明 ${slot}`).toContain(
+        `data-slot="${slot}"`,
+      );
     }
   });
 

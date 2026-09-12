@@ -1197,7 +1197,46 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     backend: "mock",
     path: "/workspace/agents/new",
     mock: { agents: MOCK_AGENTS },
-    settle: [{ kind: "visible", target: { selector: "input[placeholder]" } }],
+    /*
+      **侧栏那两行导航挂在这个场景上，不是因为这一页与它们有关，而是因为
+      这一屏是唯一一处两行同时「反着」的**（2026-09-12 第十二轮）。
+
+      侧栏的四颗菜单键（新建对话 / Chats / Agents / 定时任务）两个应用都是
+      `SidebarMenuButton asChild` 套一条链接，激活态由 cva 里那三条
+      `data-[active=true]:{bg,text,font-medium}` 给。本仓那四颗是**手抄的类串**，
+      抄的时候把 `data-[active=true]:font-medium` 写成了**无条件** `font-medium`
+      （只有新建对话那颗），另外三颗干脆没有这一条。
+
+      于是差异只在特定路径上现形，而 `sidebar` 场景恰好停在
+      `/workspace/chats/new`——那一屏新建对话**正好是激活态**，本仓无条件的 500
+      和上游激活态的 500 撞上了；其余三行两边都不激活、都是 400。
+      **四个锚点全都「对上」，而四颗按钮全都抄漏了。**
+
+      `/workspace/agents/new` 同时踩反两边：
+      - 新建对话**不**激活 → 上游 400、本仓 500；
+      - Agents 那行**激活** → 上游 500、本仓 400，而且上游还多一条
+        `data-[active=true]:text-sidebar-accent-foreground`（颜色档一起响）。
+
+      按 href 定位不按名字：这个场景有两个语言维，而 `sidebar.newChat` 与
+      `sidebar.agents` 两条词条都随语言变（坑 214 / wave 129 的同一条）。
+      再用 `[data-sidebar='sidebar']` 收一层——`sidebar` 场景已经证明这层
+      在桌面维下只命中一份外壳。
+    */
+    settle: [
+      { kind: "visible", target: { selector: "input[placeholder]" } },
+      {
+        kind: "visible",
+        target: {
+          selector: "[data-sidebar='sidebar'] a[href='/workspace/chats/new']",
+        },
+      },
+      {
+        kind: "visible",
+        target: {
+          selector: "[data-sidebar='sidebar'] a[href='/workspace/agents']",
+        },
+      },
+    ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
   {
