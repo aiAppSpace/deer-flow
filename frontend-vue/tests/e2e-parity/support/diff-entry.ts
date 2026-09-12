@@ -83,6 +83,7 @@ export function diffGeometry(
       "background",
       "fontSize",
       "fontWeight",
+      "borderRadius",
       "opacity",
       "hit",
       "before",

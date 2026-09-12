@@ -103,6 +103,30 @@ export type GeometrySample = {
   */
   fontWeight: string;
   /*
+    圆角。
+
+    **加这一档是因为它是一处真的盲区**（2026-09-12 第九轮撞出来的）：
+    几何档量位置、尺寸、前景/背景色、字号、字重、opacity、命中与伪元素，
+    **一样都不是形状**。把一块面板的 `rounded-2xl` 改成 `rounded-md`，
+    盒子的 x/y/宽高一个数都不动、颜色不动、字重不动、命中不动——
+    **现有各档一条都不响**（坑 258 那句判据在这一条上有现成答案）。
+
+    这不是假想的形状：上游的 composer 外壳是靠调用点一句
+    `*:data-[slot='input-group']:rounded-2xl` 把 `ui/input-group` 的 `rounded-md`
+    顶掉的（`input-box.tsx:2265`），而本仓那块是手写的 `ComposerSurface.vue`。
+    第九轮把那块外壳挂成锚点、12 维零差异——**但那个「零」不包括形状**，
+    判词里写明了这条边界，这一档就是来补它的。
+
+    **只取 `borderRadius` 一个属性，不取 `boxShadow` / `backdropFilter`**：
+    后两者的计算值里带颜色与长度的组合写法，浏览器归一化之后噪声比信号多
+    （`rgba(0,0,0,0.05) 0px 1px 2px 0px` 这种串两边一个空格的差别就报一行）。
+    真要加，先按同一条判据单独论证。
+
+    四个角各不相同时 `getComputedStyle` 返回的是四段（`8px 8px 0px 0px`），
+    所以这一档天然覆盖「只有上面两个角是圆的」这类写法，不需要分别取四个属性。
+  */
+  borderRadius: string;
+  /*
     元素**自己**的 opacity。
 
     加这一档是因为它是一处真的盲区：`opacity: 0` 的元素**照样在可访问性树里**
@@ -454,6 +478,7 @@ export async function sampleGeometry(
             background: toRgba(style.backgroundColor),
             fontSize: style.fontSize,
             fontWeight: style.fontWeight,
+            borderRadius: style.borderRadius,
             opacity: style.opacity,
             hit,
             before: pseudo("::before"),

@@ -78,6 +78,7 @@ describe("台账判词", () => {
             background: "b",
             fontSize: "12px",
             fontWeight: "400",
+            borderRadius: "0px",
             opacity: "1",
             hit: "hit",
             before: "none",
@@ -100,6 +101,7 @@ describe("台账判词", () => {
       background: "b",
       fontSize: "12px",
       fontWeight: "400",
+      borderRadius: "0px",
       opacity: "1",
       hit: "hit",
       before: "none",
@@ -117,5 +119,55 @@ describe("台账判词", () => {
         capture({ geometry: { a: sample } }),
       ),
     ).toBe(1);
+  });
+});
+
+/*
+  **一把新尺子最先要量的是它自己**（坑 213 / 186）。`borderRadius` 这一档加进来的
+  理由是「现有各档都看不见形状」，那就得证明两件事：它在形状变了的时候**会响**，
+  以及它在别的什么都没变的时候**不会响**——否则它只是往台账里灌噪声。
+*/
+describe("borderRadius 这一档", () => {
+  const base = {
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 40,
+    color: "c",
+    background: "b",
+    fontSize: "12px",
+    fontWeight: "400",
+    borderRadius: "16px",
+    opacity: "1",
+    hit: "self",
+    before: "none",
+    after: "none",
+  };
+
+  it("只改圆角时它响，而其余各档一条都不响", () => {
+    const entry = buildDiffEntry(
+      capture({ geometry: { panel: base } }),
+      capture({ geometry: { panel: { ...base, borderRadius: "6px" } } }),
+    );
+    expect(entry.geometry).toEqual(["panel borderRadius React=16px Vue=6px"]);
+    // 其余各档必须是空的：这一行就是「现有的档看不见形状」那句话的机器版本。
+    for (const lane of [
+      entry.ariaOnlyReact,
+      entry.ariaOnlyVue,
+      entry.order,
+      entry.tabOrder,
+      entry.requestsOnlyReact,
+      entry.requestsOnlyVue,
+    ])
+      expect(lane).toEqual([]);
+  });
+
+  it("圆角相同时不报（四段写法逐字比，不做归一）", () => {
+    const corners = { ...base, borderRadius: "8px 8px 0px 0px" };
+    const entry = buildDiffEntry(
+      capture({ geometry: { panel: corners } }),
+      capture({ geometry: { panel: { ...corners } } }),
+    );
+    expect(entry.geometry).toEqual([]);
   });
 });
