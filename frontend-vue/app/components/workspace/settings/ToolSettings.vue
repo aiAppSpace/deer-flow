@@ -233,15 +233,22 @@ async function toggle(name: string, enabled: boolean) {
       >
         {{ t.settings.sessionUnavailable }}
       </p>
-      <p
+      <!--
+        **照抄上游 `tool-settings-page.tsx:53`：`<div className="text-muted-foreground
+        text-sm">`——没有琥珀框。** 本仓原来是 `<p class="rounded-md bg-amber-50 p-3
+        text-sm text-amber-800">`，两处自造的固定色**都没有 `dark:` 变体**，
+        深色主题下是一块浅琥珀底配深琥珀字（2026-09-12 第十三轮）。
+        `<div>` 不是 `<p>`：理由与下面那句 loading 相同（多一个 paragraph 节点）。
+      -->
+      <div
         v-else-if="
           access.permissions.value.adminRequired || actualAdminRequired
         "
-        class="rounded-md bg-amber-50 p-3 text-sm text-amber-800"
+        class="text-muted-foreground text-sm"
         data-testid="mcp-admin-required"
       >
         {{ t.settings.tools.adminRequired }}
-      </p>
+      </div>
       <template v-else>
         <p v-if="mcp.loading.value" class="text-muted-foreground text-sm">
           {{ t.common.loading }}

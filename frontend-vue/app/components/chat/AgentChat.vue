@@ -2022,12 +2022,21 @@ onUnmounted(() => {
             走 toaster（判据写在 failedSend 的声明上）。上游是每个 llm_retry 事件
             一条 toast（`core/threads/hooks.ts:1835`），一次重试风暴会堆出一摞，
             而且「已经不在重试了」这件事那边没有出口。
+
+            **形态是判过的分歧，颜色不是**（2026-09-12 第十三轮）：这两块原来写的是
+            `bg-blue-50 text-blue-700` / `bg-amber-50 text-amber-700`——**上游全仓
+            从没用过这四个 utility，而且它们一个 `dark:` 变体都没有**，
+            深色主题下就是两块浅色方块浮在暗背景上。
+            改走 token：重试是中性状态，用浮层自己的 `bg-popover`（与侧栏那颗
+            CSS tooltip 同一套）；发送失败是错误，用本仓既有的错误提示写法
+            `bg-destructive/10 text-destructive`（同 `settings-session-unavailable`）。
+            门禁：tests/guards/invented-palette-colors.test.ts。
           -->
           <p
             v-if="stream.llmRetry.value"
             data-testid="llm-retry-status"
             role="status"
-            class="absolute right-4 bottom-48 z-40 max-w-md rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-700 shadow"
+            class="bg-popover text-popover-foreground absolute right-4 bottom-48 z-40 max-w-md rounded-lg border px-4 py-2 text-sm shadow"
           >
             {{ stream.llmRetry.value.message }}
           </p>
@@ -2044,7 +2053,7 @@ onUnmounted(() => {
             v-if="failedSend"
             data-testid="send-failure"
             role="status"
-            class="absolute right-4 bottom-36 z-40 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-700 shadow"
+            class="bg-destructive/10 text-destructive absolute right-4 bottom-36 z-40 rounded-lg px-4 py-2 text-sm shadow"
           >
             {{ failedSend.message }}
             <button type="button" class="ml-2 underline" @click="retrySend">

@@ -214,8 +214,46 @@ describe("persisted message surfaces", () => {
     expect(
       wrapper.findAll("li").map((item) => item.attributes("data-status")),
     ).toEqual(["pending", "in_progress", "completed"]);
-    expect(wrapper.get("li[data-status='completed'] span").classes()).toContain(
-      "line-through",
+
+    /*
+      三态各钉一次，**指示器与文字分开取**（`li … span` 会先命中指示器）。
+      类串照抄上游 `ai-elements/queue.tsx` 的 QueueItemIndicator / QueueItemContent
+      加 `todo-list.tsx:88/95` 那两句调用点补色——本仓这一屏**至今没有对照锚点**
+      （见 vue-parity-open-accounts.md 第十三轮那节），所以判据只能落在这里。
+      原来这一条取的是第一个 span、只查一个 `line-through`：第十三轮把完成态那颗
+      lucide `Check`（写死 `text-emerald-600`，上游全仓没用过这个色）换成上游的
+      CSS 圆点之后，那把尺子当场指到了圆点身上。
+    */
+    const dotOf = (status: string) =>
+      wrapper.get(`li[data-status='${status}'] span:first-child`).classes();
+    const textOf = (status: string) =>
+      wrapper.get(`li[data-status='${status}'] span:last-child`).classes();
+
+    for (const status of ["pending", "in_progress", "completed"]) {
+      expect(dotOf(status), `${status} 的指示器不是那颗圆点`).toEqual(
+        expect.arrayContaining(["size-2.5", "rounded-full", "border"]),
+      );
+      expect(
+        textOf(status),
+        `${status} 的文字少了 QueueItemContent 的基类`,
+      ).toEqual(
+        expect.arrayContaining(["line-clamp-1", "grow", "break-words"]),
+      );
+    }
+    expect(dotOf("completed")).toEqual(
+      expect.arrayContaining([
+        "border-muted-foreground/20",
+        "bg-muted-foreground/10",
+      ]),
     );
+    expect(textOf("completed")).toEqual(
+      expect.arrayContaining(["text-muted-foreground/50", "line-through"]),
+    );
+    expect(dotOf("in_progress")).toContain("bg-primary/70");
+    expect(textOf("in_progress")).toContain("text-primary/70");
+    expect(dotOf("pending")).toContain("border-muted-foreground/50");
+    expect(textOf("pending")).toContain("text-muted-foreground");
+    // 上游那颗完成指示器不是图标——本仓这一屏也不该再有 svg。
+    expect(wrapper.findAll("li svg")).toHaveLength(0);
   });
 });

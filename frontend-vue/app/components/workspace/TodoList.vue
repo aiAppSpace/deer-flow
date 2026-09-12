@@ -8,7 +8,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { Check, ChevronUp, Circle, ListTodo } from "lucide-vue-next";
+import { ChevronUp, ListTodo } from "lucide-vue-next";
 
 import type { Todo } from "@/core/todos";
 
@@ -57,27 +57,39 @@ const collapsed = ref(true);
         class="flex items-start gap-2 text-sm"
         :data-status="todo.status"
       >
-        <Check
-          v-if="todo.status === 'completed'"
-          :size="15"
-          class="mt-0.5 text-emerald-600"
-        />
-        <Circle
-          v-else
-          :size="15"
-          class="mt-0.5"
-          :class="
-            todo.status === 'in_progress'
-              ? 'fill-primary text-primary'
-              : 'text-muted-foreground'
-          "
+        <!--
+          **指示器是一颗 CSS 圆点，不是图标**：上游 `ai-elements/queue.tsx` 的
+          `QueueItemIndicator`（`mt-0.5 inline-block size-2.5 rounded-full border`
+          ＋ 完成态 `border-muted-foreground/20 bg-muted-foreground/10`、
+          未完成 `border-muted-foreground/50`），进行中由调用点补 `bg-primary/70`
+          （`todo-list.tsx:88`）。本仓原来画的是两颗 lucide 图标，完成那颗还写死
+          `text-emerald-600`——**上游全仓没用过这个 utility，它也没有 `dark:` 变体**
+          （2026-09-12 第十三轮）。文字同理走 `QueueItemContent`：
+          `line-clamp-1 grow break-words` ＋ 完成 `text-muted-foreground/50 line-through`、
+          未完成 `text-muted-foreground`，进行中调用点补 `text-primary/70`。
+
+          **容器那一层还没对齐**，是一张单独的账（见 vue-parity-open-accounts.md
+          第十三轮那节）：上游的列表体是定高 `h-28` ＋ 高度过渡 ＋ ScrollArea ＋
+          条目 `hover:bg-muted`，本仓是 `v-if` 整块摘掉、`space-y-1 p-3`。
+          那一层改动会动到折叠动画，且这一屏**至今没有任何对照锚点**。
+        -->
+        <span
+          class="mt-0.5 inline-block size-2.5 shrink-0 rounded-full border"
+          :class="[
+            todo.status === 'completed'
+              ? 'border-muted-foreground/20 bg-muted-foreground/10'
+              : 'border-muted-foreground/50',
+            todo.status === 'in_progress' ? 'bg-primary/70' : '',
+          ]"
         />
         <span
-          :class="
+          class="line-clamp-1 grow break-words"
+          :class="[
             todo.status === 'completed'
-              ? 'text-muted-foreground line-through'
-              : ''
-          "
+              ? 'text-muted-foreground/50 line-through'
+              : 'text-muted-foreground',
+            todo.status === 'in_progress' ? 'text-primary/70' : '',
+          ]"
         >
           {{ todo.content }}
         </span>

@@ -282,13 +282,19 @@ function archiveErrorOptions(cause: unknown) {
         {{ t.settings.sessionUnavailable }}
       </p>
       <template v-else>
-        <p
+        <!--
+          **照抄上游 `skill-settings-page.tsx:55`：`<div className="text-muted-foreground
+          text-sm">`——没有琥珀框。** 下面那句「`<div>` 不是 `<p>`」的规则此前只落到了
+          loading 那一行，这一行还留着自造的 `bg-amber-50 text-amber-800`
+          （**没有 `dark:` 变体**，深色下是一块浅琥珀底）——2026-09-12 第十三轮修。
+        -->
+        <div
           v-if="access.permissions.value.adminRequired"
-          class="rounded-md bg-amber-50 p-3 text-sm text-amber-800"
+          class="text-muted-foreground text-sm"
           data-testid="skills-admin-required"
         >
           {{ t.settings.skills.adminRequired }}
-        </p>
+        </div>
         <!--
           `<div>` 不是 `<p>`：上游那一句是
           `<div className="text-muted-foreground text-sm">{t.common.loading}</div>`，
