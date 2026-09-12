@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第十五轮收工）
+## 当前状态（2026-09-12 第十六轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,69 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十六轮）做了什么
+
+**「这件事没人守」这句话，会随着有人给它加了门禁而变假——而没有任何机器在看这件事。**
+
+### 怎么撞上的
+
+按 token 聚类剩下的几族逐条核：`values`（流协议 4 处）、command-score 的分词 quirk、
+类型契约——**全部确有指名用例**（`gap-recovery.test.ts` 专门钉「custom 必须在 values
+之前」、`command-score.test.ts` 的 22 组定值里就有
+`["minimax-m3","MiniMax M3",0.9996000599960002]`、`reducer.test.ts` 与
+`thread-runner.test.ts` 各有指名用例）。
+
+出货的是**核的过程本身**：`message.contract.ts` 的文件头说「这个文件之所以在 `app/`
+而不是 `tests/`，是因为 **`tests/` 根本不过 vue-tsc**」。实测——在 `tests/` 里塞
+`const x: number = "s"`，**当场报 TS2322**；git 一查，`make typecheck-tests`
+2026-09-11 就接进了 `verify`，而那份文件最后一次改动是 08-25。
+
+### 七处同一句过期断言
+
+它被当**现在时事实**用在七个地方，每一处都在支撑一个设计决定：
+`message.contract.ts`（为什么住 `app/`）、`message-content-contract.test.ts`
+（为什么把护栏挪走）、`parity-ledger-fields.test.ts` 与 `e2e-parity/support/ledger.ts`
+（为什么不写类型断言）、`scenarios.ts` 与 `playwright-factory.ts`（「没有任何机器说过话」）。
+
+**`playwright-factory.ts` 那一处是守卫自己扫出来的——我手写的 grep 漏了它。**
+
+七处全改成过去时并写明被哪条命令推翻；靠它支撑的结论逐条重判：
+`message.contract.ts` 仍留 `app/`（换理由：骑 typecheck 预算门禁）、
+两处仍不写类型断言（换理由：要对的是**三方**，而那个 `.mjs` 脚本读不到 TS 类型）。
+
+### 第二处同形：改在了发现它的地方，没改到另一处
+
+`scripts/icon-parity.mjs` 的文件头**专门**标注过「『这是顾问工具，不进任何门禁』
+那句话从 wave 111 起就是假的……读到它的人会以为这份输出可以忽略，接 CI 的人会照它
+跳过」，而 `scripts/lib/cross-app-by-design.mjs` 的登记里原样留着同一句。改掉。
+
+### 新门：`tests/guards/stale-coverage-claims.test.ts`
+
+**判据不是「不许写这句话」，而是「写了就得现在还成立」**——它在 2026-09-11 之前
+是对的而且有用。这道门把「还成不成立」**算出来**（`typecheck-tests` 在不在 `verify`
+的先决条件里）；摘掉它，这句话重新成立，**门自己让路**。
+
+**第一版判据是错的，而且是守卫自己报出来的**：它把五处刚改好的文件全报成违规——
+那些文件**引用了原句**来记录历史。改成「引用可以，但同一份文件里必须点名
+`typecheck-tests`」。**这个仓库就是靠「原文写的是 X，而 X 从某天起是假的」记住坑的，
+判据不能把这种写法一并禁掉。**
+
+### 负向验证（3 条）
+
+| # | 变异 | 该响的 |
+| --- | --- | --- |
+| N1 | 把旧说法写回 `playwright-factory.ts`（不带推翻标记） | 报出那一份文件 |
+| N2 | 把 `typecheck-tests` 从 `verify` 摘掉 | **全绿**——那句话重新成立，门让路（设计动作） |
+| N3 | 把 Makefile 的解析正则写坏 | 形状断言先红（`expected 1 to be greater than 5`） |
+
+### 一个当场踩到的坑
+
+改 `message.contract.ts` 的注释时写进了 `` `./tests/**/*.ts` ``——
+**`**/*.ts` 里的 `*/` 把块注释提前闭合了**，eslint 报 `Parsing error: Expression expected`。
+在块注释里写 glob 要避开 `*/`。
+
+**这一轮没有改任何产品行为**（六处注释 + 一处登记措辞 + 一道门），只跑 verify。
 
 ## 上一轮（2026-09-12 第十五轮）做了什么
 

@@ -1,9 +1,63 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第十五轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十六轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 
-> ## 2026-09-12 第十五轮：**一条写着却永远不成立的选择器，比没写更糟**
+> ## 2026-09-12 第十六轮：**「这件事没人守」会随着有人给它加了门禁而变假，而没有任何机器在看这件事**
+>
+> 接着筛按 token 聚类剩下的几族。**`values`（流协议 4 处）、command-score 的分词
+> quirk、类型契约——逐条核过，全部确有指名用例**（`gap-recovery.test.ts` 专门钉
+> 「custom 必须在 values 之前」、`command-score.test.ts` 的 22 组定值里就有
+> `["minimax-m3","MiniMax M3",0.9996000599960002]`）。
+>
+> 出货的是**核的过程本身**：`message.contract.ts` 的文件头说
+> 「这个文件之所以在 `app/` 而不是 `tests/`，是因为 **`tests/` 根本不过 vue-tsc**」。
+> 实测——在 `tests/` 里塞一个 `const x: number = "s"`，**当场报 TS2322**。
+>
+> ### 一、同一句过期断言，七处
+>
+> `make typecheck-tests`（`vue-tsc -p tsconfig.tests.json`）**2026-09-11 就接进了
+> `make verify`**（git 可查），而这句话被当**现在时事实**用在七个地方，
+> 每一处都在支撑一个设计决定：
+>
+> | 处 | 它撑着什么 |
+> | --- | --- |
+> | `app/core/types/message.contract.ts` | 这份类型断言**为什么住在 `app/`** |
+> | `tests/guards/message-content-contract.test.ts` | 为什么把类型层护栏挪走 |
+> | `tests/guards/parity-ledger-fields.test.ts` | 为什么不写成类型层断言 |
+> | `tests/e2e-parity/support/ledger.ts` | 「证据是门禁不是类型」的全部理由 |
+> | `tests/e2e-parity/support/scenarios.ts` | 「所以没有任何机器说过话」 |
+> | `tests/support/playwright-factory.ts` | 同上（**这一处是守卫自己扫出来的，我的 grep 漏了**） |
+>
+> 七处全部改成过去时并写明**是被哪条命令推翻的**。靠它支撑的结论逐条重判：
+> `message.contract.ts` 留在 `app/`（换一条理由：骑的是 typecheck 预算门禁）、
+> `parity-ledger-fields` / `ledger.ts` 仍然不写类型断言（换一条理由：要对的是
+> **三方**，而那个 `.mjs` 脚本读不到 TS 类型，类型断言够不着它）。
+>
+> ### 二、第二处同形：改在了发现它的地方，没改到另一处
+>
+> `scripts/icon-parity.mjs` 的文件头**专门**标注过：「『这是顾问工具，不进任何门禁』
+> 那句话从 wave 111 起就是假的……留着的后果不是措辞问题：**读到它的人会以为这份
+> 输出可以忽略，接 CI 的人会照它跳过**」。而 `scripts/lib/cross-app-by-design.mjs`
+> 的登记里**原样留着同一句**。改措辞并写清真实条件（它不在 `verify` 的先决条件里，
+> 但豁免表过期或形状断言不成立时它会红）。
+>
+> ### 三、做成守卫：`tests/guards/stale-coverage-claims.test.ts`
+>
+> **判据不是「不许写这句话」，而是「写了就得现在还成立」**——这句话在 2026-09-11
+> 之前是对的，而且**有用**（它解释了一个真实的坑）。所以这道门把「还成不成立」
+> **算出来**：`typecheck-tests` 在不在 `verify` 的先决条件里。
+> 哪天有人把它从 `verify` 摘掉，这句话重新成立，**这道门自己让路**（负向验证 N2 证过）。
+>
+> **第一版判据是错的，守卫自己报了出来**：它把五处**刚刚改好的**文件全报成违规
+> ——因为那些文件**引用了原句**来记录历史。改成「引用可以，但同一份文件里必须
+> 点名 `typecheck-tests`（是它推翻的）」。**这个仓库就是靠「原文写的是 X，而 X
+> 从某天起是假的」记住坑的，判据不能把这种写法一并禁掉。**
+>
+> **加一条之前先想清楚「怎么算出它还成不成立」**——算不出来的不要进表，
+> 否则它自己就变成下一句没人守的散文。
+>
+**一条写着却永远不成立的选择器，比没写更糟**
 >
 > 按第十四轮定下的口径接着筛：把断言按**它点名的 token** 聚类，
 > 只看**被 ≥2 份文件点名**的那些（跨文件同形 = 这两轮出货的形状）。
