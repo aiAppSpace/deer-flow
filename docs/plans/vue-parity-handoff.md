@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-12 第九轮收工）
+## 当前状态（2026-09-12 第十轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -30,6 +30,34 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-12 第十轮）做了什么
+
+**给几何档加 `borderRadius`，第一次整套跑就抓到一处形状差异并当轮修掉。**
+
+第九轮判 `ui/input-group` 不移植时写下了那个结论的边界（几何档不量形状），
+这一轮把那一档补上。加之前过了坑 258 那一问——**有没有一种变异能让它响、
+而现有的档都不响**——答得上来：改一个圆角，x/y/宽高/颜色/字重/命中/aria 全不动。
+只取 `borderRadius`，不取 `boxShadow` / `backdropFilter`（后两者计算值噪声比信号多）。
+
+**新尺子先量自己**：单测两条——只改圆角时它响**而其余各档一条都不响**、
+圆角相同时不报（四段写法逐字比）。
+
+第一次整套跑：**5 行，全部是同一处**（`artifact-preview` ×3 维 +
+`artifact-panel-resize` ×2 维）：`borderRadius React=3.35544e+07px Vue=8px`
+——`3.35544e+07px` 是 Tailwind v4 的 `rounded-full`（`calc(infinity*1px)`）。
+**噪声 0 行、与别的档重复 0 行。**
+
+根因（探针把元素身份打出来，不拿文本当证据）：上游是 `span[data-slot="badge"]`
+（`ChainOfThoughtSearchResult` = `<Badge variant="secondary">`），
+**本仓 `ProcessingToolStep.vue` 手抄了它的外观**，三处。
+**本仓是有 `ui/badge` 的、基类与上游逐字相同**——不是「没移植」，是「移植了却没用」。
+手抄那版丢掉的：`rounded-full`、`border`、`w-fit`、`whitespace-nowrap`、`shrink-0`、
+`gap-1`、`items-center justify-center`、`overflow-hidden`、`focus-visible:*`、
+`aria-invalid:*`、`transition-[color,box-shadow]`。
+
+三处换成 Badge；`web_fetch` 那一支照抄上游的层次（Badge 里套 `<a>`，
+而不是把链接本身当 badge）。**读数 5 行 → 0 行。**
 
 ## 上一轮（2026-09-12 第九轮）做了什么
 

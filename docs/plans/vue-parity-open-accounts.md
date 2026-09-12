@@ -1,7 +1,69 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-12 第九轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-12 第十轮）
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
+
+> ## 2026-09-12 第十轮：**给几何档加 `borderRadius`，第一次跑就抓到一处形状差异**
+>
+> 第九轮判 `ui/input-group` 不移植时写下了那个结论的边界：
+> **几何档不量形状**。这一轮把那一档补上，并立刻用它找到了东西。
+>
+> ### 一、加之前先过坑 258 那一问
+>
+> > **有没有一种变异能让它响、而现有的档都不响？**
+>
+> 答得上来：把一块面板的 `rounded-2xl` 改成 `rounded-md`，
+> 盒子的 x/y/宽高一个数都不动、颜色不动、字重不动、命中不动、aria 不动。
+> **现有各档一条都不响。** 这一问答不上来就不该加档（`depth` 那一档就是这么被撤掉的）。
+>
+> 只取 `borderRadius`，**不取 `boxShadow` / `backdropFilter`**：后两者的计算值是
+> 颜色 + 多段长度的组合写法，噪声比信号多。真要加，按同一条判据单独论证。
+>
+> **这把新尺子先量了它自己**（坑 213/186）：`tests/unit/parity/diff-entry.test.ts`
+> 新增两条——只改圆角时它响**而其余各档一条都不响**（这就是上面那句判据的机器版本）、
+> 圆角相同时不报（四段写法 `8px 8px 0px 0px` 逐字比，不做归一）。
+>
+> ### 二、第一次整套跑：**5 行，全部同一处**
+>
+> ```
+> artifact-preview   ×3 维    text:/artifact-fixtures/report.html
+> artifact-panel-resize ×2 维   borderRadius React=3.35544e+07px Vue=8px
+> ```
+>
+> `3.35544e+07px` 是 Tailwind v4 的 `rounded-full`（`calc(infinity * 1px)`）。
+> **噪声 0 行、与别的档重复 0 行**——新增的 5 行是同一处差异在 5 个场景-维度上的投影。
+>
+> ### 三、根因：又一处「手抄 primitive 的外观」
+>
+> 探针把两边那个锚点解析到的**元素身份**打出来（别拿「文本对得上」当证据，坑 264）：
+>
+> ```
+> REACT  span[badge] .inline-flex items-center justify-center rounded-full border w-fit … r=3.35544e+07px
+> VUE    span        .bg-secondary text-secondary-foreground inline-flex max-w-full rounded-md px-2 py-0.5 … r=8px
+> ```
+>
+> 上游那一族全部走 `ChainOfThoughtSearchResult`
+> （`ai-elements/chain-of-thought.tsx:183` = `<Badge variant="secondary"
+> className="gap-1 px-2 py-0.5 text-xs font-normal">`）；
+> **本仓 `ProcessingToolStep.vue` 手抄了它的外观**，三处。
+>
+> **本仓是有 `ui/badge` 的，而且它的基类与上游逐字相同**——也就是说这不是「没移植」，
+> 是「移植了却没用」。手抄那一版丢掉的东西：`rounded-full`（变成 `rounded-md`）、
+> `border`、`w-fit`、`whitespace-nowrap`、`shrink-0`、`gap-1`、
+> `items-center justify-center`、`overflow-hidden`、`focus-visible:*` 与
+> `aria-invalid:*` 两组状态、`transition-[color,box-shadow]`。
+>
+> 三处全部换成 `<Badge variant="secondary" class="gap-1 px-2 py-0.5 text-xs font-normal">`。
+> `web_fetch` 那一支照抄上游的**层次**：Badge 里套一个 `<a class="cursor-pointer">`，
+> 而不是把链接本身当 badge 用（chain-of-thought 那颗 badge 不是控件，链接才是）。
+>
+> **读数：`artifact-preview` 三维 5 行 → 0 行**，台账回到 159 行。
+>
+> ### 四、这一轮真正的结论
+>
+> **一条尺子加对了，会在第一次跑的时候就付清成本。** 这一档新增 5 行、
+> 其中噪声 0 行、重复 0 行、真差异 1 处（5 个投影），当轮修完归零。
+> 对比 wave 94 的焦点档（17 行里 10 行是描述器噪声），这已经是很干净的一次扩档。
 
 > ## 2026-09-12 第九轮：**`ui/input-group` 判「不移植」——先把它接进取样面，再用读数说话**
 >
