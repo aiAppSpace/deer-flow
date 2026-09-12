@@ -20,13 +20,17 @@ import {
 import { cn } from "@/lib/utils";
 
 const props = defineProps<
-  DropdownMenuSubTriggerProps & { class?: HTMLAttributes["class"] }
+  DropdownMenuSubTriggerProps & {
+    class?: HTMLAttributes["class"];
+    inset?: boolean;
+  }
 >();
 
 const forwarded = useForwardProps(props);
 const delegated = computed(() => {
-  const { class: _class, ...rest } = forwarded.value;
+  const { class: _class, inset: _inset, ...rest } = forwarded.value;
   void _class;
+  void _inset;
   return rest;
 });
 </script>
@@ -34,6 +38,7 @@ const delegated = computed(() => {
 <template>
   <DropdownMenuSubTrigger
     data-slot="dropdown-menu-sub-trigger"
+    :data-inset="props.inset || undefined"
     v-bind="delegated"
     :class="
       cn(

@@ -30,6 +30,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -234,6 +235,52 @@ describe("DropdownMenu", () => {
       get<HTMLElement>('[data-slot="dropdown-menu-item"][data-variant]').dataset
         .variant,
     ).toBe("destructive");
+  });
+
+  /*
+    `data-[inset]:pl-8` 这条类三份 dropdown primitive 都带着（基类逐字照上游），
+    而本仓**没有任何出口能把 `data-inset` 打上去**——reka 没有 `inset` 这个概念，
+    它是 shadcn 层的 prop（`ui/dropdown-menu.tsx:74/156/212`）。
+    也就是说那条选择器在本仓是**死的**：写着、永远不成立（2026-09-12 第十五轮）。
+
+    **判据落在渲染结果上，不落在源码文本上**：源码里有 `:data-inset` 不等于
+    属性真的到了 DOM（`useForwardProps` 会把未知 prop 原样转发，
+    `inset` 不从 `delegated` 里剥掉的话，reka 会额外打一个裸 `inset` 属性）。
+    所以这一条同时钉「`data-inset` 在」与「裸 `inset` 不在」。
+
+    上游两边都**零消费者**（没有调用点传 `inset`），所以这不是可见缺陷，
+    是 primitive 的合同缺口：类串承诺的事，本仓做不到。
+  */
+  it("inset 打成 data-inset，而不是漏掉或漏成裸属性", async () => {
+    await mountPortal(() =>
+      h(DropdownMenu, null, () => [
+        h(DropdownMenuTrigger, null, () => [
+          h("button", { type: "button", "aria-label": "More" }, "More"),
+        ]),
+        h(DropdownMenuContent, null, () => [
+          h(DropdownMenuLabel, { inset: true }, () => "Group"),
+          h(DropdownMenuItem, { inset: true }, () => "Rename"),
+          h(DropdownMenuItem, null, () => "Plain"),
+        ]),
+      ]),
+    );
+    get<HTMLButtonElement>('[aria-label="More"]').click();
+    await flushPromises();
+
+    const label = get<HTMLElement>('[data-slot="dropdown-menu-label"]');
+    expect(label.getAttribute("data-inset")).toBe("true");
+    expect(label.hasAttribute("inset")).toBe(false);
+
+    const items = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[data-slot="dropdown-menu-item"]',
+      ),
+    ];
+    expect(items.map((item) => item.getAttribute("data-inset"))).toEqual([
+      "true",
+      null,
+    ]);
+    expect(items.some((item) => item.hasAttribute("inset"))).toBe(false);
   });
 
   it("把子菜单内容留在父菜单的子树里，不 portal 到 body 末尾", async () => {

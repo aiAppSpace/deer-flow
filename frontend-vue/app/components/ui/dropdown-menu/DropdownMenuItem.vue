@@ -54,15 +54,22 @@ const props = defineProps<
   DropdownMenuItemProps & {
     class?: HTMLAttributes["class"];
     variant?: "default" | "destructive";
+    inset?: boolean;
   }
 >();
 const emits = defineEmits<DropdownMenuItemEmits>();
 
 const forwarded = useForwardProps(props);
 const delegated = computed(() => {
-  const { class: _class, variant: _variant, ...rest } = forwarded.value;
+  const {
+    class: _class,
+    variant: _variant,
+    inset: _inset,
+    ...rest
+  } = forwarded.value;
   void _class;
   void _variant;
+  void _inset;
   return rest;
 });
 </script>
@@ -70,6 +77,7 @@ const delegated = computed(() => {
 <template>
   <DropdownMenuItem
     data-slot="dropdown-menu-item"
+    :data-inset="props.inset || undefined"
     :data-variant="props.variant"
     v-bind="delegated"
     :class="
