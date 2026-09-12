@@ -67,9 +67,15 @@ describe("AgentMessageContent 的联合两侧", () => {
     expect(Array.isArray(asParts)).toBe(true);
   });
 
-  // 「不能整体赋给 string」这类**类型层**断言不放在这里：tests/ 不过 vue-tsc，
-  // 写在这里的 @ts-expect-error 是空操作（实测塌成 string 后本文件 8 个用例照样全绿）。
-  // 塌陷的护栏在 app/core/types/message.contract.ts，骑 typecheck 预算门禁。
+  /*
+    「不能整体赋给 string」这类**类型层**断言不放在这里，护栏在
+    `app/core/types/message.contract.ts`（骑 typecheck 预算门禁）。
+
+    **原来的理由「tests/ 不过 vue-tsc，写在这里的 @ts-expect-error 是空操作」
+    从 2026-09-11 起是假的**：`make typecheck-tests` 已经接进 `make verify`。
+    现在写在这里也会被查——只是护栏没必要搬家，两条命令都跑。
+    （第十六轮核对；门禁 tests/guards/stale-coverage-claims.test.ts。）
+  */
 
   test("AgentContentPart 保留协议未知字段（index signature 不是装饰）", () => {
     const part: AgentContentPart = {

@@ -11,10 +11,16 @@
                    像模像样的总数。那个文件头当时就写着「多一个少一个都要在这里显式加」，
                    **而没有任何机器在守那句话**。
 
-                   为什么不写成类型层断言：`tests/` 整棵树不在 `make typecheck` 的
-                   include 里（Nuxt 的 tsconfig 只收 `app/**` 与 `tests/nuxt/**`）。
-                   实测把字段表改少一个、改多一个假字段，`vue-tsc` 两次都是绿的。
-                   在这里写类型断言等于写了个不会执行的注释。
+                   **为什么不写成类型层断言**：判据要对的是**三方**——这份表、
+                   那个 `.mjs` 脚本自己抄的表、以及签入基线里真实出现的字段。
+                   脚本是 `.mjs`，读不到 TS 类型，类型层断言够不着它。
+
+                   （原文这里写的理由是「`tests/` 整棵树不在 `make typecheck` 的
+                   include 里，写类型断言等于写了个不会执行的注释」。
+                   **那句话从 2026-09-11 起是假的**——`make typecheck-tests`
+                   已经接进 `make verify`，第十六轮实测在 `tests/` 里塞一个
+                   类型错误当场报 TS2322。理由换成上面那条，结论不变。
+                   门禁：tests/guards/stale-coverage-claims.test.ts。）
 
                    为什么读脚本的**源码**而不是 import 它：那个脚本是 CLI，
                    import 即执行——它会去读 test-results/、打印、并 `process.exit`。

@@ -102,7 +102,9 @@ export type ParityTarget =
     在 Playwright 里就是「这个 role 的任意元素」。
 
     此前这里写成必填，于是那两处**运行时一直是对的、类型上一直是错的**——
-    而 `tests/` 整棵树不在 typecheck 里，所以没有任何机器说过话。
+    而当时 `tests/` 整棵树还不在 typecheck 里，所以没有任何机器说过话。
+    （**2026-09-11 起不是这样了**：`make typecheck-tests` 已接进 `make verify`，
+    同样的错误今天会当场报出来。门禁：tests/guards/stale-coverage-claims.test.ts。）
   */
   | { role: Parameters<Page["getByRole"]>[0]; name?: string | RegExp }
   | { text: string | RegExp };

@@ -21,7 +21,9 @@ type WebServer = NonNullable<PlaywrightTestConfig["webServer"]>;
   原来写的是 `WebServer extends readonly (infer T)[] ? T : never`——条件类型在
   联合上会分配，非数组那一支求出 `never`，于是整体塌成 `never`，
   四份 config 里的 `servers: [...]` 全部「不能赋给 never」。
-  运行时一直是对的；**类型上一直是错的，而 `tests/` 不在 typecheck 里，没人说话。**
+  运行时一直是对的；**类型上一直是错的，而当时 `tests/` 不在 typecheck 里，没人说话。**
+  （**2026-09-11 起不是这样了**：`make typecheck-tests` 已接进 `make verify`，
+  同样的类型错误今天会当场报出来。门禁：tests/guards/stale-coverage-claims.test.ts。）
 */
 export type WebServerEntry = Extract<WebServer, readonly unknown[]>[number];
 

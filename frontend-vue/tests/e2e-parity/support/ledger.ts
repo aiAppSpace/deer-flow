@@ -67,10 +67,12 @@ export type DiffEntry = {
  * 于是那个报告**六档差异一行都没算进去**，还照样打印出一个像模像样的总数。
  * 它自己的文件头写着「多一个少一个都要在这里显式加」，可没有任何机器在守。
  *
- * **证据是门禁不是类型**：`tests/` 整棵树不在 `make typecheck` 的 include 里
- * （Nuxt 的 tsconfig 只收 `app/**` 与 `tests/nuxt/**`），在这里写类型层断言等于
- * 写了个不会执行的注释——实测：把这份表改少一个、改多一个假字段，
- * `vue-tsc` 两次都是绿的。所以判据落在
+ * **证据是门禁不是类型**：要对的是**三方**——这份表、那个 `.mjs` 脚本自己抄的
+ * 一份表、以及签入基线里真实出现的字段；脚本读不到 TS 类型，类型层断言够不着它。
+ * （原文这里写的是「`tests/` 整棵树不在 `make typecheck` 的 include 里」。
+ * **那句话从 2026-09-11 起是假的**——`make typecheck-tests` 已接进 `make verify`；
+ * 理由换成上面那条，结论不变。门禁：tests/guards/stale-coverage-claims.test.ts。）
+ * 判据落在
  * tests/guards/parity-ledger-fields.test.ts：它把这份表、那个脚本的表、
  * 以及签入基线里真实出现的字段三方对账。
  */

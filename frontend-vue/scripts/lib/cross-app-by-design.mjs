@@ -100,7 +100,7 @@ export const CROSS_APP_BY_DESIGN = {
   },
   "scripts/icon-parity.mjs": {
     kind: "script",
-    note: "图标字形 / 尺寸 / tooltip 的对照报告；要读上游装的 lucide 别名表（本仓装的是 lucide-vue-next，别名映射不同），所以路径写死。缺席时打印一行后退出 0，不进任何门禁。",
+    note: "图标字形 / 尺寸 / tooltip 的对照报告；要读上游装的 lucide 别名表（本仓装的是 lucide-vue-next，别名映射不同），所以路径写死。缺席时打印一行后退出 0。**它不是「顾问工具」**：豁免表过期或形状断言不成立时它会红（`icon-parity.mjs` 的文件头写明了那两类条件，并记着「这是顾问工具，不进任何门禁」那句话从 wave 111 起就是假的）——只是它不在 `make verify` 的先决条件里，要单独跑。",
   },
   "baseline/upstream-marker.json": {
     kind: "data",
