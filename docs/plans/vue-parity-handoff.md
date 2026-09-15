@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-15 第十九轮收工）
+## 当前状态（2026-09-16 第二十一轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -32,6 +32,28 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-16 第二十一轮）做了什么
+
+**追 CI 上那条「本机绿」的红，修到根因，两边同改。**
+
+- `make e2e-mock` 在 CI 红：`integrations.spec.ts` 的 375px 断言，
+  `panelOverflow: 0` / **`cardOverflow: 9`**。本机 macOS 一直绿。
+- 根因：`CardHeader` 有 `CardAction` 时是 `grid-cols-[1fr_auto]`，
+  第 2 列是 `whitespace-nowrap` 的 Refresh（min-content 95px），
+  第 1 列虽写 `1fr` 但 grid/flex 子项默认 `min-width: auto`，**缩不到 min-content
+  以下**，卡死 137px。容器从 257 缩到 248 时 `grid-template-columns` 完全没变——
+  这是决定性读数。
+- 修法：外层 flex 与内层文字 div 补 `min-w-0`，图标盒补 `shrink-0`。
+  上游 `integrations-settings-page.tsx:642` 逐字相同、同样缺，**两边同改**，
+  marker 推到 `a0f6bcae`。开始溢出的宽度 370 → 320。
+- 门禁补一档 360px：**原来只量 375px，而那一档余量恰好为 0**，
+  所以它在 macOS 绿、Linux 红。负向验证：拿掉修复 → 360px 那档在本机就红、375px 仍绿。
+- 顺带量出一条流程账：规则写着「批不超过 4 轮」，而 `e2e-mock` 上一次真跑是
+  **第十三轮**，隔了 7 轮——CI 那条红因此躺了 6 天。
+
+读数：React `pnpm check` 0；Vue `verify` 0（330 文件 2681 单测）；
+`e2e-visual` 8 passed（截图一张没变）；**`e2e-mock` 319 passed**；负向验证 2 条。
 
 ## 上一轮（2026-09-15 第十九轮）做了什么
 
