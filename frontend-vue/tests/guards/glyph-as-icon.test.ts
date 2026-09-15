@@ -89,12 +89,18 @@ const ALLOWED: Record<string, string> = {
 };
 
 describe("不许拿符号字符当图标", () => {
-  const found = new Map<string, Set<string>>();
+  /*
+    **按出现顺序收，不去重**（第十九轮改的）。此前这里是 `Set`：同一个文件里
+    多画一个 `×`，集合仍是 `{×}`，下面那条断言照样绿——豁免写的是上游某一处，
+    盖住的却是「这个文件里这个字符随便画几次」。用数组的话，第二处会让期望串
+    从 `×` 变成 `××`，必须回来说清那一处对应上游哪里。
+  */
+  const found = new Map<string, string[]>();
   for (const file of [...walk("app/components"), ...walk("app/pages")]) {
     const src = blankComments(readFileSync(file, "utf8"));
     for (const m of src.matchAll(GLYPH_RE)) {
-      if (!found.has(file)) found.set(file, new Set());
-      found.get(file)!.add(m[1]!);
+      if (!found.has(file)) found.set(file, []);
+      found.get(file)!.push(m[1]!);
     }
   }
 
@@ -118,9 +124,11 @@ describe("不许拿符号字符当图标", () => {
     expect([...found.keys()].sort()).toEqual(Object.keys(ALLOWED).sort());
   });
 
-  it("每个文件用的字符，正好是清单写的那个", () => {
+  it("每个文件用的字符与处数，正好是清单写的那些", () => {
     for (const [file, glyphs] of found) {
-      expect([...glyphs].join("")).toBe(ALLOWED[file]);
+      expect(glyphs.join(""), `${file}：字符或处数与 ALLOWED 对不上`).toBe(
+        ALLOWED[file],
+      );
     }
   });
 });

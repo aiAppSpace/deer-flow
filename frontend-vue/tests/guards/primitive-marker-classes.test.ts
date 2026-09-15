@@ -49,10 +49,11 @@ const uiDir = join(appDir, "components/ui");
  *
  * 加一条之前先回上游看那一处：上游走 primitive 的，本仓也要走。
  */
-const ALLOWED: Record<string, [string, string][]> = {
+const ALLOWED: Record<string, [string, number, string][]> = {
   "components/workspace/ThreadSidebar.vue": [
     [
       "peer/menu-button",
+      1,
       '上游是 `<DropdownMenuTrigger asChild><SidebarMenuButton size="lg">`，' +
         "而本仓的收起态不是 `data-collapsible=icon` 而是自己的 `collapsed` ref，" +
         "cva 里那两条 `group-data-[collapsible=icon]:*!` 永远不成立。" +
@@ -105,6 +106,12 @@ describe("primitive 的标记类只属于 primitive", () => {
   it("`ui/` 之外没有人手写 primitive 的标记类", () => {
     const offenders: string[] = [];
     const seen = new Set<string>();
+    /*
+      **处数也要对**（第十九轮加的）。此前豁免只到「标记类」这一层：
+      同一个文件里第二处手写同一个标记类会被一起放过，而写下的理由
+      说的只是上游那一处。
+    */
+    const counts = new Map<string, number>();
     for (const file of walk(appDir)) {
       if (file.startsWith(`${uiDir}/`)) continue;
       const key = relative(appDir, file);
@@ -112,8 +119,10 @@ describe("primitive 的标记类只属于 primitive", () => {
       for (const match of strip(readFileSync(file, "utf8")).matchAll(MARKER)) {
         const marker = match[0];
         if (!markers.has(marker)) continue;
-        seen.add(`${key} → ${marker}`);
-        if (!allowed.has(marker)) offenders.push(`${key} → ${marker}`);
+        const site = `${key} → ${marker}`;
+        counts.set(site, (counts.get(site) ?? 0) + 1);
+        seen.add(site);
+        if (!allowed.has(marker)) offenders.push(site);
       }
     }
     expect(
@@ -125,11 +134,21 @@ describe("primitive 的标记类只属于 primitive", () => {
 
     // 反向：过期豁免同样报错。
     const stale: string[] = [];
+    const miscounted: string[] = [];
     for (const [key, entries] of Object.entries(ALLOWED)) {
-      for (const [marker] of entries) {
-        if (!seen.has(`${key} → ${marker}`)) stale.push(`${key} → ${marker}`);
+      for (const [marker, count] of entries) {
+        const site = `${key} → ${marker}`;
+        if (!seen.has(site)) stale.push(site);
+        else if (counts.get(site) !== count)
+          miscounted.push(
+            `${site}：实际 ${counts.get(site)} 处，表里写 ${count}`,
+          );
       }
     }
     expect(stale, "ALLOWED 里的条目已经不存在了，删掉它").toEqual([]);
+    expect(
+      miscounted,
+      "手写处数和豁免写的对不上——多出来的那几处没有任何理由覆盖",
+    ).toEqual([]);
   });
 });

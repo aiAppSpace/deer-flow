@@ -20,12 +20,24 @@
                    `node_modules/reka-ui/dist` 里查，而不是维护一张手抄的名单。
 
                    **唯一的豁免 `collapsible` 是 wave 74 判过的分歧**：
-                   `ui/sidebar` 的 cva 里有 `group-data-[collapsible=icon]:*!`，
                    而本仓的侧栏收起态不是 `data-collapsible` 而是
                    `useWorkspaceSidebar` 自己的 `collapsed` ref（外壳在
-                   `ThreadSidebarShell.vue`，不在 `ui/` 里）。基类照抄上游、
-                   那两条因此恒不成立——这是**已量过并写下判词**的死类，不是新债。
-                   哪天侧栏换成 `data-collapsible`，把这一条从表里删掉。
+                   `ThreadSidebarShell.vue`，不在 `ui/` 里）。基类照抄上游，
+                   这些选择器因此恒不成立——已量过并写下判词，不是新债。
+
+                   **第十九轮收紧了这条豁免的范围。** 在那之前它按**属性名**在
+                   整棵 `ui/` 树上生效，而写下的理由只说了侧栏 cva 里「那两条」；
+                   实测是 **6 处、跨 3 个文件**——`SidebarGroupLabel.vue`（收起时
+                   把分组标题 `-mt-8 opacity-0` 藏掉）和 `SidebarMenuAction.vue`
+                   （收起时 `hidden`）理由里一个字都没提，却一样被放过。
+                   **豁免说的是 A，放过的是 A+B+C**。现在按「文件 → 处数」钉死：
+                   多一处就红，逼着写清那一处为什么也该豁免。
+
+                   **它盖住的那笔账**（第十九轮记，还没做）：上游收起靠 CSS
+                   （节点还在，`opacity-0` / `hidden`），本仓收起靠
+                   `v-if="sidebarExpanded"`（**节点直接删掉**）。两者的
+                   可访问性树与几何在收起态必然不同，而**没有任何对照场景会收起侧栏**——
+                   这一态整个在取样面之外。要接着追，先给场景加一步「点收起」。
 */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -41,13 +53,27 @@ const rekaDist = fileURLToPath(
   new URL("../../node_modules/reka-ui/dist", import.meta.url),
 );
 
-/** X → 为什么这一条注定不成立。加一条之前先确认它**真的**不该成立。 */
-const ALLOWED: Record<string, string> = {
-  collapsible:
-    "wave 74：本仓侧栏的收起态是 `useWorkspaceSidebar` 的 `collapsed` ref，" +
-    "不是 `data-collapsible`；外壳在 ThreadSidebarShell.vue，不在 ui/ 里。" +
-    "基类照抄上游，那两条 `group-data-[collapsible=icon]:*!` 因此恒不成立。",
-};
+/**
+ * X → 为什么这一条注定不成立，**以及它到底盖住哪几处**。
+ *
+ * `sites` 是 `ui/` 下的相对路径 → 剥掉注释之后 `data-[X` 的处数，必须逐字相等：
+ * 只写理由不写范围，下一个人会把豁免读成「这个属性名整棵树随便写」
+ * （第十九轮实测就是这样：理由说「那两条」，实际放过 6 处、跨 3 个文件）。
+ */
+const ALLOWED: Record<string, { why: string; sites: Record<string, number> }> =
+  {
+    collapsible: {
+      why:
+        "wave 74：本仓侧栏的收起态是 `useWorkspaceSidebar` 的 `collapsed` ref，" +
+        "不是 `data-collapsible`；外壳在 ThreadSidebarShell.vue，不在 ui/ 里。" +
+        "基类照抄上游，`group-data-[collapsible=icon]:*` 因此恒不成立。",
+      sites: {
+        "sidebar/SidebarGroupLabel.vue": 2,
+        "sidebar/SidebarMenuAction.vue": 1,
+        "sidebar/menu-button-variants.ts": 3,
+      },
+    },
+  };
 
 function strip(source: string): string {
   const blank = (match: string) => match.replaceAll(/[^\n]/g, " ");
@@ -110,6 +136,25 @@ describe("ui/ 里没有写着却永远不成立的 data 选择器", () => {
         "**这条选择器永远不成立**。要么补上写它的出口（同 wave 205 的 `inset`），" +
         "要么进 ALLOWED 并写清为什么它注定不成立。",
     ).toEqual([]);
+  });
+
+  it("豁免盖住的处数就是表里写的那几处", () => {
+    for (const [name, entry] of Object.entries(ALLOWED)) {
+      const actual: Record<string, number> = {};
+      for (const file of walk(uiDir, [".vue", ".ts"])) {
+        const hits = [
+          ...strip(readFileSync(file, "utf8")).matchAll(
+            new RegExp(`data-\\[${name}[\\]=]`, "g"),
+          ),
+        ].length;
+        if (hits) actual[file.slice(uiDir.length + 1)] = hits;
+      }
+      expect(
+        actual,
+        `豁免 \`${name}\` 写的范围和实际对不上。多出来的那几处**没有被任何理由` +
+          "覆盖**——要么补进 sites 并说清它为什么也该豁免，要么把那处选择器修活。",
+      ).toEqual(entry.sites);
+    }
   });
 
   it("ALLOWED 里没有已经不需要的条目（双向）", () => {
