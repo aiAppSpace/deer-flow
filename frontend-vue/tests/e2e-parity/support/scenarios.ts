@@ -1847,6 +1847,56 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
+  /*
+    **收起态的侧栏，第十九轮量出「整个不在取样面」之后第一次接进来。**
+
+    **这一屏量出来是 0 行，而且是真的 0**（2026-09-15 在真实栈上逐项核过）。
+    此前以为「上游靠 CSS 藏、节点还在，所以 aria 会差一片」——**那个猜测是错的**：
+    `sidebar.tsx:415` 那两条 `group-data-[collapsible=icon]:-mt-8 opacity-0`
+    在这个应用里根本用不上，workspace 侧栏收起时**两边的分组标题都从 DOM 里消失**，
+    四颗导航键的可访问名也逐字相同（新对话/对话/智能体/定时任务）。
+
+    留这条场景不是为了那 0，是为了**把这一态钉住**：它此前完全在取样面之外，
+    两边的实现机制并不相同（上游 `data-collapsible=icon` + CSS，
+    本仓 `collapsed` ref + `v-if="sidebarExpanded"`），哪天任一侧改了，这里会红。
+
+    锚点：`{ role: "button", name: "Toggle Sidebar" }`。三处核过：
+    ① 上游 5 个调用点里 3 个带 `md:hidden`（窄屏），
+      另两个是 `workspace-header.tsx:35/48` 的收起/展开互斥分支——
+      本仓 `ThreadSidebar.vue:471/491` 逐一对应，**桌面展开态两边各恰好一颗**；
+    ② 可访问名两边都恒为 `Toggle Sidebar`（上游写在 sidebar.tsx:264 的注释里，
+      本仓走 `primitives.toggleSidebar`，**两个语言同一串**），所以跨语言维度也成立；
+    ③ 收起之后那颗换成 `hidden … group-hover:block` 的分支，
+      **不在可访问性树里**——所以只点一次，不要想着再点回去。
+
+    `settle` 就锚在那颗按钮上：它是收起前两边都有的东西。
+  */
+  {
+    id: "sidebar-collapsed",
+    title: "收起态的侧栏",
+    backend: "mock",
+    path: `/workspace/chats/${MOCK_THREAD_ID}`,
+    mock: {
+      threads: [{ thread_id: MOCK_THREAD_ID, title: "Sidebar collapse" }],
+    },
+    settle: [
+      { kind: "visible", target: { role: "button", name: "Toggle Sidebar" } },
+    ],
+    /*
+      **终态必须自己断言，否则 0 行有两种读法。** click 没生效的话两边都停在
+      展开态，十一档照样全空——和「两边真的一样」长得一模一样。
+
+      判据选 `DeerFlow` 而不是那颗触发器或 `DF`：后两者都挂着
+      `group-hover/workspace-header:*`，而 click 之后鼠标还停在头部，
+      悬停态下它们的可见性会翻转；`DeerFlow` 只在展开支里渲染、不受悬停影响，
+      **两边都是**（workspace-header.tsx:41/45 与 ThreadSidebar.vue:454）。
+    */
+    steps: [
+      { kind: "click", target: { role: "button", name: "Toggle Sidebar" } },
+      { kind: "hidden", target: { text: /^DeerFlow$/ } },
+    ],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+  },
   {
     id: "background-tasks",
     title: "当前会话的后台任务抽屉",

@@ -33,11 +33,12 @@
                    **豁免说的是 A，放过的是 A+B+C**。现在按「文件 → 处数」钉死：
                    多一处就红，逼着写清那一处为什么也该豁免。
 
-                   **它盖住的那笔账**（第十九轮记，还没做）：上游收起靠 CSS
-                   （节点还在，`opacity-0` / `hidden`），本仓收起靠
-                   `v-if="sidebarExpanded"`（**节点直接删掉**）。两者的
-                   可访问性树与几何在收起态必然不同，而**没有任何对照场景会收起侧栏**——
-                   这一态整个在取样面之外。要接着追，先给场景加一步「点收起」。
+                   **它盖住的那笔账，第二十轮在真实栈上量完了**：两边的收起机制
+                   确实不同（上游 `data-collapsible=icon` + CSS，本仓
+                   `collapsed` ref + `v-if="sidebarExpanded"`），**但可观察结果相同**
+                   ——收起时两边的分组标题都从 DOM 里消失，四颗导航键的可访问名
+                   逐字相同。`sidebar.tsx:415` 那两条 `opacity-0` 在这个应用里
+                   走不到。场景 `sidebar-collapsed` 已经把这一态接进取样面，0 行。
 */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";

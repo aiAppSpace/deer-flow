@@ -15,7 +15,7 @@
 >
 > - 工作区干净，**已推送到 `origin/main-wc`**（2026-09-15；领先多少现场量：
 >   `git rev-list --count origin/main-wc..HEAD`）；
-> - 对照台账 **159 唯一行 / 140 个场景-维度**（数 `baseline/parity-diff.json` 的
+> - 对照台账 **159 唯一行 / 142 个场景-维度**（数 `baseline/parity-diff.json` 的
 >   `entries`；量法写在冷启动文档里。**这两个数有门禁守着**——
 >   `frontend-vue/tests/guards/doc-facts.test.ts` 逐处比对签入基线，
 >   而且是全称判据：文档里每一处都得对，不是「有一处对就行」）；
@@ -62,7 +62,7 @@
   **本机一直是 22 passed，因为本机 backend venv 里装着 playwright。**
 
 读数：verify exit 0 / **330 文件 2681 单测**；台账 **159 唯一行 / 179 多重集 /
-140 个场景-维度**（零产品改动，未变）；e2e-parity 用例数 148（`--list` 数的，
+142 个场景-维度**（零产品改动，未变）；e2e-parity 用例数 148（`--list` 数的，
 本轮没跑整条）。负向验证 14 条，全红全还原。
 
 ## 上一轮（2026-09-12 第十八轮）做了什么
