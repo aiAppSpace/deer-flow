@@ -532,51 +532,62 @@ test.describe("Integrations settings", () => {
     而「装不装得下」不会。两侧各一条，因为两边的坏法落在不同的层上：
     `panelOverflow` 抓上游那种撑出格子，`cardOverflow` 抓本仓这种裁掉。
   */
-  test("the settings panel fits inside the dialog on a 375px screen", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
-    mockLangGraphAPI(page);
-    await page.route("**/api/integrations/lark/status", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(configuredLarkStatus()),
-      }),
-    );
-
-    const dialog = await openSettingsDialog(
+  /*
+    **两档宽度，不是一档**（2026-09-16）。原来只量 375px，而那一档的余量恰好是 0：
+    macOS 上刚好不溢出、CI 的 Linux 字体宽一点就 `cardOverflow: 9`——
+    **一条只在某个平台上成立的断言，和它守住了长得一模一样**。
+    360px 是常见的 Android 宽度，本来就该装得下；把它一起量，这条用例就不再
+    依赖字体度量。根因（CardHeader 的 `1fr` 列 `min-width: auto` 缩不动）
+    已在 `IntegrationsSettings.vue` 与上游 `integrations-settings-page.tsx`
+    两边同改修掉，修完 340px 都还有余量。
+  */
+  for (const width of [375, 360]) {
+    test(`the settings panel fits inside the dialog on a ${width}px screen`, async ({
       page,
-      "/workspace/chats/new?settings=integrations",
-    );
-    await dialog.getByRole("button", { name: "Change Lark app" }).click();
-    await expect(dialog.getByLabel("App ID")).toBeVisible();
+    }) => {
+      await page.setViewportSize({ width, height: 812 });
+      mockLangGraphAPI(page);
+      await page.route("**/api/integrations/lark/status", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(configuredLarkStatus()),
+        }),
+      );
 
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const dialogEl = document.querySelector("[role=dialog]");
-            const panel = dialogEl?.querySelector<HTMLElement>(
-              '[data-slot="scroll-area"]',
-            );
-            const card =
-              dialogEl?.querySelector<HTMLElement>('[data-slot="card"]');
-            if (!panel?.parentElement || !card) return { missing: true };
-            const over = (value: number) => Math.max(0, Math.round(value));
-            return {
-              panelOverflow: over(
-                panel.getBoundingClientRect().width -
-                  panel.parentElement.clientWidth,
-              ),
-              cardOverflow: over(card.scrollWidth - card.clientWidth),
-            };
-          }),
-        {
-          message:
-            "panelOverflow>0 = 面板被撑出了栅格格子；cardOverflow>0 = 卡片里的东西被裁掉了",
-        },
-      )
-      .toEqual({ panelOverflow: 0, cardOverflow: 0 });
-  });
+      const dialog = await openSettingsDialog(
+        page,
+        "/workspace/chats/new?settings=integrations",
+      );
+      await dialog.getByRole("button", { name: "Change Lark app" }).click();
+      await expect(dialog.getByLabel("App ID")).toBeVisible();
+
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => {
+              const dialogEl = document.querySelector("[role=dialog]");
+              const panel = dialogEl?.querySelector<HTMLElement>(
+                '[data-slot="scroll-area"]',
+              );
+              const card =
+                dialogEl?.querySelector<HTMLElement>('[data-slot="card"]');
+              if (!panel?.parentElement || !card) return { missing: true };
+              const over = (value: number) => Math.max(0, Math.round(value));
+              return {
+                panelOverflow: over(
+                  panel.getBoundingClientRect().width -
+                    panel.parentElement.clientWidth,
+                ),
+                cardOverflow: over(card.scrollWidth - card.clientWidth),
+              };
+            }),
+          {
+            message:
+              "panelOverflow>0 = 面板被撑出了栅格格子；cardOverflow>0 = 卡片里的东西被裁掉了",
+          },
+        )
+        .toEqual({ panelOverflow: 0, cardOverflow: 0 });
+    });
+  }
 });
