@@ -14,6 +14,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { reactAppPresent } from "./support/react-preview";
 import {
   DEFAULT_DIMENSION,
@@ -42,25 +43,42 @@ for (const scenario of PARITY_SCENARIOS) {
       scenario.dimensions ?? [DEFAULT_DIMENSION]) {
       const name = state.id ? `${scenario.id}#${state.id}` : scenario.id;
       test(`${name} · ${label(dimension)} · 两个应用都到得了`, async ({
-        page,
-        context,
+        browser,
       }) => {
-        // 一个应用一个 page：mock 路由、init script 和视口都是 page 级状态，
-        // 复用同一个 page 会让第二个应用带着第一个的残留。
-        const vuePage: Page = page;
-        const reactPage = await context.newPage();
+        /*
+          **一个应用一个 context，不是一个 page**（第二十轮改的，同 diff.spec）。
 
-        await expect(
-          runScenario(vuePage, VUE_APP, scenario, dimension, state),
-          `Vue 没能到达场景 ${name}（${label(dimension)}）`,
-        ).resolves.toBeTruthy();
+          原来这里是 `context.newPage()`，注释写的理由是「mock 路由、init script
+          和视口都是 **page 级**状态」——**范围比实际需要的窄**：cookie 是
+          **context 级**的，而两个应用把侧栏收起态存在**同名** cookie
+          `sidebar_state` 里（上游 `sidebar.tsx:28`，本仓
+          `useWorkspaceSidebar.restoreFromCookie`）。于是先跑的 Vue 一收起，
+          后跑的 React 就带着 `sidebar_state=false` 开局——**开局状态被上一个
+          应用改掉了**，再点一下反而展开。
 
-        await expect(
-          runScenario(reactPage, REACT_APP, scenario, dimension, state),
-          `React 没能到达场景 ${name}（${label(dimension)}）`,
-        ).resolves.toBeTruthy();
+          实测现场：`sidebar-collapsed` 这条场景两个维度都红，截图里
+          Vue 收起、React 展开，看起来像产品差异，其实是夹具串味。
+          `diff.spec` 一直是一应用一 context，所以台账那边从没中招。
+        */
+        const vueContext = await browser.newContext(PARITY_CONTEXT_OPTIONS);
+        const reactContext = await browser.newContext(PARITY_CONTEXT_OPTIONS);
+        const vuePage: Page = await vueContext.newPage();
+        const reactPage: Page = await reactContext.newPage();
 
-        await reactPage.close();
+        try {
+          await expect(
+            runScenario(vuePage, VUE_APP, scenario, dimension, state),
+            `Vue 没能到达场景 ${name}（${label(dimension)}）`,
+          ).resolves.toBeTruthy();
+
+          await expect(
+            runScenario(reactPage, REACT_APP, scenario, dimension, state),
+            `React 没能到达场景 ${name}（${label(dimension)}）`,
+          ).resolves.toBeTruthy();
+        } finally {
+          await vueContext.close();
+          await reactContext.close();
+        }
       });
     }
 }
