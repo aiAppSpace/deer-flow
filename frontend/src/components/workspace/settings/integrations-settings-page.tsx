@@ -637,13 +637,28 @@ function LarkIntegrationCard() {
         the content column came out at 167px on a 375px screen, narrower
         than the "Re-register in browser" button (191px) and the OAuth scope
         example, both of which then overflowed. sm+ is unchanged.
+
+        That bought ~16px of padding back but left the real cause in place, so
+        the header has been sitting at zero slack ever since: CardHeader is
+        `grid-cols-[1fr_auto]` whenever a CardAction is present, the action is a
+        `whitespace-nowrap` Refresh button (min-content 95px), and the `1fr`
+        column is a grid item with the default `min-width: auto` — it cannot go
+        below its own min-content (icon 36 + gap 12 + text 89 = 137px). Neither
+        column can yield, so the grid overflows and the action hangs off the
+        card's right edge. Measured on a 375px viewport (card content 257px):
+        macOS happens to fit exactly, Linux's wider metrics overflow by 9px and
+        turned the Vue side's 375px e2e assertion red in CI. `min-w-0` on both
+        flex levels (plus `shrink-0` on the icon so it is not squashed instead)
+        restores the shrink chain; narrowing the viewport to 366px reproduces
+        the old overflow locally and the only element past the edge was the
+        card-action.
       */}
       <CardHeader className="px-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary/10 text-primary rounded-lg p-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="bg-primary/10 text-primary shrink-0 rounded-lg p-2">
             <PlugZapIcon className="size-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <CardTitle>{t.settings.integrations.lark.title}</CardTitle>
             <CardDescription>
               {t.settings.integrations.lark.description}

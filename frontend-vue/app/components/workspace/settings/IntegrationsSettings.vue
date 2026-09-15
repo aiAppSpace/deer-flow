@@ -683,11 +683,26 @@ onUnmounted(() => {
         那颗按钮（191px）和 OAuth scope 示例都窄，两者当场溢出。sm 以上不变。
       -->
       <CardHeader class="px-4 sm:px-6">
-        <div class="flex items-center gap-3">
-          <div class="bg-primary/10 text-primary rounded-lg p-2">
+        <!--
+          `min-w-0` + `shrink-0` 不是装饰，是这张卡片在窄屏下装不装得下的唯一变量
+          （两边同改，上游 integrations-settings-page.tsx:642 同一处）。
+
+          CardHeader 在有 CardAction 时是 `grid-cols-[1fr_auto]`：第 2 列是那颗
+          `whitespace-nowrap` 的 Refresh（min-content 95px），第 1 列虽然是 `1fr`，
+          但 grid/flex 子项默认 `min-width: auto`——**缩不到自己的 min-content 以下**。
+          于是这一列卡在 137px（图标 36 + gap 12 + 文字 min-content 89），
+          两列谁也让不出空间，整个 grid 溢出，表现为 Refresh 探出卡片右边。
+
+          实测（375px 视口、卡片内容宽 257）：本机 macOS 恰好不溢出，
+          CI 的 Linux 字体宽一点就 `cardOverflow: 9`——**余量本来就是 0**。
+          把视口收窄到 366px 能在本机复现同一个数（溢出 8），越界者自始至终
+          只有 `[data-slot="card-action"]`。
+        -->
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="bg-primary/10 text-primary shrink-0 rounded-lg p-2">
             <PlugZap class="size-5" />
           </div>
-          <div>
+          <div class="min-w-0">
             <CardTitle>{{ larkCopy.title }}</CardTitle>
             <CardDescription>{{ larkCopy.description }}</CardDescription>
           </div>
