@@ -8,15 +8,17 @@
 
 ---
 
-## 当前状态（2026-09-12 第十八轮收工）
+## 当前状态（2026-09-15 第十九轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
 >
-> - 工作区干净，**本地领先 `origin/main-wc` 三百多个提交、未推送**
->   （精确值现场量：`git rev-list --count origin/main-wc..HEAD`）；
-> - 对照台账 **159 唯一行 / 138 个场景-维度**（数 `baseline/parity-diff.json` 的
->   `entries`；量法写在冷启动文档里）；
+> - 工作区干净，**已推送到 `origin/main-wc`**（2026-09-15；领先多少现场量：
+>   `git rev-list --count origin/main-wc..HEAD`）；
+> - 对照台账 **159 唯一行 / 140 个场景-维度**（数 `baseline/parity-diff.json` 的
+>   `entries`；量法写在冷启动文档里。**这两个数有门禁守着**——
+>   `frontend-vue/tests/guards/doc-facts.test.ts` 逐处比对签入基线，
+>   而且是全称判据：文档里每一处都得对，不是「有一处对就行」）；
 > - **「台账还剩多少行」已经不能当坐标系**：159 行里 **99 行**是
 >   `div[scroll-area-viewport]` 那一笔判过的账（含它在 `tabOrder` 上的投影）、
 >   **20 行**是请求层那几条（`retry` 与抽屉挂载拓扑两族），剩下 40 行逐条有判词
@@ -30,6 +32,38 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-15 第十九轮）做了什么
+
+**零产品改动的一轮，正题是「写下的范围 ≠ 机器生效的范围」。**
+
+- **计划文档里的读数第一次有门禁。** 两处历史快照都自带「数字已过期」并指向
+  冷启动文档，于是活着的台账读数只写在那里，而 `doc-facts` 的扫描面止于
+  `frontend-vue/`，够不到仓库根的 `docs/plans/`。实测**五处活跃断言在说谎**：
+  场景-维度数三处停在上一轮之前、方向 A 那句的断点分布连族名单都是旧的
+  （漏三族）、词典 key 与 e2e-parity 用例数各差一点。
+  新增 `frontend-vue/scripts/lib/plan-docs.mjs`（形状照 `backend-source.mjs`：
+  目录不在→跳过，目录在而文件不在→抛错）与 `doc-facts` 里的七类断言。
+  判据用**全称**而非 `toContain`，并且**按类**断言「还有活的命中点」——
+  只在聚合层防空集的话，某一类的措辞被改掉就会静默失守。
+- **八张豁免表按「范围被读宽」筛了一遍。** 真缺口一处：
+  `dead-data-selectors` 的 `collapsible` 理由写「那两条」，实现按属性名在整棵
+  `ui/` 树上生效，实测放过 6 处、跨 3 个文件。`glyph-as-icon`（比去重字符集）
+  与 `primitive-marker-classes`（比标记类集合）同形状、今天无缺口，一并按处数收紧。
+  其余五张读过实现确认是紧的。
+- **上一轮留下一条红门禁没人发现。** `primitives.todos` 没进词典审计基线，
+  `make i18n-check` 自那次提交起一直红；而上一轮记的「verify exit 0」是
+  `make … | tail` 的退出码。CI 也确认 fork 上这次推送后 `frontend-vue verify` 是 failure。
+- **同一份 CI 日志暴露出 `real-backend` 至少从 2026-09-09 起一直红**：
+  它起真 Gateway 却只跑 `uv sync --group dev`，缺 Playwright 直接
+  `RuntimeError: Failed to load configuration during gateway startup`；
+  同文件里 `external-gates` 装了 `--extra browser` 且是绿的。
+  已照抄补齐，并在 `tooling-contracts` 加门禁钉住「起真 Gateway 的 job 装配一致」。
+  **本机一直是 22 passed，因为本机 backend venv 里装着 playwright。**
+
+读数：verify exit 0 / **330 文件 2681 单测**；台账 **159 唯一行 / 179 多重集 /
+140 个场景-维度**（零产品改动，未变）；e2e-parity 用例数 148（`--list` 数的，
+本轮没跑整条）。负向验证 14 条，全红全还原。
 
 ## 上一轮（2026-09-12 第十八轮）做了什么
 

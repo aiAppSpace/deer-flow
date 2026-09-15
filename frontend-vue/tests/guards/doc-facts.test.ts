@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { readBackendSource } from "../../scripts/lib/backend-source.mjs";
+import { readPlanDoc } from "../../scripts/lib/plan-docs.mjs";
 import { productVueInventory } from "../../scripts/lib/i18n-source-guard.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -245,5 +246,245 @@ describe("文档里的数字和代码一致", () => {
     for (const [name, count] of counts) {
       expect(doc).toContain(`\`${name}\` ${count}`);
     }
+  });
+});
+/*
+  仓库根 `docs/plans/` 那三份计划文档里的**台账读数**。
+
+  为什么要单独守这一处：两份历史快照（`vue-parity-handoff.md` 的「历史快照」节、
+  `vue-parity-open-accounts.md` 的「收工时的门禁读数」节）都自带「数字已过期」
+  并把读者指向冷启动文档——**于是全仓唯一活着的台账读数只写在那两个地方**，
+  而此前 `doc-facts` 的扫描面止于 `frontend-vue/`，够不到它们。
+  第十九轮实测的偏差：冷启动文档两处写 `138 个场景-维度`（实际 140）、
+  一处写 `129 个场景-维度里仍有 110 个是 desktop`（实际 140 里 118），
+  交接文档写 `138 个场景-维度`。第十八轮把场景-维度从 138 加到 140 时，
+  没有任何门禁会因为文档没跟而变红。
+
+  判据用**全称**而不是 `toContain`：`toContain` 只证明「至少有一处写对了」，
+  证不了「没有第二处还是旧的」——冷启动文档正好有两处写同一个数。
+  为此必须同时断言**匹配到的处数不为 0**：全称量词在空集上恒真，
+  改了措辞让正则一处都匹配不上，这条用例会静默变成永远绿的。
+
+  **全称判据的代价，写明白省得下一个人困惑**：冷启动文档里从此**不能**再写出
+  「<旧数> 个场景-维度」这样的历史值——正则不区分「现状」和「引述」，会把它判红。
+  要讲某个数以前是错的，绕开这几个词组（本文档第十九轮那段就是这么写的）。
+  这是刻意的取舍：宁可措辞受限，也不要一个能被「我这是在引述」绕过去的门禁。
+
+  `parityTests` 那一条的量法另外核过一遍：
+  `npx playwright test -c playwright.parity.config.ts --list` 报 `Total: 148 tests`，
+  与 `场景-维度 140 + 固定 8` 相等——不是推导和散文互相印证的自洽错误。
+*/
+type PlanClaim = {
+  /** 文档里的写法，捕获组 1 是那个数。 */
+  pattern: RegExp;
+  /** 这个数从签入产物怎么算出来。 */
+  actual: (m: LedgerMeasures) => number;
+  label: string;
+};
+
+type LedgerMeasures = {
+  scenarioDimensions: number;
+  uniqueRows: number;
+  multiset: number;
+  desktopDimensions: number;
+  nonDesktopFamilies: string[];
+  i18nKeys: number;
+  i18nUnused: number;
+  parityTests: number;
+};
+
+/*
+  `diff.spec` 与 `topology.spec` 里的固定用例数。为什么是 8 而两份文件只有
+  7 个 `test(` 调用点：`topology.spec` 最后那个包在一个两项的 `for` 里
+  （vue / react 各一条）。下面那条用例钉住「调用点还是 7 个」——有人加一条
+  用例，调用点数变了就红，逼着这个常量和文档一起跟进。
+  **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
+  失效时会明确报出来。
+*/
+const PARITY_FIXED_TESTS = 8;
+
+/** 全部读数只从签入基线算，一个字都不从散文里读。 */
+function measureLedger(): LedgerMeasures {
+  const entries = JSON.parse(read("baseline/parity-diff.json"))
+    .entries as Record<string, Record<string, unknown>>;
+  const rows: string[] = [];
+  for (const [key, lanes] of Object.entries(entries)) {
+    for (const [lane, value] of Object.entries(lanes)) {
+      if (Array.isArray(value))
+        for (const row of value) rows.push(`${key}·${lane}:${row}`);
+    }
+  }
+  const keys = Object.keys(entries);
+  const i18n = JSON.parse(read("baseline/i18n-keys.json")) as {
+    total: number;
+    unusedTotal: number;
+  };
+  return {
+    i18nKeys: i18n.total,
+    i18nUnused: i18n.unusedTotal,
+    // e2e-parity 的用例数**是算得出来的**，不是只能跑出来的：
+    // `scenarios.spec` 每个场景-维度一条，另加两份 spec 里的固定用例。
+    parityTests: keys.length + PARITY_FIXED_TESTS,
+    scenarioDimensions: keys.length,
+    uniqueRows: new Set(rows).size,
+    multiset: rows.length,
+    desktopDimensions: keys.filter((k) => k.includes("/desktop/")).length,
+    // 键形是 `场景[#终态]/断点/主题/语言`；按**场景族**去重（去掉 `#终态`）。
+    nonDesktopFamilies: [
+      ...new Set(
+        keys
+          .filter((k) => !k.includes("/desktop/"))
+          .map((k) => k.split("/")[0]!.split("#")[0]!),
+      ),
+    ].sort(),
+  };
+}
+
+const PLAN_CLAIMS: PlanClaim[] = [
+  { pattern: /(\d+) 唯一行/g, actual: (m) => m.uniqueRows, label: "唯一行" },
+  { pattern: /(\d+) 多重集/g, actual: (m) => m.multiset, label: "多重集" },
+  {
+    pattern: /(\d+) *个? *场景-维度/g,
+    actual: (m) => m.scenarioDimensions,
+    label: "场景-维度",
+  },
+  {
+    pattern: /(\d+) 个是 desktop/g,
+    actual: (m) => m.desktopDimensions,
+    label: "desktop 档",
+  },
+  { pattern: /词典 (\d+) key/g, actual: (m) => m.i18nKeys, label: "词典 key" },
+  {
+    pattern: /词典 \d+ key \/ (\d+) unused/g,
+    actual: (m) => m.i18nUnused,
+    label: "词典 unused",
+  },
+  {
+    pattern: /e2e-parity[^\n]*?\*\*(\d+) passed\*\*/g,
+    actual: (m) => m.parityTests,
+    label: "e2e-parity 用例数",
+  },
+];
+
+/*
+  交接文档整篇有大量**历史**读数（`137 → 154 唯一行`、`131 → 133 场景-维度`），
+  不能整篇扫。活着的那段是开头那个 blockquote，按**结构**取（连续的 `>` 行），
+  不按行号取——行号会随每一轮追加而漂。
+*/
+function leadBlockquote(doc: string): string {
+  const lines = doc.split("\n");
+  const start = lines.findIndex((l) => l.startsWith(">"));
+  if (start < 0) return "";
+  let end = start;
+  while (
+    end < lines.length &&
+    (lines[end]!.startsWith(">") || lines[end]!.trim() === "")
+  )
+    end += 1;
+  return lines.slice(start, end).join("\n");
+}
+
+describe("计划文档里的台账读数和签入基线一致", () => {
+  const measures = measureLedger();
+
+  // 先钉住量法本身：这四个数必须都是正的，否则下面的全称断言在退化的读数上照样绿。
+  it("量法本身有效", () => {
+    expect(measures.scenarioDimensions).toBeGreaterThan(0);
+    expect(measures.uniqueRows).toBeGreaterThan(0);
+    expect(measures.multiset).toBeGreaterThanOrEqual(measures.uniqueRows);
+    expect(measures.desktopDimensions).toBeGreaterThan(0);
+    expect(measures.nonDesktopFamilies.length).toBeGreaterThan(0);
+    expect(measures.i18nKeys).toBeGreaterThan(0);
+    expect(measures.parityTests).toBeGreaterThan(measures.scenarioDimensions);
+  });
+
+  it("e2e-parity 的固定用例数常量还对得上调用点", () => {
+    const sites = ["diff", "topology"].reduce(
+      (n, f) =>
+        n +
+        (read(`tests/e2e-parity/${f}.spec.ts`).match(/^\s*test\(/gm) ?? [])
+          .length,
+      0,
+    );
+    // 7 个调用点 → 8 条用例（topology 最后一个包在两项 for 里）。
+    expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
+      调用点: 7,
+      常量: 8,
+    });
+  });
+
+  const SCOPES = [
+    ["vue-parity-cold-start.md", (d: string) => d],
+    ["vue-parity-handoff.md", leadBlockquote],
+  ] as const;
+
+  /** 每一类断言在整组文档里命中了几处。 */
+  const hits = new Map(PLAN_CLAIMS.map((c) => [c.label, 0]));
+
+  for (const [name, scope] of SCOPES) {
+    it(`${name} 里每一处台账数字都是实测值`, () => {
+      const doc = readPlanDoc(name);
+      // `../docs/plans` 整个不在 checkout 里（模块被单独移走）→ 明确跳过。
+      if (doc === null) return;
+      const text = scope(doc);
+      const wrong: string[] = [];
+      let matched = 0;
+      for (const claim of PLAN_CLAIMS) {
+        for (const m of text.matchAll(claim.pattern)) {
+          matched += 1;
+          hits.set(claim.label, (hits.get(claim.label) ?? 0) + 1);
+          const want = claim.actual(measures);
+          if (Number(m[1]) !== want)
+            wrong.push(`${claim.label}: 文档 ${m[1]} ≠ 实测 ${want}`);
+        }
+      }
+      // 空集上恒真的陷阱：措辞一改，上面的循环一次都不跑，而这条用例仍然绿。
+      expect({ doc: name, matched: matched > 0 }).toEqual({
+        doc: name,
+        matched: true,
+      });
+      expect(wrong).toEqual([]);
+    });
+  }
+
+  /*
+    上面那条 `matched > 0` 只关到**聚合层**：七类断言里有一类的措辞被改掉，
+    总数仍然大于 0，那一类就**静默失守**——和它守得好好的长得一模一样。
+    这条按类关：每一类都必须在这组文档里至少命中一处。
+    （放在最后是因为它读的是上面两条填的计数；vitest 在一个 describe 内按序跑。）
+  */
+  it("七类断言都还有活的命中点（逐类，不是总数）", () => {
+    if (readPlanDoc("vue-parity-cold-start.md") === null) return;
+    const dead = [...hits].filter(([, n]) => n === 0).map(([label]) => label);
+    expect(
+      dead,
+      "这一类在两份文档里一处都没命中——要么那句话被改写了（跟进正则），" +
+        "要么那个读数被删了（删掉这一类）。**别让它留在表里空转。**",
+    ).toEqual([]);
+  });
+
+  /*
+    光钉数字不够：`140 个里 118 个 desktop` 对了，而后面那份**族名单**还是旧的，
+    这条用例照样绿——第十九轮实测就是这样，名单漏了 `artifact-preview`、
+    `project-detail`、`scheduled-tasks` 三族。一道只守住一半的门禁，读起来
+    和守全了一模一样。名单按结构取（`非 desktop 的 N 族逐字是：` 到句号），
+    不按行号取。
+  */
+  it("冷启动文档列的非 desktop 场景族就是基线里的那几族", () => {
+    const doc = readPlanDoc("vue-parity-cold-start.md");
+    if (doc === null) return;
+    const m = /非 desktop 的 (\d+) 族逐字是：([\s\S]*?)。/.exec(doc);
+    // 措辞被改掉 → 这里必须红，而不是静默跳过。
+    expect({ 找到名单: m !== null }).toEqual({ 找到名单: true });
+    const listed = [...m![2]!.matchAll(/`([a-z0-9-]+)`/g)]
+      .map((x) => x[1]!)
+      .sort();
+    expect({
+      族数: Number(m![1]),
+      名单: listed,
+    }).toEqual({
+      族数: measures.nonDesktopFamilies.length,
+      名单: measures.nonDesktopFamilies,
+    });
   });
 });
