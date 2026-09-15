@@ -335,3 +335,90 @@ describe("Playwright 的录制策略与重试次数不许自相矛盾", () => {
     }
   });
 });
+/*
+  第三条底座一致性：**起真 Gateway 的 CI job，装配步骤必须一致。**
+
+  第十九轮实测到的偏差：`frontend-vue-verify.yml` 里 `external-gates` 装的是
+  `uv sync --group dev --extra browser` + `playwright install --with-deps chromium`
+  （绿），而 `real-backend` 只有 `uv sync --group dev`（红）。Gateway 启动时按仓库根
+  `config.yaml` 加载浏览器工具，缺 Playwright 直接
+  `RuntimeError: Failed to load configuration during gateway startup`，
+  于是 `make e2e-backend` 在 CI 上**至少从 2026-09-09 起一直红**。
+
+  它躲过每一轮的原因很具体：**本机的 backend venv 里装着 playwright**，
+  所以每一轮跑 `make e2e-backend` 都是 22 passed。
+  「本机绿」和「这条门禁有效」是两件事，而它们长得一模一样。
+
+  判据钉的不是版本号也不是步骤的措辞，是**「需要真 Gateway 的 job，装配步骤是同一份」**
+  ——照 LOCKSTEP 那条的思路，只在真正分叉的那一刻红。
+*/
+const ciRoot = fileURLToPath(new URL("../../../.github/", import.meta.url));
+const WORKFLOW = "workflows/frontend-vue-verify.yml";
+
+/** 跑这些 target 的 job 要起真的 Gateway。 */
+const NEEDS_GATEWAY = ["e2e-backend", "e2e-external", "e2e-browser"];
+/** 起真 Gateway 就必须有的两行。 */
+const GATEWAY_SETUP = [
+  "uv sync --group dev --extra browser",
+  "uv run playwright install --with-deps chromium",
+];
+
+/** 按两格缩进的 `<name>:` 切 job。 */
+function workflowJobs(text: string): Map<string, string> {
+  const lines = text.split("\n");
+  const jobs = new Map<string, string>();
+  let name: string | null = null;
+  let buffer: string[] = [];
+  for (const line of lines) {
+    const header = /^ {2}([a-z][a-z0-9-]*):\s*$/.exec(line);
+    if (header) {
+      if (name) jobs.set(name, buffer.join("\n"));
+      name = header[1]!;
+      buffer = [];
+    } else if (name) buffer.push(line);
+  }
+  if (name) jobs.set(name, buffer.join("\n"));
+  // `on:` 下的 `push:` / `pull_request:` 也是两格缩进，按「有 steps」筛掉。
+  return new Map([...jobs].filter(([, body]) => body.includes("steps:")));
+}
+
+describe("起真 Gateway 的 CI job 装配一致", () => {
+  // `.github` 整个不在（本模块被单独移走）→ 明确跳过；目录在而文件不在 → 抛错。
+  const text = existsSync(ciRoot)
+    ? (() => {
+        const path = join(ciRoot, WORKFLOW);
+        if (!existsSync(path))
+          throw new Error(
+            `.github 在 checkout 里，但 ${WORKFLOW} 不在——工作流被挪了，跟进这条断言`,
+          );
+        return readFileSync(path, "utf8");
+      })()
+    : null;
+
+  it("形状先断言：切得出 job，而且真有 job 需要 Gateway", () => {
+    if (text === null) return;
+    const jobs = workflowJobs(text);
+    expect(jobs.size).toBeGreaterThan(2);
+    const needing = [...jobs].filter(([, body]) =>
+      NEEDS_GATEWAY.some((target) => body.includes(`make ${target}`)),
+    );
+    // 空集上恒真：切 job 的正则失效会让下面那条静默全绿。
+    expect(needing.length).toBeGreaterThan(1);
+  });
+
+  it("每个需要 Gateway 的 job 都装了浏览器依赖", () => {
+    if (text === null) return;
+    const missing: string[] = [];
+    for (const [name, body] of workflowJobs(text)) {
+      if (!NEEDS_GATEWAY.some((target) => body.includes(`make ${target}`)))
+        continue;
+      for (const line of GATEWAY_SETUP)
+        if (!body.includes(line)) missing.push(`${name} 缺：${line}`);
+    }
+    expect(
+      missing,
+      "这个 job 会起真的 Gateway，而 Gateway 启动要 Playwright——" +
+        "缺了它整条 job 红，而本机因为 venv 里装着而照旧绿。",
+    ).toEqual([]);
+  });
+});

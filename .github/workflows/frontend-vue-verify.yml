@@ -142,9 +142,16 @@ jobs:
           # Must match backend/Dockerfile's UV_IMAGE tag; pinned by backend/tests/test_ci_uv_version_pin.py
           version: "0.11.1"
 
-      - name: Install replay Gateway dependencies
+      # 和 external-gates 那一步逐字相同，理由见下：两个 job 都要起**真的** Gateway，
+      # 而 Gateway 启动时会按仓库根 config.yaml 加载浏览器工具，缺 Playwright 直接
+      # `RuntimeError: Failed to load configuration during gateway startup`。
+      # 此前这里只有 `uv sync --group dev`，于是 real-backend 至少从 2026-09-09 起
+      # 一直红（本机绿是因为本机 venv 里装着 playwright——这正是它躲过每一轮的原因）。
+      - name: Install replay Gateway and browser dependencies
         working-directory: backend
-        run: uv sync --group dev
+        run: |
+          uv sync --group dev --extra browser
+          uv run playwright install --with-deps chromium
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
