@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes } from "react";
 
 import { resolveMarkdownArtifactURL } from "@/core/artifacts/utils";
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 import { CitationLink, extractReactNodeText } from "../citations/citation-link";
@@ -66,6 +67,7 @@ export function createMarkdownLinkComponent(threadId?: string) {
     href,
     ...props
   }: AnchorHTMLAttributes<HTMLAnchorElement>) {
+    const { t } = useI18n();
     // Reject unsafe schemes up front so a prompt-injected / pasted href can
     // never reach the rendered anchor — including through the citation
     // branch (which renders <a href={href}> directly). Check before the
@@ -83,8 +85,8 @@ export function createMarkdownLinkComponent(threadId?: string) {
             "text-muted-foreground cursor-not-allowed underline decoration-dotted underline-offset-2",
             className,
           )}
-          aria-label="Unsafe link omitted"
-          title={`Unsafe link scheme in ${href}`}
+          aria-label={t.markdown.unsafeLink}
+          title={t.markdown.unsafeLinkTitle(href)}
         >
           {children}
         </span>

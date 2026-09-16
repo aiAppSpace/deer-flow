@@ -1,5 +1,6 @@
 import type { AnchorHTMLAttributes } from "react";
 
+import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
 import { isSafeHref } from "../messages/markdown-link";
@@ -12,6 +13,7 @@ function isExternalUrl(href: string | undefined): boolean {
 
 /** Link renderer for artifact markdown: citation: prefix → CitationLink, otherwise underlined text. */
 export function ArtifactLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
+  const { t } = useI18n();
   // Reject unsafe schemes so prompt-injected [label](javascript:...) in a .md
   // artifact preview cannot execute in the main document, matching the guard in
   // createMarkdownLinkComponent (markdown-link.tsx).
@@ -26,8 +28,8 @@ export function ArtifactLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
           "text-muted-foreground cursor-not-allowed underline decoration-dotted underline-offset-2",
           className,
         )}
-        aria-label="Unsafe link omitted"
-        title={`Unsafe link scheme in ${props.href}`}
+        aria-label={t.markdown.unsafeLink}
+        title={t.markdown.unsafeLinkTitle(props.href)}
       >
         {children}
       </span>

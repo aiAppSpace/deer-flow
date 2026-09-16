@@ -707,6 +707,10 @@ export interface Translations {
     tableFormatCsv: string;
     tableFormatMarkdown: string;
     tableFormatTsv: string;
+    // Blocked-link affordance. Not a streamdown key — see the spread in
+    // ai-elements/streamdown.tsx; streamdown ignores what it does not know.
+    unsafeLink: string;
+    unsafeLinkTitle: (url: string) => string;
     viewFullscreen: string;
   };
 

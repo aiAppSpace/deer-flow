@@ -808,6 +808,8 @@ export const zhCN: Translations = {
     tableFormatCsv: "CSV",
     tableFormatMarkdown: "Markdown",
     tableFormatTsv: "TSV",
+    unsafeLink: "已省略不安全链接",
+    unsafeLinkTitle: (url) => `链接协议不安全：${url}`,
     viewFullscreen: "全屏查看",
   },
 

@@ -863,6 +863,8 @@ export const enUS: Translations = {
     tableFormatCsv: "CSV",
     tableFormatMarkdown: "Markdown",
     tableFormatTsv: "TSV",
+    unsafeLink: "Unsafe link omitted",
+    unsafeLinkTitle: (url) => `Unsafe link scheme in ${url}`,
     viewFullscreen: "View fullscreen",
   },
 
