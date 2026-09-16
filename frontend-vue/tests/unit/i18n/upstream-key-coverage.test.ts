@@ -68,6 +68,15 @@ const upstreamDictionary = fileURLToPath(
 const vueDictionary = fileURLToPath(
   new URL("../../../app/core/i18n/locales/en-US.ts", import.meta.url),
 );
+const upstreamDictionaryZh = fileURLToPath(
+  new URL(
+    "../../../../frontend/src/core/i18n/locales/zh-CN.ts",
+    import.meta.url,
+  ),
+);
+const vueDictionaryZh = fileURLToPath(
+  new URL("../../../app/core/i18n/locales/zh-CN.ts", import.meta.url),
+);
 
 /**
  * 抽出叶子 key → 字面量值。
@@ -205,6 +214,58 @@ describe.skipIf(!upstreamPresent)("上游词典的覆盖", () => {
     expect(
       thin,
       "每一条『不做』要带上什么时候重新问一次，否则它就是一条没人会回看的豁免。",
+    ).toEqual([]);
+  });
+
+  /*
+    **同名 key 必须在两个应用里念同一句话——两种语言都要。**
+
+    上面那条别名检查只覆盖手工判过的 4 条，而两边**同名**的条目有几百条，
+    此前没有任何机器在比它们的**值**：`i18n-check` 只管本仓自己的 key 集合与基线，
+    `vue-only-keys` 只管本仓独有块里有没有死条目，这一条之前只管「上游的 key 本仓有没有」。
+    于是「同一个控件在两个应用里念两句不同的话」可以一直存在——
+    账 H 就是这一类（只是它的形状更糟：上游**根本没进词典**，把英文写死在组件里）。
+
+    判据是全称的，**零豁免**：第二十五轮实测 en-US 共有 666 条、zh-CN 共有 709 条，
+    两种语言各 **0 条**不一致。也就是说这条不变量今天就成立，加门禁只是让它以后
+    也成立——**不是**先立一条需要一张豁免表的规矩（线索 180）。
+
+    真有一条该不同的时候，正确做法是让它**不同名**（本仓独有的块，或者进 ALIASES
+    并写明理由），而不是在这里开一张白名单。
+  */
+  it("两边同名的词条，两种语言都念同一句话", () => {
+    const pairs = [
+      ["en-US", upstream.values, vue.values],
+      [
+        "zh-CN",
+        upstreamPresent
+          ? readDictionary(upstreamDictionaryZh).values
+          : new Map<string, string>(),
+        readDictionary(vueDictionaryZh).values,
+      ],
+    ] as const;
+
+    const mismatched: string[] = [];
+    const compared: Record<string, number> = {};
+    for (const [locale, up, mine] of pairs) {
+      let n = 0;
+      for (const [key, value] of up) {
+        const ours = mine.get(key);
+        if (ours === undefined) continue;
+        n += 1;
+        if (ours !== value)
+          mismatched.push(`[${locale}] ${key}: 上游="${value}" 本仓="${ours}"`);
+      }
+      compared[locale] = n;
+    }
+
+    /* 形状先断言：抽取器写坏了会让上面的循环一次都不跑，而那样它照样全绿（坑 176）。 */
+    expect(compared["en-US"]).toBeGreaterThan(600);
+    expect(compared["zh-CN"]).toBeGreaterThan(600);
+    expect(
+      mismatched,
+      "同名词条两边的字不一样——同一个控件在两个应用里念了两句话。" +
+        "真要不同就让它不同名（本仓独有的块或 ALIASES 并写明理由），不要在这里开白名单。",
     ).toEqual([]);
   });
 
