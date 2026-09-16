@@ -103,6 +103,13 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
    `deerflow-no-midway-questions` / `deerflow-vue-alignment-scope`。
 4. `AGENTS.md`（仓库根）与 `frontend-vue/README.md` —— 命令与门禁。
 
+**`docs/plans/` 下其余那几份带日期的文件一律不要读、更不要引用它们的数字**
+（`vue-parity-2026-09-1*-re*.md`、`upstream-merge-202609-review.md`、
+`vue-parity-fix-audit-2026-09-08.md`、`vue-full-parity-backlog.md`）。
+它们是历史快照，每一份开头都盖了章说明这一点——**但 grep 是不看抬头的**，
+所以这里再说一遍：搜到它们里面的台账数字、「还剩多少」「未推送」这类话，
+一律当历史，现状只看上面第 1、2 条。
+
 ### 硬规则（违反会白干一轮）
 
 - **默认只改 `frontend-vue/`。** 例外只有一种：**上游自己是坏的**——

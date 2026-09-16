@@ -2206,7 +2206,7 @@
   判据按**行为**收口（渲染了 reka `*Portal` 的组件），绕开 `ToggleGroupItem` 那两处
   非浮层的 `z-10`，因此零豁免；另配反向断言（`z-90` 只能是 tooltip）。
 - **一条正确、但没人守的边界**（wave 153）：`ARCHITECTURE.md:84` 写着
-  「`app/components/ui/` 是唯一的交互控件底座，建在 Reka UI 之上」——实测**当前是真的**
+  「`app/components/ui/` 是唯一的交互控件底座，建在 Reka UI 之上」——实测**wave 128 时是真的**（这句至今成立，且由 handwritten-button / handwritten-input / primitive-marker-classes 那一族守卫钉着）
   （`ui/` 之外 0 处 import、`ui/` 之内 69 份），而**守着它的机器是 0 台**。
   一条正确但没人守的边界和一条错的边界只差一次改动：产品组件直接建在 reka 上，
   就绕开了这一层统一补的 `aria-modal`、z-index 分层与可访问名约定
