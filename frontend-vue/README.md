@@ -170,14 +170,25 @@ not wired into CI: no existing workflow installs both apps' `node_modules`, and
 this one needs `lucide-react`'s type declarations to resolve icon aliases.
 
 **What CI actually runs.** `frontend-vue-verify.yml` runs `verify`,
-`asset-budget`, `audit`, `container-smoke`, `e2e-mock`, `e2e-backend` and
-`e2e-visual`'s siblings. Three gates run **only locally**, and the reasons
-differ: `icon-parity` because no workflow installs both apps' `node_modules`
-(see above); `standalone-sim` because it renames the sibling app out of the
-checkout; `e2e-parity` and `e2e-parity-auth` because they build both apps against a
-replay Gateway. Those last two are a cost decision that has never
-actually been made -- they are local-only by default, not by design. Only
-`e2e-visual`'s local-only status is machine-coupled to its cause
+`asset-budget`, `standalone-sim`, `audit`, `container-smoke`, `e2e-mock`,
+`e2e-backend` and `e2e-visual`'s siblings.
+
+`standalone-sim` **used to be local-only**, and the reason given here was that it
+renames the sibling app out of the checkout. That reason never made it unsafe in
+CI -- the job is sequential and the script puts the sibling back before it exits
+-- and being outside every automatic entry point is exactly what let
+`invented-palette-colors.test.ts` read the sibling app at _collection_ time from
+the day it was written and stay red for twenty rounds, invisible on every
+developer machine because `../frontend` is always present there. It has run in
+the `verify` job since 2026-09-16.
+
+Three gates still run **only locally**, and the reasons differ:
+`icon-parity` because no workflow installs both apps' `node_modules` (see above);
+`e2e-parity` and `e2e-parity-auth` because they build both apps against a replay
+Gateway. Those last two are a cost decision that has never actually been made --
+they are local-only by default, not by design, which means **the ledger that this
+whole effort is measured by is never checked by a machine that isn't this laptop**.
+Only `e2e-visual`'s local-only status is machine-coupled to its cause
 (`tests/guards/visual-baseline-platforms.test.ts`).
 
 `make e2e-visual` is deliberately in neither: its screenshot

@@ -2912,7 +2912,15 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    /*
+      **补 `dark` 这一维**（第三十轮）：这一屏是「固定红 vs `--destructive` token」
+      的高发区——三张子任务卡分别停在**失败**、**被停止**与完成三种终态上，
+      而 `DARK_DIMENSION` 的文件头写着这一维要先给带错误态的场景加
+      （浅色下 `--destructive` 与 `red-600` 同值，只有深色才现形）。
+
+      照既定纪律**只补一维**（主题轴与语言/断点轴正交）。
+    */
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   {
     id: "artifact-preview",

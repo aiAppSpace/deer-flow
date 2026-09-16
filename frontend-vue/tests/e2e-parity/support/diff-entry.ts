@@ -97,6 +97,51 @@ export function diffGeometry(
   return lines;
 }
 
+/**
+ * 同一个请求上，两个应用的**请求体**差异。
+ *
+ * **只比两边都发过的那些键。** 一边发了、另一边没发，那是 `requests` 那一档的事
+ * ——在这里再报一次只会让同一处差异有两份投影，而台账的唯一行本来就已经是投影数
+ * （2026-09-16 全面审查的结论）。
+ *
+ * **按「不同的体」的集合比，不按多重集。** 同一个键发几次是 `requestsOnly*`
+ * 那一档的事——第三十轮第一跑就撞上了：`thread-list-pin#mobile-drawer` 上
+ * React 把 `POST /api/threads/search` 发了两次而 Vue 一次，体**逐字相同**，
+ * 于是多重集写法在 requests 与 body 两档各报一行，**同一处差异两份投影**。
+ * 用集合比，那一行当场消失，而两边体真不一样时照样报。
+ *
+ * 体本身可能很长，所以只报**前两条**不同的，并带上总数——
+ * 一屏上同一个请求体差异重复二十次，读的人只需要知道"有，且是这一条"。
+ */
+export function diffRequestBodies(
+  react: { key: string; body: string }[],
+  vue: { key: string; body: string }[],
+) {
+  const group = (items: { key: string; body: string }[]) => {
+    const map = new Map<string, Set<string>>();
+    for (const { key, body } of items)
+      map.set(key, (map.get(key) ?? new Set<string>()).add(body));
+    return map;
+  };
+  const reactByKey = group(react);
+  const vueByKey = group(vue);
+  const lines: string[] = [];
+  for (const key of [...reactByKey.keys()].sort()) {
+    const vueBodies = vueByKey.get(key);
+    if (!vueBodies) continue;
+    const reactBodies = reactByKey.get(key) ?? new Set<string>();
+    const onlyReact = [...reactBodies].filter((b) => !vueBodies.has(b)).sort();
+    const onlyVue = [...vueBodies].filter((b) => !reactBodies.has(b)).sort();
+    if (!onlyReact.length && !onlyVue.length) continue;
+    const show = (items: string[]) =>
+      items.length > 2
+        ? `${items.slice(0, 2).join(" | ")} …共 ${items.length} 条`
+        : items.join(" | ");
+    lines.push(`${key} body React=[${show(onlyReact)}] Vue=[${show(onlyVue)}]`);
+  }
+  return lines;
+}
+
 /** 一个取样点上，两个应用之间所有档的差异。 */
 export function buildDiffEntry(react: ParityCapture, vue: ParityCapture) {
   const aria = diffAriaLines(react.aria, vue.aria);
@@ -107,6 +152,10 @@ export function buildDiffEntry(react: ParityCapture, vue: ParityCapture) {
     ariaOnlyVue: aria.onlyVue,
     requestsOnlyReact: requests.onlyReact,
     requestsOnlyVue: requests.onlyVue,
+    requestBodies: diffRequestBodies(
+      react.requestBodies ?? [],
+      vue.requestBodies ?? [],
+    ),
     geometry: diffGeometry(react.geometry, vue.geometry),
     focus:
       react.focus === vue.focus
@@ -122,6 +171,21 @@ export function buildDiffEntry(react: ParityCapture, vue: ParityCapture) {
       "公共可 tab 元素",
     ),
   };
+}
+
+/**
+ * 这一对样本里，**真的采到请求体**的请求数。
+ *
+ * 与 `countPseudoSamples` 同一个理由：body 那一档在干净树上也是 0 行，
+ * 而 0 有两种——**算出来的 0** 和**没算的 0**。`postData()` 那段但凡写坏
+ * （比如把 `raw !== ""` 写反、或者 catch 吞掉了一切），它会永远返回空数组，
+ * 两边一致、台账 0 行，而且没有任何一条用例会红。
+ */
+export function countRequestBodySamples(
+  react: ParityCapture,
+  vue: ParityCapture,
+): number {
+  return (react.requestBodies?.length ?? 0) + (vue.requestBodies?.length ?? 0);
 }
 
 /**

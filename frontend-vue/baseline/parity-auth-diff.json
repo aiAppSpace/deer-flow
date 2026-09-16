@@ -8,6 +8,7 @@
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
       ],
+      "requestBodies": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -23,6 +24,7 @@
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
       ],
+      "requestBodies": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -36,6 +38,7 @@
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
+      "requestBodies": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -53,6 +56,7 @@
       ],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
+      "requestBodies": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -68,6 +72,7 @@
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
       ],
+      "requestBodies": [],
       "geometry": [],
       "focus": [],
       "order": [],
@@ -107,6 +112,7 @@
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
       ],
+      "requestBodies": [],
       "geometry": [],
       "focus": [],
       "order": [],

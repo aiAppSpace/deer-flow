@@ -58,6 +58,18 @@ export type ParityCapture = {
   ariaTree: { depth: number; body: string }[];
   /** 归一化后的产品 API 请求，按发出顺序。 */
   requests: string[];
+  /**
+   * 带请求体的那些请求：归一后的键 + 归一后的 JSON 体。
+   *
+   * **「天生看不见的八类」里的第②类**（交接文档那一节）：`requests` 只比
+   * `METHOD /path?query`，**请求体一个字节都不进取样面**。这不是理论问题——
+   * 上游 `mcp-settings.spec.ts` 自己断言的就是「PUT body 里没丢 advanced 字段、
+   * 也没动到兄弟条目」，而那正是台账看不到的一半。
+   *
+   * 只收**真的带体**的请求（GET 没有体）。非 JSON 的体原样留着——
+   * 抹掉它等于假装它不存在，而硬规则 2 说归一化只能因为实测而增加。
+   */
+  requestBodies: { key: string; body: string }[];
   /** 场景锚点的盒模型与关键计算样式。 */
   geometry: Record<string, GeometrySample | null>;
   /** 取样时刻的 `document.activeElement`，归一成一句话。见 describeFocus。 */
@@ -248,6 +260,57 @@ export function normalizeRequest(
     .map(([key, value]) => `${key}=${value}`);
   const query = params.length ? `?${params.join("&")}` : "";
   return `${method.toUpperCase()} ${pathname}${query}`;
+}
+
+/**
+ * 把一个 JSON 值归一成**稳定可比**的字符串。
+ *
+ * 只做两件事，一件都不多：
+ * 1. 对象按 key 排序——两个应用序列化字段的顺序天然可能不同，而那不是差异；
+ * 2. UUID 形状且不在 `KNOWN_IDS` 里的字符串抹成 `«generated»`——与
+ *    `normalizeRequest` 对路径段用的**同一条规则、同一份名单**，
+ *    理由也一样（客户端生成的 id 两边必然不同）。
+ *
+ * **没有第三条**。时间戳、随机 nonce 这类看起来"显然该抹"的东西一律不抹：
+ * 硬规则 2 说归一化只能因为实测而增加——真出现了，它会作为一条 body 差异
+ * 报出来，拿着那条读数再加（`normalizeRequest` 里那张被删掉的
+ * `VOLATILE_QUERY_KEYS` 表就是这么量掉的）。
+ */
+export function canonicalJson(
+  value: unknown,
+  knownIds: ReadonlySet<string> = KNOWN_IDS,
+): unknown {
+  if (typeof value === "string")
+    return UUID_SEGMENT.test(value) && !knownIds.has(value)
+      ? "«generated»"
+      : value;
+  if (Array.isArray(value))
+    return value.map((item) => canonicalJson(item, knownIds));
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).sort())
+      out[key] = canonicalJson(
+        (value as Record<string, unknown>)[key],
+        knownIds,
+      );
+    return out;
+  }
+  return value;
+}
+
+/**
+ * 请求体归一成一行。**解析不了 JSON 就原样留着**——
+ * 静默丢掉一个"不认识"的体，与 wave 120 那三个夹具 id 是同一类失效。
+ */
+export function normalizeRequestBody(
+  raw: string,
+  knownIds: ReadonlySet<string> = KNOWN_IDS,
+): string {
+  try {
+    return JSON.stringify(canonicalJson(JSON.parse(raw), knownIds));
+  } catch {
+    return raw;
+  }
 }
 
 /**
@@ -634,9 +697,27 @@ export async function captureScenario(
   settleMs = 700,
 ): Promise<ParityCapture> {
   const requests: string[] = [];
+  const requestBodies: { key: string; body: string }[] = [];
   const onRequest = (request: Request) => {
     const normalized = normalizeRequest(request.method(), request.url());
-    if (normalized) requests.push(normalized);
+    if (!normalized) return;
+    requests.push(normalized);
+    /*
+      `postData()` 对没有体的请求返回 null；对上传那类二进制体可能抛。
+      抛了就当没体——**不让取样本身变成失败源**，而漏掉的那一条会在
+      requests 档上照样看得见（它的 method/path 还在）。
+    */
+    let raw: string | null;
+    try {
+      raw = request.postData();
+    } catch {
+      raw = null;
+    }
+    if (raw !== null && raw !== "")
+      requestBodies.push({
+        key: normalized,
+        body: normalizeRequestBody(raw),
+      });
   };
   page.on("request", onRequest);
   try {
@@ -656,6 +737,7 @@ export async function captureScenario(
       aria,
       ariaTree,
       requests,
+      requestBodies,
       geometry,
       focus,
       tabbables,

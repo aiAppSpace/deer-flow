@@ -19,6 +19,18 @@ export type DiffEntry = {
   ariaOnlyVue: string[];
   requestsOnlyReact: string[];
   requestsOnlyVue: string[];
+  /**
+   * 两边**都发过的同一个请求**上，请求体不一样。
+   *
+   * 「台账天生看不见的八类」里的第②类（藏在请求 body 里的）：
+   * `requestsOnly*` 只比 `METHOD /path?query`，**体一个字节都不进取样面**。
+   * 上游 `mcp-settings.spec.ts` 自己断言的就是「PUT body 里没丢 advanced 字段」，
+   * 而那正是台账看不到的一半。第三十轮补上。
+   *
+   * **只比两边都发过的键**——一边发了另一边没发是 `requestsOnly*` 那一档的事，
+   * 在这里再报一次只会让同一处差异多一份投影。
+   */
+  requestBodies: string[];
   /** 锚点的几何与色板差异，一行一处。 */
   geometry: string[];
   /**
@@ -82,6 +94,7 @@ export const DIFF_ENTRY_FIELDS = [
   "ariaOnlyVue",
   "requestsOnlyReact",
   "requestsOnlyVue",
+  "requestBodies",
   "geometry",
   "focus",
   "order",

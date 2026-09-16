@@ -37,7 +37,11 @@ import {
 } from "./support/scenarios";
 
 import { type DiffEntry, addedRows } from "./support/ledger";
-import { buildDiffEntry, countPseudoSamples } from "./support/diff-entry";
+import {
+  buildDiffEntry,
+  countPseudoSamples,
+  countRequestBodySamples,
+} from "./support/diff-entry";
 
 const VUE_APP = process.env.E2E_APP_URL ?? "http://localhost:3115";
 const REACT_APP = process.env.E2E_REACT_APP_URL ?? "http://localhost:3116";
@@ -140,6 +144,7 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     所以这里数一下真的采到伪元素的锚点，下面断言它不是 0。
   */
   let pseudoSamples = 0;
+  let bodySamples = 0;
   /** 只有 `PARITY_ONLY` 时才收：两边的完整请求序列。 */
   const rawRequests: Record<string, { react: string[]; vue: string[] }> = {};
 
@@ -178,6 +183,7 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
         await reactContext.close();
 
         pseudoSamples += countPseudoSamples(react, vue);
+        bodySamples += countRequestBodySamples(react, vue);
         const entryKey = key(scenario.id, state, dimension);
         entries[entryKey] = buildDiffEntry(react, vue);
         /*
@@ -211,6 +217,15 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
       pseudoSamples,
       "伪元素这一档一个样本都没采到——先确认 pseudo() 还在工作，再改这个阈值",
     ).toBeGreaterThanOrEqual(4);
+    /*
+      请求体这一档同理（第三十轮新加）。阈值取一个**远低于实测**的数：
+      它挡的是「采集整个坏掉→永远空数组→静默 0 行」，不是「今天恰好采到几条」。
+      数字变了要先看一眼再改，别顺手调低——与上面那条伪元素断言同一条纪律。
+    */
+    expect(
+      bodySamples,
+      "请求体这一档一个样本都没采到——先确认 postData() 那段还在工作，再改这个阈值",
+    ).toBeGreaterThanOrEqual(10);
   }
 
   if (ONLY) {
@@ -222,8 +237,13 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
       Object.keys(entries),
       `PARITY_ONLY=${ONLY} 没有匹配到任何场景——检查 id 拼写`,
     ).not.toEqual([]);
+    /*
+      **把两条取样计数也打出来。** 诊断模式下最容易误读的就是「某一档空着」
+      ——它有两种：两边一样，和**压根没采到**。这两个数把它们分开。
+    */
     console.log(
-      `PARITY_ONLY=${ONLY}\n${JSON.stringify(entries, null, 2)}\n` +
+      `PARITY_ONLY=${ONLY} 取样计数：伪元素 ${pseudoSamples} / 请求体 ${bodySamples}\n` +
+        `${JSON.stringify(entries, null, 2)}\n` +
         `REQUESTS\n${JSON.stringify(rawRequests, null, 2)}`,
     );
     return;
