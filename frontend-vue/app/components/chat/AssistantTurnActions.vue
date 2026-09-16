@@ -9,9 +9,19 @@
                    `message-list.tsx:780/817` 用 `enableBranchForTurn` /
                    `enableRegenerateForTurn` 决定**渲染**，用 `disabled={!canBranch …}` /
                    `disabled={!canRegenerate …}` 决定**可用**——只读态（案例页 isMock、
-                   静态站、上传中、加载中）下这两颗仍然画出来，只是禁用。本仓此前把两者
+                   上传中、分支请求在飞）下这两颗仍然画出来，只是禁用。本仓此前把两者
                    压成一个 show-*，只读态下整颗按钮消失，读屏器与键盘用户因此看不到
                    「这里本来有个操作、现在不可用」。
+
+                   **这段话里原来还列着「静态站、加载中」，两处都订正了**
+                   （2026-09-16 第二十八轮逐条量的）：
+                   - **加载中不是这一档**——`thread.isLoading` 时**两个应用都是不画**
+                     （上游 `message-list.tsx:707/717` 的 `latestAssistantGroupId` 与
+                     `branchableAssistantGroupIds` 直接返回 null / 空集，本仓同形）；
+                   - **静态整站模式在对齐范围之外**，本仓不实现 `STATIC_WEBSITE_ONLY`。
+                   而「上传中」这一条**写下来的时候是假的**：调用点当时只传
+                   `interactive = !isDemo`，上传中三颗照样点得动。第二十八轮才补上，
+                   同一轮把这段话改成它真正兑现的样子。
                    分支与重新生成的 aria-label 与 tooltip 文案是同一份：tooltip 是给鼠标
                    用户补上可见名字，不是可访问名字的来源，所以 aria-label 不能因此去掉。
                    图标要认准上游那两颗：分支是 **GitBranchPlus**（带 + 号的那颗，

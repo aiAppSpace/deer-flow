@@ -125,6 +125,29 @@ const props = withDefaults(
       （`ariaOnlyVue: button "Edit and rerun"`，两个语言维各一条）。
     */
     hasGoal?: boolean;
+    /*
+      **上游那三串判据里，本仓此前一条都没有。**
+
+      上游把可用性算在页面那一层，逐字是（`chats/chat-page.tsx:466-497`）：
+
+      - `canRegenerate` = `!isNewThread && !isMock && !STATIC && !isUploading && !thread.isLoading`
+      - `canEdit`       = 以上 + `!branchThread.isPending && !hasGoal && !hasOpenHumanInputCard`
+      - `canBranch`     = `canRegenerate` + `!branchThread.isPending`
+
+      本仓对应的只有一个 `interactive`，而调用点是 `:interactive="!isDemo"`
+      （`AgentChat.vue`）——也就是说三串里只兑现了 `!isMock` 那一条。
+      `!thread.isLoading` 这一条本仓是靠结构兑现的（`latestAssistantGroupId` 与
+      `branchable` 在 streaming 时就空了，上游 `message-list.tsx:707/717` 同样如此），
+      剩下两条是真缺口，所以这里补两个 prop 而不是一个「忙」：
+
+      - `uploading` 进三颗键（上游三串都有 `!isUploading`）；
+      - `branchPending` **只进分支与编辑**——上游 `canRegenerate` 里没有它。
+        这个区别不是抠字眼：分支请求在飞的时候重跑仍然是合法操作。
+
+      `STATIC_WEBSITE_ONLY` 那一条不补：静态整站模式本来就在对齐范围之外。
+    */
+    uploading?: boolean;
+    branchPending?: boolean;
     artifactPaths?: readonly string[];
     isMock?: boolean;
     /** `.skill` 的 Install 只对管理员出现；判据在 ArtifactFileCards 的文件头。 */
@@ -1349,6 +1372,8 @@ onUnmounted(() => {
                   :edit-label="$i18n.t.value.messages.actions.editAndRerun"
                   :show-edit="
                     interactive !== false &&
+                    !props.uploading &&
+                    !props.branchPending &&
                     !props.hasGoal &&
                     !hasOpenHumanInput &&
                     Boolean(message.id) &&
@@ -1571,8 +1596,12 @@ onUnmounted(() => {
                 entry.group.id === latestAssistantGroupId &&
                 Boolean(lastAI(entry.index)?.id)
               "
-              :branch-disabled="interactive === false"
-              :regenerate-disabled="interactive === false"
+              :branch-disabled="
+                interactive === false ||
+                Boolean(uploading) ||
+                Boolean(branchPending)
+              "
+              :regenerate-disabled="interactive === false || Boolean(uploading)"
               @copy="
                 copyMessage(
                   `assistant:${entry.group.id ?? entry.index}`,

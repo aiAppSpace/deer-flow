@@ -1419,6 +1419,15 @@ async function stopRun() {
   一条未处理的 rejection——没有跳转、没有任何提示，用户点了「分支」之后屏幕纹丝不动。
   两条词条 `conversation.branchCreated` / `branchFailed` 也因此一直躺在 unused 里。
 */
+/*
+  **分支请求在飞的时候，分支与「编辑并重跑」都要点不动**——上游 `canBranch` /
+  `canEdit` 里那条 `!branchThread.isPending`（`chat-page.tsx:480/496`）就是它，
+  上游拿的是 react-query mutation 自带的 pending 位。
+
+  本仓此前**一个门都没有**：`branch()` 可重入，连点两下就是两个 POST、
+  两条新线程，而用户只想要一条。
+*/
+const branchPending = ref(false);
 async function branch(messageId: string, messageIds: string[]) {
   if (isDemo.value) return;
   if (!routeThreadId.value) return;
@@ -1426,6 +1435,7 @@ async function branch(messageId: string, messageIds: string[]) {
     (thread) => thread.thread_id === routeThreadId.value,
   );
   let result: Awaited<ReturnType<typeof branchThreadFromTurn>>;
+  branchPending.value = true;
   try {
     result = await branchThreadFromTurn(routeThreadId.value, {
       messageId,
@@ -1439,6 +1449,16 @@ async function branch(messageId: string, messageIds: string[]) {
         : $i18n.t.value.conversation.branchFailed,
     );
     return;
+  } finally {
+    /*
+      **落点与上游一致：请求一回就清，不等跳转。** 上游那条
+      `branchThread.isPending` 是 react-query mutation 自带的位，
+      mutation 一 settle 就是 false，而 `router.push` 在它之后——
+      也就是说上游同样有「请求已回、页面还没换」那一拍。
+      写成 `finally` 只是为了两条出口都盖到（catch 那支里有 `return`），
+      **不是**为了把 pending 拖到跳转之后。
+    */
+    branchPending.value = false;
   }
   const now = new Date().toISOString();
   threads.upsert({
@@ -1939,6 +1959,8 @@ onUnmounted(() => {
             :artifact-paths="artifactPanel.artifacts.value"
             :is-mock="isDemo"
             :has-goal="Boolean(activeGoal)"
+            :uploading="localUploading"
+            :branch-pending="branchPending"
             :is-admin="isAdmin"
             :subtasks="stream.subtasks.value"
             :active-run-id="stream.activeRunId.value"
