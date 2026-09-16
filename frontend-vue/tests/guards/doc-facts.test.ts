@@ -291,6 +291,7 @@ type LedgerMeasures = {
   i18nKeys: number;
   i18nUnused: number;
   parityTests: number;
+  distinctRows: number;
 };
 
 /*
@@ -314,12 +315,27 @@ function measureLedger(): LedgerMeasures {
         for (const row of value) rows.push(`${key}·${lane}:${row}`);
     }
   }
+  /*
+    **不同的差异条目**：按 `(档, 行文本)` 去重，而不是按 `场景/档/行`。
+    两者都对，但回答的是不同问题——`uniqueRows` 数的是「有多少个
+    场景-维度×档×行 的坑」（同一处差异投影几次就数几次），
+    这个数的是「还有多少件事要判或要修」。
+    2026-09-16 实测：159 vs **41**，差了将近四倍，而此前所有散文只写前者，
+    读的人（多半是模型）会把它当成「还有 159 件事」。
+  */
+  const distinct = new Set<string>();
+  for (const [, lanes] of Object.entries(entries))
+    for (const [lane, value] of Object.entries(lanes))
+      if (Array.isArray(value))
+        for (const row of value) distinct.add(`${lane}\u0000${row}`);
+
   const keys = Object.keys(entries);
   const i18n = JSON.parse(read("baseline/i18n-keys.json")) as {
     total: number;
     unusedTotal: number;
   };
   return {
+    distinctRows: distinct.size,
     i18nKeys: i18n.total,
     i18nUnused: i18n.unusedTotal,
     // e2e-parity 的用例数**是算得出来的**，不是只能跑出来的：
@@ -352,6 +368,11 @@ const PLAN_CLAIMS: PlanClaim[] = [
     pattern: /(\d+) 个是 desktop/g,
     actual: (m) => m.desktopDimensions,
     label: "desktop 档",
+  },
+  {
+    pattern: /(\d+) 条不同的差异/g,
+    actual: (m) => m.distinctRows,
+    label: "不同的差异条数",
   },
   { pattern: /词典 (\d+) key/g, actual: (m) => m.i18nKeys, label: "词典 key" },
   {
@@ -395,6 +416,9 @@ describe("计划文档里的台账读数和签入基线一致", () => {
     expect(measures.desktopDimensions).toBeGreaterThan(0);
     expect(measures.nonDesktopFamilies.length).toBeGreaterThan(0);
     expect(measures.i18nKeys).toBeGreaterThan(0);
+    // 不同条数必然 ≤ 投影去重数；相等就说明去重键写错了。
+    expect(measures.distinctRows).toBeGreaterThan(0);
+    expect(measures.distinctRows).toBeLessThan(measures.uniqueRows);
     expect(measures.parityTests).toBeGreaterThan(measures.scenarioDimensions);
   });
 

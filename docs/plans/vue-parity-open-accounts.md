@@ -1,4 +1,83 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十一轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十二轮）
+
+## 零、2026-09-16 全面审查：**台账的「159 行」是投影数，真正不同的差异是 41 条**
+
+> 这一节是**逐条从签入产物量出来的**（`baseline/parity-diff.json`），
+> 不是从任何一份散文里抄的。量法：按 `(档, 行文本)` 去重。
+
+**先说最要紧的读法订正。** 此前所有文档说的「台账还剩 159 行」，用的是
+**场景-维度 × 档 × 行**的去重计数——**同一处差异投影到多少个场景-维度就数多少次**。
+按 `(档, 行文本)` 去重之后，**真正不同的差异是 41 条**。
+三个数字都对，但它们回答的是不同问题：
+
+| 口径 | 数 | 回答的问题 |
+| --- | --- | --- |
+| 多重集 | 179 | 所有出现次数 |
+| 投影去重（文档一直说的「行」） | 159 | 「有多少个 场景-维度×档×行 的坑」 |
+| **不同的差异条目** | **41** | **「还有多少件事要判/要修」** |
+
+**「还剩 159 行」会被读成「还有 159 件事」——实际是 41 件，而且高度聚集。**
+
+### 41 条按组（全部实测）
+
+| 组 | 不同条数 | 投影 | 状态 |
+| --- | --- | --- | --- |
+| `div[scroll-area-viewport]` 系（`tabbablesOnlyReact` 1 条 + `tabOrder` 3 条） | **4** | **99** | 历史账 #6，判词成立。**订正**：该行此前写「现在是 47 行」，实测是 **99 个投影 / 4 条不同** |
+| 请求层（`requestsOnlyReact` 6 条 + `requestsOnlyVue` 3 条） | **9** | **40** | **订正**：此前写「20 行」，实测 40 投影 / 9 条不同 |
+| **Mermaid 工具条**（见下面 F） | **8** | 16 | **此前没有任何账认领** |
+| **`channels#settings-panel-connected` 那一块**（见下面 G） | **12** | 12 | **此前没有任何账认领** |
+| 焦点 | **2** | 2 | 历史账 #5，部分推翻，判词见该行 |
+| 零散（`div(menuitem)` ×2、`role:separator` 几何 ×2、`tabbablesOnlyVue button` ×2、两条 `alert`、两条 `tooltip "分叉"`） | **6** | 10 | 逐条有判词，见下方历史条目 |
+
+### 本次审查新挂的两笔账
+
+| # | 账 | 证据与下一步 |
+| - | -- | ---- |
+| **F** | **Mermaid 工具条那四个名字，本仓翻译了而上游写死英文** | **8 条 / 16 投影，全部落在 `thread-history-mermaid#*/desktop/light/zh-CN`——只在中文维度**，成因就是翻译。上游 `ai-elements/streamdown.tsx:81` 的注释**明确写着**：「Zoom in / Zoom out / Reset zoom and pan / the diagram's alt text are *not* in `StreamdownTranslations`; they are hardcoded inside the library and **stay English until it exposes them**」，并指名本仓这类字符串的规矩是「both apps announce the same English string（见 `primitives.*`）」。实测上游产物里确实是 `title:"Zoom in"` / `"Zoom out"` / `"Reset zoom and pan"` 与 `aria-label:"Mermaid chart"`，本仓 `markdown.zoomIn/zoomOut/resetZoomAndPan/mermaidChart` 在 zh-CN 里译成了中文。**下一步**：把这四条按 `primitives.*` 的做法改成两语言同串（英文），台账 16 个投影归零。**这是 Claude 记忆 `deerflow-untranslated-primitive-names` 那条规矩没落实的地方。** |
+| **G** | **`channels#settings-panel-connected` 里有一块 Vue 独有的结构** | **12 条 / 12 投影**，全是 `ariaOnlyVue`：`button "添加账号"`、`heading "已连接账号" [level=4]`、`text: parity-account 已连接`（各有 en/zh 两份），连带 `geometry` 两条 `text:/parity-account/ y Δ-16.1`、一条 `width Δ-6.7`、`order` 第 47 个公共节点两边不同（React=修改 / Vue=断开连接）、以及 `workspace-changes#changes-panel` 上一条 `focus`。**「React 没有的 Vue 不许有」的候选**，但也可能是上游缺口——**下一步先去上游对应页确认它有没有这块**，再定是删还是两边同改。 |
+
+### 工单队列现状：**三张 pending 表全空**
+
+记忆 `deerflow-upstream-features-must-land-in-vue` 说「那三张表是工单队列，
+条目只能因为做完了而消失」。2026-09-16 逐个量：
+
+| 表 | 现状 |
+| --- | --- |
+| `baseline/react-parity-scope.json` → `pendingRoutes.routes` | **`[]` 空** |
+| `baseline/upstream-i18n-map.json` → `pending.keys` | **`[]` 空** |
+| `baseline/parity-route-sampling.json` → `pending` | **0**（exempt 4） |
+| `baseline/parity-scenario-coverage.json` → `pending` | **1**，但那是**判过的边界**而非欠账（见下） |
+
+**队列是清的。** 唯一那条 `artifact-table-performance` 的理由写在 `$pendingReasons`：
+它量的是时延，而对照工厂的坐标系是 aria/几何/请求，**天生表达不了**；
+镜像 spec 已在 `make e2e-mock` 里跑。
+
+### 其余现场读数（2026-09-16 实测）
+
+- 覆盖率棘轮 covered **37** / pending **1** / exempt **3**；词典 **1140** key / 15 unused。
+- 守卫 **49** 道；产品 SFC **269** 个；upstream marker `a0f6bcae`。
+- **视觉基线 9 张全是 `-darwin`** —— `make e2e-visual` 因此**只在本机有效**，
+  CI 的 `visual-baselines` job 是 `skipped`。这条不变量由
+  `tests/guards/visual-baseline-platforms.test.ts` 钉着（签了 `-linux` 基线却没接进 CI，
+  或接进 CI 却没有 `-linux` 基线，两个方向都会红），**不是新账，但要知道它的边界**。
+- **`origin/main-wc`（`f30ba6c3`）当前 CI 是红的**：`verify` job 失败在
+  `Run every suite that needs no backend`，就是那条 375px；
+  **修复在本地尚未推送的提交里**（`5f57757a` 起）。推上去之前，
+  「那条红修好了」仍然只是本机结论。
+
+### 顺带核清的两处
+
+- **棘轮 `pending` 不是空的**，但**也不是欠账**：里面是 `artifact-table-performance`，
+  理由写在 `$pendingReasons` 里——它量的是**时延**（冷 Worker 首表延迟、长任务、心跳），
+  而对照工厂的坐标系是 aria/几何/请求，**天生表达不了**；镜像 spec
+  `tests/e2e/artifact-table-performance.spec.ts` 已在 `make e2e-mock` 里跑。
+  历史表里 `~~2~~` 说的 `chat-thread-init-ordering` 确实在 wave 175 结清了，两者不是同一条。
+- **覆盖率棘轮现状**：covered **37** / pending **1** / exempt **3**。
+  `covered` 与场景目录逐字相等由棘轮守卫钉着（`e2e-parity` 150 passed 里验过），
+  **不需要也不该再用正则去数一遍**。
+
+---
+
 
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
