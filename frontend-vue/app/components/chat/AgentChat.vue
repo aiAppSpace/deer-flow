@@ -1961,6 +1961,7 @@ onUnmounted(() => {
             :has-goal="Boolean(activeGoal)"
             :uploading="localUploading"
             :branch-pending="branchPending"
+            :can-branch="!agentName"
             :is-admin="isAdmin"
             :subtasks="stream.subtasks.value"
             :active-run-id="stream.activeRunId.value"

@@ -120,6 +120,50 @@ describe("调用点把这两样真传进去了", () => {
   });
 });
 
+/*
+  **agent 会话上没有分支入口**（第二十九轮）。
+
+  判词不是「照抄上游」——是查后端定的：分支接口
+  （`backend/app/gateway/routers/threads.py:1052-1058`）建新线程时写的是
+  `metadata=branch_metadata`，继承 project、继承标题序号，**唯独不继承
+  `agent_name`**，而 agent 归属就存在线程行的这个元数据里
+  （`core/threads/utils.ts:47`）。也就是说这颗键点下去会造出一条
+  服务端不认为属于这个 agent 的线程。
+
+  上游关掉它的办法是**不传 `onBranchTurn`**（agent 会话页只传 `canRegenerate`
+  与 `canEdit`，而 `message-list.tsx:890` 的渲染条件里有 `onBranchTurn &&`）。
+  本仓一个组件服务两条路由，所以做成显式的 `canBranch`。
+
+  **翻案判据**：后端让分支继承 agent 归属之后，这一条连同上游那一侧一起重判。
+*/
+describe("agent 会话上的分支入口", () => {
+  beforeEach(() => {
+    vi.stubGlobal("useNuxtApp", () => ({
+      $i18n: { t: ref(enUS), locale: ref("en-US") },
+    }));
+  });
+
+  it("canBranch 关掉时整颗不画，而另外两颗照常", async () => {
+    const wrapper = mountList({ canBranch: false });
+    await flushPromises();
+
+    expect(byLabel(wrapper, BRANCH)).toHaveLength(0);
+    expect(byLabel(wrapper, REGENERATE)).toHaveLength(1);
+    expect(byLabel(wrapper, EDIT)).toHaveLength(1);
+  });
+
+  it("调用点按 agentName 关掉它", () => {
+    const source = stripComments(
+      readFileSync(
+        resolve(process.cwd(), "app/components/chat/AgentChat.vue"),
+        "utf8",
+      ),
+    );
+
+    expect(source).toContain(':can-branch="!agentName"');
+  });
+});
+
 describe("上传中 / 分支在飞时的回合操作", () => {
   beforeEach(() => {
     vi.stubGlobal("useNuxtApp", () => ({

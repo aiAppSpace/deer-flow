@@ -148,6 +148,27 @@ const props = withDefaults(
     */
     uploading?: boolean;
     branchPending?: boolean;
+    /*
+      **agent 会话上没有分支入口。**
+
+      上游是**不传** `onBranchTurn` 来关掉它的：agent 会话页
+      （`[agent_name]/chats/[thread_id]/page.tsx:356/364`）只传 `canRegenerate`
+      与 `canEdit`，而 `message-list.tsx:890` 的渲染条件里有 `onBranchTurn &&`，
+      于是那颗键在 agent 会话上根本不画。本仓一个组件服务两条路由，
+      所以这里补一个显式的 prop 而不是靠「没接 handler」。
+
+      **判词是查后端定的，不是照抄上游**：分支接口
+      （`backend/app/gateway/routers/threads.py:1052-1058`）建新线程时写的是
+      `metadata=branch_metadata`——它继承 project、继承标题序号，
+      **唯独不继承 `agent_name`**（agent 归属就存在线程行的这个元数据里，
+      见 `core/threads/utils.ts:47`）。也就是说在 agent 会话上分支出来的线程，
+      服务端并不认为它属于这个 agent；本仓此前画着这颗键，点下去就会造出
+      一条归属不一致的线程。
+
+      **这不是「上游缺了本仓有」，是本仓提供了一个后端还没配套的操作。**
+      要翻案得先修后端（让分支继承 agent 归属），那笔账记在挂账清单第二十九轮条目。
+    */
+    canBranch?: boolean;
     artifactPaths?: readonly string[];
     isMock?: boolean;
     /** `.skill` 的 Install 只对管理员出现；判据在 ArtifactFileCards 的文件头。 */
@@ -169,6 +190,13 @@ const props = withDefaults(
   {
     active: true,
     resizeScroll: "smooth",
+    /*
+      **必须显式给默认值。** Vue 的布尔 prop 不传时是 `false` 不是 `undefined`
+      （wave 15 那条坑，仓里已经栽过一次），而这颗键的常态是「有」——
+      不给默认值的话，所有没传 `can-branch` 的调用点（sidecar、showcase…）
+      会一起把分支入口弄丢，而单测里 `mountList({})` 也会跟着变。
+    */
+    canBranch: true,
   },
 );
 const emit = defineEmits<{
@@ -1590,7 +1618,9 @@ onUnmounted(() => {
               :copy-label="$i18n.t.value.clipboard.copyToClipboard"
               :branch-label="$i18n.t.value.messages.actions.branch"
               :regenerate-label="$i18n.t.value.messages.actions.regenerate"
-              :show-branch="branchable.has(entry.group.id ?? '')"
+              :show-branch="
+                props.canBranch && branchable.has(entry.group.id ?? '')
+              "
               :show-regenerate="
                 latestAssistantGroupId !== null &&
                 entry.group.id === latestAssistantGroupId &&
