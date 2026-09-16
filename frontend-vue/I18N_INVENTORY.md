@@ -35,6 +35,19 @@ shadcn breadcrumb 的 `aria-label="breadcrumb"`、以及 thread-channel-source �
 放进词典而不是写死在 SFC 里，是为了让这条决定留在一个能被 review、也能在上游接入
 i18n 之后一次性翻掉的位置。
 
+`primitives.mermaidChart` / `zoomIn` / `zoomOut` / `resetZoomAndPan` 是同一组里
+**唯一不来自上游源码的一支**：画 Mermaid 工具条的是第三方 `streamdown`，四串英文
+写死在它的 dist 产物里，而它导出的 `StreamdownTranslations` 根本没有对应字段——
+上游那句 `<Streamdown translations={{ ...t.markdown }}>` 翻不到它们，
+`ai-elements/streamdown.tsx:81` 的注释也写着这一点
+（那个 chunk 的文件名带内容哈希、每次发版都变，所以这里不记它；复量法：`grep -r "Reset zoom and pan" frontend/node_modules/streamdown/dist`）。本仓的 ZoomPan 是手写的，
+所以这四条**必须由本仓自己按同一条规矩钉住**，否则 zh-CN 下同一颗控件两边两个名字
+（2026-09-16 之前正是如此，台账 `thread-history-mermaid#*/desktop/light/zh-CN`
+两档各 8 条差异）。
+
+上面这串 key 是**举例**，不是全集：全集就是两份 locale 的 `primitives` 块本身，
+由 `tests/unit/i18n/vue-only-keys.test.ts` 的「两个 locale 一字不差」逐字钉着。
+
 ## Key 与 unused baseline
 
 `en-US` 和 `zh-CN` 当前各有 1140 个完全一致的 leaf key。

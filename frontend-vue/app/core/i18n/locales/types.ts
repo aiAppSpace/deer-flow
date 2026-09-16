@@ -63,6 +63,10 @@ export interface Translations {
     loadingSettingsPage: string;
     channel: (label: string) => string;
     breadcrumb: string;
+    mermaidChart: string;
+    zoomIn: string;
+    zoomOut: string;
+    resetZoomAndPan: string;
   };
 
   // Common
@@ -1282,7 +1286,6 @@ export interface Translations {
     tableFormatMarkdown: string;
     tableFormatCsv: string;
     tableFormatTsv: string;
-    mermaidChart: string;
     downloadDiagram: string;
     downloadDiagramAsSvg: string;
     downloadDiagramAsPng: string;
@@ -1290,9 +1293,6 @@ export interface Translations {
     mermaidFormatSvg: string;
     mermaidFormatPng: string;
     mermaidFormatMmd: string;
-    zoomIn: string;
-    zoomOut: string;
-    resetZoomAndPan: string;
     unsafeLink: string;
     unsafeLinkTitle: (url: string) => string;
   };

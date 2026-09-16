@@ -180,7 +180,7 @@ const RESET_CLASS =
       <button
         :class="CONTROL_CLASS"
         :disabled="zoom >= props.maxZoom"
-        :title="$i18n.t.value.markdown.zoomIn"
+        :title="$i18n.t.value.primitives.zoomIn"
         type="button"
         @click="zoomIn"
       >
@@ -189,7 +189,7 @@ const RESET_CLASS =
       <button
         :class="CONTROL_CLASS"
         :disabled="zoom <= props.minZoom"
-        :title="$i18n.t.value.markdown.zoomOut"
+        :title="$i18n.t.value.primitives.zoomOut"
         type="button"
         @click="zoomOut"
       >
@@ -197,7 +197,7 @@ const RESET_CLASS =
       </button>
       <button
         :class="RESET_CLASS"
-        :title="$i18n.t.value.markdown.resetZoomAndPan"
+        :title="$i18n.t.value.primitives.resetZoomAndPan"
         type="button"
         @click="reset"
       >

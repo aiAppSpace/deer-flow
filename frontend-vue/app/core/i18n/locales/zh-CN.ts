@@ -89,6 +89,11 @@ export const zhCN: Translations = {
     loadingSettingsPage: "Loading…",
     channel: (label) => `${label} channel`,
     breadcrumb: "breadcrumb",
+    /* streamdown 把这四串写死在 dist 里、`StreamdownTranslations` 也没有它们，上游翻不掉。 */
+    mermaidChart: "Mermaid chart",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    resetZoomAndPan: "Reset zoom and pan",
   },
 
   // Common
@@ -1511,7 +1516,6 @@ export const zhCN: Translations = {
     tableFormatMarkdown: "Markdown",
     tableFormatCsv: "CSV",
     tableFormatTsv: "TSV",
-    mermaidChart: "Mermaid 图表",
     downloadDiagram: "下载图表",
     downloadDiagramAsSvg: "下载图表为 SVG",
     downloadDiagramAsPng: "下载图表为 PNG",
@@ -1519,9 +1523,6 @@ export const zhCN: Translations = {
     mermaidFormatSvg: "SVG",
     mermaidFormatPng: "PNG",
     mermaidFormatMmd: "MMD",
-    zoomIn: "放大",
-    zoomOut: "缩小",
-    resetZoomAndPan: "重置缩放与平移",
     unsafeLink: "已省略不安全链接",
     unsafeLinkTitle: (url) => `链接协议不安全：${url}`,
   },

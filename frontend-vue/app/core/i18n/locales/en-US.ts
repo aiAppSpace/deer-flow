@@ -104,6 +104,22 @@ export const enUS: Translations = {
     loadingSettingsPage: "Loading…",
     channel: (label) => `${label} channel`,
     breadcrumb: "breadcrumb",
+    /*
+      Mermaid 工具条那三颗键的 `title` 与图表本身的 `aria-label`——**上游够不着**：
+      画它们的是 `streamdown`，四串英文写死在它的 dist 产物里，
+      而它导出的 `StreamdownTranslations` 里**没有对应字段**，
+      所以上游那句 `<Streamdown translations={{ ...t.markdown }}>` 翻不到它们。
+      **这里不写那个 chunk 的文件名和行号**：它带内容哈希、每次发版都变，
+      写下来就是一条注定烂掉的引用（复量法：`grep -r "Reset zoom and pan" frontend/node_modules/streamdown/dist`）。
+      上游 `ai-elements/streamdown.tsx:81` 的注释自己写着这一点：
+      「they are hardcoded inside the library and stay English until it exposes them」。
+      本仓的 ZoomPan 是手写的，于是 zh-CN 下念的是中文、上游念的是英文——
+      **同一颗控件在两个应用里有两个名字**，正是 `primitives.*` 要挡的那件事。
+    */
+    mermaidChart: "Mermaid chart",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    resetZoomAndPan: "Reset zoom and pan",
   },
 
   // Common
@@ -1585,7 +1601,6 @@ export const enUS: Translations = {
     tableFormatMarkdown: "Markdown",
     tableFormatCsv: "CSV",
     tableFormatTsv: "TSV",
-    mermaidChart: "Mermaid chart",
     downloadDiagram: "Download diagram",
     downloadDiagramAsSvg: "Download diagram as SVG",
     downloadDiagramAsPng: "Download diagram as PNG",
@@ -1593,9 +1608,6 @@ export const enUS: Translations = {
     mermaidFormatSvg: "SVG",
     mermaidFormatPng: "PNG",
     mermaidFormatMmd: "MMD",
-    zoomIn: "Zoom in",
-    zoomOut: "Zoom out",
-    resetZoomAndPan: "Reset zoom and pan",
     unsafeLink: "Unsafe link omitted",
     unsafeLinkTitle: (url) => `Unsafe link scheme in ${url}`,
   },

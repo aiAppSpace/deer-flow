@@ -61,7 +61,7 @@ const chartClass = computed(() =>
     >
       <!-- eslint-disable vue/no-v-html —— 见文件头 ④ -->
       <div
-        :aria-label="$i18n.t.value.markdown.mermaidChart"
+        :aria-label="$i18n.t.value.primitives.mermaidChart"
         :class="chartClass"
         role="img"
         v-html="props.svg"
