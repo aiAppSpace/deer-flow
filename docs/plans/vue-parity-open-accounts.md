@@ -1,4 +1,57 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十九轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-16 第三十轮）
+
+## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
+
+> 用户当天的原话：「最终目的是 vue 版本和 react 版本在**功能，体验，交互逻辑，界面**上
+> 保持**完全一致**」，并追一句「这个才是最终目标」。
+>
+> **这改的是判据本身。** 此前计划文档写着「台账的目标不是 0，是『新出现、还没定过的
+> 行只能减不能增』」——那是**过程规则**，管的是「这一轮别把账做烂」，
+> 管不了「这笔账要不要还」。于是历轮判成**「保留本仓这一侧」**的那些行，
+> 在这条判据下**不是结清，是欠账**。
+>
+> **唯一的豁免仍然只有一条**：落地页 / docs / blog / 静态整站模式（双向豁免）。
+> **还账也不等于照抄 React 的缺陷**——上游是坏的那一类仍然走「两边同改」，
+> 变的是**不许停在「两边不一样但都能用」**。
+
+### 现存 **35 条不同的差异**，按根因归族与还账路径（分组一律写「N 条差异条目」）
+
+（读数：2026-09-16 第三十轮 accept 之后的签入基线，147 场景-维度 / 170 投影。
+**族的划分是按根因手工归的，不是机器算的**——重算脚本见本节末。）
+
+| 族 | 条数 / 投影 | 是什么 | 还账路径 |
+| --- | --- | --- | --- |
+| **A** `div[scroll-area-viewport]` 可 tab | 6 / **105** | React 的滚动视口能用 Tab 走到（Radix 在内容可滚动时给 viewport `tabindex=0`），本仓的走不到 | **改本仓**。这是**交互逻辑**上的真差异：键盘用户在 React 能 Tab 进滚动区再用方向键翻，在本仓不能。投影占全部的 62%，**一处根因还掉三分之二的账** |
+| **B** 请求集合 | 9 / 43 | 一边发、另一边不发的接口：React 轮询 `lark/status` 与 `scheduled-tasks`、失败后重试 3 次；两边各有一处 `features` / `threads/search` 的多发少发 | **逐条分**：重试 3 次那族是**上游的缺陷**（走两边同改）；轮询那两条要先量「本仓靠什么替代」；`features`/`search` 两向都有，先查是不是时序 |
+| **C** 请求体 | 2 / 2 | 建线程时本仓多带 `assistant_id`；`runs/stream` 的 `stream_mode` 多一个 `values`、多一个 `stream_resumable` | **改本仓向上游看齐**，但 `values` 那一条**牵连本仓的 `authoritativeTodos`/`authoritativeGoal` 读的就是 `stream.state`**，要连着改数据来源，不能只删一个字符串 |
+| **D** 多账号绑定块 | 12 / 12 | 本仓的渠道设置页画「已连接账号」列表 + 「添加账号」+ 逐账号断开，上游一个 provider 只认一条 connection | **两边同改（给上游补）**：后端 `/api/channels/connections` 本来就返回列表，上游 `connectionByProvider` 把它收敛成一条是**上游丢信息**。这是**功能**层面最大的一处不一致 |
+| **E** tooltip 播报节点 | 2 / 2 | React 的 aria 树里多一个 `- tooltip "…"` 节点 | **库差异**（Radix 常驻 tooltip 节点 vs Reka 的投影方式）。**要还账得先验「读屏器读出来一不一样」**——判据是体验一致，不是 DOM 一致 |
+| **F** 焦点落点 | 1 / 2 | 某个操作之后焦点一边落在 Close、一边落在文件行 | **改本仓**（交互逻辑），先查是哪一步 |
+| **G** 分栏把手 | 1 / 2 | 伪元素点击区 React 4px / 本仓 16px（历轮判词是「本仓更好，已接受」） | **两边同改**：4px 的拖拽热区是上游的可用性缺陷，把上游也改成 16px |
+| **H** `alert` 播报 | 2 / 2 | React 是空的 `- alert`，本仓是 `- alert: New chat - DeerFlow` | **先查谁对**：本仓把文档标题播出去了，上游播了个空 alert——两边可能都不对 |
+
+**排序按「一处根因还掉多少投影」**：A（105）→ B（43）→ D（12）→ C/E/F/G/H（各 2）。
+**但 D 是唯一一处「功能层面」的不一致**（用户能不能绑第二个账号），
+按最终目标那句话的措辞（功能 / 体验 / 交互逻辑 / 界面），**D 与 A 同等优先**。
+
+```bash
+# 重算这张表（族的划分在脚本里是手工规则，改了要连着改上面的表）
+cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow
+python3 - <<'EOF'
+import json, collections
+d = json.load(open("frontend-vue/baseline/parity-diff.json"))["entries"]
+g = collections.Counter()
+for v in d.values():
+    for f, rows in v.items():
+        if isinstance(rows, list):
+            for x in rows: g[(f, x)] += 1
+print("不同的差异", len(g), "／ 投影", sum(g.values()))
+for (f, x), n in sorted(g.items(), key=lambda kv: -kv[1]):
+    print(f"{n:4d}  {f:20s} {x[:110]}")
+EOF
+```
+
+---
 
 ## 零、2026-09-16 全面审查：**台账的唯一行是投影数，件数要按 `(档, 行文本)` 去重**
 
@@ -84,6 +137,88 @@
 ---
 
 
+> ## 2026-09-16 第三十轮：**把队列里那条退役，然后给尺子补上第②类**
+>
+> ### 一、账 C 那条线退役——三次量都没货
+>
+> 队列第 1 条写的是「还有多少『本仓用原生 `title`、上游用 tooltip』的地方」。
+> **这个前提不成立**，三次读数：
+>
+> | 量法 | 读数 | 结论 |
+> | --- | --- | --- |
+> | 两边 `title=` 用量（剥注释后） | 本仓 **80** 处 / 上游 **72** 处 | 不是系统性差异，两边都在用 |
+> | 按文件名配对后「本仓有、上游那份没有」的两处 | `MessageList`(1 vs 0)、`CodeBlock`(1 vs 0) | **逐个查都对得上**：run duration 上游在独立的 `run-duration.tsx:53` 里用同一个 `title`；CodeBlock 照的是 streamdown 自己的 `data-streamdown="code-block-download-button"` 标记 |
+> | icon-only 且开标签里没有 `aria-label` 的控件 | 本仓 18 处 | **不是缺陷**：按 HTML 规范 `title` 本来就是可访问名的兜底，两边都靠它，台账因此也报不出差异 |
+>
+> 第二十四轮账 C 修的那四颗侧栏键是**具体的一处**（上游那里用的是 Radix Tooltip），
+> 不是一条可以外推的规律。**把它当成规律去扫 80 处，是在为一个没量过的前提干活。**
+>
+> ### 二、第三扇维度窗，第三次零新差异
+>
+> `subtask-card` 补 `desktop/dark`（三张卡分别停在失败 / 被停止 / 完成，
+> 是「固定红 vs `--destructive` token」的高发区）——**三个档全空**。
+>
+> 连起来看：第二十七轮 `mcp-settings`+mobile、`preview-failed`+dark，
+> 第三十轮 `subtask-card`+dark，**连续三扇零新差异**。
+> 这条线仍然出货（每开一扇就多一片有机器守着的面），但**单位产出已经量出来是低的**，
+> 队列里的排序要照这个读数改，而不是照「它 2026-09-11 那次很有货」的记忆改。
+>
+> ### 三、**正题：把「天生看不见的第②类」补上——请求体进取样面**
+>
+> `requests` 那一档只比 `METHOD /path?query`，**请求体一个字节都不进取样面**。
+> 这不是理论问题：上游 `mcp-settings.spec.ts` 自己断言的就是
+> 「PUT body 里没丢 advanced 字段、也没动到兄弟条目」，而那正是台账看不到的一半。
+>
+> 做法：
+>
+> - `ParityCapture.requestBodies`：带体的请求收 `{key, body}`，key 就是
+>   `normalizeRequest` 归一后的那一串（所以两档天然对得上）；
+> - 归一化**只有两条规则**——对象按 key 排序、UUID 形状且不在 `KNOWN_IDS` 里的
+>   字符串抹成 `«generated»`（与路径段同一条规则、同一份名单）。
+>   **时间戳、nonce 一律不抹**：硬规则 2 说归一化只能因为实测而增加，
+>   真出现了它会作为一条 body 差异报出来，拿着读数再加
+>   （`normalizeRequest` 里那张 `VOLATILE_QUERY_KEYS` 表就是这么被量掉的）；
+> - 解析不了 JSON 的体**原样留着**——静默丢掉它与 wave 120 那三个夹具 id 同一类失效；
+> - `DiffEntry.requestBodies`：**只比两边都发过的键**。一边发了另一边没发是
+>   `requestsOnly*` 那一档的事，在这里再报一次只会让同一处差异多一份投影；
+> - 三方字段表同步（`ledger.ts` 的 `DIFF_ENTRY_FIELDS`、
+>   `scripts/parity-ledger-report.mjs` 的 `FIELDS`、签入基线）——
+>   `tests/guards/parity-ledger-fields.test.ts` 当场把没同步的那一步报红，
+>   **这道门是 wave 那次「报告六档一行没算」之后加的，这次真接住了**。
+>
+> **两条「0 要算出来」的配套**（与伪元素那一档同一条纪律）：
+>
+> - 形状断言 `bodySamples >= 10`：挡住「`postData()` 那段写坏→永远空数组→
+>   两边一致→台账 0 行→没有任何用例会红」；
+> - `PARITY_ONLY` 诊断模式现在会打印 `取样计数：伪元素 N / 请求体 M`
+>   ——诊断时最容易误读的就是「某一档空着」，而它有两种：两边一样，和压根没采到。
+>
+> 实测：`PARITY_ONLY=thread-title-sync` → **请求体 20 条样本、0 行差异**。
+> 那个 0 是**算出来的**。
+>
+> 纯函数那五条规则另有单测钉着
+> （`tests/unit/parity/request-body-normalization.test.ts`），
+> 理由是它们只在十几分钟的 e2e 里跑，而**归一化写错的代价是「两边一致」
+> 这个结论本身不可信**。
+>
+> ### 四、这一档第一跑就报了三行，逐条判词
+>
+> | # | 读数 | 判词 |
+> | - | --- | --- |
+> | 1 | `POST /api/langgraph/threads` — Vue 体多一个 `"assistant_id":"lead_agent"`（上游只发 `{metadata, thread_id}`） | **保留本仓这一侧**。后端拿线程行上的 `assistant_id` 解析「有效 schema」（`threads.py:1228` → `build_thread_checkpoint_state_accessor`），两个应用每次 run 都带 `lead_agent`，所以实际解析结果相同；本仓把它落在线程行上只是让「不在 run 里时」也确定。**翻案判据**：上游哪天也在建线程时带上它，或后端明确要求它为空。 |
+> | 2 | `runs/stream` 的 `stream_mode`：Vue 多一个 `"values"` | **早就判过的一条**——`MessageList.vue` 的注释里写着「上游 `stream_mode` 里没有 `values`，本仓多一个」，那正是本仓需要 `isSyntheticValuesMessageId` 那道防线的原因。**这一档独立地把它重新量了出来**，是这把新尺子可信的旁证。 |
+> | 3 | `runs/stream` 的 `stream_resumable: false`：只有 Vue 发 | **保留本仓这一侧**。它是 LangGraph SDK 的出厂默认，后端**显式接受**它（`run_models.py:32` 那条 `Literal[False] \| None`，`gateway/AGENTS.md` 记着拒收它那次把所有 IM 渠道的 run 打成 422、#4466）。上游那边是 JS SDK 自己没带。**翻案判据**：后端改口不收它。 |
+> | 4 | `runs/stream` 的 `context.thread_id`：React 是 `«generated»`、Vue 是夹具线程 id | **挂着，下一轮查**。这条场景（`chat-thread-init-ordering`）本来就是为「线程初始化顺序」立的，而上游 `chat-page.tsx:88` 那段注释点名了 issue #2746。**先查上游那个 id 从哪来的再定判词**——两边路径都是同一条线程，差的是 context 里带的那一个。 |
+>
+> **另外还报过一行，当场改掉了判据**：`thread-list-pin#mobile-drawer` 上
+> `POST /api/threads/search` 的体**逐字相同**，只是 React 发了两次、Vue 一次
+> ——而「发了几次」`requestsOnlyReact` 已经报过了。
+> 多重集写法会让同一处差异在两档各占一行；**改成按「不同的体」的集合比之后
+> 那一行当场消失**，而两边体真不一样时照样报。
+> **这是「一处差异多份投影」那条老账在新尺子上的复现**，第一跑就撞上了。
+>
+> ---
+>
 > ## 2026-09-16 第二十九轮：**判词是查后端定的——本仓多的那颗键才是错的**
 >
 > ### 一、把一个 0 变成真读数
