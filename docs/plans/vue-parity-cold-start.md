@@ -200,7 +200,7 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**330 文件 / 2683** 单测；词典 1140 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **150 passed**（第二十三轮实测整条 6.4 分钟；
+make -C <abs>/frontend-vue e2e-parity     # **151 passed**（第二十三轮实测整条 6.4 分钟；
                                           #   此前记的 17.3 分钟是旧机况，耗时本来就没人守）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
                                           #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
@@ -401,22 +401,14 @@ Claude 记忆 `measure-dont-guess`）。
 
 **下一轮最该先拿的（按顺序，第 1 条就能直接动手）**：
 
-> **账 F 与账 G 第二十三轮已结清**（F 修掉、G 判为本仓独有能力并保留），
-> 逐条读数写在一页账的「2026-09-16 第二十三轮」条目里。下面是重排后的队列。
+> **账 F / G 第二十三轮结清、账 C 第二十四轮结清**，逐条读数写在一页账里。
+> 下面是重排后的队列。
 
-1. **账 C —— 收起态下 Vue 有原生 tooltip 而 React 什么都没有**（第二十轮量出来的）。
-   上游的 `SidebarMenuButton` **自带 `tooltip` 属性**（`frontend/src/components/ui/sidebar.tsx:509-548`，
-   收起时渲染 Radix Tooltip）**却在 workspace 侧栏一个都没传**；本仓
-   `ThreadSidebar.vue:515/554/572` 自己加了 `:title="collapsed ? … : undefined"`。
-   两边同改：React 给那四颗传 `tooltip=`，本仓移植该 prop 并撤掉临时的 `:title`。
-   **改完这一屏仍然量不出来**（`aria` 比可访问名两边相同、`geometry` 不取 `title`），
-   所以同一轮要把判据做成守卫，而不是靠台账。
-
-2. **账 H —— `markdown.unsafeLink` / `unsafeLinkTitle`：上游写死英文、本仓翻了中文。**
+1. **账 H —— `markdown.unsafeLink` / `unsafeLinkTitle`：上游写死英文、本仓翻了中文。**
    第二十三轮比两边 `markdown` 块的 key 量出来的（上游 28 / 本仓 34，本仓独有 6 条，
    4 条是账 F）。上游 `workspace/messages/markdown-link.tsx:86-87` 与
    `workspace/citations/artifact-link.tsx:29-30` 把
-   `aria-label="Unsafe link omitted"` / `title={\`Unsafe link scheme in ${href}\`}`
+   `aria-label="Unsafe link omitted"` 与那句 `Unsafe link scheme in …` 的 `title`
    写死在**自己的源码**里——**够得着，所以走两边同改**（上游 `markdown` 词典加两条 +
    两个消费点改读词典），**不要**顺手塞进 `primitives.*`（那是给「上游也够不着」
    留的，判据见账 F）。**起手式：先给取样面补一条不安全协议的链接**——
@@ -424,15 +416,24 @@ Claude 记忆 `measure-dont-guess`）。
    上游的 `markdown` 块是整块 spread 进 `<Streamdown translations>` 的，
    这两条不属于 streamdown。
 
-3. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
+2. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
    上游把它和 TodoList 放在同一层包裹里，本仓的在 `ChatComposer.vue`；
    **目前没有任何场景同时喂 goal 与 todos**，改完没有读数可以验——先补夹具。
 
-4. **方向 1 继续：把取样面往没人看过的维度开一扇窗**（本文件开头那节排第一的一条）。
+3. **方向 1 继续：把取样面往没人看过的维度开一扇窗**（本文件开头那节排第一的一条）。
    **142 个场景-维度里仍有 120 个是 desktop**，非 desktop 只有 7 族。
    照「一个场景补一维就够」的纪律继续开。
 
+4. **沿着账 C 那条线索往下扫：还有多少「本仓用原生 `title`、上游用 tooltip」的地方。**
+   第二十四轮只改了侧栏那四颗。起手式：
+   `grep -rn ':title=' frontend-vue/app` 逐个问「上游这一处是什么」——
+   **判据是「两个应用给出同一种提示机制」，不是「有没有提示」**。
+
 5. **方向 C 继续**（把「写下来当规则用、却没人守」的话变成守卫，判据见下面 C 节）。
+   **第二十四轮给这条方向加了一个新形状**：撑「**不做**某件事」的理由
+   （`SidebarMenuButton.vue` 那句「没有图标条形态所以不移植 tooltip」）
+   比撑「做某件事」的更难发现——**它没有代码，只有一段注释和一个缺口**。
+   起手式：搜「没有移植 / 不移植 / 暂时不 / 需要时再」，逐条问「那个前提今天还成立吗」。
 
 6. ~~把「批不超过 4 轮」变成机器判据~~ —— **已降级**，前提被推翻，理由见下面
    「第二十二轮那条订正」。它仍有价值（抓本机能抓的回归），但**不是**那条 CI 红的成因。
@@ -457,6 +458,26 @@ Claude 记忆 `measure-dont-guess`）。
 **方法学**：「有一个说得通的解释」和「查过了」是两回事。查 CI 就去读 job 的**逐步结论**
 （哪一步 failure、哪些 skipped），查回归就 `git log -S` 找那段代码何时进来的。
 
+
+### 第二十四轮踩出来的三条
+
+1. **「改完复量」抓到的是我自己刚做出来的回归——前提是复量的东西选对了。**
+   账 C 的第一版摘掉了本仓那四个原生 `title`，探针一跑：本仓三颗导航键
+   **从可访问性树上消失了**（`找到: false`），而 lint / typecheck / 单测全绿。
+   根因是那个 `title` 同时撑着两件事——「悬停提示」和「可访问名」
+   （本仓收起时 `v-if` 把标签删掉了，上游是留着让 `overflow-hidden` 裁）。
+   **我只复量了我想修的那一件。判据：复量要把「原来靠什么撑着」也量一遍。**
+2. **撑「不做某件事」的理由，比撑「做某件事」的更难发现——它没有代码。**
+   `SidebarMenuButton.vue` 的文件头写着「本仓的侧栏外壳没有图标条形态，
+   传进来也没有触发条件」，这是当初不移植上游 `tooltip` 参数的理由；
+   而 `ThreadSidebarShell.vue` 写着 `props.collapsed ? 'w-12' : 'w-64'`，
+   48px 正是上游的 `SIDEBAR_WIDTH_ICON = "3rem"`。**这句话从收起态做出来那天起就是假的**，
+   而它撑着的是一个**缺口**，所以没有任何门禁、任何用例会因为它变假而变红。
+3. **守卫要守「这件事」，不要守「这个现象」。** 第一版守卫数全局
+   `[role="tooltip"]` 的个数，在「移开鼠标浮层应当消失」那一步红了——
+   reka 会把内容投影到一个**常驻**的 `role="tooltip"` 节点上供读屏器读。
+   改成读每颗键自己的 `aria-describedby`：不需要拆卸断言，
+   量到的也确实是合同本身（「这颗键被这段文字描述着」）。
 
 ### 第二十一轮踩出来的两条
 

@@ -8,7 +8,7 @@
 
 ---
 
-## 当前状态（2026-09-16 第二十三轮收工）
+## 当前状态（2026-09-16 第二十四轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
@@ -36,6 +36,36 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-16 第二十四轮）做了什么
+
+**账 C 结清：收起态的侧栏提示，两边同改 + 把判据做成守卫。**
+
+- **改前读数**（探针把两个应用并排放进真浏览器，收起态逐颗悬停）：
+  本仓四颗导航键挂着 `title="New chat"` 之类、上游四颗 `title` **全是 `null`**，
+  而**两边悬停都不出任何浮层**——也就是收起之后本仓弹原生气泡、上游毫无反馈。
+  **台账在这一屏十一个档上全是 0 行**（`aria` 比可访问名、`geometry` 不取 `title`），
+  所以这件事只有并排放进真浏览器才看得见。
+- **改法**：上游自己的 `SidebarMenuButton` 一直支持 `tooltip` 参数
+  （`ui/sidebar.tsx`，收起时渲染 Radix Tooltip），**workspace 侧栏一个都没传**
+  ——React 四颗都传上；本仓把 `tooltip` 移植进 primitive，
+  收没收起由调用方经 `tooltipHidden` 传（L2 禁止 import `@/composables`）。
+- **推翻一句写下来当理由用的话**：`SidebarMenuButton.vue` 的文件头写着
+  「本仓的侧栏外壳没有图标条形态，传进来也没有触发条件」——而
+  `ThreadSidebarShell.vue` 写着 `props.collapsed ? 'w-12' : 'w-64'`，
+  48px 正是上游的 `SIDEBAR_WIDTH_ICON = "3rem"`。**这句话从收起态做出来那天起就是假的。**
+- **顺带对齐两处机制差**：① 可访问名的来源——上游收起时把标签留在 DOM 里让
+  `overflow-hidden` 裁，本仓 `v-if="sidebarExpanded"` 直接删掉，名字全靠那个 `title` 撑着；
+  改成始终渲染。② 悬停延迟——上游侧栏这一支是 0ms（`SidebarProvider` 写死），
+  本仓 `TooltipProvider.vue` 默认 500ms；在侧栏这一支显式压回 0，**不动全局默认**。
+- **守卫**：`tests/e2e-parity/sidebar-collapsed-affordance.spec.ts`，两条断言缺一不可
+  ——① 收起态下四颗键**仍然按可访问名找得到**；② 没有原生 `title`，
+  且持续悬停后 `aria-describedby` 指向的文字等于那颗键的名字。两个应用各量一遍。
+  `doc-facts` 的 `PARITY_FIXED_SPECS` / `PARITY_FIXED_TESTS` 跟着从 8 改到 9。
+
+**这一轮最值钱的一条教训**：**复量抓到的是我自己刚做出来的回归。** 摘掉 `:title`
+的第一版里，本仓三颗键**从可访问性树上消失了**，而 lint / typecheck / 单测全绿——
+那个 `title` 同时撑着「悬停提示」和「可访问名」两件事，而我只复量了前一件。
 
 ## 上一轮（2026-09-16 第二十三轮）做了什么
 
