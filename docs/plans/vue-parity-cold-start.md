@@ -385,32 +385,84 @@ cookie `sidebar_state`** 里，先跑的污染后跑的；改成一应用一 con
 同时**推翻了第十九轮写进本文档的一个猜测**（详见下面第二十一轮的教训 2 与
 Claude 记忆 `measure-dont-guess`）。
 
-**下一轮最该先拿的**：
+**下一轮最该先拿的（按顺序，第 1 条就能直接动手）**：
 
-1. ~~把「批不超过 4 轮」变成机器判据~~ —— **前提在第二十二轮被推翻，降级。**
+1. **账 F —— Mermaid 工具条那四个名字，本仓翻译了而上游写死英文。**
+   **这是现在证据最硬、改动最小、读数最明确的一件。**
+   - **读数**：台账里 8 条差异条目 / 16 个投影，**全部落在
+     `thread-history-mermaid#default` 与 `#download-menu` 的 `desktop/light/zh-CN`**
+     ——只在中文维度，成因就是翻译。
+   - **上游背书**：`frontend/src/components/ai-elements/streamdown.tsx:81` 的注释
+     明确写着「Zoom in / Zoom out / Reset zoom and pan / the diagram's alt text are
+     *not* in `StreamdownTranslations`; they are hardcoded inside the library and
+     **stay English until it exposes them**」，并指名本仓这类字符串的规矩是
+     「both apps announce the same English string（见 `primitives.*`）」。
+     产物里实测确实是 `title:"Zoom in"` / `"Zoom out"` / `"Reset zoom and pan"` 与
+     `aria-label:"Mermaid chart"`。
+   - **要改哪里（做法已经定死了，别自己发明）**：把
+     `zoomIn` / `zoomOut` / `resetZoomAndPan` / `mermaidChart` 四条
+     **从 `markdown.*` 挪进 `primitives.*`**（两个 locale 都挪），
+     再把消费点改成读 `primitives.*`。
+     **为什么必须挪而不是「把 zh-CN 改成英文」**：
+     `frontend-vue/tests/unit/i18n/vue-only-keys.test.ts:165` 已有一条用例
+     「primitives 两个 locale 一字不差（照抄上游写死的英文）」——**`primitives` 块
+     有机器钉着，`markdown` 块没有**。只改值不挪块的话，下一个人把它翻回中文
+     不会让任何门禁变红（那条用例的注释自己就写着这个失效模式）。
+     挪进去 = 修完即受保护，这也正是 `close` / `toggleSidebar` / `todos` 的先例。
+   - **消费点要全找**：`grep -rn 'markdown\.\(zoomIn\|zoomOut\|resetZoomAndPan\|mermaidChart\)' frontend-vue/app`
+     ——已知 `MermaidZoomPan.vue:183/192/200`，`mermaidChart` 那条多半在
+     `MermaidChart.vue` 或 `MermaidFullscreen.vue`（`markdown.*` 在本仓有 8 个消费者，
+     别漏）。`vue-only-keys.test.ts` 还有一条「每一条都有消费者」，漏改会红。
+   - **验收**：`PARITY_ONLY=thread-history-mermaid make -C frontend-vue e2e-parity`
+     那 16 个投影归零；`make -C frontend-vue verify` 绿。
+     **负向验证**：把 zh-CN 的 `primitives` 里任一条翻回中文 → `vue-only-keys` 必须红。
+   - **这是 Claude 记忆 `deerflow-untranslated-primitive-names` 那条规矩没落实的地方。**
 
-   **订正（第二十二轮实测，逐次查了 CI 的 job 步骤）**：那条 375px 的红
-   **不是「躺了 6 天」**。
-   - `cc0387db`（09-09，上一次推送）那次 `verify` job **整个 success**——
-     因为那条用例当时**还不存在**（09-12 由 `6e1c06c2` 加的，晚于那次推送）；
-   - 两次推送之间本地攒了 **360 个提交**，CI 一次都没看见；
-   - `90af6bea`（09-15 13:58）红在 `Run fast verification`（i18n），
-     后面的 `Run every suite that needs no backend` 全部 **skipped**
-     ——**一条红挡住了另一条**；
-   - `c0d25064`（14:34）i18n 修好后才第一次真跑到那一步，当场红。
+2. **账 G —— `channels#settings-panel-connected` 里有一块 Vue 独有结构。**
+   12 条差异条目，全是 `ariaOnlyVue`：`button "添加账号"`、
+   `heading "已连接账号" [level=4]`、`text: parity-account 已连接`（en/zh 各一份），
+   连带 `geometry` 两条 `text:/parity-account/ y Δ-16.1`、一条 `width Δ-6.7`、
+   `order` 第 47 个公共节点两边不同（React=修改 / Vue=断开连接）。
+   **起手式：先去上游 `frontend/src/components/workspace/settings/channels-settings-page.tsx`
+   确认它有没有这一块**，再定是「React 没有的 Vue 不许有」删掉，还是上游缺口两边同改。
 
-   **推论**：本机跑 `e2e-mock` 再多遍也抓不到它——**它在 macOS 上就是绿的**。
-   能抓它的只有 Linux，也就是 CI；而 **CI 只看得见推上去的东西**。
-   所以这条账**就算做出来也抓不到这一条**。本机批次限额仍有价值
-   （抓本机能抓的回归），但它不是那条红的成因，不该再排第一。
-   真正的变量是**推送节奏**——账 E，**2026-09-16 已结清**：用户重申
-   「后续你自动push」，而这条授权 2026-09-06 就在记忆里了，是文档写错。
-2. **收起态下 Vue 有原生 tooltip 而 React 什么都没有**（第二十轮量出来的，未修，
-   见一页账的 C 条）。两边同改：React 给那四颗 `SidebarMenuButton` 传 `tooltip=`，
-   本仓移植该 prop 并撤掉临时的 `:title`。**改完这一屏仍然量不出来**，
-   所以同一轮要把判据做成守卫。
-3. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
-4. **方向 C 继续**。
+3. **账 C —— 收起态下 Vue 有原生 tooltip 而 React 什么都没有**（第二十轮量出来的）。
+   上游的 `SidebarMenuButton` **自带 `tooltip` 属性**（`frontend/src/components/ui/sidebar.tsx:509-548`，
+   收起时渲染 Radix Tooltip）**却在 workspace 侧栏一个都没传**；本仓
+   `ThreadSidebar.vue:515/554/572` 自己加了 `:title="collapsed ? … : undefined"`。
+   两边同改：React 给那四颗传 `tooltip=`，本仓移植该 prop 并撤掉临时的 `:title`。
+   **改完这一屏仍然量不出来**（`aria` 比可访问名两边相同、`geometry` 不取 `title`），
+   所以同一轮要把判据做成守卫，而不是靠台账。
+
+4. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
+   上游把它和 TodoList 放在同一层包裹里，本仓的在 `ChatComposer.vue`；
+   **目前没有任何场景同时喂 goal 与 todos**，改完没有读数可以验——先补夹具。
+
+5. **方向 C 继续**（把「写下来当规则用、却没人守」的话变成守卫，判据见下面 C 节）。
+
+6. ~~把「批不超过 4 轮」变成机器判据~~ —— **已降级**，前提被推翻，理由见下面
+   「第二十二轮那条订正」。它仍有价值（抓本机能抓的回归），但**不是**那条 CI 红的成因。
+
+### 第二十二轮那条订正（为什么第 6 条被降级）
+
+第二十一轮挂账时给了一个现成的解释：「本机批次规则写了没执行，`e2e-mock` 隔了 7 轮
+没跑，所以 CI 上那条 375px 的红躺了 6 天」。**听起来完全成立，所以它进了提交说明、
+三份文档和一条记忆——而我没查。** 逐次查 CI 的 job **逐步结论**之后，因果是错的：
+
+- `cc0387db`（09-09，上一次推送）那次 `verify` job **整个 success**——
+  那条用例**当时还不存在**（`git log -S` 查到是 09-12 由 `6e1c06c2` 加的，晚于那次推送）；
+- 两次推送之间本地攒了 **360 个提交**，CI 一次都没看见；
+- `90af6bea`（09-15 13:58）红在 `Run fast verification`（i18n），后面的
+  `Run every suite that needs no backend` 全部 **skipped**——**一条红挡住了另一条**；
+- `c0d25064`（14:34）修掉 i18n 之后才第一次跑到它，当场红。
+
+**推论**：本机跑 `e2e-mock` 再多遍也抓不到它——**它在 macOS 上就是绿的**。
+能抓的只有 Linux，也就是 CI；而 **CI 只看得见推上去的东西**。
+真正的变量是推送节奏（账 E，已结清：每轮收工自动推）。
+
+**方法学**：「有一个说得通的解释」和「查过了」是两回事。查 CI 就去读 job 的**逐步结论**
+（哪一步 failure、哪些 skipped），查回归就 `git log -S` 找那段代码何时进来的。
+
 
 ### 第二十一轮踩出来的两条
 

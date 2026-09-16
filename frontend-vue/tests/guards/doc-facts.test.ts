@@ -369,10 +369,17 @@ const PLAN_CLAIMS: PlanClaim[] = [
     actual: (m) => m.desktopDimensions,
     label: "desktop 档",
   },
+  /*
+    **`N 条不同的差异` 这个措辞保留给台账总数**，因为这条是全称判据：
+    文档里每一处这样写的都会被拿去和实测总数比。
+    分组计数（某一笔账占几条）请写 **`N 条差异条目`**，否则会撞上这条断言
+    ——2026-09-16 实测撞过一次：给账 F / G 写「8 条不同的差异」「12 条不同的差异」
+    当场红，而它们说的是分组不是总数。
+  */
   {
     pattern: /(\d+) 条不同的差异/g,
     actual: (m) => m.distinctRows,
-    label: "不同的差异条数",
+    label: "不同的差异条数（这个措辞保留给总数；分组请写「N 条差异条目」）",
   },
   { pattern: /词典 (\d+) key/g, actual: (m) => m.i18nKeys, label: "词典 key" },
   {
