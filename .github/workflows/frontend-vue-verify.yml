@@ -84,6 +84,23 @@ jobs:
         working-directory: frontend-vue
         run: make asset-budget
 
+      # Same story as the budget step above, and the reason this one is here:
+      # `standalone-sim` moves `../frontend` aside and re-runs every file that
+      # is declared as reading the sibling app, which is the only machine that
+      # checks this project's stated goal -- Vue stays self-sufficient once the
+      # React app is gone. It is not part of `make verify`, so nothing ran it:
+      # `invented-palette-colors.test.ts` read the sibling app at *collection*
+      # time from the day it was written (2026-09-12) and stayed red for twenty
+      # rounds, invisible on every developer machine because `../frontend` is
+      # always present there.
+      #
+      # It is safe in CI precisely because the job is sequential: the script
+      # restores the sibling app before it exits, and nothing else in this job
+      # runs while it is away.
+      - name: Prove the app still stands without its sibling
+        working-directory: frontend-vue
+        run: make standalone-sim
+
       - name: Audit dependency advisories
         working-directory: frontend-vue
         run: make audit

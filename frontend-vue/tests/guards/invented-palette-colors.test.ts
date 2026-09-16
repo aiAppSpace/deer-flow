@@ -96,7 +96,21 @@ function scan(root: string, exts: string[]): Map<string, Set<string>> {
 
 describe.skipIf(!upstreamPresent)("本仓不自造固定调色板颜色", () => {
   const mine = scan(vueApp, [".vue", ".ts", ".css"]);
-  const theirs = scan(upstream, [".tsx", ".ts", ".css"]);
+  /*
+    **`describe.skipIf` 跳过的是用例，不是收集**——这一行在 describe 的回调体里，
+    收集阶段照样执行。兄弟应用被移走时 `readdirSync` 当场 ENOENT，
+    `standalone-sim` 报的是「整个文件没跑起来——收集阶段就炸了」，
+    而 `make verify` 在本机永远看不见（本机 `../frontend` 一直在）。
+
+    这正是 `scripts/lib/cross-app-by-design.mjs` 文件头记着的 wave 83 那条坑，
+    2026-09-16 第二十七轮在这份文件上复发了一次：它 2026-09-12 建档时就带着，
+    而这道门不在 `make verify` 的先决条件里，隔了二十多轮才被跑到。
+    修法照 `primitive-base-classes.test.ts` 的 `reactBases()`：**缺席时返回空表**，
+    真正的判据交给上面那个 `skipIf`。
+  */
+  const theirs = upstreamPresent
+    ? scan(upstream, [".tsx", ".ts", ".css"])
+    : new Map<string, Set<string>>();
 
   /* 形状断言：正则写坏、目录写错都会让下面两条静默全绿（坑 176/195）。 */
   it("两边都扫到了固定色，而且共用的那几个确实在", () => {
