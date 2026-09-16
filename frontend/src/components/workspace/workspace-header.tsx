@@ -51,8 +51,17 @@ export function WorkspaceHeader({ className }: { className?: string }) {
       </div>
       <SidebarMenu>
         <SidebarMenuItem>
+          {/*
+            `tooltip` is what names these entries once the rail is collapsed:
+            the label span is hidden there, so without it a collapsed sidebar
+            gives mouse users no hover feedback at all. The primitive already
+            gates it on `state === "collapsed"` (ui/sidebar.tsx), so passing it
+            unconditionally is the intended usage — same for the three entries
+            in workspace-nav-chat-list.tsx.
+          */}
           <SidebarMenuButton
             isActive={pathname === "/workspace/chats/new"}
+            tooltip={t.sidebar.newChat}
             asChild
           >
             <Link className="text-muted-foreground" href="/workspace/chats/new">

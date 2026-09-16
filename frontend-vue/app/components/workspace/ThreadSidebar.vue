@@ -508,17 +508,16 @@ function openSettingsDialog(section: "appearance" | "about") {
           <SidebarMenuButton
             as-child
             :is-active="isActive('/workspace/chats/new')"
+            :tooltip="$i18n.t.value.sidebar.newChat"
+            :tooltip-hidden="!collapsed"
           >
             <NuxtLink
               to="/workspace/chats/new"
               class="text-muted-foreground"
-              :title="collapsed ? $i18n.t.value.sidebar.newChat : undefined"
               @click="startNewChat"
             >
               <MessageSquarePlus :size="16" class="shrink-0" />
-              <span v-if="sidebarExpanded">{{
-                $i18n.t.value.sidebar.newChat
-              }}</span>
+              <span>{{ $i18n.t.value.sidebar.newChat }}</span>
             </NuxtLink>
           </SidebarMenuButton>
         </SidebarMenuItem>
@@ -547,16 +546,12 @@ function openSettingsDialog(section: "appearance" | "about") {
                 route.path.startsWith('/workspace/chats') &&
                 !isActive('/workspace/chats/new')
               "
+              :tooltip="$i18n.t.value.sidebar.chats"
+              :tooltip-hidden="!collapsed"
             >
-              <NuxtLink
-                class="text-muted-foreground"
-                to="/workspace/chats"
-                :title="collapsed ? $i18n.t.value.sidebar.chats : undefined"
-              >
+              <NuxtLink class="text-muted-foreground" to="/workspace/chats">
                 <MessagesSquare :size="16" class="shrink-0" />
-                <span v-if="sidebarExpanded">{{
-                  $i18n.t.value.sidebar.chats
-                }}</span>
+                <span>{{ $i18n.t.value.sidebar.chats }}</span>
               </NuxtLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -565,16 +560,12 @@ function openSettingsDialog(section: "appearance" | "about") {
               v-if="features.agentsApiEnabled.value"
               as-child
               :is-active="route.path.startsWith('/workspace/agents')"
+              :tooltip="$i18n.t.value.sidebar.agents"
+              :tooltip-hidden="!collapsed"
             >
-              <NuxtLink
-                class="text-muted-foreground"
-                to="/workspace/agents"
-                :title="collapsed ? $i18n.t.value.sidebar.agents : undefined"
-              >
+              <NuxtLink class="text-muted-foreground" to="/workspace/agents">
                 <Bot :size="16" class="shrink-0" />
-                <span v-if="sidebarExpanded">{{
-                  $i18n.t.value.sidebar.agents
-                }}</span>
+                <span>{{ $i18n.t.value.sidebar.agents }}</span>
               </NuxtLink>
             </SidebarMenuButton>
             <!--
@@ -595,9 +586,7 @@ function openSettingsDialog(section: "appearance" | "about") {
                 aria-describedby="agents-disabled-description"
               >
                 <Bot :size="16" class="shrink-0" />
-                <span v-if="sidebarExpanded">{{
-                  $i18n.t.value.sidebar.agents
-                }}</span>
+                <span>{{ $i18n.t.value.sidebar.agents }}</span>
               </SidebarMenuButton>
               <span id="agents-disabled-description" class="sr-only">{{
                 $i18n.t.value.sidebar.agentsDisabledTooltip
@@ -619,18 +608,15 @@ function openSettingsDialog(section: "appearance" | "about") {
             <SidebarMenuButton
               as-child
               :is-active="route.path.startsWith('/workspace/scheduled-tasks')"
+              :tooltip="$i18n.t.value.sidebar.scheduledTasks"
+              :tooltip-hidden="!collapsed"
             >
               <NuxtLink
                 to="/workspace/scheduled-tasks"
                 class="text-muted-foreground"
-                :title="
-                  collapsed ? $i18n.t.value.sidebar.scheduledTasks : undefined
-                "
               >
                 <CalendarClock :size="16" class="shrink-0" />
-                <span v-if="sidebarExpanded">{{
-                  $i18n.t.value.sidebar.scheduledTasks
-                }}</span>
+                <span>{{ $i18n.t.value.sidebar.scheduledTasks }}</span>
               </NuxtLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
