@@ -896,14 +896,20 @@ test.describe("Side chat", () => {
     await expect
       .poll(() => streamBody?.input?.messages?.length, { timeout: 10_000 })
       .toBe(2);
+    /*
+      **`thread_id` 不在 context 里**（wave 216 两边同改）：Gateway 的
+      `build_run_config` 写着 `context["thread_id"] = thread_id`，取的是 URL
+      路径里的那一个，客户端传什么都被当场覆盖。这条 sidecar run 的目标线程
+      仍然由 URL 决定，下面那条 `parent_thread_id` 才是真正承载信息的键。
+    */
     expect(streamBody?.context).toMatchObject({
       model_name: "fast-model",
       thinking_enabled: false,
       is_plan_mode: false,
       subagent_enabled: false,
       reasoning_effort: "minimal",
-      thread_id: MOCK_SIDECAR_THREAD_ID,
     });
+    expect(streamBody?.context).not.toHaveProperty("thread_id");
 
     const messages = streamBody?.input?.messages ?? [];
     expect(messages[0]?.additional_kwargs).toMatchObject({

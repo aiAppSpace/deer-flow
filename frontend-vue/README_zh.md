@@ -116,6 +116,17 @@ make e2e-parity-auth    # 同样两个应用、但开着鉴权构建：登录页
 （`make standalone-check` 静态证明，`make standalone-sim` 真做一遍）。
 `../frontend` 缺席时它不启动 React，用例整组跳过。
 
+不进聚合入口不等于不进 CI：`e2e-parity`、`e2e-parity-auth` 与 `icon-parity`
+从 2026-09-17 起在 `.github/workflows/frontend-vue-parity.yml` 里跑，
+那是唯一同时装两个应用 `node_modules` 的工作流。它带 `paths:` 过滤
+（`frontend-vue/**`、`frontend/**` 与回放 Gateway 的输入），因为这三条要起两个
+生产构建，成本是真的；**React 单侧的改动也在过滤里**——上游漂移把台账推动，
+正是这把尺子要量的东西。
+那份工作流设了 `PARITY_REQUIRE_REACT=1`：没有它，`../frontend` 不在 checkout 里时
+156 条全跳过、退出 0，绿得和真绿一模一样。两半都由
+`tests/guards/tooling-contracts.test.ts` 钉着，而且它扫的是
+`.github/workflows/` **整个目录**而不是点名的那一份。
+
 `make e2e-visual` 刻意两边都不进：截图基线只有 `-darwin` 一份，在生成并签入
 `-linux` 基线之前，它是本机门禁。这两件事由
 `tests/guards/visual-baseline-platforms.test.ts` 双向绑定：只签基线不接 CI 会红，

@@ -20,80 +20,103 @@
 ## ⚠ 最终判据（2026-09-16 用户重申，比旧文档强，读之前先看这一段）
 
 用户原话：**「最终目的是 vue 版本和 react 版本在功能，体验，交互逻辑，界面上保持
-完全一致」**，并追一句「这个才是最终目标」。**所以对照台账的目标就是 0。**
-「新出现、还没定过的行只能减不能增」只是**过程规则**，不是终点——
-历轮判成「保留本仓这一侧」的行，按这条判据**是欠账不是结清**。
+完全一致」**，并追一句「这个才是最终目标」。
 
 同日还给了四句，它们是同一条判据的四个面：
 
-- **不能缩水和打补丁**——对齐要还**根因**，不是让台账那一行消失
-  （反例：两边可 tab 性不同就给本仓那个元素硬加 `tabindex`）；
+- **不能缩水和打补丁**——对齐要还**根因**，不是让台账那一行消失；
 - **该重构重构**——上游那一层结构本仓缺了，就按本仓的分层**补一层真组件**；
 - **按业界最佳方案**——两边都不对时取业界做法**两边同改**，不要把本仓改成和上游一样错；
 - **不要机械式对齐**——**判据是渲染与行为一致，不是源码字面一致**，两者会给出相反答案。
 
 **底层不同构时可以退让**（用户原话：「如果是因为底层架构有差异，实在不能实现完全
 对齐，能最大程度对齐就行」）。**这条要读窄**：允许不一致的只是**实现字面**，
-渲染/行为/可访问性树仍按完全一致要求；而且必须拿得出**实测读数**
-（「按字面对齐之后尺子上反而多出几行」）并写**翻案判据**。
+渲染/行为/可访问性树仍按完全一致要求；而且必须拿得出**实测读数**并写**翻案判据**。
 
-逐族清单与还账路径：`vue-parity-open-accounts.md` 开头那节「按最终目标重排」。
 判据全文：Claude 记忆 `deerflow-vue-replacement-goal` 与 `deerflow-long-term-top-tier-goal`。
 
 ---
 
-## 接手时的状态（2026-09-16，**现场量，不要当断言**）
+## ⚠ 台账已经清零了，但**清零不等于对齐完成**
 
-- 工作区干净、**已推送**到 `origin/main-wc`（交接时 HEAD 是一条纯 docs 提交）。
-- 台账：**147 场景-维度 / 3 唯一行 / 2 条不同的差异 / 3 个投影**（起点是 170）。
-- **CI：`03cfb6ae`（最后一个动过 `frontend-vue` 的提交）已确认 `completed/success`。**
-  交接之后的提交若仍是纯 docs，则 `head_sha` 查 HEAD 会是 0——那是 `paths:` 过滤，
-  不是「没测过就有问题」，命令见下面两个坑。
-- 本会话跑完第 27~33 轮并做了一次**文档审计**（见下），第 34 轮**只做了一半**。
+第三十六轮把对照台账推到 **0 唯一行 / 0 多重集 / 0 条不同的差异**（起点 170 个投影）。
+**这句话的边界必须说清楚**，否则新窗口会以为任务结束了：
 
-## 交接前那次文档审计改了什么（都是按代码事实核出来的假断言）
-
-- `ChannelConnections.vue` **四处**：「多账号列表 / 逐账号断开是本仓独有」——
-  第三十三轮起**两边都有**；「`removeProviderConfig` 上游没有这颗键」——
-  **上游一直有**（`channels-settings-page.tsx:447/466`）；「上游这一排最多两颗」——
-  现在两边都可能三颗。
-- `primitive-base-classes.test.ts` 文件头「DECLARED 里剩下的 7 条」——**实际 12 条**，
-  而且理由已经是四类（新增「底层不同构、字面对齐反而更差」，`CommandInput` 那条）。
-  **那句话没有任何机器守着，已改成「别再往这句话里写条数」。**
-- `DECLARED` 里 ScrollArea 那条引的是 wave 98 的判词（「上游那层 Suggestions 永远不会
-  真的滚动、决定不跟」）——**第三十一轮已作废**，一页账里那两处原文也都盖了章。
-- `ARCHITECTURE.md` 的 primitive 清单补上 `Suggestion`；
-  根 `README.md` 的 IM Channels 一节补上「列出每个账号并逐个解绑」（用户可见改动）。
-- 冷启动文档的门禁读数块换成本会话真跑的数（verify 332 文件 / 2700 单测、
-  e2e-parity 156、standalone-sim 18/5/0 **且已进 CI**）。
-
-## 下一件事：第三十四轮已量到一半，别重猜
-
-侧栏在窄屏上的挂载时机，8 个投影。**已经排除掉两种猜法**：
-
-- **不是「谁挂了侧栏」**：两边 workspace layout 都挂，且两边窄屏分支**都是 Sheet**
-  （本仓 `ThreadSidebarShell.vue` 的 `v-if="narrow"` 对上游 `ui/sidebar.tsx:183`）。
-- **不是请求集合差异**：desktop 维度上两边发的是**同一个五条集合**，只是顺序不同。
-
-**已量到**：三行全在 mobile 维度、方向相反；本仓 `ThreadSidebar.vue` 在自己的 setup
-里起了 `useThreads()` 与 `useAgentsApiEnabled()`，不在 Sheet 插槽里、关着也跑
-——解释了 `threads/search` 与 `features`，**解释不了 `channels/providers`**。
-
-**下一步**：窄屏由 JS 判定，首帧很可能先挂桌面分支、子树跟着挂载并发请求，随后才切
-Sheet。**先证这一条再决定修法**——若属实，正解是让 `narrow` 首帧就正确，
-而不是给查询加 `enabled`（后者挡不住「整棵子树白挂载一次」）。
+- 台账只覆盖 **147 个场景-维度**，也就是 `tests/e2e-parity/support/scenarios.ts`
+  那份目录。**取样面之外的屏，台账一个字都没说。**
+- 覆盖率棘轮现状：**covered 37 / pending 1 / exempt 3**。那 1 条 pending
+  （`artifact-table-performance`）**已经有完整判词，别再重新问一遍**——
+  它量的是时延，而对照工厂的坐标系是 aria 树 / 几何 / 请求，表达不了时延断言；
+  镜像 spec 早就有了。要变，得先有人决定豁免 `/artifacts/view` 这条路由。
+- 所以「0」的正确读法是：**当前这把尺子、在当前这个取样面上，量不出差异了。**
+  下一步是**让尺子更可信**（进 CI）与**让尺子照到更多地方**（扩取样面）。
 
 ---
 
-## 量 CI 的两个坑（两个都是前几轮现场踩出来的，别再踩）
+## 下一轮最该先拿的（按顺序）
+
+### 1. 把 `e2e-parity` 接进 CI —— **现在它是最大的一块**
+
+`.github/workflows/` 里 **`e2e-parity` 零命中**（grep 实测），而
+`frontend-vue/README.md` 自己写着这是
+「**a cost decision that has never actually been made** —— local-only by
+default, not by design」。
+
+**为什么现在必须做**：整个对齐工作的坐标系就是这份台账，而它**只在这台笔记本上
+被验过**。台账刚清零，此刻正是它最值钱、也最容易被悄悄改红的时候——
+任何人改一行 primitive，本机不跑就没人知道。
+
+这与第二十七轮 `standalone-sim` 那件事是同一个形状（记忆
+`deerflow-gate-needs-an-entrypoint`：**没进 verify / CI 的门，迟早红着没人看见**），
+只是标的大得多。**第二十一轮那条 375px 的红正是「本机绿、Linux 红」**——
+同一类风险在这里没有任何遮挡。
+
+要考虑的：这个套件要起三个服务（replay Gateway + Vue + 兄弟 React），
+一轮 ~16 分钟；CI 上要装 `../frontend` 的依赖。成本是真的，
+所以**先量成本再决定形态**（每次 PR 都跑 / 只在 `frontend-vue`+`frontend` 变更时跑 /
+nightly），把读数写进提交说明。
+
+### 2. 扩取样面 —— 台账清零之后，新差异只能从这里来
+
+**开新维度/新场景的单位产出在降**（第三十三轮连开两扇零新差异），所以
+**别盲开**，按读数选：
+
+- `baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由的取样点最少；
+- 对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景
+  （棘轮门禁会红）；
+- 加新场景要**给它加终态断言**，否则「零差异」可能只是「压根没采到」
+  （第二十轮那条教训：拿到 0 不等于两边一样）。
+
+### 3. 三张 pending 表是工单队列，不是可以停住的账
+
+记忆 `deerflow-upstream-features-must-land-in-vue`：上游有的功能 Vue 必须实现。
+台账看不见「本仓整个屏都没做」这一类——它只比两边都到得了的屏。
+
+---
+
+## 第三十六轮留下的两条教训（别重犯）
+
+1. **一处重复请求会把另一处缺陷遮住。** 去掉 `refreshPostRun` 里那次多余的
+   `threads.get()` 之后，尺子当场照出 `GET /api/threads/**null**/token-usage`
+   ——`refetch()` 绕过 `enabled`，而 `queryFn` 里那个 `!` 假设了 `enabled` 挡得住。
+   **「多发一个请求」值得当账还，理由之一就是它会藏别的 bug。**
+
+2. **上一轮判成「架构差异、退让」的，这一轮翻案了。** `thread-title-sync` 那条
+   先判「本仓没有第二个查询要收敛」，再查才发现本仓**四处**都在失效
+   `["thread","metadata",id]` 而**没有任何查询拥有这个 key**——四处全是空操作。
+   **「本仓不需要」和「本仓缺了那一层」长得很像**，判前先 grep 一遍谁在用这个 key。
+
+---
+
+## 量 CI 的两个坑（前几轮现场踩出来的，别再踩）
 
 1. **`head_sha` 必须传全 sha**：传短 sha **永远返回 `total_count: 0`**，
    于是那条命令在任何情况下都会「证明」这个 sha 没被测过。
 2. **纯 docs 提交不会有任何 CI run**（workflow 有 `paths:` 过滤），
    所以「HEAD 绿不绿」这个问题本身可能问错了——要问的是
    「**覆盖当前 `frontend-vue` 树的那次 run** 绿不绿」。
-   **当前 HEAD `ca05875f` 就是纯 docs 提交，它 `total_count` 是 0；
-   要查的是 `03cfb6ae`。**
+   （上一次交接文档在这里写错过：它断言 HEAD 是纯 docs 提交所以没有 run，
+   而那次提交同时改了 `frontend-vue/` 下的文件，run 是有的。**现场量，别照抄。**）
 
 ```bash
 cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow
@@ -115,3 +138,16 @@ RID=$(gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --fo
   && gh api "repos/aiAppSpace/deer-flow/actions/runs/$RID/jobs" \
     --jq '.jobs[] | "【\(.name)】\(.conclusion)", (.steps[] | select(.conclusion=="failure" or .conclusion=="skipped") | "    \(.conclusion)  \(.name)")'
 ```
+
+（`visual-baselines` 恒为 `skipped` 是**设计如此**——它是 `workflow_dispatch` 专用，
+见 `frontend-vue-verify.yml` 的 `if:`。别把它当红。）
+
+---
+
+## 跑长命令的纪律（这一轮踩到的）
+
+`make e2e-parity` ~16 分钟、`e2e-backend` ~6 分钟、`verify` ~4 分钟。
+**用 `run_in_background` 起一次，然后等通知**——不要再开
+`while pgrep ...; do sleep; done` 去轮询：Bash 前台 600 秒超时会把那个循环也变成
+一个后台任务，等一次就多一个，最后攒出十几个空转任务。
+要串行跑多套就写成一条命令（`make a > a.log; echo "A=$?" >> a.log; make b > b.log; ...`）。

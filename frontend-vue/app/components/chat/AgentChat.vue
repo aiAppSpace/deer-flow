@@ -70,6 +70,7 @@ import { useAgentCreationSession } from "@/composables/useAgentCreationSession";
 import { useSidecar } from "@/composables/useSidecar";
 import { useSidecarSession } from "@/composables/useSidecarSession";
 import { useThreadStream } from "@/composables/useThreadStream";
+import { useThreadMetadata } from "@/composables/useThreadMetadata";
 import { useThreads } from "@/composables/useThreads";
 import { useNotifications } from "@/composables/useNotifications";
 import { useSuggestionsConfig } from "@/composables/useSuggestionsConfig";
@@ -105,7 +106,6 @@ import {
   threadTokenUsageToTokenUsage,
 } from "@/core/threads/token-usage";
 import {
-  isThreadMissingError,
   shouldLeaveMissingThread,
   type ThreadPresence,
 } from "@/core/threads/thread-presence";
@@ -1161,19 +1161,18 @@ async function refreshPostRun(
   suggestionController?.abort();
   const controller = new AbortController();
   suggestionController = controller;
-  try {
-    const refreshed = await getAPIClient().threads.get(targetThreadId);
-    if (
-      controller.signal.aborted ||
-      (routeThreadId.value ?? lastStartedThreadId) !== targetThreadId ||
-      !suggestionGeneration.isCurrent(token, scope)
-    ) {
-      return;
-    }
-    threads.upsert(refreshed);
-  } catch {
-    // The stream state remains authoritative while metadata persistence catches up.
-  }
+  /*
+    **run 结束后重读线程这件事归 `useThreadMetadata`，这里不再自己打一次。**
+
+    那个查询的 `enabled` 带着 `!isStreaming`，所以 run 一落定它就自己重取，
+    结果由上面那个 watch 写回列表缓存——与上游同一条机制：上游的
+    `useThreadMetadata` 也是靠 `runInFlight` 翻假之后自动重取的
+    （`chat-page.tsx` 的 `enabled: !isNewThread && !isMock && !runInFlight`）。
+
+    此前这里还命令式打一次 `threads.get()`，于是本仓在这一屏上**发两次**、
+    上游只发一次——对照台账 `chat-thread-init-ordering` 上那条
+    `requestsOnlyVue: GET /langgraph/threads/{id}` 就是这一次重复（wave 216）。
+  */
   if (
     controller.signal.aborted ||
     (routeThreadId.value ?? lastStartedThreadId) !== targetThreadId ||
@@ -1576,11 +1575,11 @@ onMounted(async () => {
     demoMessages.value = null;
   }
 });
-onMounted(async () => {
-  if (!initialRouteThreadId || isDemo.value) return;
-  /*
-    只探 `GET /threads/{id}`：**它自己就带着 checkpoint 的 values**，再取一次
-    `/state` 拿到的是同一份东西。
+/*
+  **线程元数据（含存在性探测）是一个查询，不是 onMounted 里的一次性请求**（wave 216）。
+
+  只探 `GET /threads/{id}`：**它自己就带着 checkpoint 的 values**，再取一次
+  `/state` 拿到的是同一份东西。
 
     这不是推断，是读后端加实测的结论。两个路由都走 `accessor.aget(config)` 取
     同一个最新快照，再用同一个 `serialize_channel_values_for_api` 序列化：
@@ -1598,25 +1597,70 @@ onMounted(async () => {
       并返回空快照的 values，合并结果同样不变。
     删掉之后每次打开线程少一次完全重复的往返。
 
-    另外，`/state` 从来就没参与过「线程是否存在」的判断——那条判据在
-    core/threads/thread-presence.ts 里，读的只有这一次元数据探测的错误码。
+  另外，`/state` 从来就没参与过「线程是否存在」的判断——那条判据在
+  core/threads/thread-presence.ts 里，读的只有这一次元数据探测的错误码。
+
+  **为什么要有 key**：`useThreadMetadata` 的文件头写着三处对
+  `["thread","metadata",id]` 的失效此前全是空操作——归档、移到项目、run 结束，
+  都以为自己重读了这条线程，其实什么也没发生。改名同理，对照台账
+  `thread-title-sync` 上那条 `requestsOnlyReact: GET /langgraph/threads/{id}` 就是它。
+
+  **也不再只探首次挂载那一条**：`AgentChat` 切线程时并不重建，原来的
+  `initialRouteThreadId` 让 `threadPresence` 停在上一条线程的判定上。
+*/
+const threadMetadata = useThreadMetadata(routeThreadId, {
+  /*
+    **run 在跑的时候不探**——上游同一处是
+    `enabled: !isNewThread && !isMock && !runInFlight`（`chat-page.tsx`），
+    与本仓历史查询那道门（`useThreadStream` 里的
+    `enabled: Boolean(threadId) && !isStreaming`）**是同一条理由**：
+    `/chats/new` 提交之后 threadId 由 `onStart` 交出来，那一刻 run 已经在流，
+    此时取回来的是 run 之前的世界。
+
+    少了这一半会当场多发一次请求：对照台账 `chat-thread-init-ordering` 上
+    `requestsOnlyVue: GET /langgraph/threads/{id}` 就是它（wave 216 加这个查询时
+    一次量出来的——上游那一屏一条都不发）。
   */
-  try {
-    const metadata = await getAPIClient().threads.get(initialRouteThreadId);
-    threads.upsert(metadata);
-    threadPresence.value = {
-      threadId: initialRouteThreadId,
-      presence: "present",
-    };
-  } catch (error) {
-    // 探测失败本身不构成「不存在」：只有 403/404 才是。其余错误留在 unknown，
-    // 于是一次瞬时 5xx 不会把用户连人带对话踢回新会话。
-    threadPresence.value = {
-      threadId: initialRouteThreadId,
-      presence: isThreadMissingError(error) ? "missing" : "unknown",
-    };
-  }
+  enabled: computed(() => !isDemo.value && !stream.isStreaming.value),
 });
+watch(
+  () => threadMetadata.data.value,
+  (metadata) => {
+    if (metadata) threads.upsert(metadata);
+  },
+  { immediate: true },
+);
+watch(
+  [
+    routeThreadId,
+    () => threadMetadata.data.value,
+    () => threadMetadata.error.value,
+    () => threadMetadata.isFetching.value,
+  ],
+  ([threadId, metadata, error, fetching]) => {
+    if (!threadId) return;
+    /*
+      取数还在飞的时候保持 `unknown`——`shouldLeaveMissingThread` 要求
+      presence 确认 missing 才放弃 URL，中途读到一个过期的 present/missing
+      会让判据基于上一条线程的答案。
+    */
+    if (fetching && metadata === undefined && !error) {
+      threadPresence.value = { threadId, presence: "unknown" };
+      return;
+    }
+    // 403/404 在 queryFn 里已经归一成 null；其余错误留在 unknown，
+    // 于是一次瞬时 5xx 不会把用户连人带对话踢回新会话。
+    const presence: ThreadPresence = error
+      ? "unknown"
+      : metadata === null
+        ? "missing"
+        : metadata
+          ? "present"
+          : "unknown";
+    threadPresence.value = { threadId, presence };
+  },
+  { immediate: true },
+);
 watch(
   [() => props.agentName, isDemo],
   async ([agentName, demo]) => {

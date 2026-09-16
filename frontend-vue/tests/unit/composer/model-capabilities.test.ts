@@ -62,12 +62,7 @@ describe("model defaults and capabilities", () => {
       reasoning_effort: "high",
     });
 
-    const payload = buildRunContext(
-      normalized,
-      "thread-1",
-      undefined,
-      models[0],
-    );
+    const payload = buildRunContext(normalized, undefined, models[0]);
     expect(payload).toEqual({
       model_name: "basic",
       mode: "flash",
@@ -75,7 +70,6 @@ describe("model defaults and capabilities", () => {
       is_plan_mode: false,
       subagent_enabled: false,
       reasoning_effort: "high",
-      thread_id: "thread-1",
     });
   });
 
@@ -83,7 +77,6 @@ describe("model defaults and capabilities", () => {
     expect(
       buildRunContext(
         { model_name: "think-only", mode: "pro", reasoning_effort: "high" },
-        "thread-2",
         { agent_name: "analyst" },
         models[2],
       ),
@@ -95,7 +88,6 @@ describe("model defaults and capabilities", () => {
       is_plan_mode: true,
       subagent_enabled: false,
       reasoning_effort: "high",
-      thread_id: "thread-2",
     });
   });
 
@@ -103,7 +95,6 @@ describe("model defaults and capabilities", () => {
     expect(
       buildRunContext(
         { model_name: "reasoner", mode: "ultra" },
-        "thread-3",
         undefined,
         models[1],
       ),
@@ -114,13 +105,11 @@ describe("model defaults and capabilities", () => {
       is_plan_mode: true,
       subagent_enabled: true,
       reasoning_effort: "high",
-      thread_id: "thread-3",
     });
 
     expect(
       buildRunContext(
         { model_name: "think-only", mode: "pro" },
-        "thread-4",
         undefined,
         models[2],
       ),
@@ -131,7 +120,6 @@ describe("model defaults and capabilities", () => {
       is_plan_mode: true,
       subagent_enabled: false,
       reasoning_effort: "medium",
-      thread_id: "thread-4",
     });
   });
 });

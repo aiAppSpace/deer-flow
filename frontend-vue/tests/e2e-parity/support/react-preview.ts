@@ -32,6 +32,37 @@ const reactRoot = fileURLToPath(
 /** 兄弟应用在不在 checkout 里。缺席时 parity 套件不启动它，用例整组跳过。 */
 export const reactAppPresent = existsSync(`${reactRoot}package.json`);
 
+/*
+  **跳过是对开发机说的，不是对 CI 说的。**
+
+  parity 的四份 spec 每一份开头都是 `test.skip(!reactAppPresent, …)`。
+  在开发机上这是对的：本模块的独立性判据要求 `../frontend` 缺席时一切照常
+  （见 make standalone-check / standalone-sim）。
+  但同一行搬到 CI 上就变成了这个项目反复踩的那种门——**156 条全跳过、退出 0、
+  一片绿，而什么都没量**。`e2e-visual` 悄悄红了三个提交、
+  `invented-palette-colors` 在收集期读兄弟应用红了二十轮，都是这个形状。
+
+  所以 CI 把 `PARITY_REQUIRE_REACT=1` 打开：缺席时**在配置加载那一刻就炸**，
+  而不是安静跳过。判据用的是 `reactAppPresent` 本身——写成工作流里的
+  `test -f frontend/package.json` 就成了第二把尺子，它绿不代表这把尺子绿
+  （比如 reactRoot 算错了路径）。
+
+  门禁：tests/guards/tooling-contracts.test.ts 钉「跑 parity 的 CI job 设了这个变量」，
+  tests/unit/parity/react-presence.test.ts 钉这段逻辑本身。
+*/
+export function assertReactAppPresentIfRequired(
+  present: boolean = reactAppPresent,
+  required: boolean = process.env.PARITY_REQUIRE_REACT === "1",
+): void {
+  if (!required || present) return;
+  throw new Error(
+    `PARITY_REQUIRE_REACT=1，但兄弟 React 应用不在 checkout 里（找的是 ${reactRoot}package.json）。` +
+      "对照套件此时会整组跳过并退出 0——那是一条量不到任何东西的绿。",
+  );
+}
+
+assertReactAppPresentIfRequired();
+
 export function reactAppUrl(port: string) {
   return `http://localhost:${port}`;
 }

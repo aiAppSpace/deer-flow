@@ -77,9 +77,24 @@ const REASONING_EFFORT_BY_MODE: Record<string, "low" | "medium" | "high"> = {
   thinking: "low",
 };
 
+/**
+ * 拼 run 请求里的 `context`。
+ *
+ * **不带 `thread_id`**（wave 216 去掉）。Gateway 的 `build_run_config` 里写着
+ * `context["thread_id"] = thread_id`，而那个 `thread_id` 取自 **URL 路径**——
+ * 客户端传什么都会被当场覆盖，注释也明写着「thread_id comes from the URL path,
+ * not caller config」。也就是说这颗键在 wire 上**完全是空转的**。
+ *
+ * 上游两处（`core/threads/hooks.ts` 的普通提交与 replay 提交）也在发它，而且
+ * **发的还是错的那一个**：`sendMessage(threadId, …)` 拿到的是提交那一刻客户端
+ * 预生成的 draft id，而 run 打到的是后端真正创建出来的线程。
+ * 对照台账 `chat-thread-init-ordering` 上那条 `requestBodies` 差异就是它
+ * （React 侧被归一成 `«generated»`，本仓侧是夹具线程 id——两边指的不是同一条线程）。
+ *
+ * 一个服务端保证会丢弃、而且有一侧一直发错的字段，正确的做法是两边都不发。
+ */
 export function buildRunContext(
   context: ThreadRunContextInput,
-  threadId: string,
   extraContext?: Record<string, unknown>,
   model?: Model | null,
 ): Record<string, unknown> {
@@ -96,7 +111,6 @@ export function buildRunContext(
     reasoning_effort:
       normalized.reasoning_effort ??
       (mode === undefined ? undefined : REASONING_EFFORT_BY_MODE[mode]),
-    thread_id: threadId,
   };
   return result;
 }

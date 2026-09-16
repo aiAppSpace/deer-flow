@@ -136,26 +136,34 @@ export interface UseThreadStreamOptions {
 const noopNotifier: ThreadStreamNotifier = { warn: () => {}, error: () => {} };
 
 /**
- * `useStream` 原本会根据消息读取和回调自动推导这四种模式。Vue 的自研
- * transport 没有那层隐式记账，所以每个创建 run 的入口都必须显式携带同一组：
- * `messages-tuple` 提供文本/tool-call 分片，`values` 提供完整状态，另外两种
- * 分别驱动标题更新和自定义任务/gap 事件。漏掉整个字段时 Gateway 会退回
- * `values`-only，SSE 仍然连接着，但回答只能按完整状态成段刷新。
+ * 每个创建 run 的入口都显式携带同一组，**与上游逐字相同**：`messages-tuple`
+ * 提供文本/tool-call 分片，`updates` 提供每个节点写了哪些通道（状态由它累积），
+ * `custom` 驱动自定义任务/gap 事件。漏掉整个字段时 Gateway 会退回 `values`-only，
+ * SSE 仍然连着，但回答只能按完整状态成段刷新——所以字段必须在，值必须是这三个。
+ *
+ * **不订 `values`（wave 216 去掉）。** 上游 SDK 的 wire 上也没有它，状态同样靠
+ * `updates` 累积（`reduceUpdates` 的 `patch-state` 本来就实现了这件事）。
+ * 多订一个 `values` 不只是多一个字符串：`values` 是全量快照，里面**用户刚发出的
+ * 那条 human 消息没有 id**（两个应用发出去的消息本来就不带 id），于是本仓要给它
+ * 编一个 `values-0` 这样的位置键，而 `getLatestEditableTurn` 会据此认为这一轮可编辑、
+ * 画出「编辑并重新运行」——那颗键按下去会把 `values-0` 交给
+ * `POST /runs/edit-regenerate/prepare`，服务端解析不了。
+ * `isSyntheticValuesMessageId` 那一套是为这件事打的补丁；**这里拔的是根**。
  */
-const THREAD_STREAM_MODES = [
-  "values",
-  "messages-tuple",
-  "updates",
-  "custom",
-] as const;
+const THREAD_STREAM_MODES = ["messages-tuple", "updates", "custom"] as const;
 
 /**
  * Match the React SDK boundary exactly: DeerFlow keeps a disconnected run alive,
  * while the client resumes through Content-Location + Last-Event-ID rather than
  * requesting an unsupported server-side resumable stream.
+ *
+ * `stream_resumable` is deliberately absent (wave 216). The Gateway declares it
+ * as `Literal[False] | None` with a `None` default — "compatibility placeholder;
+ * only the SDK's non-resumable default is accepted" (`run_models.py`) — so
+ * sending `false` and sending nothing are the same request. The SDK omits it,
+ * and a key that can only ever carry its own default is noise on the wire.
  */
 const THREAD_RUN_TRANSPORT_OPTIONS = {
-  stream_resumable: false,
   on_disconnect: "continue",
 } as const;
 
@@ -802,7 +810,6 @@ export function useThreadStream(options: UseThreadStreamOptions) {
           config: { recursion_limit: 1000 },
           context: buildRunContext(
             toValue(context),
-            targetThreadId,
             extraContext,
             model ? toValue(model) : undefined,
           ),
@@ -921,7 +928,6 @@ export function useThreadStream(options: UseThreadStreamOptions) {
           config: { recursion_limit: 1000 },
           context: buildRunContext(
             toValue(context),
-            targetThreadId,
             undefined,
             model ? toValue(model) : undefined,
           ),

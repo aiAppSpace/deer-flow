@@ -307,6 +307,20 @@ Chromium browser runtime 证明握手、REST 和二进制帧。最后一层的�
   边界，实际 open section 由 route query 决定；关闭仅移除 `settings`，保留其余 query/hash。
   Gateway banner 复用唯一 session Query，并立即观察 middleware 预填的 unavailable 状态，
   因此恢复通知不依赖组件先于路由守卫挂载。
+- **单条线程的元数据（`GET /threads/{id}`）是一个有 key 的查询，不是一次命令式请求。**
+  `useThreadMetadata` 拥有 `threadMetadataQueryKey`（`core/threads/metadata.ts` 是
+  它唯一的定义处），归档、移到项目、run 结束、改名四处都失效同一颗 key。
+  **这一层此前是缺的，而那四处已经按它存在来写了**——没有拥有者，
+  `invalidateQueries` 找不到观察者，四处全是空操作。403/404 在 queryFn 里归一成
+  `null`（= 线程不存在），其余错误照抛（= 判不出来），判据在
+  `core/threads/thread-presence.ts`：一次瞬时 5xx 不许把用户退回新会话。
+  查询按 `routeThreadId` 走，所以切线程时存在性判定跟着换，不会拿上一条的结论。
+- **run 的 `stream_mode` 只有 `messages-tuple` / `updates` / `custom`，与上游逐字相同。**
+  状态由 `updates` 累积（`reduceUpdates` 的 `patch-state`）。**不要加回 `values`**：
+  全量快照里用户刚发出的那条 human 消息没有 id，本仓得给它编一个位置键，
+  而「编辑并重新运行」会把那个假 id 交给后端，服务端解析不了——
+  `isSyntheticValuesMessageId` 是为此打的补丁，根因是多订了 `values`。
+  `stream_resumable` 也不发：Gateway 把它声明成 `Literal[False] | None` 的兼容占位。
 - **侧栏里每个查询由「抽屉里面」的那颗组件持有，不由抽屉外面的 `ThreadSidebar` 持有。**
   `WorkspaceNavChatList` 持有 `GET /api/features`，`WorkspaceChannelsList` 持有
   `GET /api/channels/providers`，`RecentChatList` 持有 `POST /api/threads/search`；

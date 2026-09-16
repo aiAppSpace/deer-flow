@@ -824,9 +824,14 @@ test.describe("Agent chat", () => {
         regenerate_from_run_id: `run-${MOCK_THREAD_ID}`,
         regenerate_checkpoint_id: "checkpoint-before-human",
       },
+      /*
+        **`thread_id` 不在 context 里**（wave 216 两边同改）：Gateway 的
+        `build_run_config` 写着 `context["thread_id"] = thread_id`，取的是 URL
+        路径里的那一个，客户端传什么都被当场覆盖；上游那一侧发的还是错的
+        （提交时预生成的 draft id，不是后端真建出来的线程）。
+      */
       context: {
         agent_name: "test-agent",
-        thread_id: MOCK_THREAD_ID,
       },
     });
   });
@@ -988,9 +993,14 @@ test.describe("Agent chat", () => {
         edit_message_id: replacementHumanMessage.id,
         edit_version_group_id: humanMessage.id,
       },
+      /*
+        **`thread_id` 不在 context 里**（wave 216 两边同改）：Gateway 的
+        `build_run_config` 写着 `context["thread_id"] = thread_id`，取的是 URL
+        路径里的那一个，客户端传什么都被当场覆盖；上游那一侧发的还是错的
+        （提交时预生成的 draft id，不是后端真建出来的线程）。
+      */
       context: {
         agent_name: "test-agent",
-        thread_id: MOCK_THREAD_ID,
       },
     });
     await expect(page.getByText("Edited agent question")).toBeVisible();

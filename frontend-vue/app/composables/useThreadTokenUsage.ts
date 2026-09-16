@@ -4,6 +4,14 @@
   【主要导出】     useThreadTokenUsage
   【依赖关系】     core/threads/api · token-usage
   【边界与注意】   placeholder 只能留在同一 thread；跨路由不得闪回上一线程 usage。
+
+                   **`queryFn` 自己挡空 threadId，不能只靠 `enabled`。**
+                   `refetch()` 按 TanStack 的设计就是**绕过 `enabled`** 的强制取数，
+                   而本仓 run 落定之后正有一处这样的调用（`AgentChat` 的
+                   `refreshPostRun`）。原来这里写的是 `fetchThreadTokenUsage(threadId.value!)`
+                   ——那个 `!` 等于在说「enabled 保证非空」，而这条保证对 `refetch()`
+                   不成立：实测发出过 `GET /api/threads/null/token-usage`，
+                   字面量 `null` 直接拼进了 URL（wave 216 对照尺子量到）。
 */
 
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
@@ -23,7 +31,12 @@ export function useThreadTokenUsage(
   const threadId = computed(() => toValue(threadIdInput) ?? null);
   const query = useQuery({
     queryKey: computed(() => threadTokenUsageQueryKey(threadId.value)),
-    queryFn: () => fetchThreadTokenUsage(threadId.value!),
+    queryFn: () => {
+      const id = threadId.value;
+      // 见文件头：refetch() 绕过 enabled，空 id 必须在这里挡住。
+      if (!id) return null;
+      return fetchThreadTokenUsage(id);
+    },
     enabled: computed(
       () => Boolean(threadId.value) && toValue(options.enabled ?? true),
     ),

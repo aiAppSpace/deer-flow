@@ -43,6 +43,7 @@ import {
 } from "@/core/projects";
 import { moveThreadToProject } from "@/core/threads/api";
 import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
+import { threadMetadataQueryKey } from "@/core/threads/metadata";
 import { THREAD_PROJECT_METADATA_KEY } from "@/core/threads/utils";
 
 /** 与上游 `PROJECT_THREADS_PAGE_SIZE` 同值：两边翻页边界一致才好对照。 */
@@ -153,7 +154,7 @@ export function useMoveThreadToProject(options?: {
     }) => moveThreadToProject(threadId, projectId),
     onError: options?.onError,
     async onSuccess(_response, { threadId, projectId }) {
-      const metadataKey = ["thread", "metadata", threadId] as const;
+      const metadataKey = threadMetadataQueryKey(threadId);
       await queryClient.cancelQueries({ queryKey: metadataKey });
       queryClient.setQueriesData<Record<string, unknown> | undefined>(
         { queryKey: metadataKey },

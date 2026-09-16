@@ -355,15 +355,42 @@ describe("Playwright 的录制策略与重试次数不许自相矛盾", () => {
   ——照 LOCKSTEP 那条的思路，只在真正分叉的那一刻红。
 */
 const ciRoot = fileURLToPath(new URL("../../../.github/", import.meta.url));
-const WORKFLOW = "workflows/frontend-vue-verify.yml";
+const WORKFLOW_DIR = "workflows";
+/**
+ * 至少要在的那份工作流。
+ *
+ * **不写成「只读这一份」**：第三十七轮把对照套件放进了
+ * `frontend-vue-parity.yml`（它的 `paths:` 必须含 `frontend/**`，塞进 verify
+ * 那份会让每个 React 提交白跑三条 job）。如果这条守卫继续只读 verify 那一份，
+ * 新 job 就是**这条判据够不着的地方**——而它起的正是真 Gateway。
+ * 一条只覆盖旧文件的守卫和没有守卫长得一模一样。
+ */
+const REQUIRED_WORKFLOW = "frontend-vue-verify.yml";
 
 /** 跑这些 target 的 job 要起真的 Gateway。 */
-const NEEDS_GATEWAY = ["e2e-backend", "e2e-external", "e2e-browser"];
+const NEEDS_GATEWAY = [
+  "e2e-backend",
+  "e2e-external",
+  "e2e-browser",
+  // 也起 replay Gateway（playwright.parity.config.ts 的 servers[0]）。
+  "e2e-parity",
+  "e2e-parity-auth",
+];
 /** 起真 Gateway 就必须有的两行。 */
 const GATEWAY_SETUP = [
   "uv sync --group dev --extra browser",
   "uv run playwright install --with-deps chromium",
 ];
+
+/**
+ * 跑这些 target 的 job 必须把 `PARITY_REQUIRE_REACT=1` 打开。
+ *
+ * 缺了它，`../frontend` 一旦不在 checkout 里，四份 spec 的
+ * `test.skip(!reactAppPresent)` 会让整组跳过、退出 0——CI 一片绿而一条都没量。
+ * 理由全文在 tests/e2e-parity/support/react-preview.ts 的注释里。
+ */
+const NEEDS_REACT_REQUIRED = ["e2e-parity", "e2e-parity-auth"];
+const REACT_REQUIRED_LINE = 'PARITY_REQUIRE_REACT: "1"';
 
 /** 按两格缩进的 `<name>:` 切 job。 */
 function workflowJobs(text: string): Map<string, string> {
@@ -384,43 +411,84 @@ function workflowJobs(text: string): Map<string, string> {
   return new Map([...jobs].filter(([, body]) => body.includes("steps:")));
 }
 
+/**
+ * `.github/workflows/` 下每一份工作流里的每一个 job，键是 `文件名 / job 名`。
+ *
+ * **扫整个目录而不是点名文件**：点名的那一刻，下一份工作流就自动落在判据之外。
+ */
+function allWorkflowJobs(): Map<string, string> {
+  const dir = join(ciRoot, WORKFLOW_DIR);
+  const files = readdirSync(dir).filter(
+    (name) => name.endsWith(".yml") || name.endsWith(".yaml"),
+  );
+  if (!files.includes(REQUIRED_WORKFLOW))
+    throw new Error(
+      `.github 在 checkout 里，但 ${REQUIRED_WORKFLOW} 不在——工作流被挪了，跟进这条断言`,
+    );
+  const jobs = new Map<string, string>();
+  for (const file of files)
+    for (const [name, body] of workflowJobs(
+      readFileSync(join(dir, file), "utf8"),
+    ))
+      jobs.set(`${file} / ${name}`, body);
+  return jobs;
+}
+
 describe("起真 Gateway 的 CI job 装配一致", () => {
-  // `.github` 整个不在（本模块被单独移走）→ 明确跳过；目录在而文件不在 → 抛错。
-  const text = existsSync(ciRoot)
-    ? (() => {
-        const path = join(ciRoot, WORKFLOW);
-        if (!existsSync(path))
-          throw new Error(
-            `.github 在 checkout 里，但 ${WORKFLOW} 不在——工作流被挪了，跟进这条断言`,
-          );
-        return readFileSync(path, "utf8");
-      })()
-    : null;
+  // `.github` 整个不在（本模块被单独移走）→ 明确跳过。
+  const jobs = existsSync(ciRoot) ? allWorkflowJobs() : null;
+
+  /** 跑了 `targets` 里任意一个 target 的 job。 */
+  function jobsRunning(targets: readonly string[]) {
+    return [...jobs!].filter(([, body]) =>
+      targets.some((target) => body.includes(`make ${target}`)),
+    );
+  }
 
   it("形状先断言：切得出 job，而且真有 job 需要 Gateway", () => {
-    if (text === null) return;
-    const jobs = workflowJobs(text);
+    if (jobs === null) return;
     expect(jobs.size).toBeGreaterThan(2);
-    const needing = [...jobs].filter(([, body]) =>
-      NEEDS_GATEWAY.some((target) => body.includes(`make ${target}`)),
-    );
-    // 空集上恒真：切 job 的正则失效会让下面那条静默全绿。
-    expect(needing.length).toBeGreaterThan(1);
+    // 空集上恒真：切 job 的正则失效会让下面那些条静默全绿。
+    expect(jobsRunning(NEEDS_GATEWAY).length).toBeGreaterThan(1);
+    expect(jobsRunning(NEEDS_REACT_REQUIRED).length).toBeGreaterThan(0);
   });
 
   it("每个需要 Gateway 的 job 都装了浏览器依赖", () => {
-    if (text === null) return;
+    if (jobs === null) return;
     const missing: string[] = [];
-    for (const [name, body] of workflowJobs(text)) {
-      if (!NEEDS_GATEWAY.some((target) => body.includes(`make ${target}`)))
-        continue;
+    for (const [name, body] of jobsRunning(NEEDS_GATEWAY))
       for (const line of GATEWAY_SETUP)
         if (!body.includes(line)) missing.push(`${name} 缺：${line}`);
-    }
     expect(
       missing,
       "这个 job 会起真的 Gateway，而 Gateway 启动要 Playwright——" +
         "缺了它整条 job 红，而本机因为 venv 里装着而照旧绿。",
+    ).toEqual([]);
+  });
+
+  /*
+    对照套件这一条与上面那条是同一个形状的判据，只是失败方向相反：
+    上面那条缺了会**红**，这一条缺了会**绿**——绿在一条什么都没量的运行上。
+    后者更难发现，所以它必须由机器守着。
+  */
+  it("跑对照套件的 job 都要求兄弟应用真的在场", () => {
+    if (jobs === null) return;
+    const running = jobsRunning(NEEDS_REACT_REQUIRED);
+    // job 级找不到就去它所在的文件级 `env:` 里找（本仓写在文件级，两个 job 共用）。
+    const dir = join(ciRoot, WORKFLOW_DIR);
+    const missing = running
+      .filter(([name, body]) => {
+        if (body.includes(REACT_REQUIRED_LINE)) return false;
+        const file = name.split(" / ")[0]!;
+        return !readFileSync(join(dir, file), "utf8").includes(
+          REACT_REQUIRED_LINE,
+        );
+      })
+      .map(([name]) => `${name} 缺：${REACT_REQUIRED_LINE}`);
+    expect(
+      missing,
+      "没有它，`../frontend` 不在 checkout 里时四份 spec 整组 skip、退出 0——" +
+        "一条量不到任何东西的绿，而它和真绿长得一模一样。",
     ).toEqual([]);
   });
 });

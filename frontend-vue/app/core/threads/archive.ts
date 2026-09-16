@@ -27,6 +27,7 @@ import {
 import { projectKeys } from "@/core/projects/query-keys";
 
 import { patchThreadMetadata, type ThreadMetadataPatchResponse } from "./api";
+import { threadMetadataQueryKey } from "./metadata";
 import {
   INFINITE_THREADS_QUERY_KEY_PREFIX,
   mapInfiniteThreadsCache,
@@ -71,7 +72,7 @@ export function setThreadMetadataInCaches(
       ),
   );
   queryClient.setQueriesData<AgentThread | null>(
-    { queryKey: ["thread", "metadata", threadId] },
+    { queryKey: threadMetadataQueryKey(threadId) },
     (old) => (old ? merge(old) : old),
   );
 }
@@ -84,7 +85,7 @@ export function useArchiveThread(options: ArchiveThreadOptions = {}) {
         [THREAD_ARCHIVED_METADATA_KEY]: archived,
       }),
     async onSuccess(response, { threadId, archived }) {
-      const metadataKey = ["thread", "metadata", threadId] as const;
+      const metadataKey = threadMetadataQueryKey(threadId);
       await Promise.all([
         queryClient.cancelQueries({
           queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,

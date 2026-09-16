@@ -2210,6 +2210,17 @@ export function useThreadStream({
             config: {
               recursion_limit: 1000,
             },
+            /*
+              No `thread_id` here. The Gateway overwrites it unconditionally in
+              `build_run_config` — `context["thread_id"] = thread_id`, taken from
+              the URL path, with its own comment saying "thread_id comes from the
+              URL path, not caller config". So the key never reaches the agent as
+              anything but the path's value, and what we used to put in it was
+              wrong anyway: `threadId` here is the draft id the client minted
+              before submitting, while the run goes to whatever thread the backend
+              actually created. Measured on the parity harness as a request-body
+              difference against the Vue app. Removed on both frontends together.
+            */
             context: {
               ...extraContext,
               ...context,
@@ -2225,7 +2236,6 @@ export function useThreadStream({
                     : context.mode === "thinking"
                       ? "low"
                       : undefined),
-              thread_id: threadId,
             },
           },
         );
@@ -2335,6 +2345,7 @@ export function useThreadStream({
           config: {
             recursion_limit: 1000,
           },
+          // No `thread_id` — see the note on the main submit path above.
           context: {
             ...context,
             thinking_enabled: context.mode !== "flash",
@@ -2349,7 +2360,6 @@ export function useThreadStream({
                   : context.mode === "thinking"
                     ? "low"
                     : undefined),
-            thread_id: threadId,
           },
         });
         void queryClient.invalidateQueries({ queryKey: ["thread", threadId] });

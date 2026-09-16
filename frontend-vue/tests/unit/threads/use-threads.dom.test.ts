@@ -200,8 +200,20 @@ describe("useThreads server-state owner", () => {
     // 真的又问了一次后端，而且收敛到了服务端返回的那一份：第 3 步的机器证据。
     expect(searchThreadsByArchive).toHaveBeenCalledTimes(2);
     expect(titleNow()).toBe(serverTitle);
-    // 项目页那张 REST 列表是普通 enabled 查询，失效就够。
-    expect(invalidated).toEqual([["projects", "threads"]]);
+    /*
+      项目页那张 REST 列表是普通 enabled 查询，失效就够。
+
+      **单条线程的元数据查询也要失效**（wave 216）：`useThreadMetadata` 持有
+      同一条线程的 `values.title`，改完名不让它重读，那份缓存就留着旧标题。
+      在此之前本仓根本没有这个查询，于是全仓对 `["thread","metadata",id]` 的
+      三处失效（归档、移到项目、run 结束）**都是空操作**——对照台账
+      `thread-title-sync` 上那条 `requestsOnlyReact: GET /langgraph/threads/{id}`
+      就是这个缺口。
+    */
+    expect(invalidated).toEqual([
+      ["projects", "threads"],
+      ["thread", "metadata", "t-1"],
+    ]);
 
     wrapper.unmount();
     queryClient.clear();

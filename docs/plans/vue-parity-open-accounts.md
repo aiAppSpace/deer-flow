@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-17 第三十五轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-17 第三十六轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -44,11 +44,11 @@
 > | E/F/H + 其余 | — | **7 条 / 9 投影** | 未动（tooltip 播报节点 / 焦点落点 / alert 播报 / `div(menuitem)`） |
 >
 > **现状读数**（2026-09-17 第三十五轮 accept 之后的签入基线）：
-> **147 场景-维度 / 3 唯一行 / 2 条不同的差异 / 3 个投影**，起点是 170 个投影。
+> **147 场景-维度 / 0 唯一行 / 0 多重集 / 0 条不同的差异**，起点是 170 个投影。
 >
-> **只剩两条，逐条判词写在第三十五轮条目的第六节**：
-> `thread-title-sync` 那 2 个是架构差异（已退让、有翻案判据），
-> `runs/stream` 那 1 个是欠账（`stream_mode` 多订 `values`，下一轮还）。
+> **清零了，但 0 不等于对齐完成**：台账只覆盖这 147 个场景-维度，
+> 取样面之外它一个字都没说。覆盖率棘轮 covered 37 / pending 1 / exempt 3。
+> 边界说明与下一轮三条方向写在 `NEXT-WINDOW.md`，**那份是当前版本**。
 
 ### 归族与还账路径（**还账前**的快照，35 条差异条目，分组一律写「N 条差异条目」）
 
@@ -169,6 +169,92 @@ EOF
 - **覆盖率棘轮现状**：covered **37** / pending **1** / exempt **3**。
   `covered` 与场景目录逐字相等由棘轮守卫钉着（`e2e-parity` 150 passed 里验过），
   **不需要也不该再用正则去数一遍**。
+
+---
+
+
+> ## 2026-09-17 第三十六轮：**最后两条——一条是本仓缺了一层，一条是两边都在发空转字段**
+>
+> ### 一、`stream_mode` 拔掉 `values`
+>
+> 上游 wire 上是 `["messages-tuple","updates","custom"]`，本仓多一个 `"values"`。
+> **这不是多一个字符串**：`values` 是全量快照，里面用户刚发出的那条 human 消息
+> **没有 id**（两个应用发出去的消息本来就不带 id），于是 `reduceValues` 要给它编
+> 一个 `values-0` 这样的位置键；`getLatestEditableTurn` 据此认为这一轮可编辑、
+> 画出「编辑并重新运行」，而那颗键按下去会把 `values-0` 交给
+> `POST /runs/edit-regenerate/prepare`，**服务端解析不了**。
+> `isSyntheticValuesMessageId` 是为这件事打的补丁，**这一轮拔的是根**。
+>
+> 状态改由 `updates` 累积——`reduceUpdates` 的 `patch-state` 本来就在做这件事，
+> 上游 SDK 也是这么维护 `thread.values` 的。
+> **判据是真后端**：`make e2e-backend` 八个套件 22 条全绿，todos / goal / 最终状态照常到。
+>
+> `stream_resumable` 一起去掉：Gateway 把它声明成 `Literal[False] | None`、默认 `None`
+> （`run_models.py` 写着「compatibility placeholder」），发 `false` 与不发是同一个请求。
+>
+> **顺带订正了一条已经变假的门禁注释**：`chat-dataflow.spec.ts` 里写着
+> 「wave 42 用一次性 probe 打上游的 mock 后端」量到上游键集含 `stream_resumable`、
+> `stream_mode` 含 `values`——而 `e2e-parity` 的 `requestBodies` 档每轮都在真跑两个
+> 应用录真请求体，它记的上游值两者都没有。**一次性 probe 与常驻尺子矛盾时以尺子为准**；
+> 那条过期读数把本仓多发的两处钉成了「合同」。
+>
+> ### 二、补上 `useThreadMetadata` 这一层（`thread-title-sync` 那 2 个投影）
+>
+> 上一轮把这条判成「架构差异、退让」，**这一轮查出来判错了**：本仓
+> `core/threads/archive.ts`、`composables/useProjects.ts`、
+> `core/threads/cache-invalidation.ts`、`useThreads.rename` **四处**都在
+> cancel / setQueriesData / invalidateQueries `["thread","metadata",threadId]`，
+> 而**没有任何查询拥有这个 key**——四处全是空操作。归档、移到项目、run 结束、改名
+> 都以为自己重读了这条线程，其实什么都没发生。
+>
+> **那不是「本仓不需要」，是「本仓缺了那一层，而好几处已经按它存在来写了」。**
+> 新增 `useThreadMetadata`（key 收进 `core/threads/metadata.ts`，消灭四处字面量），
+> 把 `AgentChat` 里那次命令式探测换成它。顺带修掉一个真缺陷：原来的探测只在
+> `onMounted` 打一次、用的是 `initialRouteThreadId`，而 `AgentChat` 切线程并不重建
+> ——**切到一条已被删除的线程不会被退回新会话**。改成查询之后按 key 隔离，自然就对了。
+>
+> ### 三、`context.thread_id`：两边都在发一个服务端保证丢弃的值
+>
+> 剩下那条 `requestBodies` 差异最后只剩 `context.thread_id`：
+> React 是一个被尺子归一成 `«generated»` 的 id、本仓是夹具线程 id，而 **URL 是同一条线程**。
+>
+> **去后端查了才判的**：`services.py` 的 `build_run_config` 里写着
+> `context["thread_id"] = thread_id`，注释明写「thread_id comes from the URL path,
+> not caller config」——客户端传什么都会被当场覆盖。也就是说这颗键**完全空转**；
+> 而上游发的还是**错的那一个**（`sendMessage(threadId, …)` 拿到的是提交那一刻客户端
+> 预生成的 draft id，run 却打到后端真正创建出来的线程）。
+>
+> 一个服务端保证丢弃、且有一侧一直发错的字段——**两边都不发**才是对的。
+>
+> ### 四、复量时冒出来的两处，都是同一个形状：重复的取数
+>
+> - 加完查询后 `chat-thread-init-ordering` 上多出 `requestsOnlyVue`：本仓在那一屏
+>   **发两次** `GET /threads/{id}`，一次是新查询、一次是 `refreshPostRun` 里命令式打的。
+>   上游只有一次——它靠 `runInFlight` 翻假之后让查询自己重取。本仓照同一条机制：
+>   查询的 `enabled` 带 `!isStreaming`，`refreshPostRun` 不再自己打。
+> - 那个 `!isStreaming` 与本仓历史查询那道门（`enabled: Boolean(threadId) && !isStreaming`）
+>   **是同一条理由**：`/chats/new` 提交之后 threadId 由 `onStart` 交出来，那一刻 run 已经
+>   在流，此时取回来的是 run 之前的世界。
+>
+> ### 五、去掉那次重复取数之后，尺子当场照出另一个真 bug
+>
+> 复量只剩一行，而那一行是 `requestsOnlyVue: GET /api/threads/**null**/token-usage`
+> ——**字面量 `null` 拼进了 URL**。
+>
+> 根因：`useThreadTokenUsage` 的 `queryFn` 写的是
+> `fetchThreadTokenUsage(threadId.value!)`，那个 `!` 等于在说「`enabled` 保证非空」，
+> 而 **`refetch()` 按 TanStack 的设计就是绕过 `enabled` 的强制取数**，
+> `refreshPostRun` 在 run 落定之后正好有这么一次调用。
+>
+> **它此前一直藏着**：`refreshPostRun` 里在 refetch 之前还命令式打了一次
+> `threads.get()`，那次 await 恰好把路由更新等到了。把那次重复取数去掉之后
+> （它本身是与上游对不上的一条多发），这个缺陷当场显形。
+> **一处重复请求把另一处缺陷遮住了**——这也是"多发一个请求"值得当账还的理由之一。
+>
+> 修法是让 `queryFn` 自己挡空 id（与 `useThreadMetadata` 同形），
+> 而不是在调用点小心翼翼地不去 refetch：任何一处 `refetch()` 都不该能拼出 `null`。
+> 门禁：`tests/unit/threads/use-thread-token-usage.dom.test.ts` 的
+> 「threadId 为空时 refetch() 也不发请求」。
 
 ---
 

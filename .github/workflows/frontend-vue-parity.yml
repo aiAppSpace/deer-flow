@@ -1,0 +1,211 @@
+# The React-vs-Vue parity ledger, run by a machine that is not one laptop.
+#
+# Why this is a separate workflow and not three more jobs in
+# `frontend-vue-verify.yml`: every gate here needs **both** applications'
+# `node_modules`, so its path filter has to include `frontend/**` — a React-only
+# change can move the ledger, that is the entire point of measuring drift. Adding
+# `frontend/**` to the verify workflow instead would drag `verify`,
+# `real-backend` and `external-gates` along on every React commit for nothing.
+#
+# Before this file existed, `frontend-vue/README.md` said of these suites: "a
+# cost decision that has never actually been made -- they are local-only by
+# default, not by design, which means the ledger that this whole effort is
+# measured by is never checked by a machine that isn't this laptop." The cost is
+# real (two production builds per job), so it is spent under a path filter
+# rather than on every push.
+name: frontend-vue parity
+
+on:
+  push:
+    paths:
+      - "frontend-vue/**"
+      # The other side of the comparison. Upstream drift lands here.
+      - "frontend/**"
+      - "contracts/**"
+      - "backend/app/gateway/**"
+      - "backend/packages/harness/deerflow/runtime/**"
+      - "backend/scripts/run_replay_gateway.py"
+      - "backend/tests/fixtures/replay/**"
+      - "backend/tests/replay_provider.py"
+      - "backend/tests/_replay_fixture.py"
+      - "backend/tests/seed_runs_router.py"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - "scripts/pnpm.py"
+      - ".github/workflows/frontend-vue-parity.yml"
+  pull_request:
+    # Duplicated, not anchored: the GitHub Actions workflow parser does
+    # not resolve YAML aliases.
+    paths:
+      - "frontend-vue/**"
+      # The other side of the comparison. Upstream drift lands here.
+      - "frontend/**"
+      - "contracts/**"
+      - "backend/app/gateway/**"
+      - "backend/packages/harness/deerflow/runtime/**"
+      - "backend/scripts/run_replay_gateway.py"
+      - "backend/tests/fixtures/replay/**"
+      - "backend/tests/replay_provider.py"
+      - "backend/tests/_replay_fixture.py"
+      - "backend/tests/seed_runs_router.py"
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - "scripts/pnpm.py"
+      - ".github/workflows/frontend-vue-parity.yml"
+
+concurrency:
+  group: fe-vue-parity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Without the sibling app every parity spec calls `test.skip(!reactAppPresent)`
+  # and the suite exits 0 having asserted nothing — the exact shape of gate this
+  # project keeps getting burned by. This flag makes `react-preview.ts` throw
+  # instead of skipping, so a checkout that loses `../frontend` fails loudly
+  # here while `make e2e-parity` on a developer machine still skips politely.
+  # Pinned by tests/guards/tooling-contracts.test.ts.
+  PARITY_REQUIRE_REACT: "1"
+
+jobs:
+  # The ledger itself: 147 scenario-dimensions across twelve comparison lanes,
+  # plus the topology, scenario and sidebar specs. Serial by construction — the
+  # two apps must observe the same Gateway state, so nothing here parallelises.
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          # Must match backend/Dockerfile's UV_IMAGE tag; pinned by backend/tests/test_ci_uv_version_pin.py
+          version: "0.11.1"
+
+      # Verbatim the same two lines as real-backend and external-gates: this job
+      # starts a *real* replay Gateway too, and Gateway startup loads the browser
+      # tools declared in the repo-root config.yaml. Pinned by
+      # tests/guards/tooling-contracts.test.ts.
+      - name: Install replay Gateway and browser dependencies
+        working-directory: backend
+        run: |
+          uv sync --group dev --extra browser
+          uv run playwright install --with-deps chromium
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install frontend-vue dependencies
+        run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
+
+      # The sibling app. `scripts/pnpm.py` runs Corepack from the selected
+      # workspace, so frontend/'s own pinned pnpm is used here, not this one's.
+      # Not --strict-peer-dependencies: that is frontend-vue's policy, and the
+      # sibling's lockfile is upstream's to set.
+      - name: Install frontend dependencies
+        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: frontend-vue
+        run: make e2e-install
+
+      # Icons, icon sizes and button variants never enter the accessibility
+      # tree, so no ARIA or screenshot gate can reach them. It was local-only
+      # for one reason only — "no existing workflow installs both apps'
+      # node_modules" — which stopped being true two steps ago. Cheap (a source
+      # scan, no servers), and it fails on a stale exemption, so it runs first.
+      - name: Compare icons, icon sizes and button variants
+        working-directory: frontend-vue
+        run: make icon-parity
+
+      - name: Measure the React-vs-Vue parity ledger
+        working-directory: frontend-vue
+        run: make e2e-parity
+
+      # The ledger's own failure evidence. `keep-e2e-failure-artifacts.mjs`
+      # moves the run's traces to test-results/failures/ precisely so a rerun
+      # cannot erase them; on a hosted runner "the files are still on disk"
+      # means nothing unless they leave the runner.
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-failures
+          path: |
+            frontend-vue/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Login and setup: the first screen every user sees, and the one the main
+  # parity suite can never reach. Auth is a build-time decision, so these are
+  # different builds of both apps rather than more scenarios — see the header of
+  # playwright.parity-auth.config.ts.
+  parity-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          # Must match backend/Dockerfile's UV_IMAGE tag; pinned by backend/tests/test_ci_uv_version_pin.py
+          version: "0.11.1"
+
+      - name: Install replay Gateway and browser dependencies
+        working-directory: backend
+        run: |
+          uv sync --group dev --extra browser
+          uv run playwright install --with-deps chromium
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install frontend-vue dependencies
+        run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
+
+      - name: Install frontend dependencies
+        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: frontend-vue
+        run: make e2e-install
+
+      - name: Measure the login and setup screens
+        working-directory: frontend-vue
+        run: make e2e-parity-auth
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-auth-failures
+          path: |
+            frontend-vue/test-results/**
+          if-no-files-found: ignore
+          retention-days: 7

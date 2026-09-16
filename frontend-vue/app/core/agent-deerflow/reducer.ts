@@ -106,8 +106,17 @@ const MESSAGES_CHANNEL = "messages";
  * 画出了「编辑并重新运行」。**那颗键点下去会把 `values-0` 交给
  * `POST /runs/edit-regenerate/prepare`，服务端解析不了。**
  * 上游没有这个分支，因为它的 `stream_mode` 里根本没有 `values`
- * （实测：上游 `["messages-tuple","updates","custom"]`，本仓多一个 `"values"`）。
+ * （实测：上游 `["messages-tuple","updates","custom"]`）。
  *
+ * **wave 216 起本仓的生产路径也不再订 `values`**，根因跟着拔掉了：
+ * `THREAD_STREAM_MODES` 只剩那三个，状态由 `updates` 累积
+ * （`reduceUpdates` 的 `patch-state` 本来就在做这件事），
+ * 所以真后端不会再发 `values` 事件，也就不会再有位置键进到 `AgentMessage.id` 上。
+ *
+ * **下面这一套仍然留着，它不再是补丁而是协议实现的完整性**：
+ * `stream_mode` 整个字段缺失时 Gateway 会退回 `values`-only，
+ * 而 e2e 夹具里也直接回放 `event: values`（见 `chat-dataflow.spec.ts`）。
+ * 收到 `values` 就得正确处理，处理就必须给无 id 的消息一个存储键。
  * 导出前缀与判据，是为了让「编了一个假 id」这件事**在一处定义、在别处认得出来**
  * ——调用点用 `isSyntheticValuesMessageId` 把这类 id 挡在需要真 id 的动作之外。
  */

@@ -15,6 +15,7 @@ import { computed, reactive, toValue, type MaybeRefOrGetter } from "vue";
 import { getAPIClient } from "@/core/api/api-client";
 import { projectKeys } from "@/core/projects/query-keys";
 import { removeDeletedThreadCaches } from "@/core/threads/cache-invalidation";
+import { threadMetadataQueryKey } from "@/core/threads/metadata";
 import {
   fetchInfiniteThreadsPage,
   getInfiniteThreadsNextPageParam,
@@ -299,11 +300,12 @@ export function useThreads(
     对照台账 `thread-title-sync` 上的 `requestsOnlyReact: POST /api/threads/search`
     就是这一步的缺席。
 
-    **没有跟上游的 `GET /api/langgraph/threads/{id}`**：那一条在上游是
-    `useThreadMetadata` 这个查询被 invalidate 触发的，而本仓的会话头部直接读列表缓存
-    （AgentChat.vue 的 `headerTitle`），没有第二个查询要收敛。为了对上一条请求计数
-    去发一个没人读的请求，是搬运不是对齐。判词记在
-    docs/plans/vue-parity-open-accounts.md。
+    **第 3 步在 wave 216 补齐了第二个端点。** 此前这里写着「本仓没有第二个查询要
+    收敛，为了对上一条请求计数去发一个没人读的请求是搬运不是对齐」——那句话当时
+    成立，但它描述的是**一个缺口**而不是一个设计：本仓那时对
+    `["thread","metadata",id]` 的三处失效（归档、移到项目、run 结束）**全是空操作**，
+    因为没有任何查询拥有这个 key。`useThreadMetadata` 把那一层补上之后，
+    这里也必须失效它，否则改完名那条线程的元数据缓存留着旧标题。
   */
   async function rename(threadId: string, title: string) {
     await apiClient.threads.updateState(threadId, { values: { title } });
@@ -332,6 +334,14 @@ export function useThreads(
     */
     void queryClient.invalidateQueries({
       queryKey: projectKeys.threadsPrefix(),
+    });
+    /*
+      单条线程的元数据查询（`useThreadMetadata`）也持有这条线程的 `values.title`，
+      改名之后必须让它重读——服务端会规范化标题（trim / 截断），
+      本地写进去的那个字符串不是最终事实。
+    */
+    void queryClient.invalidateQueries({
+      queryKey: threadMetadataQueryKey(threadId),
     });
   }
 

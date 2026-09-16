@@ -31,32 +31,41 @@ describe("buildRunContext", () => {
       { thinking: false, plan: false, subagent: false, effort: undefined },
     ],
   ] as const)("mode=%s 推导出固定的四个字段", (mode, expected) => {
-    const context = buildRunContext({ mode }, "thread-1");
+    const context = buildRunContext({ mode });
     expect(context).toMatchObject({
       thinking_enabled: expected.thinking,
       is_plan_mode: expected.plan,
       subagent_enabled: expected.subagent,
       reasoning_effort: expected.effort,
-      thread_id: "thread-1",
     });
+  });
+
+  /*
+    **`thread_id` 不在 context 里**（wave 216 去掉，两边同改）。
+    Gateway 的 `build_run_config` 写着 `context["thread_id"] = thread_id`，
+    取的是 **URL 路径**里的那一个，客户端传什么都会被当场覆盖；
+    上游那一侧发的还是错的（提交时预生成的 draft id，不是后端真建出来的线程）。
+    一个服务端保证丢弃、且有一侧一直发错的字段，两边都不发才是对的。
+  */
+  it("不带 thread_id：服务端按 URL 路径覆盖，传了也是空转", () => {
+    expect(buildRunContext({ mode: "flash" })).not.toHaveProperty("thread_id");
   });
 
   it("显式给的 reasoning_effort 覆盖 mode 推导", () => {
     expect(
-      buildRunContext({ mode: "ultra", reasoning_effort: "minimal" }, "t"),
+      buildRunContext({ mode: "ultra", reasoning_effort: "minimal" }),
     ).toMatchObject({ reasoning_effort: "minimal" });
   });
 
-  it("extraContext 在最外层被 context 覆盖，thread_id 始终最后写", () => {
-    const context = buildRunContext({ mode: "flash", agent_name: "a" }, "t", {
-      agent_name: "b",
-      extra: 1,
-    });
-    expect(context).toMatchObject({
-      agent_name: "a",
-      extra: 1,
-      thread_id: "t",
-    });
+  it("extraContext 在最外层被 context 覆盖", () => {
+    const context = buildRunContext(
+      { mode: "flash", agent_name: "a" },
+      {
+        agent_name: "b",
+        extra: 1,
+      },
+    );
+    expect(context).toMatchObject({ agent_name: "a", extra: 1 });
   });
 });
 

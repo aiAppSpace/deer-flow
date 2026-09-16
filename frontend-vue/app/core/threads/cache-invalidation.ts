@@ -29,6 +29,7 @@
 import type { InfiniteData, QueryClient } from "@tanstack/vue-query";
 
 import { threadHistoryQueryKey } from "./history";
+import { threadMetadataQueryKey } from "./metadata";
 import {
   filterInfiniteThreadsCache,
   INFINITE_THREADS_QUERY_KEY_PREFIX,
@@ -51,7 +52,7 @@ export const THREAD_CACHE_KEYS = {
   threadScoped: (threadId: string): readonly (readonly unknown[])[] => [
     ["thread", threadId],
     [...threadHistoryQueryKey(threadId)],
-    ["thread", "metadata", threadId],
+    [...threadMetadataQueryKey(threadId)],
     [...threadTokenUsageQueryKey(threadId)],
   ],
 } as const;

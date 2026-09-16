@@ -202,8 +202,7 @@ describe("useThreadStream · K3 编辑并重跑", () => {
     expect(ctx.fake.submissions.at(-1)).toMatchObject({
       threadId: "thread-1",
       payload: {
-        stream_mode: ["values", "messages-tuple", "updates", "custom"],
-        stream_resumable: false,
+        stream_mode: ["messages-tuple", "updates", "custom"],
         on_disconnect: "continue",
         input: {
           messages: [
@@ -396,22 +395,35 @@ const injectedHuman = {
 } as Message;
 
 describe("useThreadStream · production stream modes", () => {
-  it("普通发送显式请求消息分片、全量状态、更新与自定义事件", async () => {
+  /*
+    **这三个模式与上游 wire 上逐字相同，`values` 不在里面**（wave 216）。
+    状态由 `updates` 累积——`reduceUpdates` 的 `patch-state` 本来就是干这件事的。
+    多订 `values` 会带来一条真缺陷：全量快照里用户刚发出的那条 human 消息没有 id，
+    本仓得给它编 `values-0` 这种位置键，而「编辑并重新运行」会把它交给
+    `POST /runs/edit-regenerate/prepare`，服务端解析不了。判词写在
+    `useThreadStream.ts` 的 `THREAD_STREAM_MODES` 注释里。
+
+    `stream_resumable` 也不发：Gateway 把它声明成 `Literal[False] | None`、默认
+    `None`（`run_models.py` 的「compatibility placeholder」），发 `false` 与不发
+    是同一个请求，上游 SDK 也不发。
+  */
+  it("普通发送只请求消息分片、更新与自定义事件，且不带 stream_resumable", async () => {
     const ctx = mountStream();
 
     await ctx.api.sendMessage("thread-1", { text: "hi" });
 
     expect(ctx.fake.submissions).toHaveLength(1);
     expect(ctx.fake.submissions[0]?.payload.stream_mode).toEqual([
-      "values",
       "messages-tuple",
       "updates",
       "custom",
     ]);
     expect(ctx.fake.submissions[0]?.payload).toMatchObject({
-      stream_resumable: false,
       on_disconnect: "continue",
     });
+    expect(ctx.fake.submissions[0]?.payload).not.toHaveProperty(
+      "stream_resumable",
+    );
     ctx.wrapper.unmount();
   });
 
@@ -442,7 +454,6 @@ describe("useThreadStream · production stream modes", () => {
       is_plan_mode: true,
       subagent_enabled: false,
       reasoning_effort: "medium",
-      thread_id: "thread-1",
     });
     ctx.wrapper.unmount();
   });

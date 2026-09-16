@@ -424,18 +424,34 @@ function leadBlockquote(doc: string): string {
 describe("计划文档里的台账读数和签入基线一致", () => {
   const measures = measureLedger();
 
-  // 先钉住量法本身：这四个数必须都是正的，否则下面的全称断言在退化的读数上照样绿。
+  /*
+    先钉住量法本身，否则下面的全称断言在退化的读数上照样绿。
+
+    **这一条原来把「台账非空」当成了量法有效的一部分**
+    （`uniqueRows > 0`、`distinctRows > 0`、`distinctRows < uniqueRows`），
+    而台账的目标是 0——第三十七轮推到 0 时这道门当场红，红的却不是任何一处退化。
+    区分两件事：
+      · **量法还在量**：147 个场景-维度都在、用例数仍然随场景数长——
+        这几条和差异条数无关，0 行时照样是全称判据；
+      · **去重键没写错**：只有在真有差异时才检验得到，所以按条件走。
+    每条记录十二档字段俱全那一档由 tests/guards/parity-ledger-fields.test.ts
+    单独钉着，它不数行，所以在 0 行的台账上仍然有效。
+  */
   it("量法本身有效", () => {
     expect(measures.scenarioDimensions).toBeGreaterThan(0);
-    expect(measures.uniqueRows).toBeGreaterThan(0);
     expect(measures.multiset).toBeGreaterThanOrEqual(measures.uniqueRows);
     expect(measures.desktopDimensions).toBeGreaterThan(0);
     expect(measures.nonDesktopFamilies.length).toBeGreaterThan(0);
     expect(measures.i18nKeys).toBeGreaterThan(0);
-    // 不同条数必然 ≤ 投影去重数；相等就说明去重键写错了。
-    expect(measures.distinctRows).toBeGreaterThan(0);
-    expect(measures.distinctRows).toBeLessThan(measures.uniqueRows);
     expect(measures.parityTests).toBeGreaterThan(measures.scenarioDimensions);
+    // 不同条数必然 ≤ 投影去重数；相等就说明去重键写错了。
+    if (measures.uniqueRows > 0) {
+      expect(measures.distinctRows).toBeGreaterThan(0);
+      expect(measures.distinctRows).toBeLessThanOrEqual(measures.uniqueRows);
+    } else {
+      // 台账空的时候这两个必须一起是 0，一个 0 一个不是说明两边算的不是一件事。
+      expect(measures.distinctRows).toBe(0);
+    }
   });
 
   it("e2e-parity 的固定用例数常量还对得上调用点", () => {

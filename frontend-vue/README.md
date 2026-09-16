@@ -165,13 +165,14 @@ variants -- three things that never enter the accessibility tree, so no
 screenshot or ARIA gate can reach them. It exits 0 with a note when
 `../frontend` is absent, because nothing in this workspace may depend on the
 sibling; when the sibling **is** there it can fail, on a stale exemption or a
-broken shape assert. That is why it is a gate and not a report, and why it is
-not wired into CI: no existing workflow installs both apps' `node_modules`, and
-this one needs `lucide-react`'s type declarations to resolve icon aliases.
+broken shape assert. That is why it is a gate and not a report. It needs
+`lucide-react`'s type declarations to resolve icon aliases, so it runs in the
+one job that installs both apps' `node_modules` -- `frontend-vue-parity.yml`.
 
 **What CI actually runs.** `frontend-vue-verify.yml` runs `verify`,
 `asset-budget`, `standalone-sim`, `audit`, `container-smoke`, `e2e-mock`,
-`e2e-backend` and `e2e-visual`'s siblings.
+`e2e-backend` and `e2e-visual`'s siblings. `frontend-vue-parity.yml` runs
+`icon-parity`, `e2e-parity` and `e2e-parity-auth`.
 
 `standalone-sim` **used to be local-only**, and the reason given here was that it
 renames the sibling app out of the checkout. That reason never made it unsafe in
@@ -182,13 +183,29 @@ the day it was written and stay red for twenty rounds, invisible on every
 developer machine because `../frontend` is always present there. It has run in
 the `verify` job since 2026-09-16.
 
-Three gates still run **only locally**, and the reasons differ:
-`icon-parity` because no workflow installs both apps' `node_modules` (see above);
-`e2e-parity` and `e2e-parity-auth` because they build both apps against a replay
-Gateway. Those last two are a cost decision that has never actually been made --
-they are local-only by default, not by design, which means **the ledger that this
-whole effort is measured by is never checked by a machine that isn't this laptop**.
-Only `e2e-visual`'s local-only status is machine-coupled to its cause
+`icon-parity`, `e2e-parity` and `e2e-parity-auth` **used to be local-only**, and
+the reason given here was a cost that had never actually been priced: "local-only
+by default, not by design, which means the ledger that this whole effort is
+measured by is never checked by a machine that isn't this laptop". They have run
+in `frontend-vue-parity.yml` since 2026-09-17. The cost was then measured rather
+than guessed, so it is spent under a path filter (`frontend-vue/**`,
+`frontend/**`, the replay Gateway's inputs) instead of on every push -- a
+React-only change **is** in that filter, because upstream drift moving the ledger
+is the entire thing being measured.
+
+That workflow sets `PARITY_REQUIRE_REACT=1`, and that is not decoration: every
+parity spec opens with `test.skip(!reactAppPresent)`, which on a runner without
+`../frontend` would skip all 156 cases and exit 0 -- a green that measured
+nothing, the same shape as `e2e-visual` staying red across three commits and
+`invented-palette-colors` reading the sibling app at collection time for twenty
+rounds. The flag turns that skip into a throw at config load. Both halves are
+pinned by `tests/guards/tooling-contracts.test.ts`, which scans **every** file in
+`.github/workflows/` rather than a named one -- a guard that reads only the
+workflow it was written for is indistinguishable from no guard the moment a
+second workflow appears.
+
+One gate still runs **only locally**: `make e2e-visual`, and its local-only
+status is machine-coupled to its cause
 (`tests/guards/visual-baseline-platforms.test.ts`).
 
 `make e2e-visual` is deliberately in neither: its screenshot

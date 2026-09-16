@@ -206,8 +206,9 @@ test.describe("数据流 gate", () => {
     await textarea.fill("Build a deck");
     await textarea.press("Enter");
 
+    // wave 216 起不再订 `values`——理由写在 useThreadStream.ts 的 THREAD_STREAM_MODES。
     expect((await streamRequest).postDataJSON()).toMatchObject({
-      stream_mode: ["values", "messages-tuple", "updates", "custom"],
+      stream_mode: ["messages-tuple", "updates", "custom"],
     });
 
     const items = page.locator('[data-testid="message-list"] > [data-role]');
@@ -271,13 +272,18 @@ test.describe("数据流 gate", () => {
     `diff.spec.ts` 比的是这些字符串的多重集）。wave 42 第一次系统扫了它，
     这条守卫把扫出来的结论钉住——普通发送这一条是全仓最复杂的请求体。
 
-    实测（wave 42 用一次性 probe 打上游的 mock 后端）：上游发的键集是
-    `["assistant_id","config","context","input","on_disconnect","stream_mode","stream_resumable"]`，
-    与本仓逐字相同。两处已知的不同都不算差异：
+    **这张表 wave 216 按对照尺子订正过，此前有两处是假的。** 原来写的是
+    「wave 42 用一次性 probe 打上游的 mock 后端」量到上游键集里有
+    `stream_resumable`、`stream_mode` 里有 `values`——而 `e2e-parity` 的
+    `requestBodies` 档每一轮都在真跑两个应用、录真请求体，它记下的上游值是
+    `stream_mode: ["messages-tuple","updates","custom"]`，**没有 `values`，
+    整个体里也没有 `stream_resumable`**（SDK 收到 `streamResumable: false`
+    之后自己省略了这颗键）。一次性 probe 与常驻尺子矛盾时以尺子为准；
+    那条 probe 的读数已经过期，连带把本仓多发的两处钉成了「合同」。
 
-    · **`stream_mode` 的顺序**：上游是 messages-tuple/values/updates/custom（SDK 用
-      `unique([...trackStreamMode, ...callbackStreamMode])` 拼出来的），本仓是
-      values/messages-tuple/updates/custom。后端按集合处理，所以这里断的是**集合**。
+    · **`stream_mode` 的顺序**：上游是 messages-tuple/updates/custom（SDK 用
+      `unique([...trackStreamMode, ...callbackStreamMode])` 拼出来的），
+      后端按集合处理，所以这里断的是**集合**。
     · **真后端上上游会多一个 `checkpoint`**：`fetchStateHistory: { limit: 1 }` 让
       SDK 的 `includeImplicitBranch` 为真，于是它把线程头的 checkpoint 回发。
       **那个字段是空转的**——`/history` 返回的是 `checkpoint: {id, ts}`，而
@@ -312,6 +318,13 @@ test.describe("数据流 gate", () => {
     await textarea.press("Enter");
     await expect.poll(() => body !== undefined, { timeout: 20_000 }).toBe(true);
 
+    /*
+      **`stream_resumable` 不在这张表里**（wave 216 订正）。这条用例的判词是
+      「与上游逐字相同」，而上游的体里本来就没有这颗键——此前这张表钉的是本仓
+      当时的形状，不是上游的，于是它把一处真差异钉成了合同。
+      对照台账 `chat-thread-init-ordering` 的 `requestBodies` 行记着上游那一侧
+      的实测值，Gateway 那边它也只是个 `Literal[False] | None` 的兼容占位。
+    */
     expect(Object.keys(body!).sort()).toEqual([
       "assistant_id",
       "config",
@@ -319,21 +332,19 @@ test.describe("数据流 gate", () => {
       "input",
       "on_disconnect",
       "stream_mode",
-      "stream_resumable",
     ]);
     // 值也要钉：键在而值变了（比如 on_disconnect 变成 "cancel"）同样是真差异，
     // 而且那一类只在断线时才显形。
+    expect(body).not.toHaveProperty("stream_resumable");
     expect(body).toMatchObject({
       assistant_id: "lead_agent",
       on_disconnect: "continue",
-      stream_resumable: false,
       config: { recursion_limit: 1000 },
     });
     expect([...(body!.stream_mode as string[])].sort()).toEqual([
       "custom",
       "messages-tuple",
       "updates",
-      "values",
     ]);
   });
 

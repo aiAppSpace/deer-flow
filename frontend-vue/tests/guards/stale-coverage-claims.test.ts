@@ -32,7 +32,7 @@
                    算不出来的就不要进这张表，否则它自己就变成下一句没人守的散文。
 */
 
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,6 +45,22 @@ function verifyPrerequisites(): string[] {
   const makefile = readFileSync(join(root, "Makefile"), "utf8");
   const line = /^verify:([^\n]*(?:\\\n[^\n]*)*)/m.exec(makefile);
   return (line?.[1] ?? "").replaceAll("\\\n", " ").trim().split(/\s+/);
+}
+
+/**
+ * `.github/workflows/` 里所有工作流拼起来的源文本；`.github` 不在时是空串。
+ *
+ * **拼起来而不是点名一份**：同一个坑第三十七轮踩过——
+ * `tooling-contracts.test.ts` 那条只读 `frontend-vue-verify.yml`，
+ * 于是新加的 `frontend-vue-parity.yml` 天生在判据之外。
+ */
+function workflowSources(): string {
+  const dir = join(root, "..", ".github", "workflows");
+  if (!existsSync(dir)) return "";
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
+    .map((name) => readFileSync(join(dir, name), "utf8"))
+    .join("\n");
 }
 
 /**
@@ -78,9 +94,38 @@ const CLAIMS: {
       "把它改成过去时并在同一份文件里点名 `typecheck-tests`（是它推翻的）；" +
       "靠它支撑的那个设计决定要么换一条理由，要么跟着改。",
   },
+  {
+    what: "对照套件不进 CI / 只在本机跑",
+    /*
+      README 原话是「a cost decision that has never actually been made ——
+      local-only by default, not by design, which means **the ledger that this
+      whole effort is measured by is never checked by a machine that isn't this
+      laptop**」，`icon-parity` 那一段是「not wired into CI: no existing workflow
+      installs both apps' node_modules」。**这两句支撑的是同一个结论**，
+      而结论从 2026-09-17 起是假的。
+
+      判据不是「不许提」——这个仓库靠「原文写的是 X，而 X 从某天起是假的」
+      记住坑。所以同一份文件里点名那份工作流就放行。
+    */
+    pattern:
+      /(e2e-parity|icon-parity)[^\n]{0,120}(local-only|not wired into CI|只在本机|不进 ?CI|本机门禁)|never checked by a machine that isn't this laptop/,
+    refuted: /frontend-vue-parity\.yml/,
+    stillTrue: () => !workflowSources().includes("make e2e-parity"),
+    fix:
+      "`.github/workflows/frontend-vue-parity.yml` 已经在 CI 上跑 `icon-parity`、" +
+      "`e2e-parity` 与 `e2e-parity-auth`，这句话不再成立。把它改成过去时" +
+      "并在同一份文件里点名 `frontend-vue-parity.yml`（是它推翻的）。" +
+      "哪天那份工作流被摘掉，这句话重新成立，这道门自己让路。",
+  },
 ];
 
 const SCANNED = ["app", "tests", "scripts", "packages"];
+/*
+  模块根的三份文档**也要扫**：第三十七轮那句「台账从没被本机以外的机器量过」
+  就写在 `README.md` 里，而 `SCANNED` 只有四个子目录——
+  这道门当时够不着最该管的那一处。
+*/
+const SCANNED_FILES = ["README.md", "README_zh.md", "ARCHITECTURE.md"];
 const SKIPPED = new Set(["node_modules", ".nuxt", ".output", "dist"]);
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -93,7 +138,10 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const files = SCANNED.flatMap((dir) => walk(join(root, dir)));
+const files = [
+  ...SCANNED.flatMap((dir) => walk(join(root, dir))),
+  ...SCANNED_FILES.map((name) => join(root, name)).filter((f) => existsSync(f)),
+];
 
 describe("散文里的「没人守」断言现在还成立", () => {
   /* 形状断言：Makefile 解析坏了会让下面那条静默全绿（坑 176/195）。 */
@@ -102,6 +150,10 @@ describe("散文里的「没人守」断言现在还成立", () => {
     expect(steps.length).toBeGreaterThan(5);
     expect(steps).toContain("test");
     expect(files.length).toBeGreaterThan(300);
+    // 根文档要真的收进来了，否则新加的那条判据在一个够不着 README 的集合上恒绿。
+    expect(
+      files.filter((f) => SCANNED_FILES.includes(relative(root, f))),
+    ).toHaveLength(SCANNED_FILES.length);
   });
 
   it.each(CLAIMS)("「$what」", ({ pattern, refuted, stillTrue, fix }) => {
