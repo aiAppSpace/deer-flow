@@ -50,6 +50,8 @@ import {
 
 import { cn } from "@/lib/utils";
 
+import { vMenuTabStop } from "./use-menu-tab-stop";
+
 const props = defineProps<
   DropdownMenuItemProps & {
     class?: HTMLAttributes["class"];
@@ -76,6 +78,7 @@ const delegated = computed(() => {
 
 <template>
   <DropdownMenuItem
+    v-menu-tab-stop
     data-slot="dropdown-menu-item"
     :data-inset="props.inset || undefined"
     :data-variant="props.variant"

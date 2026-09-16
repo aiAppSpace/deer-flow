@@ -103,6 +103,20 @@ test("settings-and-more menu is a real menu: arrow keys move, Escape restores fo
     menu.getByRole("menuitem", { name: "DeerFlow's official website" }),
   ).toBeFocused();
 
+  /*
+    **roving tabindex：菜单里恰好有一项在 tab 序里，就是当前有焦点的那一项。**
+
+    这是 ARIA APG 的 menu 模式明写的技术，上游的菜单项走 Radix 的
+    `RovingFocusGroup.Item`（`isCurrentTabStop ? 0 : -1`）。reka 把菜单项的
+    `tabindex` 写死成 `-1`（`Menu/MenuItemImpl.js:64`），于是本仓的菜单打开时
+    **一个 tab 停靠点都没有**——台账 `thread-history` 上那条
+    `tabbablesOnlyReact: div(menuitem)` 就是它。补法与判词写在
+    `app/components/ui/dropdown-menu/use-menu-tab-stop.ts` 的文件头。
+  */
+  const tabbableItems = menu.locator('[role="menuitem"][tabindex="0"]');
+  await expect(tabbableItems).toHaveCount(1);
+  await expect(tabbableItems).toBeFocused();
+
   await page.keyboard.press("Escape");
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -302,9 +316,26 @@ test("assistant actions keep their accessible name and gain a hover tooltip", as
     await expect(tooltip.first()).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 20_000 });
   await expect(tooltip.first()).toContainText(label!);
-  // 读屏器读到的那份是 Reka 嵌在里面的 visually-hidden role="tooltip"：
-  // 视觉层本身不承担语义。它被 1px clip 起来，所以按属性定位而不是按 role。
+  /*
+    读屏器读到的那份是内嵌的 visually-hidden `role="tooltip"`：视觉层本身不承担语义。
+    它被 1px clip 起来，所以按属性定位而不是按 role。
+
+    **必须有至少一颗不带 `aria-hidden` 的**（wave 215）：reka 自己那颗走的是
+    `VisuallyHidden` 的默认 `feature="focusable"`，那一档会写上 `aria-hidden="true"`
+    ——节点在、文本也对，却根本不在可访问性树里，读屏器按元素浏览时找不到这条提示。
+    上游 Radix 那颗没有 `aria-hidden`，于是台账 `branch-thread#turn-actions` 上
+    报出 `ariaOnlyReact: - tooltip "Branch conversation"`。`TooltipContent.vue`
+    因此自己补了一颗可达的，判词写在那份文件的头注释。
+  */
   await expect(tooltip.locator('[role="tooltip"]').first()).toHaveText(label!);
+  const reachableTooltip = tooltip.locator(
+    '[role="tooltip"]:not([aria-hidden="true"])',
+  );
+  await expect(reachableTooltip.first()).toHaveText(label!);
+  await expect(tooltip.first()).toMatchAriaSnapshot(`
+    - text: ${label}
+    - tooltip "${label}"
+  `);
 
   // **wave 62 把这一条反过来了，两边同改。** 原来钉的是「复制那颗是这一排里唯一
   // 没有可访问名的，因为 React 的 CopyButton 就没有」——上游确实没有，但那是一处

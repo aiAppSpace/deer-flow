@@ -27,10 +27,21 @@
 
                    播报名的取法与 Next 一致：`document.title` → `h1` 文本 → pathname，
                    且**只有名字变了才播报**。少了这个判断，同名页面之间跳转会让读屏
-                   重复念同一句话。实测本仓当前每条路由的 title 都是 "DeerFlow"，
-                   所以它现在什么都不播——React 也一样，等 blog/docs 落地才会有区别。
+                   重复念同一句话。首次加载不播报：页面本来就会被读一遍。
 
-                   首次加载不播报：页面本来就会被读一遍，再播一次是重复。
+                   **「变没变」比的是「进入这次导航时的名字」与「这一帧渲染完之后的
+                   名字」，不是一份在挂载时抓下来的快照**（wave 215 改）。原来那份快照
+                   抓在 `onMounted` 里，而页面标题是页面组件自己在挂载后写的——
+                   于是快照抓到的是根标题 "DeerFlow"，第一次路由切换就会把一个
+                   **根本没变过**的标题播一遍。对照台账 `chat-thread-init-ordering` 上
+                   `ariaOnlyVue: - alert: New chat - DeerFlow` 对着上游的空 `- alert`
+                   就是它：那一跳（`/chats/new` → `/chats/{id}`）两边标题都没变，
+                   上游没播，本仓播了。
+
+                   导航开始那一刻 DOM 还是旧页面的，所以那时读到的就是「离开页的名字」
+                   ——比快照稳，也不需要再维护一份状态。与上游的差别只在一处且本仓更稳：
+                   上游存的是上一次导航**结束时**的标题，标题若在那之后才异步变成新值，
+                   上游会在**下一次**导航时把它当成变化播出来。
 
                    SSR 只渲染空宿主，shadow root 在 onMounted 挂上——Next 的播报器同样
                    是客户端注入的，服务端两边都没有这个节点。
@@ -42,7 +53,6 @@ const HIDDEN_STYLE =
   "position:absolute;border:0;height:1px;margin:-1px;padding:0;width:1px;clip:rect(0,0,0,0);overflow:hidden;white-space:nowrap;overflow-wrap:normal";
 
 const host = ref<HTMLElement | null>(null);
-const previousName = ref<string | null>(null);
 let liveRegion: HTMLParagraphElement | null = null;
 const route = useRoute();
 
@@ -56,7 +66,6 @@ function currentPageName(): string {
 }
 
 onMounted(() => {
-  previousName.value = currentPageName();
   const element = host.value;
   if (!element || liveRegion) return;
   const root = element.shadowRoot ?? element.attachShadow({ mode: "open" });
@@ -70,12 +79,13 @@ onMounted(() => {
 watch(
   () => route.fullPath,
   async () => {
+    // 这一刻 DOM 还是上一页的，读到的就是「离开页的名字」。
+    const leaving = currentPageName();
     // 等这一帧渲染完，标题与 h1 才是新页面的。
     await nextTick();
-    const name = currentPageName();
-    if (!name || name === previousName.value) return;
-    previousName.value = name;
-    if (liveRegion) liveRegion.textContent = name;
+    const arriving = currentPageName();
+    if (!arriving || arriving === leaving) return;
+    if (liveRegion) liveRegion.textContent = arriving;
   },
 );
 </script>

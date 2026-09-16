@@ -64,7 +64,29 @@ export function WorkspaceChangePanel({
   const files = sortWorkspaceChanges(changes.files);
 
   return (
-    <SheetContent className="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-[900px]">
+    /*
+      Focus the panel itself on open instead of "the first tabbable element".
+
+      The default (Radix's, and Reka's on the Vue side) is to focus the first
+      tabbable child — and which element that is depends on whether the data has
+      landed. Here it is the close button, because `files` is still empty while
+      the detail query is in flight; give the same panel its file list up front
+      and the focus lands on the first row's collapsible trigger instead. A
+      focus position that moves with network timing is not a contract, and
+      landing on a trigger whose Enter collapses a row is a poor default.
+
+      APG's first recommendation for a dialog is to focus the dialog container,
+      so a screen reader starts from the title and description and the user tabs
+      into the content. Changed on both frontends together.
+    */
+    <SheetContent
+      className="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-[900px]"
+      onOpenAutoFocus={(event) => {
+        event.preventDefault();
+        const panel = event.currentTarget;
+        if (panel instanceof HTMLElement) panel.focus({ preventScroll: true });
+      }}
+    >
       <SheetHeader className="border-border border-b px-5 py-4">
         <SheetTitle className="flex items-center gap-2 text-base">
           <FileDiffIcon className="text-muted-foreground size-4" />

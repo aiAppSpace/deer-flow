@@ -1296,7 +1296,6 @@ async function ensureThread() {
   if (preparedThreadId.value) return preparedThreadId.value;
   const created = await getAPIClient().threads.create({
     threadId: draftThreadId.value,
-    assistantId: "lead_agent",
     metadata: props.agentName ? { agent_name: props.agentName } : {},
   });
   preparedThreadId.value = created.thread_id;

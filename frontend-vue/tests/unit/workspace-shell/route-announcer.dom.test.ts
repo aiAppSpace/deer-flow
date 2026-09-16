@@ -14,7 +14,7 @@
 */
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { reactive } from "vue";
+import { defineComponent, h, reactive, watch } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import RouteAnnouncer from "@/components/RouteAnnouncer.vue";
@@ -52,8 +52,40 @@ describe("RouteAnnouncer", () => {
     wrapper.unmount();
   });
 
-  it("announces a changed page name once and stays silent when it is unchanged", async () => {
+  /*
+    **标题是在路由变了之后才被页面写上的，测试必须照这个顺序来。**
+
+    上一版这条用例先 `document.title = ...` 再改路由，于是它只证明了「标题先变、
+    再换页会播报」——而真实顺序恰好相反：路由先变，新页面挂载/更新时才写标题。
+    wave 215 的缺陷正是躲在这个顺序里：播报器原来在 `onMounted` 抓一份标题快照，
+    那一刻页面还没写标题，抓到的是根标题，于是第一次换页会把一个**没变过**的
+    标题播出去（台账 `chat-thread-init-ordering` 上那条 `- alert: New chat - DeerFlow`）。
+    下面用一个「跟着路由写标题」的假页面复现真实顺序；它在播报器之后挂载，
+    与真实的组件树同序（根先于页面）。
+  */
+  it("announces across a navigation only when the page name actually changes", async () => {
+    const titles: Record<string, string> = {
+      "/workspace/chats/new": "New chat - DeerFlow",
+      // 换了路由但名字没变：这一跳不许播。
+      "/workspace/chats/thread-1": "New chat - DeerFlow",
+      "/workspace/scheduled-tasks": "Scheduled tasks - DeerFlow",
+    };
+    const FakePage = defineComponent({
+      setup() {
+        watch(
+          () => route.fullPath,
+          (path) => {
+            const next = titles[path];
+            if (next) document.title = next;
+          },
+          { immediate: true },
+        );
+        return () => h("div");
+      },
+    });
+
     const wrapper = mountAnnouncer();
+    const page = mount(FakePage, { attachTo: document.body });
     await flushPromises();
     const live = document
       .getElementById("__route-announcer__")!
@@ -62,15 +94,17 @@ describe("RouteAnnouncer", () => {
     // 首次加载不播报：页面本来就会被读一遍。
     expect(live.textContent).toBe("");
 
-    // 同名页面之间跳转不重复念。
-    route.fullPath = "/workspace/chats/other";
+    // 换了路由、名字没变——**这一条就是那个缺陷**。
+    route.fullPath = "/workspace/chats/thread-1";
     await flushPromises();
     expect(live.textContent).toBe("");
 
-    document.title = "Scheduled tasks";
+    // 名字真的变了才播。
     route.fullPath = "/workspace/scheduled-tasks";
     await flushPromises();
-    expect(live.textContent).toBe("Scheduled tasks");
+    expect(live.textContent).toBe("Scheduled tasks - DeerFlow");
+
+    page.unmount();
     wrapper.unmount();
   });
 });

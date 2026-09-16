@@ -35,7 +35,6 @@ export interface DeerFlowApiClient {
   threads: {
     create(input?: {
       threadId?: string;
-      assistantId?: string;
       metadata?: Record<string, unknown>;
     }): Promise<AgentThread>;
     search(query?: ThreadSearchQuery<AgentThreadState>): Promise<AgentThread[]>;
@@ -123,9 +122,18 @@ export function createDeerFlowApiClient(
           {
             method: "POST",
             headers: json,
+            /*
+              **不带 `assistant_id`。** 后端 `ThreadCreateRequest` 收这颗键，
+              但 `"lead_agent"` 就是它的默认值
+              （`backend/app/gateway/services.py` 的 `_DEFAULT_ASSISTANT_ID`），
+              而 `build_run_config` 里那一支写着
+              `if assistant_id and assistant_id != _DEFAULT_ASSISTANT_ID`
+              ——传与不传对 agent 路由完全等价，自定义 agent 走的是
+              `metadata.agent_name`，不是这颗键。上游也不传。
+              **真要接非默认 assistant 时再加回来**，那时它才承载信息。
+            */
             body: JSON.stringify({
               ...(input.threadId ? { thread_id: input.threadId } : {}),
-              ...(input.assistantId ? { assistant_id: input.assistantId } : {}),
               metadata: input.metadata ?? {},
             }),
           },

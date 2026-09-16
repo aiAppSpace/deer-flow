@@ -19,6 +19,8 @@ import {
 
 import { cn } from "@/lib/utils";
 
+import { vMenuTabStop } from "./use-menu-tab-stop";
+
 const props = defineProps<
   DropdownMenuSubTriggerProps & {
     class?: HTMLAttributes["class"];
@@ -37,6 +39,7 @@ const delegated = computed(() => {
 
 <template>
   <DropdownMenuSubTrigger
+    v-menu-tab-stop
     data-slot="dropdown-menu-sub-trigger"
     :data-inset="props.inset || undefined"
     v-bind="delegated"

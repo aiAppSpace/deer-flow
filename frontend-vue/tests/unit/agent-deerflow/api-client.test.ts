@@ -53,11 +53,17 @@ beforeEach(() => {
 });
 
 describe("threads", () => {
-  it("create 是 POST /threads，并保留调用方指定的 thread id", async () => {
+  /*
+    **`assistant_id` 不在这个体里，而且这条用例就是守这件事的。**
+    后端收这颗键，但 `"lead_agent"` 正是它的默认值，`build_run_config` 的
+    `if assistant_id and assistant_id != _DEFAULT_ASSISTANT_ID` 把传与不传
+    变成同一件事；自定义 agent 走的是 `metadata.agent_name`。上游也不传，
+    对照台账上 `POST /api/langgraph/threads` 的请求体差异就是它（wave 215）。
+  */
+  it("create 是 POST /threads，body 只有 thread id 与 metadata", async () => {
     const client = clientWith(() => jsonResponse({ thread_id: "draft-1" }));
     await client.threads.create({
       threadId: "draft-1",
-      assistantId: "lead_agent",
       metadata: { agent_name: "researcher" },
     });
     expect(recorded[0]).toMatchObject({
@@ -66,7 +72,6 @@ describe("threads", () => {
     });
     expect(JSON.parse(recorded[0]?.body ?? "{}")).toEqual({
       thread_id: "draft-1",
-      assistant_id: "lead_agent",
       metadata: { agent_name: "researcher" },
     });
   });

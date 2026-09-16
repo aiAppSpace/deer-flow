@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第三十四轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-17 第三十五轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -43,19 +43,12 @@
 > | G 分栏把手 | 1 条 / 2 投影 | **0** | **两边同改**：上游那 4px 拖拽热区改成 16px（第三十四轮） |
 > | E/F/H + 其余 | — | **7 条 / 9 投影** | 未动（tooltip 播报节点 / 焦点落点 / alert 播报 / `div(menuitem)`） |
 >
-> **现状读数**（2026-09-16 第三十四轮 accept 之后的签入基线）：
-> **147 场景-维度 / 13 唯一行 / 10 条不同的差异 / 13 个投影**，起点是 170 个投影。
+> **现状读数**（2026-09-17 第三十五轮 accept 之后的签入基线）：
+> **147 场景-维度 / 3 唯一行 / 2 条不同的差异 / 3 个投影**，起点是 170 个投影。
 >
-> **剩下的十条，逐条的下一步**（都在第三十四轮条目里有读数）：
->
-> | 差异 | 投影 | 下一步 |
-> | --- | --- | --- |
-> | `tabbablesOnlyReact: div(menuitem)` | 2 | 子菜单开着时上游多一个可 tab 的菜单项，先拿 `PARITY_ONLY=thread-history` 的 `TABBABLES` 段量出是哪一个 |
-> | `requestsOnlyReact: GET /langgraph/threads/{id}` | 2 | **架构差异，已判**：上游头部标题来自 `useThreadMetadata`（改名后失效重取），本仓头部读列表缓存、由 `loadInitial(true)` 收敛。两边都收敛到服务端，端点不同。**翻案判据**：本仓哪天真有一个消费 `["thread","metadata",id]` 的查询（现在三处失效全是空操作），这一行必须归零 |
-> | `focus: React=Close Vue=文件行` | 3 | 工作区变更面板打开时首个焦点落点不同，先查是不是「打开那一刻内容还没到」 |
-> | `ariaOnlyReact: - alert` / `ariaOnlyVue: - alert: New chat - DeerFlow` | 2 | **已定位**：本仓 `RouteAnnouncer` 在 `onMounted` 里抓 `previousName`，那时页面标题还没写上，于是第一次路由切换会把**没变过**的标题播一遍。改成「进入导航时读离开页的名字」 |
-> | `ariaOnlyReact: - tooltip "…"` | 2 | **已定位**：reka 的 `TooltipContentImpl` 把隐藏播报节点的内容写成 `ariaLabel` **而没有 children 兜底**（Radix 是 `ariaLabel \|\| children`），于是本仓那个 `role=tooltip` 节点是空的。在 `ui/tooltip/TooltipContent.vue` 里按插槽文本补出 `aria-label` |
-> | `requestBodies` ×2 | 2 | 建线程本仓多带 `assistant_id:"lead_agent"`——后端 `_DEFAULT_ASSISTANT_ID` 就是它，等价于不传，**删掉向上游看齐**；`runs/stream` 的 `values` / `stream_resumable` 要连着 `authoritativeTodos` 的数据来源一起改 |
+> **只剩两条，逐条判词写在第三十五轮条目的第六节**：
+> `thread-title-sync` 那 2 个是架构差异（已退让、有翻案判据），
+> `runs/stream` 那 1 个是欠账（`stream_mode` 多订 `values`，下一轮还）。
 
 ### 归族与还账路径（**还账前**的快照，35 条差异条目，分组一律写「N 条差异条目」）
 
@@ -176,6 +169,85 @@ EOF
 - **覆盖率棘轮现状**：covered **37** / pending **1** / exempt **3**。
   `covered` 与场景目录逐字相等由棘轮守卫钉着（`e2e-parity` 150 passed 里验过），
   **不需要也不该再用正则去数一遍**。
+
+---
+
+
+> ## 2026-09-17 第三十五轮：**四条根因一次清掉，台账只剩 2 条**
+>
+> **投影 13 → 3，不同的差异 10 → 2。零回归。**
+>
+> 四条都是「根因已经定位就直接修」，而且四条里有三条查出来是**库或时序的副产品，
+> 不是任何一边的契约**——这与第三十四轮那条侧栏是同一个形状。
+>
+> ### 一、路由播报器：一份抓早了的快照（`ariaOnlyVue: - alert: New chat - DeerFlow`，2 投影）
+>
+> `RouteAnnouncer` 在 `onMounted` 里抓 `previousName`，而**页面标题是页面组件自己
+> 在挂载后写的**——快照抓到的是根标题 `DeerFlow`，于是第一次路由切换会把一个
+> 根本没变过的标题播出去。`chat-thread-init-ordering` 那一跳
+> （`/chats/new` → `/chats/{id}`）两边标题都是 `New chat - DeerFlow`，上游没播，本仓播了。
+>
+> 改成**进入导航时读「离开页的名字」**（那一刻 DOM 还是旧页面的），
+> 与「这一帧渲染完之后的名字」比。不需要再维护快照，也比上游稳一点：
+> 上游存的是上一次导航结束时的标题，标题若在那之后才异步变成新值，
+> 上游会在下一次导航时把它当成变化播出来。
+>
+> **门禁连着改了**：原来那条用例先写标题再改路由，顺序与真实相反，
+> 所以它对这个缺陷是瞎的。改成用一个「跟着路由写标题」的假页面复现真实顺序。
+> 负向验证：把实现改回快照版，用例当场红（`expected 'New chat - DeerFlow' to be ''`）。
+>
+> ### 二、tooltip 播报节点：reka 把它标成了 `aria-hidden`（2 投影）
+>
+> 探针实测：本仓 `[role=tooltip]` **存在、文本也对**，但带着 `aria-hidden="true"`
+> ——根本不在可访问性树里，读屏器按元素浏览找不到这条提示。
+> 根因在 `reka-ui/dist/Menu/…` 隔壁：`TooltipContentImpl` 调 `VisuallyHidden` 时
+> **没有覆盖 `feature`**，而那颗 primitive 的默认档 `"focusable"` 就会写
+> `aria-hidden="true"`。Radix 的 `VisuallyHidden` 不写。
+>
+> 够不着库内部那颗，所以在 `ui/tooltip/TooltipContent.vue` 里**自己补一颗可达的**，
+> 形状照 Radix（`aria-label || children`）。同时把算好的文本显式传给 `aria-label`
+> ——不传的话 reka 那颗会把新补的这份也算进 `textContent`，读屏器念两遍。
+>
+> ### 三、`div(menuitem)`：reka 把菜单项的 `tabindex` 写死成 `-1`（2 投影）
+>
+> `PARITY_ONLY=thread-history` 的 `TABBABLES` 段逐项比出来：两边 26 项里 25 项相同，
+> 只差菜单里那一个。上游菜单项走 Radix 的 `RovingFocusGroup.Item`
+> （`isCurrentTabStop ? 0 : -1`），这是 ARIA APG 的 menu 模式明写的技术；
+> reka 写死 `-1`，于是**本仓菜单打开时一个 tab 停靠点都没有**。
+>
+> **实现走了一次弯路，值得记**：先写的是 `:tabindex` + `@focus` 的响应式版，
+> 结果**子菜单打不开**——`thread-actions-menu` 那条导出用例当场红。二分到是 `@focus`：
+> reka 的 `MenuSubTrigger.onClick` 里先 `event.currentTarget?.focus()` 再
+> `onOpenChange(true)`，我们的处理器在那一句里同步改了一个 prop，
+> 触发的重渲染把后半段打断了。改成**自定义指令直接 `addEventListener` + `setAttribute`**，
+> 不经过渲染，与 Radix 自己的做法同形。
+> （不会被覆盖回 `-1`：Vue patch 比的是新旧 vnode 的 props，reka 那侧前后都是 `"-1"`，
+> 于是根本不写 DOM。）
+>
+> ### 四、变更面板的焦点落点：又一个时序副产品（3 投影）
+>
+> 上游打开面板时 `files` 还是空的（detail 查询在飞），唯一可聚焦的是关闭键；
+> 本仓的 summary 查询本来就带 `includeFiles`，打开那一刻文件行已经画出来了，
+> 于是焦点落在第一行的折叠触发器上。**两边都不是有意的**，所以不是「跟谁」的问题。
+>
+> 两边同改成 APG 对话框模式的第一推荐做法：**焦点放在对话框容器本身**，
+> 读屏器从标题和描述开始念，用户再 Tab 进内容；也避免焦点一上来就停在一个
+> 按 Enter 会折叠某一行的触发器上。
+>
+> ### 五、顺带：建线程不再多带 `assistant_id`（1 投影）
+>
+> 后端 `ThreadCreateRequest` 收这颗键，但 `"lead_agent"` 正是
+> `_DEFAULT_ASSISTANT_ID`，`build_run_config` 那一支写着
+> `if assistant_id and assistant_id != _DEFAULT_ASSISTANT_ID`——传与不传对 agent
+> 路由完全等价，自定义 agent 走的是 `metadata.agent_name`。**去后端查过才判的**，
+> 不是「上游没有所以上游对」。
+>
+> ### 六、剩下的两条
+>
+> | 差异 | 投影 | 判词 |
+> | --- | --- | --- |
+> | `requestsOnlyReact: GET /langgraph/threads/{id}` | 2 | **架构差异，退让**。上游头部标题来自 `useThreadMetadata`（改名后失效重取），本仓头部读列表缓存、由 `loadInitial(true)` 收敛；两边都收敛到服务端，端点不同。本仓那三处对 `["thread","metadata",id]` 的失效**全是空操作**（没有任何查询拥有这个 key，已核）。**翻案判据**：本仓哪天真有一个消费该 key 的查询，这一行必须归零 |
+> | `requestBodies: runs/stream` | 1 | **欠账，下一轮做**。本仓 `stream_mode` 多一个 `"values"`、多一个 `stream_resumable:false`。多订 `values` 不只是多一个字符串：`reducer.ts` 因此要给 values 里没有 id 的消息编 `values-0` 这种合成 id，而 `isSyntheticValuesMessageId` 正是为它打的补丁。**根因是多订了 `values`**，还账路径是让自研 transport 用 `updates` 累积状态（上游 SDK 就是这么做的），把合成 id 那一套连根拔掉 |
 
 ---
 

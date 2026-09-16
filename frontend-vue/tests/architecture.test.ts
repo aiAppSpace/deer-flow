@@ -317,6 +317,7 @@ const l2Files = [
   "app/components/ui/dropdown-menu/DropdownMenuSubTrigger.vue",
   "app/components/ui/dropdown-menu/DropdownMenuTrigger.vue",
   "app/components/ui/dropdown-menu/index.ts",
+  "app/components/ui/dropdown-menu/use-menu-tab-stop.ts",
   "app/components/ui/empty/Empty.vue",
   "app/components/ui/empty/EmptyContent.vue",
   "app/components/ui/empty/EmptyDescription.vue",

@@ -170,16 +170,11 @@
       "tabOrder": []
     },
     "chat-thread-init-ordering/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- alert"
-      ],
-      "ariaOnlyVue": [
-        "- alert: New chat - DeerFlow"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [
-        "POST /api/langgraph/threads body React=[{\"metadata\":{},\"thread_id\":\"«generated»\"}] Vue=[{\"assistant_id\":\"lead_agent\",\"metadata\":{},\"thread_id\":\"«generated»\"}]",
         "POST /api/langgraph/threads/00000000-0000-0000-0000-000000000001/runs/stream body React=[{\"assistant_id\":\"lead_agent\",\"config\":{\"recursion_limit\":1000},\"context\":{\"is_plan_mode\":false,\"subagent_enabled\":false,\"thinking_enabled\":true,\"thread_id\":\"«generated»\"},\"input\":{\"messages\":[{\"additional_kwargs\":{},\"content\":[{\"text\":\"Hello\",\"type\":\"text\"}],\"type\":\"human\"}]},\"on_disconnect\":\"continue\",\"stream_mode\":[\"messages-tuple\",\"updates\",\"custom\"]}] Vue=[{\"assistant_id\":\"lead_agent\",\"config\":{\"recursion_limit\":1000},\"context\":{\"is_plan_mode\":false,\"subagent_enabled\":false,\"thinking_enabled\":true,\"thread_id\":\"00000000-0000-0000-0000-000000000001\"},\"input\":{\"messages\":[{\"additional_kwargs\":{},\"content\":[{\"text\":\"Hello\",\"type\":\"text\"}],\"type\":\"human\"}]},\"on_disconnect\":\"continue\",\"stream_mode\":[\"values\",\"messages-tuple\",\"updates\",\"custom\"],\"stream_resumable\":false}]"
       ],
       "geometry": [],
@@ -228,9 +223,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div(menuitem)"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -244,9 +237,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div(menuitem)"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1291,9 +1282,7 @@
       "tabOrder": []
     },
     "branch-thread#turn-actions/desktop/light/en-US": {
-      "ariaOnlyReact": [
-        "- tooltip \"Branch conversation\""
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
@@ -1307,9 +1296,7 @@
       "tabOrder": []
     },
     "branch-thread#turn-actions/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- tooltip \"分叉\""
-      ],
+      "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
@@ -1819,9 +1806,7 @@
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.mdModified\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],
@@ -1835,9 +1820,7 @@
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.md修改+1 -1\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],
@@ -1851,9 +1834,7 @@
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
-      "focus": [
-        "React=button \"Close\" Vue=button \"/mnt/user-data/outputs/report.mdModified\""
-      ],
+      "focus": [],
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [],

@@ -19,6 +19,8 @@ import { Circle } from "lucide-vue-next";
 
 import { cn } from "@/lib/utils";
 
+import { vMenuTabStop } from "./use-menu-tab-stop";
+
 const props = defineProps<
   DropdownMenuRadioItemProps & { class?: HTMLAttributes["class"] }
 >();
@@ -34,6 +36,7 @@ const delegated = computed(() => {
 
 <template>
   <DropdownMenuRadioItem
+    v-menu-tab-stop
     data-slot="dropdown-menu-radio-item"
     v-bind="delegated"
     :class="

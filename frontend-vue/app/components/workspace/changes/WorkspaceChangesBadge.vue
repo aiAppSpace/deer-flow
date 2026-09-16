@@ -96,6 +96,13 @@ watch(
   },
 );
 
+/* 见模板里那段注释：焦点落点不能由「数据到没到」决定。 */
+function focusPanelItself(event: Event) {
+  event.preventDefault();
+  const panel = event.currentTarget;
+  if (panel instanceof HTMLElement) panel.focus({ preventScroll: true });
+}
+
 function errorMessage(error: unknown) {
   if (!error) return null;
   return error instanceof Error && error.message.trim()
@@ -261,10 +268,26 @@ function statusIconClass(file: WorkspaceFileChange) {
       照抄的理由不是量出来的：两个 token 的语义不同（封顶 vs 不封顶），
       哪天上游动了那个 `w-[...]`，`max-w-none` 会安静地跟着走偏。
     -->
+    <!--
+      **打开时焦点落在面板本身，不落在「第一个可 tab 的元素」上**（两边同改）。
+
+      默认行为（Radix / Reka 都一样）是聚焦内容里第一个可 tab 的元素，而那一个
+      **由数据到没到决定**：上游打开面板时 `files` 还是空的（detail 查询在飞），
+      于是唯一可聚焦的是关闭键；本仓的 summary 查询本来就带 `includeFiles`，
+      打开那一刻文件行已经画出来了，于是焦点落在第一行的折叠触发器上。
+      对照台账 `workspace-changes#changes-panel` 三个维度上那条
+      `focus: React=button "Close" Vue=button "…report.mdModified"` 就是它。
+
+      **两边都不是有意的**，所以不是「跟谁」的问题：一个随网络快慢变的焦点落点
+      本来就不该是契约。改成 APG 对话框模式的第一推荐做法——把焦点放在对话框
+      容器上，读屏器从标题和描述开始念，用户再 Tab 进内容；也避免焦点一上来就
+      停在一个按 Enter 会折叠某一行的触发器上。
+    -->
     <SheetContent
       v-if="summary"
       class="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-[900px]"
       :close-label="$i18n.t.value.primitives.close"
+      @open-auto-focus="focusPanelItself"
     >
       <!--
         头部照上游 workspace-change-panel.tsx:68：图标在 `SheetTitle` **里面**
