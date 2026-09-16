@@ -19,7 +19,7 @@
   **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
   一个 run 都不会有，`total_count: 0` 不是「没问题」。正确的问法与命令写在
   下面第十九轮清单的第 3 条里（那里有三条，第三条就是这件事）。
-- 对照台账 **143 唯一行 / 163 多重集 / 142 个场景-维度**。
+- 对照台账 **146 唯一行 / 168 多重集 / 144 个场景-维度**。
   **但唯一行是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
   按 `(档, 行文本)` 去重，**只有 33 条不同的差异**，而且高度聚集——
@@ -75,9 +75,9 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
      「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
    - 开 `mobile`（同样只给 `integrations`）→ **当场量出上游一颗够不着的控件**
      （技能开关在 375px 下 `x=395.5`，手机上点不到）。
-   - **142 个场景-维度里仍有 120 个是 desktop**；非 desktop 的 7 族逐字是：
-     `artifact-preview` `chat` `integrations` `project-detail` `scheduled-tasks`
-     `thread-list-pin` `ui-polish-mobile`。
+   - **144 个场景-维度里仍有 121 个是 desktop**；非 desktop 的 8 族逐字是：
+     `artifact-preview` `chat` `integrations` `mcp-settings` `project-detail`
+     `scheduled-tasks` `thread-list-pin` `ui-polish-mobile`。
      （这一行此前写「129 个里 110 个 desktop，非 desktop 只有 4 族」——**两个数
      和那份名单都是旧的**，第十九轮从基线数出来才发现；现在有门禁守着，见
      `tests/guards/doc-facts.test.ts`。）
@@ -200,11 +200,11 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**330 文件 / 2683** 单测；词典 1140 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **151 passed**（第二十三轮实测整条 6.4 分钟；
+make -C <abs>/frontend-vue e2e-parity     # **153 passed**（第二十七轮实测整条 17.5 分钟；
                                           #   此前记的 17.3 分钟是旧机况，耗时本来就没人守）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
                                           #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
-                                          #  台账 143 唯一行 / 163 多重集 / 142 场景-维度
+                                          #  台账 146 唯一行 / 168 多重集 / 144 场景-维度
                                           #  （第十二、十三两轮基线文件都一个字节没动；
                                           #    第十二轮新挂的两个锚点报出 4 行、当轮修完归零，
                                           #    第十三轮修的四处**本来就没有锚点**——那正是问题本身）
@@ -221,7 +221,13 @@ make -C <abs>/frontend-vue e2e-mock       # 319 passed（274 + 22 + 15 + 2 + 6�
 make -C <abs>/frontend-vue e2e-backend    # 22 passed（2+5+2+3+3+5+1+1；需要 backend 的 uv 环境）
 make -C <abs>/frontend-vue parity-accept  # 只能让台账变短；要变长得 PARITY_ACCEPT_GROW=1
                                           #  并在提交说明里逐行解释
-make -C <abs>/frontend-vue standalone-sim # exit 0（跑过 15 / 未跑 5 / 红 0）
+make -C <abs>/frontend-vue standalone-sim # exit 0（第二十七轮实测 跑过 18 / 未跑 5 / 红 0）
+                                          #  **第二十七轮它红过**：`invented-palette-colors.test.ts`
+                                          #  从 2026-09-12 建档那天起就在**收集阶段**读上游
+                                          #  （`describe.skipIf` 跳过用例不跳过收集——
+                                          #   wave 83 那条坑在另一份文件上复发），
+                                          #  而这道门当时既不在 verify 里也不在 CI 里，
+                                          #  红了二十多轮没人看见。**第二十七轮把它加进了 CI**。
 make -C <abs>/frontend-vue e2e-visual     # 8 passed（只有 -darwin 基线，本机门禁；第十三轮复跑）
                                           #  **第十二轮的教训**：这一档改完侧栏字重仍然全绿，
                                           #  而那**不是**「侧栏没变」的证据——它是 fullPage +
@@ -365,7 +371,37 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-16 第二十一轮）做了什么，下一轮从哪接
+## 上一轮（2026-09-16 第二十七轮）做了什么
+
+**开了两扇窗、结清一处上游条件门槛。**
+
+- **两扇新窗都报零新差异**：`mcp-settings` 补 `mobile/light`（URL 直达的设置对话框，
+  不必先解决移动端抽屉）、`artifact-batched-stream#preview-failed` 补 `desktop/dark`
+  （错误态是「固定红 vs `--destructive` token」的高发区）。两处量出来都只有已判过的
+  老账（scroll-area 那笔 / `retry: 3` 那笔）。**机器证据是「不同的差异」这个数
+  33 → 33 纹丝不动**，而唯一行 143 → 146 只是投影变多——
+  这正是本文开头那句「唯一行是投影数不是待办数」的又一次实测。
+- **清单第 2 条那条线索上摸到一处真差异**：上游**两个入口**
+  （`chats/chat-page.tsx:559-561` 与 agent 页 `[thread_id]/page.tsx:442-448`）
+  的欢迎区条件都是 `isWelcomeMode && !hasGoal && !hasTodos`，**本仓两处都没有**。
+  后果是欢迎态下敲一条 `/goal …` 之后，两边在同一块绝对定位区域上各画各的。
+  **台账看不见它**：上游的欢迎态等价于 `isNewThread`，那条路由上 `thread.values`
+  根本没取过，也就是说上游这一支**只能靠 `/goal` 命令走到**，夹具喂不出
+  「新会话 + 已有目标」。所以钉成源码守卫
+  `tests/unit/chat/welcome-yields-to-goal.test.ts`，**两侧都钉**
+  （上游那串条件哪天变了，这条守卫的理由就该重新判一次）。
+
+- **沿途挖出一件比正题大的**：`make standalone-sim` 红了二十多轮没人看见
+  （`invented-palette-colors.test.ts` 在 `describe.skipIf` 的回调体里读上游——
+  skipIf 跳过用例不跳过收集）。修掉之后 18 过 / 5 未跑 / 0 红，
+  **并把这道门加进了 CI**：它不在 `verify` 里也不在 CI 里，而它验的正是
+  这整件事的目标本身。
+
+**顺手量出、留给下一轮的**（见挂账清单第二十七轮条目）：上游 `canEdit` /
+`canRegenerate` / `canBranch` 里还有 `!isUploading` / `!thread.isLoading` /
+`!branchThread.isPending` 三串条件，本仓的 `interactive` 只等于 `!isDemo`。
+
+## 再上一轮（2026-09-16 第二十一轮）做了什么，下一轮从哪接
 
 **追 CI 上那条「本机绿」的红，修到根因。**
 
@@ -401,11 +437,23 @@ Claude 记忆 `measure-dont-guess`）。
 
 **下一轮最该先拿的（按顺序，第 1 条就能直接动手）**：
 
-> **挂账清单里已经没有待动手的账了**（C / F / G / H 与 `GoalStatus` 全部结清）。
-> 下面是方向性的活，按性价比排。
+> 第二十七轮把顺序换了：**第 1 条现在是「上游条件门槛」那条线**，
+> 因为它已经有现成读数（下面第 1 条里那三串条件是当场量出来的），
+> 而开新维度连着两扇窗都是零新差异。
 
-1. **方向 1：把取样面往没人看过的维度开一扇窗**（本文件开头那节排第一的一条）。
-   **142 个场景-维度里仍有 120 个是 desktop**，非 desktop 只有 7 族。
+1. **上游 `canEdit` / `canRegenerate` / `canBranch` 里那三串条件，本仓没有。**
+   第二十七轮当场量出来的：上游三个判据里都有 `!isUploading` 与 `!thread.isLoading`，
+   `canEdit` / `canBranch` 还多一条 `!branchThread.isPending`；
+   本仓 `MessageList` 收到的 `interactive` 只等于 `!isDemo`
+   （`AgentChat.vue:1956`），三串一条都没有。
+   **判据是「同一个操作在两边同样可用 / 同样不可用」**——上传附件的过程中上游点不动
+   重跑，本仓点得动。逐条的现状与修法草案写在挂账清单第二十七轮条目。
+
+2. **方向 1：把取样面往没人看过的维度开一扇窗**（本文件开头那节排第一的一条）。
+   **144 个场景-维度里仍有 121 个是 desktop**，非 desktop 只有 8 族。
+   **但第二十七轮连开两扇都是零新差异**（`mcp-settings` 补 mobile、
+   `preview-failed` 补 dark），所以这条现在排在条件门槛后面——
+   它仍然出货（每开一扇就多一片有机器守着的面），只是单位产出降了。
    照「一个场景补一维就够」的纪律继续开。
    **两条边界要先知道**：
    - 对照场景的 id **就是上游 spec 的文件名**（`tests/parity/scenario-coverage.test.ts`
@@ -415,19 +463,15 @@ Claude 记忆 `measure-dont-guess`）。
    - **给既有场景补一维 / 补一支夹具，比开新场景便宜得多，而且一样出货**：
      第二十六轮只是给 `thread-todos` 补了一份 goal 夹具，就一次逼出两处真差异。
 
-2. **沿着第二十六轮那条线索：还有多少「上游有条件、本仓没有」的交互门槛。**
-   那一轮量出上游 `canEdit` 里的 `!hasGoal` 本仓完全没有（点下去会打断目标续跑）。
-   起手式：把上游 `chats/chat-page.tsx` 里 `canEdit` / `canBranch` /
-   `onSubmitHumanInput` 那几串条件逐条对一遍本仓的对应判据——
-   **判据是「同一个操作在两边同样可用 / 同样不可用」**。
-
 3. **沿着账 C 那条线索：还有多少「本仓用原生 `title`、上游用 tooltip」的地方。**
    第二十四轮只改了侧栏那四颗。起手式：
    `grep -rn ':title=' frontend-vue/app` 逐个问「上游这一处是什么」——
    **判据是「两个应用给出同一种提示机制」，不是「有没有提示」**。
 
 4. **方向 C 继续**（把「写下来当规则用、却没人守」的话变成守卫，判据见下面 C 节）。
-   最近三轮给它加了三个新形状：
+   最近四轮给它加了四个新形状（第四个是第二十七轮的
+   `welcome-yields-to-goal`：**守卫可以两侧都钉**——本仓那一条钉「照着做了」，
+   上游那两条钉「照的还是那个样子」，上游一变，这条守卫的**理由**当场变红）：
    - 撑「**不做**某件事」的理由（`SidebarMenuButton.vue` 那句「没有图标条形态」）
      ——**它没有代码，只有一段注释和一个缺口**；
    - **立全称判据之前先量一遍**（「两边同名就得同字」听起来要豁免表，实测 0 条不一致）；

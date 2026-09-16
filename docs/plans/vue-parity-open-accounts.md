@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十六轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十七轮）
 
 ## 零、2026-09-16 全面审查：**台账的唯一行是投影数，件数要按 `(档, 行文本)` 去重**
 
@@ -84,6 +84,108 @@
 ---
 
 
+> ## 2026-09-16 第二十七轮：**开了两扇零新差异的窗，和一处台账天生看不见的条件**
+>
+> ### 一、两扇新窗：零新差异，而这次「零」有机器证据
+>
+> | 窗 | 挑它的理由 | 读数 |
+> | --- | --- | --- |
+> | `mcp-settings` 补 `mobile/light` | URL 直达（`?settings=tools`），**不必先解决移动端抽屉那一层**；而设置对话框在窄屏上第二十一轮真红过一次，当时只修了 integrations 自己那条收缩链 | 三个档全是已判过的 `div[scroll-area-viewport]`（mobile 档序号从第 15 变第 8） |
+> | `artifact-batched-stream#preview-failed` 补 `desktop/dark` | 这条场景里**唯一的错误态**，而 `DARK_DIMENSION` 文件头写着这一维先给带错误态的场景加 | 与浅色档逐字相同，只有已判过的 `retry: 3` |
+>
+> **「零新差异」的机器证据是台账的「不同的差异」这个数：33 → 33 纹丝不动。**
+> 同时唯一行 143 → 146、多重集 163 → 168、场景-维度 142 → 144——
+> **涨的全是投影**。这正是本文开头那句「唯一行是投影数不是待办数」的又一次实测：
+> 如果只看唯一行，这一轮看起来像「多了 3 件事」。
+>
+> **一条实现上的坑**：终态自己的 `dimensions` 是**覆盖**不是追加
+> （`ParityState.dimensions` 的注释写着「不写就沿用场景的」），
+> 所以给 `preview-failed` 加 dark 必须把场景那两档逐字列出来，
+> 否则这一支会连 `desktop/light` 与 zh-CN 一起丢掉。
+>
+> ### 二、当轮结清：欢迎区不给目标让位
+>
+> 上游**两个入口**逐字相同：
+>
+> - `chats/chat-page.tsx:559-561` → `extraHeader={isWelcomeMode && !hasGoal && !hasTodos && <Welcome …/>}`
+> - agent 页 `[agent_name]/chats/[thread_id]/page.tsx:442-448` → 同一串条件，换成 `<AgentWelcome …/>`
+>
+> 本仓 `AgentChat.vue` 一个组件服务这两条路由，而那个 `#extraHeader` 的 `v-if`
+> **两条都没有**。后果具体：欢迎态下敲一条 `/goal …`（两个应用都支持，本仓走
+> `@goal-change`）之后目标条出现，而它与欢迎区**共用输入框上方那一块绝对定位区域**
+> ——上游把欢迎区收起来腾地方，本仓两块都画。
+>
+> **台账为什么看不见**：上游的欢迎态等价于 `isNewThread`
+> （`chat-page.tsx:92` 初值 + `:114` 那个 effect），而那条路由上
+> `thread.values` 根本没取过——也就是说上游这一支**只能靠 `/goal` 命令走到**，
+> 夹具喂不出「新会话 + 已有目标」这个组合。所以钉成源码守卫
+> `tests/unit/chat/welcome-yields-to-goal.test.ts`，与账 C 同一个形状。
+>
+> **这条守卫两侧都钉**：本仓那条钉「照着做了」，上游那两条钉「照的还是那个样子」。
+> 理由是这条判据的**全部依据就是「照上游」**——上游哪天自己不这么写了，
+> 本仓这一条就该重新判一次，而不是继续被守着。
+>
+> **负向验证（四条，逐条打印了变异后的被改对象）**：
+>
+> | # | 变异 | 变异后实测 | 守卫 |
+> | - | --- | --- | --- |
+> | N1 | 摘掉本仓 `!activeGoal` | 开标签只剩 `isWelcomeMode && !authoritativeTodos.length && …` | 红 |
+> | N2 | 摘掉本仓 `!authoritativeTodos.length` | 开标签只剩 `isWelcomeMode && !activeGoal && …` | 红 |
+> | N3 | 摘掉上游聊天页 `!hasGoal` | `extraHeader={isWelcomeMode && !hasTodos && …}` | 红 |
+> | N4 | 摘掉上游 agent 页 `!hasGoal` | 同上形状 | 红 |
+>
+> **翻案判据**：哪天对照取样面能走到「欢迎态 + 有目标」（例如把 `/goal` 命令流
+> 接进 `steps`），就把这条守卫换成台账读数。
+>
+> ### 三、沿途挖出来的：**唯一在验「Vue 能不能自足」的那道门，红了二十多轮**
+>
+> 本轮给新守卫登记 `cross-app-by-design` 之后顺手跑了一次 `standalone-sim`
+> （它把 `../frontend` 真移走、再逐条跑登记表里的文件），**红 2 条**：
+>
+> - `tests/guards/invented-palette-colors.test.ts` **整个文件没跑起来——
+>   收集阶段就炸了**。根因是 `describe.skipIf(!upstreamPresent)` 的回调体里直接
+>   `scan(upstream, …)`，而 **`skipIf` 跳过的是用例、不是收集**。
+>   这条坑 `scripts/lib/cross-app-by-design.mjs` 的文件头 wave 83 就写着，
+>   这次在另一份文件上复发；那份文件 2026-09-12 建档那天起就带着它。
+> - 「整套 vitest」那条是同一个根因的第二次报数。
+>
+> **真正的根因不是那份文件写错了，是没有任何机器在跑这道门**：
+> 它不在 `make verify` 的先决条件里（有意的——它动文件系统），
+> **也不在 CI 里**。而这道门验的正是这整件事的目标本身
+> （「移走 `frontend/` 之后 Vue 仍能自足」）。
+>
+> 所以两件都做了：修掉那处收集期读取（照 `primitive-base-classes.test.ts` 的
+> `reactBases()`，缺席时返回空表），**并把 `standalone-sim` 加进 CI 的 verify job**。
+> CI 里安全的理由写进了那一步的注释：job 是串行的，脚本退出前会把兄弟应用放回去。
+>
+> 复量：`SIM_EXIT=0`，**跑过 18 / 未跑 5 / 红 0**。
+>
+> **这与 CI 里 `asset-budget` 那一步的注释是同一句话**——那句写着「它不在
+> `make verify` 里，所以没人跑它，于是它红着跨了好几个提交没人发现」。
+> 同一个形状第二次出现，判据是：**一道门只要没有自动入口，它迟早会红着没人看见。**
+>
+> ### 四、**新账 I：上游三串交互条件，本仓的 `interactive` 只等于 `!isDemo`**
+>
+> 顺着上一轮那条线索往下扫，当场量出来的（`chat-page.tsx:466-497` vs
+> `MessageList.vue:1350/1568-1575` + `AgentChat.vue:1956`）：
+>
+> | 上游判据 | 上游的条件串 | 本仓对应 |
+> | --- | --- | --- |
+> | `canRegenerate` | `!isNewThread && !isMock && !STATIC && !isUploading && !thread.isLoading` | `show-regenerate` 只看「是不是最新 assistant 组」，禁用只看 `interactive === false` |
+> | `canEdit` | 以上 + `!branchThread.isPending && !hasGoal && !hasOpenHumanInputCard` | `!hasGoal` 与 `!hasOpenHumanInput` 第二十六轮已补，其余没有 |
+> | `canBranch` | `canRegenerate` + `!branchThread.isPending` | `show-branch` 看 `branchable`，禁用只看 `interactive` |
+>
+> 而 `interactive` 在调用点就是 `:interactive="!isDemo"`。
+> **判据是「同一个操作在两边同样可用 / 同样不可用」**：上传附件的过程中、
+> 历史还在加载时、分支请求还在飞的时候，上游这三颗键点不动，本仓点得动。
+>
+> **这一轮没动它的理由**：三串条件要三处新状态从 `AgentChat` 传进 `MessageList`，
+> 而其中 `isUploading` 本仓已经有（`stream.isUploading`）、
+> `thread.isLoading` 与「分支请求在飞」两处要先确认本仓有没有对应的量。
+> **留给下一轮做，它现在是清单第 1 条。**
+>
+> ---
+>
 > ## 2026-09-16 第二十六轮：**挂了八轮的不是那处差异，是那份夹具**
 >
 > 正题是第十八轮留下的 `GoalStatus` 位置差异。**一份夹具逼出两处真差异，第二处比原账要紧。**

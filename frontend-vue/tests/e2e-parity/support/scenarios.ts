@@ -1691,7 +1691,24 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    /*
+      **补 `mobile` 这一维的理由**（2026-09-16 第二十七轮）：设置对话框在窄屏上
+      **已经真红过一次**——第二十一轮量出 integrations 那张卡 `CardHeader` 的第 1 列
+      卡在自己的 min-content 上（grid/flex 子项默认 `min-width: auto`），375px 下
+      Linux 溢出 9px、macOS 恰好 0 余量。那一轮只修了 integrations 自己那条收缩链，
+      **同一个形状在别的设置页上没有任何机器看着**。
+
+      挑这一屏而不是别的 desktop-only 场景，是因为它**用 URL 直达**
+      （`?settings=tools`）：移动端侧栏是抽屉，靠点击导航的场景补窄屏维要先解决
+      抽屉那一层，而这一屏不用——一维的成本就只是这三行。
+
+      照既有纪律**只补一维**（断点轴与语言/主题轴正交），所以不给 zh-CN 配窄屏孪生。
+    */
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      { viewport: "mobile", theme: "light", locale: "en-US" },
+    ],
   },
   {
     id: "thread-title-sync",
@@ -3962,6 +3979,18 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             },
           },
         ],
+        /*
+          **深色只给这一个终态**（2026-09-16 第二十七轮）。
+
+          `DARK_DIMENSION` 的文件头写着这一维要「先只给带错误态的场景加」，
+          因为「固定红 vs `--destructive` token」在浅色下两者同值、只有深色才现形。
+          而这条场景的两个终态里，只有 `preview-failed` 是错误态——
+          `default` 停在渲染好的 markdown 上，给它配深色只是让取样时间变长。
+
+          终态自己的 `dimensions` 是**覆盖**不是追加，所以这里把场景那两档也逐字列出来，
+          否则这一支会连 `desktop/light` 与 zh-CN 一起丢掉。
+        */
+        dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],

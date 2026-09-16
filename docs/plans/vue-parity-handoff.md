@@ -8,14 +8,14 @@
 
 ---
 
-## 当前状态（2026-09-16 第二十六轮收工）
+## 当前状态（2026-09-16 第二十七轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
 >
 > - 工作区干净，**已推送到 `origin/main-wc`**（2026-09-16；领先多少现场量：
 >   `git rev-list --count origin/main-wc..HEAD`）；
-> - 对照台账 **143 唯一行 / 142 个场景-维度**（数 `baseline/parity-diff.json` 的
+> - 对照台账 **146 唯一行 / 144 个场景-维度**（数 `baseline/parity-diff.json` 的
 >   `entries`；量法写在冷启动文档里。**这两个数有门禁守着**——
 >   `frontend-vue/tests/guards/doc-facts.test.ts` 逐处比对签入基线，
 >   而且是全称判据：文档里每一处都得对，不是「有一处对就行」）；
@@ -36,6 +36,45 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-16 第二十七轮）做了什么
+
+**开了两扇窗（都零新差异），外加一处上游条件门槛。**
+
+- **两扇新窗**：`mcp-settings` 补 `mobile/light`、
+  `artifact-batched-stream#preview-failed` 补 `desktop/dark`。
+  两处报出来的都是已判过的老账（scroll-area 那笔 / `retry: 3` 那笔）。
+  **「零新差异」这次有机器证据**：台账的**不同的差异 33 → 33 纹丝不动**，
+  而唯一行 143 → 146、多重集 163 → 168、场景-维度 142 → 144
+  ——涨的全是投影。
+- **挑这两处的理由都写进了场景注释**：`mcp-settings` 是 URL 直达
+  （`?settings=tools`），不必先解决移动端抽屉那一层；而设置对话框在窄屏上
+  第二十一轮真红过一次，当时只修了 integrations 自己那条收缩链。
+  `preview-failed` 是这条场景里**唯一的错误态**，而 `DARK_DIMENSION` 的文件头
+  写着这一维要先给带错误态的场景加。
+- **终态自己的 `dimensions` 是覆盖不是追加**——给 `preview-failed` 加 dark 时
+  必须把场景那两档逐字列出来，否则这一支会连 `desktop/light` 与 zh-CN 一起丢掉。
+- **一处真差异**：上游两个入口的欢迎区条件都是
+  `isWelcomeMode && !hasGoal && !hasTodos`（`chat-page.tsx:559-561`、
+  agent 页 `page.tsx:442-448`），本仓 `AgentChat.vue` 服务这两条路由而**两处都没有**。
+  台账看不见它——上游的欢迎态等价于 `isNewThread`，那条路由上 `thread.values`
+  没取过，所以上游这一支只能靠 `/goal` 命令走到，夹具喂不出「新会话 + 已有目标」。
+  修完钉成 `tests/unit/chat/welcome-yields-to-goal.test.ts`，**两侧都钉**：
+  本仓那条钉「照着做了」，上游那两条钉「照的还是那个样子」。
+  负向验证四条（本仓两条件各摘一次、上游两入口各摘一次）全部按预期变红。
+
+- **沿途挖出一件比正题大的**：`make standalone-sim`——**唯一在验「移走 `frontend/`
+  之后 Vue 仍能自足」的那道门**——红了二十多轮没人看见。
+  `invented-palette-colors.test.ts` 从 2026-09-12 建档起就在 `describe.skipIf`
+  的**回调体**里读上游（skipIf 跳过用例不跳过收集，wave 83 那条坑复发）。
+  修掉之后 `SIM_EXIT=0`（跑过 18 / 未跑 5 / 红 0）。
+  **根因不是那份文件**：这道门既不在 `verify` 里也不在 CI 里，
+  所以第二十七轮把它加进了 CI 的 verify job——与那里 `asset-budget` 那一步的
+  注释是同一句话。
+
+**留给下一轮的**：上游 `canEdit` / `canRegenerate` / `canBranch` 里还有
+`!isUploading` / `!thread.isLoading` / `!branchThread.isPending` 三串条件，
+本仓 `interactive` 只等于 `!isDemo`。
 
 ## 上一轮（2026-09-16 第二十六轮）做了什么
 
