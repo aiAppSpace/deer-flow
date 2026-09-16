@@ -936,11 +936,7 @@
     "integrations#load-failed/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -954,11 +950,7 @@
     "integrations#load-failed/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -972,11 +964,7 @@
     "integrations#load-failed/desktop/dark/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -990,11 +978,7 @@
     "integrations#load-failed/mobile/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status",
-        "GET /api/integrations/lark/status"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -1520,11 +1504,7 @@
     "scheduled-tasks#load-failed/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -1538,11 +1518,7 @@
     "scheduled-tasks#load-failed/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -1556,11 +1532,7 @@
     "scheduled-tasks#load-failed/mobile/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [
         "GET /api/channels/providers",
         "GET /api/features",
@@ -1578,11 +1550,7 @@
     "scheduled-tasks#load-failed/desktop/dark/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks",
-        "GET /api/scheduled-tasks"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -2015,11 +1983,7 @@
     "artifact-batched-stream#preview-failed/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -2033,11 +1997,7 @@
     "artifact-batched-stream#preview-failed/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -2051,11 +2011,7 @@
     "artifact-batched-stream#preview-failed/desktop/dark/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md",
-        "GET /api/threads/00000000-0000-0000-0000-000000000001/artifacts/mnt/user-data/outputs/batched-report.md"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],

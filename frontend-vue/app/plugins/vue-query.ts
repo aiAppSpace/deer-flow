@@ -14,13 +14,24 @@
                    同一次 500，**上游发了 3 次 `GET /api/integrations/lark/status`，
                    本仓发 1 次**。
 
-                   **决定：保留本仓的 `retry: false`**，判据是 fork-boundary 里
-                   那条已授权的例外「vue 有更好的可以保留」——
-                   thread history 的 404 意味着 thread 不存在（上游把 403 也当
-                   404 处理，为的是不泄露「这个 thread 存不存在」），而 TanStack 的
-                   默认重试**不分错误码**，于是重试三次只是把跳回空聊天页推迟 3 秒。
-                   **翻案判据**：哪天需要按错误码分流（5xx 重试、4xx 不重试），
-                   那时把这里换成一个 `retry: (count, error) => …`，而不是改回默认。
+                   ~~**决定：保留本仓的 `retry: false`**~~ —— **2026-09-16 第三十二轮
+                   按上面那条翻案判据兑现了**：换成 `isRetryableTransportError`
+                   这条**两个应用逐字同一份**的判据（`core/api/errors.ts`），
+                   **只重试传输层失败（`fetch` 抛的原生 `TypeError`：断网 / DNS / TLS），
+                   任何 HTTP 状态码一律不重试**。
+
+                   为什么不是把其中一边抄成另一边：抄 `3` 是照搬上游的缺陷
+                   （404 也重试三次，只把错误界面推迟几秒），
+                   抄 `false` 是把上游对瞬时故障的韧性一起抹掉。
+                   **这条判据比两边现状都好，而且让台账在三个失败终态上收敛**
+                   （33 个投影）。上游那一侧同一条改在
+                   `frontend/src/components/query-client-provider.tsx`。
+
+                   **判据放在 `core/api/retry.ts`（零依赖）而不是 `core/api/errors.ts`**：
+                   这个插件**每条路由都加载**，第一版写在 `errors.ts` 里当场被
+                   `tests/e2e/route-payload.spec.ts` 抓住——`/` 的首屏 brotli
+                   131546 对预算 131200，**超 346 字节**，因为那条新的 import 边
+                   把 `GatewayResponseError` 与整套读响应的机器拖进了首屏。
 
                    `refetchOnWindowFocus: false` 是全局默认，`THREAD_HISTORY_QUERY_POLICY`
                    里又写了一遍——不是冗余：那份策略是上游 `thread-history-options`
@@ -29,11 +40,23 @@
 
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 
+import { isRetryableTransportError } from "@/core/api/retry";
+
+/**
+ * 传输层失败重试几次。
+ *
+ * 取 TanStack 自己的默认次数（3），**改的是「哪一类错误值得重试」而不是「重试几次」**
+ * ——换一个新数字会让「为什么是 2 / 5」变成一句没人验得了的话。
+ */
+const TRANSPORT_RETRY_LIMIT = 3;
+
 export default defineNuxtPlugin((nuxtApp) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false,
+        retry: (failureCount, error) =>
+          failureCount < TRANSPORT_RETRY_LIMIT &&
+          isRetryableTransportError(error),
         refetchOnWindowFocus: false,
       },
     },
