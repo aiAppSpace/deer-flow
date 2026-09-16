@@ -558,13 +558,17 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
    而这个 workflow 有 `paths:` 过滤**（`.github/workflows/frontend-vue-verify.yml`
    只在 `frontend-vue/**`、`contracts/**`、`backend/app/gateway/**` 等路径变动时触发）。
    **纯 docs 提交不会有任何 run**，于是「HEAD 有没有绿」这个问题本身就问错了——
-   第二十二轮收工点 `4ada3f4a` 是纯 docs 提交，`runs?head_sha=4ada3f4a` 返回
-   `total_count: 0`，而三份文档都写着「已推送、CI 全绿」。**正确的问法是
+   第二十二轮收工点 `4ada3f4a` 是纯 docs 提交，一个 run 都没有，
+   而三份文档都写着「已推送、CI 全绿」。**正确的问法是
    「覆盖当前 `frontend-vue` 树的那次 run 绿不绿」**——往前找第一个动过受控路径的提交：
 
    ```bash
-   gh api 'repos/aiAppSpace/deer-flow/actions/runs?head_sha=<sha>' --jq '.total_count'
+   gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git rev-parse HEAD)" --jq '.total_count'
    ```
+
+   **`head_sha` 必须是全 sha**（第二十三轮当场踩的）：传短 sha **永远返回 `0`**，
+   于是这条命令会在任何情况下都「证明」没有 run——**一个恒绿的判据等于没有判据**。
+   （那一轮的结论侥幸还是对的：`4ada3f4a` 用全 sha 查也是 0。**侥幸对不等于量对了。**）
 
    `0` 的意思是「这个 sha 没被测过」，**不是「没问题」**；这时去看上一个动过
    `frontend-vue/` 的 sha，那次 run 才是当前树的结论。
