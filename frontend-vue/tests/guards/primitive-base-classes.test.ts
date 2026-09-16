@@ -67,6 +67,8 @@ const DECLARED: Record<string, string> = {
     "同 `DropdownMenuItem`：多一条 `hover:bg-accent`，理由同上。",
   DropdownMenuSubTrigger:
     "① 同 `DropdownMenuItem` 的 `hover:bg-accent`，理由同上；② 多一组 `data-[disabled]:pointer-events-none data-[disabled]:opacity-50`——上游这一颗**没有**禁用态样式（兄弟组件 `DropdownMenuItem` 有），禁用的子菜单看上去与可用的一样。保留本仓的（翻案判据：上游哪天补上这两条，这一条就该整个删掉）。",
+  CommandInput:
+    "两边底层不同构（本仓 Reka `ListboxFilter`、上游 cmdk `Input`），**逐字照抄反而把渲染对齐搞坏**：2026-09-16 第三十一轮试过一次，对照台账当场报出 `role:dialog[Model Selector] height React=135.6 Vue=122.5 Δ-13.1` 等六行几何，而改之前这一屏几何全对。判据取渲染一致而不是类串一致——最终目标是「界面完全一致」，类串只是它的代理。翻案判据：两边底层同构了（或上游换掉 cmdk）就重新逐字对一遍。",
   ScrollArea:
     "本仓多一个 `overflow-hidden`。ScrollArea 这一整类差异 wave 98 已判过（上游那层 `Suggestions` 永远不会真的滚动，决定不跟）；这一条随那笔账。",
   TooltipContent:
@@ -119,6 +121,61 @@ function walk(dir: string, ext: string, out: string[] = []): string[] {
   return out;
 }
 
+/**
+ * 找出源码里每一处 `cn(...)` 的**实参文本**，用配平括号扫，而不是正则。
+ *
+ * **为什么不用正则**（2026-09-16 第三十一轮实测）：原来两边各是一条
+ * `cn\(([\s\S]*?),\s*props\.class\s*,?\s*\)` 式的非贪婪正则。
+ * 它有一个静默失效：只要文件里**更早**有一处 `cn(` 的实参里带别的 `props.xxx`，
+ * 非贪婪匹配会从那一处起跳、跨行吞到后面真正的 `props.class`，
+ * 交出一段混着模板与 `</script>` 的垃圾实参 —— `literalTokens` 判它不是纯字面量、
+ * 返回 null、`continue`，于是**这个组件整个从比对集合里消失，而没有任何提示**。
+ *
+ * 当轮就是这么撞上的：给 `ScrollArea` 加了 `props.scrollbarClass` 之后，
+ * ScrollArea 从 `vueBases()` 里消失，两边「不再有差异」，
+ * 只有「DECLARED 里不许留着已经一致了的条目」那条断言把它捞了出来。
+ * **尺子坏了会让它守的那件事静默全绿**（线索 131 的形状）。
+ */
+function cnCallArgs(source: string): string[] {
+  const out: string[] = [];
+  for (const match of source.matchAll(/\bcn\(/g)) {
+    let index = match.index + match[0].length;
+    let depth = 1;
+    while (index < source.length && depth > 0) {
+      const char = source[index];
+      if (char === "(") depth += 1;
+      else if (char === ")") depth -= 1;
+      index += 1;
+    }
+    if (depth === 0)
+      out.push(source.slice(match.index + match[0].length, index - 1));
+  }
+  return out;
+}
+
+/**
+ * 一处 `cn(...)` 的实参文本里，**最后一个顶层实参**。
+ *
+ * 判据是「最后一个实参是不是调用方传进来的 class」——那正是「基类 + 调用方覆盖」
+ * 这个写法的形状。按顶层逗号切，所以实参里嵌套的 `cn()` / 对象不会切歪。
+ */
+function splitTopLevelArgs(args: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < args.length; index += 1) {
+    const char = args[index];
+    if (char === "(" || char === "[" || char === "{") depth += 1;
+    else if (char === ")" || char === "]" || char === "}") depth -= 1;
+    else if (char === "," && depth === 0) {
+      parts.push(args.slice(start, index));
+      start = index + 1;
+    }
+  }
+  parts.push(args.slice(start));
+  return parts.map((part) => part.trim()).filter((part) => part.length > 0);
+}
+
 /** 只有「全是字符串字面量」的那一种读得出基类；混了运行时表达式的读不出。 */
 function literalTokens(args: string): string[] | null {
   const literals = [...args.matchAll(STRING_LITERAL)].map(literalBody);
@@ -131,14 +188,17 @@ function vueBases(): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const file of walk(vueRoot, ".vue")) {
     const source = readFileSync(file, "utf8");
-    const match = source.match(/cn\(([\s\S]*?),\s*props\.class\s*,?\s*\)/);
-    if (!match) continue;
-    const tokens = literalTokens(match[1]!);
-    if (!tokens) continue;
-    out.set(
-      file.slice(file.lastIndexOf("/") + 1).replace(/\.vue$/, ""),
-      tokens,
-    );
+    for (const args of cnCallArgs(source)) {
+      const parts = splitTopLevelArgs(args);
+      if (parts.length < 2 || parts.at(-1) !== "props.class") continue;
+      const tokens = literalTokens(parts.slice(0, -1).join(", "));
+      if (!tokens) continue;
+      out.set(
+        file.slice(file.lastIndexOf("/") + 1).replace(/\.vue$/, ""),
+        tokens,
+      );
+      break;
+    }
   }
   return out;
 }
@@ -153,9 +213,20 @@ function reactBases(): Map<string, string[]> {
   if (!upstreamPresent) return out;
   for (const file of walk(reactRoot, ".tsx")) {
     const source = readFileSync(file, "utf8");
-    for (const match of source.matchAll(
-      /cn\(([\s\S]*?),\s*className,?\s*\)/g,
-    )) {
+    for (const match of source.matchAll(/\bcn\(/g)) {
+      let index = match.index + match[0].length;
+      let depth = 1;
+      while (index < source.length && depth > 0) {
+        const char = source[index];
+        if (char === "(") depth += 1;
+        else if (char === ")") depth -= 1;
+        index += 1;
+      }
+      if (depth !== 0) continue;
+      const parts = splitTopLevelArgs(
+        source.slice(match.index + match[0].length, index - 1),
+      );
+      if (parts.length < 2 || parts.at(-1) !== "className") continue;
       // 组件名取这次 cn() 之前最近的一个 `function X` / `const X`。
       const declaration = [
         ...source
@@ -163,7 +234,7 @@ function reactBases(): Map<string, string[]> {
           .matchAll(/(?:function|const)\s+([A-Z][A-Za-z0-9]*)/g),
       ].pop();
       if (!declaration) continue;
-      const tokens = literalTokens(match[1]!);
+      const tokens = literalTokens(parts.slice(0, -1).join(", "));
       if (!tokens) continue;
       out.set(declaration[1]!, tokens);
     }

@@ -3,7 +3,27 @@
   【架构位置】     L2
   【主要导出】     CommandInput 组件
   【依赖关系】     Reka ListboxFilter · cn
-  【边界与注意】   焦点留在 input 上，选中项通过 aria-activedescendant 宣告——
+  【边界与注意】   **基类与上游不同字，而那是量出来的取舍，不是漏抄。**
+                   上游 `ui/command.tsx` 的 `CommandInput` 是外层
+                   `flex h-9 items-center gap-2 border-b px-3` + input
+                   `placeholder:text-muted-foreground flex h-10 w-full rounded-md
+                   bg-transparent py-3 text-sm outline-hidden …`；本仓是外层
+                   `border-border flex items-center gap-2 border-b px-3` + input
+                   `h-12 min-w-0 flex-1 … outline-none`。
+
+                   2026-09-16 第三十一轮**试过逐字照抄**，对照台账当场报出六行几何：
+                   `role:dialog[Model Selector] height React=135.6 Vue=122.5 Δ-13.1`、
+                   `y Δ6.5`、`role:option y Δ-6.5`（两个语言维各三行），
+                   而**改之前这一屏几何是全对的**。原因是底层不同构：
+                   本仓是 Reka `ListboxFilter`、上游是 cmdk `Input`，
+                   外层与 input 的盒模型不一样，同一串类渲染出不同高度。
+
+                   **判据取渲染一致而不是类串一致**——最终目标是「界面完全一致」，
+                   类串只是它的代理。这一条因此留在
+                   `tests/guards/primitive-base-classes.test.ts` 的 `DECLARED` 里，
+                   **翻案判据**：两边底层同构了（或上游换掉 cmdk）就重新逐字对一遍。
+
+                   焦点留在 input 上，选中项通过 aria-activedescendant 宣告——
                    所以调用方不要再把焦点搬到列表项上。
 
                    **role="combobox" 三件套是写死的**，与上游 cmdk 一致

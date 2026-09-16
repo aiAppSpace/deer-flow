@@ -147,6 +147,7 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
   let bodySamples = 0;
   /** 只有 `PARITY_ONLY` 时才收：两边的完整请求序列。 */
   const rawRequests: Record<string, { react: string[]; vue: string[] }> = {};
+  const rawTabbables: Record<string, { react: string[]; vue: string[] }> = {};
 
   for (const scenario of PARITY_SCENARIOS) {
     if (ONLY && scenario.id !== ONLY) continue;
@@ -196,6 +197,17 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
             react: [...react.requests],
             vue: [...vue.requests],
           };
+          /*
+            **可 tab 清单也留全的。** `tabbablesOnly*` 报的是差集，
+            而查「这颗到底是谁、它在两边各排第几」要看完整序列——
+            第三十一轮查 `div[scroll-area-viewport]` 那族（64 个投影）时，
+            光看差集把人绕进了「两边 primitive 都写了 tabindex，那差异从哪来」
+            的死胡同，只能靠完整序列才看得出是**用在哪**不一样。
+          */
+          rawTabbables[entryKey] = {
+            react: [...react.tabbables],
+            vue: [...vue.tabbables],
+          };
         }
       }
   }
@@ -244,7 +256,8 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     console.log(
       `PARITY_ONLY=${ONLY} 取样计数：伪元素 ${pseudoSamples} / 请求体 ${bodySamples}\n` +
         `${JSON.stringify(entries, null, 2)}\n` +
-        `REQUESTS\n${JSON.stringify(rawRequests, null, 2)}`,
+        `REQUESTS\n${JSON.stringify(rawRequests, null, 2)}\n` +
+        `TABBABLES\n${JSON.stringify(rawTabbables, null, 2)}`,
     );
     return;
   }

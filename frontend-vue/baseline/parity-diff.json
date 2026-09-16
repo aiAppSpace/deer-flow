@@ -11,9 +11,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -27,9 +25,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -43,9 +39,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -59,9 +53,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -75,9 +67,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -91,9 +81,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -107,9 +95,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -123,9 +109,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -139,9 +123,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -155,9 +137,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -171,9 +151,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -187,9 +165,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -253,8 +229,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div(menuitem)",
-        "div[scroll-area-viewport]"
+        "div(menuitem)"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -270,8 +245,7 @@
       "order": [],
       "depth": [],
       "tabbablesOnlyReact": [
-        "div(menuitem)",
-        "div[scroll-area-viewport]"
+        "div(menuitem)"
       ],
       "tabbablesOnlyVue": [],
       "tabOrder": []
@@ -286,9 +260,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -302,9 +274,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -546,9 +516,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -562,9 +530,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -581,9 +547,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -597,13 +561,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "mcp-settings/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -615,13 +575,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "mcp-settings/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -633,13 +589,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "thread-title-sync/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -879,9 +831,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -895,9 +845,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -939,13 +887,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#default/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -957,13 +901,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#default/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -975,13 +915,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#default/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -993,13 +929,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#load-failed/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1015,13 +947,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#load-failed/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1037,13 +965,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#load-failed/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -1059,13 +983,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#load-failed/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -1081,13 +1001,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-load-failed/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1099,13 +1015,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-load-failed/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1117,13 +1029,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-load-failed/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -1135,13 +1043,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-load-failed/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -1153,13 +1057,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1171,13 +1071,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1189,13 +1085,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -1207,13 +1099,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -1225,13 +1113,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-loading/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1243,13 +1127,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-loading/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1261,13 +1141,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-loading/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -1279,13 +1155,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#skills-loading/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -1297,13 +1169,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#permission-request/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1315,13 +1183,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#permission-request/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1333,13 +1197,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#permission-request/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -1351,13 +1211,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#permission-request/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -1369,13 +1225,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#change-app/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1387,13 +1239,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#change-app/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1405,13 +1253,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#change-app/desktop/dark/en-US": {
       "ariaOnlyReact": [],
@@ -1423,13 +1267,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "integrations#change-app/mobile/light/en-US": {
       "ariaOnlyReact": [],
@@ -1441,13 +1281,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 8 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "branch-thread#default/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1767,13 +1603,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "settings-notification/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1785,13 +1617,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 15 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "channels#default/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1803,9 +1631,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1819,9 +1645,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1835,9 +1659,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1851,9 +1673,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1867,9 +1687,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1883,9 +1701,7 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
@@ -1899,13 +1715,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "channels#settings-panel/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1917,13 +1729,9 @@
       "focus": [],
       "order": [],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": [
-        "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "channels#settings-panel-connected/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -1944,15 +1752,11 @@
         "第 47 个公共节点 React=- button \"Modify\" Vue=- button \"Disconnect parity-account\": Disconnect"
       ],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [
         "button"
       ],
-      "tabOrder": [
-        "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "channels#settings-panel-connected/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -1972,15 +1776,11 @@
         "第 47 个公共节点 React=- button \"修改\" Vue=- button \"断开 parity-account\": 断开连接"
       ],
       "depth": [],
-      "tabbablesOnlyReact": [
-        "div[scroll-area-viewport]"
-      ],
+      "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [
         "button"
       ],
-      "tabOrder": [
-        "第 22 个公共可 tab 元素 React=div[scroll-area-viewport] Vue=button"
-      ]
+      "tabOrder": []
     },
     "thread-history-mermaid#default/desktop/light/en-US": {
       "ariaOnlyReact": [],

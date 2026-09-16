@@ -54,6 +54,7 @@ import ThreadArchiveStatus from "@/components/workspace/ThreadArchiveStatus.vue"
 import ThreadBackgroundTasks from "@/components/workspace/ThreadBackgroundTasks.vue";
 import ThreadSubagentBatches from "@/components/workspace/ThreadSubagentBatches.vue";
 import GoalStatus from "@/components/workspace/GoalStatus.vue";
+import { Suggestion, Suggestions } from "@/components/ui/suggestion";
 import TodoList from "@/components/workspace/TodoList.vue";
 import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import WorkspacePanels from "@/components/workspace/WorkspacePanels.vue";
@@ -2212,6 +2213,16 @@ onUnmounted(() => {
                   新的流上面（上游用这一条与提交时的 `setFollowupsLoading(false)` 挡了两道）。
                 - `!bootstrap` 是本仓独有的一条，理由见下面那段注释。
               -->
+              <!--
+                **外面是两层容器，不是一层**（上游 `input-box.tsx:2187-2188`）：
+                外层 `flex items-center justify-center pb-1`，内层 `flex items-center gap-2`。
+                本仓此前把它压成一个带 `mb-2 flex-wrap` 的 div——`mb-2` 上游没有，
+                而 `flex-wrap` 落在了错的那一层（上游的换行发生在 `Suggestions`
+                的列表格里，外面两层都不换行）。
+
+                **加载态与建议行是互斥的两支**（上游是三元），本仓此前把它们并列，
+                于是「正在生成建议」那颗 chip 会和上一轮的建议同时挂着。
+              -->
               <div
                 v-if="
                   !bootstrap &&
@@ -2221,50 +2232,45 @@ onUnmounted(() => {
                   !stream.isStreaming.value &&
                   (followupsLoading || followups.length > 0)
                 "
-                data-slot="suggestions-list"
-                class="mb-2 flex w-full flex-wrap justify-center gap-2"
+                class="flex items-center justify-center pb-1"
               >
-                <span
-                  v-if="followupsLoading"
-                  class="text-muted-foreground bg-background/80 rounded-full border px-4 py-1.5 text-xs backdrop-blur-sm"
-                >
-                  {{ $i18n.t.value.inputBox.followupLoading }}
-                </span>
-                <!--
-                  上游 `input-box.tsx:2131` 两颗都走 Button：建议 chip 是
-                  `<Suggestion>`（= `variant="outline" size="sm"` 加
-                  `h-auto rounded-full px-4 py-2 text-xs font-normal
-                  whitespace-normal dark:bg-background`），关闭键是
-                  `<Button variant="outline" size="sm" class="h-auto rounded-full
-                  px-2.5 py-1.5 text-xs font-normal"><XIcon class="size-4" /></Button>`。
+                <div class="flex items-center gap-2">
+                  <div
+                    v-if="followupsLoading"
+                    class="text-muted-foreground bg-background/80 rounded-full border px-4 py-1.5 text-xs backdrop-blur-sm"
+                  >
+                    {{ $i18n.t.value.inputBox.followupLoading }}
+                  </div>
+                  <!--
+                    关闭键**在 `Suggestions` 里面**（上游 `input-box.tsx:2203`），
+                    不是它的兄弟节点——它跟着建议一起进那个可滚动列表格。
 
-                  **关闭键此前画的是文字 `×`**（U+00D7 乘号），不是 lucide `X`——
-                  跟着正文字体渲染，字形、字重、光学重心都和 16px 的图标不是一回事。
-                  这条 aria 看不见（两边可访问名都是 `common.close`）。
-                  chip 的内边距也差一档：`px-3 py-1.5` 对上游 `px-4 py-2`。
-                -->
-                <Button
-                  v-for="suggestion in followups"
-                  :key="suggestion"
-                  class="text-muted-foreground dark:bg-background h-auto max-w-full rounded-full px-4 py-2 text-center text-xs font-normal whitespace-normal"
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                  @click="composer?.offerFollowup(suggestion)"
-                >
-                  {{ suggestion }}
-                </Button>
-                <Button
-                  v-if="followups.length"
-                  :aria-label="$i18n.t.value.common.close"
-                  class="text-muted-foreground h-auto rounded-full px-2.5 py-1.5 text-xs font-normal"
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                  @click="followups = []"
-                >
-                  <X class="size-4" />
-                </Button>
+                    **关闭键此前画的是文字 `×`**（U+00D7 乘号），不是 lucide `X`——
+                    跟着正文字体渲染，字形、字重、光学重心都和 16px 的图标不是一回事。
+                    这条 aria 看不见（两边可访问名都是 `common.close`）。
+                    `cursor-pointer` 也照上游补上：本仓 Button 基类没有它。
+                  -->
+                  <Suggestions v-else class="w-fit items-center">
+                    <Suggestion
+                      v-for="suggestion in followups"
+                      :key="suggestion"
+                      class="py-1.5"
+                      @click="composer?.offerFollowup(suggestion)"
+                    >
+                      {{ suggestion }}
+                    </Suggestion>
+                    <Button
+                      :aria-label="$i18n.t.value.common.close"
+                      class="text-muted-foreground h-auto cursor-pointer rounded-full px-2.5 py-1.5 text-xs font-normal"
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      @click="followups = []"
+                    >
+                      <X class="size-4" />
+                    </Button>
+                  </Suggestions>
+                </div>
               </div>
               <!--
                 **待办面板外面有两层定位容器，欢迎态与常规态不同**

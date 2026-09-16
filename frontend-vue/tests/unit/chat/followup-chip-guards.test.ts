@@ -33,11 +33,36 @@ describe("follow-up chip visibility", () => {
     `send()` 只清 `followups` 不清 `followupsLoading`，上一轮建议还没取回来时再发
     一条，「正在生成建议」那颗 chip 会一直挂在新的流上面。
   */
+  /*
+    **锚在「这件事」上，不锚在邻居身上。** 原来的写法是找
+    `data-slot="suggestions-list"` 再往前取 400 个字符——那个属性 2026-09-16
+    第三十一轮把建议行重构成 `ui/suggestion` 之后**搬进了包装组件**，
+    于是 `indexOf` 返回 -1、`slice(-401, -1)` 静静地切走了文件末尾一段，
+    六条断言全部去一段无关文本里找判据。**用例钉错对象和产品回归长得一模一样**
+    （线索：wave 107 那条 `auth-contract` 钉在中间态上的同一个形状）。
+
+    现在按语义定位：把所有 `v-if="..."` 的表达式取出来，
+    要求**恰好一处**提到 `followupsLoading`——那就是建议行那一支。
+    形状断言（恰好一处）自带反向检查：哪天有第二处，这条会红而不是悄悄挑错一个。
+  */
   it("carries every guard upstream's showFollowups has", () => {
-    const block = agentChat.slice(
-      agentChat.indexOf('data-slot="suggestions-list"') - 400,
-      agentChat.indexOf('data-slot="suggestions-list"'),
-    );
+    const conditions = [...agentChat.matchAll(/v-if="([\s\S]*?)"/g)]
+      .map((match) => match[1]!)
+      /*
+        取**外层那道总闸**：它是唯一同时提到两者的那一处。
+        只按 `followupsLoading` 过会连加载态那颗 pill 自己的 `v-if` 一起捞上来
+        （第三十一轮把加载态与建议行改成互斥两支之后就有两处了）。
+      */
+      .filter(
+        (expression) =>
+          expression.includes("followupsLoading") &&
+          expression.includes("followups.length"),
+      );
+    expect(
+      conditions,
+      "建议行那一支的 v-if 没找到、或找到不止一处",
+    ).toHaveLength(1);
+    const block = conditions[0]!;
     for (const guard of [
       "!bootstrap",
       "!isDemo",

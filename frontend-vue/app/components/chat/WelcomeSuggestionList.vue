@@ -17,32 +17,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ConfettiButton from "@/components/ui/effects/ConfettiButton.vue";
+import {
+  SUGGESTION_CHIP_CLASS,
+  Suggestions,
+  suggestionEntranceDelay,
+} from "@/components/ui/suggestion";
 
 defineProps<{ disabled?: boolean }>();
 const emit = defineEmits<{ select: [prompt: string] }>();
 const { $i18n } = useNuxtApp();
-
-const suggestionClass =
-  "text-muted-foreground dark:bg-background h-auto max-w-full cursor-pointer rounded-full px-4 py-2 text-center text-xs font-normal whitespace-normal";
-
-/*
-  逐个淡入的错峰延时，常数照上游 `ai-elements/suggestion.tsx`
-  （`STAGGER_DELAY_MS_OFFSET = 250`、`STAGGER_DELAY_MS = 60`）。
-
-  上游把这一层套在 `Suggestions` 里，本仓**不跟那个包装**（它是一个永远不会真滚动的
-  ScrollArea，判据记在一页纸清单第 6 条），但入场动画是另一回事——它是用户看得见的
-  产品行为，wave 167 之前本仓一处都没有。
-*/
-const entranceDelay = (index: number) => `${250 + index * 60}ms`;
 </script>
 
 <template>
-  <div
-    data-slot="suggestions-list"
+  <Suggestions
+    class="min-h-16 max-w-full justify-center self-center px-4 sm:w-fit sm:px-0"
     data-testid="welcome-suggestions"
-    class="flex min-h-16 w-full max-w-full flex-wrap items-center justify-center gap-2 self-center px-4 sm:w-fit sm:px-0"
   >
-    <span class="entrance" :style="{ animationDelay: entranceDelay(0) }">
+    <span
+      class="entrance"
+      :style="{ animationDelay: suggestionEntranceDelay(0) }"
+    >
       <ConfettiButton
         variant="outline"
         size="sm"
@@ -59,13 +53,13 @@ const entranceDelay = (index: number) => `${250 + index * 60}ms`;
       v-for="(suggestion, index) in $i18n.t.value.inputBox.suggestions"
       :key="suggestion.suggestion"
       class="entrance"
-      :style="{ animationDelay: entranceDelay(index + 1) }"
+      :style="{ animationDelay: suggestionEntranceDelay(index + 1) }"
     >
       <Button
         type="button"
         variant="outline"
         size="sm"
-        :class="suggestionClass"
+        :class="SUGGESTION_CHIP_CLASS"
         :disabled="disabled"
         @click="emit('select', suggestion.prompt)"
       >
@@ -77,7 +71,7 @@ const entranceDelay = (index: number) => `${250 + index * 60}ms`;
     <span
       class="entrance"
       :style="{
-        animationDelay: entranceDelay(
+        animationDelay: suggestionEntranceDelay(
           $i18n.t.value.inputBox.suggestions.length + 1,
         ),
       }"
@@ -89,7 +83,7 @@ const entranceDelay = (index: number) => `${250 + index * 60}ms`;
             type="button"
             variant="outline"
             size="sm"
-            :class="suggestionClass"
+            :class="SUGGESTION_CHIP_CLASS"
             :disabled="disabled"
           >
             <Plus class="size-4" />
@@ -119,7 +113,7 @@ const entranceDelay = (index: number) => `${250 + index * 60}ms`;
         </DropdownMenuContent>
       </DropdownMenu>
     </span>
-  </div>
+  </Suggestions>
 </template>
 
 <style scoped>
