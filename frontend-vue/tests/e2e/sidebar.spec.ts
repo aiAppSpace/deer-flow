@@ -112,4 +112,70 @@ test.describe("Sidebar navigation", () => {
       mobileSidebar.locator("a[href='/workspace/agents']"),
     ).toBeVisible();
   });
+
+  /*
+    **窄屏、抽屉没打开时，侧栏那三个查询一次都不该发。**
+
+    上游窄屏的侧栏是 Sheet，关着时整棵子树不在 DOM 里，于是
+    `WorkspaceNavChatList` / `WorkspaceChannelsList` / `RecentChatList`
+    这三颗组件各自持有的查询自然不跑。对照台账上
+    `scheduled-tasks#default` 与 `#load-failed` 两屏的
+    `requestsOnlyVue: GET /api/channels/providers · GET /api/features ·
+    POST /api/threads/search` 就是本仓多发的那三条（wave 214）。
+
+    两处根因，缺一条这门就漏：
+    ① `isNarrow` 以前在 `onMounted` 里才纠正，而父组件的 `onMounted` 跑在子组件
+       **全部挂载之后**——首帧先挂桌面那一支，整棵侧栏连同查询起来一次再扔掉；
+    ② `useThreads()` 与 `useAgentsApiEnabled()` 以前写在抽屉**外面**的
+       `ThreadSidebar` setup 里，跟抽屉开不开没关系。
+
+    **所以这条用例按「请求」判，不按「DOM 里有没有侧栏」判**：修掉①之后 DOM
+    终态一直是对的（抽屉关着，什么都没有），只有请求能看见那一帧。
+  */
+  test("does not run the sidebar queries while the mobile drawer is closed", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    const seen: string[] = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith("/api/")) seen.push(`${request.method()} ${path}`);
+    });
+    mockLangGraphAPI(page);
+
+    await page.goto("/workspace/chats/new");
+    // 等到这一屏真的画出来，否则「没有请求」可能只是还没开始。
+    await expect(page.getByRole("textbox").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.locator("[data-sidebar='trigger']:visible").first(),
+    ).toBeVisible();
+
+    expect(
+      seen.filter((entry) => entry.endsWith("/api/channels/providers")),
+    ).toEqual([]);
+    expect(
+      seen.filter((entry) => entry.endsWith("/api/threads/search")),
+    ).toEqual([]);
+
+    // 反向：抽屉一打开，这三条就该出现——否则上面的 0 只是把侧栏整个弄没了。
+    await page.locator("[data-sidebar='trigger']:visible").first().click();
+    await expect(
+      page.locator("[data-mobile='true'][data-sidebar='sidebar']"),
+    ).toBeVisible();
+    await expect
+      .poll(
+        () =>
+          seen.filter((entry) => entry.endsWith("/api/channels/providers"))
+            .length,
+      )
+      .toBeGreaterThan(0);
+    await expect
+      .poll(
+        () =>
+          seen.filter((entry) => entry.endsWith("/api/threads/search")).length,
+      )
+      .toBeGreaterThan(0);
+  });
 });

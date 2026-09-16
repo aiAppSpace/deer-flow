@@ -2,7 +2,7 @@
   【文件职责】     以一个 splitpanes 组承载聊天区与 artifacts/sidecar/browser 共用右侧面板。
   【架构位置】     L3 workspace layout
   【主要导出】     WorkspacePanels
-  【依赖关系】     splitpanes；面板业务开关仍由 AgentChat 的唯一状态路径拥有
+  【依赖关系】     splitpanes · useMediaQuery；面板业务开关仍由 AgentChat 的唯一状态路径拥有
   【边界与注意】   使用 splitpanes 原生 width/keyboard/ARIA 行为；只在真实 release 后持久化或折叠。
                    **窄屏是另一套实现，不是同一套加几条媒体查询。** React 在 isMobile
                    分支把整个分栏换成 Sheet（frontend/src/components/workspace/chats/chat-box.tsx），
@@ -12,14 +12,7 @@
 -->
 
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { Pane, Splitpanes, type SplitpanesResizedPayload } from "splitpanes";
 
 import {
@@ -29,6 +22,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useMediaQuery } from "@/composables/useMediaQuery";
 
 const props = defineProps<{
   open: boolean;
@@ -62,14 +56,11 @@ const panelRegion = ref<HTMLElement | null>(null);
   把它报成 dialog 等于告诉用户「其余内容现在不可用」，而它明明可用。
 
   断点用 JS 判定而不是只靠 CSS：两边是**两棵不同的树**，媒体查询换不了树。
-  SSR 阶段当作宽屏，与 React 的 useIsMobile 在服务端按桌面渲染一致。
+  **首帧就要是真值**——晚一帧等于在窄屏上先把桌面那棵树整个挂一次再扔掉，
+  连同它的副作用；判据写在 `useMediaQuery.ts` 的文件头。
 */
 const NARROW_QUERY = "(max-width: 767px)";
-const isNarrow = ref(false);
-let narrowMedia: MediaQueryList | null = null;
-function syncNarrow(event: MediaQueryList | MediaQueryListEvent) {
-  isNarrow.value = event.matches;
-}
+const isNarrow = useMediaQuery(NARROW_QUERY);
 
 const sideSize = computed(() =>
   props.open ? clampOpenSize(props.panelSize) : 0,
@@ -122,16 +113,8 @@ function syncSplitterDisabled() {
   }
 }
 onMounted(async () => {
-  narrowMedia = globalThis.matchMedia?.(NARROW_QUERY) ?? null;
-  if (narrowMedia) {
-    syncNarrow(narrowMedia);
-    narrowMedia.addEventListener("change", syncNarrow);
-  }
   await nextTick();
   syncSplitterDisabled();
-});
-onBeforeUnmount(() => {
-  narrowMedia?.removeEventListener("change", syncNarrow);
 });
 watch(() => props.open, syncSplitterDisabled, { flush: "post" });
 

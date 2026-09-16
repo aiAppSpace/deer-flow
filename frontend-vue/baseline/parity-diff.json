@@ -480,9 +480,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
-      "geometry": [
-        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) anim=none Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0) anim=none"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -496,9 +494,7 @@
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
-      "geometry": [
-        "role:separator[undefined] after React=content=\"\" op=1 w=4 h=800 bg=rgba(0,0,0,0) anim=none Vue=content=\"\" op=1 w=16 h=800 bg=rgba(0,0,0,0) anim=none"
-      ],
+      "geometry": [],
       "focus": [],
       "order": [],
       "depth": [],
@@ -537,10 +533,7 @@
     "thread-list-pin#mobile-drawer/mobile/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
-      "requestsOnlyReact": [
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
+      "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
@@ -1473,11 +1466,7 @@
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
-      "requestsOnlyVue": [
-        "GET /api/channels/providers",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
       "focus": [],
@@ -1533,11 +1522,7 @@
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
-      "requestsOnlyVue": [
-        "GET /api/channels/providers",
-        "GET /api/features",
-        "POST /api/threads/search"
-      ],
+      "requestsOnlyVue": [],
       "requestBodies": [],
       "geometry": [],
       "focus": [],

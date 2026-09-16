@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第三十三轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-16 第三十四轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -37,14 +37,25 @@
 > | 族 | 当时 | 现在 | 谁改的 |
 > | --- | --- | --- | --- |
 > | A `scroll-area-viewport` 可 tab | 6 条 / 105 投影 | **0** | 本仓补上游缺的整层 `Suggestions`（第三十一轮） |
-> | B 请求集合 | 9 条 / 43 投影 | **6 条 / 10 投影** | 大头（33 投影）是重试策略，**两边同改**（第三十二轮）；剩下 8 个是侧栏窄屏挂载时机，另 2 个是 `thread-title-sync` 上游多发的 `GET /langgraph/threads/{id}` |
+> | B 请求集合 | 9 条 / 43 投影 | **1 条 / 2 投影** | 大头（33 投影）是重试策略，**两边同改**（第三十二轮）；侧栏窄屏挂载时机那 8 个**两边同改**（第三十四轮）；剩下的 2 个是 `thread-title-sync` 上游多发的 `GET /langgraph/threads/{id}` |
 > | C 请求体 | 2 条 / 2 投影 | 2 条 / 2 投影 | 未动（判词见第三十轮条目） |
 > | D 多账号绑定块 | 12 条 / 12 投影 | **0** | **改上游**：它把账号列表塌成了一条（第三十三轮） |
-> | E/F/G/H + 其余 | — | **8 条 / 11 投影** | 未动（tooltip 播报节点 / 焦点落点 / 分栏把手 / alert 播报 / `div(menuitem)` 与 `button` 各 2） |
+> | G 分栏把手 | 1 条 / 2 投影 | **0** | **两边同改**：上游那 4px 拖拽热区改成 16px（第三十四轮） |
+> | E/F/H + 其余 | — | **7 条 / 9 投影** | 未动（tooltip 播报节点 / 焦点落点 / alert 播报 / `div(menuitem)`） |
 >
-> **现状读数**（2026-09-16 第三十三轮 accept 之后的签入基线）：
-> **147 场景-维度 / 23 唯一行 / 16 条不同的差异 / 23 个投影**，起点是 170 个投影。
-> 下一件事：族 B 剩下的 8 个投影（侧栏窄屏挂载时机，第三十四轮已量到一半）。
+> **现状读数**（2026-09-16 第三十四轮 accept 之后的签入基线）：
+> **147 场景-维度 / 13 唯一行 / 10 条不同的差异 / 13 个投影**，起点是 170 个投影。
+>
+> **剩下的十条，逐条的下一步**（都在第三十四轮条目里有读数）：
+>
+> | 差异 | 投影 | 下一步 |
+> | --- | --- | --- |
+> | `tabbablesOnlyReact: div(menuitem)` | 2 | 子菜单开着时上游多一个可 tab 的菜单项，先拿 `PARITY_ONLY=thread-history` 的 `TABBABLES` 段量出是哪一个 |
+> | `requestsOnlyReact: GET /langgraph/threads/{id}` | 2 | **架构差异，已判**：上游头部标题来自 `useThreadMetadata`（改名后失效重取），本仓头部读列表缓存、由 `loadInitial(true)` 收敛。两边都收敛到服务端，端点不同。**翻案判据**：本仓哪天真有一个消费 `["thread","metadata",id]` 的查询（现在三处失效全是空操作），这一行必须归零 |
+> | `focus: React=Close Vue=文件行` | 3 | 工作区变更面板打开时首个焦点落点不同，先查是不是「打开那一刻内容还没到」 |
+> | `ariaOnlyReact: - alert` / `ariaOnlyVue: - alert: New chat - DeerFlow` | 2 | **已定位**：本仓 `RouteAnnouncer` 在 `onMounted` 里抓 `previousName`，那时页面标题还没写上，于是第一次路由切换会把**没变过**的标题播一遍。改成「进入导航时读离开页的名字」 |
+> | `ariaOnlyReact: - tooltip "…"` | 2 | **已定位**：reka 的 `TooltipContentImpl` 把隐藏播报节点的内容写成 `ariaLabel` **而没有 children 兜底**（Radix 是 `ariaLabel \|\| children`），于是本仓那个 `role=tooltip` 节点是空的。在 `ui/tooltip/TooltipContent.vue` 里按插槽文本补出 `aria-label` |
+> | `requestBodies` ×2 | 2 | 建线程本仓多带 `assistant_id:"lead_agent"`——后端 `_DEFAULT_ASSISTANT_ID` 就是它，等价于不传，**删掉向上游看齐**；`runs/stream` 的 `values` / `stream_resumable` 要连着 `authoritativeTodos` 的数据来源一起改 |
 
 ### 归族与还账路径（**还账前**的快照，35 条差异条目，分组一律写「N 条差异条目」）
 
@@ -165,6 +176,89 @@ EOF
 - **覆盖率棘轮现状**：covered **37** / pending **1** / exempt **3**。
   `covered` 与场景目录逐字相等由棘轮守卫钉着（`e2e-parity` 150 passed 里验过），
   **不需要也不该再用正则去数一遍**。
+
+---
+
+
+> ## 2026-09-16 第三十四轮：**侧栏窄屏挂载时机——两处根因，两边同改**
+>
+> ### 零、先说这一轮被尺子推翻的那个前提
+>
+> 上一轮的半程判词写着「两边窄屏分支**都是 Sheet**，关着时内容都不在 DOM 里」，
+> 于是把这 8 个投影当成「本仓多发」。**这个前提只对了一半，而错的那一半是关键**：
+> Sheet 关着确实不渲染内容，但**首帧渲染的不是 Sheet**——窄屏由 JS 判定，
+> 首帧两边都先挂桌面那一支，整棵侧栏连同它的查询起来一次，随后才被扔掉。
+>
+> **是尺子把这件事翻出来的，不是推理。** 只改本仓、只跑完整 `e2e-parity` 之后，
+> 台账不是少 6 行而是**多出 45 行**：15 个 mobile 场景上变成
+> `requestsOnlyReact: channels/providers · features · threads/search`。
+> 也就是说**上游在 chats 系路由上一直在发这三条**，只有 `scheduled-tasks` 那两屏不发。
+> 直接探针（`E2E_REACT_APP_URL` 上打 `fetch` 钩子）实测：
+> `/workspace/chats/new` 三条请求发出时 `[data-slot=sidebar]` 的 `data-mobile` 是
+> **desktop**，而终态 DOM 里一个侧栏都没有——**上游自己就是那个「白挂载一次」**。
+> 同一份 layout、同一个 hook，`/workspace/scheduled-tasks` 却一条都不发：
+> **上游在这件事上没有契约，只有一个随水合时序开奖的结果。**
+>
+> ### 一、两处根因
+>
+> **① 断点判定晚了一帧。** 本仓 `isNarrow` 初值 false、在 `onMounted` 里才读
+> `matchMedia`，而父组件的 `onMounted` 跑在**子组件全部挂载之后**。
+> `ThreadSidebar` / `WorkspacePanels` 各手搓了一份，`toggleSidebar` 里还有第三处
+> 直接 `matchMedia`。统一成 `app/composables/useMediaQuery.ts`：
+> **客户端首次渲染就是真值**，订阅随 scope 释放。
+> `/workspace/**` 是 `ssr: false`（`config/routes.ts` 的 `csrRoutes`），
+> 首帧就是客户端渲染，**不存在水合不一致**。
+>
+> **② 查询挂在抽屉外面。** 上游 `WorkspaceSidebar` 自己的函数体里**没有查询**，
+> 三个查询分别归 `WorkspaceNavChatList`(`features`) /
+> `WorkspaceChannelsList`(`channels/providers`) / `RecentChatList`(`threads/search`)，
+> 它们都是 `<Sidebar>` 的子节点。本仓把前两个写在 `ThreadSidebar` 的 setup 里，
+> 那是抽屉**外面**那一层。按上游分层补两颗真组件
+> （`WorkspaceNavChatList.vue` / `RecentChatList.vue`），
+> `ThreadSidebar` 退回编排层，它那份 `useThreads({ enabled: false })` 是只读缓存
+> ——重命名/置顶/删除三套处理器要与 `ProjectsSection` 的行共用同一个对话框和同一条 alert。
+>
+> ### 二、上游那一侧（两边同改）
+>
+> 上游躲不开①：workspace 是 SSR（`force-dynamic`），`useIsMobile` 的
+> `getServerSnapshot()` 必须返回 false 才不水合不一致。所以上游改的是②那一半的极端形式——
+> `ui/sidebar.tsx` 的桌面分支**水合期间不渲染 `children`**（`useIsHydrated()`，
+> 标准的 React 18 水合探针：服务端快照 false / 客户端快照 true，只翻一次、不额外排渲染）。
+>
+> **代价是量过的**：`sidebar-gap` 与 `sidebar-container` 仍然进服务端 HTML，
+> 所以**桌面不位移**，晚一帧到的只是侧栏自己的内容——而它本来就全是客户端取数。
+> **没有改成「给查询加 enabled」**：那样整棵子树照样挂一次再卸一次，
+> 而且每加一个子组件都要记得再 opt-in 一次。
+>
+> ### 三、读数（都是实测，不是推理）
+>
+> | 探针 | 改前 | 改后 |
+> | --- | --- | --- |
+> | 本仓 375px `/workspace/chats/new` | `channels/providers` 1 · `features` 2 · `threads/search` 1 | `features` 1，其余 0 |
+> | 上游 375px `/workspace/chats/new` | 同上三条 + 页面自己的 | 只剩页面自己的 |
+> | 上游 375px `/workspace/scheduled-tasks` | 本来就只有 `scheduled-tasks` | 不变 |
+> | 两边 1280px | 三条都发 | 不变（晚一帧，集合相同） |
+>
+> **负向验证**：把 `useMediaQuery` 改回「挂载后再纠正」，
+> `tests/e2e/sidebar.spec.ts` 那条新门禁当场报红
+> （`requestsOnlyVue: GET /api/channels/providers`），改回来即绿。
+>
+> ### 四、顺带结清的一笔：账 G（分栏把手）
+>
+> 上游 `ui/resizable.tsx` 的拖拽热区是 `after:w-1`（4px），本仓是 16px，
+> 历轮判词是「本仓更好，已接受」。按最终目标那是欠账不是结清，
+> 而 4px 的热区是**上游的可用性缺陷**（分隔线是改宽度的唯一入口，
+> 4px 鼠标都难稳中，触控板更不用说），所以**两边同改**：上游改成 `after:w-4`。
+> 可见的那条 1px 线一个像素都没动，两个方向（水平/垂直）一起改。
+> `sidecar-chat` 那两行 `geometry: role:separator after w=4 vs w=16` 归零。
+>
+> ### 五、这一轮留下的门
+>
+> - `tests/e2e/sidebar.spec.ts`：窄屏抽屉关着时那三条请求为 0，**打开后必须出现**
+>   （反向那一半不能少，否则「把侧栏整个弄没了」也能绿）；
+> - `tests/unit/workspace/use-media-query.dom.test.ts`：子组件挂载那一刻就拿到真值；
+> - `tests/unit/workspace-shell/sidebar-skeleton.test.ts` 的读取面从两份扩到四份
+>   ——拆完它当场报红，报的正是搬走的那三颗 slot。**这就是这道门存在的理由。**
 
 ---
 

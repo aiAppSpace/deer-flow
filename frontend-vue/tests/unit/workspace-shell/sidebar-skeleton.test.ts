@@ -13,13 +13,21 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /*
-  侧栏自 wave 148 起是**两份文件**：外壳（窄屏是 Sheet、宽屏是版面里的一块）
-  与主体。`data-slot="sidebar-inner"` 跟着外壳走，其余骨架 slot 仍在主体里，
-  所以这份合同要同时读两份——只读主体会让 `sidebar-inner` 那一条静默失守。
+  骨架分散在**四份文件**里，这份合同要把它们一起读。
+
+  - wave 148：外壳（窄屏 Sheet / 宽屏版面块）拆成 `ThreadSidebarShell.vue`，
+    `data-slot="sidebar-inner"` 跟着它走；
+  - wave 214：导航组与「最近的对话」组各自拆成组件，理由是**查询的归属**
+    （见那两份文件的头注释），组/组标题/组内容那三颗 slot 跟着搬了过去。
+
+  只读其中一两份，搬走的那几条会**静默失守**——这正是 wave 214 当场撞到的：
+  拆完这条用例立刻报红，报的就是 `sidebar-group` / `-label` / `-content`。
 */
 const source = [
   "app/components/workspace/ThreadSidebarShell.vue",
   "app/components/workspace/ThreadSidebar.vue",
+  "app/components/workspace/WorkspaceNavChatList.vue",
+  "app/components/workspace/RecentChatList.vue",
 ]
   .map((file) => readFileSync(resolve(process.cwd(), file), "utf8"))
   .join("\n");

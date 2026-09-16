@@ -5,7 +5,7 @@ import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react";
 
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsHydrated, useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,6 +164,25 @@ function Sidebar({
   collapsible?: "offcanvas" | "icon" | "none";
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+  /*
+    While hydrating, `isMobile` is still the server's guess (`false`), so the
+    desktop branch below is what renders on a phone for exactly one pass. The
+    markup itself is harmless — it is `hidden md:block`, so nothing is painted —
+    but React mounts `children` and runs their effects before the corrected
+    render can unmount them, and the sidebar's children are the owners of
+    `GET /api/features`, `GET /api/channels/providers` and
+    `POST /api/threads/search`. Measured on a 375px viewport: three requests for
+    a sidebar the user never sees.
+
+    Holding the children back until hydration is over costs one render on
+    desktop and nothing anywhere else: `sidebar-gap` and `sidebar-container`
+    still ship in the server HTML, so the layout does not shift — only the
+    sidebar's own content arrives with the rest of the client-rendered app.
+    Do NOT "fix" this by gating the queries instead: that leaves the whole
+    subtree mounting and unmounting for nothing, and each new child has to
+    remember to opt in.
+  */
+  const hydrated = useIsHydrated();
 
   if (collapsible === "none") {
     return (
@@ -246,7 +265,7 @@ function Sidebar({
           data-slot="sidebar-inner"
           className="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
         >
-          {children}
+          {hydrated ? children : null}
         </div>
       </div>
     </div>

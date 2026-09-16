@@ -25,18 +25,15 @@
                    `ThreadSidebarShell.vue`。门禁：tests/guards/handwritten-primitive-slots.test.ts
                    只管 `ui/` 里确实存在的那些 slot。
 */
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import {
-  Bot,
   Bug,
-  CalendarClock,
   ChevronsUpDown,
   Github,
   Globe,
   Info,
   Mail,
   MessageSquarePlus,
-  MessagesSquare,
   Settings,
   Settings2,
 } from "lucide-vue-next";
@@ -44,9 +41,9 @@ import {
 import WorkspaceChannelsList from "@/components/workspace/channels/WorkspaceChannelsList.vue";
 import ProjectsSection from "@/components/workspace/projects/ProjectsSection.vue";
 import ProjectMoveDialog from "@/components/workspace/projects/ProjectMoveDialog.vue";
-import ThreadSidebarItem from "@/components/workspace/ThreadSidebarItem.vue";
+import RecentChatList from "@/components/workspace/RecentChatList.vue";
 import ThreadSidebarShell from "@/components/workspace/ThreadSidebarShell.vue";
-import VirtualThreadList from "@/components/workspace/VirtualThreadList.vue";
+import WorkspaceNavChatList from "@/components/workspace/WorkspaceNavChatList.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -65,9 +62,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -76,13 +70,8 @@ import {
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
 import { useMoveThreadToProject } from "@/composables/useProjects";
 import { useThreads } from "@/composables/useThreads";
-import { useAgentsApiEnabled } from "@/composables/useWorkspaceFeatures";
-import {
-  SIDEBAR_NARROW_QUERY,
-  useWorkspaceSidebar,
-} from "@/composables/useWorkspaceSidebar";
+import { useWorkspaceSidebar } from "@/composables/useWorkspaceSidebar";
 import { ThreadCascadeDeleteError } from "@/core/threads/delete";
-import { flattenThreadBranches } from "@/core/threads/thread-branch-tree";
 import { pathOfThread, titleOfThread } from "@/core/threads/utils";
 import type { AgentThread } from "@/core/threads/types";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
@@ -90,16 +79,28 @@ import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 const route = useRoute();
 const router = useRouter();
 const { $i18n } = useNuxtApp();
-const threads = useThreads();
-const features = useAgentsApiEnabled();
+/*
+  **这里只读缓存、不发请求**（`enabled: false`，与 `ProjectsSection.vue` 同一个写法）。
+  列表的取数方是 `RecentChatList.vue`，理由写在那份文件的头注释：上游把
+  `useInfiniteThreads` 放在抽屉**里面**的组件里，本仓原来放在抽屉外面，于是窄屏
+  关着抽屉也照发一次 `threads/search`。
+
+  重命名/置顶/删除这三套**处理器仍然留在这里**：`ProjectsSection` 的行与
+  `RecentChatList` 的行共用它们，失败也要落在同一个对话框、同一条 alert 上。
+  变更走 mutation，不受 `enabled` 影响。
+*/
+const threads = useThreads({ enabled: false });
 const settingsDialog = useSettingsDialog();
 const toast = useWorkspaceToast();
-const sentinel = ref<HTMLElement | null>(null);
 /*
   窄屏由 JS 判定而不是只靠 CSS：React 在移动端把侧栏换成 Sheet，关着时**整棵子树
   都不在 DOM 里**。只用 translate 推出屏幕的话，元素仍然可聚焦、仍然被读屏器遍历——
-  用户会 Tab 进一个自己看不见的导航。SSR 阶段当作宽屏，与 React 的 useIsMobile
-  在服务端返回 undefined（按桌面渲染）一致，水合后再纠正。
+  用户会 Tab 进一个自己看不见的导航。
+
+  **`isNarrow` 首帧就是真值**（`useMediaQuery`），不是挂载后再纠正：这个组件的
+  `onMounted` 跑在子组件全部挂载之后，晚一帧就意味着窄屏上先把整棵桌面侧栏挂一次
+  再扔掉，而那一帧里下面几个查询已经把请求发出去了。判据与上游那套机制写在
+  `useMediaQuery.ts` 的文件头。
 
   开合态本身住在 `useWorkspaceSidebar`，不在这个组件里：触发器有三个调用点，
   另外两个（AgentChat / WorkspaceContainer）此前拿不到这份状态，见那个文件的头注释。
@@ -113,10 +114,8 @@ const {
   closeMobileSidebar,
   toggleSidebar,
   collapseSidebar,
-  syncNarrow,
   restoreFromCookie,
 } = useWorkspaceSidebar();
-let narrowMedia: MediaQueryList | null = null;
 const settingsOpen = ref(false);
 const settingsTrigger = ref<HTMLButtonElement | null>(null);
 const renameThreadId = ref<string | null>(null);
@@ -124,9 +123,6 @@ const renameTitle = ref("");
 const deleteError = ref<string | null>(null);
 const failedDeleteThread = ref<AgentThread | null>(null);
 const deletingThreadId = ref<string | null>(null);
-let observer: IntersectionObserver | null = null;
-/** 哨兵在不在视口里。见下面观察者那段注释：它必须是状态，不能只当事件用。 */
-const sentinelVisible = ref(false);
 
 const displayThreadTitle = (thread: Parameters<typeof titleOfThread>[0]) =>
   titleOfThread(thread, $i18n.t.value.pages.untitled);
@@ -144,50 +140,13 @@ const displayThreadTitle = (thread: Parameters<typeof titleOfThread>[0]) =>
 */
 
 onMounted(() => {
-  narrowMedia = globalThis.matchMedia?.(SIDEBAR_NARROW_QUERY) ?? null;
-  if (narrowMedia) {
-    syncNarrow(narrowMedia);
-    narrowMedia.addEventListener("change", syncNarrow);
-  }
   restoreFromCookie();
   globalThis.addEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.addEventListener("deerflow:collapse-sidebar", collapseSidebar);
-  /*
-    **观察者只记「哨兵在不在视口里」这个状态，翻页交给 watch。**
-
-    写成「在回调里直接判 canLoadMore」是错的，而且错得很隐蔽：列表还空的时候
-    哨兵本来就在视口内，回调触发一次、被 `canLoadMore === false` 挡掉；此后哨兵
-    一直可见，**不会再有 intersection 事件**，于是首屏数据到了也永远不翻页。
-    `scrollIntoViewIfNeeded` 对已在视口内的元素不滚动，也就不产生新事件——
-    e2e `thread-list-infinite-scroll.spec.ts` 那条等满 15 秒超时就是这个形状。
-
-    以前 `onMounted` 里有一句 `void threads.loadInitial()` 排在建观察者之前，
-    时序上遮住了它；列表查询改成自己会跑（`enabled` 打开）之后那句没了，它就露出来了。
-    **一次性事件 + 依赖异步状态的守卫**本来就是脆的，改成状态 + watch 才是对的形状。
-
-    `loadMore()` 自己有在途守卫，重复触发安全。
-  */
-  observer = new IntersectionObserver(
-    (entries) => {
-      sentinelVisible.value = entries.some((entry) => entry.isIntersecting);
-    },
-    { rootMargin: "120px 0px 120px 0px" },
-  );
-  if (sentinel.value) observer.observe(sentinel.value);
-});
-watch([sentinelVisible, () => threads.canLoadMore], ([visible, canLoad]) => {
-  if (visible && canLoad) void threads.loadMore();
 });
 onUnmounted(() => {
-  narrowMedia?.removeEventListener("change", syncNarrow);
-  observer?.disconnect();
   globalThis.removeEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.removeEventListener("deerflow:collapse-sidebar", collapseSidebar);
-});
-
-watch(sentinel, (element, previous) => {
-  if (previous) observer?.unobserve(previous);
-  if (element) observer?.observe(element);
 });
 
 watch(() => route.fullPath, closeMobileSidebar);
@@ -196,11 +155,6 @@ function isActive(path: string) {
   return route.path === path;
 }
 
-/*
-  侧栏显示的行 = 前 200 条（threads.displayedThreads）**加上当前打开的那条**，
-  哪怕它已经掉出上限之外。React 的 RecentChatList 就是这么补的：翻得足够深再点开
-  一条老会话，不补的话侧栏里没有任何一行是高亮的，用户看不出自己在哪儿。
-*/
 /*
   移动会话到项目：**mutation 与对话框都由侧栏持有**，不放在会话行的下拉菜单里。
   菜单在点击后立刻卸载，挂在里面的失败回调会跟着没掉，错误就静默了
@@ -212,41 +166,9 @@ const moveToProject = useMoveThreadToProject({
 });
 const newProjectForThreadId = ref<string | null>(null);
 
-/*
-  侧栏列表按**分支树**展开：分叉出来的会话缩进挂在父会话下面，而不是按时间
-  散在列表各处。摊成带 `thread_id` 的行，是因为虚拟列表的泛型只要求这一个字段
-  （见 VirtualThreadList 的 `generic="Row extends { thread_id: string }"`），
-  这样分支信息能一路带到行组件里而不用改那份契约。
-*/
-
 function requestMoveToProject(threadId: string, projectId: string | null) {
   moveToProject.mutate({ threadId, projectId });
 }
-
-const sidebarThreads = computed(() => {
-  const activeId = route.params.thread_id;
-  if (typeof activeId !== "string" || !activeId) {
-    return threads.displayedThreads;
-  }
-  if (
-    threads.displayedThreads.some((thread) => thread.thread_id === activeId)
-  ) {
-    return threads.displayedThreads;
-  }
-  const active = threads.threads.find(
-    (thread) => thread.thread_id === activeId,
-  );
-  return active
-    ? [...threads.displayedThreads, active]
-    : threads.displayedThreads;
-});
-
-const sidebarRows = computed(() =>
-  flattenThreadBranches(sidebarThreads.value).map((entry) => ({
-    ...entry,
-    thread_id: entry.thread.thread_id,
-  })),
-);
 
 function startNewChat() {
   mobileOpen.value = false;
@@ -537,91 +459,7 @@ function openSettingsDialog(section: "appearance" | "about") {
       data-sidebar="content"
       class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto"
     >
-      <SidebarGroup class="pt-1">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              as-child
-              :is-active="
-                route.path.startsWith('/workspace/chats') &&
-                !isActive('/workspace/chats/new')
-              "
-              :tooltip="$i18n.t.value.sidebar.chats"
-              :tooltip-hidden="!collapsed"
-            >
-              <NuxtLink class="text-muted-foreground" to="/workspace/chats">
-                <MessagesSquare :size="16" class="shrink-0" />
-                <span>{{ $i18n.t.value.sidebar.chats }}</span>
-              </NuxtLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              v-if="features.agentsApiEnabled.value"
-              as-child
-              :is-active="route.path.startsWith('/workspace/agents')"
-              :tooltip="$i18n.t.value.sidebar.agents"
-              :tooltip-hidden="!collapsed"
-            >
-              <NuxtLink class="text-muted-foreground" to="/workspace/agents">
-                <Bot :size="16" class="shrink-0" />
-                <span>{{ $i18n.t.value.sidebar.agents }}</span>
-              </NuxtLink>
-            </SidebarMenuButton>
-            <!--
-              禁用那一支的**外观**照上游 workspace-nav-chat-list.tsx:56 抄三条：
-              ① 包裹层 `cursor-not-allowed`——上游明写在这一层（还留了注释说明
-                 为什么在 span 上而不在按钮上：按钮已经 pointer-events:none）；
-              ② 按钮 `aria-disabled:pointer-events-none aria-disabled:opacity-50`
-                 ——上游 SidebarMenuButton 的 cva 自带这两条，本仓原来一条都没有，
-                 于是这个禁用的入口**还会跟着鼠标高亮**，看起来和能点的一样；
-              ③ 颜色是 `text-muted-foreground/50`（半透明），不是全实的 muted。
-            -->
-            <div v-else class="group relative block w-full cursor-not-allowed">
-              <SidebarMenuButton
-                type="button"
-                class="text-muted-foreground/50"
-                :aria-label="$i18n.t.value.sidebar.agents"
-                aria-disabled="true"
-                aria-describedby="agents-disabled-description"
-              >
-                <Bot :size="16" class="shrink-0" />
-                <span>{{ $i18n.t.value.sidebar.agents }}</span>
-              </SidebarMenuButton>
-              <span id="agents-disabled-description" class="sr-only">{{
-                $i18n.t.value.sidebar.agentsDisabledTooltip
-              }}</span>
-              <!--
-                这里刻意**不**换成 Tooltip primitive。禁用入口的原因必须对键盘和读屏器
-                恒定可见，所以它挂在一个常驻的 aria-describedby 上；Reka 的 tooltip 只在
-                打开时才写 aria-describedby，as-child 合并会把这条常驻关联覆盖成 undefined。
-                悬停浮层在这里只是视觉补充，用 CSS 就够。
-              -->
-              <span
-                aria-hidden="true"
-                class="bg-popover text-popover-foreground absolute top-full left-2 z-50 hidden rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow group-focus-within:block group-hover:block"
-                >{{ $i18n.t.value.sidebar.agentsDisabledTooltip }}</span
-              >
-            </div>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              as-child
-              :is-active="route.path.startsWith('/workspace/scheduled-tasks')"
-              :tooltip="$i18n.t.value.sidebar.scheduledTasks"
-              :tooltip-hidden="!collapsed"
-            >
-              <NuxtLink
-                to="/workspace/scheduled-tasks"
-                class="text-muted-foreground"
-              >
-                <CalendarClock :size="16" class="shrink-0" />
-                <span>{{ $i18n.t.value.sidebar.scheduledTasks }}</span>
-              </NuxtLink>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroup>
+      <WorkspaceNavChatList />
 
       <WorkspaceChannelsList v-if="sidebarExpanded" />
 
@@ -647,88 +485,22 @@ function openSettingsDialog(section: "appearance" | "about") {
         @delete-thread="removeThread($event)"
       />
 
-      <!--
-        一条会话都没有的时候，标题和列表**都不渲染**——React 的 RecentChatList 在
-        threads.length === 0 时直接 return null。留一个空标题加一个空 ul，读屏器会
-        念出「最近的对话，列表，0 项」，而屏幕上其实什么都没有。
-      -->
-      <SidebarGroup v-if="sidebarExpanded && sidebarRows.length">
-        <SidebarGroupLabel>
-          {{ $i18n.t.value.sidebar.recentChats }}
-        </SidebarGroupLabel>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            <!--
-              按钮和哨兵是 ul 的**非 li 子节点**，与 React 一样：它们不是列表项，
-              包进 li 会让读屏器把「加载更早的对话」念成第 51 个会话。哨兵还要
-              aria-hidden——一个 1px 高的空 li 在可访问性树里是一个真实的 listitem。
-            -->
-            <div
-              class="flex w-full flex-col gap-1"
-              style="overflow-anchor: none"
-            >
-              <VirtualThreadList
-                :estimate-size="36"
-                :gap="4"
-                :items="sidebarRows"
-                scroll-parent-selector='[data-sidebar="content"]'
-              >
-                <template #default="{ thread: row }">
-                  <ThreadSidebarItem
-                    :thread="row.thread"
-                    :title="displayThreadTitle(row.thread)"
-                    :is-active="isActive(pathOfThread(row.thread))"
-                    :pinned="threads.isPinned(row.thread)"
-                    :deleting="deletingThreadId === row.thread.thread_id"
-                    :branch-entry="row"
-                    @rename="beginRename(row.thread.thread_id)"
-                    @toggle-pin="togglePinned(row.thread)"
-                    @delete="removeThread(row.thread)"
-                    @new-project-for-thread="
-                      newProjectForThreadId = row.thread.thread_id
-                    "
-                    @move-to-project="
-                      requestMoveToProject(row.thread.thread_id, $event)
-                    "
-                  />
-                </template>
-              </VirtualThreadList>
-              <template v-if="threads.hasMore && threads.canLoadMore">
-                <!--
-                  上游 `recent-chat-list.tsx:434` 是
-                  `<Button variant="ghost" size="sm"
-                  className="mx-2 my-1 w-[calc(100%-1rem)] justify-center text-xs">`。
-                  手写那版把悬停色写成了 **sidebar-accent**，而上游这一颗走的是
-                  Button 的 ghost 变体、用的是普通 **accent**——两套变量在深色主题下
-                  不是同一个值。另外少 `cursor-pointer`、3px 焦点环、
-                  `dark:hover:bg-accent/50`、`gap-1.5` 与 `font-medium`。
-                -->
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  data-testid="recent-chat-list-load-more"
-                  :disabled="threads.loadingMore"
-                  class="mx-2 my-1 w-[calc(100%-1rem)] justify-center text-xs"
-                  @click="threads.loadMore()"
-                >
-                  {{
-                    threads.loadingMore
-                      ? $i18n.t.value.chats.loadingMore
-                      : $i18n.t.value.chats.loadOlderChats
-                  }}
-                </Button>
-                <div
-                  ref="sentinel"
-                  aria-hidden="true"
-                  data-testid="recent-chat-list-sentinel"
-                  class="h-px w-full"
-                />
-              </template>
-            </div>
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+      <RecentChatList
+        v-if="sidebarExpanded"
+        :active-thread-id="
+          typeof route.params.thread_id === 'string'
+            ? route.params.thread_id
+            : null
+        "
+        :title-of="displayThreadTitle"
+        :is-active-path="isActive"
+        :deleting-thread-id="deletingThreadId"
+        @rename-thread="beginRename($event)"
+        @toggle-pin-thread="togglePinned($event)"
+        @delete-thread="removeThread($event)"
+        @new-project-for-thread="newProjectForThreadId = $event"
+        @move-to-project="requestMoveToProject"
+      />
     </div>
     <div
       v-if="sidebarExpanded && deleteError"

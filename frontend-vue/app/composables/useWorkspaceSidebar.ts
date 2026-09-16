@@ -18,11 +18,17 @@
                    两边同改才有意义，本轮按对照原则先保持一致并记账。
 
                    ③ 模块级 `const ref` 即单例，与 `useSettingsDialog` 同一形状。
-                   SSR 阶段当作宽屏（`isNarrow` 初值 false），与上游 `useIsMobile`
-                   在服务端返回 undefined、按桌面渲染一致，水合后由 `syncNarrow` 纠正。
+                   **`isNarrow` 不在这一列**：它是视口的纯函数，谁算都一样，
+                   所以交给 `useMediaQuery` 按 scope 订阅，不必也不该做成单例。
+
+                   ④ **`isNarrow` 首帧就是真值**，不是挂载后再纠正。为什么这件事
+                   非这样不可（以及上游靠什么机制拿到同样的结果），写在
+                   `useMediaQuery.ts` 的文件头 ①②。
 */
 
 import { computed, ref } from "vue";
+
+import { useMediaQuery } from "@/composables/useMediaQuery";
 
 const SIDEBAR_COOKIE = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -31,7 +37,6 @@ export const SIDEBAR_NARROW_QUERY = "(max-width: 767px)";
 
 const collapsed = ref(false);
 const mobileOpen = ref(false);
-const isNarrow = ref(false);
 
 /** 上游 `useSidebar().open`。见文件头 ②：**不**包含窄屏抽屉。 */
 const open = computed(() => !collapsed.value);
@@ -39,6 +44,8 @@ const open = computed(() => !collapsed.value);
 const sidebarExpanded = computed(() => !collapsed.value || mobileOpen.value);
 
 export function useWorkspaceSidebar() {
+  const isNarrow = useMediaQuery(SIDEBAR_NARROW_QUERY);
+
   function setCollapsed(value: boolean) {
     collapsed.value = value;
     document.cookie = `${SIDEBAR_COOKIE}=${String(!value)}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; samesite=lax`;
@@ -49,7 +56,7 @@ export function useWorkspaceSidebar() {
   }
 
   function toggleSidebar() {
-    if (globalThis.matchMedia?.(SIDEBAR_NARROW_QUERY).matches) {
+    if (isNarrow.value) {
       mobileOpen.value = !mobileOpen.value;
     } else {
       setCollapsed(!collapsed.value);
@@ -66,10 +73,6 @@ export function useWorkspaceSidebar() {
   function collapseSidebar() {
     if (collapsed.value) return;
     setCollapsed(true);
-  }
-
-  function syncNarrow(event: MediaQueryList | MediaQueryListEvent) {
-    isNarrow.value = event.matches;
   }
 
   /** 从 cookie 恢复桌面收起态；只在客户端调用。 */
@@ -91,7 +94,6 @@ export function useWorkspaceSidebar() {
     closeMobileSidebar,
     toggleSidebar,
     collapseSidebar,
-    syncNarrow,
     restoreFromCookie,
   };
 }

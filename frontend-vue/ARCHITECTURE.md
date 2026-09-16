@@ -307,6 +307,20 @@ Chromium browser runtime 证明握手、REST 和二进制帧。最后一层的�
   边界，实际 open section 由 route query 决定；关闭仅移除 `settings`，保留其余 query/hash。
   Gateway banner 复用唯一 session Query，并立即观察 middleware 预填的 unavailable 状态，
   因此恢复通知不依赖组件先于路由守卫挂载。
+- **侧栏里每个查询由「抽屉里面」的那颗组件持有，不由抽屉外面的 `ThreadSidebar` 持有。**
+  `WorkspaceNavChatList` 持有 `GET /api/features`，`WorkspaceChannelsList` 持有
+  `GET /api/channels/providers`，`RecentChatList` 持有 `POST /api/threads/search`；
+  `ThreadSidebar` 只做编排，它那份 `useThreads({ enabled: false })` 是**只读缓存**，
+  为的是让重命名/置顶/删除三套处理器与 `ProjectsSection` 的行共用同一个对话框和
+  同一条 alert。窄屏的侧栏是 Sheet，关着时这几颗组件都不在 DOM 里，于是这几个查询
+  不跑——把任何一个提到 `ThreadSidebar` 的 setup 里都会让它变成「抽屉关着也发」。
+  由 `tests/e2e/sidebar.spec.ts` 那条 mobile-drawer 用例双向守着（关着为 0、开了要有）。
+- **断点只有一个 owner：`useMediaQuery`，而且它在客户端第一次渲染就是真值。**
+  `useWorkspaceSidebar` 的 `isNarrow` 与 `WorkspacePanels` 的窄屏分支都从它来。
+  「挂载后再纠正」不是一种可接受的实现：父组件的 `onMounted` 跑在子组件全部挂载
+  之后，窄屏首帧会先把桌面那一支连同它的副作用整个挂一次再扔掉。上游用
+  `useSyncExternalStore` 的 layout-effect 重渲染抢在 passive effect 之前达到同样
+  的结果，机制不同、要求相同，判词写在 `app/composables/useMediaQuery.ts` 的文件头。
 - workspace changes 的服务端真相只归 `useWorkspaceChanges`。summary/detail 由
   thread/run/include_files/include_diff 完整 key 隔离，queryFn 必须消费 AbortSignal；组件只持有
   panel open 状态，不复制 response/error。recent-thread 的 share/export pending 状态归每个

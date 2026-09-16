@@ -379,7 +379,8 @@ describe("照抄上游的 class 串", () => {
     少了后半句，谁把它们从 cva 删掉这条用例都不会响。
   */
   it("禁用的 Agents 入口不高亮、不接指针、半透明", () => {
-    const source = stripped("components/workspace/ThreadSidebar.vue");
+    /* wave 214：这一组随「谁持有 features 查询」搬进了自己的组件，判词没变。 */
+    const source = stripped("components/workspace/WorkspaceNavChatList.vue");
     const at = source.indexOf('aria-describedby="agents-disabled-description"');
     expect(at, "找不到禁用入口").toBeGreaterThan(-1);
     const tag = source.slice(
