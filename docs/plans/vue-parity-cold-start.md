@@ -371,7 +371,22 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 ---
 
-## 上一轮（2026-09-16 第二十七轮）做了什么
+## 上一轮（2026-09-16 第二十八轮）做了什么
+
+**账 I 结清。** 上游 `canEdit` / `canRegenerate` / `canBranch` 那三串条件逐条对完，
+**六项里只有两项是真缺口**：`!isUploading` 与 `!branchThread.isPending`。
+另外四项要么本仓已兑现（`!isMock`），要么**靠结构兑现**
+（streaming / 新会话时键根本不画，上游同形），要么在对齐范围之外（`STATIC_WEBSITE_ONLY`）。
+
+**`branchPending` 那一条不只是灰按钮**：本仓 `branch()` 可重入，连点两下两条新线程。
+
+**那条不对称是判据本身**：上游 `canRegenerate` 里没有 `!branchThread.isPending`。
+测里专门钉它，挡「三颗一起禁掉」那种看起来更整齐的写法。
+
+顺带订正了 `AssistantTurnActions.vue` 文件头那段**撑着设计决定**的注释——
+它列的四种只读态里三种不对，而「上传中」那一条**写下来那天就是假的**。
+
+## 再上一轮（2026-09-16 第二十七轮）做了什么
 
 **开了两扇窗、结清一处上游条件门槛。**
 
@@ -437,17 +452,30 @@ Claude 记忆 `measure-dont-guess`）。
 
 **下一轮最该先拿的（按顺序，第 1 条就能直接动手）**：
 
-> 第二十七轮把顺序换了：**第 1 条现在是「上游条件门槛」那条线**，
-> 因为它已经有现成读数（下面第 1 条里那三串条件是当场量出来的），
-> 而开新维度连着两扇窗都是零新差异。
+> ~~第二十七轮把顺序换了：第 1 条是「上游条件门槛」那条线~~
+> —— **第二十八轮已结清（账 I）**，那条线上剩下的两项都补完了。
+> 下面是方向性的活，按性价比排。
 
-1. **上游 `canEdit` / `canRegenerate` / `canBranch` 里那三串条件，本仓没有。**
-   第二十七轮当场量出来的：上游三个判据里都有 `!isUploading` 与 `!thread.isLoading`，
-   `canEdit` / `canBranch` 还多一条 `!branchThread.isPending`；
-   本仓 `MessageList` 收到的 `interactive` 只等于 `!isDemo`
-   （`AgentChat.vue:1956`），三串一条都没有。
-   **判据是「同一个操作在两边同样可用 / 同样不可用」**——上传附件的过程中上游点不动
-   重跑，本仓点得动。逐条的现状与修法草案写在挂账清单第二十七轮条目。
+1. **上游的 agent 会话页根本不传 `canBranch` / `onBranchTurn`——本仓一个组件服务两条路由。**
+   第二十八轮扫完上游所有 `can*={` 传参之后剩下的唯一一条线索（全仓只有
+   `chats/chat-page.tsx` 与 agent 页两处传，逐字比完就这一处不一样）：
+   上游 `[agent_name]/chats/[thread_id]/page.tsx:356/364` **只有 `canRegenerate`
+   与 `canEdit`**，没有 `canBranch`、也没有 `onBranchTurn`——而
+   `message-list.tsx:890` 的渲染条件里有 `onBranchTurn &&`，
+   **也就是说 agent 会话上游压根没有分支入口**。本仓 `AgentChat.vue`
+   一个组件服务两条路由，`branchable` 不看 `agentName`。
+
+   **夹具够不够得着，第二十八轮已经量过了：够不着。** `agent-chat` 的 path 是
+   `/workspace/agents/test-agent/chats/new`——**一条新会话，一条消息都没有**，
+   所以三颗回合键两边都不画，那两个档报的 0 是「压根没测到」，不是「两边一样」
+   （第二十轮那条教训：拿到 0 不等于两边一样）。
+   **所以第一步是给这条场景补一支带完整回合的终态**，
+   与第二十六轮 `GoalStatus` 那笔账同一个形状——
+   `thread-todos` 那份 goal 夹具只有十行配置，就一次逼出两处真差异。
+
+   要是量出来确有差异，**判词要先定「谁对」**：上游 agent 会话不给分支，
+   可能是有意（agent 线程的分支语义不清），也可能只是漏传——
+   去读那两处的注释与 git 历史再定，别默认「上游就是对的」。
 
 2. **方向 1：把取样面往没人看过的维度开一扇窗**（本文件开头那节排第一的一条）。
    **144 个场景-维度里仍有 121 个是 desktop**，非 desktop 只有 8 族。

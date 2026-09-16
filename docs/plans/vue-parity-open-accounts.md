@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十七轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十八轮）
 
 ## 零、2026-09-16 全面审查：**台账的唯一行是投影数，件数要按 `(档, 行文本)` 去重**
 
@@ -84,6 +84,74 @@
 ---
 
 
+> ## 2026-09-16 第二十八轮：**账 I 结清——那三串条件里，本仓只兑现了一条**
+>
+> ### 一、逐条对完之后剩下几条
+>
+> 上游把可用性算在页面那一层（`chats/chat-page.tsx:466-497`）：
+>
+> | 上游判据 | 条件串 |
+> | --- | --- |
+> | `canRegenerate` | `!isNewThread && !isMock && !STATIC && !isUploading && !thread.isLoading` |
+> | `canEdit` | 以上 + `!branchThread.isPending && !hasGoal && !hasOpenHumanInputCard` |
+> | `canBranch` | `canRegenerate` + `!branchThread.isPending` |
+>
+> 本仓对应的只有一个 `interactive`，调用点是 `:interactive="!isDemo"`。
+> **逐条量下来，六项里只有两项是真缺口**：
+>
+> | 上游那一项 | 本仓现状 | 判词 |
+> | --- | --- | --- |
+> | `!isMock` | `interactive = !isDemo` | 已兑现 |
+> | `!thread.isLoading` | **靠结构兑现**：`latestAssistantGroupId` 与 `branchable` 在 streaming 时就空了，键根本不画 | 已兑现——**上游 `message-list.tsx:707/717` 同样是不画**，不是「画着禁用」 |
+> | `!isNewThread` | 新会话没有 assistant 组，键本来就不画 | 已兑现 |
+> | `!STATIC` | 本仓不实现 `STATIC_WEBSITE_ONLY` | **不补**：静态整站模式本来就在对齐范围之外 |
+> | `!isUploading` | **没有** | 补：`uploading` 进三颗键 |
+> | `!branchThread.isPending` | **没有，而且连 pending 位都不存在** | 补：`branchPending` **只进分支与编辑** |
+>
+> **那条不对称是判据本身**：上游 `canRegenerate` 里没有 `!branchThread.isPending`
+> ——分支请求在飞的时候重跑仍然是合法操作。
+> 测里专门有一条钉它，挡的是「顺手把三颗一起禁掉」那种看起来更整齐的写法。
+>
+> ### 二、`branchPending` 那一条不只是灰一下按钮
+>
+> 本仓 `branch()` **可重入**：没有任何 pending 位，连点两下就是两个
+> `POST /threads/{id}/branch`、**两条新线程**，而用户只想要一条。
+> 上游拿的是 react-query mutation 自带的 pending 位。
+> 落点与上游一致：**请求一 settle 就清，不等 `router.push`**
+> （上游同样有「请求已回、页面还没换」那一拍）。
+>
+> ### 三、顺带订正一段**撑着设计决定**的注释
+>
+> `AssistantTurnActions.vue` 的文件头写着「只读态（案例页 isMock、静态站、
+> **上传中、加载中**）下这两颗仍然画出来，只是禁用」。逐条量下来三处都不对：
+>
+> - **「上传中」写下来那天就是假的**——调用点只传 `interactive = !isDemo`，
+>   上传中三颗照样点得动。第二十八轮才补上，同一轮把这段话改成它真正兑现的样子。
+> - **「加载中」不是这一档**：两个应用都是**不画**，不是画着禁用。
+> - **「静态站」在对齐范围之外**，本仓不实现它。
+>
+> 这是第十六轮那条教训的又一个样本：**这类断言不是装饰，是理由**——
+> 它撑着「为什么 show 和 disabled 要拆成两个 prop」这个决定，
+> 而它变假的时候没有任何机器会红。
+>
+> ### 四、负向验证（七条，逐条打印了变异后的被改对象）
+>
+> | # | 变异 | 守卫 |
+> | - | --- | --- |
+> | N1 | 分支的 disabled 摘掉 `uploading` | 红 |
+> | N2 | 重跑的 disabled 摘掉 `uploading` | 红 |
+> | N3 | 分支的 disabled 摘掉 `branchPending` | 红 |
+> | N4 | `show-edit` 摘掉 `!props.uploading` | 红 |
+> | N5 | **把 `branchPending` 也塞进重跑**（看起来更整齐的写法） | 红 |
+> | N6 | 调用点不传 `:branch-pending` | 红 |
+> | N7 | `finally` 里不清 pending | 红 |
+>
+> **N1 第一次没生效却全绿**——`old` 串按未格式化的三行写，实际文件里是一行，
+> `assert` 抛了而后面那条 `run` 照跑。**这正是「一次没生效的变异和守卫没问题
+> 长得一模一样」**（第十七轮那条纪律），靠「先打印被改对象再看用例」当场发现。
+>
+> ---
+>
 > ## 2026-09-16 第二十七轮：**开了两扇零新差异的窗，和一处台账天生看不见的条件**
 >
 > ### 一、两扇新窗：零新差异，而这次「零」有机器证据
