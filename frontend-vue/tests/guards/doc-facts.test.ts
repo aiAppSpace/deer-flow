@@ -295,14 +295,23 @@ type LedgerMeasures = {
 };
 
 /*
-  `diff.spec` 与 `topology.spec` 里的固定用例数。为什么是 8 而两份文件只有
-  7 个 `test(` 调用点：`topology.spec` 最后那个包在一个两项的 `for` 里
-  （vue / react 各一条）。下面那条用例钉住「调用点还是 7 个」——有人加一条
-  用例，调用点数变了就红，逼着这个常量和文档一起跟进。
+  `PARITY_FIXED_SPECS` 那几份 spec 里的固定用例数（**不随场景目录变**的那些）。
+  为什么是 9 而三份文件只有 8 个 `test(` 调用点：`topology.spec` 最后那个包在
+  一个两项的 `for` 里（vue / react 各一条）。下面那条用例钉住「调用点还是 8 个」
+  ——有人加一条用例，调用点数变了就红，逼着这个常量和文档一起跟进。
   **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
   失效时会明确报出来。
+
+  **加新 spec 要同时改三处**：这张表、这个常量、下面那条调用点断言。
+  第二十四轮加 `sidebar-collapsed-affordance.spec.ts` 时走的就是这条
+  （8 → 9 / 7 → 8 个调用点）。
 */
-const PARITY_FIXED_TESTS = 8;
+const PARITY_FIXED_SPECS = [
+  "diff",
+  "topology",
+  "sidebar-collapsed-affordance",
+] as const;
+const PARITY_FIXED_TESTS = 9;
 
 /** 全部读数只从签入基线算，一个字都不从散文里读。 */
 function measureLedger(): LedgerMeasures {
@@ -430,17 +439,17 @@ describe("计划文档里的台账读数和签入基线一致", () => {
   });
 
   it("e2e-parity 的固定用例数常量还对得上调用点", () => {
-    const sites = ["diff", "topology"].reduce(
+    const sites = PARITY_FIXED_SPECS.reduce(
       (n, f) =>
         n +
         (read(`tests/e2e-parity/${f}.spec.ts`).match(/^\s*test\(/gm) ?? [])
           .length,
       0,
     );
-    // 7 个调用点 → 8 条用例（topology 最后一个包在两项 for 里）。
+    // 8 个调用点 → 9 条用例（topology 最后一个包在两项 for 里）。
     expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 7,
-      常量: 8,
+      调用点: 8,
+      常量: 9,
     });
   });
 
