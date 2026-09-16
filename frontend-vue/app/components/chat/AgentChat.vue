@@ -53,6 +53,7 @@ import ContextUsageBadge from "@/components/workspace/ContextUsageBadge.vue";
 import ThreadArchiveStatus from "@/components/workspace/ThreadArchiveStatus.vue";
 import ThreadBackgroundTasks from "@/components/workspace/ThreadBackgroundTasks.vue";
 import ThreadSubagentBatches from "@/components/workspace/ThreadSubagentBatches.vue";
+import GoalStatus from "@/components/workspace/GoalStatus.vue";
 import TodoList from "@/components/workspace/TodoList.vue";
 import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import WorkspacePanels from "@/components/workspace/WorkspacePanels.vue";
@@ -1937,6 +1938,7 @@ onUnmounted(() => {
             :thread-id="routeThreadId"
             :artifact-paths="artifactPanel.artifacts.value"
             :is-mock="isDemo"
+            :has-goal="Boolean(activeGoal)"
             :is-admin="isAdmin"
             :subtasks="stream.subtasks.value"
             :active-run-id="stream.activeRunId.value"
@@ -2259,13 +2261,21 @@ onUnmounted(() => {
                 调用点的 class 也照上游：`bg-background/5`（半透明，配
                 TodoList 自己的 `backdrop-blur-sm`），不是本仓原来的 `mb-2`。
 
-                **`GoalStatus` 没有跟着搬过来**：上游把它和 TodoList 放在同一层
-                （`{activeGoal && <GoalStatus/>}`），本仓的在 `ChatComposer.vue` 里。
-                那是另一处判过的位置差异，单独记在挂账清单里。
+                ~~**`GoalStatus` 没有跟着搬过来**：上游把它和 TodoList 放在同一层
+                （`{activeGoal && <GoalStatus/>}`），本仓的在 `ChatComposer.vue` 里。~~
+                **第二十六轮搬过来了。** 此前它在 `ChatComposer.vue` 的最上面，
+                也就是排在这一整块**下面**；量出来是目标条 y 差 **137px**、
+                待办那四行各差 **-48px**（本仓整体高一档，因为上游那一档被目标条占着），
+                外加 `order` 档第 45 个公共节点两边不同。
+
+                **外层的 `v-if` 要跟着放宽成「有目标**或**有待办」**（上游是
+                `{(hasGoal || hasTodos) && …}`，chat-page.tsx:517）：只按待办判的话，
+                「有目标、没待办」的线程会连目标条一起不渲染——那是把一处位置差异
+                换成一处**缺失**。
               -->
               <div
                 v-if="
-                  authoritativeTodos.length &&
+                  (activeGoal || authoritativeTodos.length) &&
                   !(bootstrap && creation.status.value === 'created')
                 "
                 class="right-0 left-0 z-0"
@@ -2275,7 +2285,9 @@ onUnmounted(() => {
                   class="right-0 bottom-0 left-0 flex flex-col"
                   :class="isWelcomeMode ? 'absolute' : 'relative'"
                 >
+                  <GoalStatus v-if="activeGoal" :goal="activeGoal" />
                   <TodoList
+                    v-if="authoritativeTodos.length"
                     :todos="authoritativeTodos"
                     class="bg-background/5"
                   />
@@ -2318,7 +2330,6 @@ onUnmounted(() => {
                 :submit-message="send"
                 :references="sidecar.conversationQuotes.value"
                 :context="context"
-                :goal="activeGoal"
                 :disabled="isDemo"
                 @send="send"
                 @stop="stopRun"

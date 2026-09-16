@@ -46,7 +46,6 @@ import ModeHoverGuide from "@/components/chat/ModeHoverGuide.vue";
 import ComposerSurface from "@/components/chat/ComposerSurface.vue";
 import WelcomeSuggestionList from "@/components/chat/WelcomeSuggestionList.vue";
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
-import GoalStatus from "@/components/workspace/GoalStatus.vue";
 import type { SidecarReference } from "@/composables/useSidecar";
 import { useComposerDraft } from "@/composables/useComposerDraft";
 import { useModels } from "@/composables/useModels";
@@ -165,7 +164,6 @@ const props = withDefaults(
     showWelcomeSuggestions?: boolean;
     references?: SidecarReference[];
     context?: ThreadRunContextInput;
-    goal?: GoalState | null;
     disabled?: boolean;
     /*
       只加在输入框外框上的 class。欢迎态的 -translate-y 属于**输入框本身**，不属于
@@ -1419,7 +1417,6 @@ defineExpose({ replaceDraft, offerFollowup });
     class="relative flex min-w-0 flex-col"
     :class="isWelcome ? 'gap-4' : 'gap-2'"
   >
-    <GoalStatus v-if="goal" :goal="goal" />
     <!--
       上游 input-box.tsx:2765 是一个**真的** `<Dialog>`：portal 出去、遮罩、焦点陷阱、
       Escape 关闭、`DialogTitle` + `DialogDescription` 提供可访问名与描述，

@@ -116,6 +116,15 @@ const props = withDefaults(
     tailRequest?: number;
     resizeScroll?: "smooth" | "instant";
     interactive?: boolean;
+    /*
+      有活跃目标时，人类消息上的「编辑并重跑」入口要收起来——重跑会把目标的
+      续跑循环打断，上游因此把 `!hasGoal` 直接写进 `canEdit`
+      （`chats/chat-page.tsx:481`，与 `!hasOpenHumanInputCard` 并列）。
+      本仓此前没有这一条，于是喂了目标之后本仓多出一颗上游没有的键——
+      第二十六轮给 `thread-todos` 补 goal 夹具时当场量出来的
+      （`ariaOnlyVue: button "Edit and rerun"`，两个语言维各一条）。
+    */
+    hasGoal?: boolean;
     artifactPaths?: readonly string[];
     isMock?: boolean;
     /** `.skill` 的 Install 只对管理员出现；判据在 ArtifactFileCards 的文件头。 */
@@ -1340,6 +1349,7 @@ onUnmounted(() => {
                   :edit-label="$i18n.t.value.messages.actions.editAndRerun"
                   :show-edit="
                     interactive !== false &&
+                    !props.hasGoal &&
                     !hasOpenHumanInput &&
                     Boolean(message.id) &&
                     editable?.humanMessage.id === message.id
