@@ -12,11 +12,10 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-12 第十八轮收工实测，不是估计）**：
+**接手时的状态（2026-09-16 收工时的快照，**不是断言**——下面每个数都现场量一遍）**：
 
-- 工作区干净；**已推送**——2026-09-15 收到推送指令后把 `main-wc` 推到
-  `origin/main-wc`（快进，本地与远端同一个提交）。之后的新提交默认不推，
-  要推先问用户。
+- 上一轮收工时工作区干净、**已推送到 `origin/main-wc`**。
+  **领先多少、有没有未提交改动、CI 是绿是红，一律现场量**（命令见下一段）。
 - 对照台账 **159 唯一行 / 179 多重集 / 142 个场景-维度**。
   **但「159」是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
@@ -89,15 +88,17 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 
 ### 第一步：按这个顺序读，不要跳
 
-1. `docs/plans/vue-parity-open-accounts.md` —— **一页纸的挂账总清单**，
-   先看「还欠什么」。三分钟读完。
-2. `docs/plans/vue-parity-handoff.md` —— **轮次交接文档**，约 4100 行。
-   必读：开头的「当前状态 / 门禁实测值」、「下一轮」那一节、
-   结尾的「其他常踩的坑」（**270 条**里最近的十几条）。中间各轮的记录按需查。
-   **最近二十八轮（101~128）在最前面，先读它们**——这个阶段的方法论都在那里。
+1. `docs/plans/vue-parity-open-accounts.md` —— 挂账总清单，**2668 行 / 236K**
+   （名字叫「一页账」是历史叫法，早就不是一页了）。
+   **只读开头的「零、全面审查」那一节**就够开工——它是 2026-09-16 逐条量出来的现状，
+   含 41 条不同差异的分组、两笔新账（F / G）与全部现场读数。后面是历史，按需查。
+2. `docs/plans/vue-parity-handoff.md` —— 轮次交接文档，**11189 行 / 736K**。
+   **按轮次倒序排**：开头是「当前状态」，紧接着是最近几轮（第二十一轮 → 第十九轮 →
+   第十八轮 …），越往后越旧。**只读开头的「当前状态」和最近两三轮**；
+   结尾的「其他常踩的坑」按需查（线索编号已到 **339**、坑编号到 **316**）。
 3. Claude 记忆 `deerflow-parity-harness-plan`
    （`/Users/wangcheng/.claude/projects/-Users-wangcheng-Documents-workSpace-frontEnd-aiAppSpace-deer-flow/memory/`）
-   —— 每一轮的实测记录与 **270 条踩坑线索全文**。同目录下另有
+   —— 每一轮的实测记录与踩坑线索全文（编号已到 **339**）。同目录下另有
    `deerflow-fork-boundary` / `deerflow-vue-replacement-goal` /
    `deerflow-no-midway-questions` / `deerflow-vue-alignment-scope`。
 4. `AGENTS.md`（仓库根）与 `frontend-vue/README.md` —— 命令与门禁。
@@ -112,8 +113,15 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 - **不要中途提问。** 取舍自己定，写进提交说明。分歧的兜底判据是**按业界主流做法**。
 - **每轮收工写交接文档 + 一页纸清单 + 记忆，然后自动开下一轮**，
   推到我喊停为止；**不要停下来问「要不要继续」**。
+- **每轮收工自动 `git push`，不再询问。** 2026-09-06 就给的长期授权
+  （Claude 记忆 `deerflow-no-midway-questions`），2026-09-16 用户重申。
+  **判据：记忆与计划文档冲突时，以记忆里的用户原话为准，并当场把文档改对。**
+  此前这三份文档里写着「要推就先问用户」，与记忆直接矛盾而文档赢了——
+  代价与来龙去脉写在一页账的账 E，这里不复述。
 - **台账的规则现在是「新出现、还没定过的行只能减不能增」**，不再是「保持 0」。
-  `frontend-vue/baseline/parity-diff.json` 当前 **202 行 / 90 样本**
+  `frontend-vue/baseline/parity-diff.json` 的**活读数只有一处**——本文开头
+  「接手时的状态」那一条，或直接跑上面那段脚本。**下面这串是变更史，不是现状**：
+  （wave 200 实测 103 行 / 95 个取样点）
   （wave 149 把三档里 59/79 行「认不出是谁」的问题修掉，行数没动、可读性归零缺口）
   （wave 148 把三处手搓的模态换成 primitive，233 → 202）
   （wave 147 把移动端侧栏抽屉挂进取样面，+34 行，其中 30 行是同一处模态做法差异）
@@ -168,16 +176,19 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 ```bash
 # 2026-09-16 第二十一轮收工实测（每一条都是真跑出来的，不是抄的；
 # 第十九轮 verify 跑了七遍（前三遍红——见下面「读门禁的退出码」那条）；
-# e2e-parity 这一轮**没跑整条**，148 这个数是 `--list` 数出来的（本轮零产品改动，
-# 台账不可能变；真要重量就跑 make e2e-parity）；
+# 第十九轮那次**没跑整条**，当时 `--list` 数出来是 148；
+# 第二十轮加了 sidebar-collapsed 两维之后是下面那个 150（有门禁钉着）；
 # e2e-visual 是第二十一轮真跑的（8 passed，截图一张没变）；icon-parity 是第十三轮的；
 # 其余读数是第五 / 七轮真跑的，第五轮九条全绿）
 # 【哪些数有门禁守着】`tests/guards/doc-facts.test.ts` 逐处比对签入产物：
-#   台账三个数、desktop 档数与非 desktop 族名单、词典 key/unused、e2e-parity 用例数。
+#   台账三个数、不同的差异条数、desktop 档数与非 desktop 族名单、词典 key/unused、
+#   e2e-parity 用例数。**但它只认 `N 唯一行` / `N 多重集` / `N 个场景-维度` /
+#   `N 条不同的差异` 这一套措辞**——换个写法（如「N 行 / N 样本」）就绕过去了，
+#   所以那两种旧写法已被另一条 BAN 规则禁掉。
 #   **没有门禁的是**：verify 的「文件 / 单测」条数、各条耗时、e2e-mock /
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
-make -C <abs>/frontend-vue verify         # exit 0；**330 文件 / 2681** 单测；词典 1140 key / 15 unused
+make -C <abs>/frontend-vue verify         # exit 0；**330 文件 / 2683** 单测；词典 1140 key / 15 unused
 make -C <abs>/frontend-vue e2e-parity     # **150 passed**（整条 17.3 分钟）
                                           #  台账 159 唯一行 / 179 多重集 / 142 场景-维度
                                           #  （第十二、十三两轮基线文件都一个字节没动；
@@ -218,8 +229,10 @@ make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口�
 `python3 scripts/pnpm.py --dir frontend check`（0）/ `test`（**1354**）/
 `test:e2e`（**189 passed**，2026-09-12 第五轮实测；要用 3002 端口的绕法，
 写在交接文档「React 的 test:e2e 绕法」那一段。实操上不必自己 `next build` +
-`next start`——直接 `PLAYWRIGHT_BASE_URL=http://localhost:3002 SKIP_ENV_VALIDATION=1
-pnpm exec playwright test`，config 会照这个 URL 的端口自己起 webServer）。
+`next start`——**在 `frontend/` 目录里**跑
+`PLAYWRIGHT_BASE_URL=http://localhost:3002 SKIP_ENV_VALIDATION=1 pnpm exec playwright test`
+（**必须 cd 进 frontend/**，在仓库根跑找不到 config），
+config 会照这个 URL 的端口自己起 webServer）。
 
 **一轮的典型节奏**（2026-09-11 那轮 14 笔提交都是这么走的）：
 `PARITY_ONLY=<场景id> make e2e-parity`（约 5 分钟，单场景 + 两侧完整请求序列转储）
@@ -390,7 +403,8 @@ Claude 记忆 `measure-dont-guess`）。
    能抓它的只有 Linux，也就是 CI；而 **CI 只看得见推上去的东西**。
    所以这条账**就算做出来也抓不到这一条**。本机批次限额仍有价值
    （抓本机能抓的回归），但它不是那条红的成因，不该再排第一。
-   真正的变量是**推送节奏**，已单独列为账 E（需要用户决定）。
+   真正的变量是**推送节奏**——账 E，**2026-09-16 已结清**：用户重申
+   「后续你自动push」，而这条授权 2026-09-06 就在记忆里了，是文档写错。
 2. **收起态下 Vue 有原生 tooltip 而 React 什么都没有**（第二十轮量出来的，未修，
    见一页账的 C 条）。两边同改：React 给那四颗 `SidebarMenuButton` 传 `tooltip=`，
    本仓移植该 prop 并撤掉临时的 `:title`。**改完这一屏仍然量不出来**，
@@ -476,7 +490,23 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
    都不在取样面），所以同一轮要把判据做成守卫，而不是靠台账。
 3. **确认 CI 那条修复真的绿了。** 第十九轮照 `external-gates` 逐字补齐了
    `real-backend` 的装配步骤，并加了门禁钉住「起真 Gateway 的 job 装配一致」，
-   但**CI 结论只能靠推送验证**——推送要先问用户。
+   但**CI 结论只能靠推送验证**；每轮收工自动推，所以下一轮开工时看一眼 CI 就有结论。
+   **查 CI 必须显式指定 fork**——这个 checkout 里 `upstream` remote 指向
+   `bytedance/deer-flow`，裸 `gh run list` 会打到上游去、返回空结果，
+   很容易被误读成「CI 没问题」。照抄这两条：
+
+   ```bash
+   gh api 'repos/aiAppSpace/deer-flow/actions/runs?branch=main-wc&per_page=3' \
+     --jq '.workflow_runs[] | "\(.created_at) \(.head_sha[0:8]) → \(.status)/\(.conclusion // \"进行中\")"'
+   ```
+   ```bash
+   RID=$(gh api 'repos/aiAppSpace/deer-flow/actions/runs?branch=main-wc&per_page=1' --jq '.workflow_runs[0].id') \
+     && gh api "repos/aiAppSpace/deer-flow/actions/runs/$RID/jobs" \
+       --jq '.jobs[] | "【\(.name)】\(.conclusion)", (.steps[] | select(.conclusion=="failure" or .conclusion=="skipped") | "    \(.conclusion)  \(.name)")'
+   ```
+
+   **第二条不能省**：一条红会让后面的步骤全部 `skipped`，只看 job 级结论会把
+   「被挡住、还没跑过」读成「没问题」——第二十二轮就是这么误判过一次。
 4. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
    上游把它和 TodoList 放在同一层包裹里，本仓的在 `ChatComposer.vue`；
    **目前没有任何场景同时喂 goal 与 todos**，改完没有读数可以验。
@@ -895,18 +925,23 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 
 ### D. ~~挂着的账~~ —— **wave 101/102/103 全部处理完，这一段空了**
 
-一页纸清单「真正还开着的」现在是 **5 条**，且**全部是「已决定 / 够不着」**：
+> **⚠ 这一段已被 2026-09-16 的全面审查推翻**，留着看判据怎么演进。
+> 现状以一页账的「零、全面审查」节为准：真正不同的差异 **41 条 / 6 组**，
+> 其中 **Mermaid 工具条 8 条（账 F）** 和 **`channels#settings-panel-connected` 12 条（账 G）**
+> 是**要动手的**，不是「已决定 / 够不着」。
+
+一页纸清单「真正还开着的」当时是 **5 条**，且**全部是「已决定 / 够不着」**：
 覆盖率棘轮的 pending 1 条（wave 101 按判据量到底，**不翻案**）、
 tooltip 播报节点 2 行（reka-ui 内部，够不着）、
 42 行「上游写死英文」（决定保留本仓翻译）、7 行焦点差异（已钉住）、
 42 行 ScrollArea（wave 98 核完，决定不跟）。
-**每条都带翻案判据，写在一页纸清单第一节。没有需要动手的。**
+**每条都带翻案判据，写在一页纸清单第一节。**（「没有需要动手的」这句已被上面那条推翻。）
 
 ## 别忘了的三件事
 
-- **台账当前是 95 行 / 73 个取样点**（此处原写「0 行 / 40 个取样点」，wave 101 订正——
-  那是 wave 87 的数字）。**「量不出差异」的准确含义是「这些取样点上量不出」**，
-  不是「两个应用一样」；而 95 行**全部已决定**，规则是「新出现、还没定过的行只能减不能增」。
+- **「量不出差异」的准确含义是「这些取样点上量不出」**，不是「两个应用一样」。
+  规则是「新出现、还没定过的行只能减不能增」。
+  （**wave 101 时是 95 行 / 73 个取样点**；活读数只看本文开头那一处，别引用这里。）
   天生看不见的八类列在交接文档里（第⑧类、第④类的顺序那一半、tab 序都已补上）。
 - **这条尾巴没有自然终点。** 历史命中率：**wave 107 捞出一处「静默跳过」
   （HEAD 的守卫在被守的文件挪走之后 11 条全绿）+ 一条钉错对象的 e2e 断言**、

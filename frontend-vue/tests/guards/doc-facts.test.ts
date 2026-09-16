@@ -477,6 +477,74 @@ describe("计划文档里的台账读数和签入基线一致", () => {
     这条按类关：每一类都必须在这组文档里至少命中一处。
     （放在最后是因为它读的是上面两条填的计数；vitest 在一个 describe 内按序跑。）
   */
+  /*
+    **禁措辞，而不是比数值。**
+
+    2026-09-16 体检实测：冷启动文档里「台账当前是多少」同时有三个数——
+    开头那处 `159 唯一行 / 179 多重集 / 142 个场景-维度`（真，有上面那套断言守着）、
+    棘轮那一节的 `202 行 / 90 样本`、「别忘了的三件事」的 `95 行 / 73 个取样点`。
+    后两个都是十几轮前的旧数，而且**换了个措辞就绕过了上面所有正则**——
+    门禁全绿，假数原地躺着。同一条棘轮的参照点被同时抬高和压低，
+    新窗口拿哪个当基准，「涨了还是减了」的方向判断都会反过来。
+
+    值比对只有在「每轮都记得更新这一处措辞」时才成立，而这次红的根因正是没人更新。
+    所以这条钉的是**写法**：活读数只许用受控措辞（`N 唯一行` / `N 多重集` /
+    `N 个场景-维度` / `N 条不同的差异`），`N 行 / N 样本`、`N 行 / N 个取样点`
+    这两种旧写法在这两个扫描面里**一律非法**，除非紧邻显式的 wave / 轮次戳
+    （历史记录要能留下来）。
+
+    **它是「零命中才算绿」，和上面那套「至少命中一处」相反**，所以**不能挂进 `hits`**
+    （挂进去会因为永远 0 命中而恒红）。为此下面配了一条自反测试：
+    示例串写在**测试文件里**，不能写进被扫的那两份 md——否则守卫会把自己的
+    说明文字报成违规（记忆 `deerflow-guard-strip-comments`，已踩四次）。
+  */
+  const STALE_LEDGER = /(\d+)\s*行\s*\/\s*(\d+)\s*个?\s*(?:样本|取样点)/g;
+  /** 紧邻的轮次戳：往前看 26 个字符够覆盖「（wave 200 实测 」「（**wave 101 时是 」。 */
+  const STAMP = /wave\s*\d+|第[一二三四五六七八九十百]+轮/;
+
+  /** 返回违规片段；带轮次戳的放行。 */
+  function staleLedgerHits(text: string): string[] {
+    const out: string[] = [];
+    for (const m of text.matchAll(STALE_LEDGER)) {
+      const before = text.slice(Math.max(0, m.index - 26), m.index);
+      if (!STAMP.test(before)) out.push(m[0]);
+    }
+    return out;
+  }
+
+  it("禁措辞这条判据自己会响（自反测试）", () => {
+    expect(staleLedgerHits("台账当前是 95 行 / 73 个取样点")).toEqual([
+      "95 行 / 73 个取样点",
+    ]);
+    expect(staleLedgerHits("parity-diff.json 当前 202 行 / 90 样本")).toEqual([
+      "202 行 / 90 样本",
+    ]);
+    // 带戳的历史记录必须放行，否则没人能写变更史。
+    expect(staleLedgerHits("（wave 200 实测 103 行 / 95 个取样点）")).toEqual(
+      [],
+    );
+    expect(staleLedgerHits("第二十轮收工时 187 行 / 87 样本")).toEqual([]);
+  });
+
+  it("活读数不许用绕过受控措辞的旧写法", () => {
+    const cold = readPlanDoc("vue-parity-cold-start.md");
+    if (cold === null) return;
+    const handoff = readPlanDoc("vue-parity-handoff.md");
+    const offenders = [
+      ...staleLedgerHits(cold).map((h) => `cold-start: ${h}`),
+      ...(handoff ? staleLedgerHits(leadBlockquote(handoff)) : []).map(
+        (h) => `handoff 活跃块: ${h}`,
+      ),
+    ];
+    expect(
+      offenders,
+      "台账的活读数只许用 `N 唯一行` / `N 多重集` / `N 个场景-维度` / " +
+        "`N 条不同的差异` 这一套受控措辞（它们有值比对守着）。" +
+        "`N 行 / N 样本`、`N 行 / N 个取样点` 是没人守得到的旧写法——" +
+        "要写变更史就在前面加 `wave N` 或 `第N轮` 的戳。",
+    ).toEqual([]);
+  });
+
   it("七类断言都还有活的命中点（逐类，不是总数）", () => {
     if (readPlanDoc("vue-parity-cold-start.md") === null) return;
     const dead = [...hits].filter(([, n]) => n === 0).map(([label]) => label);
