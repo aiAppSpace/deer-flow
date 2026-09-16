@@ -135,6 +135,24 @@ export type ParityState = {
     不写就沿用场景的 `dimensions`，**没写过这一档的场景键逐字不变**。
   */
   dimensions?: ParityDimension[];
+  /*
+    这个终态**自己的**落地地址，覆盖场景那一层的 `path`。
+
+    **为什么需要**（第二十九轮）：有些终态**只在另一条地址上存在**。
+    `agent-chat` 就是——它的 `path` 是 `/workspace/agents/test-agent/chats/new`，
+    一条新会话、一条消息都没有，于是三颗回合键两边都不画，那两个档报的 0 是
+    「压根没测到」而不是「两边一样」。要量 agent 会话上的回合操作，
+    只能落在一条**已有消息的** agent 线程上。
+
+    与 `routes`（wave 128）、`dimensions`（wave 147）是同一条理由：
+    **场景 id 受覆盖率棘轮约束、编不出新的**（`agent-chat` 就是上游那份
+    `agent-chat.spec.ts`），所以「同一条场景里换一个落点」只能做成终态自己的一档。
+    不写就沿用场景的 `path`，**没写过这一档的场景键逐字不变**。
+
+    `settle` 仍然是场景那一层的——换落点不换「这一屏算不算到齐了」的判据，
+    要是新落点上那个锚点不成立，这一支会当场超时，那正是该被看见的。
+  */
+  path?: string;
 };
 
 export type ParityStep =
@@ -496,7 +514,7 @@ export async function runScenario(
   await applyScenarioBackend(page, scenario, state);
   await applyScenarioStubs(page, scenario);
   await applyDimension(page, base, dimension);
-  await page.goto(`${base}${scenario.path}`);
+  await page.goto(`${base}${state.path ?? scenario.path}`);
   for (const step of scenario.settle) await runStep(page, step, timeout);
   for (const step of state.steps) await runStep(page, step, timeout);
   return page;
@@ -1133,7 +1151,25 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     title: "自定义 agent 的新会话页",
     backend: "mock",
     path: "/workspace/agents/test-agent/chats/new",
-    mock: { agents: MOCK_AGENTS },
+    mock: {
+      agents: MOCK_AGENTS,
+      threads: [
+        {
+          thread_id: MOCK_THREAD_ID,
+          title: "Agent thread",
+          agent_name: "test-agent",
+          updated_at: "2026-06-01T12:00:00Z",
+          messages: [
+            {
+              type: "human",
+              id: "agent-human-1",
+              content: [{ type: "text", text: "PARITY-AGENT-QUESTION" }],
+            },
+            { type: "ai", id: "agent-ai-1", content: "PARITY-AGENT-ANSWER" },
+          ],
+        },
+      ],
+    },
     /*
       模型选择器**展开态**挂在这个场景上，理由与 branch-thread 挂 interrupt 相同：
       场景 id 受棘轮约束，夹具与步骤不受约束，而这一屏本来就是最干净的 composer。
@@ -1146,10 +1182,57 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     */
     routes: [MODELS_ROUTE_BASIC_FIRST],
     settle: [{ kind: "visible", target: { selector: "textarea" } }],
-    steps: [
-      { kind: "click", target: { role: "button", name: "Parity Basic" } },
-      { kind: "visible", target: { role: "dialog", name: "Model Selector" } },
-      { kind: "visible", target: { role: "option", name: /Parity Thinker/ } },
+    states: [
+      {
+        id: "model-picker",
+        steps: [
+          { kind: "click", target: { role: "button", name: "Parity Basic" } },
+          {
+            kind: "visible",
+            target: { role: "dialog", name: "Model Selector" },
+          },
+          {
+            kind: "visible",
+            target: { role: "option", name: /Parity Thinker/ },
+          },
+        ],
+      },
+      /*
+        **agent 会话上的「已完成回合」第一次进取样面**（第二十九轮）。
+
+        这一支存在的理由是一条量出来的线索：上游 agent 会话页
+        （`[agent_name]/chats/[thread_id]/page.tsx:356/364`）**只传
+        `canRegenerate` 与 `canEdit`，不传 `canBranch`、也不传 `onBranchTurn`**，
+        而 `message-list.tsx:890` 的渲染条件里有 `onBranchTurn &&`
+        ——也就是说 agent 会话上游**压根没有分支入口**。本仓 `AgentChat.vue`
+        一个组件服务两条路由，`branchable` 不看 agent。
+
+        **而此前台账对它报 0**：场景的 `path` 是 `…/chats/new`，一条消息都没有，
+        三颗回合键两边都不画。那个 0 是「压根没测到」，不是「两边一样」
+        （第二十轮那条教训）。所以这一支换落点到一条**已有消息的** agent 线程，
+        用的是终态自己的 `path`（那个 prop 就是为这件事加的）。
+
+        夹具直接复用 `MOCK_THREAD_ID`：这条场景的 mock 是它自己的一份，
+        不与别的场景共享，省掉一个新 UUID 进 `KNOWN_IDS` 的手续（wave 120）。
+        `agent_name` 要给——mock 的线程按它认归属（`mock-api.ts:443`）。
+
+        回合形状照 `branch-thread` 那条：一问一答、两条都带 id。
+        **带 id 是必须的**：没有 id 的人类消息本仓不给「编辑并重跑」
+        （`edit-rerun-needs-an-id.dom.test.ts` 钉着），那会把「agent 页有没有这颗键」
+        和「这条消息寻不寻得到址」混成一件事。
+      */
+      {
+        id: "completed-turn",
+        path: `/workspace/agents/test-agent/chats/${MOCK_THREAD_ID}`,
+        steps: [
+          /*
+            锚点取助手那条回答的正文：它不进词典，两个语言维逐字相同，
+            而且它出现就说明这一轮真的渲染出来了——三颗回合键的前提条件
+            （有一个已完成的 assistant 组）也就跟着成立。
+          */
+          { kind: "visible", target: { text: "PARITY-AGENT-ANSWER" } },
+        ],
+      },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
