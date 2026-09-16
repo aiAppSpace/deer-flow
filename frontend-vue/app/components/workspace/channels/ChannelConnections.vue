@@ -326,7 +326,13 @@ function showConnectAction(view: ChannelProviderView) {
     :title="$i18n.t.value.settings.channels.title"
     :description="$i18n.t.value.settings.channels.description"
   >
-    <div class="space-y-3">
+    <!--
+      **容器间距照上游**（`channels-settings-page.tsx` 的
+      `flex w-full flex-col gap-4`）。本仓此前是 `space-y-3`（12px 对 16px），
+      对照台账上它表现为账号行 `text:/parity-account/ y Δ-16.1`
+      ——一处间距差在列表里累积出来的位移。两边都不是缺陷，所以跟上游。
+    -->
+    <div class="flex w-full flex-col gap-4">
       <!--
         渠道整体停用、或一个可见 provider 都没有时,照 React 渲染一句说明,
         而不是把整节藏起来。藏起来的代价是用户在设置里找不到「渠道」这一节,

@@ -109,10 +109,22 @@ function getProviderUnavailableReason(
 
 function ChannelProviderItem({
   provider,
-  connection,
+  connections,
 }: {
   provider: ChannelProvider;
-  connection?: ChannelConnection;
+  /*
+    Every connection the gateway reports for this provider, newest-first as it
+    sent them.
+
+    This used to be a single optional `connection`, collapsed from the list by
+    the page above with "keep the connected one if there is one". That threw
+    information away: `GET /channels/connections` returns a list because a
+    provider really can carry several bound accounts, and the backend already
+    exposes `DELETE /channels/connections/{id}` per account — this app even
+    shipped `useDisconnectChannelConnection` for it. A user with two accounts
+    on one provider saw only one of them and could not unbind the other.
+  */
+  connections: ChannelConnection[];
 }) {
   const { t } = useI18n();
   const { user } = useAuth();
@@ -132,12 +144,24 @@ function ChannelProviderItem({
   const runtimeAvailable = provider.configured && !provider.unavailable_reason;
   const isConnected =
     runtimeAvailable &&
-    (connection?.status === "connected" ||
+    (connections.some((candidate) => candidate.status === "connected") ||
       provider.connection_status === "connected");
   const canEditRuntimeConfig = providerCanEditRuntimeConfig(provider);
+  /*
+    Connected used to mean "no connect control at all", which made adding a
+    second account impossible even though the gateway supports it and this page
+    now lists the accounts. Keep the control whenever there is a bound account
+    to add to — the label above says "Add account" in that state.
+
+    The `!isConnected` half still applies when the provider reports itself
+    connected with no bound accounts (`DEER_FLOW_AUTH_DISABLED=1` routes every
+    channel message to the default user, so no binding row exists or is needed):
+    there the button would start a pointless binding flow next to a green
+    "connected" badge.
+  */
   const canConnect =
     (provider.connectable ?? (provider.enabled && provider.configured)) &&
-    !isConnected;
+    (connections.length > 0 || !isConnected);
   const isConnecting =
     (connectMutation.isPending &&
       connectMutation.variables === provider.provider) ||
@@ -146,11 +170,39 @@ function ChannelProviderItem({
   const isDisconnecting =
     disconnectProviderMutation.isPending &&
     disconnectProviderMutation.variables === provider.provider;
-  const isDisconnectingConnection =
+  /*
+    The row's own summary still describes one connection — the live one when
+    there is one — because the badge and the `connected as …` sentence are
+    about the provider, not about a particular account. The per-account
+    controls live in the list below.
+  */
+  const primaryConnection =
+    connections.find((candidate) => candidate.status === "connected") ??
+    connections[0];
+  const isDisconnectingConnection = (candidate: ChannelConnection) =>
     disconnectConnectionMutation.isPending &&
-    disconnectConnectionMutation.variables === connection?.id;
-  const connectionLabel = connection ? getConnectionLabel(connection) : null;
-  const statusLabel = getStatusLabel(provider, connection, t);
+    disconnectConnectionMutation.variables === candidate.id;
+  const connectionLabel = primaryConnection
+    ? getConnectionLabel(primaryConnection)
+    : null;
+  const statusLabel = getStatusLabel(provider, primaryConnection, t);
+  /*
+    Three states, all about the bound accounts rather than the provider:
+    a live account already exists → adding another, only revoked ones are left
+    → reconnecting, none at all → connecting for the first time.
+
+    This used to read `connection?.status === "revoked"`, i.e. it asked the one
+    collapsed connection; with several accounts that answered about whichever
+    one happened to win the collapse.
+  */
+  const connectLabel = connections.some(
+    (candidate) =>
+      candidate.status === "connected" || candidate.status === "pending",
+  )
+    ? t.channels.addAccount
+    : connections.some((candidate) => candidate.status === "revoked")
+      ? t.channels.reconnect
+      : t.channels.connect;
   const unavailableReason = getProviderUnavailableReason(provider, t);
 
   const startConnect = (
@@ -181,6 +233,49 @@ function ChannelProviderItem({
       });
   };
 
+  /*
+    One connect control, rendered from both branches.
+
+    It used to live only in the not-connected branch, so once a provider was
+    connected there was no way to bind a second account — even though the
+    gateway returns a list of connections and this page now lists them. The
+    label reads "Add account" in that state (see `connectLabel`).
+
+    Still hidden when the provider reports itself connected with no binding
+    row at all (`DEER_FLOW_AUTH_DISABLED=1` routes every channel message to
+    the default user): there the button would open a pointless binding flow
+    right next to a green "connected" badge.
+  */
+  const showConnectAction = connections.length > 0 || !isConnected;
+  const connectAction = (
+    <Button
+      type="button"
+      size="sm"
+      disabled={isConnecting}
+      title={unavailableReason}
+      onClick={() => {
+        if (providerNeedsRuntimeConfig(provider)) {
+          setSetupOpen(true);
+          return;
+        }
+
+        if (!canConnect) {
+          toast.error(unavailableReason ?? t.channels.unavailable);
+          return;
+        }
+
+        startConnect(provider);
+      }}
+    >
+      {isConnecting ? (
+        <LoaderCircleIcon className="animate-spin" />
+      ) : (
+        <PlugIcon />
+      )}
+      {connectLabel}
+    </Button>
+  );
+
   return (
     <>
       <Item variant="outline" className="w-full items-start">
@@ -210,6 +305,72 @@ function ChannelProviderItem({
               ? ` ${provider.unavailable_reason}`
               : ""}
           </ItemDescription>
+          {/*
+            One row per bound account, with the unbind control that belongs to
+            that account. The gateway returns a list and exposes
+            `DELETE /channels/connections/{id}`; collapsing the list to a
+            single row here meant a second account was invisible and could not
+            be unbound.
+
+            Same shape as the Vue app renders, down to the heading and the
+            per-row status line, so the two read identically to a screen
+            reader. The provider-level badge above still summarises the
+            provider itself.
+          */}
+          {connections.length > 0 ? (
+            <div className="mt-3 w-full space-y-2">
+              <h4 className="text-xs font-medium">{t.channels.accounts}</h4>
+              {connections.map((candidate) => {
+                const label = getConnectionLabel(candidate) ?? candidate.id;
+                return (
+                  <div
+                    key={candidate.id}
+                    data-testid={`channel-connection-${candidate.id}`}
+                    className="bg-muted/40 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-medium">
+                        {label}
+                      </div>
+                      <div className="text-muted-foreground text-xs">
+                        {getStatusLabel(provider, candidate, t)}
+                      </div>
+                    </div>
+                    {candidate.status !== "revoked" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isDisconnectingConnection(candidate)}
+                        aria-label={t.channels.disconnectAccount(label)}
+                        onClick={() => {
+                          void disconnectConnectionMutation
+                            .mutateAsync(candidate.id)
+                            .then(() => {
+                              toast.success(t.channels.revoked);
+                            })
+                            .catch((error) => {
+                              toast.error(
+                                error instanceof Error
+                                  ? error.message
+                                  : t.channels.unavailable,
+                              );
+                            });
+                        }}
+                      >
+                        {isDisconnectingConnection(candidate) ? (
+                          <LoaderCircleIcon className="animate-spin" />
+                        ) : (
+                          <UnplugIcon />
+                        )}
+                        {t.channels.disconnect}
+                      </Button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </ItemContent>
         <ItemActions className="ml-auto">
           {isConnected ? (
@@ -230,57 +391,7 @@ function ChannelProviderItem({
                   {t.channels.modify}
                 </Button>
               ) : null}
-              {/*
-                Unbinding your own account had no control at all: the backend
-                exposes DELETE /channels/connections/{id} and this app already
-                shipped useDisconnectChannelConnection — with zero consumers.
-                The only disconnect-ish button on this page is admin-only and
-                deletes the whole deployment's provider runtime config, so a
-                user who connected an IM account could not undo it.
-
-                Same shape as the Vue side (outline / sm / Unplug icon /
-                spinner while pending, accessible name naming the account).
-                The multi-account list that app renders stays out of scope
-                here: this row only ever shows one connection per provider.
-
-                Success/failure goes through toasts, matching the provider
-                removal button right below it. The Vue side reports both
-                inline instead — that is this page's own local convention
-                over there and predates this button; each app stays
-                consistent with itself rather than importing the other's.
-              */}
-              {connection && connection.status !== "revoked" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={isConnecting || isDisconnectingConnection}
-                  aria-label={t.channels.disconnectAccount(
-                    connectionLabel ?? connection.id,
-                  )}
-                  onClick={() => {
-                    void disconnectConnectionMutation
-                      .mutateAsync(connection.id)
-                      .then(() => {
-                        toast.success(t.channels.revoked);
-                      })
-                      .catch((error) => {
-                        toast.error(
-                          error instanceof Error
-                            ? error.message
-                            : t.channels.unavailable,
-                        );
-                      });
-                  }}
-                >
-                  {isDisconnectingConnection ? (
-                    <LoaderCircleIcon className="animate-spin" />
-                  ) : (
-                    <UnplugIcon />
-                  )}
-                  {t.channels.disconnect}
-                </Button>
-              ) : null}
+              {showConnectAction ? connectAction : null}
             </>
           ) : (
             <>
@@ -305,34 +416,7 @@ function ChannelProviderItem({
                   {t.channels.modify}
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                size="sm"
-                disabled={isConnecting}
-                title={unavailableReason}
-                onClick={() => {
-                  if (providerNeedsRuntimeConfig(provider)) {
-                    setSetupOpen(true);
-                    return;
-                  }
-
-                  if (!canConnect) {
-                    toast.error(unavailableReason ?? t.channels.unavailable);
-                    return;
-                  }
-
-                  startConnect(provider);
-                }}
-              >
-                {isConnecting ? (
-                  <LoaderCircleIcon className="animate-spin" />
-                ) : (
-                  <PlugIcon />
-                )}
-                {connection?.status === "revoked"
-                  ? t.channels.reconnect
-                  : t.channels.connect}
-              </Button>
+              {showConnectAction ? connectAction : null}
             </>
           )}
           {/*
@@ -434,12 +518,17 @@ export function ChannelsSettingsPage() {
   const error = providersError ?? connectionsError;
   const visibleProviders = providers.filter((provider) => provider.enabled);
 
-  const connectionByProvider = new Map<string, ChannelConnection>();
+  /*
+    Group, do not collapse. The previous shape kept one connection per provider
+    ("the connected one if there is one"), which silently hid every additional
+    bound account — and the gateway returns a list precisely because a provider
+    can carry several.
+  */
+  const connectionsByProvider = new Map<string, ChannelConnection[]>();
   for (const connection of connections) {
-    const existing = connectionByProvider.get(connection.provider);
-    if (!existing || connection.status === "connected") {
-      connectionByProvider.set(connection.provider, connection);
-    }
+    const bucket = connectionsByProvider.get(connection.provider);
+    if (bucket) bucket.push(connection);
+    else connectionsByProvider.set(connection.provider, [connection]);
   }
 
   return (
@@ -465,7 +554,7 @@ export function ChannelsSettingsPage() {
             <ChannelProviderItem
               key={provider.provider}
               provider={provider}
-              connection={connectionByProvider.get(provider.provider)}
+              connections={connectionsByProvider.get(provider.provider) ?? []}
             />
           ))}
         </div>

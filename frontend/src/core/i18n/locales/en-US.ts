@@ -759,10 +759,12 @@ export const enUS: Translations = {
   channels: {
     title: "Channels",
     connect: "Connect",
+    addAccount: "Add account",
     modify: "Modify",
     reconnect: "Reconnect",
     disconnect: "Disconnect",
     disconnectAccount: (name: string) => `Disconnect ${name}`,
+    accounts: "Connected accounts",
     removeProviderConfig: "Remove provider configuration",
     connected: "Connected",
     notConnected: "Not connected",

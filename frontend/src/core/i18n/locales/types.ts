@@ -634,10 +634,12 @@ export interface Translations {
   channels: {
     title: string;
     connect: string;
+    addAccount: string;
     modify: string;
     reconnect: string;
     disconnect: string;
     disconnectAccount: (name: string) => string;
+    accounts: string;
     removeProviderConfig: string;
     connected: string;
     notConnected: string;
