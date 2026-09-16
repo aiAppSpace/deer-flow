@@ -8,23 +8,24 @@
 
 ---
 
-## 当前状态（2026-09-16 第二十一轮收工）
+## 当前状态（2026-09-16 第二十三轮收工）
 
 > **接手请先读 `docs/plans/vue-parity-cold-start.md`**——那份是维护到当前事实的，
 > 这份 4000+ 行的文档是**历史轮次记录**，用来查某一条判据是怎么来的。
 >
-> - 工作区干净，**已推送到 `origin/main-wc`**（2026-09-15；领先多少现场量：
+> - 工作区干净，**已推送到 `origin/main-wc`**（2026-09-16；领先多少现场量：
 >   `git rev-list --count origin/main-wc..HEAD`）；
-> - 对照台账 **159 唯一行 / 142 个场景-维度**（数 `baseline/parity-diff.json` 的
+> - 对照台账 **143 唯一行 / 142 个场景-维度**（数 `baseline/parity-diff.json` 的
 >   `entries`；量法写在冷启动文档里。**这两个数有门禁守着**——
 >   `frontend-vue/tests/guards/doc-facts.test.ts` 逐处比对签入基线，
 >   而且是全称判据：文档里每一处都得对，不是「有一处对就行」）；
-> - **但「159」是投影数，不是待办数**：按 `(档, 行文本)` 去重只有
->   **41 条不同的差异**（2026-09-16 全面审查实测，同样有门禁守着）。
->   逐组清单与两笔新账见 `vue-parity-open-accounts.md` 的「零、全面审查」节；
-> - **「台账还剩多少行」已经不能当坐标系**：159 行里 **99 行**是
+> - **但唯一行是投影数，不是待办数**：按 `(档, 行文本)` 去重只有
+>   **33 条不同的差异**（2026-09-16 全面审查实测、第二十三轮复量，同样有门禁守着）。
+>   逐组清单见 `vue-parity-open-accounts.md` 的「零、全面审查」节；
+>   那一节点名的账 F / G **第二十三轮已结清**，现状看该文件的第二十三轮条目；
+> - **「台账还剩多少行」已经不能当坐标系**：唯一行里 **99 个投影**是
 >   `div[scroll-area-viewport]` 那一笔判过的账（含它在 `tabOrder` 上的投影）、
->   **20 行**是请求层那几条（`retry` 与抽屉挂载拓扑两族），剩下 40 行逐条有判词
+>   **40 个**是请求层那几条（`retry` 与抽屉挂载拓扑两族），剩下 24 个逐条有判词
 >   （**第七轮起没有一条判词里带「先怀疑」**），
 >   而且第三到第六轮**每一轮都主动把台账做大了**（新开 `dark` / `mobile` 维度、
 >   给 diff 三档挂锚点、把 `channels` 的「已连接」那一支接进来、
@@ -35,6 +36,69 @@
 >
 > 下面这一段「截至 wave 202」是 2026-09-09 的快照，**数字与结论都已过期**，
 > 留着是为了能追溯历史。
+
+## 上一轮（2026-09-16 第二十三轮）做了什么
+
+**账 F 结清：Mermaid 工具条那四个名字改走 `primitives.*`。**
+
+- **改前读数**：`thread-history-mermaid#default` 与 `#download-menu` 的
+  `desktop/light/zh-CN` 两档各 8 条（4 `ariaOnlyReact`「Zoom in / Zoom out /
+  Reset zoom and pan / Mermaid chart」+ 4 `ariaOnlyVue`「放大 / 缩小 /
+  重置缩放与平移 / Mermaid 图表」），**共 16 投影，en-US 两档全空**——只在中文维度，
+  成因就是翻译。
+- **做法**：`zoomIn` / `zoomOut` / `resetZoomAndPan` / `mermaidChart`
+  从 `markdown.*` **挪进 `primitives.*`**（两个 locale 同为英文），
+  四个消费点改读新路径，`baseline/i18n-keys.json` 走 `make i18n-refresh`
+  （1140 key / 15 unused 不变，diff 恰好 4 减 4 增）。
+- **为什么挪块而不是只改值**：`primitives` 有
+  `tests/unit/i18n/vue-only-keys.test.ts` 的「两个 locale 一字不差」钉着，
+  `markdown` 没有。**改前的状态本身就是证据**——`markdown.zoomIn` 在 zh-CN 里
+  一直写着「放大」，而 `f55bc3b9` 那次 CI 四个 job 全绿。
+- **「上游够不着」是一手量的**：`streamdown` 把四串写死在它的 dist 产物里，
+  而它导出的 `StreamdownTranslations` 里没有对应字段。
+  **这与 `primitives.*` 其余条目成因不同**（那些是上游自己的源码写死的、够得着），
+  所以 `I18N_INVENTORY.md` 单独交代了这一支。**chunk 文件名带内容哈希，
+  哪里都没记它**——复量法：`grep -r "Reset zoom and pan" frontend/node_modules/streamdown/dist`。
+- **顺带结清账 G**：`channels#settings-panel-connected` 那 11 条是**本仓独有的
+  多账号能力**的投影，上游 `channels-settings-page.tsx:243` 的注释自己写着
+  「The multi-account list that app renders stays out of scope here」，
+  能力由 `tests/e2e-channels/channels.spec.ts` 拿真 Gateway 钉着。**保留**。
+- **新挂账 H**：比两边 `markdown` 块的 key（上游 28 / 本仓 34）量出本仓独有 6 条，
+  4 条是账 F，剩下 `unsafeLink` / `unsafeLinkTitle` 是新账——上游
+  `markdown-link.tsx:86-87` 与 `artifact-link.tsx:29-30` 写死在**自己的源码**里，
+  **够得着 → 两边同改**。台账看不见它（没有场景喂过不安全协议的链接）。
+
+读数：台账 **143 唯一行 / 163 多重集 / 142 个场景-维度 / 33 条不同的差异**
+（159 / 179 / 142 / 41 → 减 16 投影、减 8 条）。负向验证 2 条，逐条先打印被改对象
+的前后状态再看用例：N1 把 zh-CN `primitives.zoomIn` 改回「放大」→ `vue-only-keys` 红；
+N2 把消费点改回 `markdown.zoomIn` → 守卫报「没有消费者」**且** `make typecheck`
+exit 2（`TS2339`）。**本轮没动 `frontend/`。**
+
+## 上一轮（2026-09-16 第二十二轮）做了什么
+
+**零产品改动的一轮：交接件体检 + 全面审查 + 第一次 CI 全绿。**
+（这一节是第二十三轮**补记**的——当时只写进了冷启动文档与记忆，
+交接文档这条轮次链上因此缺了一环，下一个人数不清自己是第几轮。
+第二十轮同样缺，它的记录在冷启动文档的「再上一轮（第二十轮）」里。）
+
+- **台账的读法订正**：一直说的「还剩 159 行」是**投影数**（`场景-维度 × 档 × 行`），
+  按 `(档, 行文本)` 去重只有 **41 条不同的差异**。逐组清单进了一页账的「零、全面审查」节，
+  并从中挖出两笔此前没有 itemized 条目的账：**F（Mermaid 工具条）**与
+  **G（`channels#settings-panel-connected`）**。`doc-facts` 同时加了
+  「`N 条不同的差异`」这一类断言。
+- **把第二十一轮自己写下的因果推翻了**：那轮挂账时说「CI 那条 375px 的红躺了 6 天，
+  因为本机 `e2e-mock` 隔了 7 轮没跑」。逐次查 CI 的 **job 逐步结论**之后发现是错的
+  ——09-09 那次 `verify` 整个 success（用例当时还不存在），
+  09-15 第一次推上去时先被 i18n 那条红挡住、后面的步骤全 `skipped`。
+  **真正的变量是推送节奏**（账 E），而那条红在 macOS 上本来就抓不到。
+- **账 E 结清，根因是一处文档错误**：三份计划文档写着「要推就先问用户」，
+  与 Claude 记忆里 2026-09-06 的用户原话（长期授权自行推送）直接矛盾，
+  而**后来的会话读文档不读记忆**——于是两次推送之间攒了 360 个提交。
+  文档已全部改成「每轮收工自动推」。
+- **六份历史快照盖章**（`vue-parity-2026-09-1*` 等），并堵掉其中四处会误导新窗口的假话；
+  一份都没删，理由逐条量过（有的被活代码引用，有的是唯一副本）。
+- **CI 第一次全绿**（`2482725b`）：verify / real-backend / external-gates 三个 job
+  成功，`visual-baselines` 按设计 skipped。往前四次回到 2026-09-09 全是 failure。
 
 ## 上一轮（2026-09-16 第二十一轮）做了什么
 

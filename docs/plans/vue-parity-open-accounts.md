@@ -1,6 +1,10 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十二轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-16 第二十三轮）
 
-## 零、2026-09-16 全面审查：**台账的「159 行」是投影数，真正不同的差异是 41 条**
+## 零、2026-09-16 全面审查：**台账的唯一行是投影数，件数要按 `(档, 行文本)` 去重**
+
+> **⚠ 第二十三轮已把账 F / G 结清**，下表的数是**审查当天（41 条）的**，
+> 现状是 **143 唯一行 / 163 多重集 / 142 个场景-维度 / 33 条不同的差异**。
+> 变更与三处格子的订正写在本文件的「2026-09-16 第二十三轮」条目里。
 
 > 这一节是**逐条从签入产物量出来的**（`baseline/parity-diff.json`），
 > 不是从任何一份散文里抄的。量法：按 `(档, 行文本)` 去重。
@@ -79,6 +83,83 @@
 ---
 
 
+> ## 2026-09-16 第二十三轮：**够不着的那一侧，规矩要由本仓自己钉住**
+>
+> 正题是账 F。顺带把账 G 结清，并新挂一笔同形的账 H。
+>
+> ### 一、当轮结清
+>
+> | # | 账 | 结论 |
+> | - | -- | ---- |
+> | **F** | **Mermaid 工具条那四个名字** | **修掉。** `zoomIn` / `zoomOut` / `resetZoomAndPan` / `mermaidChart` 从 `markdown.*` **挪进 `primitives.*`**，两个 locale 同为英文，四个消费点改读新路径。读数：改前 `thread-history-mermaid#default` 与 `#download-menu` 的 `desktop/light/zh-CN` 两档各 8 条（4 `ariaOnlyReact` + 4 `ariaOnlyVue`）、共 16 投影；改后**两档全空**。 |
+> | **G** | **`channels#settings-panel-connected` 的多账号块** | **不是欠账，是本仓独有的能力，判词见下。** |
+>
+> **账 F 为什么必须「挪块」而不是「把 zh-CN 改成英文」**：`primitives` 块有
+> `tests/unit/i18n/vue-only-keys.test.ts` 的「两个 locale 一字不差」逐字钉着，
+> `markdown` 块没有。**改前的状态本身就是证据**——`markdown.zoomIn` 在 zh-CN 里
+> 一直写着「放大」，而 `make verify` 在 CI 上是绿的（`f55bc3b9`，四个 job 全过）。
+>
+> **够不着的证据是一手量的，不是引上游的注释**：`streamdown` 把四串英文写死在
+> 它的 dist 产物里（实测到的是 `title:"Zoom in"` / `"Zoom out"` /
+> `"Reset zoom and pan"` / `aria-label":"Mermaid chart"`），
+> 而它导出的 `StreamdownTranslations` 里**没有对应字段**——
+> 上游那句 `<Streamdown translations={{ ...t.markdown }}>` 翻不到它们。
+> **那个 chunk 的文件名带内容哈希、每次发版都变，所以哪里都没记它**——
+> 复量法：`grep -r "Reset zoom and pan" frontend/node_modules/streamdown/dist`。
+> （`upstream-citations` 门禁当场把第一版注释里那条 `dist/index.d.ts:223` 报红了：
+> 指进 `node_modules` 的行号引用，正是它守的那一类「照着找什么都找不到」。）
+> 这与 `primitives.*` 其余条目**成因不同**（那些是上游自己的源码写死的、够得着），
+> 所以 `I18N_INVENTORY.md` 里单独交代了这一支。
+>
+> **账 G 的判词**：那一块（`heading "已连接账号"` + 每账号一行 + 逐账号断开）
+> 是**本仓独有的多账号能力**，上游一个 provider 只认一条 connection。
+> 两边的源码里都写着这个决定：本仓 `ChannelConnections.vue:415` 起的注释，
+> 以及上游 `channels-settings-page.tsx:243`「The multi-account list that app renders
+> stays out of scope here: this row only ever shows one connection per provider.」
+> 能力本身由 `tests/e2e-channels/channels.spec.ts` 拿**真 Gateway** 钉着。
+> 台账那 11 条（3 条 `ariaOnlyVue` × 两语言 + 3 条 `geometry` + 2 条 `order`）
+> 全部是这一个根因的投影，**保留**。
+> **翻案判据**：上游哪天也做多账号（那时要对齐的是它的形状），
+> 或者本仓把多账号能力去掉。
+>
+> ### 二、本轮新挂的一笔账
+>
+> | # | 账 | 证据与下一步 |
+> | - | -- | ---- |
+> | **H** | **`markdown.unsafeLink` / `unsafeLinkTitle`：上游写死英文，本仓翻了中文** | **量法**：比两边 `markdown` 块的 key（上游 28、本仓 34），本仓独有 6 条——4 条是账 F，**剩下 2 条就是这一笔**。上游 `workspace/messages/markdown-link.tsx:86-87` 与 `workspace/citations/artifact-link.tsx:29-30` 把 `aria-label="Unsafe link omitted"` 与那句 `Unsafe link scheme in …` 的 `title` **写死在自己的源码里**，中文界面照样念英文；本仓 `MarkdownLink.vue:131-132` 念的是「已省略不安全链接」。**与账 F 不同的是：这一处上游够得着**（它有自己的 `markdown` 词典块，en/zh 都在），所以按 `browser` / `markdown` / `artifacts` 三块的先例走**两边同改**（上游加两条词条 + 两个消费点改读词典），**不是**走 `primitives.*`。**台账看不见它**——没有任何场景喂过一条不安全协议的链接，所以做之前要先给取样面补这一支，否则改完没有读数可验（第二十轮那条教训：拿到 0 不等于两边一样）。**顺带**：上游那个 `markdown` 块是整块 spread 进 `<Streamdown translations>` 的，加进去的两条不属于 streamdown，要想清楚放哪一块。 |
+>
+> ### 三、订正上面那张审查表的三处格子
+>
+> 逐条从签入基线重算（脚本按 `(档, 行文本)` 去重再按根因归组），总数 41 / 179 两个数
+> 都对得上，但**三个格子当天抄错了**：**对得上总数不等于每格都对**。
+>
+> - `channels#settings-panel-connected` 是 **11 条 / 11 投影**，不是 12 / 12；
+> - 焦点是 **2 条 / 3 投影**，不是 2 / 2——审查那天把第 3 个焦点投影算进了 G；
+> - 零散那一格写 **6**，而它自己列出来的条目数是 **7**（`div(menuitem)` ×2、
+>   `role:separator` 几何 ×2、`tabbablesOnlyVue button` ×2、两条 `alert`、
+>   两条 `tooltip`），**列表是对的、格子是错的**。
+>
+> ### 四、这一轮的三条方法教训
+>
+> 1. **「上游够不着」和「上游没做」要分开处理，而判据是去读那个包的产物与类型。**
+>    同样是「上游写死英文」，账 F 走 `primitives.*`（库里写死、类型上没有口子），
+>    账 H 走两边同改（上游自己的源码、自己的词典）。**只看症状会把两笔账做成同一笔。**
+> 2. **一条会烂的引用，门禁比我先看出来。** 我给账 F 的注释写了
+>    `dist/index.d.ts:223` 当证据——`upstream-citations` 当场报红两处
+>    （`I18N_INVENTORY.md` 与 `en-US.ts`），理由是「指进 `node_modules` 的行号引用
+>    照着找什么都找不到」。**更糟的是同一段还写了 `dist/chunk-BO2N2NFS.js`**：
+>    那个文件名带内容哈希，**streamdown 每发一次版就变**，而它不含 `:行号`、
+>    没有任何门禁看得见。修法不是放宽门禁，是**换一种不会烂的写法**——
+>    记类型名（`StreamdownTranslations`）与**复量命令**，不记位置。
+>    这是「尺子绑在位置事实上」那条坑的同一个形状，只是这次出现在**证据**里。
+> 3. **「此前没有任何账认领」这句话要按两个面查。** 账 F / G 在挂账清单里确实没有
+>    itemized 条目，但**冷启动文档的散文里点过名**（「剩下 40 行是 tooltip 播报节点、
+>    写死英文、焦点落点、以及本仓独有的多账号绑定块」），账 4 那一行也早就把
+>    「真正跟不了的只剩 4 条」写清楚了。**散文里的判词不算「有账」，但算「有结论」**——
+>    不先搜一遍就会把一条已经判过的差异当成新发现重判一次。
+>
+> ---
+>
 这份文件回答一个问题：**「还欠什么」。** 逐条给状态，不给散文。
 深度背景在 `vue-parity-handoff.md`，踩坑线索在 Claude 记忆 `deerflow-parity-harness-plan`。
 

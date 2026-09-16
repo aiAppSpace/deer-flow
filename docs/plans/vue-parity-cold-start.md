@@ -16,14 +16,18 @@
 
 - 上一轮收工时工作区干净、**已推送到 `origin/main-wc`**。
   **领先多少、有没有未提交改动、CI 是绿是红，一律现场量**（命令见下一段）。
-- 对照台账 **159 唯一行 / 179 多重集 / 142 个场景-维度**。
-  **但「159」是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
+  **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
+  一个 run 都不会有，`total_count: 0` 不是「没问题」。正确的问法与命令写在
+  下面第十九轮清单的第 3 条里（那里有三条，第三条就是这件事）。
+- 对照台账 **143 唯一行 / 163 多重集 / 142 个场景-维度**。
+  **但唯一行是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
-  按 `(档, 行文本)` 去重，**只有 41 条不同的差异**，而且高度聚集——
+  按 `(档, 行文本)` 去重，**只有 33 条不同的差异**，而且高度聚集——
   光 `div[scroll-area-viewport]` 一系就是 4 条占掉 99 个投影。
-  **「还剩 159 行」会被读成「还有 159 件事」，实际是 41 件。**
-  逐组清单与两笔新账（Mermaid 工具条、`channels#settings-panel-connected`）
-  写在 `vue-parity-open-accounts.md` 的「零、全面审查」节。
+  **把唯一行读成「还有这么多件事」是错的**，件数看的是上面那个去重数。
+  逐组清单写在 `vue-parity-open-accounts.md` 的「零、全面审查」节；
+  账 F（Mermaid 工具条）与账 G（`channels#settings-panel-connected`）
+  **第二十三轮已结清**，见那份文件的第二十三轮条目。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
 
@@ -52,12 +56,12 @@ EOF
 
 ## 这个阶段的工作性质（先读完再动手）
 
-**「台账还剩多少行」已经不能当坐标系了。** 第九轮收工时 **159 行逐条都有判词**，
-**而且没有一条判词里还带「先怀疑」**。分布极不均匀：**99 行**是
-`div[scroll-area-viewport]` 那一笔判过的账（含它在 `tabOrder` 上的投影）、
-**20 行**是请求层那两族（`retry` 与抽屉挂载拓扑），
-剩下 **40 行**是 tooltip 播报节点、写死英文、焦点落点、以及本仓独有的多账号绑定块
-这几类早就判过的。
+**「台账还剩多少行」已经不能当坐标系了。** 第九轮起**每一行逐条都有判词**，
+**而且没有一条判词里还带「先怀疑」**。分布极不均匀（第二十三轮实测的投影数）：
+**99 个投影**是 `div[scroll-area-viewport]` 那一笔判过的账（含它在 `tabOrder` 上的投影）、
+**40 个**是请求层那两族（`retry` 与抽屉挂载拓扑），
+剩下 **24 个**是 tooltip 播报节点、焦点落点、以及本仓独有的多账号绑定块
+这几类早就判过的。（「写死英文」那一类**第二十三轮清零了**——见账 F。）
 所以行数涨落本身不说明好坏——**连着三轮它都是因为取样面变大而涨的**：
 09-11 新开 `dark` 与 `mobile` 两维（当场量出上游一颗手机上点不到的控件）、
 第四轮给 diff 三档挂锚点（当场逼出一处 4px）、
@@ -196,8 +200,11 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**330 文件 / 2683** 单测；词典 1140 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **150 passed**（整条 17.3 分钟）
-                                          #  台账 159 唯一行 / 179 多重集 / 142 场景-维度
+make -C <abs>/frontend-vue e2e-parity     # **150 passed**（第二十三轮实测整条 6.4 分钟；
+                                          #   此前记的 17.3 分钟是旧机况，耗时本来就没人守）
+                                          #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
+                                          #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
+                                          #  台账 143 唯一行 / 163 多重集 / 142 场景-维度
                                           #  （第十二、十三两轮基线文件都一个字节没动；
                                           #    第十二轮新挂的两个锚点报出 4 行、当轮修完归零，
                                           #    第十三轮修的四处**本来就没有锚点**——那正是问题本身）
@@ -394,46 +401,10 @@ Claude 记忆 `measure-dont-guess`）。
 
 **下一轮最该先拿的（按顺序，第 1 条就能直接动手）**：
 
-1. **账 F —— Mermaid 工具条那四个名字，本仓翻译了而上游写死英文。**
-   **这是现在证据最硬、改动最小、读数最明确的一件。**
-   - **读数**：台账里 8 条差异条目 / 16 个投影，**全部落在
-     `thread-history-mermaid#default` 与 `#download-menu` 的 `desktop/light/zh-CN`**
-     ——只在中文维度，成因就是翻译。
-   - **上游背书**：`frontend/src/components/ai-elements/streamdown.tsx:81` 的注释
-     明确写着「Zoom in / Zoom out / Reset zoom and pan / the diagram's alt text are
-     *not* in `StreamdownTranslations`; they are hardcoded inside the library and
-     **stay English until it exposes them**」，并指名本仓这类字符串的规矩是
-     「both apps announce the same English string（见 `primitives.*`）」。
-     产物里实测确实是 `title:"Zoom in"` / `"Zoom out"` / `"Reset zoom and pan"` 与
-     `aria-label:"Mermaid chart"`。
-   - **要改哪里（做法已经定死了，别自己发明）**：把
-     `zoomIn` / `zoomOut` / `resetZoomAndPan` / `mermaidChart` 四条
-     **从 `markdown.*` 挪进 `primitives.*`**（两个 locale 都挪），
-     再把消费点改成读 `primitives.*`。
-     **为什么必须挪而不是「把 zh-CN 改成英文」**：
-     `frontend-vue/tests/unit/i18n/vue-only-keys.test.ts:165` 已有一条用例
-     「primitives 两个 locale 一字不差（照抄上游写死的英文）」——**`primitives` 块
-     有机器钉着，`markdown` 块没有**。只改值不挪块的话，下一个人把它翻回中文
-     不会让任何门禁变红（那条用例的注释自己就写着这个失效模式）。
-     挪进去 = 修完即受保护，这也正是 `close` / `toggleSidebar` / `todos` 的先例。
-   - **消费点要全找**：`grep -rn 'markdown\.\(zoomIn\|zoomOut\|resetZoomAndPan\|mermaidChart\)' frontend-vue/app`
-     ——已知 `MermaidZoomPan.vue:183/192/200`，`mermaidChart` 那条多半在
-     `MermaidChart.vue` 或 `MermaidFullscreen.vue`（`markdown.*` 在本仓有 8 个消费者，
-     别漏）。`vue-only-keys.test.ts` 还有一条「每一条都有消费者」，漏改会红。
-   - **验收**：`PARITY_ONLY=thread-history-mermaid make -C frontend-vue e2e-parity`
-     那 16 个投影归零；`make -C frontend-vue verify` 绿。
-     **负向验证**：把 zh-CN 的 `primitives` 里任一条翻回中文 → `vue-only-keys` 必须红。
-   - **这是 Claude 记忆 `deerflow-untranslated-primitive-names` 那条规矩没落实的地方。**
+> **账 F 与账 G 第二十三轮已结清**（F 修掉、G 判为本仓独有能力并保留），
+> 逐条读数写在一页账的「2026-09-16 第二十三轮」条目里。下面是重排后的队列。
 
-2. **账 G —— `channels#settings-panel-connected` 里有一块 Vue 独有结构。**
-   12 条差异条目，全是 `ariaOnlyVue`：`button "添加账号"`、
-   `heading "已连接账号" [level=4]`、`text: parity-account 已连接`（en/zh 各一份），
-   连带 `geometry` 两条 `text:/parity-account/ y Δ-16.1`、一条 `width Δ-6.7`、
-   `order` 第 47 个公共节点两边不同（React=修改 / Vue=断开连接）。
-   **起手式：先去上游 `frontend/src/components/workspace/settings/channels-settings-page.tsx`
-   确认它有没有这一块**，再定是「React 没有的 Vue 不许有」删掉，还是上游缺口两边同改。
-
-3. **账 C —— 收起态下 Vue 有原生 tooltip 而 React 什么都没有**（第二十轮量出来的）。
+1. **账 C —— 收起态下 Vue 有原生 tooltip 而 React 什么都没有**（第二十轮量出来的）。
    上游的 `SidebarMenuButton` **自带 `tooltip` 属性**（`frontend/src/components/ui/sidebar.tsx:509-548`，
    收起时渲染 Radix Tooltip）**却在 workspace 侧栏一个都没传**；本仓
    `ThreadSidebar.vue:515/554/572` 自己加了 `:title="collapsed ? … : undefined"`。
@@ -441,9 +412,25 @@ Claude 记忆 `measure-dont-guess`）。
    **改完这一屏仍然量不出来**（`aria` 比可访问名两边相同、`geometry` 不取 `title`），
    所以同一轮要把判据做成守卫，而不是靠台账。
 
-4. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
+2. **账 H —— `markdown.unsafeLink` / `unsafeLinkTitle`：上游写死英文、本仓翻了中文。**
+   第二十三轮比两边 `markdown` 块的 key 量出来的（上游 28 / 本仓 34，本仓独有 6 条，
+   4 条是账 F）。上游 `workspace/messages/markdown-link.tsx:86-87` 与
+   `workspace/citations/artifact-link.tsx:29-30` 把
+   `aria-label="Unsafe link omitted"` / `title={\`Unsafe link scheme in ${href}\`}`
+   写死在**自己的源码**里——**够得着，所以走两边同改**（上游 `markdown` 词典加两条 +
+   两个消费点改读词典），**不要**顺手塞进 `primitives.*`（那是给「上游也够不着」
+   留的，判据见账 F）。**起手式：先给取样面补一条不安全协议的链接**——
+   今天没有任何场景喂过它，改完没有读数可验。**顺带要想清楚放哪一块**：
+   上游的 `markdown` 块是整块 spread 进 `<Streamdown translations>` 的，
+   这两条不属于 streamdown。
+
+3. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
    上游把它和 TodoList 放在同一层包裹里，本仓的在 `ChatComposer.vue`；
    **目前没有任何场景同时喂 goal 与 todos**，改完没有读数可以验——先补夹具。
+
+4. **方向 1 继续：把取样面往没人看过的维度开一扇窗**（本文件开头那节排第一的一条）。
+   **142 个场景-维度里仍有 120 个是 desktop**，非 desktop 只有 7 族。
+   照「一个场景补一维就够」的纪律继续开。
 
 5. **方向 C 继续**（把「写下来当规则用、却没人守」的话变成守卫，判据见下面 C 节）。
 
@@ -566,6 +553,21 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
 
    **第二条不能省**：一条红会让后面的步骤全部 `skipped`，只看 job 级结论会把
    「被挡住、还没跑过」读成「没问题」——第二十二轮就是这么误判过一次。
+
+   **还有第三条，第二十三轮开工时踩的**：**`gh run list --branch` 是按 sha 列的，
+   而这个 workflow 有 `paths:` 过滤**（`.github/workflows/frontend-vue-verify.yml`
+   只在 `frontend-vue/**`、`contracts/**`、`backend/app/gateway/**` 等路径变动时触发）。
+   **纯 docs 提交不会有任何 run**，于是「HEAD 有没有绿」这个问题本身就问错了——
+   第二十二轮收工点 `4ada3f4a` 是纯 docs 提交，`runs?head_sha=4ada3f4a` 返回
+   `total_count: 0`，而三份文档都写着「已推送、CI 全绿」。**正确的问法是
+   「覆盖当前 `frontend-vue` 树的那次 run 绿不绿」**——往前找第一个动过受控路径的提交：
+
+   ```bash
+   gh api 'repos/aiAppSpace/deer-flow/actions/runs?head_sha=<sha>' --jq '.total_count'
+   ```
+
+   `0` 的意思是「这个 sha 没被测过」，**不是「没问题」**；这时去看上一个动过
+   `frontend-vue/` 的 sha，那次 run 才是当前树的结论。
 4. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
    上游把它和 TodoList 放在同一层包裹里，本仓的在 `ChatComposer.vue`；
    **目前没有任何场景同时喂 goal 与 todos**，改完没有读数可以验。
