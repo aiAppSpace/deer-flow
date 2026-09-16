@@ -49,32 +49,41 @@
   它量的是时延，而对照工厂的坐标系是 aria 树 / 几何 / 请求，表达不了时延断言；
   镜像 spec 早就有了。要变，得先有人决定豁免 `/artifacts/view` 这条路由。
 - 所以「0」的正确读法是：**当前这把尺子、在当前这个取样面上，量不出差异了。**
-  下一步是**让尺子更可信**（进 CI）与**让尺子照到更多地方**（扩取样面）。
+  下一步是**让尺子更可信**（进 CI——见下面第 1 条，那套东西已经在仓库里了）
+  与**让尺子照到更多地方**（扩取样面）。
+- **本地复量过两次**：基线重录后独立再跑一次 `make e2e-parity`，
+  `PARITY_EXIT=0` / 156 passed（diff.spec 是拿实测比签入基线，绿即实测与基线一致）。
 
 ---
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 把 `e2e-parity` 接进 CI —— **现在它是最大的一块**
+### 1. 核实「`e2e-parity` 接进 CI」那套东西 —— **它已经在仓库里了，别重做**
 
-`.github/workflows/` 里 **`e2e-parity` 零命中**（grep 实测），而
-`frontend-vue/README.md` 自己写着这是
-「**a cost decision that has never actually been made** —— local-only by
-default, not by design」。
+> **⚠ 这一条本来写的是「去做接 CI」，是错的，2026-09-17 当场订正。**
+> 写那句话时我 grep 过 `.github/workflows/`，`e2e-parity` 零命中——**那个读数当时是真的**，
+> 但随后工作区里出现了一整套做这件事的改动，并被 `98f27946` 提交了。
+> **那 8 个文件不是第三十六轮的工作**，是另一个会话的在途成果，
+> 被一次 `git add -A` 裹进了那次提交（提交说明里没写，这是记录失真，已在后续提交里补记）。
 
-**为什么现在必须做**：整个对齐工作的坐标系就是这份台账，而它**只在这台笔记本上
-被验过**。台账刚清零，此刻正是它最值钱、也最容易被悄悄改红的时候——
-任何人改一行 primitive，本机不跑就没人知道。
+**已经在仓库里的那一套**（`git show 98f27946 --name-status` 可查）：
 
-这与第二十七轮 `standalone-sim` 那件事是同一个形状（记忆
-`deerflow-gate-needs-an-entrypoint`：**没进 verify / CI 的门，迟早红着没人看见**），
-只是标的大得多。**第二十一轮那条 375px 的红正是「本机绿、Linux 红」**——
-同一类风险在这里没有任何遮挡。
+- `.github/workflows/frontend-vue-parity.yml`（新增，211 行）：两个 job，
+  `parity` 跑 `icon-parity` + `e2e-parity`，`parity-auth` 跑 `e2e-parity-auth`；
+  `paths:` 含 `frontend/**`（上游漂移也会动台账，这是它独立成一个 workflow 的理由）；
+  `PARITY_REQUIRE_REACT: "1"` 防止 React 缺席时整组静默 skip。
+- `tests/e2e-parity/support/react-preview.ts` + `tests/unit/parity/react-presence.test.ts`：
+  上面那个环境变量的实现与守卫。
+- `tests/guards/tooling-contracts.test.ts` / `stale-coverage-claims.test.ts` / `doc-facts.test.ts`：
+  配套守卫。
+- `README.md` / `README_zh.md`：删掉了「a cost decision that has never actually been made」那段。
 
-要考虑的：这个套件要起三个服务（replay Gateway + Vue + 兄弟 React），
-一轮 ~16 分钟；CI 上要装 `../frontend` 的依赖。成本是真的，
-所以**先量成本再决定形态**（每次 PR 都跑 / 只在 `frontend-vue`+`frontend` 变更时跑 /
-nightly），把读数写进提交说明。
+**新窗口该做的不是重做，是核实**：
+
+1. 这套东西**有没有在 CI 上真跑绿过**？`98f27946` 触发了 `frontend-vue parity`，
+   去查那次 run 的**逐步结论**（命令见本文件末尾；一条红会让后面全 `skipped`）。
+2. 跑绿了就把它当既成事实，**这一条划掉**，从第 2 条开始。
+3. 跑红了，那就是真账——而且是最值钱的一笔：台账刚清零，CI 是唯一能保住它的东西。
 
 ### 2. 扩取样面 —— 台账清零之后，新差异只能从这里来
 

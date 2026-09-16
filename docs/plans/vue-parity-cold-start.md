@@ -574,14 +574,16 @@ Claude 记忆 `measure-dont-guess`）。
 > 完整的边界说明、下一轮三条方向、以及第三十六轮那两条教训，
 > 都写在 `NEXT-WINDOW.md`，**那份是这张单子的当前版本**。
 
-1. **把 `e2e-parity` 接进 CI——现在它是最大的一块。**
-   `.github/workflows/` 里 `e2e-parity` **零命中**（grep 实测），而
-   `frontend-vue/README.md` 自己写着这是「a cost decision that has never actually
-   been made —— local-only by default, not by design」。
-   整个对齐工作的坐标系就是这份台账，而它**只在这台笔记本上被验过**；
-   台账刚清零，此刻正是它最值钱、也最容易被悄悄改红的时候。
-   与第二十七轮 `standalone-sim` 同形（记忆 `deerflow-gate-needs-an-entrypoint`），
-   只是标的大得多。**先量成本再决定形态**，把读数写进提交说明。
+1. **核实「`e2e-parity` 接进 CI」那套东西——它已经在仓库里了，别重做。**
+   **这一条原本写的是「去做」，是错的，2026-09-17 当场订正**：写那句话时
+   `.github/workflows/` 里 `e2e-parity` 确实零命中，但随后一整套做这件事的改动
+   进了工作区并被 `98f27946` 提交（**那 8 个文件不属于第三十六轮**，是另一个会话的
+   在途成果被 `git add -A` 裹了进去）。
+   现在仓库里有 `.github/workflows/frontend-vue-parity.yml`（两个 job、
+   `paths:` 含 `frontend/**`、`PARITY_REQUIRE_REACT: "1"`）与配套守卫。
+   **该做的是核实它在 CI 上真跑绿过**（查 `98f27946` 那次 run 的逐步结论），
+   绿就划掉这一条、从第 2 条开始；红了那才是真账。
+   详情写在 `NEXT-WINDOW.md` 的第 1 条。
 
 2. **扩取样面——台账清零之后，新差异只能从这里来。**
    但**开新维度/新场景的单位产出在降**（第三十三轮连开两扇零新差异），别盲开：
