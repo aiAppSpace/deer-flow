@@ -1816,18 +1816,8 @@
       "tabOrder": []
     },
     "thread-history-mermaid#default/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"Reset zoom and pan\":",
-        "- button \"Zoom in\":",
-        "- button \"Zoom out\":",
-        "- img \"Mermaid chart\":"
-      ],
-      "ariaOnlyVue": [
-        "- button \"放大\":",
-        "- button \"缩小\":",
-        "- button \"重置缩放与平移\":",
-        "- img \"Mermaid 图表\":"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
@@ -1852,18 +1842,8 @@
       "tabOrder": []
     },
     "thread-history-mermaid#download-menu/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- button \"Reset zoom and pan\":",
-        "- button \"Zoom in\":",
-        "- button \"Zoom out\":",
-        "- img \"Mermaid chart\":"
-      ],
-      "ariaOnlyVue": [
-        "- button \"放大\":",
-        "- button \"缩小\":",
-        "- button \"重置缩放与平移\":",
-        "- img \"Mermaid 图表\":"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "geometry": [],
