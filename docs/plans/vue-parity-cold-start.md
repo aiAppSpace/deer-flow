@@ -199,7 +199,7 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   **没有门禁的是**：verify 的「文件 / 单测」条数、各条耗时、e2e-mock /
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
-make -C <abs>/frontend-vue verify         # exit 0；**330 文件 / 2683** 单测；词典 1140 key / 15 unused
+make -C <abs>/frontend-vue verify         # exit 0；**331 文件 / 2687** 单测；词典 1140 key / 15 unused
 make -C <abs>/frontend-vue e2e-parity     # **153 passed**（第二十七轮实测整条 17.5 分钟；
                                           #   此前记的 17.3 分钟是旧机况，耗时本来就没人守）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
