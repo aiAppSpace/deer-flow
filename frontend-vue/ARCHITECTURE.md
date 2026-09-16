@@ -83,7 +83,11 @@ Compose Watch 同步源码并在依赖清单变化时重建对应镜像；Nginx 
 
 `app/components/ui/` 是唯一的交互控件底座，建在 Reka UI 之上：Dialog、AlertDialog、
 Sheet、Popover、DropdownMenu、Select、Tabs、Switch、Tooltip、HoverCard、ScrollArea、
-Command、Button，以及建在 CodeMirror 6 之上的 CodeEditor。产品组件不再直接 import
+Command、Button、Suggestion（建议 chip 行，对位上游 `ai-elements/suggestion.tsx`），
+以及建在 CodeMirror 6 之上的 CodeEditor。
+
+**上游 `ai-elements/*` 映射进这一层，不另开一个平行目录**——`components/markdown/*`
+一直是这么来的，2026-09-16 补 `ui/suggestion/` 时沿用了同一条。产品组件不再直接 import
 `reka-ui`——焦点陷阱、Escape、外点关闭、方向键与 aria 状态属于这一层，散在调用点
 就会各写一份、各错一处。
 

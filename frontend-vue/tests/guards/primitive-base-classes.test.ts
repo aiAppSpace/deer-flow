@@ -17,10 +17,17 @@
                    另三处 wave 142 修掉（两个 DropdownMenu content 的 `border-border`
                    `text-sm` 与 `shadow-lg`、`HoverCardContent` 的尺寸内距与整组动画）。
 
-                   **现在 `DECLARED` 里剩下的 7 条全部只差三类东西**：z-index（本仓统一的
-                   那一层）、`--reka-*` 对 `--radix-*` 的变量名、以及 Tailwind 的等价写法
-                   （`min-w-32` ≡ `min-w-[8rem]`、`top-1/2 -translate-x-1/2` ≡
-                   `top-[50%] translate-x-[-50%]`），外加 ScrollArea 那笔已决定的账。
+                   ~~现在 `DECLARED` 里剩下的 7 条全部只差三类东西~~
+                   **⚠ 这个数与这句概括都过期了**（2026-09-16 第三十四轮按表数出来：
+                   **实际 12 条**）。**别再往这句话里写条数**——它没有任何机器守着，
+                   而下面那条「DECLARED 里不许留着已经一致了的条目」才是真判据。
+
+                   现在表里是四类理由，逐条写在各自的值里：
+                   ① z-index（本仓统一的那一层）；② `--reka-*` 对 `--radix-*` 的变量名；
+                   ③ Tailwind 的等价写法（`min-w-32` ≡ `min-w-[8rem]`、
+                   `top-1/2 -translate-x-1/2` ≡ `top-[50%] translate-x-[-50%]`）；
+                   ④ **底层不同构，字面对齐反而让渲染更差**——`CommandInput` 是这一类，
+                   它带着实测读数（第三十一轮：字面对齐后对话框高度 Δ-13.1px）。
                    **一条「待修」都不剩了**；再有新条目进来就是新的漂移。
 
                    **判据形状**：不是「必须一字不差」——两个应用用的是不同的组件库
@@ -70,7 +77,7 @@ const DECLARED: Record<string, string> = {
   CommandInput:
     "两边底层不同构（本仓 Reka `ListboxFilter`、上游 cmdk `Input`），**逐字照抄反而把渲染对齐搞坏**：2026-09-16 第三十一轮试过一次，对照台账当场报出 `role:dialog[Model Selector] height React=135.6 Vue=122.5 Δ-13.1` 等六行几何，而改之前这一屏几何全对。判据取渲染一致而不是类串一致——最终目标是「界面完全一致」，类串只是它的代理。翻案判据：两边底层同构了（或上游换掉 cmdk）就重新逐字对一遍。",
   ScrollArea:
-    "本仓多一个 `overflow-hidden`。ScrollArea 这一整类差异 wave 98 已判过（上游那层 `Suggestions` 永远不会真的滚动，决定不跟）；这一条随那笔账。",
+    "本仓根元素多一个 `overflow-hidden`。**原来挂的理由（wave 98：上游那层 `Suggestions` 永远不会真的滚动、决定不跟）2026-09-16 第三十一轮已作废**——本仓把 `Suggestions` 整层补上了，那一族 105 个投影因此清零。这一条留下来的是另一件事：**根元素的类串仍差一个 `overflow-hidden`，而两边渲染一致**（补上这一层之后台账在那些屏上是 0 行）。判据取渲染一致而不是类串一致。翻案判据：哪天台账在 ScrollArea 所在的屏上报出几何差异，就回来逐字对一遍。",
   TooltipContent:
     "① z-index：本仓是 90（tooltip 要压过 80 那一层）；② `--reka-*` 变量名。wave 141 已把整组进出动画与 `dark:bg-[#050504]` 补齐。",
 };

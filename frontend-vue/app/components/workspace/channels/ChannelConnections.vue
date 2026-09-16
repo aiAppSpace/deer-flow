@@ -7,6 +7,12 @@
   【边界与注意】   侧栏是另一个组件（WorkspaceChannelsList.vue），不要再把两者合成一个 variant——
                    理由写在那个文件的头注释里。
 
+                   ~~这里比 React 的 channels-settings-page.tsx 多出多账号列表、逐账号断开与~~
+                   **⚠ 2026-09-16 第三十三轮起这句话是假的**：多账号列表与逐账号断开
+                   **两边都有了**——上游那一页原来把 `GET /channels/connections` 返回的
+                   列表塌成一条（`connectionByProvider`），第二个绑定账号在它那边
+                   既看不见也解不掉，按「两边同改」给上游补上了。
+                   原文保留如下（它记的是当时的事实）：
                    这里比 React 的 channels-settings-page.tsx 多出多账号列表、逐账号断开与
                    管理员删 provider 配置三件事，是刻意保留的：tests/e2e-channels/channels.spec.ts
                    拿真实 Gateway 钉住了这条生命周期。**但多出来的东西只在真用得上时出现**——
@@ -313,8 +319,11 @@ function connectLabel(view: ChannelProviderView) {
   `ariaOnlyVue: button "Connect"` 原样变成 3 行 `button "Add account"`——
   行数一行没少，只是换了个名字。门禁当场拒写，这条判据是它给的。
 
-  有 binding row 时保留：多账号是本仓设置页独有的能力（上游没有这个概念），
-  「添加账号」在那种形状下是真操作。
+  有 binding row 时保留：「添加账号」在那种形状下是真操作。
+
+  ~~多账号是本仓设置页独有的能力（上游没有这个概念）~~ —— **2026-09-16 第三十三轮
+  起这句是假的**：上游现在也列出全部账号、也有「添加账号」那一档
+  （`channels-settings-page.tsx` 的 `showConnectAction` 与本仓同形）。
 */
 function showConnectAction(view: ChannelProviderView) {
   return view.connections.length > 0 || !providerConnected(view);
@@ -418,7 +427,10 @@ function showConnectAction(view: ChannelProviderView) {
           <!--
             **账号列表只在真有 binding row 时才存在。**
 
-            这一整块（「已连接账号」标题 + 每个账号一行）是本仓独有的：上游一个
+            ~~这一整块（「已连接账号」标题 + 每个账号一行）是本仓独有的~~
+            —— **2026-09-16 第三十三轮起两边都有**（上游那一页改成按 provider 分组、
+            逐账号断开，词条 `channels.accounts` / `channels.addAccount` 两个语言都补了）。
+            原文保留如下：上游一个
             provider 只认一条 connection，没有列表这个概念。留着是对的——
             多账号与逐账号断开被 tests/e2e-channels/channels.spec.ts 拿真 Gateway 钉着。
 
@@ -480,9 +492,15 @@ function showConnectAction(view: ChannelProviderView) {
           哪一颗是主操作）、清配置那颗写死 `text-red-600` 而不是 destructive token
               （2026-09-11 已全仓统一）。
 
-          `removeProviderConfig` 是本仓独有的管理员操作（上游没有这颗键），
-          所以它没有可抄的上游形状；这里只把它接进同一套 Button 规格。
-          `flex-wrap justify-end` 也是为它加的：上游这一排最多两颗，本仓是三颗。
+          ~~`removeProviderConfig` 是本仓独有的管理员操作（上游没有这颗键），
+          所以它没有可抄的上游形状~~ —— **这两句都是假的，2026-09-16 第三十四轮
+          按代码核出来的**：上游同一页有同一颗键
+          （`channels-settings-page.tsx:447/466`，`aria-label` 是
+          `${removeProviderConfig}: ${display_name}`），只是它那边也只对管理员渲染。
+          这里把它接进同一套 Button 规格仍然成立，**但理由不是「没有可抄的形状」**。
+
+          `flex-wrap justify-end` 留着：~~上游这一排最多两颗，本仓是三颗~~
+          —— 第三十三轮之后**两边都可能三颗**（Modify + 连接/添加账号 + 清配置）。
         -->
         <ItemActions class="ml-auto flex-wrap justify-end">
           <!--

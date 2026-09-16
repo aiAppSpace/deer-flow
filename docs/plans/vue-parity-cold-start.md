@@ -211,8 +211,8 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   **没有门禁的是**：verify 的「文件 / 单测」条数、各条耗时、e2e-mock /
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
-make -C <abs>/frontend-vue verify         # exit 0；**331 文件 / 2687** 单测；词典 1140 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **156 passed**（第三十轮实测；第二十七轮整条 17.5 分钟；
+make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1140 key / 15 unused
+make -C <abs>/frontend-vue e2e-parity     # **156 passed**（第三十三轮实测 15.7 分钟；
                                           #   此前记的 17.3 分钟是旧机况，耗时本来就没人守）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
                                           #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
@@ -222,7 +222,7 @@ make -C <abs>/frontend-vue e2e-parity     # **156 passed**（第三十轮实测�
                                           #    第十三轮修的四处**本来就没有锚点**——那正是问题本身）
                                           #  （此处此前写「3 passed」——那是只跑 diff.spec.ts 的数字，
                                           #    整个套件还有 scenarios.spec 的每场景-维度一条 + topology）
-make -C <abs>/frontend-vue e2e-mock       # 319 passed（274 + 22 + 15 + 2 + 6）；**第二十一轮真跑**
+make -C <abs>/frontend-vue e2e-mock       # 319 passed（274 + 22 + 15 + 2 + 6）；**第三十三轮真跑**
                                           #  （第十三轮之后一直没跑——规则写着「批不超过 4 轮」，
                                           #    实际隔了 7 轮。**但那条 375px 的红与此无关**——
                                           #    它在 macOS 上一直绿，本机跑多少遍都抓不到。
@@ -233,7 +233,11 @@ make -C <abs>/frontend-vue e2e-mock       # 319 passed（274 + 22 + 15 + 2 + 6�
 make -C <abs>/frontend-vue e2e-backend    # 22 passed（2+5+2+3+3+5+1+1；需要 backend 的 uv 环境）
 make -C <abs>/frontend-vue parity-accept  # 只能让台账变短；要变长得 PARITY_ACCEPT_GROW=1
                                           #  并在提交说明里逐行解释
-make -C <abs>/frontend-vue standalone-sim # exit 0（第二十七轮实测 跑过 18 / 未跑 5 / 红 0）
+make -C <abs>/frontend-vue standalone-sim # exit 0（跑过 18 / 未跑 5 / 红 0）
+                                          #  **第二十七轮起它进了 CI 的 verify job**——在那之前
+                                          #  它不在任何自动入口里，`invented-palette-colors.test.ts`
+                                          #  从建档那天起在**收集阶段**读上游、红了二十多轮没人看见
+                                          #  （本机 `../frontend` 永远在，`make verify` 照样全绿）。
                                           #  **第二十七轮它红过**：`invented-palette-colors.test.ts`
                                           #  从 2026-09-12 建档那天起就在**收集阶段**读上游
                                           #  （`describe.skipIf` 跳过用例不跳过收集——

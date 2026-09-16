@@ -44,11 +44,28 @@
 
 ## 接手时的状态（2026-09-16，**现场量，不要当断言**）
 
-- HEAD `ca05875f`，工作区干净、**已推送**到 `origin/main-wc`。
+- 工作区干净、**已推送**到 `origin/main-wc`（交接时 HEAD 是一条纯 docs 提交）。
 - 台账：**147 场景-维度 / 23 唯一行 / 16 条不同的差异 / 23 个投影**（起点是 170）。
-- **CI：`03cfb6ae`（最后一个动过 `frontend-vue` 的提交）那次 run 在交接时还
-  `in_progress`——第一件事就是把它的结论查出来**，命令见下面两个坑。
-- 本会话跑完第 27~33 轮，第 34 轮**只做了一半**（见下）。
+- **CI：`03cfb6ae`（最后一个动过 `frontend-vue` 的提交）已确认 `completed/success`。**
+  交接之后的提交若仍是纯 docs，则 `head_sha` 查 HEAD 会是 0——那是 `paths:` 过滤，
+  不是「没测过就有问题」，命令见下面两个坑。
+- 本会话跑完第 27~33 轮并做了一次**文档审计**（见下），第 34 轮**只做了一半**。
+
+## 交接前那次文档审计改了什么（都是按代码事实核出来的假断言）
+
+- `ChannelConnections.vue` **四处**：「多账号列表 / 逐账号断开是本仓独有」——
+  第三十三轮起**两边都有**；「`removeProviderConfig` 上游没有这颗键」——
+  **上游一直有**（`channels-settings-page.tsx:447/466`）；「上游这一排最多两颗」——
+  现在两边都可能三颗。
+- `primitive-base-classes.test.ts` 文件头「DECLARED 里剩下的 7 条」——**实际 12 条**，
+  而且理由已经是四类（新增「底层不同构、字面对齐反而更差」，`CommandInput` 那条）。
+  **那句话没有任何机器守着，已改成「别再往这句话里写条数」。**
+- `DECLARED` 里 ScrollArea 那条引的是 wave 98 的判词（「上游那层 Suggestions 永远不会
+  真的滚动、决定不跟」）——**第三十一轮已作废**，一页账里那两处原文也都盖了章。
+- `ARCHITECTURE.md` 的 primitive 清单补上 `Suggestion`；
+  根 `README.md` 的 IM Channels 一节补上「列出每个账号并逐个解绑」（用户可见改动）。
+- 冷启动文档的门禁读数块换成本会话真跑的数（verify 332 文件 / 2700 单测、
+  e2e-parity 156、standalone-sim 18/5/0 **且已进 CI**）。
 
 ## 下一件事：第三十四轮已量到一半，别重猜
 
@@ -88,7 +105,7 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git rev-parse HEAD)" 
 
 ```bash
 gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%H -- frontend-vue contracts backend/app/gateway)" \
-  --jq '.workflow_runs[0] | "\(.status)/\(.conclusion // \"进行中\")"'
+  --jq '.workflow_runs[0] | "\(.head_sha[0:8]) \(.status)/\(.conclusion)"'
 ```
 
 **一条红会让后面的步骤全部 `skipped`**，所以 job 级结论不够，要看**逐步结论**：
