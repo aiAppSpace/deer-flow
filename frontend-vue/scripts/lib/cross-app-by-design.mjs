@@ -58,6 +58,10 @@ export const CROSS_APP_BY_DESIGN = {
     kind: "test",
     note: "钉本仓源码/测试/文档里对上游的『文件:行号』引用还指得到东西；缺席时整组 describe.skipIf 跳过。",
   },
+  "tests/unit/chat/welcome-yields-to-goal.test.ts": {
+    kind: "test",
+    note: "欢迎区让位给目标/待办这条判据的**全部依据就是照上游**，所以两侧都钉：本仓那条钉「照着做了」，上游那两条钉「照的还是那个样子」；缺席时**上游那两条** it.skipIf 跳过，本仓那条照常跑。",
+  },
   "tests/guards/toggle-variant-pressed.test.ts": {
     kind: "test",
     note: "「选中态只靠换色」的守卫，两个应用一起扫（对照台账看不见两边一起漏，线索 238）；缺席时**上游那一条** it.skipIf 跳过，Vue 那一条照常跑。",

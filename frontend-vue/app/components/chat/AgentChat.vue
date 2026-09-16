@@ -2354,9 +2354,26 @@ onUnmounted(() => {
                   到输入框顶 28px，本仓只有 13px），宽度也差 2px 导致段落少折一行。
                   判据与实测都记在 ComposerSurface.vue 的注释里。
                 -->
+                <!--
+                  **有目标或有待办时，欢迎区要让位**（上游两个入口逐字相同：
+                  `chats/chat-page.tsx:559-561` 与 agent 页
+                  `[agent_name]/chats/[thread_id]/page.tsx:442-448`，
+                  都是 `isWelcomeMode && !hasGoal && !hasTodos && <Welcome…>`）。
+
+                  本仓此前两处都没有这一条。后果具体：欢迎态下敲一条
+                  `/goal …`（两个应用都支持，本仓走 `@goal-change`）之后，
+                  目标条会在同一屏上出现，而上游把「👋 Hello, again!」那一整块
+                  收起来腾地方、本仓仍然画着——**同一屏上两句主张**。
+
+                  判据取上游那一串条件本身，不是「看起来挤不挤」：
+                  这一块与目标条/待办块**共用输入框上方那一块绝对定位的区域**
+                  （见上面那段 wave 67 的注释），谁都不让位就是重叠。
+                -->
                 <template
                   v-if="
                     isWelcomeMode &&
+                    !activeGoal &&
+                    !authoritativeTodos.length &&
                     !(bootstrap && creation.status.value === 'created')
                   "
                   #extraHeader
