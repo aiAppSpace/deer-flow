@@ -1817,7 +1817,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       都是同一串，也天然只有一份。
     */
     id: "thread-todos",
-    title: "会话里的待办列表",
+    title: "会话里的待办列表与目标",
     backend: "mock",
     path: `/workspace/chats/${MOCK_THREAD_ID}`,
     mock: {
@@ -1825,6 +1825,31 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         {
           thread_id: MOCK_THREAD_ID,
           title: "Todo work",
+          /*
+            **`goal` 与 `todos` 一起喂，是第十八轮留下的那笔账的前提。**
+            上游把 `GoalStatus` 和 `TodoList` 放在同一层包裹里
+            （`chats/chat-page.tsx:530-531`），本仓的 `GoalStatus` 在
+            `ChatComposer.vue` 里——**位置不同**。而在这之前**没有任何场景同时喂
+            这两样**，于是这处差异一个档都报不出来：只喂 todos 时两边都不画目标条，
+            只喂 goal 时又没有 todos 当参照物。
+
+            `MockThread.goal` 这个字段 mock 一直就支持（`threadChannelValues`
+            里是 `goal: thread?.goal ?? null`），缺的一直只是一个用它的场景。
+
+            形状照 `core/threads/types.ts` 的 `GoalState` 逐字段给全——
+            少一个必填字段时两边的容错不一定相同，那会把「位置差异」和
+            「谁更能容忍残缺数据」混成一件事。
+          */
+          goal: {
+            objective: "PARITY-GOAL-OBJECTIVE",
+            status: "active",
+            created_at: "2026-05-24T04:46:42.565307+00:00",
+            updated_at: "2026-05-24T04:47:01.123949+00:00",
+            continuation_count: 1,
+            max_continuations: 8,
+            no_progress_count: 0,
+            max_no_progress_continuations: 3,
+          },
           todos: [
             { content: "PARITY-TODO-PENDING", status: "pending" },
             { content: "PARITY-TODO-RUNNING", status: "in_progress" },
@@ -1833,7 +1858,15 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       ],
     },
-    settle: [{ kind: "visible", target: { text: "To-dos" } }],
+    settle: [
+      { kind: "visible", target: { text: "To-dos" } },
+      /*
+        目标条的锚点取夹具自己给的那串 objective：它不随语言变，
+        两个应用都把它渲染成可见文字（上游 `goal-status.tsx`、本仓 `GoalStatus.vue`）。
+        **锚在它上面而不是锚在「目标」这类词条上**——后者在两个语言维下不是同一串。
+      */
+      { kind: "visible", target: { text: "PARITY-GOAL-OBJECTIVE" } },
+    ],
     /*
       折叠头默认是收起的（两个应用都是），列表体要点一下才出现——
       所以这里必须有一步 click。按可访问名点：那颗按钮的内容就是
