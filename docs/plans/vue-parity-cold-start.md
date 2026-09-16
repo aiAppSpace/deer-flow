@@ -541,7 +541,32 @@ Claude 记忆 `measure-dont-guess`）。
 > 逐族清单与还账路径写在一页账开头那节「按最终目标重排」。
 > 原来那几条方向性的活（开维度、接 CI、账 J）排到它们后面。
 
-1. **侧栏挂载差异——8 个投影，两向都有（现在最大的一块）。**
+1. **侧栏在窄屏上的挂载时机——8 个投影，现在最大的一块。第三十四轮已量到一半。**
+
+   **已经量到的事实**（别重查）：
+   - 三行全在 **mobile 维度**上，方向相反：`scheduled-tasks#default` 与
+     `#load-failed` 上**本仓多发** `channels/providers` / `features` /
+     `threads/search`（各 1），`thread-list-pin#mobile-drawer` 上**上游多发**
+     `features` / `threads/search`（各 1）。
+   - **不是「谁挂了侧栏」**：两边的 workspace layout 都挂，
+     而且两边的窄屏分支**都是 Sheet**（`ThreadSidebarShell.vue` 的 `v-if="narrow"`
+     对上游 `ui/sidebar.tsx:183` 的 `if (isMobile)`），关着时内容都不在 DOM 里。
+   - **也不是请求集合差异**：desktop 维度上两边发的是**同一个五条集合**，
+     只是顺序不同（`PARITY_ONLY=scheduled-tasks` 的 `REQUESTS` 段实测）。
+   - 本仓 `ThreadSidebar.vue` 在**自己的 setup 里**起了两个查询
+     （`useThreads()` → `POST /threads/search`、`useAgentsApiEnabled()` → `GET /features`），
+     它们不在 Sheet 的插槽里，**Sheet 关着也照跑**；
+     而 `channels/providers` 的所有者是插槽里的 `WorkspaceChannelsList`——
+     **它按理不该在关着时跑，所以那一条还没解释**。
+
+   **下一步的问题写清楚了**：窄屏是**由 JS 判定**的（`ThreadSidebar.vue` 里那段注释
+   自己写着「窄屏由 JS 判定而不是只靠 CSS」），所以首帧很可能先挂桌面分支、
+   子树跟着挂载并发请求，随后才切成 Sheet。**先证这一条**
+   （探针：在 mobile 维度上打印 `narrow` 的首帧值与切换时刻），再决定修法：
+   若属实，修法是让 `narrow` 在首帧就正确（SSR/媒体查询初值），
+   而不是给查询加 `enabled` ——后者只挡住两条，挡不住「整棵子树白挂载一次」。
+
+
    `scheduled-tasks` 两个终态上本仓多发 `channels/providers` / `features` /
    `threads/search`（各 2），而 `thread-list-pin#mobile-drawer` 上**上游**多发
    `features` / `threads/search`（各 1）。**两向都有，先查是不是「谁挂了侧栏」**
