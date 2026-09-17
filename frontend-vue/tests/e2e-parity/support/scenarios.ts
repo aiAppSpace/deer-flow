@@ -3037,7 +3037,20 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
 
       照既定纪律**只补一维**（主题轴与语言/断点轴正交）。
     */
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
+    /*
+      **补 mobile 维的理由**（2026-09-18 第三十八轮）：这一屏此前只有
+      desktop/zh/dark 三维，窄屏从没采过——而窄屏正是它出事的地方。
+      逐状态扫描在 360px 上量到本仓折叠头右侧那格 `min-w-0` 漏抄，
+      宽度 144 → 214、撑破父格 50px，**状态图标被推到 364–380，整个跑出视口**
+      （上游同处一直有那颗类，所以这是本仓单边的缺陷）。
+      补上这一维，同一个形状下次就有机器看着。
+    */
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      DARK_DIMENSION,
+      { viewport: "mobile", theme: "light", locale: "en-US" },
+    ],
   },
   {
     id: "artifact-preview",

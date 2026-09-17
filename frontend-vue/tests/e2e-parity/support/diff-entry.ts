@@ -46,6 +46,37 @@ export function diffMultiset(react: string[], vue: string[]) {
   return { onlyReact: onlyReact.sort(), onlyVue: onlyVue.sort() };
 }
 
+/*
+  伪元素描述串里的 `w=` / `h=` **也是像素**，要走和 x/y/width/height 同一个容差。
+
+  **2026-09-18 第三十八轮实测**：给 `subtask-card` 补 mobile 维之后，那一格当场报出
+
+      selector:[data-slot="ambilight"] before
+        React=content="" op=1 w=311 h=156   bg=rgba(0,0,0,0) anim=none
+        Vue  =content="" op=1 w=311 h=155.9 bg=rgba(0,0,0,0) anim=none
+
+  ——**0.1px**。常规几何有 2px 容差，而伪元素那一档是按整串精确比的，
+  于是同一把尺子对同一种量用了两套判据：布局上过得去的零头，在这里变成一行台账。
+
+  做法是把 `w=<数> h=<数>` 拆出来按容差比，**其余部分仍然逐字比**
+  （`content` / `opacity` / `bg` / `anim` 都不是像素，差一点就是真差一点）。
+  `none` 与任何非 `none` 仍然直接判不等。
+*/
+const PSEUDO_SIZE = /\bw=(-?[\d.]+) h=(-?[\d.]+)\b/;
+
+function pseudoEqual(a: string, b: string): boolean {
+  if (a === b) return true;
+  const ma = PSEUDO_SIZE.exec(a);
+  const mb = PSEUDO_SIZE.exec(b);
+  if (!ma || !mb) return false;
+  // 抠掉尺寸之后必须逐字相同，否则不是「零头」而是真差异。
+  if (a.replace(PSEUDO_SIZE, "") !== b.replace(PSEUDO_SIZE, "")) return false;
+  return (
+    Math.abs(Number(ma[1]) - Number(mb[1])) <= GEOMETRY_TOLERANCE_PX &&
+    Math.abs(Number(ma[2]) - Number(mb[2])) <= GEOMETRY_TOLERANCE_PX
+  );
+}
+
 export function diffGeometry(
   react: Record<string, GeometrySample | null>,
   vue: Record<string, GeometrySample | null>,
@@ -87,10 +118,13 @@ export function diffGeometry(
       "borderRadius",
       "opacity",
       "hit",
-      "before",
-      "after",
     ] as const) {
       if (r[field] !== v[field]) {
+        lines.push(`${label} ${field} React=${r[field]} Vue=${v[field]}`);
+      }
+    }
+    for (const field of ["before", "after"] as const) {
+      if (!pseudoEqual(r[field], v[field])) {
         lines.push(`${label} ${field} React=${r[field]} Vue=${v[field]}`);
       }
     }

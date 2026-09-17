@@ -143,9 +143,21 @@ const runtimeUsageLabel = computed(() => {
   两个 text-* 会同时留在 class 里，最终谁赢取决于**样式表里的先后**而不是这里的
   先后——现在恰好是红色赢，但那是运气，不是判据。
 */
+/*
+  **`min-w-0` 是承重的，不是装饰**（2026-09-18 第三十八轮量出来，本仓此前漏了它）。
+
+  这一格是 `flex min-w-0 items-center gap-1` 的孩子，而 flex 子项默认
+  `min-width: auto`——缩不到自己的 min-content 以下。少了 `min-w-0`，
+  360px 屏上它从 144 涨到 214，把父格（164）撑破 50px，于是**右边那颗状态图标
+  被推到 364–380，整个跑到视口外面**（视口只有 360）。上游 `subtask-card.tsx:179`
+  一直有这颗类；本仓漏抄。
+
+  **台账看不见它**：`subtask-card` 这个场景只有 desktop/zh/dark 三维，
+  窄屏从来没采过。同轮给它补上了 mobile 维。
+*/
 const metadataClasses = computed(() =>
   cn(
-    "text-muted-foreground flex items-center gap-1 text-xs font-normal",
+    "text-muted-foreground flex min-w-0 items-center gap-1 text-xs font-normal",
     viewModel.value.status === "failed" ? "text-red-500 opacity-67" : "",
   ),
 );

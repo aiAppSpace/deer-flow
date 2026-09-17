@@ -92,6 +92,103 @@ describe("台账判词", () => {
     expect(onlyReact.geometry).toEqual(["anchor 取样缺失 React=有 Vue=无"]);
   });
 
+  /*
+    **伪元素的 `w=` / `h=` 也是像素，要走和 x/y/width/height 同一个容差。**
+
+    第三十八轮给 `subtask-card` 补 mobile 维之后当场报出 0.1px 的一行：
+
+        [data-slot="ambilight"] before  React=… w=311 h=156  Vue=… w=311 h=155.9
+
+    常规几何有 2px 容差，而伪元素那一档此前按整串精确比——同一把尺子对同一种量
+    用了两套判据。下面三条钉的是修完之后的性质：**零头放过、真差异照报、
+    非像素字段仍然逐字比**。
+  */
+  it("伪元素：尺寸零头走几何容差，不再报成一行", () => {
+    const sample = (h: number) => ({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      color: "c",
+      background: "b",
+      fontSize: "12px",
+      fontWeight: "400",
+      fontFamily: "ui-sans-serif",
+      borderRadius: "0px",
+      opacity: "1",
+      hit: "hit",
+      before: `content="" op=1 w=311 h=${h} bg=rgba(0,0,0,0) anim=none`,
+      after: "none",
+    });
+    expect(
+      buildDiffEntry(
+        capture({ geometry: { a: sample(156) } }),
+        capture({ geometry: { a: sample(155.9) } }),
+      ).geometry,
+    ).toEqual([]);
+
+    // 超出容差仍然报。
+    expect(
+      buildDiffEntry(
+        capture({ geometry: { a: sample(156) } }),
+        capture({ geometry: { a: sample(150) } }),
+      ).geometry,
+    ).toHaveLength(1);
+  });
+
+  it("伪元素：非像素字段差一点就是真差一点，不吃容差", () => {
+    const sample = (anim: string) => ({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      color: "c",
+      background: "b",
+      fontSize: "12px",
+      fontWeight: "400",
+      fontFamily: "ui-sans-serif",
+      borderRadius: "0px",
+      opacity: "1",
+      hit: "hit",
+      before: `content="" op=1 w=311 h=156 bg=rgba(0,0,0,0) anim=${anim}`,
+      after: "none",
+    });
+    expect(
+      buildDiffEntry(
+        capture({ geometry: { a: sample("none") } }),
+        capture({ geometry: { a: sample("ambilight") } }),
+      ).geometry,
+    ).toHaveLength(1);
+  });
+
+  it("伪元素：`none` 与真的有一个，永远算差异", () => {
+    const base = {
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      color: "c",
+      background: "b",
+      fontSize: "12px",
+      fontWeight: "400",
+      fontFamily: "ui-sans-serif",
+      borderRadius: "0px",
+      opacity: "1",
+      hit: "hit",
+      after: "none",
+    };
+    expect(
+      buildDiffEntry(
+        capture({
+          geometry: {
+            a: { ...base, before: 'content="" op=1 w=1 h=1 bg=x anim=none' },
+          },
+        }),
+        capture({ geometry: { a: { ...base, before: "none" } } }),
+      ).geometry,
+    ).toHaveLength(1);
+  });
+
   it("伪元素采样计数只数真的采到的，`none` 不算", () => {
     const sample = {
       x: 0,
