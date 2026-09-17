@@ -345,18 +345,29 @@ EOF
 > 串在一条命令里，看到 `VERIFY_EXIT=2` 时已经推出去了，分支带着一条红。
 > **门禁的退出码要卡住提交**，不能只是打印出来。
 >
-> **账 K：菜单项的焦点在指针移出后不收（6 行，含原账 I′，未修）。**
-> 两处同根：`thread-history` 的 `div(menuitem)[dropdown-menu-item]` ×2、
-> `thread-list-pin` 的 `a(menuitem)` ×2 与 `focus: React=div Vue=a "…官网…"` ×2。
-> 机制：指针划过打开的菜单再移出时，**Radix 让焦点跟着指针走、离开时收回 content**
-> （`onItemLeave`）；**reka 只打 `data-highlighted`、不动焦点**
-> （`primitive-base-classes.test.ts` 给 `DropdownMenuItem` 挂豁免时就记着这一条），
-> 于是焦点留在开菜单时的首项上。
-> **用户看得见**：鼠标移出打开的菜单后，Vue 还有一项亮着、React 没有。
-> 按最终判据（交互逻辑一致）要修，修法落在 primitive 层，
-> ⚠ 注意第三十五轮那条教训：**在 reka 的事件序列里同步改 prop 会打断它自己的时序**，
-> 要用指令 + 直接 DOM 操作。
+> **账 K：菜单里多一个 tab 停靠点 / 焦点落点不同（6 行，未修，机制未判）。**
 >
+> 两处：`thread-history` 的 `tabbablesOnlyVue: div(menuitem)[dropdown-menu-item]` ×2、
+> `thread-list-pin` 的 `tabbablesOnlyVue: a(menuitem)` ×2 与
+> `focus: React=div Vue=a "…官网…"` ×2。**本机可复现，与 CI 逐字相同。**
+>
+> **关键读数**：`thread-list-pin` 那 4 行**只在 `steps: 4` 时出现**，
+> `steps: 1`（瞬移）与完全不归位时都没有（run3 / run5 / run8 三次对比）。
+> 也就是分步指针在离开时**划过了打开的菜单**，两个应用在这条路径上落到不同的
+> 焦点状态。**真实用户把鼠标移出打开的菜单时也会划过，所以这是真行为差异。**
+>
+> ⚠ **机制连猜三次、三次都被源码推翻，别接着猜**：
+>
+> | 猜法 | 被什么推翻 |
+> | --- | --- |
+> | reka 在指针离开时不收焦点 | 两库 `onItemLeave` **逐字相同**（都是 `content.focus()` + 清 `currentItemId`） |
+> | 开菜单时焦点落点不同 | 两库 mount auto-focus **逐字相同**（都是 `preventDefault()` + `content.focus({preventScroll:true})`） |
+> | 那一项的元素本身不同 | 两边都是 `DropdownMenuItem as-child` 包 `<a href target rel>`，标记等价 |
+>
+> **下一步要的是一次逐步焦点探针**：在两个应用上按场景步骤逐步记录
+> `document.activeElement` 与那几个菜单项的 `tabindex`，看分岔发生在哪一步。
+> 本机一次 2.2 分钟，别再从源码推。
+
 > ### 四、A / E 两组当时的排查过程（**A 组已结清，见三之三**）
 >
 > #### A 组（5 行，`integrations` 三个 mobile 档的宽度 Δ≈4.1–4.2px）
