@@ -124,6 +124,22 @@ settle 时  本仓 anims=[]                       → 等待返回 0ms → 采�
 
 处置：补一条 `hidden` 终态断言（等那次自动收起真的发生），按状态等不按秒表等。
 
+### 窄屏门禁从 1 个分区推到 10 个：**当场抓到两处两边共有的缺陷**
+
+`integrations` 那一个分区此前单独有「窄屏装得下」的门禁，而它在第二十一/二十七/
+三十八轮各出过一次事。**一个分区有门禁，另外九个不是没问题，是没人看。**
+新门禁 `tests/e2e/settings-narrow-screen.spec.ts` 用 `SETTINGS_SECTIONS` 反查，
+375/360 两档各断言 `panelOverflow === 0` 与 `panelSlack >= 12`。第一次跑就红 3 条：
+
+| 分区 | 读数 | 根因（上游逐字相同） |
+| --- | --- | --- |
+| `appearance` | `panelOverflow` **55@375 / 70@360** | 主题预览写死 `grid-cols-[1fr_240px]`，固定轨道不会缩 |
+| `skills` | 余量 **3px@360** | 外层 header 有 flex-wrap，里面那组按钮没有 |
+
+`appearance` 那条不是「余量小」，是**这块面板在所有手机上都挂在设置对话框外面**。
+两边同改（`minmax(0,240px)` / 内层补 `flex-wrap`）。
+**这两处都不减对照分——两边一样坏，台账按定义看不见。**
+
 ### `hit` 三行怎么判的
 
 **先排除应用**（判据 #9），三跑同号：两边的 dialog 动画声明**逐字相同**
@@ -156,19 +172,33 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 `ScrollArea.vue`、`SettingsDialog.vue`、`integrations-settings-page.tsx`
 这几份的文件头都很长，而且都带读数，值得先读完。
 
-### 2. 本机 `make verify` **不含** `e2e-mock`
+### 2. `hidden` 断言前面必须有一条 `visible`
+
+`locateTarget(...).first()` 匹配不到时是个**空 locator**，而
+`waitFor({ state: "hidden" })` 对不存在的元素**立刻通过**。
+`background-tasks#disabled` 的主角断言就是这么在空壳上绿了很久的。
+**同一轮我自己在 `showcase-public-thread` 上原样又写了一遍。**
+
+### 3. 锚点不能写死英文
+
+场景跑 en-US 与 zh-CN 两维，导航文案两边词典都翻译了。
+第三十八轮给 `background-tasks` 写 `role=link, name: "New chat"`，zh-CN 三条超时。
+**优先挑夹具里的字符串**（如那个场景的 `mock.threads[].title`）——它不过词典，
+天生语言无关，而且证明的东西更强。
+
+### 4. 本机 `make verify` **不含** `e2e-mock`
 
 **改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2 分钟，275 条）。
 第三十七轮就是这么漏过一条红的：本机一路绿、CI 才照出来。
 
-### 3. 「逐字对齐上游」不是无条件正确的
+### 5. 「逐字对齐上游」不是无条件正确的
 
 本仓比上游多出来的东西，可能正扛着上游没有的约束。
 **删之前问「它在守什么」，而不是只问「上游有没有」。**
 （`ScrollArea` 那颗 `overflow-hidden` 就是：第三十七轮删过一次，当场被门禁按回来；
 第三十八轮先修掉它守着的那个 0 余量，才真的删得掉。）
 
-### 4. 「余量为 0」和「守住了」长得一模一样
+### 6. 「余量为 0」和「守住了」长得一模一样
 
 只断言「溢出为 0」抓不到「余量为 0」。第二十一轮和第三十七轮各栽一次。
 补门禁时把**余量**直接量出来（把元素临时设成 `width:min-content` 读固有宽度，
@@ -178,7 +208,28 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 系统查一遍「终态没定义完」的场景 —— 第三十八轮刚证明这一类是真的
+### 1. 对话框的窄屏扫描 —— **别再逐个手接入口**
+
+设置对话框的十个分区已经有门禁了（见上）。**同一类缺陷的下一块地是别的对话框**：
+`AgentSettingsDialog` / `ChannelRuntimeConfigDialog` / `SubagentEditorDialog` /
+`ComposerModelSelector` / `ProjectMoveDialog` / `MarkdownTable` / `MermaidFullscreen`
+等，一共 18 个带 `DialogContent` 的组件。
+
+⚠ **第三十八轮试过逐个手写触发器，两个都卡在打不开（30 秒超时），不是量到了什么。**
+parity 场景表里**已经编码了到达这些状态的步骤**（`channels#runtime-config-edit` 等），
+正确做法是复用 `runScenario`。挡路的是套件边界：`scenarios.ts` 在
+`tests/e2e-parity/` 下，e2e-mock 不该反向依赖它（`e2e-suite-contract` 管着）。
+**先判这个再动手**，两条路：
+
+- 把窄屏溢出断言加进 parity 取样（跑得到两个应用；但台账看不见「两边一样坏」，
+  要单独断言而不是进台账）；
+- 或者把场景表提到两个套件都能引的一层。
+
+**已量到的负结果，别重做**：8 条产品路由在 360px 默认态全干净
+（`documentElement.scrollWidth === 360`、越界元素 0）；`subagent-editor`
+对话框有富余（dialog 328 / min-content 218）。**缺陷在对话框里，不在路由本身。**
+
+### 2. 系统查一遍「终态没定义完」的场景 —— 已经做过一轮，工具留着
 
 `streaming-reasoning-order` 的 `settle` 只写到「第一眼看到的东西出现」，
 而那一屏之后还会自己变一次，于是它的「0 行」一直是假的。
@@ -192,7 +243,7 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 它看不见。抓到的每一条都要按 `streaming-reasoning-order` 那样补终态断言，
 **不要用 `waitForTimeout` 顶**。
 
-### 2. 继续扩取样面
+### 3. 继续扩取样面
 
 
 
@@ -207,13 +258,13 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 ——拖拽手柄属性、菜单焦点释放、整层漏掉的面板外框，aria 树 / 几何锚点 / 请求
 一个都没报出来，全靠临时写探针照出来的。
 
-### 3. 320px 那 3px（低优先，取舍已写）
+### 4. 320px 那 3px（低优先，取舍已写）
 
 两边一起溢出 3px，同值、不是对照问题、不在受支持档里。
 要动就得动徽标的 `whitespace-nowrap` 或第四层内边距，**没有读数支持**。
 翻案判据：哪天 320px 进了受支持档，回来重量那条链。
 
-### 4. 工单表读数（2026-09-17 量的，会漂，自己重量）
+### 5. 工单表读数（2026-09-17 量的，会漂，自己重量）
 
 ```
 react-parity-scope.json  → pendingRoutes        0     （18 条 page.tsx − 4 条豁免）

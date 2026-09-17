@@ -3747,6 +3747,54 @@ Playwright 的 `click` / `fill` 会把目标滚进视野，**滚动量按当时�
 **收工复量**：57 个场景键、**0 条在取样点上还在变、0 条跳过**。
 
 
+### 五、窄屏门禁从 1 个分区推到 10 个——**当场抓到两处两边共有的缺陷**
+
+`integrations` 那一个分区此前单独有「窄屏装得下」的门禁。它出过事的方式是两边
+共有的：某个不给换行机会的字面量、或某颗 `whitespace-nowrap` 的按钮，把整块面板
+的 min-content 顶到比它那格还宽——第二十一轮、第二十七轮、第三十八轮各出过一次。
+**一个分区有门禁，另外九个不是没问题，是没人看。**
+
+新门禁 `tests/e2e/settings-narrow-screen.spec.ts` 用 `SETTINGS_SECTIONS` 反查分区
+（不另抄名单：抄一份的话新增分区默认不在门禁里，而那正是它要防的形状），
+375/360 两档各断言 `panelOverflow === 0` 与 `panelSlack >= 12`。
+
+第一次跑 20 条，**3 条红**：
+
+| 分区 | 读数 | 根因（上游逐字相同） |
+| --- | --- | --- |
+| `appearance` | `panelOverflow` **55@375 / 70@360** | 主题预览卡写死 `grid-cols-[1fr_240px]`，**固定轨道不会缩**，面板 min-content 348 而那格只有 293 |
+| `skills` | 余量 **3px@360** | 外层 header 有 `flex-wrap`，里面那组按钮没有，两颗 nowrap 键连成 240.7px 整块 |
+
+`appearance` 那条不是「余量小」，是**这块面板在所有手机上都挂在设置对话框外面**，
+而这一屏此前没有任何机器看着。改法：`minmax(0,240px)`（上限不变，约 420px 以上
+毫无变化）与内层补 `flex-wrap`。两边同改。
+
+**这两处都不减对照分——两边一样坏。** 台账按定义看不见它们。
+
+### 六、这一轮量到的两个负结果（都有价值，别重做）
+
+1. **产品路由在 360px 上全干净**：8 条产品面路由（workspace / chats / chats/new /
+   chats/:id / agents / agents/new / scheduled-tasks / showcase）默认态
+   `documentElement.scrollWidth === 360`、越界元素 0。
+   **缺陷在叠加其上的对话框里**，不在路由本身。
+2. **`subagent-editor` 对话框在 360px 上有富余**：dialog 328、min-content 218。
+
+### 七、下一步该怎么做「对话框的窄屏扫描」——**别再逐个手接入口**
+
+第三十八轮试过逐个手写触发器去开对话框（channels runtime config、agent settings），
+两个都是 30 秒超时**卡在打不开**，而不是量到了什么。
+**parity 场景表里已经编码了到达这些状态的步骤**（`channels#runtime-config-edit`
+等），正确做法是复用 `runScenario`，而不是在 e2e-mock 里把入口重写一遍。
+
+挡路的是套件边界：`scenarios.ts` 在 `tests/e2e-parity/` 下，而 e2e-mock 套件不该
+反向依赖它（`tests/guards/e2e-suite-contract.test.ts` 管着）。两条路各有代价，
+**下一轮先判这个，再动手**：
+
+- 把窄屏溢出断言加进 parity 取样（它跑得到两个应用，但台账看不见「两边一样坏」，
+  要单独断言而不是进台账）；
+- 或者把场景表提到两个套件都能引的一层。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里
