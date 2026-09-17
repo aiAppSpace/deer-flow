@@ -29,7 +29,17 @@ const markdown = computed(() => buildAboutMarkdown());
 </script>
 
 <template>
+  <!--
+    **`wrap-anywhere`**：这一页的标题是 `text-2xl` 的单个长词——
+    「🙌 Acknowledgments」就是这一屏最宽的东西，而 360px 下设置面板的内容列
+    只有约 200px。CI 的 Linux 字体下它把整块面板顶出格子 4px（`panelSlack` −3），
+    而 macOS 上还剩 41px 余量——**一个只在某个平台成立的缺陷，和没有缺陷长得
+    一模一样**。用 `break-words` 没用：按 css-text-3，`overflow-wrap: break-word`
+    新增的换行机会不计入 min-content；`anywhere` 才计入，而且它只在一个词实在
+    放不下时才断开。两边同改。
+  -->
   <MessageMarkdown
+    class="wrap-anywhere"
     :content="markdown"
     :components="richContentComponents"
     :remark-plugins="defaultRemarkPlugins"

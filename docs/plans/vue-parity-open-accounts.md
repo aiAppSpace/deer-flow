@@ -3795,6 +3795,57 @@ Playwright 的 `click` / `fill` 会把目标滚进视野，**滚动量按当时�
 - 或者把场景表提到两个套件都能引的一层。
 
 
+### 八、新门禁在 CI 上第一次跑就抓到一条**本机看不见**的缺陷
+
+`bd8353bc` 的 verify 在 Linux 上红了（parity 绿）：
+
+| | 读数 |
+| --- | --- |
+| macOS 本机 | `about` 两档都绿，360px 余量 **41px** |
+| Linux CI | `about` **panelOverflow 4 / panelSlack −3** |
+
+根因：这一页的标题是 `text-2xl` 的**单个长词**——「🙌 Acknowledgments」就是这一屏
+最宽的东西，而 360px 下内容列只有约 200px。两边字体栈不同，Linux 那边这个词宽出
+约 18%（本机 min-content 237.5，CI 推算约 281）。
+
+**这正是写这条门禁的理由**：「一个只在某个平台成立的缺陷，和没有缺陷长得一模一样」
+——第二十一轮踩过一次，这次是门禁自己照出来的。
+
+修法与 scope 字面量同一条：`wrap-anywhere`（`break-words` 对 min-content 无效）。
+**改在调用点而不是共享的 markdown 基类**——后者镜像上游 Streamdown 的类串，
+动它是另一回事，而且没有读数支持。两边同改
+（React `SafeStreamdown className`，Vue `MessageMarkdown class`）。
+
+实测：面板 min-content **237.5 → 68.2**，360px 余量 41 → **210**。
+
+### 九、窄屏状态扫描：一次**我自己造出来的假读数**，与两条真溢出
+
+第一版扫描报出「43 个状态全溢出」。**那是我自己的 bug**：`runScenario` 里的
+`applyDimension` 会按 `VIEWPORTS.mobile` 把视口设成 **375**，覆盖掉
+`newContext` 里的 360——于是我拿 361 去卡一个 375 宽的页面。
+**判据：探针里凡是「全都红」，先怀疑探针。**
+
+改成按页面实际 `innerWidth` 量、并在 `runScenario` 之后再压到 360，真实读数：
+
+    43 个状态检查，2 个有溢出；另有 14 个状态在窄屏下压根到不了（侧栏在手机上是抽屉）
+
+- `subtask-card`：一个 `svg` 出界 20px（right=380，w=16）；
+- `artifact-table-preview`：`table` 出界 2px（w=588 的 `table-fixed`）。
+
+**两条都还没查根因、也还没判**，挂账。
+
+### 十、两条**只在全套负载下红**的用例（飘）
+
+| 用例 | 全套 | 单跑 |
+| --- | --- | --- |
+| `artifact-table-preview · zh-CN`（parity 可达性） | 红过 1 次 | `--repeat-each=3` 六次全绿 |
+| `thread-list-infinite-scroll`（e2e-mock） | 红过 1 次 | `--repeat-each=5` 十五次全绿，随后整套复跑 295 passed |
+
+两条都不是这一轮改出来的。**「偶发红的门会被当成噪音忽略掉，等于没有门」**
+（记忆 `deerflow-gate-needs-an-entrypoint` 的同一形状），所以它们值得单独查一轮，
+但不该在别的账里顺手改。挂账。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里
