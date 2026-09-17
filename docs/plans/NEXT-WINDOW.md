@@ -1,14 +1,15 @@
 # 新窗口开工：整段贴给下一个窗口
 
 > 这份文件只有一个用途：**新窗口第一句话贴什么**。
-> 真正的交接内容在 `vue-parity-cold-start.md` 里，那份是维护到当前事实的。
-> 这份不重复它——重复就会有两份会各自过期的散文。
+> 深度背景在 `vue-parity-cold-start.md`（怎么接手）与
+> `vue-parity-open-accounts.md`（每一笔账的判词）里。
 
 ---
 
-读 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/docs/plans/vue-parity-cold-start.md` 并按它执行。
+读 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/docs/plans/NEXT-WINDOW.md`
+并按它执行。
 
-先按文档开头那段命令**现场量一遍状态**（git、台账、CI），量完把读数说给我看；
+先按下面「现场量一遍」那段命令**把状态量出来**，量完把读数说给我看；
 **不要引用文档里的散文当读数**。
 
 然后从「下一轮最该先拿的」第 1 条开始做，**做完自动开下一轮**，一直推到我喊停。
@@ -17,184 +18,231 @@
 
 ---
 
-## ⚠ 最终判据（2026-09-16 用户重申，比旧文档强，读之前先看这一段）
+## ⚠ 最终判据（2026-09-16 用户重申）
 
 用户原话：**「最终目的是 vue 版本和 react 版本在功能，体验，交互逻辑，界面上保持
 完全一致」**，并追一句「这个才是最终目标」。
 
-同日还给了四句，它们是同一条判据的四个面：
+同日给的四句是同一条判据的四个面：
 
 - **不能缩水和打补丁**——对齐要还**根因**，不是让台账那一行消失；
 - **该重构重构**——上游那一层结构本仓缺了，就按本仓的分层**补一层真组件**；
-- **按业界最佳方案**——两边都不对时取业界做法**两边同改**，不要把本仓改成和上游一样错；
-- **不要机械式对齐**——**判据是渲染与行为一致，不是源码字面一致**，两者会给出相反答案。
+- **按业界最佳方案**——两边都不对时取业界做法**两边同改**；
+- **不要机械式对齐**——**判据是渲染与行为一致，不是源码字面一致**。
 
-**底层不同构时可以退让**（用户原话：「如果是因为底层架构有差异，实在不能实现完全
-对齐，能最大程度对齐就行」）。**这条要读窄**：允许不一致的只是**实现字面**，
-渲染/行为/可访问性树仍按完全一致要求；而且必须拿得出**实测读数**并写**翻案判据**。
+**底层不同构时可以退让**，但允许不一致的只是**实现字面**；渲染/行为/可访问性树
+仍按完全一致要求，而且必须拿得出**实测读数**并写**翻案判据**。
 
-判据全文：Claude 记忆 `deerflow-vue-replacement-goal` 与 `deerflow-long-term-top-tier-goal`。
+判据全文：记忆 `deerflow-vue-replacement-goal` 与 `deerflow-long-term-top-tier-goal`。
 
 ---
 
-## ⚠ 签入基线是 0，但**那是 macOS 的读数**
+## 现场量一遍（别信散文，这几个数会漂）
 
-第三十六轮把签入基线推到 **0 唯一行 / 0 多重集 / 0 条不同的差异**（起点 170 个投影）。
-第三十七轮把 `e2e-parity` 接进 CI，**第一次运行就红**——同一棵树在 ubuntu-latest
-上量出 **16 行**（run 35143922501）。**边界因此是三重的**，否则新窗口会以为任务结束了：
+```bash
+cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow
+git rev-parse --short HEAD && git status --short && git rev-list --count origin/main-wc..HEAD
 
-- 台账只覆盖 **147 个场景-维度**，也就是 `tests/e2e-parity/support/scenarios.ts`
-  那份目录。**取样面之外的屏，台账一个字都没说。**
-- 覆盖率棘轮现状：**covered 37 / pending 1 / exempt 3**。那 1 条 pending
-  （`artifact-table-performance`）**已经有完整判词，别再重新问一遍**——
-  它量的是时延，而对照工厂的坐标系是 aria 树 / 几何 / 请求，表达不了时延断言；
-  镜像 spec 早就有了。要变，得先有人决定豁免 `/artifacts/view` 这条路由。
-- **第三重、也是第三十七轮才量到的一重：当前这台笔记本。** 同一棵树换一台机器
-  就是 16 行。第三十六轮那句「本地复量过两次」复现的是同一台机器上的同一个结果
-  ——`PARITY_EXIT=0` / 158 passed，而绿只说明**实测与签入基线一致**，
-  不说明两个应用一样。
-- 所以「0」的正确读法是：**当前这把尺子、在当前这个取样面上、在这台 Mac 上，
-  量不出差异了。** 下一步是**判掉 Linux 那 16 行**（下面第 1 条）
-  与**让尺子照到更多地方**（扩取样面）。
+python3 - <<'EOF'
+import json
+d = json.load(open("frontend-vue/baseline/parity-diff.json"))["entries"]
+rows = {f"{k}·{f}:{x}" for k, v in d.items() for f, r in v.items()
+        if isinstance(r, list) for x in r}
+print("场景-维度", len(d), "唯一行", len(rows))
+EOF
+
+# CI：⚠ head_sha 必须传全 sha（短 sha 永远返回 total_count: 0）
+gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git rev-parse HEAD)" --jq '.total_count'
+gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%H -- frontend-vue contracts backend/app/gateway)" \
+  --jq '.workflow_runs[] | "\(.name) \(.status)/\(.conclusion) \(.head_sha[0:8])"'
+```
+
+⚠ **纯 docs 提交不会触发任何 CI run**（workflow 有 `paths:` 过滤），
+所以 `total_count: 0` **不是「没问题」**。要问的是「覆盖当前 `frontend-vue` 树的
+那次 run 绿不绿」；一条红会让后面的步骤全 `skipped`，所以要看**逐步结论**。
+
+---
+
+## ⚠ 签入基线是 0，但那是 **macOS** 的读数
+
+第三十六轮把签入基线推到 0。第三十七轮把 `e2e-parity` 接进 CI，
+**第一次运行就红**——同一棵树在 ubuntu-latest 上量出 16 行。
+所以「清零」的边界是三重的：**当前尺子、当前取样面、当前这台笔记本**。
+
+台账只覆盖 147 个场景-维度（`tests/e2e-parity/support/scenarios.ts`）。
+覆盖率棘轮：covered 37 / pending 1 / exempt 3，那 1 条 pending
+（`artifact-table-performance`）**已有完整判词，别重新问**。
+
+---
+
+## 第三十七轮收工状态：Linux 台账 **8 行**
+
+| 账 | 行 | 状态 |
+| --- | --- | --- |
+| **A 组**（`integrations` mobile 宽度 Δ4.1/4.2） | **5** | **未结清**，见「别再做的事」第 1 条 |
+| **E 组**（表格 y 偏移） | **0** | ✅ ①上游 `{" "}` 的句首空格 ②本仓整层漏了 `Artifact` 外框 |
+| **账 J**（`div(separator)` 30 行） | **0** | ✅ **不是应用的账**——尺子标签改成「只在重复时才补 `data-slot`」 |
+| **账 K**（菜单 tab 停靠点 / 焦点） | **0** | ✅ 菜单项指针移出后不释放焦点，按 Radix `onItemLeave` 同形补上 |
+| `hit React=self Vue=div` | **3** | 未判，**飘**（四次读数 2/3/0/3），Linux-only |
+
+**已结清的三笔全是「六档全盲」**——拖拽手柄属性、菜单焦点释放、面板外框，
+没有一项能被 aria 树 / 几何锚点 / 请求看见。
+**「台账 0 行」只意味着「当前这些档在当前这些锚点上量不出差异」。**
+
+---
+
+## ⚠ 别再做的事（第三十七轮踩过，逐条带读数）
+
+### 1. 别删 ScrollArea 根元素的 `overflow-hidden` —— A 组不能那样"结清"
+
+删掉它，台账 A 组那 5 行确实归零，**但 `tests/e2e/integrations.spec.ts` 的
+「设置面板在 375px/360px 屏上装得进对话框」当场从 `panelOverflow: 0` 变成 `4`**。
+
+那颗类是**承重的**：对 grid/flex 子项，`overflow` 非 `visible` 会把「自动最小尺寸」
+从 min-content 变成 0，这一层因此能缩到内容宽度以下。
+**它同时就是 A 组那 4px 的来源**——本仓靠它多缩 4px。
+**台账那 5 行和「窄屏不溢出」是同一个「0 余量」的两面。**
+
+**真正该修的**：`CardHeader` 的 `grid-cols-[1fr_auto]` 第 2 列那颗
+`whitespace-nowrap` 的 Refresh 按钮顶着 min-content（第二十一轮量到同一张卡
+375px 下「macOS 恰好装得下、Linux 溢出 9px」）。**先修那个 0 余量**，
+修完之后删掉 `overflow-hidden` 而窄屏门禁仍绿，A 组才真的结清。
+
+### 2. 本机 `make verify` **不含** `e2e-mock`
+
+上面那条红就是这么漏过去的：本机一路绿、CI 才照出来。
+**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 3 分钟，275 条）。
+
+### 3. 「逐字对齐上游」不是无条件正确的
+
+本仓比上游多出来的东西，可能正扛着上游没有的约束。
+**删之前问「它在守什么」，而不是只问「上游有没有」。**
 
 ---
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 判掉 Linux 上那 16 行 —— **核实已经做完了，答案是红**
+### 1. 那个「0 余量」——它同时挡着 A 组和窄屏门禁
 
-> 这一条上一版写的是「去核实那套 CI 接入跑绿没有」，并且写明「跑红了那就是真账」。
-> **2026-09-17 核实完毕：红。** 所以这一条现在是那笔真账本身。
+见「别再做的事」第 1 条。当前**唯一一笔能一次结清两边**的账。
 
-`e2e-parity` 已经在仓库里、也已经在 CI 上跑过（`frontend-vue-parity.yml`），
-**不要重做**。run 35143922501（commit `98f27946`）的逐步结论：
+### 2. `hit` 那 3 行（飘、Linux-only）
 
-| job | 结论 | 耗时 |
-| --- | --- | --- |
-| `parity` | **failure**，`Measure the React-vs-Vue parity ledger` 这一步红 | 24m50s（装配 1m15s + 套件 23m25s） |
-| `parity-auth` | success | 4m17s |
-| `icon-parity`（在 `parity` job 里） | success | 瞬时 |
+`integrations#permission-request` 三个维度：
+`role:button[/^(Request permissions|申请新权限)$/] hit React=self Vue=div`。
+截图里**本仓那颗按钮不在可视区**，中心点因此打到对话框外的遮罩上。
 
-套件本身是 **1 failed / 155 passed**，红的只有台账那条：
-**Linux 上量出 16 行，而签入基线是 0 行。**
+**已量到**（本机探针，平台无关的量）：
 
-**当前状态：这条工作流是红的，而且应该保持红**，直到逐组判完。
-它红着说明它在量东西——本机十四轮没看见的东西，换一台机器一次就照出来了。
+```
+本仓 scrollTop=460  scrollHeight=950  clientHeight=490
+上游 scrollTop=411  scrollHeight=950  clientHeight=490
+```
 
-**逐组清单与已判/未判写在 `vue-parity-open-accounts.md` 第三十七轮条目**，
-那份是当前版本，这里不重复。**第三十七轮收工时的 Linux 台账 = 3 行**（run 35202704174 实测）。
-起点 16 行，本轮结清五笔：
+**内容度量完全相同**，`maxScrollTop = 460` → **本仓滚到了最底，上游只做最小滚动**。
+场景那一步是 `fill` OAuth 输入框，而 Playwright 的 `fill` 会把元素滚进视野。
 
-| 账 | 起 | 现 | 根因 |
-| --- | --- | --- | --- |
-| **A 组**（`integrations` mobile 宽度） | 5 | **0** ✅ | `ScrollArea` 基类差四处（`w-2.5`/`p-px`/透明边框/Root 多 `overflow-hidden`） |
-| **账 J**（`div(separator)`） | 30 | **0** ✅ | **不是应用的账**——尺子标签改成「只在重复时才补 `data-slot`」 |
-| **账 K**（菜单 tab 停靠点 / 焦点） | 6 | **0** ✅ | 菜单项在指针移出后不释放焦点，按 Radix `onItemLeave` 同形补上 |
-| **E 组**（表格 y 偏移） | 3 | **0** ✅ | ①上游 `{" "}` 造出的句首空格（根因在 React）②**本仓整层漏了 `Artifact` 外框** |
-| `hit React=self Vue=div` | 3 | **3** | **唯一剩下的**，飘、Linux-only。已量到「滚动落点 460 vs 411、内容度量完全相同」，逐条见挂账文档三之七 |
+**已排除**：两边都没有显式滚动代码（`scrollIntoView` / `scrollTop` / `scroll-margin`
+零命中）、都没有 `scroll-behavior: smooth`、输入框前后标记逐字等价、
+且 run1/run3 就有这 3 行（不是第三十七轮引入的）。
 
-**四笔已结的账全是「六档全盲」**——滚动条宽度、拖拽手柄属性、菜单焦点释放、
-面板外框，没有一项能被 aria 树 / 几何锚点 / 请求这三类看见。
-**这说明「台账 0 行」只意味着「当前这些档在当前这些锚点上量不出差异」。**
+**下一步**：在 `fill` 前后插桩，记录 click Calendar → click Docs → fill 三个时刻的
+`scrollTop`，看分岔发生在哪次交互。**别从源码推**——第三十七轮在这类问题上
+从源码推了四次，四次都被源码本身推翻。
+⚠ 它在 macOS 量不出来，本机回路无效，只能 `parity_only` 跑 Linux。
 
-⚠ **别拿总数当读数**：本轮总数被「尺子变准」和「修好差异」两个相反方向同时推动，
-16 → 8 → 16 → 22 → 41 → 11，**没有一次总数单独说明问题**。逐行比才是结论。
+### 3. 扩取样面
 
-### 第三十七轮后半段的读数（**都是量的，不是推的**）
+`baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由取样点最少。
+对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景（棘轮会红）。
+加新场景要**给它加终态断言**，否则「零差异」可能只是「压根没采到」。
 
-**本机诊断循环建起来了**：`PARITY_ONLY=<场景>` 一次 **2.2 分钟**，全量 CI 一次 25 分钟。
-后半段每个判断都是用它量的。
-
-1. **字体被实测排除。** run6 里 `fontFamily` 这一档报 **0 行**——两个应用在所有
-   取样锚点上声明的字体栈完全相同（本机 `PARITY_ONLY=integrations` 28 个维度同样
-   0 行）。它是声明值、与平台无关，所以两个平台同时成立。
-   **「A/E 那 4px 是不是字体」这个我推过三次的问题，到此关闭：不是。**
-2. **顺着它挖出一笔独立真账并已修：`ScrollArea` 的基类差四处**
-   （`p-px` vs `p-0.5`、`w-2.5` vs `w-2`、少一道透明边框、viewport 少一整组焦点环，
-   外加 Root 多一个 `overflow-hidden`）。**滚动条是用户看得见的东西**，
-   而它不进可访问性树、也不是台账锚点，**六档一条都不响**。
-   路子是顺着门禁自己的豁免走出来的——那条豁免写着「哪天台账在 ScrollArea 所在的
-   屏上报出几何差异，就回来逐字对一遍」，而 A 组正好满足。**豁免已退役，门禁通过。**
-   ⚠ **它是不是 A 组的根因还不知道**，要 Linux 读数说了算。
-3. **`steps: 1` 的瞬移指针造过 12 行伪差异**：菜单库判「收不收子菜单」靠指针经过
-   父菜单那串 `pointermove`，瞬移把那条路径整个跳过。改成分步移动后
-   `thread-history` 从 14 行降到 2 行（`steps: 4` 与 `12` 读数相同，成本三分之一）。
-4. **run7 红的不是差异，是我引入的成本**：diff 那条用例撞了 900s 闸门。
-   已按文件自己定的政策「往上提而不是砍维度」提到 1_500_000，
-   并先把成本降下来（指针没动过的场景不归位）。
-
-### 2. 扩取样面 —— 台账清零之后，新差异只能从这里来
-
-**开新维度/新场景的单位产出在降**（第三十三轮连开两扇零新差异），所以
-**别盲开**，按读数选：
-
-- `baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由的取样点最少；
-- 对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景
-  （棘轮门禁会红）；
-- 加新场景要**给它加终态断言**，否则「零差异」可能只是「压根没采到」
-  （第二十轮那条教训：拿到 0 不等于两边一样）。
-
-### 3. 三张 pending 表是工单队列，不是可以停住的账
+### 4. 三张 pending 表是工单队列
 
 记忆 `deerflow-upstream-features-must-land-in-vue`：上游有的功能 Vue 必须实现。
-台账看不见「本仓整个屏都没做」这一类——它只比两边都到得了的屏。
+台账看不见「本仓整个屏都没做」这一类。
 
 ---
 
-## 第三十六轮留下的两条教训（别重犯）
+## 手上的工具（第三十七轮建的，直接用）
 
-1. **一处重复请求会把另一处缺陷遮住。** 去掉 `refreshPostRun` 里那次多余的
-   `threads.get()` 之后，尺子当场照出 `GET /api/threads/**null**/token-usage`
-   ——`refetch()` 绕过 `enabled`，而 `queryFn` 里那个 `!` 假设了 `enabled` 挡得住。
-   **「多发一个请求」值得当账还，理由之一就是它会藏别的 bug。**
+### 本机诊断回路：**2.2 分钟**，而不是 25 分钟
 
-2. **上一轮判成「架构差异、退让」的，这一轮翻案了。** `thread-title-sync` 那条
-   先判「本仓没有第二个查询要收敛」，再查才发现本仓**四处**都在失效
-   `["thread","metadata",id]` 而**没有任何查询拥有这个 key**——四处全是空操作。
-   **「本仓不需要」和「本仓缺了那一层」长得很像**，判前先 grep 一遍谁在用这个 key。
+```bash
+cd frontend-vue
+PARITY_ONLY=thread-history node scripts/keep-e2e-failure-artifacts.mjs -- \
+  node scripts/with-loopback-no-proxy.mjs -- \
+  python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test \
+  -c playwright.parity.config.ts diff.spec.ts
+```
+
+该模式**既不比基线也不 accept**，结果打在 console 上（`取样计数` 之后那段 JSON），
+还附 `REQUESTS` 与 `TABBABLES` 两段全量清单。
+
+### Linux 定点复量
+
+```bash
+gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
+  --ref main-wc -f parity_only=integrations#permission-request
+```
+
+**读产物，别读颜色**——该模式下那次 run 一定是绿的，结论在 artifact
+`parity-failures` 的 `e2e-parity/report.json` 里。
+
+### 探针三件套（第三十七轮三次靠它定位到根因，都是源码看不出来的）
+
+写一份 `tests/e2e-parity/zz-*.spec.ts`，**用
+`runScenario(page, base, scenario, undefined, state)` 把场景跑到位**
+（自造夹具会失败），然后在两个应用上各拍一次快照 `console.log` 出来，用完即删：
+
+1. **焦点快照**：`document.activeElement` + 各菜单项 `tabindex` → 定位到账 K；
+2. **文本快照**：`JSON.stringify(el.textContent)` + `getComputedStyle(el).font`
+   → 照出上游的句首空格；
+3. **祖先链**：逐层 `width` / `padding` / `borderLeftWidth`
+   → 照出整层漏掉的 `Artifact` 外框。
+
+### 截图归属
+
+`diff.spec.ts` 里 `captureScenario` **先采 Vue、再采 React**，
+所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React（`i` 是该场景键在
+`report.json` 里的序号）。**别按奇偶猜**——我猜反过一次。
 
 ---
 
-## 量 CI 的两个坑（前几轮现场踩出来的，别再踩）
+## ⚠ 第三十七轮我被订正了十次，共同形状只有一个
 
-1. **`head_sha` 必须传全 sha**：传短 sha **永远返回 `total_count: 0`**，
-   于是那条命令在任何情况下都会「证明」这个 sha 没被测过。
-2. **纯 docs 提交不会有任何 CI run**（workflow 有 `paths:` 过滤），
-   所以「HEAD 绿不绿」这个问题本身可能问错了——要问的是
-   「**覆盖当前 `frontend-vue` 树的那次 run** 绿不绿」。
-   （上一次交接文档在这里写错过：它断言 HEAD 是纯 docs 提交所以没有 run，
-   而那次提交同时改了 `frontend-vue/` 下的文件，run 是有的。**现场量，别照抄。**）
+**「说得通的东西」和读数长得一模一样。** 逐条：
 
-```bash
-cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow
-gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git rev-parse HEAD)" --jq '.total_count'
-```
+| # | 我拿什么当了读数 | 被什么推翻 |
+| --- | --- | --- |
+| 1 | 算术（`230/255 = 90.2%` 恰好是 Tailwind `/90` 档） | 下一次 CI 运行 |
+| 2 | 源码结构（`CardTitle` 是块级 div → 排除字体） | React 自己的注释：那一列卡在 min-content |
+| 3 | **一次运行**（16 → 8 就说根因找到了） | 同一棵树的下一次运行回到 16 |
+| 4 | **总数**（16 → 29 就说改坏了） | 逐行比：消掉 7 行伪差异 + 照出 20 行真差异 |
+| 5 | 奇偶推断（奇数号截图是 React） | `diff.spec.ts` 的采样顺序 |
+| 6 | 把「让红变绿」当「修好了」（往 Vue 塞 `data-slot`） | `invariant-ownership` 门禁 |
+| 7-9 | 三次从源码推账 K 的机制 | 那三处**确实逐字相同**，分岔在它们之外 |
+| 10 | **又一次单次运行**（run10 的 0 行 → 说 `hit` 随账 K 消失） | run11 回到 3 行 |
 
-`0` 的意思是「这个 sha 没被测过」，**不是「没问题」**。往前找第一个动过
-`frontend-vue/`、`contracts/`、`backend/app/gateway/` 的提交，那次 run 才是当前树的结论：
+**判据**：
 
-```bash
-gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%H -- frontend-vue contracts backend/app/gateway)" \
-  --jq '.workflow_runs[0] | "\(.head_sha[0:8]) \(.status)/\(.conclusion)"'
-```
-
-**一条红会让后面的步骤全部 `skipped`**，所以 job 级结论不够，要看**逐步结论**：
-
-```bash
-RID=$(gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%H -- frontend-vue contracts backend/app/gateway)" --jq '.workflow_runs[0].id') \
-  && gh api "repos/aiAppSpace/deer-flow/actions/runs/$RID/jobs" \
-    --jq '.jobs[] | "【\(.name)】\(.conclusion)", (.steps[] | select(.conclusion=="failure" or .conclusion=="skipped") | "    \(.conclusion)  \(.name)")'
-```
-
-（`visual-baselines` 恒为 `skipped` 是**设计如此**——它是 `workflow_dispatch` 专用，
-见 `frontend-vue-verify.yml` 的 `if:`。别把它当红。）
+- **一次运行是一个样本**——判「修好了」要同一棵树连着量到稳定；判「飘」两次不一致就够；
+- **推翻一次实测只能靠另一次实测**，算术和源码结构都只是线索；
+- **总数不是读数**——它会被「尺子变准」和「修好差异」两个相反方向同时推动；
+- **「源码一样」不等于「运行时一样」**；
+- **尺子报出差异时先问：两边用户看到的东西有没有区别**——角色/几何/可达性全同、
+  只差一颗内部样式钩子，那是尺子的问题，不是应用的问题。
 
 ---
 
-## 跑长命令的纪律（这一轮踩到的）
+## 跑长命令的纪律
 
-`make e2e-parity` ~16 分钟、`e2e-backend` ~6 分钟、`verify` ~4 分钟。
-**用 `run_in_background` 起一次，然后等通知**——不要再开
-`while pgrep ...; do sleep; done` 去轮询：Bash 前台 600 秒超时会把那个循环也变成
-一个后台任务，等一次就多一个，最后攒出十几个空转任务。
+`make e2e-parity` ~25 分钟、`make e2e` ~3 分钟、`make verify` ~4 分钟。
+**用 `run_in_background` 起一次然后等通知**，不要开 `while pgrep; do sleep; done` 轮询。
 要串行跑多套就写成一条命令（`make a > a.log; echo "A=$?" >> a.log; make b > b.log; ...`）。
+
+⚠ **门禁的退出码要卡住提交**，不能只打印——第三十七轮把 `make verify` 和
+`git commit && git push` 串在一条命令里，看到 `VERIFY_EXIT=2` 时已经推出去了。
+
+⚠ **`frontend-vue parity` 的并发组是 `cancel-in-progress`**：run 跑着时推送会把它取消。
+纯 docs 提交不匹配 `paths:`，推了既不触发也不取消。
