@@ -42,12 +42,41 @@ export const vMenuTabStop: Directive<Anchored> = {
   mounted(el) {
     const focus = () => el.setAttribute("tabindex", "0");
     const blur = () => el.setAttribute("tabindex", "-1");
+    /*
+      **指针离开菜单时把焦点交还给菜单容器**，与上游 Radix 的 `onItemLeave`
+      （`contentRef.current?.focus(); setCurrentItemId(null)`）同形。
+
+      为什么本仓要自己补：两个库的 `onItemLeave` 实现**逐字相同**，
+      mount auto-focus 也逐字相同，那一项的标记（`as-child` 包 `<a>`）也等价
+      ——三处都对过。**分岔是探针量出来的**（2026-09-17 第三十七轮，
+      `thread-list-pin` 场景）：跑完场景步骤时两边状态一模一样
+      （`activeElement` 都是 `div(menu)`、所有菜单项 `tabindex=-1`），
+      指针划过某一项再移出之后，**上游一切不变，本仓那一项拿着焦点不放**。
+
+      **用户看得见**：鼠标移出打开的菜单，本仓还有一项亮着、上游没有。
+
+      **只在指针真的离开整个菜单时才动**：`relatedTarget` 还在同一份菜单内容里
+      （挪到兄弟项、或正往子菜单走）一律不管——后者正是第三十五轮踩过的坑，
+      在 reka 的事件序列中间抢焦点会把子菜单打不开。
+      同理这里只 `focus()` 容器、不碰任何 prop，不经过渲染。
+    */
+    const pointerleave = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") return;
+      if (document.activeElement !== el) return;
+      const content = el.closest<HTMLElement>("[data-reka-menu-content]");
+      if (!content) return;
+      const to = event.relatedTarget;
+      if (to instanceof Node && content.contains(to)) return;
+      content.focus({ preventScroll: true });
+    };
     el.addEventListener("focus", focus);
     el.addEventListener("blur", blur);
+    el.addEventListener("pointerleave", pointerleave);
     if (document.activeElement === el) focus();
     el[CLEANUP] = () => {
       el.removeEventListener("focus", focus);
       el.removeEventListener("blur", blur);
+      el.removeEventListener("pointerleave", pointerleave);
     };
   },
   unmounted(el) {

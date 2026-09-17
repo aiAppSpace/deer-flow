@@ -345,28 +345,44 @@ EOF
 > 串在一条命令里，看到 `VERIFY_EXIT=2` 时已经推出去了，分支带着一条红。
 > **门禁的退出码要卡住提交**，不能只是打印出来。
 >
-> **账 K：菜单里多一个 tab 停靠点 / 焦点落点不同（6 行，未修，机制未判）。**
+> **账 K：菜单项在指针移出后不释放焦点（6 行，已修）。**
 >
-> 两处：`thread-history` 的 `tabbablesOnlyVue: div(menuitem)[dropdown-menu-item]` ×2、
+> 两处：`thread-history` 的 `tabbablesOnlyVue: div(menuitem)` ×2、
 > `thread-list-pin` 的 `tabbablesOnlyVue: a(menuitem)` ×2 与
-> `focus: React=div Vue=a "…官网…"` ×2。**本机可复现，与 CI 逐字相同。**
+> `focus: React=div Vue=a "…官网…"` ×2。
 >
-> **关键读数**：`thread-list-pin` 那 4 行**只在 `steps: 4` 时出现**，
-> `steps: 1`（瞬移）与完全不归位时都没有（run3 / run5 / run8 三次对比）。
-> 也就是分步指针在离开时**划过了打开的菜单**，两个应用在这条路径上落到不同的
-> 焦点状态。**真实用户把鼠标移出打开的菜单时也会划过，所以这是真行为差异。**
+> **用户看得见**：鼠标移出打开的菜单后，本仓留一项亮着、上游不留。
+> 而它**六档全盲**——aria 树一样、几何一样、请求一样，
+> 只有同轮新加/已有的 `focus` 与 `tabbables` 两档照得出来。
 >
-> ⚠ **机制连猜三次、三次都被源码推翻，别接着猜**：
+> #### 排查路径值得记：**三次从源码推，三次被源码推翻**
 >
 > | 猜法 | 被什么推翻 |
 > | --- | --- |
-> | reka 在指针离开时不收焦点 | 两库 `onItemLeave` **逐字相同**（都是 `content.focus()` + 清 `currentItemId`） |
-> | 开菜单时焦点落点不同 | 两库 mount auto-focus **逐字相同**（都是 `preventDefault()` + `content.focus({preventScroll:true})`） |
-> | 那一项的元素本身不同 | 两边都是 `DropdownMenuItem as-child` 包 `<a href target rel>`，标记等价 |
+> | reka 在指针离开时不收焦点 | 两库 `onItemLeave` **逐字相同** |
+> | 开菜单时焦点落点不同 | 两库 mount auto-focus **逐字相同** |
+> | 那一项的元素本身不同 | 两边都是 `as-child` 包 `<a href target rel>`，标记等价 |
 >
-> **下一步要的是一次逐步焦点探针**：在两个应用上按场景步骤逐步记录
-> `document.activeElement` 与那几个菜单项的 `tabindex`，看分岔发生在哪一步。
-> 本机一次 2.2 分钟，别再从源码推。
+> 三处**确实逐字相同**，分岔在它们之外——**「源码一样」不等于「运行时一样」**。
+> 最后是探针在两个时刻各拍一张快照才定位到：
+>
+> ```
+> 跑完场景步骤：  两边都是 active=div(menu) ti=-1，六个菜单项全 ti=-1
+> 指针归位之后：  上游一切不变；本仓 active=a(menuitem) ti=0 ——那一项拿着焦点不放
+> ```
+>
+> #### 修法
+>
+> 在 `vMenuTabStop` 指令里补一个 `pointerleave`，与上游 Radix 的 `onItemLeave`
+> （`contentRef.current?.focus(); setCurrentItemId(null)`）同形：
+> **指针真的离开整个菜单时，把焦点交还菜单容器。** 三条保险：
+> 只认鼠标事件、只在该元素确实持有焦点时动、`relatedTarget` 仍在同一份菜单内容里
+> （挪到兄弟项或正往子菜单走）一律不管——**最后那条正是第三十五轮踩过的坑**
+> （在 reka 的事件序列中间抢焦点会让子菜单打不开）。
+> 全程只 `focus()` 容器、不碰 prop、不经过渲染。
+>
+> **复量**：探针四个状态全部一致；本机 `PARITY_ONLY=thread-list-pin` 与
+> `PARITY_ONLY=thread-history` 双双 **0 行**（此前 4 + 2）。
 
 > ### 四、A / E 两组当时的排查过程（**A 组已结清，见三之三**）
 >
