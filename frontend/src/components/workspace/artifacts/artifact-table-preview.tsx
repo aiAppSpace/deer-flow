@@ -127,8 +127,22 @@ function TablePreview({
               role="status"
               className="bg-muted/30 text-muted-foreground border-b px-4 py-2 text-xs"
             >
-              {result.columnCount > 50 && labels.columnsLimited}{" "}
-              {result.unevenRows && labels.uneven}
+              {/*
+                Join, don't interleave. The `{" "}` separator used to render
+                even when the first sentence was absent, so the common case
+                (uneven rows, columns not limited) came out with a leading
+                space: `" Some rows have different numbers of fields."`. It is
+                invisible until the line is near its wrap point -- measured on
+                the Vue parity harness, where this paragraph sits one character
+                from wrapping and the stray space pushed React onto a second
+                line while Vue stayed on one, shifting the whole table 18px.
+              */}
+              {[
+                result.columnCount > 50 && labels.columnsLimited,
+                result.unevenRows && labels.uneven,
+              ]
+                .filter(Boolean)
+                .join(" ")}
             </p>
           )}
           <div

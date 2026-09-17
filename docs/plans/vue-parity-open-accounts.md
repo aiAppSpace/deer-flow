@@ -384,6 +384,46 @@ EOF
 > **复量**：探针四个状态全部一致；本机 `PARITY_ONLY=thread-list-pin` 与
 > `PARITY_ONLY=thread-history` 双双 **0 行**（此前 4 + 2）。
 
+> ### 三之五、E 组：**探针一次抓出两条，其中一条根因在上游**
+>
+> 两边那个 `<p role="status">` 的运行时快照（本机探针，平台无关的部分）：
+>
+> ```
+> Vue  : text="Some rows have different numbers of fields. Missing fields are marked."   width=460.4
+> React: text=" Some rows have different numbers of fields. Missing fields are marked."  width=458.4
+>                ↑ 句首多一个空格
+> ```
+>
+> `font` 简写两边逐字相同、内边距相同、高度相同——**所以不是字体、不是内边距**。
+>
+> #### ① 上游的句首空格（已修，根因在 React）
+>
+> `artifact-table-preview.tsx` 里写的是
+> `{columnCount > 50 && labels.columnsLimited}{" "}{unevenRows && labels.uneven}`
+> ——那个 `{" "}` 本意是**两句话之间的分隔符**，但第一句为假时它**照样渲染**，
+> 于是最常见的情形（有缺字段、列数没超限）渲染出的是**句首带空格**的文本。
+>
+> **平时完全看不见**，只有当这一行正好卡在折行临界点上才显形——而那一屏恰好是：
+> 一个空格把 React 推到第二行，整张表下移 18px。
+>
+> 修法：先 `filter(Boolean)` 再 `join(" ")`，两边输出逐字一致。
+> **这是「修 React 自身缺陷」那条已授权的例外**，不是把本仓改成和上游一样错。
+>
+> #### ② 面板宽度差 2px（新账，未判）
+>
+> Vue 460.4 / React 458.4。**正好压在几何档 2px 容差线上**
+> ——macOS 量不出（所以签入基线一直是 0），Linux 越线。
+> 它与 ① 叠加才把 React 推过折行临界点；**单修 ① 未必能清掉 E 组的 3 行**，
+> 下一次 Linux 读数说了算。
+>
+> #### 这一笔的普遍意义
+>
+> **对照工厂不只是让 Vue 追上 React。** 两个独立实现写同一份设计，
+> 不一致处就暴露**至少一侧**的缺陷。本轮已经三次根因在上游或两侧：
+> 第三十六轮的 `context.thread_id`（两边都发一个服务端保证丢弃的值，
+> 且上游发的还是错的那个）、账 I′（菜单 tab 停靠点 0 个，疑 React 不符 APG）、
+> 以及这次的句首空格。
+>
 > ### 四、A / E 两组当时的排查过程（**A 组已结清，见三之三**）
 >
 > #### A 组（5 行，`integrations` 三个 mobile 档的宽度 Δ≈4.1–4.2px）
