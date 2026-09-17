@@ -739,13 +739,24 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
   打开的样子。第一版没有这个条件，于是它把场景自己摆好的姿势撤销了，
   报出 6 行「React 的 tooltip 还开着、Vue 已关」——那不是产品差异，是我造的。
 
+  **`steps: 12` 不是保险，是判据的一部分。** Playwright 的 `mouse.move` 默认
+  `steps: 1`——指针**瞬移**，中间不产生任何 `pointermove`。而菜单库（Radix 与 reka
+  都一样）判「要不要收起子菜单」靠的正是指针经过父菜单时的那串 `pointermove`
+  与「安全三角」宽限区。瞬移把那条路径整个跳过，于是两边各自停在不同的中间态。
+
+  实测（本机 `PARITY_ONLY=thread-history`，2.2 分钟一次）：
+  `steps: 1` 时 `thread-history` 报 **14 行**（`ariaOnlyVue: menu "Export" /
+  menuitem "Export as JSON" / …[expanded]`，看起来像「Vue 的子菜单不收」）；
+  改成 `steps: 12` 之后 **只剩 2 行**。
+  **那 12 行是尺子造的**——真实用户的指针有轨迹，两个应用都会收起子菜单。
+
   挪到 (0,0)：视口左上角，两个应用在这一点上都没有可交互元素。
   放在 `runScenario` 之后、静置之前——hover 退出的过渡因此有时间跑完，
   再由 `waitForFiniteAnimations` 等干净。
 */
 async function parkPointer(page: Page, hoverIsTheScenario: boolean) {
   if (hoverIsTheScenario) return;
-  await page.mouse.move(0, 0).catch(() => undefined);
+  await page.mouse.move(0, 0, { steps: 12 }).catch(() => undefined);
 }
 
 /*

@@ -271,17 +271,27 @@ EOF
 > 修法是**场景里有 hover 步骤就不归位**：那种场景里「指针停在哪」是判据本身，
 > 不是残留状态。
 >
-> **账 I：菜单的关闭时机（真账）。** `thread-history` 两个语言各 7 行；
-> 它的步骤是 `click "More"` → `click "Export"`，**全是点击、没有 hover**，
-> 所以归位指针不改变它声明的状态：
-> `ariaOnlyReact: - menuitem "Export"` 对
-> `ariaOnlyVue: - menu "Export": / menuitem "Export as JSON" / "Export as Markdown"
-> / menuitem "Export" [expanded]`，外加 geometry 的「取样缺失 React=无 Vue=有」
-> 与 `tabbablesOnlyVue: div(menuitem)`。
-> **指针移开后 Vue 的导出子菜单还开着、React 已经关了。**
+> **账 I 原判「Vue 的子菜单不收」——那 14 行里 12 行是尺子造的。**
+> `page.mouse.move` 默认 `steps: 1`，指针**瞬移**、中间不产生 `pointermove`；
+> 而菜单库判「要不要收子菜单」靠的正是指针经过父菜单时那串 `pointermove`
+> 与安全三角宽限区（Radix 与 reka 的 `handlePointerLeave` 我逐行比过，
+> **几乎逐字相同**）。瞬移把那条路径整个跳过。
 >
-> **这两笔此前一直被「指针停在触发器上」掩盖**——两边都开着，比不出来。
-> 它们是**交互逻辑差异**，正落在最终判据里，**未判，要修**。
+> 本机 `PARITY_ONLY=thread-history` 实测（一次 2.2 分钟）：
+> `steps: 1` → **14 行**；`steps: 12` → **2 行**。已改成 `steps: 12`。
+>
+> **剩下的 2 行是真账（账 I′）**：
+> `tabbablesOnlyVue: div(menuitem)`，两个语言各一行。
+>
+> 两边 26 / 25 项 tabbable 逐项相同，**Vue 末尾多一个**。同轮读数：
+> `aria` 档 0 行（两边树一致）、`focus` 档 0 行（两边焦点落点相同）
+> ——所以那是一个**没被聚焦、却留着 `tabindex=0`** 的菜单项。
+>
+> ⚠ **方向和第三十五轮相反**：那一轮是 `tabbablesOnlyReact`（本仓菜单一个 tab
+> 停靠点都没有，用 `vMenuTabStop` 指令补的）；这一轮是本仓**多**一个。
+> 指令只在 `focus` 置 0、`blur` 收回，**某条路径上 blur 没来**。
+> **未判**：要抓的是「哪一个元素、它是怎么在没有 blur 的情况下失去焦点的」。
+> 本机可复现，一次 2.2 分钟。
 >
 > ### 四、剩下的 8 行：A 组已排除字体，E 组未判
 >
