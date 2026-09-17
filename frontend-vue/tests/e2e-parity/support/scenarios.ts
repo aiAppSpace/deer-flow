@@ -84,6 +84,28 @@ export const ZH_DIMENSION: ParityDimension = {
  *
  * 与 ZH_DIMENSION 同一条纪律：**一个场景补一维就够**（主题轴与语言/断点轴正交）。
  * 先只给**带错误态的场景**加，因为那是这一类差异的高发区；全矩阵仍然只有 `chat` 跑。
+ *
+ * **2026-09-17 第三十八轮扩到「错误态之外的色彩面」。** 那一轮收工时台账在
+ * macOS 与 Linux 上同时是 0、四张工单表三张归零，**剩下的不是「还有多少没做」，
+ * 是「还有多少没被看见」**——而当时 147 个场景-维度里只有 19 个是 dark，
+ * 其中 14 个挤在 `integrations` / `scheduled-tasks` / `workspace-changes`
+ * 这三块错误态上，**43 个场景一个 dark 样本都没有**。
+ *
+ * 挑的是**彼此不重叠的色彩面**，每块一个场景，不求覆盖率好看：
+ *
+ * | 场景 | 这一维能采到、别处采不到的东西 |
+ * | --- | --- |
+ * | `thread-history` | Markdown 渲染面：代码块、链接、引用块、表格——整条消息流的配色 |
+ * | `sidebar` | 工作区外壳：选中态 / 悬停态 / 分组标题 |
+ * | `channels` | 连接状态徽标（已连接/未连接是两种色），与 integrations 不是同一块面板 |
+ * | `thread-todos` | 待办的三档状态色 |
+ * | `background-tasks` | 后台任务的状态色 |
+ * | `artifact-preview` | artifact 面板外壳 + 文件预览 |
+ * | `mcp-settings` | 另一块设置面板的启用/停用态 |
+ * | `branch-thread` | 悬停工具条 |
+ *
+ * **`geometry` 档采 `color` / `background` / `borderRadius` / `opacity`**，所以这一维
+ * 确实采得到东西——加维之前先确认这一点，否则「零差异」只是「压根没采到」。
  */
 export const DARK_DIMENSION: ParityDimension = {
   viewport: "desktop",
@@ -1133,7 +1155,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       `[selected]` 因此稳定落在第一项。
     */
     steps: [{ kind: "fill", target: { selector: "textarea" }, value: "/" }],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   {
     id: "thread-history",
@@ -1176,7 +1198,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   {
     id: "agent-chat",
@@ -1822,6 +1844,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     dimensions: [
       DEFAULT_DIMENSION,
       ZH_DIMENSION,
+      DARK_DIMENSION,
       { viewport: "mobile", theme: "light", locale: "en-US" },
     ],
   },
@@ -2010,7 +2033,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       { kind: "visible", target: { text: "PARITY-TODO-RUNNING" } },
       { kind: "visible", target: { text: "PARITY-TODO-DONE" } },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   /*
     **收起态的侧栏，第十九轮量出「整个不在取样面」之后第一次接进来。**
@@ -2142,7 +2165,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   {
     id: "thread-archive",
@@ -2810,6 +2833,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     dimensions: [
       DEFAULT_DIMENSION,
       { viewport: "desktop", theme: "light", locale: "zh-CN" },
+      DARK_DIMENSION,
     ],
   },
   {
@@ -3005,6 +3029,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       DEFAULT_DIMENSION,
       { viewport: "mobile", theme: "light", locale: "en-US" },
       ZH_DIMENSION,
+      DARK_DIMENSION,
     ],
   },
   {
@@ -3519,6 +3544,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     dimensions: [
       DEFAULT_DIMENSION,
       { viewport: "desktop", theme: "light", locale: "zh-CN" },
+      DARK_DIMENSION,
     ],
   },
   {
@@ -3812,10 +3838,42 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       ],
     },
+    /*
+      **这一屏的终态不是「正文出现」——那之后它还会自己再变一次。**
+
+      2026-09-17 第三十八轮量出来（探针，两个应用逐点同值）：推理折叠块**先展开**，
+      在 +300~+500ms 之间**自动收起**。两边行为一模一样，收起的时刻也一样。
+
+      settle 只等到正文时，取样落在那次自动收起**之前**；而一旦取样时刻在两个应用
+      上错开一点点，就会一边采到「展开」、一边采到「收起」，凭空报出四行：
+
+          ariaOnlyReact:- button "Reasoning"
+          ariaOnlyVue:  - button "Reasoning" [expanded]
+          ariaOnlyVue:  - paragraph: The user asked who I am, …
+          geometry:text:… y React=208 Vue=244 Δ36
+
+      第三十八轮给 `runScenario` 补「交互前等开场动画」之后，它就真的错开了——
+      那道等待是**内容相关**的：settle 时上游有 6 条动画在跑（等约 250ms），
+      本仓一条都没有（等 0ms），而 400ms 的自动收起正好夹在中间。
+      **Linux 与 macOS 量到完全相同的四行**，不是飘。
+
+      所以补的是这条 `hidden`：**等那次自动收起真的发生**，两个应用才都停在同一个
+      稳定态上。这不是给尺子打补丁——「一个还会自己变的屏幕不算终态」，
+      与「加新场景要给它加终态断言」是同一条纪律。
+
+      ⚠ **别把这条换回靠时长的等待**（`waitForTimeout`）：那又是一个会随机器快慢
+      漂的数。按状态等，不按秒表等。
+    */
     settle: [
       {
         kind: "visible",
         target: { text: "I am DeerFlow, an open-source super agent." },
+      },
+      {
+        kind: "hidden",
+        target: {
+          text: "The user asked who I am, so I will list the core capabilities.",
+        },
       },
     ],
     /*

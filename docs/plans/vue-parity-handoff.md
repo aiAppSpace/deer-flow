@@ -15,7 +15,7 @@
 >
 > - 工作区干净，**已推送到 `origin/main-wc`**（2026-09-16；领先多少现场量：
 >   `git rev-list --count origin/main-wc..HEAD`）；
-> - 对照台账 **0 唯一行 / 0 多重集 / 147 个场景-维度**（数 `baseline/parity-diff.json` 的
+> - 对照台账 **0 唯一行 / 0 多重集 / 161 个场景-维度**（数 `baseline/parity-diff.json` 的
 >   `entries`；量法写在冷启动文档里。**这两个数有门禁守着**——
 >   `frontend-vue/tests/guards/doc-facts.test.ts` 逐处比对签入基线，
 >   而且是全称判据：文档里每一处都得对，不是「有一处对就行」）；
