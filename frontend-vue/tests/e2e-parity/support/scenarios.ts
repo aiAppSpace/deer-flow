@@ -23,6 +23,8 @@
 
 import type { Page } from "@playwright/test";
 
+import { waitForFiniteAnimations } from "./settle";
+
 import type { Agent } from "@/core/agents/types";
 
 import {
@@ -516,6 +518,36 @@ export async function runScenario(
   await applyDimension(page, base, dimension);
   await page.goto(`${base}${state.path ?? scenario.path}`);
   for (const step of scenario.settle) await runStep(page, step, timeout);
+  /*
+    **交互步骤之前先等开场动画跑完**（第三十八轮）。
+
+    此前只有取样前等一次，交互步骤是紧接着 settle 就跑的——而 settle 的锚点
+    在两个应用上落在开场动画的**不同相位**上。`integrations` 实测（三跑同号）：
+
+        对话框出现 → Lark 卡片出现   本仓 ~15ms   上游 ~293ms
+        （dialog-content 的 enter 动画两边都是 200ms、ease、delay 0，逐字相同；
+          差的是那块面板的 chunk 在本仓被 modulepreload 预取了。
+          这一笔早有判词，见 SettingsDialog.vue 文件头：chunk 划分是构建产物。）
+
+    于是 settle 返回时本仓的对话框只走了 15/200，上游已经走完 200/200，
+    而 Playwright 的 `click` / `fill` 会把目标滚进视野——**滚动量是按当时的
+    几何算的**，对话框还在 `zoom-in-95` 里就会算出不同的结果：
+
+        点第一颗按钮之后   本仓 scrollTop=460（滚到底）   上游 411
+        补上这道等待之后   两边都是 411
+
+    台账上的表现是 `integrations#permission-request` 那三行
+    `role:button[Request permissions] hit React=self Vue=div`：本仓那颗按钮被
+    滚出了可视区，中心点打到遮罩上。**它一直是飘的（四次读数 2/3/0/3），
+    因为它取决于两边各自的 chunk 什么时候就位。**
+
+    ⚠ **这道等待不许用来掩盖动画本身的差异**：两边的时长/缓动由
+    `tests/guards/primitive-base-classes.test.ts` 逐字比着类串守住
+    （`duration-200`、`zoom-in-95` 都在被比的基类串里）。
+    翻案判据：哪天那条守卫给 DialogContent 的动画类开了豁免，这道等待就必须
+    连同一条「两边动画声明相同」的门禁一起重新审。
+  */
+  await waitForFiniteAnimations(page);
   for (const step of state.steps) await runStep(page, step, timeout);
   return page;
 }

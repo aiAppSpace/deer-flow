@@ -2,7 +2,7 @@
   【文件职责】     钉住取样前那道「等有限动画跑完」的等待：会等、会放行、不会挂死。
   【架构位置】     E2E 套件（对照）
   【主要导出】     无
-  【依赖关系】     support/capture.ts 的 waitForFiniteAnimations
+  【依赖关系】     support/settle.ts 的 waitForFiniteAnimations
   【边界与注意】   **用 `page.setContent()`，两个应用一个都不碰。** 判据是这道等待
                    本身的行为，跟产品页面没关系；挂在真页面上反而要先把某个组件
                    的过渡时长钉死，那是给判据找一个会过期的坐标系。
@@ -19,7 +19,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { waitForFiniteAnimations } from "./support/capture";
+import { waitForFiniteAnimations } from "./support/settle";
 import { reactAppPresent } from "./support/react-preview";
 
 test.skip(
