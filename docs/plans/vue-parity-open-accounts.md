@@ -3829,10 +3829,23 @@ Playwright 的 `click` / `fill` 会把目标滚进视野，**滚动量按当时�
 
     43 个状态检查，2 个有溢出；另有 14 个状态在窄屏下压根到不了（侧栏在手机上是抽屉）
 
-- `subtask-card`：一个 `svg` 出界 20px（right=380，w=16）；
-- `artifact-table-preview`：`table` 出界 2px（w=588 的 `table-fixed`）。
+- `subtask-card`：一个 `svg` 出界 20px（right=380，w=16）→ **真缺陷**，见第十一节；
+- `artifact-table-preview`：`table` 出界 2px → **不是缺陷**，见下。
 
-**两条都还没查根因、也还没判**，挂账。
+#### `artifact-table-preview` 那 2px：**探针的规则太粗，不是应用的账**
+
+两边几何**完全相同**：`table l=-226 r=362 w=588`，而它的父容器是
+`div.min-h-0.flex-1.overflow-auto`（`sw=588 cw=317`，`l=30 r=347`）——
+这是一张**本来就横向滚动**的表格，被父容器裁在 347，根本没跑到视口外。
+
+**「right > 视口宽」这条规则会把被滚动容器裁掉的元素也算成溢出。**
+`subtask-card` 那条之所以是真的，正因为它**一路到顶都是 `overflow: visible`**，
+没有任何裁剪祖先。
+
+⚠ **做成常驻门禁时，规则必须是「逐层往上走，遇到 `overflow` 非 `visible` 的祖先
+就不算」**，否则每一张可滚动的表格、每一个横向滚动条都会报一行。
+（`document.documentElement.scrollWidth <= innerWidth` 这一条本身是干净的：
+这次扫描里它对 43 个状态全部成立。）
 
 ### 十、两条**只在全套负载下红**的用例（飘）
 
