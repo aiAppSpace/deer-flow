@@ -321,13 +321,29 @@ EOF
 >
 > ### 三之四、同一轮里尺子照出的另外两笔
 >
-> **账 J：拖拽手柄缺 `data-slot`（30 行，一个根因，已修）。**
-> 上游 `ui/resizable.tsx` 的手柄带 `data-slot="resizable-handle"`，
-> 本仓用的是 splitpanes、手柄由库在挂载后 `createElement` 插入，没有这颗属性。
-> **此前两边都读作 `div(separator)`、正好抵消，15 个场景-维度上一直看不见**；
-> 同轮放宽标签规则后当场报出 30 行。补在 `syncSplitterDisabled()` 里
-> （与既有的 `aria-disabled` / `tabindex` 同法，模板上够不着它）。
-> 本机 `PARITY_ONLY=artifact-panel-resize` 复量：**2 个维度各 2 行 → 0 行**。
+> **账 J：那 30 行不是账，是我放宽标签造出来的——而我第一次修错了方向。**
+>
+> 放宽标签后 CI 上多出 30 行
+> `tabbablesOnlyReact: div(separator)[resizable-handle]` 对
+> `tabbablesOnlyVue: div(separator)`。上游用 shadcn 的 Resizable primitive、
+> 手柄自带那颗属性；本仓用 splitpanes，**根本不存在这个 primitive**。
+>
+> **我的第一反应是往 Vue 的 splitter 上 `setAttribute("data-slot", …)`——
+> 被 `tests/guards/invariant-ownership.test.ts` 当场拦下，而那条不变量是对的。**
+> `data-slot` 是 shadcn 标识 primitive 部件的约定；为了让尺子闭嘴，
+> 往一个压根没有那个 primitive 的实现里塞一颗没有意义的属性，方向反了。
+>
+> **判据（值得单独记）**：尺子报出差异时先问**两边用户看到的东西有没有区别**。
+> 这里角色、几何、可达性完全一样，差的只是一颗内部样式钩子——**那是尺子的问题**。
+>
+> 改的是尺子：`data-slot` **只在标签重复、确实需要区分时才补**。
+> `div(menuitem)` 有多个，补；`div(separator)` 全树只有一个，不补。
+> 本机 `PARITY_ONLY=artifact-panel-resize` 复量：**0 行**，
+> 而 `[dropdown-menu-item]` 的区分能力保留。
+>
+> ⚠ **同一段里我还犯了一个流程错误**：把 `make verify` 与 `git commit && git push`
+> 串在一条命令里，看到 `VERIFY_EXIT=2` 时已经推出去了，分支带着一条红。
+> **门禁的退出码要卡住提交**，不能只是打印出来。
 >
 > **账 K：菜单项的焦点在指针移出后不收（6 行，含原账 I′，未修）。**
 > 两处同根：`thread-history` 的 `div(menuitem)[dropdown-menu-item]` ×2、

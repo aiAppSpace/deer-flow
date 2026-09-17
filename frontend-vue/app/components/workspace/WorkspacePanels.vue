@@ -104,20 +104,6 @@ function onResized(payload: SplitpanesResizedPayload) {
 function syncSplitterDisabled() {
   const splitter = root.value?.querySelector(".splitpanes__splitter");
   if (!splitter) return;
-  /*
-    `data-slot` 也只能在这里补，理由同 `aria-disabled`：splitpanes 的 splitter
-    是挂载后 `createElement` 插进来的，模板上没有它。上游那颗手柄带
-    `data-slot="resizable-handle"`（`ui/resizable.tsx`），那是两个应用共有的
-    shadcn 约定。
-
-    **它是被尺子照出来的，而照出来靠的是同轮放宽的标签规则**（2026-09-17
-    第三十七轮）：`tabbablesOnly*` 此前只在**没有 role** 时才把 `data-slot`
-    写进标签，于是两边都读作 `div(separator)`、正好抵消，**15 个场景-维度上
-    这处缺失一直看不见**。放宽之后当场报出 30 行
-    （`tabbablesOnlyReact: div(separator)[resizable-handle]` 对
-    `tabbablesOnlyVue: div(separator)`）。
-  */
-  splitter.setAttribute("data-slot", "resizable-handle");
   if (props.open) {
     splitter.removeAttribute("aria-disabled");
     splitter.setAttribute("tabindex", "0");

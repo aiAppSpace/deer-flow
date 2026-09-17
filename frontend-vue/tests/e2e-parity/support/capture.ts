@@ -680,29 +680,52 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
         顺手量了一下范围：`tabbablesOnly*` 与 `tabOrder` 三档共 79 行，
         **其中 59 行含裸 `div`/`span`**——四分之三认不出。
 
-        判据是 **generic 标签（div/span）就补**，有没有 role 都补。
+        判据是 **只在需要区分时才补**：同一份清单里基础标签重复的那些才补，
+        只出现一次的不补。
         `data-slot` 是两个应用共有的 shadcn 约定（侧栏骨架合同已经在钉它），
         不像 `data-testid` 那样两边对不上（坑：wave 94 定过同一条）。
 
-        **「有 role 的本来就认得出」这条限制 2026-09-17 第三十七轮撤掉了，
-        因为它不成立。** 当轮有一笔账是 `tabbablesOnlyVue: div(menuitem)`
+        **这条规则 2026-09-17 第三十七轮改过两次，两次都是实测逼的。**
+
+        ① 原来「只在没有 role 时才补」不成立：当轮有一笔账是
+        `tabbablesOnlyVue: div(menuitem)`
         ——菜单里每一项都是 `div(menuitem)`，这行字说不出是哪一个，
         我为它单开了一个探针，而那正是本段开头那句「一条要靠探针才认得出的账，
         等于没有账」说的事。补上之后它读作
         `div(menuitem)[dropdown-menu-sub-trigger]`，一眼认得出。
 
+        ② **但放宽成「generic 标签就补」之后会制造伪差异**：CI 上当场多出 30 行
+        `tabbablesOnlyReact: div(separator)[resizable-handle]` 对
+        `tabbablesOnlyVue: div(separator)`——上游用 shadcn 的 Resizable primitive、
+        手柄自带那颗属性，本仓用 splitpanes、**根本不存在这个 primitive**。
+        两边那个元素的角色、几何、可达性完全一样，差的只是一颗内部样式钩子。
+        我当时往 Vue 里塞了一颗 `data-slot` 去迎合尺子，被
+        `tests/guards/invariant-ownership.test.ts` 当场拦下——**那条不变量是对的：
+        不该为了让尺子闭嘴而往应用里加没有意义的属性。**
+        于是改尺子：`div(separator)` 全树只有一个、根本不歧义，补它只制造不对称。
+
         **此刻改它代价为零**：签入基线是 0 行，没有任何既有行文本要跟着改写。
       */
-      const slot =
-        tag === "div" || tag === "span"
-          ? element.getAttribute("data-slot")
-          : null;
-      return `${tag}${type ? `[${type}]` : ""}${role ? `(${role})` : ""}${
-        slot ? `[${slot}]` : ""
-      }`;
+      return `${tag}${type ? `[${type}]` : ""}${role ? `(${role})` : ""}`;
     };
-    return [...document.querySelectorAll(selector)]
-      .filter((element) => {
+    /** 基础标签重复时才补 `data-slot`，只出现一次的不补（理由见上）。 */
+    const disambiguate = (elements: Element[]) => {
+      const base = elements.map(describe);
+      const seen = new Map<string, number>();
+      for (const label of base) seen.set(label, (seen.get(label) ?? 0) + 1);
+      return elements.map((element, index) => {
+        const label = base[index]!;
+        if ((seen.get(label) ?? 0) < 2) return label;
+        const tag = element.tagName.toLowerCase();
+        const slot =
+          tag === "div" || tag === "span"
+            ? element.getAttribute("data-slot")
+            : null;
+        return slot ? `${label}[${slot}]` : label;
+      });
+    };
+    return disambiguate(
+      [...document.querySelectorAll(selector)].filter((element) => {
         if (element.hasAttribute("disabled")) return false;
         if (element.getAttribute("aria-hidden") === "true") return false;
         const tabindex = element.getAttribute("tabindex");
@@ -711,8 +734,8 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
         if (element.offsetParent === null && element.tagName !== "BODY")
           return false;
         return getComputedStyle(element).visibility !== "hidden";
-      })
-      .map(describe);
+      }),
+    );
   });
 }
 
