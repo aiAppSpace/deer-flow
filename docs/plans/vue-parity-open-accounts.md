@@ -409,12 +409,26 @@ EOF
 > 修法：先 `filter(Boolean)` 再 `join(" ")`，两边输出逐字一致。
 > **这是「修 React 自身缺陷」那条已授权的例外**，不是把本仓改成和上游一样错。
 >
-> #### ② 面板宽度差 2px（新账，未判）
+> #### ② 那 2px 的根因：**本仓整层漏了上游的 `Artifact` 外框**（已修）
 >
-> Vue 460.4 / React 458.4。**正好压在几何档 2px 容差线上**
-> ——macOS 量不出（所以签入基线一直是 0），Linux 越线。
-> 它与 ① 叠加才把 React 推过折行临界点；**单修 ① 未必能清掉 E 组的 3 行**，
-> 下一次 Linux 读数说了算。
+> 祖先链探针逐层打两边的宽度/内边距/边框，一眼看出 React 多一层：
+>
+> ```
+> React  4 div w=460.4 bd=1px/1px cls="bg-background flex flex-col overflow-hidden rounded-…"
+> Vue    （没有这一层）3 section w=460.4 → 4 div w=492.4 p-4
+> ```
+>
+> 上游 `ai-elements/artifact.tsx` 的 `Artifact`：
+> `bg-background flex flex-col overflow-hidden rounded-lg border shadow-lg`，
+> 只在 artifact 这一路用（`artifact-file-detail.tsx:397`），
+> **sidecar / browser 两个面板都没有**——所以那两处不带框是对的。
+>
+> **本仓的 artifact 面板因此没有边框、没有圆角、没有阴影**，用户看得见；
+> 那 2px 只是它的副产品，而 2px 正好压在容差线上，于是表现成
+> 「警告在上游折行、本仓不折，整张表错开一个行高」。
+>
+> **又一次六档全盲**：边框挂在非锚点的 div 上，aria 树不带边框。
+> 已补在 `ArtifactPanel.vue` 的根 `section` 上。
 >
 > #### 这一笔的普遍意义
 >

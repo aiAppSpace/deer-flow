@@ -578,7 +578,25 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="flex size-full min-h-0 flex-col">
+  <!--
+    **外框照上游 `ai-elements/artifact.tsx` 的 `Artifact`**：
+    `bg-background flex flex-col overflow-hidden rounded-lg border shadow-lg`。
+    上游只在 artifact 这一路用它（`artifact-file-detail.tsx:397` 的 `<Artifact>`），
+    sidecar / browser 两个面板都没有——所以那两处不带框是对的，别顺手加。
+
+    **本仓此前整层漏了**（2026-09-17 第三十七轮，祖先链探针量出来的）：
+    上游 `p-4` 容器里还有一层 `bd=1px/1px` 的卡片，本仓从 `p-4` 直接进 `section`。
+    后果是**用户看得见的**——本仓的 artifact 面板没有边框、没有圆角、没有阴影。
+
+    它**六档一条都不响**：边框挂在一个非锚点的 div 上，aria 树不带边框，
+    请求与几何锚点也都不经过它。台账上只留下一个副产品——
+    内容宽度差 2px（上游 458.4 / 本仓 460.4），而 2px **正好压在几何档的容差线上**，
+    macOS 量不出、Linux 越线，于是表现成 `artifact-table-preview` 那条警告
+    在上游折行、本仓不折，整张表错开一个行高（E 组那 3 行）。
+  -->
+  <section
+    class="bg-background flex size-full min-h-0 flex-col overflow-hidden rounded-lg border shadow-lg"
+  >
     <!--
       `data-testid` 是给 e2e 定位用的锚点，不进 aria 快照、不影响对照台账。
       加它的直接原因：wave 62 给消息轮次的复制键补上可访问名之后，
