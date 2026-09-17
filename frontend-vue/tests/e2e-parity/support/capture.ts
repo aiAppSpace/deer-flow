@@ -1,7 +1,8 @@
 /*
   【文件职责】     在一个应用上跑完一个场景，取下可比对的样本：可访问性树 + API 请求序列。
   【架构位置】     对照测试基础设施
-  【主要导出】     ParityCapture · normalizeRequest · sampleGeometry · captureScenario
+  【主要导出】     ParityCapture · normalizeRequest · sampleGeometry · captureScenario ·
+                   waitForFiniteAnimations
   【依赖关系】     ./scenarios · ../../../scripts/lib/aria-parity.mjs · @playwright/test
   【边界与注意】   取样只保留两边都会发的**产品请求**：`/api/` 下面的那些。框架自己的
                    资源与载荷请求（Next 的 `_next` 与 RSC、Nuxt 的 `_nuxt` 与 payload）
@@ -688,6 +689,52 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
   });
 }
 
+/*
+  等到页面上**有限**的动画/过渡都跑完，再取样。
+
+  **它补的是一处健壮性缺口，不是某一行台账的根因。** 此前取样前只有一条固定的
+  `settleMs = 700`：一个写死的毫秒数，稳不稳完全取决于机器快慢，
+  而那正是一条会偶发红的门禁的做法——偶发红的门会被当成噪音忽略掉，等于没有门
+  （记忆 `deerflow-gate-needs-an-entrypoint` 的同一形状）。
+
+  **不要把它记成「修好了 CI 上那四行 alpha」。** 2026-09-17 第一次把
+  `e2e-parity` 接进 CI 时量到
+
+      role:button[…Docs…] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)
+      role:button[…PNG…]  background React=rgba(248,245,237,102) Vue=rgba(0,0,0,0)
+
+  当轮第一版判词是「读在过渡中途」，**同一轮就被自己推翻**：
+  `230/255 = 90.2%`、`102/255 = 40.0%` 恰好是 Tailwind 的 `/90` 与 `/40` 档位
+  （过渡中途的 alpha 不会两次都精确落在档位上），而且对照上下文本来就带
+  `reducedMotion: "reduce"`（见 support/context-options.ts）。
+  那四行更像真实的样式差异，判词记在 vue-parity-open-accounts.md 第三十七轮条目。
+
+  **必须排除无限循环的动画**：子任务卡片底下那层 `.ambilight` 是自动播放、
+  无限循环的装饰动画（见 sampleGeometry 里 `anim=` 那段注释），
+  等它「结束」会每个场景都等满超时——156 个场景 × 2 秒在本机照样绿，
+  在 CI 上就是白烧一轮 25 分钟。判据用 `getComputedTiming().iterations`
+  **算**出来，不用动画名单：名单会过期，而「这条动画有没有终点」是算得出来的。
+
+  超时了**不抛**：取样本身不该变成失败源（同 `postData()` 那处的判词）。
+  真有一条无限动画漏网时，它造成的差异会在几何档上照样看得见。
+*/
+export async function waitForFiniteAnimations(page: Page, timeout = 2_000) {
+  await page
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .filter((animation) => animation.playState === "running")
+          .every(
+            (animation) =>
+              animation.effect?.getComputedTiming().iterations === Infinity,
+          ),
+      undefined,
+      { timeout },
+    )
+    .catch(() => undefined);
+}
+
 export async function captureScenario(
   page: Page,
   base: string,
@@ -723,6 +770,7 @@ export async function captureScenario(
   try {
     await runScenario(page, base, scenario, dimension, state);
     await page.waitForTimeout(settleMs);
+    await waitForFiniteAnimations(page);
     const rawAria = await page.locator("body").ariaSnapshot();
     const aria = normalizeAriaSnapshot(rawAria);
     /*

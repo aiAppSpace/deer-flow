@@ -296,8 +296,8 @@ type LedgerMeasures = {
 
 /*
   `PARITY_FIXED_SPECS` 那几份 spec 里的固定用例数（**不随场景目录变**的那些）。
-  为什么是 9 而三份文件只有 8 个 `test(` 调用点：`topology.spec` 最后那个包在
-  一个两项的 `for` 里（vue / react 各一条）。下面那条用例钉住「调用点还是 8 个」
+  为什么是 11 而四份文件只有 10 个 `test(` 调用点：`topology.spec` 最后那个包在
+  一个两项的 `for` 里（vue / react 各一条）。下面那条用例钉住「调用点还是 10 个」
   ——有人加一条用例，调用点数变了就红，逼着这个常量和文档一起跟进。
   **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
   失效时会明确报出来。
@@ -310,8 +310,9 @@ const PARITY_FIXED_SPECS = [
   "diff",
   "topology",
   "sidebar-collapsed-affordance",
+  "animation-settle",
 ] as const;
-const PARITY_FIXED_TESTS = 9;
+const PARITY_FIXED_TESTS = 11;
 
 /** 全部读数只从签入基线算，一个字都不从散文里读。 */
 function measureLedger(): LedgerMeasures {
@@ -462,10 +463,10 @@ describe("计划文档里的台账读数和签入基线一致", () => {
           .length,
       0,
     );
-    // 8 个调用点 → 9 条用例（topology 最后一个包在两项 for 里）。
+    // 10 个调用点 → 11 条用例（topology 最后一个包在两项 for 里）。
     expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 8,
-      常量: 9,
+      调用点: 10,
+      常量: 11,
     });
   });
 

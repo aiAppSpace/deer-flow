@@ -53,6 +53,21 @@ on:
       - "scripts/pnpm.py"
       - ".github/workflows/frontend-vue-parity.yml"
 
+  # Diagnostics. Getting one Linux reading out of this suite costs 25 minutes,
+  # and the rows it found on its first run (2026-09-17) all need re-measuring
+  # one scenario at a time. `diff.spec.ts` already supports PARITY_ONLY -- one
+  # scenario is about 4 minutes, and in that mode it deliberately neither
+  # compares against the baseline nor accepts, because a filtered report is
+  # missing every other scenario. So this input produces a *report*, not a
+  # verdict: read the uploaded artifact, do not read the job's colour.
+  workflow_dispatch:
+    inputs:
+      parity_only:
+        description: "Measure ONE scenario id (PARITY_ONLY). Empty = the whole ledger."
+        type: string
+        required: false
+        default: ""
+
 concurrency:
   group: fe-vue-parity-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -134,14 +149,20 @@ jobs:
 
       - name: Measure the React-vs-Vue parity ledger
         working-directory: frontend-vue
+        env:
+          # Empty on push/PR, so the suite behaves exactly as it does locally.
+          PARITY_ONLY: ${{ inputs.parity_only }}
         run: make e2e-parity
 
       # The ledger's own failure evidence. `keep-e2e-failure-artifacts.mjs`
       # moves the run's traces to test-results/failures/ precisely so a rerun
       # cannot erase them; on a hosted runner "the files are still on disk"
       # means nothing unless they leave the runner.
-      - name: Upload failure evidence
-        if: failure()
+      # `failure()` alone would throw away the whole point of a PARITY_ONLY run:
+      # that run is *expected* to pass (filtered mode skips the baseline
+      # comparison), and its only product is the report inside this artifact.
+      - name: Upload the measured ledger
+        if: failure() || inputs.parity_only != ''
         uses: actions/upload-artifact@v4
         with:
           name: parity-failures

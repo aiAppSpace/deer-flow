@@ -37,10 +37,11 @@
 
 ---
 
-## ⚠ 台账已经清零了，但**清零不等于对齐完成**
+## ⚠ 签入基线是 0，但**那是 macOS 的读数**
 
-第三十六轮把对照台账推到 **0 唯一行 / 0 多重集 / 0 条不同的差异**（起点 170 个投影）。
-**这句话的边界必须说清楚**，否则新窗口会以为任务结束了：
+第三十六轮把签入基线推到 **0 唯一行 / 0 多重集 / 0 条不同的差异**（起点 170 个投影）。
+第三十七轮把 `e2e-parity` 接进 CI，**第一次运行就红**——同一棵树在 ubuntu-latest
+上量出 **16 行**（run 35143922501）。**边界因此是三重的**，否则新窗口会以为任务结束了：
 
 - 台账只覆盖 **147 个场景-维度**，也就是 `tests/e2e-parity/support/scenarios.ts`
   那份目录。**取样面之外的屏，台账一个字都没说。**
@@ -48,42 +49,72 @@
   （`artifact-table-performance`）**已经有完整判词，别再重新问一遍**——
   它量的是时延，而对照工厂的坐标系是 aria 树 / 几何 / 请求，表达不了时延断言；
   镜像 spec 早就有了。要变，得先有人决定豁免 `/artifacts/view` 这条路由。
-- 所以「0」的正确读法是：**当前这把尺子、在当前这个取样面上，量不出差异了。**
-  下一步是**让尺子更可信**（进 CI——见下面第 1 条，那套东西已经在仓库里了）
+- **第三重、也是第三十七轮才量到的一重：当前这台笔记本。** 同一棵树换一台机器
+  就是 16 行。第三十六轮那句「本地复量过两次」复现的是同一台机器上的同一个结果
+  ——`PARITY_EXIT=0` / 158 passed，而绿只说明**实测与签入基线一致**，
+  不说明两个应用一样。
+- 所以「0」的正确读法是：**当前这把尺子、在当前这个取样面上、在这台 Mac 上，
+  量不出差异了。** 下一步是**判掉 Linux 那 16 行**（下面第 1 条）
   与**让尺子照到更多地方**（扩取样面）。
-- **本地复量过两次**：基线重录后独立再跑一次 `make e2e-parity`，
-  `PARITY_EXIT=0` / 156 passed（diff.spec 是拿实测比签入基线，绿即实测与基线一致）。
 
 ---
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 核实「`e2e-parity` 接进 CI」那套东西 —— **它已经在仓库里了，别重做**
+### 1. 判掉 Linux 上那 16 行 —— **核实已经做完了，答案是红**
 
-> **⚠ 这一条本来写的是「去做接 CI」，是错的，2026-09-17 当场订正。**
-> 写那句话时我 grep 过 `.github/workflows/`，`e2e-parity` 零命中——**那个读数当时是真的**，
-> 但随后工作区里出现了一整套做这件事的改动，并被 `98f27946` 提交了。
-> **那 8 个文件不是第三十六轮的工作**，是另一个会话的在途成果，
-> 被一次 `git add -A` 裹进了那次提交（提交说明里没写，这是记录失真，已在后续提交里补记）。
+> 这一条上一版写的是「去核实那套 CI 接入跑绿没有」，并且写明「跑红了那就是真账」。
+> **2026-09-17 核实完毕：红。** 所以这一条现在是那笔真账本身。
 
-**已经在仓库里的那一套**（`git show 98f27946 --name-status` 可查）：
+`e2e-parity` 已经在仓库里、也已经在 CI 上跑过（`frontend-vue-parity.yml`），
+**不要重做**。run 35143922501（commit `98f27946`）的逐步结论：
 
-- `.github/workflows/frontend-vue-parity.yml`（新增，211 行）：两个 job，
-  `parity` 跑 `icon-parity` + `e2e-parity`，`parity-auth` 跑 `e2e-parity-auth`；
-  `paths:` 含 `frontend/**`（上游漂移也会动台账，这是它独立成一个 workflow 的理由）；
-  `PARITY_REQUIRE_REACT: "1"` 防止 React 缺席时整组静默 skip。
-- `tests/e2e-parity/support/react-preview.ts` + `tests/unit/parity/react-presence.test.ts`：
-  上面那个环境变量的实现与守卫。
-- `tests/guards/tooling-contracts.test.ts` / `stale-coverage-claims.test.ts` / `doc-facts.test.ts`：
-  配套守卫。
-- `README.md` / `README_zh.md`：删掉了「a cost decision that has never actually been made」那段。
+| job | 结论 | 耗时 |
+| --- | --- | --- |
+| `parity` | **failure**，`Measure the React-vs-Vue parity ledger` 这一步红 | 24m50s（装配 1m15s + 套件 23m25s） |
+| `parity-auth` | success | 4m17s |
+| `icon-parity`（在 `parity` job 里） | success | 瞬时 |
 
-**新窗口该做的不是重做，是核实**：
+套件本身是 **1 failed / 155 passed**，红的只有台账那条：
+**Linux 上量出 16 行，而签入基线是 0 行。**
 
-1. 这套东西**有没有在 CI 上真跑绿过**？`98f27946` 触发了 `frontend-vue parity`，
-   去查那次 run 的**逐步结论**（命令见本文件末尾；一条红会让后面全 `skipped`）。
-2. 跑绿了就把它当既成事实，**这一条划掉**，从第 2 条开始。
-3. 跑红了，那就是真账——而且是最值钱的一笔：台账刚清零，CI 是唯一能保住它的东西。
+**当前状态：这条工作流是红的，而且应该保持红**，直到逐组判完。
+它红着说明它在量东西——本机十四轮没看见的东西，换一台机器一次就照出来了。
+
+**逐组清单与已判/未判写在 `vue-parity-open-accounts.md` 第三十七轮条目**，
+那份是当前版本，这里不重复。**五组一组都没判掉**——第三十七轮判过一次 B+D，**当轮就自己推翻了**：
+`230/255 = 90.2%`、`102/255 = 40.0%` 恰好是 Tailwind 的 `/90` 与 `/40` 档位，
+而且对照上下文本来就带 `reducedMotion: "reduce"`，所以那不是「读在过渡中途」，
+更像真实的样式差异。同理，**字体栈两边确实不同，但它解释不了 A 组的数字**
+（比值不一致、差是常量）。**两处都是嫌疑，别当结论写进代码。**
+
+本轮只顺带修了一处与这 16 行无关的真实缺口：取样器此前用固定 700ms 静置、
+不等动画结束（`waitForFiniteAnimations` + `animation-settle.spec.ts`）。
+下一次 CI 运行会给出它到底动没动那四行的读数。
+
+下一步就是**逐组去量**，而不是继续猜：
+
+> **定点复量的入口已经做好了**（第三十七轮，别重做）：
+> `frontend-vue parity` 工作流带 `workflow_dispatch` 输入 `parity_only`，
+> 填一个场景 id 就只量那一个（约 4 分钟，而不是 25 分钟）。
+>
+> ```bash
+> gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
+>   --ref main-wc -f parity_only=integrations#permission-request
+> ```
+>
+> **读产物，别读颜色**：`PARITY_ONLY` 模式下 `diff.spec.ts` 刻意既不比基线也不
+> accept（过滤过的报告里其余场景全缺席，拿去比会像「一大批差异一次修好了」），
+> 所以那次 run **一定是绿的**。结论在 artifact `parity-failures` 里的
+> `e2e-parity/report.json`——工作流为此把上传条件从 `failure()` 放宽到
+> 「失败**或**这是一次定点复量」。
+
+
+**两条禁止**（判据里点名的打补丁）：
+
+- 不许 `make parity-accept` 把那 16 行录进基线——那是 Makefile 里说的
+  「把回归洗白的按钮」，而且其中至少 4 行是尺子自己的噪音；
+- 不许放宽几何容差让红变绿——2px 是先定后测的，调它就是把判据改成结论。
 
 ### 2. 扩取样面 —— 台账清零之后，新差异只能从这里来
 
