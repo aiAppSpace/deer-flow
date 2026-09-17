@@ -690,6 +690,36 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
 }
 
 /*
+  取样前把指针挪开，**让「谁被悬停着」不再是取样面的一部分**。
+
+  Playwright 的指针停在上一步操作留下的位置，而台账比的是**静置渲染**，
+  不是「鼠标恰好停在哪颗按钮上」。两件事在这里会连起来出事：
+  两个应用的布局本来就有差（`integrations` 那 4px），同一个视口坐标
+  可能在一边落在按钮上、另一边落在按钮外。
+
+  **证据链**（2026-09-17 第三十七轮，从 CI artifact 的截图与源码两头量的）：
+
+  · 台账上飘的那几行是
+    `role:button[…Docs…] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)`；
+  · `230/255 = 90%`，而两个应用的 `Button` `variant="default"` 基类**逐字相同**、
+    都写着 `hover:bg-primary/90`——所以那是 **hover 态**，不是样式差异；
+  · 截图里两侧同一屏的滚动位置差约 110px（React 的 Authorization scope 标题在
+    y=456、Vue 在 y=346），于是同一个指针坐标落在不同元素上；
+  · 同一组还有 `hit React=self Vue=div`，也是「那个坐标上压着谁」。
+
+  **不声称它消除了那几行**——判据是同一棵树连着量到稳定（见
+  `waitForFiniteAnimations` 上面那段反例）。这里改的是**取样面的定义**：
+  悬停态本来就不该进台账。
+
+  挪到 (0,0)：视口左上角，两个应用在这一点上都没有可交互元素。
+  放在 `runScenario` 之后、静置之前——这样 hover 退出的过渡有时间跑完，
+  再由 `waitForFiniteAnimations` 等干净。
+*/
+async function parkPointer(page: Page) {
+  await page.mouse.move(0, 0).catch(() => undefined);
+}
+
+/*
   等到页面上**有限**的动画/过渡都跑完，再取样。
 
   **它补的是健壮性，没有被证明消除了任何一行台账。** 此前取样前只有一条固定的
@@ -773,6 +803,7 @@ export async function captureScenario(
   page.on("request", onRequest);
   try {
     await runScenario(page, base, scenario, dimension, state);
+    await parkPointer(page);
     await page.waitForTimeout(settleMs);
     await waitForFiniteAnimations(page);
     const rawAria = await page.locator("body").ariaSnapshot();
