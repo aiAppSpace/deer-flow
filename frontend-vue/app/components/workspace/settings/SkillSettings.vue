@@ -217,7 +217,14 @@ function archiveErrorOptions(cause: unknown) {
             </TabsList>
           </Tabs>
         </div>
-        <div class="flex gap-2">
+        <!--
+          **`flex-wrap` 这一层也要有。** 外层 header 早就是 `flex-wrap` 了，可这组
+          按钮自己不换行，于是两颗 `whitespace-nowrap` 的键（「Install .skill」
+          min-content 117.2）连成一个 240.7px 的整块——360px 屏上这一屏的余量只剩
+          **3px**，和「恰好装得下」长得一模一样（第二十一轮与第三十八轮各栽过一次的
+          就是这个形状）。两边同改。
+        -->
+        <div class="flex flex-wrap gap-2">
           <!--
             文件选择器是**隐藏的 input**，按钮点它。原生 file input 的外观各浏览器
             各不相同，也没法按设计系统画。

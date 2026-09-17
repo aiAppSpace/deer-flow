@@ -170,7 +170,14 @@ function ThemePreviewCard({
           <div className="h-2 w-10 rounded-full bg-current/20" />
           <div className="h-2 w-6 rounded-full bg-current/15" />
         </div>
-        <div className="grid grid-cols-[1fr_240px] gap-3 px-3 py-3">
+        {/*
+          `minmax(0,240px)`, not a bare `240px`: a fixed track never shrinks, so
+          this preview pinned the whole appearance panel's min-content at 348px
+          against a 293px cell on a 375px screen — measured panelOverflow 55 at
+          375 and 70 at 360, i.e. the panel hung out of the settings dialog on
+          every phone. The max stays 240, so nothing changes above ~420px.
+        */}
+        <div className="grid grid-cols-[1fr_minmax(0,240px)] gap-3 px-3 py-3">
           <div className="space-y-2">
             <div className="h-3 w-3/4 rounded-full bg-current/15" />
             <div className="h-3 w-1/2 rounded-full bg-current/10" />

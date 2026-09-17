@@ -134,7 +134,14 @@ function setLocale(value: unknown) {
               <div class="h-2 w-10 rounded-full bg-current/20" />
               <div class="h-2 w-6 rounded-full bg-current/15" />
             </div>
-            <div class="grid grid-cols-[1fr_240px] gap-3 px-3 py-3">
+            <!--
+              **`minmax(0,240px)`，不是裸的 `240px`**：固定轨道不会缩，于是这块
+              预览把整个「外观」面板的 min-content 顶到 348px，而 375px 屏上
+              那一格只有 293——实测 `panelOverflow` 375px 下 55、360px 下 70，
+              也就是**这块面板在所有手机上都挂在设置对话框外面**。
+              上限仍然是 240，约 420px 以上毫无变化。
+            -->
+            <div class="grid grid-cols-[1fr_minmax(0,240px)] gap-3 px-3 py-3">
               <div class="space-y-2">
                 <div class="h-3 w-3/4 rounded-full bg-current/15" />
                 <div class="h-3 w-1/2 rounded-full bg-current/10" />

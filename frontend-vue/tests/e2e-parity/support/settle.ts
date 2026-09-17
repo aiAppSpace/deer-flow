@@ -1,7 +1,7 @@
 /*
   【文件职责】     一道等待：让页面上**有限**的动画/过渡跑完。
   【架构位置】     对照测试基础设施
-  【主要导出】     waitForFiniteAnimations
+  【主要导出】     waitForFiniteAnimations · waitForDomQuiet
   【依赖关系】     @playwright/test
   【边界与注意】   **它自己一层，不放在 capture.ts 里**（第三十八轮拆出来的）：
                    `runScenario`（scenarios.ts）在跑交互步骤之前也要用它，而
@@ -60,6 +60,63 @@ export async function waitForFiniteAnimations(page: Page, timeout = 2_000) {
           ),
       undefined,
       { timeout },
+    )
+    .catch(() => undefined);
+}
+
+/*
+  等到 DOM **不再自己变**为止。
+
+  **它补的是 `waitForFiniteAnimations` 补不到的那一半。** 那道等待只看动画；
+  而一屏可以在没有任何动画的情况下继续变——折叠块到点自动收起、迟到的标志、
+  侧栏分区等接口回来才渲染。第三十八轮逐条扫过 57 个场景键：
+  `settle` 之后隔 1.5 秒再读一次页面，**3 条的文本或属性变了**
+  （`showcase-public-thread` / `sidebar-collapsed` / `background-tasks#disabled`）。
+
+  **为什么这件事必须由尺子来做，而不是逐条场景补断言：**
+  取样落在一个还在变的相位上时，两个应用只要错开一点点就会一边采到变前、
+  一边采到变后，**凭空报出几行**；反过来，两边一起采早了就是「一致」——
+  第三十八轮实证 `streaming-reasoning-order` 的那个 0 行正是这么来的，
+  **它从来不说明任何事情**。逐条补断言只覆盖有人想起来写的那几条。
+
+  **按状态等，不按秒表等**：用 MutationObserver 数「安静了多久」，而不是睡固定毫秒。
+  安静窗口取 250ms；超时 3s 之后**不抛**，取样本身不该变成失败源
+  （同 `waitForFiniteAnimations` 的判词）。真有一屏永远静不下来（比如一个每秒
+  自增的相对时间），它造成的差异会在别的档上照样看得见。
+
+  ⚠ **它不是用来掩盖「一边比另一边慢」的**：那种差异是性能特征，由各自的门禁守；
+  这里要的是「两个应用都停在自己的稳定态上再比」。
+*/
+export async function waitForDomQuiet(
+  page: Page,
+  quietMs = 250,
+  timeout = 3_000,
+) {
+  await page
+    .evaluate(
+      ([quiet, cap]) =>
+        new Promise<void>((resolve) => {
+          let timer = 0;
+          const done = () => {
+            observer.disconnect();
+            window.clearTimeout(timer);
+            window.clearTimeout(hardStop);
+            resolve();
+          };
+          const observer = new MutationObserver(() => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(done, quiet);
+          });
+          observer.observe(document.documentElement, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+          });
+          timer = window.setTimeout(done, quiet);
+          const hardStop = window.setTimeout(done, cap);
+        }),
+      [quietMs, timeout] as const,
     )
     .catch(() => undefined);
 }

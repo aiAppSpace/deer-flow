@@ -3683,6 +3683,70 @@ Playwright 的 `click` / `fill` 会把目标滚进视野，**滚动量按当时�
   不是「两边一不一样」。
 
 
+### 四、逐条扫「终态没定义完」：57 个场景键，扫出 4 条，其中一条是**空断言**
+
+第三部分那次是撞出来的一例；这一节是把它当**类**扫了一遍。
+
+办法：跑一遍场景，**在取样点上**读一次 `document.body.innerText` 加一串
+`aria-expanded/aria-selected/data-state/aria-hidden/aria-busy`，隔 1.5 秒再读一次，
+两次不同的就是取样时这一屏还在变。只跑**一个**应用——问的是「这一屏自己稳不稳」，
+不是「两边一不一样」。
+
+⚠ **探针必须和 `captureScenario` 同点**。第一版只跑到 `runScenario` 就读，
+于是把 `sidebar-collapsed` 报成不稳定；真实取样点后面还有
+`waitForTimeout(700)` + `waitForFiniteAnimations` + `waitForDomQuiet` 三道。
+对齐之后那一条自己就消失了。
+
+| 场景 | 取样之后还在变的 | 归哪一层 |
+| --- | --- | --- |
+| `streaming-reasoning-order` | 推理块定时自动收起 | 场景终态断言 |
+| `showcase-public-thread` | 同一个根因 | 场景终态断言 |
+| `sidebar-collapsed` | 收起分支的 `DF` 迟一帧挂载 | 尺子（`waitForDomQuiet`） |
+| `background-tasks#disabled` | 侧栏还在 `Loading conversation…` | **空断言，见下** |
+
+#### `background-tasks#disabled` 的主角断言一直在空壳上通过
+
+那一档的 `settle` 是 `[]`，而它唯一的断言是一条
+`hidden { testId: "background-tasks-trigger" }`。
+`locateTarget(...).first()` 在匹配不到时是个**空 locator**，而
+`waitFor({ state: "hidden" })` 对不存在的元素**立刻通过**——
+页面还没渲染出来，这条断言就已经绿了。
+
+扫描当场照出来：它的 settle 之后 1.5 秒，侧栏还从「Loading conversation…」
+变成「Projects / Recent chats / Background work」三块。
+
+处置：先等一条**只有外壳真的渲染完才成立**的正向锚点（`role=link, New chat`：
+两个应用都有，且与 `mcp_tasks` 这个开关无关，不会把主角断言变成同义反复），
+再去断言入口不在。
+
+⚠ **同一轮我自己又踩了一次**：给 `showcase-public-thread` 写 `hidden` 时没先
+`visible`，推理那段还没渲染出来它就凭空通过了。
+**判据：`hidden` 断言前面必须有一条 `visible`，否则它证明的是「没找到」，
+不是「消失了」。**
+
+#### 分层：两种「还在变」要用两种办法
+
+- **定时触发的**（自动收起这一类）必须靠**场景自己的终态断言**：
+  `waitForDomQuiet` 的安静窗口是 250ms，跨不过一个 400ms 的定时器；
+- **渲染节奏差一帧的**归 `waitForDomQuiet`：它等的是「这一屏不再自己变」，
+  不需要知道变的是哪一颗。
+
+`waitForDomQuiet` 用 MutationObserver 数安静时长，**按状态等不按秒表等**；
+超时 3s 之后不抛（取样本身不该变成失败源）。
+它同时装在 `runScenario`（交互步骤之前）与 `captureScenario`（取样之前）。
+
+#### 一处**没有**那样做的地方，理由写在场景里
+
+`sidebar-collapsed` 我先试了往 settle 加 `visible DF`，**当场超时**——收起是
+`steps` 里那次点击干的，settle 跑的时候侧栏还是展开的。改挂到 `steps` 末尾同样
+不行：`DF` 挂着 `group-hover/workspace-header:hidden`，点击之后鼠标还停在头部。
+上游有 `[data-slot="sidebar"][data-state="collapsed"]` 可以当锚点，**本仓这一层
+没有那个元素**，而为了迁就尺子往应用里塞 `data-slot` 是第三十七轮被
+`invariant-ownership` 门禁按回来过的做法。所以这一帧交给 `waitForDomQuiet`。
+
+**收工复量**：57 个场景键、**0 条在取样点上还在变、0 条跳过**。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里

@@ -23,7 +23,7 @@
 
 import type { Page } from "@playwright/test";
 
-import { waitForFiniteAnimations } from "./settle";
+import { waitForDomQuiet, waitForFiniteAnimations } from "./settle";
 
 import type { Agent } from "@/core/agents/types";
 
@@ -570,6 +570,11 @@ export async function runScenario(
     连同一条「两边动画声明相同」的门禁一起重新审。
   */
   await waitForFiniteAnimations(page);
+  /*
+    动画停了不等于这一屏不动了——见 `waitForDomQuiet` 的判词。
+    第三十八轮逐条扫出 3 条在 settle 之后还会自己变的场景。
+  */
+  await waitForDomQuiet(page);
   for (const step of state.steps) await runStep(page, step, timeout);
   return page;
 }
@@ -1322,10 +1327,31 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     title: "公开 showcase 的只读会话",
     backend: "mock",
     path: "/showcase/21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
+    /*
+      与 `streaming-reasoning-order` 同一类：消息列表出现之后，推理折叠块还会
+      自己收起一次，取样落在一个还在变的相位上。等那次收起真的发生。
+      （夹具里有九段 `reasoning_content`，扫出来还展开着的是 messages[8] 那段。）
+    */
     settle: [
       {
         kind: "visible",
         target: { selector: "[data-testid='main-message-list']" },
+      },
+      /*
+        **`visible` 这一条不能省。** `locateTarget(...).first()` 在匹配不到时
+        是个空 locator，而 `waitFor({ state: "hidden" })` 对不存在的元素
+        **立刻通过**——只写 `hidden` 的话，它会在推理那段还没渲染出来时凭空通过，
+        然后那段文字照样在取样之后才收起。
+        （这正是同一轮在 `background-tasks#disabled` 上查出来的空断言，
+        我第一版在这里原样又写了一遍。）
+      */
+      {
+        kind: "visible",
+        target: { text: /So MOE in AI context likely means/ },
+      },
+      {
+        kind: "hidden",
+        target: { text: /So MOE in AI context likely means/ },
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
@@ -2067,6 +2093,25 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     mock: {
       threads: [{ thread_id: MOCK_THREAD_ID, title: "Sidebar collapse" }],
     },
+    /*
+      **这一条的「settle 之后还在变」归尺子那一层管，不要在这里加锚点**
+      （2026-09-17 第三十八轮试过，错了）。
+
+      扫描报出它 settle 之后 1.5 秒文本还在变：收起分支的 `DF` 标志，是在下面
+      `steps` 那条 `hidden DeerFlow` 通过之后才挂上去的——展开分支先卸载、
+      收起分支后挂载，中间有一帧。
+
+      我当时往 settle 里加了 `visible DF`，**当场超时**：收起是 `steps` 里那次点击
+      干的，settle 跑的时候侧栏还是展开的。改挂到 `steps` 末尾同样不行——
+      下面那段注释早就写过：`DF` 挂着 `group-hover/workspace-header:hidden`，
+      点击之后鼠标还停在头部，它的可见性在悬停态下会翻转。
+      （上游有 `[data-slot="sidebar"][data-state="collapsed"]` 可以当锚点，
+      本仓这一层没有那个元素——而**为了迁就尺子往应用里塞 `data-slot`，
+      是第三十七轮被 `invariant-ownership` 门禁按回来过的做法**。）
+
+      所以这一帧交给 `captureScenario` 里那道 `waitForDomQuiet`：
+      它等的就是「这一屏不再自己变」，不需要知道变的是哪一颗。
+    */
     settle: [
       { kind: "visible", target: { role: "button", name: "Toggle Sidebar" } },
     ],
@@ -2104,7 +2149,23 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       `settle` 留空：两个终态一个共有元素都没有（关掉时连入口都不在），
       等待交给各终态自己的步骤——与 agents-feature-disabled 同一条判据。
     */
-    settle: [],
+    /*
+      **`settle: []` 加一条 `hidden`，等于什么都没断言**（2026-09-17 第三十八轮）：
+      页面还没渲染出来时，任何 `hidden` 都天然成立——而 `#disabled` 那一档的
+      主角断言正是一条 `hidden`。扫描当场照出来：它的 settle 之后 1.5 秒，
+      侧栏还从「Loading conversation…」变成「Projects / Recent chats /
+      Background work」三块，也就是说**那条 `hidden` 是在空壳上通过的**。
+
+      所以先等一条**只有外壳真的渲染完才成立**的正向锚点，再去断言入口不在。
+
+      ⚠ **锚点不能写死英文**：这个场景跑 en-US 与 zh-CN 两维，而导航文案两边词典
+      都翻译了（坑 244）。我第一版写的是 `role=link, name: "New chat"`，
+      zh-CN 那一维当场三条超时。挑**夹具里的会话标题** `Background work`：
+      它来自这个场景自己的 `mock.threads`，**根本不过词典**，天生语言无关；
+      而且它证明的是「这条会话真的加载出来了」，比「侧栏渲染了」更强。
+      它与 `mcp_tasks` 这个开关无关，不会把这一档的主角断言变成同义反复。
+    */
+    settle: [{ kind: "visible", target: { text: "Background work" } }],
     states: [
       {
         id: "disabled",

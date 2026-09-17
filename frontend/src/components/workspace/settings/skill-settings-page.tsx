@@ -175,7 +175,12 @@ function SkillSettingsList({
             </TabsList>
           </Tabs>
         </div>
-        <div className="flex gap-2">
+        {/* This group needs flex-wrap of its own. The header above already has
+            it, but these two whitespace-nowrap buttons ("Install .skill" is
+            117.2px of min-content) stay glued into one 240.7px block, which
+            left the skills panel 3px of slack on a 360px screen — the same
+            zero-slack shape that looks exactly like fitting. */}
+        <div className="flex flex-wrap gap-2">
           {/* The visible Button is the affordance; this input only carries the
               file dialog. Left in the accessibility tree it is a second,
               anonymous "button" that does the same thing — so hide it from AT

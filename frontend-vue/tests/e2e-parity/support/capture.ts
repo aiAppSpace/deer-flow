@@ -28,7 +28,7 @@
 
 import type { Page, Request } from "@playwright/test";
 
-import { waitForFiniteAnimations } from "./settle";
+import { waitForDomQuiet, waitForFiniteAnimations } from "./settle";
 import {
   MOCK_RUN_ID,
   MOCK_SIDECAR_THREAD_ID,
@@ -843,6 +843,13 @@ export async function captureScenario(
     await parkPointer(page, [...scenario.settle, ...state.steps]);
     await page.waitForTimeout(settleMs);
     await waitForFiniteAnimations(page);
+    /*
+      动画停了不等于这一屏不动了。**固定的 `settleMs` 挡不住这一类**：
+      它只保证「等了 700ms」，不保证「等到不动了」——折叠块到点自动收起、
+      迟到的标志、接口回来才渲染的侧栏分区，都可能正好落在 700ms 之后。
+      判词与第三十八轮那次逐条扫描的读数写在 `./settle` 的 `waitForDomQuiet`。
+    */
+    await waitForDomQuiet(page);
     const rawAria = await page.locator("body").ariaSnapshot();
     const aria = normalizeAriaSnapshot(rawAria);
     /*
@@ -868,4 +875,4 @@ export async function captureScenario(
   }
 }
 
-export { waitForFiniteAnimations };
+export { waitForDomQuiet, waitForFiniteAnimations };
