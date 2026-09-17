@@ -692,30 +692,26 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
 /*
   等到页面上**有限**的动画/过渡都跑完，再取样。
 
-  **这条是 CI 上 16 行差异里 8 行的根因，实测。** 2026-09-17 第一次把
-  `e2e-parity` 接进 CI 时，本机 158 passed / 台账 0 行，同一棵树在 ubuntu-latest
-  上量出 16 行。此前取样前只有一条固定的 `settleMs = 700`，读几何时不管过渡
-  还在不在跑——双核 runner 上 700ms 之后过渡还没结束，而这台笔记本上早就结束了。
-
-  加上这道等待之后**同一台 runner 复量：16 行 → 8 行**，消失的正好是四组
-  时序敏感的差异（run 35143922501 → 35181791622）：
-
-      role:button[…Docs…] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)   ×3
-      role:button[…Request permissions…] hit React=self Vue=div                  ×3
-      role:button[…PNG…]  background React=rgba(248,245,237,102) Vue=rgba(0,0,0,0) ×1
-      requestsOnlyVue: POST /api/threads/search                                  ×1
-
-  **这里有一条方法论上的教训，比这个修法本身值钱**：当轮一度把这个判词推翻过，
-  理由是「`230/255 = 90.2%`、`102/255 = 40.0%` 恰好是 Tailwind 的 `/90` 与 `/40`
-  档位，过渡中途不会两次都精确落在档位上」，外加「对照上下文本来就带
-  `reducedMotion: reduce`」。那套算术很像结论，**但它仍然是推理**——
-  而推翻一次实测只能靠另一次实测。第二次 CI 运行把它按回去了。
-  （`reducedMotion: reduce` 只改 media feature，**不会**停掉没有被媒体查询
-  包起来的 CSS transition，比如 Tailwind 的 `transition-colors`。）
-
-  比「Linux 上多几行」更糟的是它**不确定**：同一棵树重跑可能绿可能红，
-  而一条偶发红的门禁会被当成噪音忽略掉，等于没有门
+  **它补的是健壮性，没有被证明消除了任何一行台账。** 此前取样前只有一条固定的
+  `settleMs = 700`：一个写死的毫秒数，稳不稳完全取决于机器快慢，
+  而那正是一条会偶发红的门禁的做法——偶发红的门会被当成噪音忽略掉，等于没有门
   （记忆 `deerflow-gate-needs-an-entrypoint` 的同一形状）。
+
+  **⚠ 这里曾经写着「这条是 CI 上 16 行里 8 行的根因，实测」。那句话是错的，
+  别再照它判。** 经过是：加上这道等待后一次 CI 复量到 16 → 8，我据此写下根因；
+  **同一棵树的下一次运行又回到 16 行**。三次读数摆在一起才看清——
+
+      run1(无等待) 16 行 | run2(有等待) 8 | run3(有等待) 16
+      三次并集 17 行：稳定(3/3) 8 行，飘的 9 行
+
+  那 8 行稳定的是真差异（`integrations` mobile 的宽度 Δ4.1–4.2、
+  `artifact-table-preview` 的 y 偏移），**其余 9 行是这把尺子自己在飘**，
+  run2 只是一次异常采样。
+
+  **判据：一次运行是一个样本。** 判「修好了」要同一棵树连着量到稳定；
+  判「飘」两次不一致就够。**飘和修好在单次读数上长得一模一样。**
+  逐行出现模式与后续判词记在
+  docs/plans/vue-parity-open-accounts.md 第三十七轮条目。
 
   **必须排除无限循环的动画**：子任务卡片底下那层 `.ambilight` 是自动播放、
   无限循环的装饰动画（见 sampleGeometry 里 `anim=` 那段注释），
@@ -725,10 +721,6 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
 
   超时了**不抛**：取样本身不该变成失败源（同 `postData()` 那处的判词）。
   真有一条无限动画漏网时，它造成的差异会在几何档上照样看得见。
-
-  剩下的 8 行（`artifact-table-preview` 的 y 偏移、`integrations#…` 三个 mobile 档的
-  宽度 Δ4.1–4.2）与这道等待无关，判词记在
-  docs/plans/vue-parity-open-accounts.md 第三十七轮条目。
 */
 export async function waitForFiniteAnimations(page: Page, timeout = 2_000) {
   await page
