@@ -262,12 +262,28 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 于是 `[data-sidebar='sidebar']` 以及侧栏里那些会话行的定位器永远解析不到。
 
 **「到不了」不等于「没问题」，只等于那条路径是按桌面写的。**
-把它们纳进来要先给场景补一条「先开抽屉」的步骤——做完之后，
-窄屏门禁与台账的取样面会一起变宽（`channels` 五个终态、`sidebar`、
-`thread-history`、`thread-list-pin` 等都在里面）。
 
-另外两条不是侧栏的：`workspace-changes#reasoning-menu`（输入区的推理深度键）、
-`artifact-batched-stream`（`[role="combobox"]` 解析得到但点不动）。
+⚠ **但也别把这 14 条当成 14 块没人看的屏**——逐条对过之后，
+**真正没有窄屏覆盖的只有 5 块**：
+
+| 到不了的终态 | 那块屏别处有没有窄屏覆盖 |
+| --- | --- |
+| `channels` ×5 | **有**（实测）：`settings-narrow-screen.spec.ts` 按 `SETTINGS_SECTIONS` 覆盖 `?settings=channels`，375/360 两档含余量 |
+| `thread-list-pin` | **有**：同一场景的 `#mobile-drawer` 终态本来就跑 mobile |
+| `thread-history` | **大概率有**（未逐屏核）：消息流那一块由 `chat` 的 mobile 维采着 |
+| `artifact-batched-stream` | **大概率有**（未逐屏核）：`artifact-preview` 有 mobile 维，是同一块面板 |
+| `sidebar` | **部分**：移动抽屉由 `thread-list-pin#mobile-drawer` 与 `ui-polish-mobile` 采着 |
+| `agent-create-name-step` | **没有** |
+| `browser-feature` | **没有** |
+| `sidecar-chat` | **没有** |
+| `thread-title-sync` | **没有**（侧栏行内的 ⋯ 菜单） |
+| `workspace-changes#reasoning-menu` | **没有**（`#changes-panel` 也没有 mobile 维） |
+
+**所以下一轮该做的是那 5 块，不是 14 条。** 做法是照 `thread-list-pin#mobile-drawer`
+的样子**另开一个 mobile 终态**（先开抽屉再走），而不是改现有终态的步骤——
+步骤是跨维度共用的，加一句「点开抽屉」会把桌面那几维弄坏。
+
+⚠ 表里「大概率有」那两条**是推断不是读数**，动手前先量一眼。
 
 ### 3.（旧第 1 条）对话框的窄屏扫描 —— **别再逐个手接入口**
 
