@@ -238,37 +238,50 @@ EOF
 > `waitForFiniteAnimations` **留着**，但它的理由降级为**健壮性**
 > （固定 700ms 的静置快慢取决于机器），**不再声称它消除了任何一行**。
 >
-> ### 三之二、那 9 行为什么飘：**链条查清了，但「修好没有」仍待复量**
+> ### 三之二、把指针归位：**总数涨了，但逐行看是尺子变准了**
 >
-> 从 CI artifact 的截图与源码两头量的，四条读数连成一条链：
+> 飘的那几行是 hover 态，不是样式差异——判据：`230/255 = 90%`，而两个应用
+> `Button variant="default"` 的基类**逐字相同**、都写着 `hover:bg-primary/90`。
+> 起因是两侧同屏滚动位置差约 110px，**同一个指针坐标落到不同元素上**
+> （Vue 的 Authorization scope 标题在 y=456、React 在 y=346）。
 >
-> 1. 飘的那几行是
->    `role:button[…Docs…] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)`；
-> 2. **`230/255 = 90%`**，而两个应用 `Button` `variant="default"` 的基类
->    **逐字相同**、都写着 `hover:bg-primary/90`
->    ——所以那是 **hover 态，不是样式差异**；
-> 3. 截图里那颗 `Docs` 是 `Authorization scope` 里一颗**选中**的 chip
->    （`variant={selected ? "default" : "outline"}`），两边都选中，状态一致；
-> 4. 但**两侧同一屏的滚动位置差约 110px**（Vue 的 Authorization scope 标题在
->    y=456、React 在 y=346；React 那边 `Request permissions` 已经露出、Vue 还在
->    折叠线以下）——于是**同一个指针坐标落在不同元素上**。
+> ⚠ **截图归属按代码钉**：`diff.spec.ts` 里 `captureScenario` **先采 Vue 再采 React**，
+> 所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React。
 >
-> ⚠ **截图与应用的对应关系要按代码钉，别按奇偶猜**：`diff.spec.ts`（`captureScenario` 的两次调用，vue 在前）
-> **先采 Vue、再采 React**，所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React。
-> 我第一次写这一条时把方向推反了，当场按这行代码订正——**这是本轮第四次
-> 「说得通的东西被当成读数」**。
+> 修法 `parkPointer`：取样前把指针挪到 (0,0)。
 >
-> 同一组里那三行 `hit React=self Vue=div` 是同一件事的另一面：那个坐标上压着谁。
+> #### ⚠ 这里我按总数判错过一次，**逐行才是结论**
 >
-> **修法改的是取样面的定义，不是掩盖差异**：`parkPointer` 在 `runScenario` 之后把
-> 指针挪到 (0,0)。**悬停态本来就不该进台账**——台账比的是静置渲染，
-> 不是「鼠标恰好停在哪颗按钮上」。放在静置之前，hover 退出的过渡才有时间跑完。
+> 加上它之后台账总数 **16 → 29**，我据此判「它把场景弄坏了」并回退。
+> **逐行比对（run 35183780602 → 35186315711）推翻了那个判断**：
 >
-> ⚠ **不声称它消除了那 9 行。** 判据是同一棵树**连着量到稳定**
-> （本轮已经因为拿一次运行当结论栽过一次）。
+> | | 行数 | 内容 |
+> | --- | --- | --- |
+> | **消掉的** | 7 | `Docs background` 那一族 hover 伪差异 |
+> | **新照出的** | 20 | **两个根因的真差异，见下** |
 >
-> **顺带露出一笔可能的新账**：那 110px 的滚动差本身是什么？
-> 它可能只是 A 组那 4px 的下游，也可能是独立的一处内容高度差异。**未判。**
+> **总数是两个方向叠加出来的，方向相反，所以总数不含信息。**
+> 这是本轮第五次「说得通的东西被当成读数」——这回是**总数**。
+>
+> #### 新照出来的行分两类，**其中一类是我自己造的**
+>
+> **不是账：`branch-thread#turn-actions` 那 6 行。** 那个场景的步骤**本身就是
+> `kind: "hover"`**——它明确声明「我要采悬停打开的 tooltip」，
+> 而第一版 `parkPointer` 无条件归位，把场景自己摆好的姿势撤销了。
+> 修法是**场景里有 hover 步骤就不归位**：那种场景里「指针停在哪」是判据本身，
+> 不是残留状态。
+>
+> **账 I：菜单的关闭时机（真账）。** `thread-history` 两个语言各 7 行；
+> 它的步骤是 `click "More"` → `click "Export"`，**全是点击、没有 hover**，
+> 所以归位指针不改变它声明的状态：
+> `ariaOnlyReact: - menuitem "Export"` 对
+> `ariaOnlyVue: - menu "Export": / menuitem "Export as JSON" / "Export as Markdown"
+> / menuitem "Export" [expanded]`，外加 geometry 的「取样缺失 React=无 Vue=有」
+> 与 `tabbablesOnlyVue: div(menuitem)`。
+> **指针移开后 Vue 的导出子菜单还开着、React 已经关了。**
+>
+> **这两笔此前一直被「指针停在触发器上」掩盖**——两边都开着，比不出来。
+> 它们是**交互逻辑差异**，正落在最终判据里，**未判，要修**。
 >
 > ### 四、剩下的 8 行：A 组已排除字体，E 组未判
 >

@@ -78,6 +78,7 @@ describe("台账判词", () => {
             background: "b",
             fontSize: "12px",
             fontWeight: "400",
+            fontFamily: "ui-sans-serif",
             borderRadius: "0px",
             opacity: "1",
             hit: "hit",
@@ -101,6 +102,7 @@ describe("台账判词", () => {
       background: "b",
       fontSize: "12px",
       fontWeight: "400",
+      fontFamily: "ui-sans-serif",
       borderRadius: "0px",
       opacity: "1",
       hit: "hit",
@@ -137,6 +139,7 @@ describe("borderRadius 这一档", () => {
     background: "b",
     fontSize: "12px",
     fontWeight: "400",
+    fontFamily: "ui-sans-serif, system-ui, sans-serif",
     borderRadius: "16px",
     opacity: "1",
     hit: "self",
@@ -167,6 +170,45 @@ describe("borderRadius 这一档", () => {
     const entry = buildDiffEntry(
       capture({ geometry: { panel: corners } }),
       capture({ geometry: { panel: { ...corners } } }),
+    );
+    expect(entry.geometry).toEqual([]);
+  });
+
+  /*
+    字体栈这一档与圆角那一条同形：**它是最后一处「文本量得出来、各档都看不见」
+    的盲区**。宽度由文本撑出来时（grid/flex 子项卡在 min-content 上，本仓好几处
+    就是这样），换一套字体宽度就变，而位置/尺寸之外的每一档都不响。
+
+    判据照坑 258 那句：**有没有一种变异能让它响、而现有的档都不响**——
+    这里就是现成答案：只改 `fontFamily`，其余各档一行不动。
+  */
+  it("只改字体栈时它响，而其余各档一条都不响", () => {
+    const entry = buildDiffEntry(
+      capture({ geometry: { panel: base } }),
+      capture({
+        geometry: {
+          panel: { ...base, fontFamily: "ui-sans-serif, system-ui" },
+        },
+      }),
+    );
+    expect(entry.geometry).toEqual([
+      "panel fontFamily React=ui-sans-serif, system-ui, sans-serif Vue=ui-sans-serif, system-ui",
+    ]);
+    for (const lane of [
+      entry.ariaOnlyReact,
+      entry.ariaOnlyVue,
+      entry.order,
+      entry.tabOrder,
+      entry.requestsOnlyReact,
+      entry.requestsOnlyVue,
+    ])
+      expect(lane).toEqual([]);
+  });
+
+  it("字体栈相同时不报", () => {
+    const entry = buildDiffEntry(
+      capture({ geometry: { panel: base } }),
+      capture({ geometry: { panel: { ...base } } }),
     );
     expect(entry.geometry).toEqual([]);
   });

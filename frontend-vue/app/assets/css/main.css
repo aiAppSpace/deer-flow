@@ -145,12 +145,29 @@
     outline-offset: 2px;
   }
 
+  /*
+    `font-family` 逐字等于上游 `styles/globals.css` 的 `@theme --font-sans`
+    （也就是 Tailwind v4 的默认值）。**此前这里只写了前三项，丢掉了尾部四个
+    emoji / 符号兜底字体**——上游的 html 通过 Tailwind preflight 拿到七项那份，
+    本仓在 body 上用三项那份盖掉了它。
+
+    两边落到同一个西文字面时看不出来（macOS 上两边都是 San Francisco），
+    **但这是一处真的分歧**：任何主字体缺字的符号，上游会落到
+    `Noto Color Emoji` / `Segoe UI Symbol`，本仓落到浏览器默认——
+    字面不同就可能宽度不同，而本仓好几处布局是贴着 0 余量的
+    （见 `integrations-settings-page.tsx` 里那段 375px 的注释）。
+
+    **这不是「照抄一串字体名」**：判据是两个应用的文本必须在同一套
+    字体解析规则下测量，否则几何档比出来的宽度差永远说不清是布局还是字体。
+  */
   body {
     min-height: 100vh;
     margin: 0;
     background: var(--background);
     color: var(--foreground);
-    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-family:
+      ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   }
 }
 
