@@ -69,32 +69,45 @@ const delegated = computed(() => {
   return rest;
 });
 /*
-  **基类照上游 `ui/scroll-area.tsx`，但根元素的 `overflow-hidden` 是本仓有意多的。**
+  **基类逐字照上游 `ui/scroll-area.tsx`。**
 
-  ⚠ **别再把它当成"没对齐"删掉——2026-09-17 第三十七轮删过一次，当场被门禁按回来。**
+  这里曾经多一颗 `overflow-hidden`，而且它**真的承重**：对 grid/flex 子项，
+  `overflow` 非 `visible` 会把「自动最小尺寸」从 min-content 变成 0，这一层
+  因此能缩到内容宽度以下。2026-09-17 第三十七轮按「上游没有」把它删掉，
   `tests/e2e/integrations.spec.ts` 的「设置面板在 375px/360px 屏上装得进对话框」
-  实测 `panelOverflow: 0 → 4`。理由是 CSS 规则而不是口味：**对 grid/flex 子项，
-  `overflow` 非 `visible` 会把「自动最小尺寸」从 min-content 变成 0**，
-  这一层因此能缩到内容宽度以下；去掉它，窄屏上面板就撑破栅格格子。
+  当场从 `panelOverflow: 0` 变成 `4`，只好原样按回来。
 
-  **它同时是对照台账 A 组那 4px 的来源**：本仓靠它多缩了 4px，内容比上游窄
-  （`card-title` 76.3 vs 72.1、`textbox` 203.1 vs 199）。
-  **两者是同一个「0 余量」的两面**——第二十一轮量到同一张卡在 375px 下
-  「macOS 恰好装得下、Linux 溢出 9px」。**真正该修的是那个 0 余量**
-  （`CardHeader` 的 `grid-cols-[1fr_auto]` 里第 2 列那颗 `whitespace-nowrap`
-  的 Refresh 按钮顶着 min-content），而不是把遮挡拆掉换台账那 5 行。
+  **它守的不是自己，是集成面板那个 0 余量**——同一颗遮挡还让本仓比上游多缩 4px，
+  于是对照台账在 `integrations` mobile 上稳定报出 5 行宽度 Δ4.1/4.2。
+  **「窄屏不溢出」和那 5 行是同一件事的两面**：上游让内容撑破格子，本仓把它裁掉，
+  两种坏法各自自洽。
 
-  下面这几条是真的逐字对齐过的（同轮）：
-  此前本仓是 `p-0.5` + `data-[orientation=vertical]:w-2`（内边距 2px、条宽 8px、
-  没有那道透明左/上边框），上游是 `p-px` + `w-2.5` + `border-l border-l-transparent`
-  （1px / 10px / 有边框）。**滚动条是用户看得见的东西**，10px 与 8px 是实打实的视觉差。
+  第三十八轮量到了那个 0 余量本身（探针：逐层 `width:min-content`）：
 
-  它此前躲过门禁，是因为 `tests/guards/primitive-base-classes.test.ts` 给
-  `ScrollArea` 挂了豁免（理由：根元素类串差一个 `overflow-hidden`，但那些屏上
-  台账是 0 行，判据取渲染一致）。**那条豁免自己写了翻案判据**——
-  「哪天台账在 ScrollArea 所在的屏上报出几何差异，就回来逐字对一遍」——
-  而 A 组那 5 行几何差异正出在设置对话框，那一屏就是 ScrollArea。条件满足，
-  于是回来对了这一遍。
+      面板 min-content 286.2  vs  375px 屏上的格子 293      → 只剩 6.8px
+      承重链 card 252.2 → card-content 250.2 → 授权盒 218.2 → 192.2
+
+  链尾是 `IntegrationsSettings.vue` 里那句 scope 说明**嵌着的字面量**
+  `calendar:calendar.free_busy:read.`——冒号和点在词中不给换行机会，
+  它自己就是一个 192.2px 宽的「单词」。**两个应用的这条链逐层同值**，
+  所以这从来不是「本仓没对齐」，是两边共有的一处窄屏缺陷。
+
+  给那句说明（以及状态格里同病的 `break-words`）换成 `wrap-anywhere` 之后：
+
+      面板 min-content 240.5；375px 余量 52.5、360px 37.5、340px 17.5
+      两个应用在 375/360/340/320 四档上**逐值相同**
+
+  余量够了，这颗遮挡就不再承重，于是删掉，基类回到与上游一字不差。
+  `tests/guards/primitive-base-classes.test.ts` 里那条 `ScrollArea` 声明
+  同轮删除——它自己写的翻案判据就是这一条。
+
+  ⚠ **要再动这颗类，先把上面那串余量重新量一遍**：它是被 min-content 撑着的，
+  文案一变就会缩水。320px 上两边仍然一起溢出 3px（同值，不是对照问题）。
+
+  下面这几条是第三十七轮逐字对齐过的：此前本仓是 `p-0.5` +
+  `data-[orientation=vertical]:w-2`（内边距 2px、条宽 8px、没有那道透明左/上边框），
+  上游是 `p-px` + `w-2.5` + `border-l border-l-transparent`（1px / 10px / 有边框）。
+  **滚动条是用户看得见的东西**，10px 与 8px 是实打实的视觉差。
 */
 const SCROLLBAR_BASE = "flex touch-none p-px transition-colors select-none";
 const verticalScrollbarClass = computed(() =>
@@ -118,7 +131,7 @@ const horizontalScrollbarClass = computed(() =>
   <ScrollAreaRoot
     data-slot="scroll-area"
     v-bind="delegated"
-    :class="cn('relative overflow-hidden', props.class)"
+    :class="cn('relative', props.class)"
   >
     <ScrollAreaViewport
       data-slot="scroll-area-viewport"

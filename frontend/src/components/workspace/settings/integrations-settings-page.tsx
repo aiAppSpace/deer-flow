@@ -828,7 +828,21 @@ function LarkIntegrationCard() {
                     }
                     aria-label={t.settings.integrations.lark.customScopeLabel}
                   />
-                  <p className="text-muted-foreground text-xs">
+                  {/*
+                    This sentence embeds literal OAuth scopes
+                    (`calendar:calendar.free_busy:read.`), and a colon/dot run
+                    offers no soft wrap opportunity, so the word is 192.2px
+                    wide at text-xs. Measured: that single token was the whole
+                    panel's min-content — 192.2 + p-3 24 + border 2 + px-4 32 +
+                    card border 2 = 252.2px card, 286.2px scroll area, against
+                    a 293px grid cell on a 375px screen. Wider Linux metrics
+                    push it past the cell and the panel overflows. `break-word`
+                    would not help: per css-text-3 the wrap opportunities it
+                    adds are ignored when computing min-content. `anywhere`
+                    counts them, and only ever breaks a word that has no other
+                    way to fit, so prose still breaks at spaces.
+                  */}
+                  <p className="text-muted-foreground text-xs wrap-anywhere">
                     {t.settings.integrations.lark.customScopeDescription}
                   </p>
                 </div>
@@ -947,9 +961,18 @@ function LarkIntegrationCard() {
                     ) : null}
                     {t.settings.integrations.lark.changeAppSubmit}
                   </Button>
+                  {/*
+                    Measured min-content 191.1px against a 186px content column
+                    on a 360px screen — this one button is what made the whole
+                    settings panel wider than its grid cell there. A button
+                    label that cannot fit the narrowest supported screen has to
+                    be allowed to wrap; `min-h-8` keeps the single-line box at
+                    exactly the `sm` height, so nothing changes above ~400px.
+                  */}
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-auto min-h-8 py-1 whitespace-normal"
                     onClick={handleReRegisterInBrowser}
                     disabled={integrationBusy}
                   >
@@ -1082,7 +1105,16 @@ function StatusItem({
           {ok ? t.settings.integrations.ready : t.settings.integrations.pending}
         </Badge>
       </div>
-      <div className="text-muted-foreground text-sm break-words">{value}</div>
+      {/*
+        `break-words` here was a no-op for sizing: per css-text-3 the wrap
+        opportunities `overflow-wrap: break-word` adds are not counted when
+        computing min-content, so this cell still could not shrink below the
+        widest literal it carries (measured 162.6px for "…(LARK_CLI_INIT_IMAGE)"),
+        and it is the next thing pinning the status grid — and through it the
+        whole panel — once the scope hint above stopped doing so. `anywhere`
+        counts them and is what the class was reaching for.
+      */}
+      <div className="text-muted-foreground text-sm wrap-anywhere">{value}</div>
     </div>
   );
 }

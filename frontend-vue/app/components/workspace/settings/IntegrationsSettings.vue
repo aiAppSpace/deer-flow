@@ -817,7 +817,18 @@ onUnmounted(() => {
                 :placeholder="larkCopy.customScopePlaceholder"
                 :aria-label="larkCopy.customScopeLabel"
               />
-              <p class="text-muted-foreground text-xs">
+              <!--
+                这句话里嵌着 OAuth scope 字面量（`calendar:calendar.free_busy:read.`），
+                冒号和点在词中不提供换行机会，所以它在 text-xs 下是一个 192.2px 宽的
+                「单词」。**实测：整块设置面板的 min-content 就是这一颗 token 撑出来的**
+                ——192.2 + p-3 24 + border 2 + px-4 32 + card border 2 = 卡片 252.2、
+                滚动区 286.2，而 375px 屏上那格只有 293px。Linux 字体宽一点就顶破。
+
+                用 `break-words` 没用：按 css-text-3，`overflow-wrap: break-word` 新增的
+                换行机会**不计入 min-content**；`anywhere` 才计入，而且它只在一个词
+                实在放不下时才从中间断开，正常文字仍然在空格处换行。
+              -->
+              <p class="text-muted-foreground text-xs wrap-anywhere">
                 {{ larkCopy.customScopeDescription }}
               </p>
             </div>
@@ -929,9 +940,16 @@ onUnmounted(() => {
                 />
                 {{ larkCopy.changeAppSubmit }}
               </Button>
+              <!--
+                实测这颗按钮的 min-content 是 191.1px，而 360px 屏上它所在的
+                内容列只有 186px——**整块设置面板在那一档撑出格子，就是它一颗撑的**。
+                一颗在最窄的受支持屏幕上放不下的按钮标签必须允许折行；
+                `min-h-8` 让单行时的高度仍然正好是 `sm` 档，约 400px 以上毫无变化。
+              -->
               <Button
                 size="sm"
                 variant="outline"
+                class="h-auto min-h-8 py-1 whitespace-normal"
                 :disabled="integrationBusy"
                 @click="reRegister"
               >

@@ -540,6 +540,26 @@ test.describe("Integrations settings", () => {
     依赖字体度量。根因（CardHeader 的 `1fr` 列 `min-width: auto` 缩不动）
     已在 `IntegrationsSettings.vue` 与上游 `integrations-settings-page.tsx`
     两边同改修掉，修完 340px 都还有余量。
+
+    **第三十八轮补 `panelSlack`：只断言「溢出为 0」抓不到「余量为 0」。**
+    上面那段说的正是这件事，可写出来的断言仍然只有溢出量——而 0 溢出既可能是
+    健康的，也可能是差 0.1px 就破。这一轮把那个量直接量出来：把面板临时设成
+    `width: min-content` 读它的固有最小宽度，再和它那格的宽度相减。
+
+    当轮实测（macOS，去掉 ScrollArea 那颗承重的 `overflow-hidden` 之后）：
+
+        375px  格子 293  min-content 240.5  余量 52.5
+        360px  格子 278  min-content 240.5  余量 37.5
+
+    门限取 **12px**，不取「大于 0」：第二十一轮实测同一张卡在 Linux 上比 macOS
+    宽约 9px（macOS 恰好装下 257，Linux 溢出 9），12 刚好把那个平台差盖过去；
+    而任何一处重新钉住 min-content 的改动（一颗放不下的 nowrap 按钮、一段不给
+    换行机会的字面量）一次就吃掉 30–50px，绝不会卡在 12 附近。
+
+    这一轮量到并两边同改掉的两处，都是「余量为 0」而不是「已经溢出」：
+    ① scope 说明里的 `calendar:calendar.free_busy:read.`（192.2px 的一个「单词」，
+       `break-words` 对 min-content 无效，改 `wrap-anywhere`）；
+    ② 「在浏览器重新注册」按钮（nowrap 191.1px，而那一列只有 186px，改为可折行）。
   */
   for (const width of [375, 360]) {
     test(`the settings panel fits inside the dialog on a ${width}px screen`, async ({
@@ -574,20 +594,26 @@ test.describe("Integrations settings", () => {
                 dialogEl?.querySelector<HTMLElement>('[data-slot="card"]');
               if (!panel?.parentElement || !card) return { missing: true };
               const over = (value: number) => Math.max(0, Math.round(value));
+              // 固有最小宽度：读完立刻把内联样式还原，页面不留痕。
+              const cell = panel.parentElement.clientWidth;
+              const before = panel.style.cssText;
+              panel.style.width = "min-content";
+              panel.style.maxWidth = "none";
+              const minContent = panel.getBoundingClientRect().width;
+              panel.style.cssText = before;
               return {
-                panelOverflow: over(
-                  panel.getBoundingClientRect().width -
-                    panel.parentElement.clientWidth,
-                ),
+                panelOverflow: over(panel.getBoundingClientRect().width - cell),
                 cardOverflow: over(card.scrollWidth - card.clientWidth),
+                panelFits: cell - minContent >= 12,
               };
             }),
           {
             message:
-              "panelOverflow>0 = 面板被撑出了栅格格子；cardOverflow>0 = 卡片里的东西被裁掉了",
+              "panelOverflow>0 = 面板被撑出了栅格格子；cardOverflow>0 = 卡片里的东西被裁掉了；" +
+              "panelFits=false = 还没溢出，但余量已经不到 12px（见上方注释里的读数）",
           },
         )
-        .toEqual({ panelOverflow: 0, cardOverflow: 0 });
+        .toEqual({ panelOverflow: 0, cardOverflow: 0, panelFits: true });
     });
   }
 });

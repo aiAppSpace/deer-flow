@@ -35,6 +35,14 @@ const { $i18n } = useNuxtApp();
         }}
       </Badge>
     </div>
-    <div class="text-muted-foreground text-sm break-words">{{ value }}</div>
+    <!--
+      **`break-words`在这里对尺寸是空转的**：按 css-text-3，
+      `overflow-wrap: break-word` 新增的换行机会不计入 min-content，
+      这一格因此仍然缩不到它装着的那个字面量以下（实测
+      `…(LARK_CLI_INIT_IMAGE)` 是 162.6px）——而上面那句 scope 说明让开之后，
+      **顶着状态网格、进而顶着整块面板的就是它**。`anywhere` 才计入，
+      也正是这颗类原本想要的行为。
+    -->
+    <div class="text-muted-foreground text-sm wrap-anywhere">{{ value }}</div>
   </div>
 </template>
