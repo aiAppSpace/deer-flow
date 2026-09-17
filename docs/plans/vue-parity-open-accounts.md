@@ -277,6 +277,28 @@ EOF
 > 代价说清楚：**`frontend-vue parity` 这条工作流现在是红的**，而且在 A/C/E/F
 > 四组判完之前会一直红。这是有意的——它红着说明它在量东西，
 > 而它量出来的正是本机十四轮都没看见的东西。
+>
+> ### 六、第三十六轮那套改动，第三十七轮独立审过一遍（**别再审**）
+>
+> `98f27946` 是另一个会话提交并推送的，提交说明写得很细——但**说明不是判据**。
+> 第三十七轮对着代码和后端源码重审了一遍，结论是**站得住，不回退**。
+> 查过的四项与各自的判据：
+>
+> | 改动 | 判据（现场量的） | 结论 |
+> | --- | --- | --- |
+> | 删 `context.thread_id`（两边同改） | `backend/app/gateway/services.py:763` 是**合并调用方 context 之后的无条件覆盖**，`thread_id` 取自 URL path；两个应用仍发别的 context 键，所以走的正是这个分支，agent 照样拿得到 | 属实 |
+> | `stream_mode` 拔掉 `values` | `reduceUpdates` 逐通道 patch、其余通道原样保留、`messages` 走 `add_messages`；「上游只订这三个」是**台账 `requestBodies` 行里 React 侧的实测 wire**，不是引文档；`values` 的处理代码**保留**（`stream_mode` 整字段缺失时 Gateway 退回 values-only）；`e2e-backend` 对真 Gateway 全绿 | 站得住 |
+> | 新增 `useThreadMetadata` | 四处失效 `["thread","metadata",id]` 此前确实**没有任何查询拥有这颗 key** | 补的是真缺口 |
+> | 台账对账 | `git show 98f27946 -- baseline/parity-diff.json`：**精确减 3 行、不增一行**，与三条根因一一对应 | 对得上 |
+>
+> **专门查过「测试有没有被改松」**——结果是**改严了**：
+> `chat-dataflow.spec.ts` 的键集仍是 `toEqual` 全等，而且**新增**了一条
+> `expect(body).not.toHaveProperty("stream_resumable")`；
+> `model-capabilities.test.ts` 只是跟随 `buildRunContext` 去掉参数，断言仍是 `toEqual`。
+>
+> 唯一要记住的形状是那次提交本身的教训（已在 `c10df2f5` 补记）：
+> **`git add -A` 之前要重新看一次 `git status`**——那次把另一个会话的在途成果
+> 一并提交了，而提交说明里一个字没提。记录失真比多提交几个文件严重。
 
 ---
 
