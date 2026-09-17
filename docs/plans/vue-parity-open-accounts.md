@@ -306,7 +306,42 @@ EOF
 > ——`div(menuitem)` 证明那条理由不成立。已改成 **generic 标签（div/span）就补**。
 > **此刻改代价为零**：签入基线是 0 行，没有任何既有行文本要跟着改写。
 >
-> ### 四、剩下的 8 行：**字体已被实测排除**，那 4px 出在哪一层仍未判
+> ### 三之三、**A 组结清了**：根因就是 ScrollArea 那四处基类（run8 实测）
+>
+> `frontend-vue parity` run 35193198808（ScrollArea 对齐后的第一次全量）：
+> **A 组那 5 行 `width React=… Vue=… Δ-4.1/-4.2` 一条不剩。**
+> 那 4px 既不是字体（run6 的 `fontFamily` 档 0 行已实测排除），
+> 也不是 header 结构 / 文案 / 图标 / 按钮基类（源码逐字对过），
+> **是滚动区 primitive 的基类差**：`w-2.5` vs `w-2`、`p-px` vs `p-0.5`、
+> 少一道透明边框、Root 多一个 `overflow-hidden`。
+>
+> **它为什么只在 Linux 显形**：macOS 的覆盖式滚动条不占布局，
+> Linux 的经典滚动条占；而这一族本来就贴着 0 余量
+> （第二十一轮量到同一张卡 375px 下「macOS 恰好装得下、Linux 溢出 9px」）。
+>
+> ### 三之四、同一轮里尺子照出的另外两笔
+>
+> **账 J：拖拽手柄缺 `data-slot`（30 行，一个根因，已修）。**
+> 上游 `ui/resizable.tsx` 的手柄带 `data-slot="resizable-handle"`，
+> 本仓用的是 splitpanes、手柄由库在挂载后 `createElement` 插入，没有这颗属性。
+> **此前两边都读作 `div(separator)`、正好抵消，15 个场景-维度上一直看不见**；
+> 同轮放宽标签规则后当场报出 30 行。补在 `syncSplitterDisabled()` 里
+> （与既有的 `aria-disabled` / `tabindex` 同法，模板上够不着它）。
+> 本机 `PARITY_ONLY=artifact-panel-resize` 复量：**2 个维度各 2 行 → 0 行**。
+>
+> **账 K：菜单项的焦点在指针移出后不收（6 行，含原账 I′，未修）。**
+> 两处同根：`thread-history` 的 `div(menuitem)[dropdown-menu-item]` ×2、
+> `thread-list-pin` 的 `a(menuitem)` ×2 与 `focus: React=div Vue=a "…官网…"` ×2。
+> 机制：指针划过打开的菜单再移出时，**Radix 让焦点跟着指针走、离开时收回 content**
+> （`onItemLeave`）；**reka 只打 `data-highlighted`、不动焦点**
+> （`primitive-base-classes.test.ts` 给 `DropdownMenuItem` 挂豁免时就记着这一条），
+> 于是焦点留在开菜单时的首项上。
+> **用户看得见**：鼠标移出打开的菜单后，Vue 还有一项亮着、React 没有。
+> 按最终判据（交互逻辑一致）要修，修法落在 primitive 层，
+> ⚠ 注意第三十五轮那条教训：**在 reka 的事件序列里同步改 prop 会打断它自己的时序**，
+> 要用指令 + 直接 DOM 操作。
+>
+> ### 四、A / E 两组当时的排查过程（**A 组已结清，见三之三**）
 >
 > #### A 组（5 行，`integrations` 三个 mobile 档的宽度 Δ≈4.1–4.2px）
 >
