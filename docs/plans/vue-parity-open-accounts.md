@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-17 第三十七轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-17 第三十八轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -3525,6 +3525,99 @@ EOF
 >   两个应用一起扫，并顺手扫出剩下的两边各 12 颗。
 
 ---
+
+## 2026-09-17 第三十八轮：A 组结清、`hit` 三行判给尺子
+
+> **本轮把 `frontend-vue parity` 推到 Linux 上第一次全绿**（`b8cc8b19`）。
+> 此前 14 次全是 failure / cancelled。⚠ **一次运行是一个样本**——A 组那 5 行
+> 此前是稳定的 3/3，这次归零是实的；`hit` 那 3 行是飘的（2/3/0/3），
+> 单次绿不足以判它结清，本轮是从**机制**上判的，见下。
+
+### 一、A 组（`integrations` mobile 宽度 Δ4.1/4.2）——结清，两边同改
+
+**第三十七轮留下的判词是错的，实测推翻。** 它说根因是 `CardHeader` 的
+`grid-cols-[1fr_auto]` 第 2 列那颗 `whitespace-nowrap` 的 Refresh 按钮顶着
+min-content。探针（逐层把元素设成 `width:min-content` 读固有宽度）量出来：
+
+    headerMinContent 40    actionMinContent 95    ← 第二十一轮的 min-w-0 早修好了
+
+真正顶着的是两处**两个应用完全相同**的东西（承重链逐层同值，所以这从来不是
+「本仓没对齐」，是两边共有的窄屏缺陷）：
+
+| | 承重物 | min-content | 处置 |
+| --- | --- | --- | --- |
+| ① | scope 说明里嵌的 `calendar:calendar.free_busy:read.` | 192.2px 的一个「单词」 | `wrap-anywhere` |
+| ② | 「在浏览器重新注册」按钮 nowrap | 191.1px，列宽只有 186px | 允许折行 + `min-h-8` |
+
+①**顺带订正一条会重犯的规则**：状态格上那颗 `break-words` 对尺寸是**空转的**
+——按 css-text-3，`overflow-wrap: break-word` 新增的换行机会**不计入
+min-content**；`anywhere` 才计入。凡是「加了 break-words 但盒子还是缩不动」的，
+根因都是这一条。
+
+读数（macOS）：
+
+    面板 min-content   286.2 → 240.5    （「换 Lark 应用」态 285.1 → 240.5）
+    375px 余量 6.8 → 52.5     360px 由「上游溢出 / 本仓裁掉」→ 37.5
+    375 / 360 / 340 / 320 四档上两个应用逐值相同
+
+余量够了，`ScrollArea` 根元素那颗承重的 `overflow-hidden` 就不再守着谁——删掉，
+基类回到与上游一字不差；`primitive-base-classes` 里那条 `ScrollArea` 声明
+按它自己写的翻案判据同轮删除。
+
+**门禁补了「余量」这一维**（`tests/e2e/integrations.spec.ts`）：只断言「溢出为 0」
+抓不到「余量为 0」，而后者正是第二十一轮与第三十七轮各栽一次的地方。门限 12px
+——第二十一轮实测同一张卡 Linux 比 macOS 宽约 9px，12 盖得过那个平台差；而任何
+一处重新钉住 min-content 的改动一次吃掉 30–50px，不会卡在门限附近。
+
+**取舍**：320px 上两边仍然一起溢出 3px。同值、不是对照问题、也不在门禁的受支持
+档里；再往下压要动徽标的 `whitespace-nowrap` 或第四层内边距，那是没有读数支持的
+设计改动。**翻案判据**：哪天 320px 进了受支持档，回来重量这条链。
+
+### 二、`hit` 那三行——判给尺子，但**先排除了应用**
+
+`integrations#permission-request` 的
+`role:button[Request permissions] hit React=self Vue=div`。
+
+按判据 #9 先问「两边用户看到的有没有区别」，三跑同号：
+
+    对话框出现 → Lark 卡片出现     本仓 ~15ms      上游 ~293ms
+    dialog-content enter 动画       200ms/ease/0    200ms/ease/0    逐字相同
+    dialog-overlay  enter 动画      150ms/ease/0    150ms/ease/0    逐字相同
+
+**动画本身两边一样**（而且这几个值已经被 `primitive-base-classes` 的类串比对
+守着——`duration-200` / `zoom-in-95` 都在被比的基类串里，不需要补新门禁）。
+差的是那块面板的 chunk 何时就位，而**这一笔早有判词**，写在
+`SettingsDialog.vue` 文件头：九个面板全切开反而让关键路径涨了
+（994,976 → 1,007,885 raw），所以本仓只切 Integrations；两边的 loading 占位
+都是同一句 `role=status` 的「Loading…」。**用户看到的是同一个占位符、只是时长
+不同**，chunk 划分是构建产物而不是可观察行为。
+
+⚠ 我这一轮差点把这条当新账重开——`SettingsDialog.vue` 的文件头早写着判词和读数。
+**记忆 `deerflow-parity-three-docs` 的同一形状：动手之前先看那份文件自己怎么说的。**
+
+于是 settle 的锚点在两边落在开场动画的**不同相位**：本仓 15/200、上游 200/200。
+Playwright 的 `click` / `fill` 会把目标滚进视野，**滚动量按当时的几何算**——
+对话框还在 `zoom-in-95` 里就算出不同的结果：
+
+    点第一颗按钮之后   本仓 scrollTop=460（滚到底）   上游 411
+    补上「交互前等开场动画」之后   两边都是 411
+
+这也解释了它**为什么一直是飘的**：分岔取决于两边各自的 chunk 什么时候就位，
+而不是应用有没有改坏。
+
+做法：`waitForFiniteAnimations` 从 `capture.ts` 抽成 `support/settle.ts` 独立一层
+（`capture.ts` 依赖 `scenarios.ts`，反向 import 会成环——拆层而不是打补丁），
+`runScenario` 在 settle 步骤之后、交互步骤之前调用它。
+
+**新门禁** `interaction-settles-first.spec.ts`：跑完同一串交互，两个应用停在
+同一个滚动位置。断言**两边相等**而不是等于某个数（滚动量随文案与字体变，
+「两边一样」不会）。为什么不让台账自己守：它在这上面是飘的，偶发红的门等于
+没有门。变异验证：摘掉那道等待，当场红成 `vue=460 react=411`。
+
+**翻案判据**：这道等待不许用来掩盖动画差异。哪天 `primitive-base-classes` 给
+`DialogContent` 的动画类开了豁免，这道等待就必须连同一条「两边动画声明相同」的
+门禁一起重新审。
+
 
 ## 一、历史逐条台账（**读之前先看这一句**）
 

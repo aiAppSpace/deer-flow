@@ -63,118 +63,130 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 
 ---
 
-## ⚠ 签入基线是 0，但那是 **macOS** 的读数
+## 第三十八轮收工状态
 
-第三十六轮把签入基线推到 0。第三十七轮把 `e2e-parity` 接进 CI，
-**第一次运行就红**——同一棵树在 ubuntu-latest 上量出 16 行。
-所以「清零」的边界是三重的：**当前尺子、当前取样面、当前这台笔记本**。
+**`b8cc8b19` 是 `frontend-vue parity` 在 Linux 上第一次全绿**（此前 14 次全是
+failure / cancelled）。之后 `87dbe46e` 又改了尺子，**它的 CI 读数要自己去量**。
 
-台账只覆盖 147 个场景-维度（`tests/e2e-parity/support/scenarios.ts`）。
-覆盖率棘轮：covered 37 / pending 1 / exempt 3，那 1 条 pending
-（`artifact-table-performance`）**已有完整判词，别重新问**。
+| 账 | 状态 |
+| --- | --- |
+| **A 组**（`integrations` mobile 宽度 Δ4.1/4.2） | ✅ 结清，两边同改，根因是两处 min-content |
+| **E 组**（表格 y 偏移） | ✅ 第三十七轮结清 |
+| **账 J**（`div(separator)`） | ✅ 第三十七轮结清（尺子的账） |
+| **账 K**（菜单 tab 停靠点 / 焦点） | ✅ 第三十七轮结清 |
+| `hit React=self Vue=div` 三行 | ✅ 判给尺子并补了确定性门禁，见下 |
+
+⚠ **一次运行是一个样本。** A 组那 5 行此前稳定 3/3，归零是实的；
+`hit` 那 3 行一直是飘的（2/3/0/3），**本轮是从机制上判的，不是靠一次绿**。
+
+### A 组怎么结清的（顺带订正一条会重犯的规则）
+
+第三十七轮写的判词（「Refresh 按钮顶着 min-content」）**是错的**，探针推翻：
+`headerMinContent 40 / actionMinContent 95`，第二十一轮的 `min-w-0` 早修好了。
+真正顶着的是两处**两边完全相同**的东西：
+
+- scope 说明里嵌的 `calendar:calendar.free_busy:read.`（192.2px 的一个「单词」）；
+- 「在浏览器重新注册」按钮 nowrap 191.1px，而那一列只有 186px。
+
+**⚠ `break-words` 对 min-content 是空转的**——按 css-text-3，
+`overflow-wrap: break-word` 新增的换行机会**不计入 min-content**，`anywhere` 才计入。
+凡是「加了 `break-words` 但盒子还是缩不动」，根因都是这一条。
+
+```
+面板 min-content  286.2 → 240.5    375px 余量 6.8 → 52.5    360px → 37.5
+375/360/340/320 四档上两个应用逐值相同
+```
+
+余量够了 ⇒ `ScrollArea` 那颗承重的 `overflow-hidden` 删掉、基类与上游一字不差、
+`primitive-base-classes` 那条豁免按它自己的翻案判据删除。
+
+### `hit` 三行怎么判的
+
+**先排除应用**（判据 #9），三跑同号：两边的 dialog 动画声明**逐字相同**
+（content 200ms/ease/0、overlay 150ms/ease/0），差的只是那块面板的 chunk 何时就位
+——而那一笔 `SettingsDialog.vue` 文件头**早有判词**（九个面板全切开反而让关键路径
+涨了；两边 loading 占位都是同一句 `role=status`）。
+
+于是 settle 锚点在两边落在开场动画的**不同相位**（本仓 15/200、上游 200/200），
+Playwright 的 scroll-into-view 按当时的几何算滚动量：
+
+```
+点第一颗按钮之后   本仓 scrollTop=460（滚到底）   上游 411
+补上「交互前等开场动画」之后   两边都是 411
+```
+
+`waitForFiniteAnimations` 抽成 `support/settle.ts` 独立一层（原地反向 import 会成环），
+`runScenario` 在 settle 之后、交互之前调用它；新门禁
+`interaction-settles-first.spec.ts` 断言**两边滚动位置相等**（不是等于某个数）。
+变异验证：摘掉等待当场红成 `vue=460 react=411`。
 
 ---
 
-## 第三十七轮收工状态
+## ⚠ 别再做的事（逐条带读数）
 
-⚠ **先分清哪个是量出来的**：
+### 1. 动手改之前，先看那份文件自己怎么说的
 
-- **签入基线 147 场景-维度 / 0 唯一行** —— 随时可数，但那是 **macOS 坐标系**；
-- **最后一次实测的 Linux 读数是 run 35202704174（`a6b1f22e`）= 3 行**
-  （E 组清零、`hit` 3 行）；
-- 那之后 `ec9aa11c` **恢复了 ScrollArea 的 `overflow-hidden`**，A 组那 5 行应当回来
-  → **预计 8 行，但这是预测，不是读数**。对应的 run 在收工时还在跑。
-
-**新窗口第一件事就是把它量出来**（命令见上一节），别照抄下面这张表的行数。
-
-| 账 | 行 | 状态 |
-| --- | --- | --- |
-| **A 组**（`integrations` mobile 宽度 Δ4.1/4.2） | **5** | **未结清**，见「别再做的事」第 1 条 |
-| **E 组**（表格 y 偏移） | **0** | ✅ ①上游 `{" "}` 的句首空格 ②本仓整层漏了 `Artifact` 外框 |
-| **账 J**（`div(separator)` 30 行） | **0** | ✅ **不是应用的账**——尺子标签改成「只在重复时才补 `data-slot`」 |
-| **账 K**（菜单 tab 停靠点 / 焦点） | **0** | ✅ 菜单项指针移出后不释放焦点，按 Radix `onItemLeave` 同形补上 |
-| `hit React=self Vue=div` | **3** | 未判，**飘**（四次读数 2/3/0/3），Linux-only |
-
-**已结清的三笔全是「六档全盲」**——拖拽手柄属性、菜单焦点释放、面板外框，
-没有一项能被 aria 树 / 几何锚点 / 请求看见。
-**「台账 0 行」只意味着「当前这些档在当前这些锚点上量不出差异」。**
-
----
-
-## ⚠ 别再做的事（第三十七轮踩过，逐条带读数）
-
-### 1. 别删 ScrollArea 根元素的 `overflow-hidden` —— A 组不能那样"结清"
-
-删掉它，台账 A 组那 5 行确实归零，**但 `tests/e2e/integrations.spec.ts` 的
-「设置面板在 375px/360px 屏上装得进对话框」当场从 `panelOverflow: 0` 变成 `4`**。
-
-那颗类是**承重的**：对 grid/flex 子项，`overflow` 非 `visible` 会把「自动最小尺寸」
-从 min-content 变成 0，这一层因此能缩到内容宽度以下。
-**它同时就是 A 组那 4px 的来源**——本仓靠它多缩 4px。
-**台账那 5 行和「窄屏不溢出」是同一个「0 余量」的两面。**
-
-**真正该修的**：`CardHeader` 的 `grid-cols-[1fr_auto]` 第 2 列那颗
-`whitespace-nowrap` 的 Refresh 按钮顶着 min-content（第二十一轮量到同一张卡
-375px 下「macOS 恰好装得下、Linux 溢出 9px」）。**先修那个 0 余量**，
-修完之后删掉 `overflow-hidden` 而窄屏门禁仍绿，A 组才真的结清。
+第三十八轮差点把「两边内容到达时刻差 280ms」当新账重开——
+`SettingsDialog.vue` 的文件头早写着判词和实测读数。
+**记忆 `deerflow-parity-three-docs` 的同一形状。**
+`ScrollArea.vue`、`SettingsDialog.vue`、`integrations-settings-page.tsx`
+这几份的文件头都很长，而且都带读数，值得先读完。
 
 ### 2. 本机 `make verify` **不含** `e2e-mock`
 
-上面那条红就是这么漏过去的：本机一路绿、CI 才照出来。
-**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 3 分钟，275 条）。
+**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2 分钟，275 条）。
+第三十七轮就是这么漏过一条红的：本机一路绿、CI 才照出来。
 
 ### 3. 「逐字对齐上游」不是无条件正确的
 
 本仓比上游多出来的东西，可能正扛着上游没有的约束。
 **删之前问「它在守什么」，而不是只问「上游有没有」。**
+（`ScrollArea` 那颗 `overflow-hidden` 就是：第三十七轮删过一次，当场被门禁按回来；
+第三十八轮先修掉它守着的那个 0 余量，才真的删得掉。）
+
+### 4. 「余量为 0」和「守住了」长得一模一样
+
+只断言「溢出为 0」抓不到「余量为 0」。第二十一轮和第三十七轮各栽一次。
+补门禁时把**余量**直接量出来（把元素临时设成 `width:min-content` 读固有宽度，
+读完还原），门限要盖得过 macOS↔Linux 的字体差（实测约 9px）。
 
 ---
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 那个「0 余量」——它同时挡着 A 组和窄屏门禁
+### 1. 扩取样面 —— 现在这是唯一能真正推进的方向
 
-见「别再做的事」第 1 条。当前**唯一一笔能一次结清两边**的账。
+四张工单表里三张归零、一张剩 1 条（读数见下），台账在 macOS 与 Linux 上同时是 0。
+**剩下的不是「还有多少没做」，是「还有多少没被看见」。**
 
-### 2. `hit` 那 3 行（飘、Linux-only）
+- `baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由取样点最少；
+- 对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景（棘轮会红）；
+- 加新场景要**给它加终态断言**，否则「零差异」可能只是「压根没采到」。
 
-`integrations#permission-request` 三个维度：
-`role:button[/^(Request permissions|申请新权限)$/] hit React=self Vue=div`。
-截图里**本仓那颗按钮不在可视区**，中心点因此打到对话框外的遮罩上。
+**校准用的轶事**（是轶事不是统计）：第三十七轮结清的 5 笔里有 **3 笔是六档全盲的**
+——拖拽手柄属性、菜单焦点释放、整层漏掉的面板外框，aria 树 / 几何锚点 / 请求
+一个都没报出来，全靠临时写探针照出来的。
 
-**已量到**（本机探针，平台无关的量）：
+### 2. 320px 那 3px（低优先，取舍已写）
+
+两边一起溢出 3px，同值、不是对照问题、不在受支持档里。
+要动就得动徽标的 `whitespace-nowrap` 或第四层内边距，**没有读数支持**。
+翻案判据：哪天 320px 进了受支持档，回来重量那条链。
+
+### 3. 工单表读数（2026-09-17 量的，会漂，自己重量）
 
 ```
-本仓 scrollTop=460  scrollHeight=950  clientHeight=490
-上游 scrollTop=411  scrollHeight=950  clientHeight=490
+react-parity-scope.json  → pendingRoutes        0     （18 条 page.tsx − 4 条豁免）
+upstream-i18n-map.json   → pending.keys         0     （2026-09-10 达成）
+parity-route-sampling.json → pending            0     （exempt 4）
+parity-scenario-coverage.json → pending         1     artifact-table-performance
+                                                      **已有完整判词，别重新问**
+                              covered 37 / exempt 3
 ```
-
-**内容度量完全相同**，`maxScrollTop = 460` → **本仓滚到了最底，上游只做最小滚动**。
-场景那一步是 `fill` OAuth 输入框，而 Playwright 的 `fill` 会把元素滚进视野。
-
-**已排除**：两边都没有显式滚动代码（`scrollIntoView` / `scrollTop` / `scroll-margin`
-零命中）、都没有 `scroll-behavior: smooth`、输入框前后标记逐字等价、
-且 run1/run3 就有这 3 行（不是第三十七轮引入的）。
-
-**下一步**：在 `fill` 前后插桩，记录 click Calendar → click Docs → fill 三个时刻的
-`scrollTop`，看分岔发生在哪次交互。**别从源码推**——第三十七轮在这类问题上
-从源码推了四次，四次都被源码本身推翻。
-⚠ 它在 macOS 量不出来，本机回路无效，只能 `parity_only` 跑 Linux。
-
-### 3. 扩取样面
-
-`baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由取样点最少。
-对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景（棘轮会红）。
-加新场景要**给它加终态断言**，否则「零差异」可能只是「压根没采到」。
-
-### 4. 三张 pending 表是工单队列
-
-记忆 `deerflow-upstream-features-must-land-in-vue`：上游有的功能 Vue 必须实现。
-台账看不见「本仓整个屏都没做」这一类。
 
 ---
 
-## 手上的工具（第三十七轮建的，直接用）
+## 手上的工具（直接用）
 
 ### 本机诊断回路：**2.2 分钟**，而不是 25 分钟
 
@@ -199,55 +211,59 @@ gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
 **读产物，别读颜色**——该模式下那次 run 一定是绿的，结论在 artifact
 `parity-failures` 的 `e2e-parity/report.json` 里。
 
-### 探针三件套（第三十七轮三次靠它定位到根因，都是源码看不出来的）
+### 探针四件套（历轮靠它定位到源码看不出来的根因）
 
 写一份 `tests/e2e-parity/zz-*.spec.ts`，**用
-`runScenario(page, base, scenario, undefined, state)` 把场景跑到位**
+`runScenario(page, base, scenario, dimension, state)` 把场景跑到位**
 （自造夹具会失败），然后在两个应用上各拍一次快照 `console.log` 出来，用完即删：
 
 1. **焦点快照**：`document.activeElement` + 各菜单项 `tabindex` → 定位到账 K；
 2. **文本快照**：`JSON.stringify(el.textContent)` + `getComputedStyle(el).font`
    → 照出上游的句首空格；
 3. **祖先链**：逐层 `width` / `padding` / `borderLeftWidth`
-   → 照出整层漏掉的 `Artifact` 外框。
+   → 照出整层漏掉的 `Artifact` 外框；
+4. **min-content 承重链**（第三十八轮新增）：从根往下走，每层把元素临时设成
+   `width:min-content` 读固有宽度、挑最大的孩子继续，走出承重链。
+   ⚠ **`w-full` 的孩子固有宽度更大但不参与**，要按「不超过父亲的 min-content」过滤，
+   否则会一路走进 `<input>` 的默认 `size` 里。
+   ⚠ **一个终态只是一个取样面**：第三十八轮先只量了 `default` 态，
+   结果门禁在「换 Lark 应用」态上照样红——**门禁点开的每一个态都要各量一遍**。
+
+### 时间线/动画探针（第三十八轮新增）
+
+`page.addInitScript` 里挂一个 rAF 循环打点（`performance.now()`），量
+「对话框出现 → 内容出现 → 动画跑完」。
+⚠ **别把 `performance.now()` 和 `Date.now()-t0` 混着比**——
+前者以文档开始为原点，后者以 `goto` 之前为原点，两个时钟差一大截，
+我照着它推出过一个不存在的矛盾。
+⚠ 动画时长要读**声明值**（`effect.getComputedTiming().duration`），不要用墙钟差
+——墙钟的起点边噪声能造出 200 vs 179 这种假差异。
 
 ### 截图归属
 
 `diff.spec.ts` 里 `captureScenario` **先采 Vue、再采 React**，
 所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React（`i` 是该场景键在
-`report.json` 里的序号）。**别按奇偶猜**——我猜反过一次。
+`report.json` 里的序号）。**别按奇偶猜**。
 
 ---
 
-## ⚠ 第三十七轮我被订正了十次，共同形状只有一个
+## ⚠ 判据（历轮被订正十几次，形状只有一个）
 
-**「说得通的东西」和读数长得一模一样。** 逐条：
-
-| # | 我拿什么当了读数 | 被什么推翻 |
-| --- | --- | --- |
-| 1 | 算术（`230/255 = 90.2%` 恰好是 Tailwind `/90` 档） | 下一次 CI 运行 |
-| 2 | 源码结构（`CardTitle` 是块级 div → 排除字体） | React 自己的注释：那一列卡在 min-content |
-| 3 | **一次运行**（16 → 8 就说根因找到了） | 同一棵树的下一次运行回到 16 |
-| 4 | **总数**（16 → 29 就说改坏了） | 逐行比：消掉 7 行伪差异 + 照出 20 行真差异 |
-| 5 | 奇偶推断（奇数号截图是 React） | `diff.spec.ts` 的采样顺序 |
-| 6 | 把「让红变绿」当「修好了」（往 Vue 塞 `data-slot`） | `invariant-ownership` 门禁 |
-| 7-9 | 三次从源码推账 K 的机制 | 那三处**确实逐字相同**，分岔在它们之外 |
-| 10 | **又一次单次运行**（run10 的 0 行 → 说 `hit` 随账 K 消失） | run11 回到 3 行 |
-
-**判据**：
+**「说得通的东西」和读数长得一模一样。**
 
 - **一次运行是一个样本**——判「修好了」要同一棵树连着量到稳定；判「飘」两次不一致就够；
 - **推翻一次实测只能靠另一次实测**，算术和源码结构都只是线索；
 - **总数不是读数**——它会被「尺子变准」和「修好差异」两个相反方向同时推动；
-- **「源码一样」不等于「运行时一样」**；
+- **「源码一样」不等于「运行时一样」**；反过来，**「文档写过」不等于「现在还成立」**，
+  但**「文件头写过并带读数」通常就是判词**，重开之前先读它；
 - **尺子报出差异时先问：两边用户看到的东西有没有区别**——角色/几何/可达性全同、
-  只差一颗内部样式钩子，那是尺子的问题，不是应用的问题。
+  只差一颗内部样式钩子或只差一个时长，那是尺子的问题，不是应用的问题。
 
 ---
 
 ## 跑长命令的纪律
 
-`make e2e-parity` ~25 分钟、`make e2e` ~3 分钟、`make verify` ~4 分钟。
+`make e2e-parity` ~25 分钟、`make e2e` ~2 分钟、`make verify` ~4 分钟。
 **用 `run_in_background` 起一次然后等通知**，不要开 `while pgrep; do sleep; done` 轮询。
 要串行跑多套就写成一条命令（`make a > a.log; echo "A=$?" >> a.log; make b > b.log; ...`）。
 
