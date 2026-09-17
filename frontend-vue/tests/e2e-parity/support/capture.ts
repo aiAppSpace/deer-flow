@@ -680,13 +680,21 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
         顺手量了一下范围：`tabbablesOnly*` 与 `tabOrder` 三档共 79 行，
         **其中 59 行含裸 `div`/`span`**——四分之三认不出。
 
-        判据取最窄的那一种：**只有 generic 标签（div/span）且没有 role 时才补**。
-        有 role 的（`div(dialog)`）本来就认得出，补了只是让 59 行之外的账也跟着
-        改写法。`data-slot` 是两个应用共有的 shadcn 约定（侧栏骨架合同已经在钉它），
+        判据是 **generic 标签（div/span）就补**，有没有 role 都补。
+        `data-slot` 是两个应用共有的 shadcn 约定（侧栏骨架合同已经在钉它），
         不像 `data-testid` 那样两边对不上（坑：wave 94 定过同一条）。
+
+        **「有 role 的本来就认得出」这条限制 2026-09-17 第三十七轮撤掉了，
+        因为它不成立。** 当轮有一笔账是 `tabbablesOnlyVue: div(menuitem)`
+        ——菜单里每一项都是 `div(menuitem)`，这行字说不出是哪一个，
+        我为它单开了一个探针，而那正是本段开头那句「一条要靠探针才认得出的账，
+        等于没有账」说的事。补上之后它读作
+        `div(menuitem)[dropdown-menu-sub-trigger]`，一眼认得出。
+
+        **此刻改它代价为零**：签入基线是 0 行，没有任何既有行文本要跟着改写。
       */
       const slot =
-        !role && (tag === "div" || tag === "span")
+        tag === "div" || tag === "span"
           ? element.getAttribute("data-slot")
           : null;
       return `${tag}${type ? `[${type}]` : ""}${role ? `(${role})` : ""}${
