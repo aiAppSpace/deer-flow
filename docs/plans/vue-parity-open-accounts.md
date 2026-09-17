@@ -249,9 +249,14 @@ EOF
 >    ——所以那是 **hover 态，不是样式差异**；
 > 3. 截图里那颗 `Docs` 是 `Authorization scope` 里一颗**选中**的 chip
 >    （`variant={selected ? "default" : "outline"}`），两边都选中，状态一致；
-> 4. 但**两侧同一屏的滚动位置差约 110px**（React 的 Authorization scope 标题在
->    y=456、Vue 在 y=346，Vue 那边 `Request permissions` 已经露出、React 还在
+> 4. 但**两侧同一屏的滚动位置差约 110px**（Vue 的 Authorization scope 标题在
+>    y=456、React 在 y=346；React 那边 `Request permissions` 已经露出、Vue 还在
 >    折叠线以下）——于是**同一个指针坐标落在不同元素上**。
+>
+> ⚠ **截图与应用的对应关系要按代码钉，别按奇偶猜**：`diff.spec.ts`（`captureScenario` 的两次调用，vue 在前）
+> **先采 Vue、再采 React**，所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React。
+> 我第一次写这一条时把方向推反了，当场按这行代码订正——**这是本轮第四次
+> 「说得通的东西被当成读数」**。
 >
 > 同一组里那三行 `hit React=self Vue=div` 是同一件事的另一面：那个坐标上压着谁。
 >
@@ -292,9 +297,23 @@ EOF
 >
 > #### E 组（3 行，`artifact-table-preview` 的 y 偏移 Δ-18 / -2.1）
 >
-> 未判。`Ada, L. y React=221 Vue=203 Δ-18` 差不多是一个文本行高，
-> 而同一个 `Missing` 锚点在 en-US 上是 Δ-18.1、在 zh-CN 上只有 Δ-2.1
-> ——**同一处锚点随语言变**，指向**内容相关的换行/行高**，字体度量在这一组仍是嫌疑。
+> **看截图就看出来了，而且它很可能和 A 组是同一个根因。**
+>
+> 表格面板顶上那条警告——「Some rows have different numbers of fields.
+> Missing fields are marked.」——**React 折成两行**（在 `are` 后断开），
+> **Vue 排成一行**。下面整张表因此错开约 18px，正好是一个行高。
+>
+> 对得上台账：`Missing y React=305 Vue=286.9`、`Ada, L. y React=221 Vue=203`
+> ——**React 更靠下**，因为它上面多了一行。
+>
+> **把两组连起来的是宽度**：一条文本折不折行，取决于容器宽几个像素；
+> 而 A 组量到的正是**同一量级的 ~4px 宽度差**。
+> zh-CN 那行只有 Δ-2.1 也吻合——中文那句更短，两边都不折行，只剩残差。
+>
+> ⚠ **方向和 A 组相反**：这里是 **React 更窄**（所以它折行），
+> 而 integrations 那边是 React 更宽（203.1 vs 199）。
+> 所以不是「Vue 一律窄 4px」这种整体缩放，**是某一层容器的盒模型在两处各自不同**。
+> **未判**：还没有读数说出那 4px 具体出在哪一层。
 >
 > #### 顺带记下的一处真实源码差异（与上面两组都还没连上）
 >

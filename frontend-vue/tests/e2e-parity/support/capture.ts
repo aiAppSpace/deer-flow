@@ -703,8 +703,10 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
     `role:button[…Docs…] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)`；
   · `230/255 = 90%`，而两个应用的 `Button` `variant="default"` 基类**逐字相同**、
     都写着 `hover:bg-primary/90`——所以那是 **hover 态**，不是样式差异；
-  · 截图里两侧同一屏的滚动位置差约 110px（React 的 Authorization scope 标题在
-    y=456、Vue 在 y=346），于是同一个指针坐标落在不同元素上；
+  · 截图里两侧同一屏的滚动位置差约 110px（Vue 的 Authorization scope 标题在
+    y=456、React 在 y=346），于是同一个指针坐标落在不同元素上
+    ——**截图归属按 `diff.spec.ts`（`captureScenario` 的两次调用，vue 在前） 钉：先采 Vue 再采 React**，
+    别按文件名奇偶猜；
   · 同一组还有 `hit React=self Vue=div`，也是「那个坐标上压着谁」。
 
   **不声称它消除了那几行**——判据是同一棵树连着量到稳定（见
