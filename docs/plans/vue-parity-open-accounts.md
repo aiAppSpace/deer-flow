@@ -179,11 +179,11 @@ EOF
 >
 > `e2e-parity` 接进 CI 的**第一次运行就红了**（run 35143922501，commit `98f27946`）：
 >
-> | | 本机 macOS | ubuntu-latest |
-> | --- | --- | --- |
-> | `e2e-parity` | 156 passed / 台账 0 行 | **1 failed / 155 passed**，台账 **16 行** |
-> | `e2e-parity-auth` | 绿 | 绿（suite 步骤 2m53s） |
-> | `icon-parity` | 绿 | 绿（瞬时） |
+> | | 本机 macOS | ubuntu-latest（首跑） | ubuntu-latest（修完动画等待后复量） |
+> | --- | --- | --- | --- |
+> | `e2e-parity` | 158 passed / 台账 0 行 | **1 failed / 155 passed**，台账 **16 行** | **1 failed / 157 passed**，台账 **8 行** |
+> | `e2e-parity-auth` | 绿 | 绿（suite 步骤 2m53s） | 绿 |
+> | `icon-parity` | 绿 | 绿（瞬时） | 绿 |
 >
 > **所以「台账清零」这句话此前的边界还要再收一格**：它不只是「当前尺子、当前
 > 取样面」，还是**「当前这台笔记本」**。第三十六轮那句「0 是复现过的，不是单次
@@ -195,77 +195,95 @@ EOF
 > | 组 | 行 | 形状 | 初判 |
 > | --- | --- | --- | --- |
 > | A | 5 | `integrations` 的 card-title / textbox **宽度 Δ≈4.1–4.2px** | 未判 |
-> | B+D | 4 | 按钮 background **alpha=230 / 102** | 未判，**有强线索见下** |
-> | C | 3 | `hit React=self Vue=div` | 未判 |
+> | B+D | 4 | 按钮 background **alpha=230 / 102** | **已判：取样器不等动画。已修，复量消失** |
+> | C | 3 | `hit React=self Vue=div` | **同上，复量消失** |
 > | E | 3 | `artifact-table-preview` 的 **y 偏移 Δ-18 / -2.1** | 未判 |
-> | F | 1 | `requestsOnlyVue: POST /api/threads/search` | 未判 |
+> | F | 1 | `requestsOnlyVue: POST /api/threads/search` | **同上，复量消失** |
 >
-> ### 二、B+D 组：**我判错过一次，这里记的是订正后的**
+> ### 二、B / C / D / F 四组的根因：取样器不等动画（**实测，16 行 → 8 行**）
 >
-> **第一版判词是「取样器不等动画，读在过渡中途，尺子缺陷」。那是错的**，
-> 而且错得很典型——它从一个真实的缺口推到了一个没被量过的结论。
->
-> 推翻它的是两件事，都是现场量的：
->
-> 1. **`230/255 = 90.2%`、`102/255 = 40.0%`——恰好是 Tailwind 的 `/90` 与 `/40`
->    两个档位。** 过渡中途的 alpha 会是任意值，不会两次都精确落在档位上。
-> 2. 对照套件的上下文本来就带 **`reducedMotion: "reduce"`**
->    （`support/context-options.ts`），减动分支里的动画根本不跑。
->
-> 所以 B+D 更像**真实的样式差异**：React 那颗按钮的 `background-color` 自己带
-> alpha（`bg-…/90`、`/40`），Vue 是实色。暗色那行连 RGB 都差一点
-> （`254,255,255` vs `255,255,255`），像是 oklab color-mix 的舍入。
->
-> **仍然未判的是「为什么本机量不出来」**——静态样式差异照理两边都该看得见。
-> 在拿到 Linux 上的定点复量之前，这一组不下结论。
->
-> ### 三、顺带修掉的一处真实缺口（**不是 B+D 的根因**）
->
-> 查 B+D 的过程中量到：`capture.ts` 取样前只有一条固定的 `settleMs = 700`，
-> **没有任何等待动画结束的逻辑**。这条与 B+D 判不判得下来无关，
-> 但它本身是真的——一条固定毫秒数的静置，快慢取决于机器，
-> 而这正是一条会偶发红的门禁的做法；偶发红的门会被当噪音忽略掉，等于没有门。
+> `capture.ts` 取样前只有一条固定的 `settleMs = 700`，读几何时不管过渡还在不在跑。
+> 双核 runner 上 700ms 之后过渡还没结束，这台笔记本上早就结束了——
+> 所以 alpha 读成 230 / 102 这种中间值。
 >
 > 修法：取样前等到没有**有限**动画在跑（`waitForFiniteAnimations`）。
-> **必须排除无限循环动画**：`.ambilight` 那层是自动播放、无限循环的装饰动画，
-> 等它「结束」会每个场景都等满超时——156 个场景 × 2 秒在本机照样绿，
-> 在 CI 上就是白烧一轮 25 分钟。判据用 `getComputedTiming().iterations === Infinity`
-> **算**出来，不用动画名单（名单会过期）。
-> 门：`tests/e2e-parity/animation-settle.spec.ts`，两条——会等到终值、
-> 只剩无限动画时立刻放行。
+> **判据是同一台 runner 上的复量**（run 35143922501 → 35181791622）：
+> **16 行 → 8 行**，消失的正好是这四组共 8 行——
 >
-> **别把这条记成「修好了一组」**：它是健壮性，不是那 16 行里的任何一行。
-> 下一次 CI 运行会给出它到底动没动那四行的读数。
->
-> ### 四、A / E 两组：字体是**嫌疑**，不是结论
->
-> 源码上两边的字体栈**确实不一样**：React `styles/globals.css` 在 `@theme` 里
-> 定义 `--font-sans`（尾部四个 emoji 兜底字体，与 Tailwind v4 默认值逐字相同），
-> Vue `assets/css/main.css` 的 `body` 用三项栈覆盖掉它、**丢掉那四个兜底**，
-> 且 `@theme inline` 里没有 `--font-sans`。macOS 上两边都落到 San Francisco，
-> 所以这个分叉在本机**量不出来**。
->
-> **但它解释不了 A 组的数字**：76.3/72.1 与 203.1/199 的比值是 1.058 与 1.021
-> ——**不一致**，所以不是缩放；两处的差都是 ≈4.15，是**常量偏移**。
-> 常量宽度差更像共同祖先窄了 4px，而 card-title（76.3）显然不是被拉伸到
-> 203px 容器的那种子元素。**所以这一组还没有根因，别把字体当结论写进代码。**
->
-> 下一步要的是**在 Linux 上的定点复量**，不是继续猜。
->
-> **定点复量的入口已经做好了**（第三十七轮，别重做）：
-> `frontend-vue parity` 工作流带 `workflow_dispatch` 输入 `parity_only`，
-> 填一个场景 id 就只量那一个（约 4 分钟，而不是 25 分钟）。
->
-> ```bash
-> gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
->   --ref main-wc -f parity_only=integrations#permission-request
+> ```
+> role:button[…Docs…] background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)     ×3
+> role:button[…Request permissions…] hit React=self Vue=div                    ×3
+> role:button[…PNG…] background React=rgba(248,245,237,102) Vue=rgba(0,0,0,0)  ×1
+> requestsOnlyVue: POST /api/threads/search                                    ×1
 > ```
 >
-> **读产物，别读颜色**：`PARITY_ONLY` 模式下 `diff.spec.ts` 刻意既不比基线也不
-> accept（过滤过的报告里其余场景全缺席，拿去比会像「一大批差异一次修好了」），
-> 所以那次 run **一定是绿的**。结论在 artifact `parity-failures` 里的
-> `e2e-parity/report.json`——工作流为此把上传条件从 `failure()` 放宽到
-> 「失败**或**这是一次定点复量」。
+> **必须排除无限循环动画**：`.ambilight` 那层是自动播放、无限循环的装饰动画，
+> 等它「结束」会每个场景都等满超时——156 个场景 × 2 秒在本机照样绿，
+> 在 CI 上就是白烧一轮 25 分钟。判据用
+> `getComputedTiming().iterations === Infinity` **算**出来，不用会过期的动画名单。
+> 门：`tests/e2e-parity/animation-settle.spec.ts`，实测 624ms / 89ms
+> ——第二条钉的就是挂死那个失败模式（漏掉 Infinity 排除会是 5000ms）。
+>
+> ### 三、**这一轮最值钱的东西是一条方法论教训，不是那 8 行**
+>
+> 上面那个判词，本轮**一度被我自己推翻过**，理由是两条看起来很硬的推理：
+>
+> 1. `230/255 = 90.2%`、`102/255 = 40.0%`——**恰好是 Tailwind 的 `/90` 与 `/40`
+>    档位**，而过渡中途的 alpha 不会两次都精确落在档位上；
+> 2. 对照上下文本来就带 `reducedMotion: "reduce"`（`support/context-options.ts`），
+>    减动分支里的动画根本不跑。
+>
+> 于是我把「尺子缺陷」改判成「真实样式差异」，还把订正写进了代码注释和三份文档。
+> **第二次 CI 运行把它按回去了。**
+>
+> 两条推理各自错在哪，值得逐条记下：
+>
+> - 第 1 条是**算术，不是读数**。档位数字接近只说明过渡的**终点**是那个 token，
+>   不说明取样读到的是终点。
+> - 第 2 条是**对 `reducedMotion` 的误解**：它只改 media feature，
+>   **不会**停掉没有被媒体查询包起来的 CSS transition——而 Tailwind 的
+>   `transition-colors` 正是没包的那种。
+>
+> **判据：推翻一次实测只能靠另一次实测。** 算术再漂亮也只是线索。
+> 这条与记忆 `measure-dont-guess` 是同一条，只是这次栽在「推理长得很像读数」上。
+>
+> ### 四、剩下的 8 行：A 组已排除字体，E 组未判
+>
+> #### A 组（5 行，`integrations` 三个 mobile 档的宽度 Δ≈4.1–4.2px）
+>
+> **从源码就能排除字体。** 两个应用的 `CardTitle` 渲染的是完全相同的东西：
+>
+> ```
+> <div data-slot="card-title" class="leading-none font-semibold">
+> ```
+>
+> 没有宽度、没有内边距——**块级 div，宽度就是包含块的内容宽**，
+> 不是被文本撑出来的。所以 `React=76.3 Vue=72.1` 说的不是「这段文字两边画得不一样宽」，
+> 而是**父容器在 Vue 里窄了 4.2px**；`role:textbox[App ID] 203.1 vs 199` 同理
+> （输入框也是被容器拉伸的）。
+>
+> 这同时解释了为什么「字体」那条推理站不住：76.3/72.1 与 203.1/199 的比值是
+> 1.058 与 1.021，**不一致**；而两处的差都是 ≈4.15，是**常量偏移**。
+> 常量偏移指向盒模型——**4px 恰好是一个 Tailwind 间距档**（或每侧 2px）。
+>
+> **未判的是「这 4px 出在哪一层」，以及为什么本机量不出来。** 下一步是定点复量
+> （入口见下），拿到那一屏两侧的盒模型再说。
+>
+> #### E 组（3 行，`artifact-table-preview` 的 y 偏移 Δ-18 / -2.1）
+>
+> 未判。`Ada, L. y React=221 Vue=203 Δ-18` 差不多是一个文本行高，
+> 而同一个 `Missing` 锚点在 en-US 上是 Δ-18.1、在 zh-CN 上只有 Δ-2.1
+> ——**同一处锚点随语言变**，指向**内容相关的换行/行高**，字体度量在这一组仍是嫌疑。
+>
+> #### 顺带记下的一处真实源码差异（与上面两组都还没连上）
+>
+> React `styles/globals.css` 在 `@theme` 里定义 `--font-sans`（尾部四个 emoji
+> 兜底字体，与 Tailwind v4 默认值逐字相同）；Vue `assets/css/main.css` 的 `body`
+> 用 `ui-sans-serif, system-ui, sans-serif` 覆盖掉它、**丢掉那四个兜底**，
+> 且 `@theme inline` 里没有 `--font-sans`。macOS 上两边都落到 San Francisco，
+> 所以这个分叉在本机**量不出来**。
+> **它是一处该对齐的差异，但目前没有任何读数把它和 A/E 连起来**——
+> 别拿它当那 8 行的根因。
 >
 > ### 五、没做的事，以及为什么
 >
