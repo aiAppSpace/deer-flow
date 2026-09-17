@@ -251,23 +251,26 @@ EOF
 >
 > #### A 组（5 行，`integrations` 三个 mobile 档的宽度 Δ≈4.1–4.2px）
 >
-> **从源码就能排除字体。** 两个应用的 `CardTitle` 渲染的是完全相同的东西：
+> **已经排除掉的，逐条带判据——别重查这五项。**
 >
-> ```
-> <div data-slot="card-title" class="leading-none font-semibold">
-> ```
+> | 排除项 | 判据 |
+> | --- | --- |
+> | 字体渲染 | CI artifact 里那两张 375×812 Linux 截图（`test-failed-177/178.png`，177=Vue、178=React，按输入框右边缘 288 vs 292 对上 199 vs 203.1）：**字形完全一致**，差别只在换行位置与输入框宽度 |
+> | 文案 | `settings.integrations.lark.title` / `.description` 两边词典**逐字相同** |
+> | header 结构 | 两边都是 `CardHeader class="px-4 sm:px-6"` → `flex min-w-0 items-center gap-3` → `shrink-0` 图标 → `min-w-0` 文本列 → `CardAction`，**逐字相同** |
+> | 图标尺寸 | 两边都是 `size-5` 包在 `p-2 rounded-lg` 里，**逐字相同**（`icon-parity` 那道门也绿） |
+> | 按钮基类 | `Button` 的 `size="sm"`：React `h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5`，Vue 同一集合（只是 class 顺序不同） |
 >
-> 没有宽度、没有内边距——**块级 div，宽度就是包含块的内容宽**，
-> 不是被文本撑出来的。所以 `React=76.3 Vue=72.1` 说的不是「这段文字两边画得不一样宽」，
-> 而是**父容器在 Vue 里窄了 4.2px**；`role:textbox[App ID] 203.1 vs 199` 同理
-> （输入框也是被容器拉伸的）。
+> **宽度是怎么来的**（React 自己在 `integrations-settings-page.tsx:642` 的注释里写了，
+> 第二十一轮实测）：有 `CardAction` 时 `CardHeader` 是 `grid-cols-[1fr_auto]`，
+> 第 1 列是默认 `min-width: auto` 的 grid 子项，**降不到自己的 min-content 以下**
+> （icon 36 + gap 12 + text 89 = 137px）。375px 下 **macOS 恰好装得下、Linux 溢出 9px**
+> ——**和 A 组是同一族**。
 >
-> 这同时解释了为什么「字体」那条推理站不住：76.3/72.1 与 203.1/199 的比值是
-> 1.058 与 1.021，**不一致**；而两处的差都是 ≈4.15，是**常量偏移**。
-> 常量偏移指向盒模型——**4px 恰好是一个 Tailwind 间距档**（或每侧 2px）。
->
-> **未判的是「这 4px 出在哪一层」，以及为什么本机量不出来。** 下一步是定点复量
-> （入口见下），拿到那一屏两侧的盒模型再说。
+> 所以 `card-title` 的宽度**确实是 min-content 派生的**（我一度据「它是块级 div」
+> 判成「与文本无关」，**那是第二次同类越界**，已订正）。而三项输入都相同，
+> 那 4px 只可能出在**第 2 列那颗 Refresh 按钮的 min-content** 上：它宽 4px，
+> 第 1 列就窄 4px。**源码层查到这里为止，再往下只能靠定点复量。**
 >
 > #### E 组（3 行，`artifact-table-preview` 的 y 偏移 Δ-18 / -2.1）
 >
