@@ -306,7 +306,34 @@ EOF
 > ——`div(menuitem)` 证明那条理由不成立。已改成 **generic 标签（div/span）就补**。
 > **此刻改代价为零**：签入基线是 0 行，没有任何既有行文本要跟着改写。
 >
-> ### 三之三、**A 组结清了**：根因就是 ScrollArea 那四处基类（run8 实测）
+> ### 三之三、**A 组没有结清——我"修好"它的办法是把一处承重的遮挡拆了**
+>
+> ⚠ **这一节整个订正过。** 先写的是「A 组结清，根因是 ScrollArea 那四处基类」
+> （run8 实测那 5 行确实一条不剩）。**收工前核 CI 才发现同一次提交把
+> `frontend-vue verify` 搞红了**：`tests/e2e/integrations.spec.ts` 的
+> 「设置面板在 375px / 360px 屏上装得进对话框」从 `panelOverflow: 0` 变成 `4`。
+>
+> 根因是我把本仓 ScrollArea 根元素的 `overflow-hidden` 按「逐字对齐上游」删掉了。
+> **那颗类是承重的**：对 grid/flex 子项，`overflow` 非 `visible` 会把
+> 「自动最小尺寸」从 min-content 变成 0，这一层因此能缩到内容宽度以下。
+>
+> **它同时就是 A 组那 4px 的来源**——本仓靠它多缩 4px，内容比上游窄
+> （`card-title` 76.3 vs 72.1、`textbox` 203.1 vs 199）。
+> 也就是说：**台账那 5 行和「窄屏不溢出」是同一个「0 余量」的两面**，
+> 拆掉遮挡只是把账从一边搬到另一边。
+>
+> **已恢复 `overflow-hidden`**，豁免重新挂上并写了这一轮量出来的真理由与翻案判据。
+> **A 组重新计入未结清（5 行）。**
+>
+> **真正该修的**：`CardHeader` 的 `grid-cols-[1fr_auto]` 里第 2 列那颗
+> `whitespace-nowrap` 的 Refresh 按钮顶着 min-content
+> （第二十一轮量到同一张卡 375px 下「macOS 恰好装得下、Linux 溢出 9px」）。
+> 把那个 0 余量修掉之后，`overflow-hidden` 才该删，A 组才真的结清。
+>
+> **同轮真正对齐的**（与上面无关，保留）：滚动条 `p-px` / `w-2.5` / 透明左上边框、
+> viewport 的整组焦点环——这四处是真的逐字差异，已对齐。
+>
+> ### 三之三之二、原记录（run8 的读数，仍然是真的，但结论被上面推翻）
 >
 > `frontend-vue parity` run 35193198808（ScrollArea 对齐后的第一次全量）：
 > **A 组那 5 行 `width React=… Vue=… Δ-4.1/-4.2` 一条不剩。**

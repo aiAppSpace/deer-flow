@@ -57,6 +57,8 @@ const upstreamPresent = existsSync(reactRoot);
  * 修好一条就从这里删一条——留着不删会被下面那条反向用例报出来。
  */
 const DECLARED: Record<string, string> = {
+  ScrollArea:
+    "本仓根元素多一个 `overflow-hidden`，**这是有意的、承重的**。对 grid/flex 子项，`overflow` 非 `visible` 会把「自动最小尺寸」从 min-content 变成 0，这一层因此能缩到内容宽度以下。2026-09-17 第三十七轮按「逐字对齐」把它删过一次，`tests/e2e/integrations.spec.ts` 的「设置面板在 375px/360px 屏上装得进对话框」当场从 `panelOverflow: 0` 变成 `4`。它同时是对照台账 A 组那 4px 的来源（本仓多缩 4px，内容比上游窄）——**两者是同一个「0 余量」的两面**，真正该修的是那个 0 余量（`CardHeader` 的 `grid-cols-[1fr_auto]` 第 2 列那颗 `whitespace-nowrap` 的 Refresh 按钮顶着 min-content），而不是把遮挡拆掉换台账那 5 行。翻案判据：哪天那个 0 余量修掉了（窄屏溢出门禁在删掉这条 `overflow-hidden` 之后仍然绿），这一条就该整个删掉。其余基类（`p-px` / `w-2.5` / 透明边框 / viewport 焦点环）同轮已逐字对齐。",
   DialogContent:
     "① z-index：本仓统一到 80 那一层（已决定，见一页纸清单）；② `top-1/2 -translate-x-1/2` 与上游 `top-[50%] translate-x-[-50%]` 是同一条 CSS 的两种写法。",
   DialogOverlay: "z-index：本仓统一到 80 那一层（已决定）。",

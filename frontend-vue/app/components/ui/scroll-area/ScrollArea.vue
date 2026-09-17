@@ -69,7 +69,22 @@ const delegated = computed(() => {
   return rest;
 });
 /*
-  **基类逐字照上游 `ui/scroll-area.tsx`。** 2026-09-17 第三十七轮逐字对过一遍：
+  **基类照上游 `ui/scroll-area.tsx`，但根元素的 `overflow-hidden` 是本仓有意多的。**
+
+  ⚠ **别再把它当成"没对齐"删掉——2026-09-17 第三十七轮删过一次，当场被门禁按回来。**
+  `tests/e2e/integrations.spec.ts` 的「设置面板在 375px/360px 屏上装得进对话框」
+  实测 `panelOverflow: 0 → 4`。理由是 CSS 规则而不是口味：**对 grid/flex 子项，
+  `overflow` 非 `visible` 会把「自动最小尺寸」从 min-content 变成 0**，
+  这一层因此能缩到内容宽度以下；去掉它，窄屏上面板就撑破栅格格子。
+
+  **它同时是对照台账 A 组那 4px 的来源**：本仓靠它多缩了 4px，内容比上游窄
+  （`card-title` 76.3 vs 72.1、`textbox` 203.1 vs 199）。
+  **两者是同一个「0 余量」的两面**——第二十一轮量到同一张卡在 375px 下
+  「macOS 恰好装得下、Linux 溢出 9px」。**真正该修的是那个 0 余量**
+  （`CardHeader` 的 `grid-cols-[1fr_auto]` 里第 2 列那颗 `whitespace-nowrap`
+  的 Refresh 按钮顶着 min-content），而不是把遮挡拆掉换台账那 5 行。
+
+  下面这几条是真的逐字对齐过的（同轮）：
   此前本仓是 `p-0.5` + `data-[orientation=vertical]:w-2`（内边距 2px、条宽 8px、
   没有那道透明左/上边框），上游是 `p-px` + `w-2.5` + `border-l border-l-transparent`
   （1px / 10px / 有边框）。**滚动条是用户看得见的东西**，10px 与 8px 是实打实的视觉差。
@@ -103,7 +118,7 @@ const horizontalScrollbarClass = computed(() =>
   <ScrollAreaRoot
     data-slot="scroll-area"
     v-bind="delegated"
-    :class="cn('relative', props.class)"
+    :class="cn('relative overflow-hidden', props.class)"
   >
     <ScrollAreaViewport
       data-slot="scroll-area-viewport"
