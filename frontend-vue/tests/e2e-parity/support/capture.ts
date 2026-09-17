@@ -762,10 +762,25 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
   放在 `runScenario` 之后、静置之前——hover 退出的过渡因此有时间跑完，
   再由 `waitForFiniteAnimations` 等干净。
 */
-async function parkPointer(page: Page, hoverIsTheScenario: boolean) {
-  if (hoverIsTheScenario) return;
-  await page.mouse.move(0, 0, { steps: 12 }).catch(() => undefined);
+async function parkPointer(
+  page: Page,
+  steps: readonly { kind: string }[],
+): Promise<void> {
+  /*
+    **指针没动过就不用归位**：Playwright 的指针初始就在 (0,0)，而 147 个场景-维度
+    里很多是纯加载（`steps: []`）。空跑一次 `mouse.move` 对它们只是成本。
+    成本是真的：第三十七轮 `steps: 12` 无条件跑满 294 次取样，把 diff 那条用例
+    推过了 900 秒的闸门（run 35190580480 以「锚点等不到 + Test ended」的形状红，
+    正是本文件上面那段注释预言的形状）。
+  */
+  if (!steps.some((s) => POINTER_STEPS.has(s.kind))) return;
+  // 场景自己声明了要悬停的不归位——那种场景里「指针停在哪」是判据本身。
+  if (steps.some((s) => s.kind === "hover")) return;
+  await page.mouse.move(0, 0, { steps: 4 }).catch(() => undefined);
 }
+
+/** 会把指针挪到某个元素上的步骤种类。 */
+const POINTER_STEPS = new Set(["click", "hover", "fill"]);
 
 /*
   等到页面上**有限**的动画/过渡都跑完，再取样。
@@ -851,10 +866,7 @@ export async function captureScenario(
   page.on("request", onRequest);
   try {
     await runScenario(page, base, scenario, dimension, state);
-    await parkPointer(
-      page,
-      [...scenario.settle, ...state.steps].some((s) => s.kind === "hover"),
-    );
+    await parkPointer(page, [...scenario.settle, ...state.steps]);
     await page.waitForTimeout(settleMs);
     await waitForFiniteAnimations(page);
     const rawAria = await page.locator("body").ariaSnapshot();

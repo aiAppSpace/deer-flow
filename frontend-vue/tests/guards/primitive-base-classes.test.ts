@@ -76,8 +76,6 @@ const DECLARED: Record<string, string> = {
     "① 同 `DropdownMenuItem` 的 `hover:bg-accent`，理由同上；② 多一组 `data-[disabled]:pointer-events-none data-[disabled]:opacity-50`——上游这一颗**没有**禁用态样式（兄弟组件 `DropdownMenuItem` 有），禁用的子菜单看上去与可用的一样。保留本仓的（翻案判据：上游哪天补上这两条，这一条就该整个删掉）。",
   CommandInput:
     "两边底层不同构（本仓 Reka `ListboxFilter`、上游 cmdk `Input`），**逐字照抄反而把渲染对齐搞坏**：2026-09-16 第三十一轮试过一次，对照台账当场报出 `role:dialog[Model Selector] height React=135.6 Vue=122.5 Δ-13.1` 等六行几何，而改之前这一屏几何全对。判据取渲染一致而不是类串一致——最终目标是「界面完全一致」，类串只是它的代理。翻案判据：两边底层同构了（或上游换掉 cmdk）就重新逐字对一遍。",
-  ScrollArea:
-    "本仓根元素多一个 `overflow-hidden`。**原来挂的理由（wave 98：上游那层 `Suggestions` 永远不会真的滚动、决定不跟）2026-09-16 第三十一轮已作废**——本仓把 `Suggestions` 整层补上了，那一族 105 个投影因此清零。这一条留下来的是另一件事：**根元素的类串仍差一个 `overflow-hidden`，而两边渲染一致**（补上这一层之后台账在那些屏上是 0 行）。判据取渲染一致而不是类串一致。翻案判据：哪天台账在 ScrollArea 所在的屏上报出几何差异，就回来逐字对一遍。",
   TooltipContent:
     "① z-index：本仓是 90（tooltip 要压过 80 那一层）；② `--reka-*` 变量名。wave 141 已把整组进出动画与 `dark:bg-[#050504]` 补齐。",
 };
