@@ -4352,6 +4352,65 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
 **判据（第二次记）：改完当场 grep 核验落地结果**，而且**改文件的脚本不要放后台**。
 
 
+## 2026-09-18 第四十三轮：前提变异跑通了——**方法成立，两条轴上 0 条空转**
+
+第四十二轮判了「静态扫描查不出空转」。这一轮把**能用的那个方法**做成可重复的动作：
+**把门禁要证明的前提拿掉，跑一遍，看谁还绿。**
+
+### 一、做法（照抄即可）
+
+前提不是产品代码，是**夹具**。共享 mock 的入口在
+`tests/e2e/utils/mock-api.ts`，调用方喂进来的列表在这几行落地：
+
+```
+337  let threads = [...(options?.threads ?? [])];
+338  const agents = options?.agents ?? [];
+339  const skills = options?.skills ?? DEFAULT_SKILLS;
+340  const scheduledTasks = options?.scheduledTasks ?? [];
+1515 const projects = options?.projects ?? [];
+```
+
+把其中一行改成恒空，跑 `make e2e`，再把结果按 spec 聚合，
+和「显式喂了这个选项的 spec」求交集。**整份仍然全绿的那些就是候选。**
+
+⚠ **改 mock 的脚本不要放后台**，改完当场 grep 核验（第四十二轮的判据）。
+⚠ 跑完**一定要还原**，并 `grep -c` 确认残留为 0。
+
+### 二、读数
+
+| 变异 | 结果 | 显式喂它的 spec | 如期变红 | 仍全绿 |
+| --- | --- | --- | --- | --- |
+| `threads` 恒空 | 107 failed / 189 passed（7.3m） | 31 | **27** | 4 |
+| `agents`+`skills`+`scheduledTasks`+`projects` 恒空 | 22 failed / 274 passed（3.2m） | 9 | **4** | 5 |
+
+**27/31 与 4/9 如期变红，这就是仪器可信的证据。**
+
+### 三、九个「仍全绿」逐条查完——**0 条空转**
+
+| spec | 真相 |
+| --- | --- |
+| `thread-history-mermaid` | 直接 `goto` 会话页并**自己 stub 了 `messages/page`**；`threads` 只填侧栏 |
+| `scheduled-tasks` | 自带 9 条 `page.route`，自己 stub `/api/scheduled-tasks` |
+| `scheduled-tasks-a11y-shape` | `threads` 轴上不依赖，**`scheduledTasks` 轴上如期红了 8 条** |
+| `ui-select-shape` | 断言的是**新建表单里**那颗 Select，不是任务行——任务夹具对它是附带的 |
+| `agents-feature-disabled` | 喂的本来就是 `agents: []`，清空等于没变 |
+| `ui-primitives-a11y` / `integrations` | **我的「喂了什么」检测不准**：那两处 `skills:` 是它们自己路由的**载荷键**，不是 mock 的选项名 |
+
+⚠ **最后一条是仪器的账**：判「谁喂了这个选项」不能只 grep `"<opt>:"`，
+载荷里同名的键会混进来。下次按
+`mockLangGraphAPI\([^)]*<opt>:` 这样的形状去匹配。
+
+### 四、判词
+
+- **这个方法值得留着，但不值得做成常驻门禁**：它要跑两遍全套（各 3–7 分钟）
+  并人工判读交集，而它找到的东西是「测试写法」而不是「产品缺陷」。
+  **做成一次性动作、写清怎么跑**，比塞进 CI 有用。
+- **两条轴上 0 条空转是有价值的负结果**：夹具驱动的那 31+9 个 spec，
+  绝大多数真的依赖它们喂的数据。
+- 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
+  那才是剩下的大头，但它是逐 spec 的，没有统一入口。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里
