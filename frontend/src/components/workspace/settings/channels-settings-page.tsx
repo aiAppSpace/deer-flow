@@ -372,7 +372,14 @@ function ChannelProviderItem({
             </div>
           ) : null}
         </ItemContent>
-        <ItemActions className="ml-auto">
+        {/*
+          `flex-wrap justify-end` keeps this row from pinning the card's minimum
+          width: a provider can show three actions (Modify, connect/add account,
+          remove config) and without wrapping they force the settings panel's
+          min-content to 500px at a 360px viewport (278px available). Mirrored in
+          the Vue app, which has carried this since the three-button row landed.
+        */}
+        <ItemActions className="ml-auto flex-wrap justify-end">
           {isConnected ? (
             <>
               {canEditRuntimeConfig ? (
@@ -437,12 +444,23 @@ function ChannelProviderItem({
             这个 primitive，为一颗键引进一个新 primitive 超出了「只做小改」的
             边界；Vue 侧有（ChannelConnections.vue 的 AlertDialog）。
           */}
+          {/*
+            `h-auto min-h-8 py-1 whitespace-normal`: Button's base is
+            `whitespace-nowrap` and this is the longest label on the card, so at a
+            360px viewport it measured a 229px min-content while the card only has
+            244px to give (276px panel minus the wrapper's `p-4`). That pushed the
+            card's own min-content to 263px and the ScrollArea viewport to
+            `scrollWidth 295 / clientWidth 276` with `overflow-x: hidden`, i.e. 19px
+            of every provider card was clipped away. Letting the label wrap drops it
+            to the widest single word. Same class string as the "Re-register in
+            browser" button in integrations-settings-page.tsx. Mirrored in Vue.
+          */}
           {isAdmin && provider.configured ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="text-destructive hover:text-destructive"
+              className="text-destructive hover:text-destructive h-auto min-h-8 py-1 whitespace-normal"
               disabled={isDisconnecting}
               aria-label={`${t.channels.removeProviderConfig}: ${provider.display_name}`}
               onClick={() => {

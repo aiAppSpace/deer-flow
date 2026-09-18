@@ -551,12 +551,24 @@ function showConnectAction(view: ChannelProviderView) {
             <Plug v-else />
             {{ connectLabel(view) }}
           </Button>
+          <!--
+              **`h-auto min-h-8 py-1 whitespace-normal` 是窄屏的承重件**（2026-09-18）。
+              Button 的基类是 `whitespace-nowrap`，而这颗键的文案最长——360px 上实测
+              固有最小宽度 **229px**，而那张卡片只有 244px 可用（面板 276 减去外层
+              `p-4` 的 32）。加上卡片自己的 `p-4`(32) + 图标位(32) + 两道 `gap-2`，
+              卡片的固有最小宽度是 **263**，于是内容被压到装不下：
+              本仓把卡片挤到 244（按钮溢出卡片边框），上游的 ScrollArea 视口
+              `sw=295 cw=276` 且 `overflow-x: hidden`——**直接裁掉 19px**。
+              让文案换行之后最宽的只剩单词本身。
+              同一串类在 `IntegrationsSettings.vue` 的「在浏览器重新注册」上已经用过
+              （第三十八轮，191.1px 那一笔），这里是同一条判据的第二例。
+            -->
           <Button
             v-if="isAdmin && view.provider.configured"
             type="button"
             variant="outline"
             size="sm"
-            class="text-destructive hover:text-destructive"
+            class="text-destructive hover:text-destructive h-auto min-h-8 py-1 whitespace-normal"
             :disabled="channels.isProviderPending(view.provider.provider)"
             :aria-label="`${text.removeProviderConfig}: ${view.provider.display_name}`"
             @click="removingProvider = view.provider"

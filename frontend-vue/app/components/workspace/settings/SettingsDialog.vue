@@ -230,7 +230,36 @@ function onOpenChange(open: boolean) {
           {{ $i18n.t.value.settings.description }}
         </p>
       </DialogHeader>
-      <div class="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+      <!--
+        **`grid-cols-[minmax(0,1fr)]` 是基础档，不是多余的**（2026-09-18 第三十九轮）。
+
+        原来只写了 `md:grid-cols-[220px_minmax(0,1fr)]`：**md 以下没有显式列模板**，
+        隐式列是 `auto`，而栅格项的 `min-width` 默认是 `auto`——于是**列被内容的
+        固有最小宽度撑开**，而不是把内容压住。设置对话框在 360px 上宽 328、
+        那一格本该是 278，装上 provider 夹具之后实测：
+
+            列宽        本仓 296.9px / 上游 500.1px
+            面板右边界  本仓 338 / 上游 541      对话框右边界 344，overflow: visible
+
+        也就是说上游那块面板**直接冲出对话框和视口 181px**。另外九个分区看不出来
+        只是因为它们的固有最小宽度本来就小于 278（integrations 241、notification 233、
+        mcp 180）——**这不是「没问题」，是「余量恰好还够」**，
+        见 settings-narrow-screen.spec.ts 文件头那段判词。
+
+        **为什么修列而不是给面板加 `min-w-0`**：md 以下 `nav` 和这块面板在**同一列**里，
+        列的固有最小宽度取两者的较大值。修列一次盖住两个，而且和 `md:` 那一档
+        写法同形。两个应用是同一行代码，按两边同改。
+
+        ⚠ **这一条是「不再撑破」的结构保证，不是当前门禁验得到的**（实测）：
+        同一轮把「移除 provider 配置」那颗按钮改成可换行之后，面板的固有最小宽度
+        掉到 278 以下，于是**撤掉这行类、门禁照样绿**（变异验证 `2 passed`）。
+        它守的是**下一条长文案**：撤掉它、同时把那颗按钮改回 `whitespace-nowrap`，
+        门禁报的就从「余量不足」变成「面板撑出了栅格格子」。
+        翻案判据：哪天有读数证明隐式列不会被撑开。
+      -->
+      <div
+        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)]"
+      >
         <nav class="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
           <ul class="space-y-1 pr-1">
             <li v-for="item in sections" :key="item.id">

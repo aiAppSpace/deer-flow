@@ -215,7 +215,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {t.settings.description}
           </p>
         </DialogHeader>
-        <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
+        {/*
+          `grid-cols-[minmax(0,1fr)]` is the base track, not redundant: below `md`
+          there is no explicit template, so the implicit column is `auto` and the
+          grid item's default `min-width: auto` lets the content push the column
+          wider instead of being constrained by it. Measured at 360px with the
+          channels fixtures: the column resolved to 500.1px and the panel's right
+          edge landed at 541 while the dialog ends at 344 (`overflow: visible`),
+          i.e. the panel ran 181px past the viewport. Mirrored in the Vue app.
+        */}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
           <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
             <ul className="space-y-1 pr-1">
               {sections.map(({ id, label, icon: Icon }) => {
