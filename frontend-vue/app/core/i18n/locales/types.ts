@@ -45,6 +45,11 @@ export interface Translations {
 
   // Primitive-layer accessible names (English in every locale; see the locale files)
   primitives: {
+    /* 窄屏 sr-only SheetHeader 的四条，上游写死英文，见 en-US.ts 的注释。 */
+    panelSidecar: string;
+    panelBrowser: string;
+    panelArtifacts: string;
+    panelDescription: string;
     close: string;
     toggleSidebar: string;
     sidebar: string;
@@ -618,7 +623,6 @@ export interface Translations {
     modelLoadRetrying: string;
     officialWebsite: string;
     githubTooltip: string;
-    sidePanelDescription: string;
     settingsAndMore: string;
     visitGithub: string;
     reportIssue: string;

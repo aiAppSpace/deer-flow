@@ -115,7 +115,20 @@ const MOBILE_UNREACHABLE: Record<string, string> = {
   "thread-title-sync":
     "侧栏行内的 ⋯：`getByRole('button', { name: /^(More|更多)$/ })`",
   "browser-feature": "`getByText(/^(Browser|浏览器)$/)`",
-  "sidecar-chat": "`getByText(/^(Side chat|侧边对话)$/)`",
+  /*
+    ⚠ **这一条的失败点变过一次，经过值得留着**（2026-09-18）。
+
+    原来本仓卡在 `getByText(/^(Side chat|侧边对话)$/)`，而上游一路走到最后一步
+    才卡在 `separator`——**看起来像上游在窄屏上走得更远**。
+    量到的真相是：窄屏面板那层 sr-only 的 `SheetTitle`，上游写死英文 `"Sidecar"`，
+    本仓用的是翻译过的 `sidecar.title`（「Side chat」/「侧边对话」），
+    于是本仓多出一个文本恰好等于 "Side chat" 的隐藏 `h2`，
+    `.first()` 命中它、等它 visible 就超时。
+    改成 `primitives.panelSidecar` 之后两边停在同一步。
+
+    **它现在到不了是两边共有的原因**：那条 `separator` 在窄屏下两边都不渲染。
+  */
+  "sidecar-chat": "`getByRole('separator')`——窄屏下两边都不渲染那条分隔线",
   "workspace-changes#reasoning-menu":
     "输入区的推理深度键：`getByRole('button', { name: /^(Reasoning Effort|推理深度)[:：]/ })`",
   "artifact-batched-stream":

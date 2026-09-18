@@ -70,6 +70,22 @@ export const zhCN: Translations = {
     翻掉的地方：上游哪天把它们接进自己的 i18n，改这四行即可。
   */
   primitives: {
+    /*
+      窄屏面板那层 sr-only 的 SheetHeader。**上游写死英文、不进它自己的词典**
+      （`chat-box.tsx:408-419` 的三元里直接是 `"Sidecar"` / `"Browser"` /
+      `"Artifacts"`，描述也是一句写死的英文），所以这四条和 `close` /
+      `toggleSidebar` 那几条一样放在 `primitives` 里、两种语言同一串。
+
+      **本仓此前用的是翻译过的词条**（`sidecar.title` → 「侧边对话」、
+      `workspace.sidePanelDescription` → 「浏览本次会话的侧边面板。」）——
+      于是窄屏下读屏器听到的东西两边不一样，而**台账一直没采到**：
+      这几个场景当时都没有 mobile 维。2026-09-18 第三十八轮在窄屏可达性排查里
+      量出来的（本仓多一个隐藏的 `h2 "Side chat"`，上游那一处是 `"Sidecar"`）。
+    */
+    panelSidecar: "Sidecar",
+    panelBrowser: "Browser",
+    panelArtifacts: "Artifacts",
+    panelDescription: "Browse the side panel for this conversation.",
     close: "Close",
     toggleSidebar: "Toggle Sidebar",
     sidebar: "Sidebar",
@@ -723,7 +739,6 @@ export const zhCN: Translations = {
     modelLoadRetrying: "正在重试…",
     officialWebsite: "访问 DeerFlow 官方网站",
     githubTooltip: "访问 DeerFlow 的 GitHub 仓库",
-    sidePanelDescription: "浏览本次会话的侧边面板。",
     settingsAndMore: "设置和更多",
     visitGithub: "在 GitHub 上查看 DeerFlow",
     reportIssue: "报告问题",

@@ -1699,13 +1699,13 @@ onUnmounted(() => {
     :open="panelOpen"
     :panel-size="artifactPanel.panelSize.value"
     :panel-padded="activePanel === 'artifacts'"
-    :panel-description="$i18n.t.value.workspace.sidePanelDescription"
+    :panel-description="$i18n.t.value.primitives.panelDescription"
     :panel-label="
       activePanel === 'artifacts'
-        ? $i18n.t.value.common.artifacts
+        ? $i18n.t.value.primitives.panelArtifacts
         : activePanel === 'sidecar'
-          ? $i18n.t.value.sidecar.title
-          : $i18n.t.value.common.browser
+          ? $i18n.t.value.primitives.panelSidecar
+          : $i18n.t.value.primitives.panelBrowser
     "
     @update:panel-size="artifactPanel.panelSize.value = $event"
     @collapse="
