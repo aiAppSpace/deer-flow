@@ -16,9 +16,7 @@
 中途不要问「要不要继续 / 提交 / 推送」——提交与推送是 2026-09-06 就给的长期授权
 （Claude 记忆 `deerflow-no-midway-questions`），取舍自己定并写进提交说明。
 
-⚠ **先读「✅ 已经量过、别重做」那一节再动手。** 第三十八轮已经拿六条
-单应用不变量扫过全部终态，**三条有收获、三条 0 条**——三条 0 条的也都带着
-读数和判词，重扫一遍只会烧掉半小时再得到同一个 0。
+⚠ **先读「✅ 已经量过、别重做」那一节再动手。**
 
 ---
 
@@ -65,306 +63,197 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 所以 `total_count: 0` **不是「没问题」**。要问的是「覆盖当前 `frontend-vue` 树的
 那次 run 绿不绿」；一条红会让后面的步骤全 `skipped`，所以要看**逐步结论**。
 
-**第三十八轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
+**第三十九轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
 
 ```
-361f700d   工作树干净   未推送 0
+（本轮 docs 提交的 sha）   工作树干净   未推送 0
 场景-维度 162 唯一行 0
-total_count: 0                     ← HEAD 是纯 docs 提交，正常
-frontend-vue parity  completed/success  20da975a   ← 覆盖当前代码树的那次
-frontend-vue verify  completed/success  20da975a
+frontend-vue parity  completed/success  219ff7ae
+frontend-vue verify  completed/success  219ff7ae
 ```
 
 ---
 
-## 第三十八轮收工状态（2026-09-18）
+## 第三十九轮收工状态（2026-09-18）
 
-**代码树 = `20da975a`，CI 两条全绿**；之后只有纯 docs 提交（不触发 CI）。
-本轮 20 个提交。
+一句话：**这一轮的缺陷是门禁自己的夹具放进来的。**
+`settings-narrow-screen.spec.ts` 覆盖全部十个设置分区、两档宽度、带余量门限，
+十轮以来一直绿——而它用的是共享 mock 的 `{ enabled: false, providers: [] }`，
+**量的是一块空面板**。装上内容之后同一条断言当场红，两个应用都红。
 
 | 量 | 收工读数 |
 | --- | --- |
-| 台账 | **162 个场景-维度 / 0 唯一行**（macOS 签入基线；Linux CI 同样绿） |
-| 断点 | desktop 138 / mobile 20 / tablet 4 |
-| 主题 | light 129 / dark 33 |
+| 台账 | **162 个场景-维度 / 0 唯一行** |
 | 四张工单表 | 路由 0 · 文案 0 · 取样路由 0 · 上游 spec pending 1（有判词） |
-| 跑时 | `e2e-parity` 175 passed / 25.4m　`e2e-mock` 295 passed / 2.1m　`verify` 0 |
+| 跑时 | `e2e-parity` 175 passed / 25.0m　`make e2e` 295 passed / 2.0m　`verify` 0 |
 
 ### 本轮清掉的账
 
-| 类别 | 笔数 | 具体 |
-| --- | --- | --- |
-| **两边共有缺陷** | 5 | scope 字面量、「在浏览器重新注册」按钮、`appearance` 写死 240px 列、`skills` 按钮组、`about` 长标题（Linux-only） |
-| **本仓单边真分叉** | **2** | `subtask-card` 漏抄 `min-w-0`（图标推出视口）、sidecar 窄屏 sr-only 标题翻译了（可访问性树） |
-| **尺子的账** | 5 | `hit` 三行、三处终态没定义完（含一条**空断言**）、伪元素尺寸不走几何容差 |
-| **依赖** | 1 | devalue → 5.9.2（升掉，不写「接受」） |
-| **新常驻门禁** | 2 | 设置窄屏余量（10 分区）、窄屏溢出（57 终态） |
-| **扩取样面** | 3 | dark 19→33、`subtask-card` 补 mobile、抽屉里的 ⋯ 菜单接进取样 |
+| 类别 | 具体 |
+| --- | --- |
+| **结构性、两边共有** | 设置对话框栅格在 `md` 以下没有显式列模板——隐式列 `auto` + `min-width:auto` 被内容撑开。实测列宽解析成 296.9px（本仓）/ **500.1px**（上游），而那一格只有 278；上游那块面板**冲出对话框和视口 181px** |
+| **真分叉** | 上游 `ItemActions` 缺 `flex-wrap`。补上之后上游的固有最小宽度 500→297、528→308，**与本仓逐像素相同** |
+| **两边共有** | 「移除 provider 配置」按钮 `whitespace-nowrap`，固有最小宽度 229px，而卡片只有 244 可用 |
+| **门禁的夹具** | `settings-narrow-screen.spec.ts` 接上 `CHANNEL_PROVIDERS`；夹具提到 `tests/support/channel-providers.ts`，两个套件共用一份 |
 
 ### 三条最该记住的
 
-1. **「台账 0 行」可能是两处错误互相抵消。** `streaming-reasoning-order` 改之前
-   两边都在推理块自动收起**之前**采样，一起采到「展开」，于是「一致」。
-   **一个还会自己变的屏幕不算终态。**
-2. **只跑「干净时绿」的话，一条门禁会以永远不会红的形态签进去。**
-   窄屏溢出门禁的判定规则前三版每一版都说得通，是**变异验证**把它们按回去的。
-3. **新仪器第一跑的结果，先假设是仪器错了。** 本轮三次「第一跑一片红」全是假的。
+1. **「门禁覆盖了这个分区」不等于「门禁量到了东西」。**
+   夹具是门禁的一部分，不是背景。十轮绿的那条门禁量的是空面板。
+2. **换了测量对象的尺子不是同一把尺子。**
+   我先量「整个对话框的 min-content vs 实宽」，七个终态负余量——全是噪音，
+   因为对话框宽度本来就被视口硬顶住。换成已验证的「面板 vs 它那格」之后，
+   对照组三条立刻给出 `targetWidth == cell == 278`、余量 37/45/98，与门禁绿读数吻合。
+3. **变异验证又一次推翻了「说得通」的东西。**
+   我以为撤掉栅格那一档门禁会红；实测 `2 passed`——因为按钮改可换行之后
+   固有最小宽度已掉到 278 以下，栅格那条现在是**潜在守卫**。
+   要不是做了变异，我会把「A 也能红」当事实写进这份文档。
 
 ---
 
 ## ⚠ 别再做的事（逐条带读数）
 
-### 1. 动手改之前，先看那份文件自己怎么说的
+### 1. 新仪器第一跑的结果，先假设是仪器错了
 
-第三十八轮差点把「两边内容到达时刻差 280ms」当新账重开——
-`SettingsDialog.vue` 的文件头早写着判词和实测读数。
+本轮又中一次（累计第四轮）：第一把尺子量对话框本身，报出 7 条负余量，
+逐条查下来 `escaped` 全空、`docScrollWidth` 全是 360、横滚只有两条已登记的
+「有意横滚」——**那 7 条里只有 channels 那两条是真的**。
+
+**先拿一个已知答案的样本验仪器，再去读它的结论。**
+本轮的已知样本是 `integrations`：设置门禁说它余量 ≥12，新尺子给 37，对上了。
+
+### 2. 「桌面开对话框 → 缩窗口到 360」会把一部分对话框弄没
+
+实测 `channels#runtime-config` 与 `runtime-config-edit`：
+`dialogsBeforeResize: 1 → dialogsAfter: 0`。桌面侧栏在 <768px 卸载，
+挂在它下面的对话框跟着卸载。**用这个办法扫描时，必须显式记「缩完还在不在」**，
+否则「没量到东西」会长得和「量过、没问题」一模一样。
+
+### 3. 动手改之前，先看那份文件自己怎么说的
+
+本轮又省下一次：`ChannelConnections.vue` 的注释早写着
+「`flex-wrap justify-end` 留着——两边都可能三颗」。那句话直接给出了
+上游缺 `flex-wrap` 这条真分叉的方向。
 **记忆 `deerflow-parity-three-docs` 的同一形状。**
-`ScrollArea.vue`、`SettingsDialog.vue`、`integrations-settings-page.tsx`
-这几份的文件头都很长，而且都带读数，值得先读完。
 
-### 2. `hidden` 断言前面必须有一条 `visible`
+### 4. `hidden` 断言前面必须有一条 `visible`
 
 `locateTarget(...).first()` 匹配不到时是个**空 locator**，而
 `waitFor({ state: "hidden" })` 对不存在的元素**立刻通过**。
-`background-tasks#disabled` 的主角断言就是这么在空壳上绿了很久的。
-**同一轮我自己在 `showcase-public-thread` 上原样又写了一遍。**
 
-### 3. 锚点不能写死英文
+### 5. 锚点不能写死英文
 
-场景跑 en-US 与 zh-CN 两维，导航文案两边词典都翻译了。
-第三十八轮给 `background-tasks` 写 `role=link, name: "New chat"`，zh-CN 三条超时。
-**优先挑夹具里的字符串**（如那个场景的 `mock.threads[].title`）——它不过词典，
-天生语言无关，而且证明的东西更强。
+场景跑 en-US 与 zh-CN 两维。**优先挑夹具里的字符串**（`display_name`、
+`mock.threads[].title`）——它不过词典，天生语言无关，而且证明的东西更强。
+本轮 channels 场景的注释里已经把这条写成判词了。
 
-### 4. 新仪器第一跑一片红 → 先怀疑仪器，别先怀疑应用
+### 6. 本机 `make verify` **不含** `e2e-mock`
 
-本轮三次，全是假的：
+**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2 分钟，295 条）。
 
-| 仪器 | 第一跑 | 真相 |
-| --- | --- | --- |
-| 窄屏溢出扫描 | **43/43 全溢出** | `runScenario` 里的 `applyDimension` 把视口设回 375，我拿 361 去卡 375 宽的页面 |
-| 可访问名扫描 | 22 个终态有无名按钮 | 一条源码注释早判过、一条是 mock 返回 `models: []` |
-| 「点得动吗」扫描 | 7 个终态被挡 | 粘头（滚动位置）/ 背景控件 / `pointer-events:none` |
-
-**先拿一个已知答案的样本验仪器，再去读它的结论。**
-
-### 5. 本机 `make verify` **不含** `e2e-mock`
-
-**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2 分钟，275 条）。
-第三十七轮就是这么漏过一条红的：本机一路绿、CI 才照出来。
-
-### 6. 「逐字对齐上游」不是无条件正确的
+### 7. 「逐字对齐上游」不是无条件正确的
 
 本仓比上游多出来的东西，可能正扛着上游没有的约束。
 **删之前问「它在守什么」，而不是只问「上游有没有」。**
-（`ScrollArea` 那颗 `overflow-hidden` 就是：第三十七轮删过一次，当场被门禁按回来；
-第三十八轮先修掉它守着的那个 0 余量，才真的删得掉。）
+本轮的 `flex-wrap justify-end` 就是反方向的同一条：本仓多出来的那颗类
+正是上游缺的那条账。
 
-### 7. 「余量为 0」和「守住了」长得一模一样
+### 8. 「余量为 0」和「守住了」长得一模一样
 
-只断言「溢出为 0」抓不到「余量为 0」。第二十一轮和第三十七轮各栽一次。
-补门禁时把**余量**直接量出来（把元素临时设成 `width:min-content` 读固有宽度，
-读完还原），门限要盖得过 macOS↔Linux 的字体差（实测约 9px）。
+只断言「溢出为 0」抓不到「余量为 0」。本轮 channels 在 **375px** 上的余量是 **−4**，
+而 `panelOverflow` 在 375 上只有 4——**门限 12 是唯一抓得住 375 那一档的东西**。
+
+### 9. 改 React 的 JSX 注释，别插进三元表达式的分支位置
+
+`{cond ? ( {/* 注释 */} <X/> ) : null}` 是语法错误。注释要放在
+`{cond ? (` **之前**。本轮踩了一次，`pnpm check` 之前先自查 diff 更快。
 
 ---
 
 ## ✅ 已经量过、**别重做**（每条都带读数和判词）
 
-### 窄屏溢出常驻门禁
-
-`tests/e2e-parity/narrow-screen-overflow.spec.ts` 已落地（`e2d4d366`）。
-**这一条留在这里不是待办，是判据**——它的判定规则被变异验证按回来三次：
-
-| 版本 | 规则 | 被什么推翻 |
-| --- | --- | --- |
-| 1 | 越过视口 且 无裁剪祖先 | 变异后**照样绿**（消息列表是 `overflow-y-auto`） |
-| 2 | 算最近裁剪祖先的可滚动右界 | **误报 36 条**（`scrollWidth` 原点不是 `rect.left`） |
-| 3 | 越过视口 且 无可滚祖先 | 又绿（**`sw>cw` 在 `overflow:visible` 上不代表能滚**） |
-| 4 | 把不变量直接说出来 | ✓ |
-
-**⚠ 只跑「干净时绿」的话，一条门禁会以永远不会红的形态签进去。**
-前三版每一版都「说得通」，是变异验证而不是推理把它们按回去的。
-**判据里也不要做算术**——算式自己会错，而且错得很像读数。
-
-当时判好的三件事（已照此实现）：
-
-1. **位置**：`tests/e2e-parity/`（需要 `runScenario`），**只跑一个应用**——问的是
-   「这一屏溢不溢出」，两边一样坏的也要抓。代价约 3 分钟（当前 parity 已 23 分钟）。
-2. **规则必须排除被裁的元素**：「right > 视口宽」会把每一张横向滚动的表格都报进来
-   （`artifact-table-preview` 就是这么误报的）。**逐层往上走，遇到 `overflow` 非
-   `visible` 的祖先就不算。** `subtask-card` 那条是真的，正因为它一路到顶都是
-   `visible`。`documentElement.scrollWidth <= innerWidth` 这一条本身干净，可以直接用。
-3. **两张表而不是快照数字**：**可达且干净** 与 **窄屏下到不了**（14 条，各写原因），
-   两张表恰好划分全集，新增状态必须显式选一边。
-   别写 `checked === 43`——`e2e-suite-contract` 的文件头写过为什么不钉快照数。
-
-⚠ **写探针时的两个坑，我都踩过**：
-- `runScenario` 里的 `applyDimension` 会按 `VIEWPORTS[viewport]` 设视口，
-  **覆盖 `newContext` 的 viewport**。要量 360 必须在它之后再 `setViewportSize`。
-  没注意时我量出「43 个状态全溢出」——那是拿 361 去卡一个 375 宽的页面。
-  **判据：探针里凡是「全都红」，先怀疑探针。**
-- 那 14 条「窄屏下到不了」**本身可能就是账**：比如 `channels` 系列走侧栏点击，
-  而侧栏在手机上是抽屉。到不了不等于没问题，只等于那条路径是按桌面写的。
-
-### 那 14 条「窄屏下到不了」
-
-`narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 里躺着 14 条，
-**十二条同一个根因**：桌面侧栏在手机上不渲染（换成 Sheet 抽屉），
-于是 `[data-sidebar='sidebar']` 以及侧栏里那些会话行的定位器永远解析不到。
-
-**「到不了」不等于「没问题」，只等于那条路径是按桌面写的。**
-
-⚠ **但也别把这 14 条当成 14 块没人看的屏**——逐条对过之后，
-**真正没有窄屏覆盖的只有 5 块**：
-
-| 到不了的终态 | 那块屏别处有没有窄屏覆盖 |
-| --- | --- |
-| `channels` ×5 | **有**（实测）：`settings-narrow-screen.spec.ts` 按 `SETTINGS_SECTIONS` 覆盖 `?settings=channels`，375/360 两档含余量 |
-| `thread-list-pin` | **有**：同一场景的 `#mobile-drawer` 终态本来就跑 mobile |
-| `thread-history` | ~~大概率有~~ **已订正并补上**，见下 |
-| `thread-title-sync` | ~~没有~~ **已订正并补上**，见下 |
-| `artifact-batched-stream` | **大概率有**（仍未逐屏核）：`artifact-preview` 有 mobile 维，是同一块面板 |
-| `sidebar` | **部分**：移动抽屉由 `thread-list-pin#mobile-drawer` 与 `ui-polish-mobile` 采着 |
-| `agent-create-name-step` | **没有** |
-| `browser-feature` | **没有** |
-| `sidecar-chat` | **没有** |
-| `thread-title-sync` | **没有**（侧栏行内的 ⋯ 菜单） |
-| `workspace-changes#reasoning-menu` | **没有**（`#changes-panel` 也没有 mobile 维） |
-
-**那 4 块已经在同一轮查完了**——逐条在 360px 上**两个应用各跑一遍**：
-
-| 场景 | 判 |
-| --- | --- |
-| `agent-create-name-step` / `browser-feature` / `workspace-changes#reasoning-menu` | **不是缺口**：两边卡在同一个定位器，那几条路径/功能在手机上两边都一样 |
-| `sidecar-chat` | **有差异**，已修：窄屏 sr-only 的 `SheetTitle` 本仓翻译了、上游写死英文，读屏器听到的两边不一样。搬进 `primitives.*` 后两边停在同一步 |
-
-**判据：这一类排查必须两个应用各跑一遍。** 只跑本仓的话，「到不了」看起来
-永远像本仓的问题——实测 4 条里 3 条是两边一样的。 做法是照 `thread-list-pin#mobile-drawer`
-的样子**另开一个 mobile 终态**（先开抽屉再走），而不是改现有终态的步骤——
-步骤是跨维度共用的，加一句「点开抽屉」会把桌面那几维弄坏。
-
-⚠ 表里「大概率有」那条**是推断不是读数**，动手前先量一眼。
-
-#### 我自己那条推断当场就被量翻了（2026-09-18，同一轮）
-
-我写「`thread-history` 那块屏由 `chat` 的 mobile 维采着」——**错的**。
-去读那个场景才发现它根本不是消息流，是**侧栏会话列表 + 会话行的 ⋯ 菜单**，
-和 `thread-title-sync` 是同一块面。
-
-而 `thread-list-pin#mobile-drawer` 那个终态开了抽屉、断言 ⋯ 按钮**可见**，
-**但从没点开它**——于是那块菜单在窄屏上一格都没采过。
-所以做法不是给两个场景各开一个 mobile 终态，而是**把已有那个终态多点一下**：
-点开 ⋯ → 断言置顶/重命名/删除 → 展开导出子菜单。
-实测：新增那一维 **0 行**，窄屏溢出门禁也绿。
-
-**判据：说「那块屏别处采着呢」之前，先去读那个场景到底在量什么。**
-场景 id 常常和它实际覆盖的面对不上（`thread-history` 听起来像消息流，
-其实是侧栏）。
-
-### 六条单应用不变量的完整账 —— 三条有收获、三条没有
-
-本轮真正有收获的仪器有个共同点：**都是单应用不变量**（窄屏溢出、终态稳定、
-面板余量），而不是加维度——因为两应用台账**天生看不见「两边一样坏」**。
-
-已经扫过、**别重做**：
+### 六条单应用不变量（第三十八轮）
 
 | 不变量 | 读数 |
 | --- | --- |
-| 窄屏溢出（57 终态） | 1 条真分叉（`subtask-card`），已修并做成常驻门禁 |
+| 窄屏溢出（57 终态） | 1 条真分叉，已修并做成常驻门禁 |
 | 终态稳定（57 终态） | 4 条，含一条**一直在空壳上通过**的断言，已修 |
-| 设置面板窄屏余量（10 分区） | 2 条共有缺陷 + CI 上第 3 条（Linux-only），已修并常驻 |
-| **可访问名**（57 终态 ×2 应用） | **真分叉 0 条**；「共有缺陷」全是已判过的或夹具造成的，**不值得常驻**（判词见 open-accounts 第十四节） |
-| **语言 × 窄屏**（42 可达终态，zh-CN） | **0 条溢出**。中文可在任意字符间断行，min-content 反而更小——撑破布局的是不给换行机会的长 token，那是英文那侧的形状（判词见第十五节） |
-| **「点得动吗」**（57 终态 ×2 应用） | 收紧后 **0 条**；第一版那 7 条全是噪音（粘头、背景控件、`pointer-events:none`）。**不值得常驻**（判词见第十六节） |
+| 设置面板窄屏余量（10 分区） | 2 条共有缺陷 + CI 上第 3 条，已修并常驻 |
+| **可访问名**（57 终态 ×2 应用） | **真分叉 0 条**，不值得常驻（open-accounts 第十四节） |
+| **语言 × 窄屏**（42 可达终态 zh-CN） | **0 条溢出**（第十五节） |
+| **「点得动吗」**（57 终态 ×2 应用） | 收紧后 **0 条**（第十六节） |
 
-还没试过的方向（各自要先当探针量一遍、有收获再常驻）：
-`aria-hidden` 里套可聚焦元素、重复的可访问名、焦点陷阱、对比度、
-**同一处内容在 dark 下的对比度**。
+### 对话框窄屏扫描（第三十九轮）
 
-⚠ **「点得动吗」已经扫过了，0 条，别重做**（第十六节）。
+**23 个终态开着对话框，全量量过一遍。** 负余量七条里只有 channels 那两条是真的，
+其余是「有意横滚」（`artifact-table-preview` −271 / `artifact-batched-stream` −133、−97 /
+`workspace-changes#changes-panel` −25，都含已登记的表格或 `pre`）
+或尺子对象错了的产物（`browser-feature` −3、`background-tasks#drawer` 余量 10）。
+**别拿「整个对话框的 min-content」当判据重扫一遍。**
 
-⚠ **新仪器第一跑的结果，先假设是仪器错了。** 本轮三次「第一跑一片红」全是假的：
-窄屏溢出 43/43（视口被 harness 改回去了）、可访问名 22 个终态（已判过 + 夹具）、
-「点得动吗」7 个终态（粘头 + 背景控件）。
-**先拿一个已知答案的样本验仪器，再去读它的结论。**
+### 已量到的负结果
+
+- 8 条产品路由在 360px 默认态全干净（`documentElement.scrollWidth === 360`、越界元素 0）；
+- `subagent-editor` 对话框有富余（dialog 328 / min-content 218）。
+  **缺陷在对话框的内容里，不在路由本身。**
+
+### 320px 那 3px（低优先，取舍已写）
+
+两边一起溢出 3px，同值、不是对照问题、不在受支持档里。
+翻案判据：哪天 320px 进了受支持档，回来重量那条链。
 
 ---
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 挑下一条**单应用不变量**（方向已验证：六条里三条有收获）
+### 1. 把「窄屏到不了」那 14 条真的量掉
+
+`narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 里躺着 14 条，
+十二条同一个根因：桌面侧栏在手机上不渲染。
+**第三十九轮证明了「桌面开 → 缩到 360」够得到其中一部分**——channels 那两条
+就是这么量出来的。但它对**侧栏拥有的对话框**无效（见「别再做的事」第 2 条）。
+
+做法：给那条门禁加第二轮扫描（桌面开、缩到 360），并且**显式断言「缩完对话框还在」**；
+缩完没了的，单独一张表，各写原因。已知会掉的两条：
+`channels#runtime-config` / `channels#runtime-config-edit`。
+
+### 2. `settings-narrow-screen.spec.ts` 里仍然量空面板的四个分区
+
+`tools` / `subagents` / `skills` / `integrations` 有列表而共享 mock 给空。
+（另外五个 `account` / `appearance` / `notification` / `memory` / `about` 本来就没有列表，
+`channels` 这一轮已经接上。）
+**做法照 channels 那一笔**：把夹具放进 `tests/support/`，两个套件共用一份。
+
+⚠ 这一条的价值已经被本轮实证过一次了：同样的「覆盖了但没量到」，
+channels 那一笔一装夹具就是两边都红。
+
+### 3. 上游那一侧没有任何门禁钉着这一类
+
+`settings-narrow-screen` 只跑本仓；而 `channels#settings-panel` 没有 mobile 维
+（场景的 settle 要桌面侧栏），所以对照台账也看不见。
+**上游单边回归会没人发现。** 两条路：给那个场景补一条「先开抽屉」的 mobile 终态，
+或者把窄屏余量断言加进 parity 取样（单独断言，不进台账）。
+
+### 4. 挑下一条**单应用不变量**（方向已验证）
 
 还没试过的，各自**先当探针量一遍、有收获再常驻**：
 `aria-hidden` 里套可聚焦元素、重复的可访问名、焦点陷阱、**dark 下的对比度**。
-
 ⚠ 上面那张表里标 0 条的**别重做**。
-⚠ **新仪器第一跑一片红 → 先怀疑仪器**（「别再做的事」第 4 条）。
 
-### 2. 对话框的窄屏扫描 —— **别再逐个手接入口**
-
-设置对话框的十个分区已经有门禁了（见上）。**同一类缺陷的下一块地是别的对话框**：
-`AgentSettingsDialog` / `ChannelRuntimeConfigDialog` / `SubagentEditorDialog` /
-`ComposerModelSelector` / `ProjectMoveDialog` / `MarkdownTable` / `MermaidFullscreen`
-等，一共 18 个带 `DialogContent` 的组件。
-
-⚠ **第三十八轮试过逐个手写触发器，两个都卡在打不开（30 秒超时），不是量到了什么。**
-parity 场景表里**已经编码了到达这些状态的步骤**（`channels#runtime-config-edit` 等），
-正确做法是复用 `runScenario`。挡路的是套件边界：`scenarios.ts` 在
-`tests/e2e-parity/` 下，e2e-mock 不该反向依赖它（`e2e-suite-contract` 管着）。
-**先判这个再动手**，两条路：
-
-- 把窄屏溢出断言加进 parity 取样（跑得到两个应用；但台账看不见「两边一样坏」，
-  要单独断言而不是进台账）；
-- 或者把场景表提到两个套件都能引的一层。
-
-**已量到的负结果，别重做**：8 条产品路由在 360px 默认态全干净
-（`documentElement.scrollWidth === 360`、越界元素 0）；`subagent-editor`
-对话框有富余（dialog 328 / min-content 218）。**缺陷在对话框里，不在路由本身。**
-
-### 3. 系统查一遍「终态没定义完」的场景 —— 已经做过一轮，工具留着
-
-`streaming-reasoning-order` 的 `settle` 只写到「第一眼看到的东西出现」，
-而那一屏之后还会自己变一次，于是它的「0 行」一直是假的。
-**历轮加进来的场景里有多少条是这样，没人系统查过。**
-
-排查办法（只需要跑**一个**应用——问的是「这一屏自己稳不稳」，不是「两边一不一样」）：
-跑一遍场景，`settle` 之后隔 1.5 秒再读一次 `document.body.innerText`，两次不同的
-就是终态没定义完的。约 57 个场景键，估计 5–6 分钟。
-
-⚠ 这个办法只抓得到**文本**变化；属性（`aria-expanded`）与样式（颜色过渡）
-它看不见。抓到的每一条都要按 `streaming-reasoning-order` 那样补终态断言，
-**不要用 `waitForTimeout` 顶**。
-
-### 4. 继续扩取样面（tablet 只有 4 个样本，是最薄的一条轴）
-
-
-
-四张工单表里三张归零、一张剩 1 条（读数见下），台账在 macOS 与 Linux 上同时是 0。
-**剩下的不是「还有多少没做」，是「还有多少没被看见」。**
+### 5. 继续扩取样面（tablet 只有 4 个样本，是最薄的一条轴）
 
 - `baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由取样点最少；
 - 对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景（棘轮会红）；
 - 加新场景要**给它加终态断言**，否则「零差异」可能只是「压根没采到」。
 
-**校准用的轶事**（是轶事不是统计）：第三十七轮结清的 5 笔里有 **3 笔是六档全盲的**
-——拖拽手柄属性、菜单焦点释放、整层漏掉的面板外框，aria 树 / 几何锚点 / 请求
-一个都没报出来，全靠临时写探针照出来的。
-
-### 5. 320px 那 3px（低优先，取舍已写）
-
-两边一起溢出 3px，同值、不是对照问题、不在受支持档里。
-要动就得动徽标的 `whitespace-nowrap` 或第四层内边距，**没有读数支持**。
-翻案判据：哪天 320px 进了受支持档，回来重量那条链。
-
 ### 6. 工单表读数（会漂，自己重量）
 
 ```
-react-parity-scope.json  → pendingRoutes        0     （18 条 page.tsx − 4 条豁免）
-upstream-i18n-map.json   → pending.keys         0     （2026-09-10 达成）
-parity-route-sampling.json → pending            0     （exempt 4）
-parity-scenario-coverage.json → pending         1     artifact-table-performance
-                                                      **已有完整判词，别重新问**
-                              covered 37 / exempt 3
+react-parity-scope.json  → pendingRoutes.routes  0     （注意它是个对象，不是数组）
+upstream-i18n-map.json   → pending.keys          0
+parity-route-sampling.json → pending             0     （exempt 4）
+parity-scenario-coverage.json → pending          1     artifact-table-performance
+                                                       **已有完整判词，别重新问**
 ```
 
 ---
@@ -381,8 +270,35 @@ PARITY_ONLY=thread-history node scripts/keep-e2e-failure-artifacts.mjs -- \
   -c playwright.parity.config.ts diff.spec.ts
 ```
 
-该模式**既不比基线也不 accept**，结果打在 console 上（`取样计数` 之后那段 JSON），
-还附 `REQUESTS` 与 `TABBABLES` 两段全量清单。
+### 一次性探针：写 `tests/e2e-parity/zz-*.spec.ts`，用完即删
+
+**必须用 `runScenario(page, base, scenario, dimension, state)` 把场景跑到位**
+（自造夹具会失败）。第三十九轮用的四个形状：
+
+1. **全量扫描**：遍历 `PARITY_SCENARIOS × scenarioStates`，每个终态拍一次快照；
+2. **min-content 承重链**：从根往下，每层把元素临时设成 `width:min-content` 读固有宽度，
+   挑「不超过父亲 min-content」的最宽孩子继续。
+   ⚠ **break 的门限不能写 `mine - 1`**：一层 `rounded-lg border` 就差 2px，
+   链会在第一层就断掉（本轮踩过，改成 `mine - 4` 才走得下去）；
+   ⚠ **`w-full` 的孩子固有宽度更大但不参与**；
+   ⚠ 在**横向 flex 容器**里逐个量孩子不可靠——设一个孩子的宽度会让兄弟重排。
+   量到 flex 容器那一层就停，改成直接列「固有最小宽度 ≥ N 的元素」。
+3. **直接开到位**：`applyScenarioBackend` + `applyScenarioStubs` + `goto(URL)`，
+   **不缩窗口**——用来复核「缩窗口」那条路子有没有造出假读数（本轮复核成立）。
+4. **截图**：`page.screenshot()` 两个应用各一张。**最后判「用户看得见吗」只有它说了算**。
+
+### 变异验证（**门禁签入前必做**）
+
+```bash
+# 备份 → 撤掉修正 → 跑门禁 → 还原 → 再跑一次确认绿
+cp <file> $SCRATCH/<file>.bak
+# ...改...
+make e2e / playwright test -c playwright.config.ts <spec> --grep <name>
+cp $SCRATCH/<file>.bak <file>
+```
+
+⚠ **别用 `git checkout -- <file>` 还原**——它会把你这一轮在那个文件里写的
+注释一起回滚。本轮踩过一次，注释重写了一遍。
 
 ### Linux 定点复量
 
@@ -394,39 +310,10 @@ gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
 **读产物，别读颜色**——该模式下那次 run 一定是绿的，结论在 artifact
 `parity-failures` 的 `e2e-parity/report.json` 里。
 
-### 探针四件套（历轮靠它定位到源码看不出来的根因）
-
-写一份 `tests/e2e-parity/zz-*.spec.ts`，**用
-`runScenario(page, base, scenario, dimension, state)` 把场景跑到位**
-（自造夹具会失败），然后在两个应用上各拍一次快照 `console.log` 出来，用完即删：
-
-1. **焦点快照**：`document.activeElement` + 各菜单项 `tabindex` → 定位到账 K；
-2. **文本快照**：`JSON.stringify(el.textContent)` + `getComputedStyle(el).font`
-   → 照出上游的句首空格；
-3. **祖先链**：逐层 `width` / `padding` / `borderLeftWidth`
-   → 照出整层漏掉的 `Artifact` 外框；
-4. **min-content 承重链**（第三十八轮新增）：从根往下走，每层把元素临时设成
-   `width:min-content` 读固有宽度、挑最大的孩子继续，走出承重链。
-   ⚠ **`w-full` 的孩子固有宽度更大但不参与**，要按「不超过父亲的 min-content」过滤，
-   否则会一路走进 `<input>` 的默认 `size` 里。
-   ⚠ **一个终态只是一个取样面**：第三十八轮先只量了 `default` 态，
-   结果门禁在「换 Lark 应用」态上照样红——**门禁点开的每一个态都要各量一遍**。
-
-### 时间线/动画探针（第三十八轮新增）
-
-`page.addInitScript` 里挂一个 rAF 循环打点（`performance.now()`），量
-「对话框出现 → 内容出现 → 动画跑完」。
-⚠ **别把 `performance.now()` 和 `Date.now()-t0` 混着比**——
-前者以文档开始为原点，后者以 `goto` 之前为原点，两个时钟差一大截，
-我照着它推出过一个不存在的矛盾。
-⚠ 动画时长要读**声明值**（`effect.getComputedTiming().duration`），不要用墙钟差
-——墙钟的起点边噪声能造出 200 vs 179 这种假差异。
-
 ### 截图归属
 
 `diff.spec.ts` 里 `captureScenario` **先采 Vue、再采 React**，
-所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React（`i` 是该场景键在
-`report.json` 里的序号）。**别按奇偶猜**。
+所以 `test-failed-<2i+1>` 是 Vue、`<2i+2>` 是 React。**别按奇偶猜**。
 
 ---
 
@@ -439,8 +326,8 @@ gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
 - **总数不是读数**——它会被「尺子变准」和「修好差异」两个相反方向同时推动；
 - **「源码一样」不等于「运行时一样」**；反过来，**「文档写过」不等于「现在还成立」**，
   但**「文件头写过并带读数」通常就是判词**，重开之前先读它；
-- **「台账 0 行」不等于「这一屏对齐了」**——它还可能是**两边一起采早了**，
-  两处错误互相抵消（第三十八轮 `streaming-reasoning-order` 实证）；
+- **「台账 0 行」不等于「这一屏对齐了」**——它还可能是两边一起采早了；
+- **「门禁绿」不等于「这一屏没问题」**——它还可能是**夹具是空的**（第三十九轮实证）；
 - **尺子报出差异时先问：两边用户看到的东西有没有区别**——角色/几何/可达性全同、
   只差一颗内部样式钩子或只差一个时长，那是尺子的问题，不是应用的问题。
 
@@ -452,8 +339,10 @@ gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
 **用 `run_in_background` 起一次然后等通知**，不要开 `while pgrep; do sleep; done` 轮询。
 要串行跑多套就写成一条命令（`make a > a.log; echo "A=$?" >> a.log; make b > b.log; ...`）。
 
-⚠ **门禁的退出码要卡住提交**，不能只打印——第三十七轮把 `make verify` 和
-`git commit && git push` 串在一条命令里，看到 `VERIFY_EXIT=2` 时已经推出去了。
+⚠ **门禁的退出码要卡住提交**，不能只打印。
 
 ⚠ **`frontend-vue parity` 的并发组是 `cancel-in-progress`**：run 跑着时推送会把它取消。
 纯 docs 提交不匹配 `paths:`，推了既不触发也不取消。
+
+⚠ **改了 React 侧要另外跑 `cd frontend && pnpm check` 与 `pnpm format`**——
+`make verify` 只管 `frontend-vue/`。

@@ -4056,6 +4056,101 @@ harness 从不在 zh-CN 下跑它。**谁哪天给它加 zh-CN 维，先回来�
   这个探针跑的是默认语言。两者不矛盾。
 
 
+## 2026-09-18 第三十九轮：对话框窄屏扫描——**「门禁覆盖了」不等于「门禁量到了」**
+
+### 一、结论先写：这一轮的缺陷是**门禁自己的夹具**放进来的
+
+`settings-narrow-screen.spec.ts` 从第三十八轮起就按 `SETTINGS_SECTIONS` 覆盖**全部十个**
+分区、两档宽度、带余量门限，十轮以来一直绿。而它用的是共享 mock 的默认值：
+
+    GET /api/channels/providers  →  { enabled: false, providers: [] }
+
+**它量的是一块空面板。** 装上对照场景那份 `CHANNEL_PROVIDERS` 之后同一条断言当场红，
+而且两个应用都红：
+
+| 读数（360px，`?settings=channels`，直接开、不缩窗口） | 本仓 | 上游 |
+| --- | --- | --- |
+| 那一格宽 | 278 | 278 |
+| 面板实宽 / 固有最小宽度 | 297 | **500** |
+| `panelOverflow`（= 实宽 − 格子） | **+19** | **+222** |
+| 面板右边界（对话框右边界 344，`overflow: visible`） | 338 | **541** |
+| `settings-panel-connected` 那一支 | +30 | **+250** |
+
+上游那块面板**冲出对话框和视口 181px**。
+
+**判据（新）：一条门禁的夹具是它的一部分，不是背景。**
+「每个分区都有用例」和「每个分区都量到了东西」是两回事——
+后者要问的是「这一屏上有东西吗」。
+
+### 二、根因三层，全部两边同改
+
+1. **设置对话框的栅格在 `md` 以下没有显式列模板**（两边同一行代码）。
+   `grid min-h-0 flex-1 gap-4 md:grid-cols-[220px_minmax(0,1fr)]` —— md 以下隐式列是
+   `auto`，栅格项的 `min-width` 默认 `auto`，于是**列被内容的固有最小宽度撑开**。
+   实测列宽解析成 `296.859px` / `500.094px`，而那一格本该是 278。
+   修法：补一档基础 `grid-cols-[minmax(0,1fr)]`。
+   **为什么修列不修面板**：md 以下 `nav` 和面板在同一列里，列的最小宽度取两者较大值。
+2. **上游 `ItemActions` 缺 `flex-wrap`**（真分叉）。本仓是 `ml-auto flex-wrap justify-end`，
+   文件里还写着判词「两边都可能三颗」；上游只有 `ml-auto`。补上之后**上游的固有最小宽度
+   从 500 掉到 297、528 掉到 308，与本仓逐像素相同**——这是这两条修正都对的最强证据。
+3. **「移除 provider 配置」那颗按钮 `whitespace-nowrap`**（两边共有）。
+   Button 基类就是 `whitespace-nowrap`，而这颗键文案最长：**固有最小宽度 229px**，
+   而那张卡片只有 244 可用（面板 276 − 外层 `p-4` 的 32）。
+   加上卡片自己的 `p-4`(32) + 图标位(32) + 两道 `gap-2`，卡片固有最小宽度 **263**。
+   修法用的是第三十八轮「在浏览器重新注册」那一笔的同一串类：
+   `h-auto min-h-8 py-1 whitespace-normal`。
+
+修完之后 `gridCols` 两边都是 `278px`、`panelWidth == cell`、`panelRight 319 < 344`。
+
+### 三、变异验证：三条变异，**其中一条证明我的第二条修正当前验不到**
+
+| 变异 | 结果 |
+| --- | --- |
+| A：只撤栅格那一档 | **绿**（`2 passed`） |
+| B：只撤按钮那一串 | **红**：余量 −19（360）/ −4（375） |
+| C：两条都撤 | **红**：`panelOverflow` 19（360）/ 4（375） |
+
+**A 为什么绿**：按钮换行之后面板的固有最小宽度掉到 278 以下，隐式列就不会被撑开了——
+栅格那一档现在是**潜在守卫**，守的是下一条长文案。这一句已经写进
+`SettingsDialog.vue` 的注释，连同翻案判据。
+
+⚠ **值得单独记一笔**：要不是做了变异验证，我会把「A 也能红」当成事实写进交接文档。
+**「说得通的东西」和读数长得一模一样**，这是第 N 次。
+
+### 四、仪器的两笔账（都是我自己的）
+
+1. **第一把尺子量错了对象。** 我先量的是「整个对话框的 min-content vs 它的实宽」，
+   七个终态给出负余量。但 `escaped` 全空、`docScrollWidth` 全是 360、横滚只有两条
+   已登记的——**对话框宽度本来就被视口硬顶住，负余量在那个对象上不代表任何东西**。
+   承重链给出的 347−297=50 正好是 `p-6`+边框，才看出该量的是面板那一层。
+   已验证有效的那把尺子（`settings-narrow-screen` 的「面板 vs 它那格」）换上去，
+   对照组三条立刻给出 `targetWidth == cell == 278`、余量 37/45/98，与门禁的绿读数吻合。
+   **判据：换了测量对象的尺子不是同一把尺子，先拿已知答案的样本验它。**
+2. **「桌面开对话框再缩到 360」会把一部分对话框弄没。** `channels#runtime-config`
+   与 `runtime-config-edit` 实测 `dialogsBeforeResize: 1 → dialogsAfter: 0`——
+   桌面侧栏在 <768px 卸载，挂在它下面的对话框跟着卸载。
+   **这两块屏我那一跑根本没量到**，是下一笔账。
+
+### 五、这一轮量到的对话框全集（23 个终态开着对话框）
+
+负余量七条里，`artifact-table-preview`(−271) / `artifact-batched-stream`(−133/−97) /
+`workspace-changes#changes-panel`(−25) 都含已登记的「有意横滚」（表格、`pre`），
+`browser-feature`(−3) 与 `background-tasks#drawer`(余量 10) 是尺子对象错了的产物。
+**真账只有 channels 那两条**，已结清。
+
+### 六、还没量到的（下一轮）
+
+- `channels#runtime-config` / `runtime-config-edit` 两块对话框（缩窗口会把它们弄没）；
+- `narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 那 14 条，
+  「桌面开→缩到 360」是够得到它们的路子，但要先解决上面那条；
+- `settings-narrow-screen.spec.ts` 里仍然量空面板的四个分区：
+  `tools` / `subagents` / `skills` / `integrations`（共享 mock 给空列表）。
+  另外五个（`account` / `appearance` / `notification` / `memory` / `about`）本来就没有列表。
+- **上游那一侧没有任何门禁钉着这条**：`settings-narrow-screen` 只跑本仓，
+  而 `channels#settings-panel` 没有 mobile 维（场景的 settle 要桌面侧栏），
+  所以对照台账也看不见。上游单边回归会没人发现。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里
