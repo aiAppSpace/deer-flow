@@ -3,22 +3,43 @@ import * as React from "react";
 const MOBILE_BREAKPOINT = 768;
 const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 
-function subscribe(callback: () => void) {
-  const mql = window.matchMedia(MOBILE_QUERY);
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
-}
-
-function getSnapshot() {
-  return window.matchMedia(MOBILE_QUERY).matches;
-}
-
 function getServerSnapshot() {
   return false;
 }
 
-export function useIsMobile() {
+/*
+  Read any media query as a boolean, with the same hydration contract as
+  `useIsMobile`: the server snapshot is `false`, and the first post-hydration
+  render reports the real value.
+
+  This exists because a control that is hidden with a `sm:` utility can still
+  own an *open* overlay, and neither Radix nor Reka closes that overlay when the
+  trigger's box collapses to 0x0 — the popper just re-anchors to the origin.
+  Measured at a 700px viewport with the reasoning-effort menu open, resizing to
+  600px (crossing `sm`): the trigger goes to `[0, 0, 0]` while the menu stays
+  `aria-expanded="true"` and parks itself at `[0, 4, 280]`, floating in dead
+  space far from the composer. Both apps did this, identically. Resizing from
+  1280px hid the shared bug, because crossing `md` remounts this subtree and the
+  remount closed the menu — which is why it first looked like a Vue-only defect.
+*/
+export function useMediaQuery(query: string) {
+  const subscribe = React.useCallback(
+    (callback: () => void) => {
+      const mql = window.matchMedia(query);
+      mql.addEventListener("change", callback);
+      return () => mql.removeEventListener("change", callback);
+    },
+    [query],
+  );
+  const getSnapshot = React.useCallback(
+    () => window.matchMedia(query).matches,
+    [query],
+  );
   return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+export function useIsMobile() {
+  return useMediaQuery(MOBILE_QUERY);
 }
 
 /*

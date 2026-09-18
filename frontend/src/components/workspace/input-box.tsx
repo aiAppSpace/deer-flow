@@ -115,6 +115,7 @@ import {
   type BrowserSpeechRecognition,
   type SpeechRecognitionErrorKind,
 } from "@/core/voice-input/speech-recognition";
+import { useMediaQuery } from "@/hooks/use-mobile";
 import { isIMEComposing } from "@/lib/ime";
 import { cn } from "@/lib/utils";
 
@@ -164,6 +165,14 @@ import { Tooltip } from "./tooltip";
 type InputMode = "flash" | "thinking" | "pro" | "ultra";
 
 const COMPOSER_DRAFT_SAVE_DELAY_MS = 300;
+
+/*
+  The `sm:` breakpoint that `PromptInputActionMenuTrigger` below uses to hide the
+  reasoning-effort button. Kept in sync by hand with the `sm:inline-flex` on that
+  trigger; see `useMediaQuery` in hooks/use-mobile.ts for why the menu has to be
+  controlled at all, and settings-narrow-screen-style gates for the readings.
+*/
+const REASONING_TRIGGER_VISIBLE_QUERY = "(min-width: 40rem)";
 
 function focusContentEditableEnd(element: HTMLElement | null) {
   if (!element) {
@@ -364,6 +373,18 @@ export function InputBox({
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
+  /*
+    Controlled so the menu can be closed when its trigger stops being rendered:
+    a `hidden sm:inline-flex` trigger collapses to a 0x0 box below `sm` while the
+    menu stays open and re-anchors to the viewport origin. Mirrored in Vue.
+  */
+  const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
+  const reasoningTriggerVisible = useMediaQuery(
+    REASONING_TRIGGER_VISIBLE_QUERY,
+  );
+  useEffect(() => {
+    if (!reasoningTriggerVisible) setReasoningMenuOpen(false);
+  }, [reasoningTriggerVisible]);
   const { models } = useModels();
   const { user } = useAuth();
   const { thread, isMock } = useThread();
@@ -2622,7 +2643,10 @@ export function InputBox({
               </PromptInputActionMenuContent>
             </PromptInputActionMenu>
             {supportReasoningEffort && context.mode !== "flash" && (
-              <PromptInputActionMenu>
+              <PromptInputActionMenu
+                open={reasoningMenuOpen}
+                onOpenChange={setReasoningMenuOpen}
+              >
                 <PromptInputActionMenuTrigger
                   className="hidden gap-1! px-2! sm:inline-flex"
                   disabled={composerLocked}

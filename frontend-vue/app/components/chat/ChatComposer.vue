@@ -47,6 +47,7 @@ import ComposerSurface from "@/components/chat/ComposerSurface.vue";
 import WelcomeSuggestionList from "@/components/chat/WelcomeSuggestionList.vue";
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
 import type { SidecarReference } from "@/composables/useSidecar";
+import { useMediaQuery } from "@/composables/useMediaQuery";
 import { useComposerDraft } from "@/composables/useComposerDraft";
 import { useModels } from "@/composables/useModels";
 import { useSkillsCatalog } from "@/composables/useSkillsCatalog";
@@ -610,6 +611,33 @@ function selectModel(model: Model) {
 const supportsReasoningEffort = computed(
   () => selectedModel.value?.supports_reasoning_effort === true,
 );
+/*
+  **`sm:` 以下那颗推理深度键被 CSS 隐藏，但菜单会留在开着的状态**
+  （2026-09-18 第三十九轮实测，两边共有）。
+
+  在 700px 上打开菜单再缩到 600px（跨 `sm` = 40rem）：
+
+      触发器  [180, 739, 162]  →  [0, 0, 0]
+      菜单    [180, 409, 280]  →  [0, 4, 280]，aria-expanded 一直是 "true"
+
+  也就是**一块悬在左上角、离输入区十万八千里的菜单**，再 resize 也不纠正
+  ——popper 老老实实锚在那个 0×0 的盒子上。Radix 与 reka-ui 都不管这件事。
+
+  ⚠ **这条账差一点被判成「本仓单边」**：从 1280px 缩下来时上游先跨 `md`，
+  那一下把输入区整块重挂（实测触发器节点身份变了），菜单跟着没了，
+  于是上游看起来是对的。从 700px 起步——已经过了重挂点——**两边逐像素相同**。
+  判据：推翻一次实测只能靠另一次实测。
+
+  所以菜单改成受控，并在触发器不再渲染时关掉。查询字符串与下面那颗按钮的
+  `sm:inline-flex` 是同一档，改一处要改两处。上游同改
+  （input-box.tsx 的 REASONING_TRIGGER_VISIBLE_QUERY）。
+*/
+const reasoningTriggerVisible = useMediaQuery("(min-width: 40rem)");
+const reasoningMenuOpen = ref(false);
+watch(reasoningTriggerVisible, (visible) => {
+  if (!visible) reasoningMenuOpen.value = false;
+});
+
 const reasoningEfforts = computed(() => [
   {
     id: "minimal" as const,
@@ -1982,6 +2010,7 @@ defineExpose({ replaceDraft, offerFollowup });
             </DropdownMenu>
             <DropdownMenu
               v-if="supportsReasoningEffort && explicitMode !== 'flash'"
+              v-model:open="reasoningMenuOpen"
             >
               <DropdownMenuTrigger>
                 <!--

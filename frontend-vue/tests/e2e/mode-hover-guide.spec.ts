@@ -144,6 +144,45 @@ test("lets the reasoning effort be overridden independently of the mode", async 
   await expect(effortTrigger).toHaveText(/Reasoning Effort:\s*High/);
 });
 
+/*
+  **触发器被 CSS 隐藏时，它那块菜单必须跟着关。**
+
+  那颗键的类是 `hidden gap-1! px-2! sm:inline-flex`——`sm`（40rem）以下它的盒子
+  塌成 0×0，而 popper 会**老老实实锚在那个 0×0 上**。2026-09-18 第三十九轮实测
+  （700px 开菜单，缩到 600px 跨过 `sm`）：
+
+      触发器  [180, 739, 162]  →  [0, 0, 0]
+      菜单    [180, 409, 280]  →  [0, 4, 280]，aria-expanded 一直是 "true"
+
+  也就是一块悬在左上角、离输入区十万八千里的菜单，再 resize 也不纠正。
+  **两个应用当时一模一样**，按两边同改修（上游是 input-box.tsx 的
+  `REASONING_TRIGGER_VISIBLE_QUERY`）。
+
+  ⚠ 这条账差点被判成本仓单边：从 1280px 缩下来时上游先跨 `md`、把输入区整块重挂，
+  菜单跟着没了，看起来上游是对的。**从 700px 起步才看得见共有的那一半。**
+  所以这条用例的起点宽度是 700，不是 1280——改它之前先读这一段。
+
+  断言挑 `aria-expanded` 与菜单节点数，不挑几何：几何是症状，状态才是判据。
+*/
+test("closes the reasoning effort menu when its trigger stops being rendered", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await openWorkspace(page, "/workspace/chats/new");
+
+  const effortTrigger = page.getByTestId("composer-reasoning-effort-trigger");
+  await expect(effortTrigger).toBeVisible();
+  await effortTrigger.click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await expect(effortTrigger).toHaveAttribute("aria-expanded", "true");
+
+  // 跨过 `sm`：那颗键从这里开始是 `hidden`。
+  await page.setViewportSize({ width: 600, height: 800 });
+
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(effortTrigger).toHaveAttribute("aria-expanded", "false");
+});
+
 test("hides the reasoning effort control in flash mode", async ({ page }) => {
   // flash 的语义就是不推理，给它一个强度选择器没有意义（与 React 同条件）。
   await openWorkspace(page, "/workspace/chats/new");
