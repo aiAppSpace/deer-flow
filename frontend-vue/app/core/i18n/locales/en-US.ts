@@ -95,6 +95,11 @@ export const enUS: Translations = {
     submit: "Submit",
     stop: "Stop",
     skillSuggestions: "Skill suggestions",
+    /*
+      上游 `slash-skill-chip.tsx:29` 的 `Remove /${name}`——**写死英文、不进它自己的
+      词典**，所以两种语言同一串（同 `close` / `toggleSidebar` 的判据）。
+    */
+    removeSlashSkill: (name: string) => `Remove /${name}`,
     modelSelector: "Model Selector",
     /*
       上游 `todo-list.tsx:65` 的 `<div>To-dos</div>`——**写死英文、不是词条**，

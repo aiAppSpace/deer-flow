@@ -1094,7 +1094,41 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       「上一步把鼠标留在哪儿」。`fill` 不移动指针，指针留在 (0,0)，两边的
       `[selected]` 因此稳定落在第一项。
     */
-    steps: [{ kind: "fill", target: { selector: "textarea" }, value: "/" }],
+    states: [
+      {
+        id: "default",
+        steps: [{ kind: "fill", target: { selector: "textarea" }, value: "/" }],
+      },
+      /*
+        **选中之后那颗胶囊**（第四十四轮新增）。
+
+        这一屏此前**一次都没被取样过**——`ChatComposer.vue` 里那句
+        「取样发生在无 chip 的稳定态」就是这块盲区的自白。一打开就是两处缺口：
+        上游 `SlashSkillChip`（`border-primary/20 bg-primary/10` + X 图标 +
+        `aria-label="Remove /<name>"`）在本仓是一个**没有移除入口**的
+        `<span class="bg-secondary …">`；会话流那颗只读胶囊本仓则一个字都没画。
+
+        **用 `press: Tab` 接受建议，不用 `click`**：这条场景的注释早写过
+        「不能有 click 步骤」——虚拟指针会留在点过的地方，而活动项跟着指针走。
+        `Tab` 与 `Enter` 在两个应用里都是接受键（input-box.tsx:1669 与
+        ChatComposer.vue:1164 逐字同形），而按键不移动指针。
+
+        终态断言钉在那颗移除键上：**它只在胶囊里存在**，所以「零差异」不可能
+        是「压根没采到」。名字两种语言同一串（上游写死英文，见 primitives
+        的 `removeSlashSkill`），所以这个锚点天生语言无关。
+      */
+      {
+        id: "slash-selected",
+        steps: [
+          { kind: "fill", target: { selector: "textarea" }, value: "/" },
+          { kind: "press", key: "Tab" },
+          {
+            kind: "visible",
+            target: { role: "button", name: "Remove /data-analysis" },
+          },
+        ],
+      },
+    ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
   },
   {
@@ -2305,6 +2339,23 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
               type: "human",
               id: "msg-human-plain-text",
               content: [{ type: "text", text: PLAIN_TEXT_SOURCE }],
+            },
+            /*
+              **会话流里的斜杠激活**（第四十四轮补的）。上游把它画成
+              「胶囊 + 剩下的话」（message-list-item.tsx:355 的 HumanSlashSkillText），
+              本仓此前画成整行裸文本——`resolveSlashSkillDisplay` 实现了、单测也有，
+              **但没有任何组件调用它**。这条消息让那一处进取样面。
+
+              `data-analysis` 取自默认 mock 的技能目录里那条**已启用**的，
+              名字不过词典；`resolveSlashSkillDisplay` 只在「已装且启用」时才
+              解析成胶囊，所以这条夹具同时钉住了那道闸。
+            */
+            {
+              type: "human",
+              id: "msg-human-slash-skill",
+              content: [
+                { type: "text", text: `/data-analysis ${PLAIN_TEXT_SOURCE}` },
+              ],
             },
             { type: "ai", id: "msg-ai-plain-text", content: "ack" },
           ],

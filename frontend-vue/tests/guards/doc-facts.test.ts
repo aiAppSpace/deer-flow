@@ -296,23 +296,35 @@ type LedgerMeasures = {
 
 /*
   `PARITY_FIXED_SPECS` 那几份 spec 里的固定用例数（**不随场景目录变**的那些）。
-  为什么是 11 而四份文件只有 10 个 `test(` 调用点：`topology.spec` 最后那个包在
-  一个两项的 `for` 里（vue / react 各一条）。下面那条用例钉住「调用点还是 10 个」
-  ——有人加一条用例，调用点数变了就红，逼着这个常量和文档一起跟进。
+  为什么 16 > 14 个 `test(` 调用点：两处包在两项的 `for` 里——`topology.spec`
+  最后那条（vue / react 各一条）与 `keyboard-trap.spec` 整份（同样两个应用）。
+  下面那条用例钉住「调用点还是 14 个」——有人加一条用例，调用点数变了就红，
+  逼着这个常量和文档一起跟进。
   **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
   失效时会明确报出来。
 
   **加新 spec 要同时改三处**：这张表、这个常量、下面那条调用点断言。
   第二十四轮加 `sidebar-collapsed-affordance.spec.ts` 时走的就是这条
   （8 → 9 / 7 → 8 个调用点）。
+
+  ⚠ **这张表漏过两份 spec，而门禁看不见**（2026-09-18 第四十四轮实测）。
+  `narrow-screen-overflow`（2 条）与 `interaction-settles-first`（1 条）
+  加进套件时没人同步这张表，于是常量算出 173、而实跑是 178——
+  **门禁一直是绿的，因为它拿自己的残缺模型去对文档，两边一起错**。
+  第四十四轮加 `keyboard-trap` 时才因为实跑读数（181）对不上而现形。
+  **判据：这张表要对得上 `tests/e2e-parity/*.spec.ts` 的实际清单**，
+  而不只是对得上文档里那个数——下面那条用例现在也钉住了「表里没漏 spec」。
 */
 const PARITY_FIXED_SPECS = [
   "diff",
   "topology",
   "sidebar-collapsed-affordance",
   "animation-settle",
+  "narrow-screen-overflow",
+  "interaction-settles-first",
+  "keyboard-trap",
 ] as const;
-const PARITY_FIXED_TESTS = 11;
+const PARITY_FIXED_TESTS = 16;
 
 /** 全部读数只从签入基线算，一个字都不从散文里读。 */
 function measureLedger(): LedgerMeasures {
@@ -463,11 +475,27 @@ describe("计划文档里的台账读数和签入基线一致", () => {
           .length,
       0,
     );
-    // 10 个调用点 → 11 条用例（topology 最后一个包在两项 for 里）。
+    // 14 个调用点 → 16 条用例（topology 最后一条与整份 keyboard-trap 各包在两项 for 里）。
     expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 10,
-      常量: 11,
+      调用点: 14,
+      常量: 16,
     });
+
+    /*
+      **表里不许漏 spec**（第四十四轮补的，见常量那段注释里的读数）。
+      `scenarios.spec` 是唯一随场景目录变的那份，所以它不在固定表里；
+      其余每一份都必须登记，否则算出来的用例数会和实跑对不上，
+      而上面那条断言**照样绿**——它只对得上这张表自己。
+    */
+    const onDisk = readdirSync(join(ROOT, "tests/e2e-parity"))
+      .filter((name) => name.endsWith(".spec.ts"))
+      .map((name) => name.replace(/\.spec\.ts$/, ""))
+      .filter((name) => name !== "scenarios")
+      .sort();
+    expect(
+      onDisk,
+      "e2e-parity 下新增/删除 spec 时，PARITY_FIXED_SPECS 与 PARITY_FIXED_TESTS 要一起跟进",
+    ).toEqual([...PARITY_FIXED_SPECS].sort());
   });
 
   const SCOPES = [

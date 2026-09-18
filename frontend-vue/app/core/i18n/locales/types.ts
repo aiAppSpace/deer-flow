@@ -57,6 +57,8 @@ export interface Translations {
     submit: string;
     stop: string;
     skillSuggestions: string;
+    /* 上游 slash-skill-chip.tsx:29 的 `Remove /${name}`，写死英文，两种语言同一串。 */
+    removeSlashSkill: (name: string) => string;
     modelSelector: string;
     todos: string;
     selectAFile: string;

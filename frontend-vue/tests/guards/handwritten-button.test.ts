@@ -61,6 +61,12 @@ const ALLOWED: Record<string, [number, string]> = {
     1,
     "message-group.tsx:676，逐字相同",
   ],
+  "components/chat/SlashSkillChip.vue": [
+    1,
+    "slash-skill-chip.tsx:26 上游也是裸 <button>，不走 shadcn Button：" +
+      "它要的是 CHIP_BASE_CLASS 那一整套（h-6 / font-mono / border-primary/20），" +
+      "套 Button 的话得把 variant 的颜色、高度、内边距逐条覆盖回去",
+  ],
   "components/chat/SubtaskCard.vue": [
     1,
     "子任务步骤的重试链接，同 recent-chat-list.tsx:468 的 `mt-1 underline` 写法",

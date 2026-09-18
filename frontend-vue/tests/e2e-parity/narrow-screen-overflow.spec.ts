@@ -103,6 +103,14 @@ const DELIBERATE_HORIZONTAL_SCROLL = `
 */
 const MOBILE_UNREACHABLE: Record<string, string> = {
   sidebar: "侧栏本身：`[data-sidebar='sidebar'] a[href='/workspace/chats']`",
+  /*
+    与 `sidebar` 同一条 settle（场景的 settle 是共用的），所以卡在同一步。
+    **登记它而不是给它另找一条路**：斜杠胶囊那一屏在窄屏上要先开抽屉才够得到，
+    那是「给会话行补移动端终态」那一笔账的同一件事（见文件头 MOBILE_UNREACHABLE
+    那段注释的第①类），不是这条门禁能顺手解决的。
+  */
+  "sidebar#slash-selected":
+    "同 `sidebar`：`[data-sidebar='sidebar'] a[href='/workspace/chats']`",
   "agent-create-name-step":
     "侧栏里的「新建对话」：`[data-sidebar='sidebar'] a[href='/workspace/chats/new']`",
   channels: "侧栏本身：`[data-sidebar='sidebar']`",

@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import ComposerAttachmentChip from "@/components/chat/ComposerAttachmentChip.vue";
+import SlashSkillChip from "@/components/chat/SlashSkillChip.vue";
 import ComposerModelSelector from "@/components/chat/ComposerModelSelector.vue";
 import ModeHoverGuide from "@/components/chat/ModeHoverGuide.vue";
 import ComposerSurface from "@/components/chat/ComposerSurface.vue";
@@ -1339,6 +1340,19 @@ function cancelPolish() {
   polishOriginal.value = null;
   polishRewritten.value = null;
 }
+/*
+  取消已选中的斜杠技能，对着上游 input-box.tsx:2058 的 clearSelectedSlashSkill：
+  清掉之后**把焦点交回输入区**，否则那颗胶囊按钮一消失焦点就掉回 body，
+  键盘用户得从头 Tab 一遍。上游用 requestAnimationFrame 等 React 提交完这一帧，
+  本仓等 nextTick——`selectedSkill` 一变，`v-if` 会把可编辑区从 chip 档的 span
+  换回真 `<textarea>`，`textarea` 这个 ref 要等那次 patch 之后才指得到元素。
+*/
+function clearSelectedSkill() {
+  selectedSkill.value = null;
+  void nextTick(() => {
+    textarea.value?.focus();
+  });
+}
 function replaceDraft(value: string) {
   input.value = value;
   selectedSkill.value = null;
@@ -1658,10 +1672,18 @@ defineExpose({ replaceDraft, offerFollowup });
             class="max-h-48 min-h-6 w-full min-w-0 cursor-text overflow-y-auto text-base leading-6 break-all whitespace-pre-wrap md:text-sm"
             @click="focusChipEnd"
           >
-            <span
-              class="bg-secondary mr-2 inline-block max-w-[min(11rem,45%)] truncate rounded px-2 py-1 align-top text-xs"
-              >/{{ selectedSkill }}</span
-            >
+            <!--
+              上游 input-box.tsx:2356 用的是 `SlashSkillChip`（可移除档），
+              本仓此前是一个纯 `<span class="bg-secondary …">`：**没有移除入口**，
+              颜色也不是 `primary` 那一档。判词与读数见 SlashSkillChip.vue 文件头。
+              `mr-2 max-w-[min(11rem,45%)] align-top` 是上游在调用点传的那三个类。
+            -->
+            <SlashSkillChip
+              :name="selectedSkill"
+              class="mr-2 max-w-[min(11rem,45%)] align-top"
+              removable
+              @remove="clearSelectedSkill"
+            />
             <!--
               斜杠技能选中之后那块可编辑区，逐件对着上游 input-box.tsx:2277：
 
@@ -2190,9 +2212,19 @@ defineExpose({ replaceDraft, offerFollowup });
       aria-hidden="true"
       class="bg-background absolute right-0 -bottom-[17px] left-0 z-0 h-4"
     />
+    <!--
+      `/67` 是上游的值（input-box.tsx:2848 `text-muted-foreground/67`），**不是笔误**。
+      2026-09-18 第四十四轮第一次量 dark 下的对比度时掉出来的：本仓写的是 `/70`，
+      于是这句话在 dark 上两边的实际颜色不同——本仓 `#7a7a79`（对比度 3.84）、
+      上游 `#767675`（3.63），底色同为 `#1f1f1d`。**56 个对照终态里 46 个看得见它**，
+      而台账一行都没报：`geometry` 档只采锚点的颜色，这个 `<p>` 不是任何场景的锚点。
+      两边都低于 WCAG 1.4.3 的 4.5——那是上游的配色取舍，本轮只对齐、不重新配色，
+      判词与其余同类读数见 vue-parity-open-accounts 第四十四轮。
+      **翻案判据**：上游改了那个 alpha，这里跟着改。
+    -->
     <p
       data-testid="composer-disclaimer"
-      class="text-muted-foreground/70 px-4 text-center text-xs leading-4"
+      class="text-muted-foreground/67 px-4 text-center text-xs leading-4"
       :class="!isWelcome && 'absolute top-full right-0 left-0'"
     >
       {{ disclaimer }}

@@ -183,7 +183,7 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
-    "sidebar/desktop/light/en-US": {
+    "sidebar#default/desktop/light/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
@@ -197,7 +197,7 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
-    "sidebar/desktop/light/zh-CN": {
+    "sidebar#default/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],
@@ -211,7 +211,49 @@
       "tabbablesOnlyVue": [],
       "tabOrder": []
     },
-    "sidebar/desktop/dark/en-US": {
+    "sidebar#default/desktop/dark/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "requestBodies": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "sidebar#slash-selected/desktop/light/en-US": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "requestBodies": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "sidebar#slash-selected/desktop/light/zh-CN": {
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
+      "requestsOnlyReact": [],
+      "requestsOnlyVue": [],
+      "requestBodies": [],
+      "geometry": [],
+      "focus": [],
+      "order": [],
+      "depth": [],
+      "tabbablesOnlyReact": [],
+      "tabbablesOnlyVue": [],
+      "tabOrder": []
+    },
+    "sidebar#slash-selected/desktop/dark/en-US": {
       "ariaOnlyReact": [],
       "ariaOnlyVue": [],
       "requestsOnlyReact": [],

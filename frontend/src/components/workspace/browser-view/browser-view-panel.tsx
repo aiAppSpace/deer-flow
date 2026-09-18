@@ -340,7 +340,16 @@ export function BrowserViewPanel({
         if (!input) {
           return;
         }
-        sendInput(input);
+        // Only swallow the keystroke once it actually reached the remote page.
+        // `sendInput` returns false while the Live socket is still connecting,
+        // and Tab is one of FORWARDED_NAMED_KEYS: preventing default on a key
+        // that went nowhere strands keyboard focus on this panel for good
+        // (WCAG 2.1.2). Measured 2026-09-18 on the `browser-feature` parity
+        // screen: focus reached the panel and 26 further Tab presses produced
+        // zero focus changes, with `document.activeElement` still this div.
+        if (!sendInput(input)) {
+          return;
+        }
         event.preventDefault();
         event.stopPropagation();
       }}

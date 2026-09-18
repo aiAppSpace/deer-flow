@@ -57,12 +57,17 @@
 ### 真正的限制是取样面，不是待办
 
 ```
-台账   162 个场景-维度 / 84 个不同场景状态 / 0 唯一行（macOS 与 Linux 同时）
-断点   desktop 138 · mobile 20 · tablet 4      ← tablet 最薄
-主题   light 129 · dark 33
-语言   en-US 102 · zh-CN 60
-规模   React 214 tsx/~7.0 万行 · Vue 273 vue/~8.5 万行 · Vue 侧 407 个 spec
+台账   165 个场景-维度 / 58 个不同场景状态 / 0 唯一行
+断点   desktop 141 · mobile 20 · tablet 4      ← tablet 最薄
+主题   light 131 · dark 34
+语言   en-US 104 · zh-CN 61
+规模   frontend/src 214 tsx / 42485 行 · frontend-vue/app 276 vue / 38571 行 ·
+       frontend-vue/tests 408 个 spec/test
 ```
+
+⚠ 上面每一行都是 2026-09-18 第四十四轮**当场量的**（量法见下面「现场量一遍」）。
+「不同场景状态」此前这份文档写的是 84，和本轮的量法（`entries` 的键按第一段去重）
+对不上——**以自己量的为准，别引用这一行的历史值**。
 
 ### ⚠ 历轮规律：**打开新取样面就掉出缺陷，不开新面就是 0**
 
@@ -73,20 +78,26 @@
 | 39 | 打开「对话框 × 窄屏」这个新面 | **2 条** |
 | 40 | 打开「浮层在断点处的行为」这个新面 | **1 条** |
 | 41–43 | 加固门禁、验证方法，**没开新面** | **0 条** |
+| 44 | 一口气开三个面（`aria-hidden` / dark 对比度 / **Tab 落点**） | **2 条**（一条在上游）+ 3 条挂账 |
 
 **所以 41–43 的 0 不是证据**，它只说明那三轮没去开新面。
 **判读一轮的产出，先问它开没开新面。**
 
 ### 已知还没打开的取样面（点名，按建议顺序）
 
-1. **`aria-hidden` 里套可聚焦元素**——⚠ 探针底稿在
-   `docs/plans/probes/aria-hidden-focusable.probe.ts`，
-   **第三十九轮写好了但一次都没跑过**，拷进 `tests/e2e-parity/zz-*.spec.ts` 直接跑；
-2. **dark 下的对比度**——33 个 dark 样本已经在那儿，从没量过颜色；
+1. ~~**`aria-hidden` 里套可聚焦元素**~~ —— **第四十四轮走完，负结果 0 条**，
+   探针底稿已删。判词见 open-accounts 第四十四轮第一节：静态命中 23/23 两边相同，
+   全被模态焦点陷阱抵消；换成「键盘真的走得进去吗」之后两边 `hiddenHits` 全 0。
+   **别重做。**
+2. ~~**dark 下的对比度**~~ —— **第四十四轮走完，1 条跨应用分叉（已修）**，
+   其余 14 个低对比度签名**两边逐值相同**、是上游的配色取舍。
+   读数逐条写在 open-accounts 第四十四轮第二节。**别去重新配色。**
 3. **每个 spec 自己的 `page.route` 前提轴**——28 个 spec 用它喂数据，
-   第四十三轮验证了方法、还没铺过去（候选名单见下面「下一轮最该先拿的」第 1 条）；
+   第四十三轮验证了方法、还没铺过去（候选名单见下面「下一轮最该先拿的」）；
 4. **tablet 轴**——只有 4 个样本；
-5. 重复的可访问名 / 焦点陷阱。
+5. **重复的可访问名**（焦点陷阱第四十四轮已做成常驻门禁 `keyboard-trap.spec.ts`）；
+6. **第四十四轮新开的那个面还没走完**：`Tab` 落点序列。本轮只对了「会不会吸住」，
+   **逐位序列的比对还没做**，而它当场就掉出 3 条只在上游有的落点（见下）。
 
 ### 收工判据（建议，用户尚未拍板）
 
@@ -101,7 +112,8 @@
 - 四张工单表 0 ✅
 - 台账 0，macOS 与 Linux 同时 ✅
 - **每一类找到过的缺陷都有一条会红的门禁** ✅
-  （窄屏溢出 · 面板余量 · 反空转 · 第二轮扫描 · 浮层随触发器关闭）
+  （窄屏溢出 · 面板余量 · 反空转 · 第二轮扫描 · 浮层随触发器关闭 ·
+  **键盘陷阱**（第四十四轮新增，**两个应用都跑**——上游单边回归此前没人看得见））
 - **已知取样面名单走空，且最后三轮开面无收获** ⬜
 
 ---
@@ -158,6 +170,57 @@ frontend-vue verify  completed/success
 第四十轮（`4c3fc4dd`）verify 绿、parity 收工时仍在跑，**新窗口自己复核一遍**。
 
 ---
+
+## 第四十四轮收工状态（2026-09-18）
+
+一句话：**开了三个新面，掉出两条产品缺陷——其中一条在上游，而且是 WCAG A 级。**
+
+| 量 | 收工读数 |
+| --- | --- |
+| 台账 | **165 个场景-维度 / 0 唯一行**（新增 `sidebar#slash-selected` 三维，各档全空） |
+| 跑时 | `e2e-parity` 181 passed / ~28m　`make e2e` 296 passed / 2.9m　`verify` 0（337 文件 / 2725 单测） |
+| React 侧 | `pnpm check` 0 · `prettier --check` 0 |
+
+### 本轮清掉的账
+
+| 类别 | 具体 |
+| --- | --- |
+| **上游单边缺陷（WCAG 2.1.2）** | `browser-view-panel.tsx` 把 `Tab` 吞掉却**不管有没有真送出去**——`browser-feature` 那一屏停在 "Connecting to live"，焦点进了面板就出不来（26 次 Tab 零次 focusin，`activeElement` 不变，iframe 数 0）。上游的 `sendInput` 本来就返回布尔，只是没人接。已改成与本仓同一个契约 |
+| **本仓缺失的上游功能** | 斜杠技能胶囊**两处都缺**：输入区那颗是没有移除入口的纯 `<span>`（上游是 `<button aria-label="Remove /<name>">` + X），会话流那颗**一个字都没画**（`resolveSlashSkillDisplay` 实现了、单测了、没人调用）。补了 `SlashSkillChip.vue` / `HumanMessageText.vue` / `HumanSlashSkillText.vue` 三层 |
+| **dark 色差** | 免责声明 `text-muted-foreground/70` → `/67`（上游值）。46/56 个终态看得见，台账看不见——`geometry` 档只采锚点的颜色 |
+| **新常驻门禁** | `keyboard-trap.spec.ts`，**两个应用都跑**，带两条反空转断言 |
+| **新进取样面** | `sidebar#slash-selected`（输入区胶囊）+ `user-message-plain-text` 夹具里那条 `/data-analysis …`（会话流胶囊） |
+
+### 负结果（**别重做**）
+
+- **`aria-hidden` 子树里的可聚焦元素：0 条。** 静态命中 23/23 两边相同，
+  全被模态焦点陷阱抵消（axe 的 `focusable-modal-open` 例外）。
+  换成「键盘真的走得进去吗」之后两边 `hiddenHits` 全 0。探针底稿已删。
+- **dark 对比度的其余 14 个签名两边逐值相同**，是上游的配色取舍。
+  `Continue` 2.38 · `Agents` 1.55 · `PARITY-TODO-DONE` 2.62 · `text-red-500` 4.29–4.38 ·
+  Flash/Minimal/Ultra 3.67 · `1 more step` 3.19 · aurora 标题 1.00（尺子够不着）。
+  **单方面重新配色会造出新的分叉。**
+
+### ⚠ 本轮的仪器账（两条）
+
+1. **`runScenario` 在 `state.steps` 之后不再 settle**（`captureScenario` 是自己补的那一道）。
+   探针照着它写就会读在 animate-in 中段：对比度探针第一跑报出一批 `ratio ≈ 1.00`
+   的假失败，补上 `waitForFiniteAnimations` + `waitForDomQuiet` 之后，
+   **唯一签名从 39/43 塌到 15/15**。**写探针必须自己补那两道。**
+2. **第一跑一片红先怀疑探针**（累计第五次）：`aria-hidden` 探针两边各 23 个场景命中，
+   看着像一堆账，实际是问法漏了模态例外。
+
+### 挂账：3 条**只在上游有**的 tab 落点（下一轮查）
+
+| 终态 | 只在上游的落点 | 猜测（**未验证**） |
+| --- | --- | --- |
+| `integrations#skills` | `div(tablist)"Agent Skills"` | Radix Tabs 的 list 容器本身可聚焦 |
+| `artifact-preview` / `artifact-batched-stream` | `div(group)""` | Radix ToggleGroup 根可聚焦 |
+
+⚠ 与 wave 98/149 判过的 `scroll-area-viewport` 同一族（「上游给容器补了 tabIndex，
+本仓没跟」），**那一族当时判的是「不跟」**。所以**不能直接照抄上游**，
+先去看它是不是同一笔账。
+
 
 ## 第四十三轮收工状态（2026-09-18）
 
@@ -349,6 +412,29 @@ skills 106 · account 74 · integrations 37 · appearance 24 · channels 22
 上游缺 `flex-wrap` 这条真分叉的方向。
 **记忆 `deerflow-parity-three-docs` 的同一形状。**
 
+### 4b. 写探针时 `runScenario` 之后必须自己补 settle（第四十四轮）
+
+`runScenario` 在 `state.steps` 之后**不再 settle**——`captureScenario` 是自己补的
+那一道（capture.ts:845）。照着 `runScenario` 写的探针会**读在 animate-in 中段**：
+对比度探针第一跑报出一批 `ratio ≈ 1.00` 的「失败」（`#2c2c2b` on `#2d2d2c` 的
+Save 键），全是那一帧 opacity 还在 0.05。补上
+`waitForFiniteAnimations(page)` + `waitForDomQuiet(page)` 之后
+**唯一签名从 39/43 塌到 15/15**。
+
+### 4c. 拿现成的 a11y 规则当不变量之前，先查它的**例外**（第四十四轮）
+
+`aria-hidden` 探针第一跑两边各 23 个场景命中，看着像一堆账——
+实际是漏了 axe-core 的 `focusable-modal-open`：**模态开着时背景被 `aria-hidden`
+正是正确写法**，焦点由 FocusScope 陷住。
+**判据：把规则换成「用户真的经历得到吗」再量**——换成「键盘走得进去吗」之后
+两边 `hiddenHits` 全 0。
+
+### 4d. 颜色不要在 JS 里手工解析（第四十四轮）
+
+本仓色板是 `oklch(...)`，**Chrome 的 computed value 原样保留色彩空间**
+（不会降级成 `rgb()`）。把颜色画进 1×1 canvas 再 `getImageData` 读像素，
+顺带把 alpha 合成和祖先 opacity 一起做掉。
+
 ### 5. `hidden` 断言前面必须有一条 `visible`
 
 `locateTarget(...).first()` 匹配不到时是个**空 locator**，而
@@ -409,6 +495,16 @@ skills 106 · account 74 · integrations 37 · appearance 24 · channels 22
 或尺子对象错了的产物（`browser-feature` −3、`background-tasks#drawer` 余量 10）。
 **别拿「整个对话框的 min-content」当判据重扫一遍。**
 
+### 第四十四轮开的三个面（**别重做**）
+
+| 面 | 读数 | 判词 |
+| --- | --- | --- |
+| `aria-hidden` 里套可聚焦元素 | 静态命中 23/23 两边相同；换成「键盘走得进去吗」后两边 `hiddenHits` **全 0** | 负结果。探针底稿已删 |
+| dark 文本对比度（两边各 ~1990 个元素） | 唯一签名 15/15，**跨应用分叉只有 1 条**（免责声明 `/70` vs `/67`，已修） | 其余 14 条两边逐值相同，是上游配色取舍，**别重新配色** |
+| Tab 会不会被吸住 | 上游 `browser-feature` 吸住（已修），其余两边全过 | **已常驻**成 `keyboard-trap.spec.ts`，两个应用都跑 |
+
+⚠ 同一个面上**还没做的**是「逐位比 Tab 序列」，见「下一轮最该先拿的」第 1 条。
+
 ### 已量到的负结果
 
 - 8 条产品路由在 360px 默认态全干净（`documentElement.scrollWidth === 360`、越界元素 0）；
@@ -424,22 +520,28 @@ skills 106 · account 74 · integrations 37 · appearance 24 · channels 22
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 跑那个**从没跑过**的 `aria-hidden` 探针
+### 1. 把 **Tab 落点序列**逐位比一遍（第四十四轮开了这个面，只做了一半）
 
-底稿在 `docs/plans/probes/aria-hidden-focusable.probe.ts`，拷进
-`frontend-vue/tests/e2e-parity/zz-aria-hidden.spec.ts` 直接跑，读完删掉。
-不变量：**`aria-hidden="true"` 的子树里不该有可聚焦元素**——读屏器听不到、
-键盘却能 tab 进去。**两个应用都跑**：Radix 与 reka-ui 对 `inert` 的处理可能不同，
-那会是真分叉，而这一类台账看不见。
+第四十四轮只对了「会不会被吸住」（已常驻成 `keyboard-trap.spec.ts`），
+**逐位序列的比对没做**，而随手一比就掉出 3 条只在上游有的落点。
 
-⚠ 第一跑若一片红，**先怀疑探针**（历轮第 4 次判据）。
+做法（探针形状照抄第四十四轮的，写 `tests/e2e-parity/zz-focus-seq.spec.ts`）：
+装 focusin 记录器 → 按 40 次 Tab → 把落点描述成 `tag(role)"名字"`
+（**要去掉 `data-slot`**，那是框架字面，两边天生不同）→ 两边逐位比。
 
-### 1b. 接着开第二个面：**dark 下的对比度**
+已知会掉出来的三条（**先判是不是同一笔旧账再动手**）：
 
-33 个 dark 样本已经在取样面里，**从没量过颜色**。
-做法照 `min-content 承重链` 那一套：单应用不变量、先当探针、有收获再常驻。
+| 终态 | 只在上游 | ⚠ 先查 |
+| --- | --- | --- |
+| `integrations#skills` | `div(tablist)"Agent Skills"` | 与 wave 98/149 的 `scroll-area-viewport` 同族，**那族判的是「不跟」** |
+| `artifact-preview` / `artifact-batched-stream` | `div(group)""` | 同上 |
 
-### 1c. 再把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
+⚠ 已知的**噪音源**（别当账）：`textarea` 的 textContent（上游空、本仓是占位文案，
+可访问名相同）；`div(separator)` 的 `resizable-handle` slot（wave 146 判过）；
+`scheduled-tasks` 里 emoji 与文字之间的空格（`🔥 GitHub` vs `🔥GitHub`）——
+**这一条没查过，可能是真的**。
+
+### 1b. 再把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
 
 第四十三轮把共享 mock 的五条列表选项都变异过了，**0 条空转**。
 **剩下的大头是逐 spec 的 `page.route`**——28 个 spec 用它喂数据，
@@ -456,18 +558,20 @@ artifacts-a11y-shape 1/14/13 · thread-history 2/24/11 · workspace-shell 2/17/8
 
 ⚠ **别再写静态扫描**（第四十二轮两条全是死路）。
 
-### 2. 上游那一侧没有任何门禁钉着这一类
+### 2. 上游那一侧的门禁——**第四十四轮开了个头，还没铺完**
 
-`settings-narrow-screen` 只跑本仓；而 `channels#settings-panel` 没有 mobile 维
-（场景的 settle 要桌面侧栏），所以对照台账也看不见。
-**上游单边回归会没人发现。** 两条路：给那个场景补一条「先开抽屉」的 mobile 终态，
+`keyboard-trap.spec.ts` 是**第一条两个应用都跑的门禁**，它当场就抓到一条只有上游
+有的缺陷。但窄屏那一类仍然只跑本仓：`settings-narrow-screen` 只跑本仓，
+而 `channels#settings-panel` 没有 mobile 维（场景的 settle 要桌面侧栏），
+所以对照台账也看不见。**上游那一侧的窄屏回归仍然没人发现。**
+两条路：给那个场景补一条「先开抽屉」的 mobile 终态，
 或者把窄屏余量断言加进 parity 取样（单独断言，不进台账）。
 
 ### 3. 挑下一条**单应用不变量**（方向已验证）
 
-还没试过的，各自**先当探针量一遍、有收获再常驻**：
-`aria-hidden` 里套可聚焦元素、重复的可访问名、焦点陷阱、**dark 下的对比度**。
-⚠ 上面那张表里标 0 条的**别重做**。
+还没试过的，**先当探针量一遍、有收获再常驻**：**重复的可访问名**。
+⚠ `aria-hidden` 里套可聚焦元素（0 条）、焦点陷阱（已常驻）、
+dark 下的对比度（1 条已修，其余两边相同）**第四十四轮都走完了，别重做**。
 
 ### 4. 把「桌面开 → 缩到 360」做成 `narrow-screen-overflow.spec.ts` 的第二轮扫描
 

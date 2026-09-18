@@ -34,6 +34,7 @@ import HumanTurnActions from "@/components/chat/HumanTurnActions.vue";
 import HumanInputCard from "@/components/chat/HumanInputCard.vue";
 import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
 import MessageAttachments from "@/components/chat/MessageAttachments.vue";
+import HumanMessageText from "@/components/chat/HumanMessageText.vue";
 import MessageListSkeleton from "@/components/chat/MessageListSkeleton.vue";
 import ConversationOutline from "@/components/chat/ConversationOutline.vue";
 import MessageMarkdown from "@/components/chat/MessageMarkdown.vue";
@@ -1366,16 +1367,19 @@ onUnmounted(() => {
                   :is-mock="isMock"
                 />
                 <!--
-                  用 div 而不是 p：React 的人类消息是
-                  `<div className="wrap-break-word whitespace-pre-wrap">`
-                  （frontend/src/components/workspace/messages/message-list-item.tsx
-                  的 HumanMessageText）。输入框里打的是纯文本，不是一段文章——
-                  报成 paragraph，读屏器的「按段落浏览」会把每一条提问都当成正文段落，
-                  而 React 那边不会。
+                  人类消息的正文整段委给 HumanMessageText，形状对着上游
+                  message-list-item.tsx:338 的同名组件：纯文本走
+                  `<div class="wrap-break-word whitespace-pre-wrap">`，
+                  而 `/skill 剩下的话` 走胶囊 + 剩下的话那一支。
+                  **2026-09-18 第四十四轮之前本仓只有前一支**，判词见那两个文件的头。
+
+                  `div` 而不是 `p` 这条仍然成立、只是搬进了那一层：输入框里打的是
+                  纯文本，不是一段文章——报成 paragraph，读屏器的「按段落浏览」
+                  会把每一条提问都当成正文段落，而上游不会。
                 -->
-                <div class="wrap-break-word whitespace-pre-wrap">
-                  {{ stripUploadedFilesTag(text(message)) }}
-                </div>
+                <HumanMessageText
+                  :content="stripUploadedFilesTag(text(message))"
+                />
                 <ReferenceAttachment
                   :references="messageReferences(message)"
                   test-id="message-reference-attachment"

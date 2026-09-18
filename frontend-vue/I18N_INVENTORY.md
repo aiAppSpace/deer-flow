@@ -1,10 +1,10 @@
 # Vue 产品文案清单与门禁
 
 盘点范围由 `scripts/i18n-source-guard.mjs --inventory` 实时生成，
-不是手工维护的组件 allowlist。当前 checkout 共有 273 个 Vue SFC：
+不是手工维护的组件 allowlist。当前 checkout 共有 276 个 Vue SFC：
 
 - `app/app.vue`、`app/components/**/*.vue`、`app/layouts/**/*.vue`、
-  `app/pages/**/*.vue` 中 271 个产品 SFC 全部进入 AST source guard；
+  `app/pages/**/*.vue` 中 274 个产品 SFC 全部进入 AST source guard；
 - 仅精确排除 `app/pages/__m0/splitpanes.vue` 与
   `app/pages/__m0/visual.vue` 两个 M0 浏览器测试 fixture；
 - `node scripts/i18n-source-guard.mjs --inventory` 输出逐文件清单（文件总数由
@@ -15,7 +15,7 @@
 
 | 类别               | 处理规则                                                                                                       | 当前结果                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 用户可见产品文案   | 模板文本与 UI 脚本值必须来自唯一 `$i18n` owner                                                                 | 271 个产品 SFC 无核心英文硬编码          |
+| 用户可见产品文案   | 模板文本与 UI 脚本值必须来自唯一 `$i18n` owner                                                                 | 274 个产品 SFC 无核心英文硬编码          |
 | 可访问性与状态文案 | `aria-label`、`aria-description`、`alt`、`title`、`placeholder`、empty/loading/error/toast/dialog 一并检查     | 已迁入 typed dictionaries                |
 | 参数化文案         | 完整句子由 typed formatter 持有，参数保持 opaque                                                               | 文件名、URL、Gateway detail 等参数不翻译 |
 | 动态内容           | backend 响应、用户内容、代码、文件名和 URL 继续直接渲染                                                        | 不进入英文 literal 告警                  |
@@ -50,7 +50,7 @@ i18n 之后一次性翻掉的位置。
 
 ## Key 与 unused baseline
 
-`en-US` 和 `zh-CN` 当前各有 1143 个完全一致的 leaf key。
+`en-US` 和 `zh-CN` 当前各有 1144 个完全一致的 leaf key。
 `baseline/i18n-keys.json` 同时固定精确 key 集合和 15 个已审阅 unused key；
 新增、删除、新增 unused 或旧 key 意外恢复使用都会使
 `i18n-check`、`i18n-diff` 或 `i18n-unused` 失败。只有审阅精确 diff 与真实消费者后，

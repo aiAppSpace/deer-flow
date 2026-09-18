@@ -447,28 +447,85 @@ describe("ChatComposer slash suggestions", () => {
     expect(row.className).toContain("overflow-y-auto");
     expect(row.className).toContain("whitespace-pre-wrap");
     expect(row.className).not.toContain("flex items-start");
-    // chip：inline + 宽度上限，不会把可编辑区挤没。
-    const chip = row.querySelector("span")!;
+    /*
+      chip：inline + 宽度上限，不会把可编辑区挤没。
+      **它是一颗按钮，不是一个 span**（第四十四轮）——上游 input-box.tsx:2356
+      用的是 `SlashSkillChip` 的可移除档：`<button aria-label="Remove /<name>">`
+      里包着名字和一颗 X。本仓此前是个纯 `<span class="bg-secondary …">`，
+      **没有任何移除入口**：鼠标用户选中一个斜杠技能之后取消不掉它。
+      台账看不见这一屏（要先打字再选中才出现），是 Tab 走一圈时发现的。
+    */
+    const chip = row.querySelector("button")!;
+    expect(chip.getAttribute("aria-label")).toBe(
+      enUS.primitives.removeSlashSkill("frontend-design"),
+    );
     expect(chip.className).toContain("align-top");
     expect(chip.className).toContain("max-w-[min(11rem,45%)]");
+    // 上游 CHIP_BASE_CLASS 的那几个可感知的：颜色档、边框、等宽字。
+    expect(chip.className).toContain("bg-primary/10");
+    expect(chip.className).toContain("border-primary/20");
+    expect(chip.className).toContain("font-mono");
     // 可编辑区不再自己占一栏。
     expect(editor.classes()).not.toContain("flex-1");
 
     /*
       点容器空白处 → 光标落到可编辑区末尾（上游同一处的 onClick）。
       只在 `target === currentTarget` 时动手，所以点在 chip 上不该抢焦点。
+
+      **次序是有意的：先点空白、再点 chip。** 点 chip 现在会把技能移除掉
+      （上游 input-box.tsx:2359 的 `onRemove={clearSelectedSlashSkill}`），
+      那一下之后这一行就不存在了，再去点它只会量到一个脱离文档的节点。
     */
     // 用 spy 而不是 document.activeElement：这个 wrapper 没有 attachTo，
     // 脱离文档的节点 focus() 不会改 activeElement，断言会恒假。
     const focusSpy = vi.spyOn(editor.element as HTMLElement, "focus");
-    chip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await flushPromises();
-    expect(focusSpy).not.toHaveBeenCalled();
-
     row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
     expect(focusSpy).toHaveBeenCalledTimes(1);
+
+    chip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+    expect(focusSpy).toHaveBeenCalledTimes(1);
     focusSpy.mockRestore();
+  });
+
+  /*
+    **移除入口本身**（第四十四轮）。本仓此前那颗胶囊是个纯 `<span>`：
+    技能一旦选中，鼠标用户没有任何办法取消它——只能把整段草稿删掉。
+    上游点那颗 X 就回到普通输入框，并且**把焦点交回输入区**
+    （input-box.tsx:2058 的 clearSelectedSlashSkill 里那次 focus）。
+  */
+  it("removes the selected skill when the chip is clicked", async () => {
+    const { wrapper } = mountComposer();
+    await flushPromises();
+    const textarea = await openSuggestions(wrapper, "/front");
+    await textarea.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    const chip = wrapper.get(
+      `button[aria-label="${enUS.primitives.removeSlashSkill("frontend-design")}"]`,
+    );
+    expect(wrapper.find('[role="textbox"][contenteditable]').exists()).toBe(
+      true,
+    );
+
+    await chip.trigger("click");
+    await flushPromises();
+
+    // 胶囊与 chip 档的可编辑区一起消失，真 textarea 回来。
+    expect(
+      wrapper
+        .findAll("button")
+        .some(
+          (button) =>
+            button.attributes("aria-label") ===
+            enUS.primitives.removeSlashSkill("frontend-design"),
+        ),
+    ).toBe(false);
+    expect(wrapper.find('[role="textbox"][contenteditable]').exists()).toBe(
+      false,
+    );
+    expect(wrapper.find("textarea").exists()).toBe(true);
   });
 
   it("gives the chip editor the same textbox contract upstream has", async () => {

@@ -93,6 +93,8 @@ export const zhCN: Translations = {
     submit: "Submit",
     stop: "Stop",
     skillSuggestions: "Skill suggestions",
+    /* 上游写死英文（slash-skill-chip.tsx:29），两种语言同一串。 */
+    removeSlashSkill: (name: string) => `Remove /${name}`,
     modelSelector: "Model Selector",
     /* 上游写死英文（todo-list.tsx:65），两种语言同一串。 */
     todos: "To-dos",

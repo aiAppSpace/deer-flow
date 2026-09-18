@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-17 第三十八轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-18 第四十四轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -4409,6 +4409,198 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
   绝大多数真的依赖它们喂的数据。
 - 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
+
+
+## 2026-09-18 第四十四轮：三个新取样面，**掉出两条产品缺陷**（一条在上游）
+
+第四十一～四十三轮都没开新面，产出都是 0——这一轮按交接文档那张名单开了三个，
+规律又应验了一次。**判读一轮的产出，先问它开没开新面。**
+
+| 新取样面 | 结果 |
+| --- | --- |
+| `aria-hidden` 子树里的可聚焦元素 | **负结果，0 条**（静态命中 23/23 两边相同，全被模态焦点陷阱抵消） |
+| dark 下的文本对比度 | **1 条跨应用分叉**（免责声明 `/70` vs `/67`），其余低对比度两边逐值相同 |
+| **按下 Tab 之后焦点落在哪** | **2 条产品缺陷 + 3 条待查的单边落点** |
+
+### 一、`aria-hidden` 面：负结果，别重做
+
+底稿（第三十九轮写好、一次没跑过）照搬进 `zz-aria-hidden.spec.ts` 跑完两个应用：
+
+```
+vue 23 个场景命中   react 23 个场景命中   only-vue 0   only-react 0
+```
+
+差的只是 **`aria-hidden` 落在哪一层**：上游打在 `div[sidebar-wrapper]` 一层上，
+本仓打在 `div[sidebar-inner]` + `main` 两层上——`hideOthers` 沿祖先链标兄弟节点，
+两边覆盖的是同一片内容。
+
+**但这个问法本身是错的**，axe-core 对这条规则有 `focusable-modal-open` 例外：
+模态开着时背景被 `aria-hidden` 正是**正确写法**，焦点由 FocusScope 陷住。
+换成量「键盘真的走得进去吗」之后，**两个应用 56 个终态 `hiddenHits` 全 0**。
+
+**翻案判据**：哪天某一屏的 `aria-hidden` 背景**没有**配焦点陷阱，
+`keyboard-trap.spec.ts` 会先响（焦点会走进去并继续走）。
+
+### 二、dark 对比度面：1 条真分叉，其余是上游的配色取舍
+
+量法：每个可见文本元素，把祖先链的背景色**逐层画进 1×1 canvas** 再读像素
+（⚠ 本仓色板是 `oklch(...)`，**Chrome 的 computed value 原样保留色彩空间**，
+手工解析 rgb 会全盘读错），合成 alpha 与累计 opacity，按 WCAG 1.4.3 判 4.5 / 3.0。
+
+```
+vue checked 1994   react checked 1989   唯一失败签名 15 / 15
+```
+
+**唯一的跨应用分叉**（46/56 个终态都看得见，台账一行没报）：
+
+| | 类串 | 实测 | 对比度 |
+| --- | --- | --- | --- |
+| 上游 | `text-muted-foreground/67`（input-box.tsx:2848） | `#767675` on `#1f1f1d` | 3.63 |
+| 本仓 | `text-muted-foreground/70`（ChatComposer.vue:2195） | `#7a7a79` on `#1f1f1d` | 3.84 |
+
+**台账为什么没报**：`geometry` 档只采**锚点**的颜色，而这个 `<p>` 不是任何场景的锚点。
+已改成 `/67`。
+
+**其余 14 个签名两边逐值相同**，是上游的配色选择、不是对照问题，**别去重新配色**：
+
+```
+button「Continue」 2.38（×4 终态）   span「Agents」 1.55   「PARITY-TODO-DONE」 2.62
+text-red-500 的 -1/-2 4.29–4.38     Flash/Minimal/Ultra 与它们的说明 3.67
+「1 more step」 3.19                 markdown 正文 #333333 on #1f1f1d 1.31（×2）
+aurora 渐变标题 1.00（`bg-clip-text` + 透明文字，尺子够不着，已标 img=1）
+```
+
+**翻案判据**：上游把某一档 alpha 或 token 改了，跟着改；**单方面重新配色会造出新的分叉**。
+
+### 三、键盘面：两条产品缺陷
+
+#### ① 上游的键盘陷阱（WCAG 2.1.2）——**本轮最重的一条**
+
+`browser-feature` 这一屏，两边前 14 个 tab 落点**逐字相同**；落到浏览器面板那个
+`div` 之后：
+
+```
+上游  stops 14 / distinct 13，其后 26 次 Tab 零次 focusin，activeElement 仍是那个 div
+本仓  stops 58 / distinct 29，走完面板控件 → 侧栏 → 绕回开头
+页面里 iframe 数 = 0（两个应用），所以不是「焦点进了框架」
+```
+
+根因是**一个被丢掉的返回值**：
+
+```
+上游 browser-view-panel.tsx:  if (!input) return; sendInput(input); event.preventDefault();
+本仓 ChatComposer/BrowserPanel: if (!input || stream.sendInput(input) !== "sent") return; …
+```
+
+`Tab` 在 `FORWARDED_NAMED_KEYS` 里，上游拿到判定就吞键，**不管有没有真送出去**；
+那一屏还停在 "Connecting to live"，socket 没开，于是键被吞、人出不来。
+上游的 `sendInput` **本来就返回布尔**（socket 未 OPEN 返回 `false`），只是没人接。
+**已按已授权的例外修上游**（一行 + 判词），改成与本仓同一个契约。
+
+#### ② 斜杠技能胶囊：本仓两处都缺（上游有）
+
+两边都用 `Tab`/`Enter` 接受斜杠建议（`input-box.tsx:1669` 与 `ChatComposer.vue:1164`
+逐字同形），但接受之后：
+
+| | 输入区那颗 | 会话流那颗 |
+| --- | --- | --- |
+| 上游 | `SlashSkillChip` 可移除档：`<button aria-label="Remove /<name>">` + X，`border-primary/20 bg-primary/10 text-primary … font-mono shadow-xs` | 只读档：胶囊 + 剩下的话（message-list-item.tsx:355） |
+| 本仓（改前） | 纯 `<span class="bg-secondary mr-2 … rounded px-2 py-1">`，**没有任何移除入口** | **一个字都没画**——整行裸文本 |
+
+`resolveSlashSkillDisplay` 在本仓 `core/skills/slash.ts` **实现了、单测也有，
+但没有任何组件调用它**。
+
+**台账为什么没报**：这两处都只在「选中了斜杠技能」之后才存在，而此前
+**没有任何对照终态停在那个状态上**——`ChatComposer.vue` 自己的注释里那句
+「取样发生在无 chip 的稳定态」就是这块盲区的自白。
+
+修法按「该重构重构」：补一层真组件 `SlashSkillChip.vue`（照抄上游的
+`CHIP_BASE_CLASS`，一份视觉两个调用点），加 `HumanMessageText.vue` /
+`HumanSlashSkillText.vue` 两层——**分两层是刻意的**，与上游同一个理由：
+只有长得像斜杠激活的消息才该订阅技能目录，而 Vue 的 composable 在 setup 阶段
+无条件执行，"不订阅"只能靠"不挂载那一层"来表达。
+
+#### ③ 三条**只在上游有**的 tab 落点——**挂账，下一轮查**
+
+去掉 `data-slot` 之后按集合比，只在上游出现、本仓没有的落点：
+
+| 终态 | 只在上游的落点 | 猜测（**未验证**） |
+| --- | --- | --- |
+| `integrations#skills` | `div(tablist)"Agent Skills"` | Radix Tabs 的 list 容器本身可聚焦 |
+| `artifact-preview` / `artifact-batched-stream` | `div(group)""` | Radix ToggleGroup 根可聚焦 |
+| `sidebar` | `button"Remove /data-analysis"` | **本轮已修**（就是上面第②条） |
+
+⚠ 前两条与 wave 98/149 判过的 `scroll-area-viewport` 是同一族
+（「上游给容器补了 tabIndex，本仓没跟」），**那一族当时判的是「不跟」**。
+所以这两条**不能直接照抄上游**，要先看它是不是同一笔账。
+
+### 四、本轮的仪器账（两条，都值得记）
+
+1. **`runScenario` 在 `state.steps` 之后不再 settle。**
+   `captureScenario` 是自己补的那一道（capture.ts:845）。探针照着
+   `runScenario` 写就会**读在 animate-in 中段**：对比度探针第一跑报出一批
+   `ratio ≈ 1.00` 的「失败」（`#2c2c2b` on `#2d2d2c` 的 Save 键），
+   全是那一帧 opacity 还在 0.05。补上 `waitForFiniteAnimations` +
+   `waitForDomQuiet` 之后，**唯一签名从 39/43 塌到 15/15**。
+   **判据**：探针里 `runScenario` 之后必须自己补那两道。
+2. **第一跑一片红，先怀疑探针**（累计第五次）。
+   `aria-hidden` 探针第一跑两边各 23 个场景命中，看着像一堆账；
+   查下来是问法错了（漏了 axe 的 `focusable-modal-open` 例外）。
+
+### 五、新常驻门禁：`tests/e2e-parity/keyboard-trap.spec.ts`
+
+不变量：**从任一终态起连按 Tab，焦点不会被某个元素永久吸住。**
+
+- **两个应用都跑**——这是本轮定的：它抓到的那一条**只有上游有**，而
+  `settings-narrow-screen` / `narrow-screen-overflow` 都只跑本仓、台账又按定义
+  只报「两边不一致」，上游单边回归此前没有任何门禁看得见
+  （正是交接文档「下一轮最该先拿的」第 2 条点名的那个洞）。
+- 量法：装 focusin 记录器 → 按 30 次 → 读 → 再按 10 次 → 再读。
+  后一段零新增、而 `activeElement` 还停在具体元素上，就是吸住。
+- **两条反空转断言**：①「一次都没动」只在**有浮层接管键盘**时才放行
+  （写成规则不是清单；实测五个终态落在这一支，两个应用完全相同）；
+  ②「跑不到位」单列一张表并断言为空。
+- `activeElement` 落到 `body` 不算吸住（`artifact-preview` 那一屏有 iframe，
+  两边 `frames: 1`），**翻案判据**：哪天两边在「会不会落到 body」上分叉，那才是账。
+
+**变异验证**（签入前必做）：把上游那个 `if (!sendInput(input))` 撤回成
+`sendInput(input);`，门禁当场红，报的就是
+`browser-feature: 停在 div"Browser…Connecting to live bro"，其后 10 次 Tab 无变化`；
+还原后 `1 passed (2.9m)`。**它不是潜在守卫。**
+
+**收工整套读数**：`e2e-parity` **181 passed / 29.4m**（其中 keyboard-trap
+vue 1.5m + react 1.7m）、`make e2e` 296 passed / 2.9m、`verify` 0、
+`cd frontend && pnpm check` 0 + `prettier --check` 0。
+台账 `make parity-accept` 之后 **165 个场景-维度 / 0 唯一行**。
+
+### 五b、顺手撞出的第三条仪器账：**门禁拿自己的残缺模型去对文档，两边一起错**
+
+`doc-facts.test.ts` 算 `e2e-parity` 用例数的公式是
+`台账键数 + PARITY_FIXED_TESTS`，而 `PARITY_FIXED_SPECS` 那张表
+**漏了两份 spec**：`narrow-screen-overflow`（2 条，第三十八轮加的）与
+`interaction-settles-first`（1 条，第三十八轮加的）。
+
+于是它算出 173、文档也写 173，**门禁一直绿**——而实跑是 178。
+第四十四轮加 `keyboard-trap` 时拿实跑读数（181）去对，才现形。
+
+```
+实跑逐 spec：scenarios 165 · topology 5 · diff 3 · animation-settle 2 ·
+             narrow-screen-overflow 2 · keyboard-trap 2 ·
+             sidebar-collapsed-affordance 1 · interaction-settles-first 1
+固定部分 16（此前常量写 11）　调用点 14（此前断言写 10）
+```
+
+**判词**：那张表现在多了一条断言——`tests/e2e-parity/` 下除 `scenarios.spec`
+之外的每一份都必须登记，**漏一份就红**。
+原来那条「调用点还是 N 个」的断言只对得上表自己，看不见表外的东西。
+
+### 六、新进取样面的两个终态
+
+- `sidebar#slash-selected`——输入区那颗可移除胶囊。用 `press: Tab` 接受建议
+  （这条场景的注释早写过「不能有 click 步骤」：虚拟指针会留在点过的地方）。
+  终态断言钉在那颗移除键上，**它只在胶囊里存在**，所以「零差异」不可能是「压根没采到」。
+- `user-message-plain-text` 的夹具补了一条 `/data-analysis …` 的人类消息——
+  会话流那颗只读胶囊从此进台账。
 
 
 ## 一、历史逐条台账（**读之前先看这一句**）
