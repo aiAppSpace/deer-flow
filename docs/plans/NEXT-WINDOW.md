@@ -81,6 +81,28 @@ frontend-vue verify  completed/success
 
 ---
 
+## 第四十三轮收工状态（2026-09-18）
+
+一句话：**前提变异跑通了——方法成立，两条轴上 0 条空转。**
+
+| 变异 | 结果 | 喂它的 spec | 如期变红 | 仍全绿 |
+| --- | --- | --- | --- | --- |
+| `threads` 恒空 | 107 failed / 189 passed（7.3m） | 31 | **27** | 4 |
+| `agents`+`skills`+`scheduledTasks`+`projects` 恒空 | 22 failed / 274 passed（3.2m） | 9 | **4** | 5 |
+
+九个仍全绿的**逐条查完 0 条空转**（自带 stub / 断言的是别的东西 / 本来就喂空 /
+我的检测假阳性）。判词与完整表格见 open-accounts 第四十三轮那一节。
+
+**怎么跑**（照抄）：改 `tests/e2e/utils/mock-api.ts` 里那几行
+（`options?.threads` / `agents` / `skills` / `scheduledTasks` / `projects`）
+让它恒空 → `make e2e` → 按 spec 聚合 → 和「显式喂了这个选项的 spec」求交集 →
+**整份仍全绿的就是候选**。跑完**一定要还原并 `grep -c` 确认残留为 0**。
+
+⚠ 判「谁喂了这个选项」**不能只 grep `"<opt>:"`**——spec 自己路由的载荷里同名的键
+会混进来（本轮 `ui-primitives-a11y` / `integrations` 两条假阳性）。
+按 `mockLangGraphAPI\([^)]*<opt>:` 这样的形状匹配。
+
+
 ## 第四十二轮收工状态（2026-09-18）
 
 一句话：**静态扫描回答不了「这条门禁会不会红」。** 两条静态扫描全是死路（读数见下），
@@ -324,18 +346,22 @@ skills 106 · account 74 · integrations 37 · appearance 24 · channels 22
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 挑一条现有门禁做「前提变异」
+### 1. 把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
 
-**不要再写静态扫描**（第四十二轮两条全是死路，读数见收工状态）。
-能用的方法只有一个：**挑一条门禁，把它要证明的前提拿掉，跑一遍。**
-前提是夹具、是路由 mock、是一条前置断言——**不是产品代码**。
+第四十三轮把共享 mock 的五条列表选项都变异过了，**0 条空转**（读数见收工状态）。
+**剩下的大头是逐 spec 的 `page.route`**——28 个 spec 用它喂数据，
+而它没有统一入口，所以没法一次性变异。
 
-已知同形失效两次：`background-tasks#disabled` 的主角断言在空 locator 上绿了很久；
-`settings-narrow-screen` 对 channels 绿了十轮而量的是空面板。
-**这是本仓出现次数最多的一类失效。**
+做法：挑那些 `page.route` 条数多、而「缺席断言」占比高的 spec 逐个来。
+排名（route 数 / 肯定断言 / 缺席断言）：
 
-挑法：先挑那些**依赖 mock 返回内容**的门禁（`e2e/` 下用 `page.route` 喂数据的），
-它们最容易在「mock 不作答」时静默退回空转。
+```
+sidecar-chat 12/40/1 · agent-chat 11/25/11 · chat 7/38/3 · channels 6/40/6
+scheduled-tasks 6/30/4 · artifact-preview 6/26/2 · integrations 5/24/3
+artifacts-a11y-shape 1/14/13 · thread-history 2/24/11 · workspace-shell 2/17/8
+```
+
+⚠ **别再写静态扫描**（第四十二轮两条全是死路）。
 
 ### 2. 上游那一侧没有任何门禁钉着这一类
 
