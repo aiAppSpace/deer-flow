@@ -255,7 +255,7 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 - 那 14 条「窄屏下到不了」**本身可能就是账**：比如 `channels` 系列走侧栏点击，
   而侧栏在手机上是抽屉。到不了不等于没问题，只等于那条路径是按桌面写的。
 
-### 2. 那 14 条「窄屏下到不了」的路径 —— 本轮新挂的账
+### 2.（已查完，留着当判据）那 14 条「窄屏下到不了」
 
 `narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 里躺着 14 条，
 **十二条同一个根因**：桌面侧栏在手机上不渲染（换成 Sheet 抽屉），
@@ -280,8 +280,15 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 | `thread-title-sync` | **没有**（侧栏行内的 ⋯ 菜单） |
 | `workspace-changes#reasoning-menu` | **没有**（`#changes-panel` 也没有 mobile 维） |
 
-**所以下一轮该做的是剩下那 4 块**（`agent-create-name-step` / `browser-feature` /
-`sidecar-chat` / `workspace-changes#reasoning-menu`），**不是 14 条**。 做法是照 `thread-list-pin#mobile-drawer`
+**那 4 块已经在同一轮查完了**——逐条在 360px 上**两个应用各跑一遍**：
+
+| 场景 | 判 |
+| --- | --- |
+| `agent-create-name-step` / `browser-feature` / `workspace-changes#reasoning-menu` | **不是缺口**：两边卡在同一个定位器，那几条路径/功能在手机上两边都一样 |
+| `sidecar-chat` | **有差异**，已修：窄屏 sr-only 的 `SheetTitle` 本仓翻译了、上游写死英文，读屏器听到的两边不一样。搬进 `primitives.*` 后两边停在同一步 |
+
+**判据：这一类排查必须两个应用各跑一遍。** 只跑本仓的话，「到不了」看起来
+永远像本仓的问题——实测 4 条里 3 条是两边一样的。 做法是照 `thread-list-pin#mobile-drawer`
 的样子**另开一个 mobile 终态**（先开抽屉再走），而不是改现有终态的步骤——
 步骤是跨维度共用的，加一句「点开抽屉」会把桌面那几维弄坏。
 

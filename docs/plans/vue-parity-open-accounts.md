@@ -3920,6 +3920,43 @@ React 的 `input-box.tsx`（11 处）在本仓对应 `ChatComposer`（9）+ `Com
 **代价**：parity 173 passed 23.4m → **175 passed 25.0m**（净增约 1.6 分钟）。
 
 
+### 十三、那「4 块没覆盖的屏」查完了：**3 块不是缺口，1 块查出一条可访问性树差异**
+
+逐条在 360px 上跑，**两个应用各跑一遍**（这一步是判据本身——只跑本仓的话，
+「到不了」看起来永远像本仓的问题）：
+
+| 场景 | 上游@360 | 本仓@360 | 判 |
+| --- | --- | --- | --- |
+| `agent-create-name-step` | 卡在 `[data-sidebar='sidebar'] a[href='/workspace/chats/new']` | **同一处** | 不是缺口：那条路径两边都是按桌面写的 |
+| `browser-feature` | 卡在 `getByText(/^(Browser\|浏览器)$/)` | **同一处** | 不是缺口：浏览器面板在手机上两边都不开 |
+| `workspace-changes#reasoning-menu` | 卡在推理深度键 | **同一处** | 不是缺口：那颗键两边都不在窄屏出现 |
+| `sidecar-chat` | 卡在 `separator`（**最后一步**） | 卡在 `Side chat`（**第 42 步**） | **有差异**，见下 |
+
+#### `sidecar-chat`：窄屏 sr-only 面板标题，本仓翻译了、上游写死英文
+
+    上游  SheetTitle  "Sidecar" / "Browser" / "Artifacts"（chat-box.tsx:408-419，不进词典）
+    本仓  SheetTitle  sidecar.title → 「Side chat」/「侧边对话」
+
+于是本仓在窄屏下多出一个**文本恰好等于 "Side chat" 的隐藏 `h2`**，
+`getByText(/^Side chat$/).first()` 命中它、等它 visible 就超时——
+而**窄屏下读屏器听到的东西两边确实不一样**，这才是真账。
+按既定约定搬进 `primitives.*`（同 `close` / `toggleSidebar` 那几条），
+两种语言同一串；`workspace.sidePanelDescription` 随之无人引用，删掉。
+复量：两边停在同一步。
+
+#### ⚠ 查这一条的过程里，**仪器骗了我三次**
+
+1. 第一跑（8s 超时）看到两边停的步骤不同 → 疑似真差异；
+2. 直接读面板 `innerText` → 两边**一模一样** → 我改判「是超时造成的假象」——**错的**；
+3. 30s 重量 → 读数和 8s **完全一样**，根本不是超时；
+4. 精确量「文本恰好等于 `Side chat` 的元素」→ 本仓多一个隐藏 `h2` → 才是真相。
+
+**第 2 步那个 `innerText` 拼接太粗，把结构差异盖掉了。**
+`getByText` 的 `^...$` 要求元素**整段文本**恰好匹配，所以它看得见、我的探针看不见。
+**判据：探针的粒度必须至少和被它解释的那个断言一样细**——
+用 `innerText` 去解释一条 `getByText` 的失败，等于换了把更粗的尺子再问同一个问题。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里
