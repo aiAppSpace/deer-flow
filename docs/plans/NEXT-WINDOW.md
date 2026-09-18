@@ -63,16 +63,56 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 所以 `total_count: 0` **不是「没问题」**。要问的是「覆盖当前 `frontend-vue` 树的
 那次 run 绿不绿」；一条红会让后面的步骤全 `skipped`，所以要看**逐步结论**。
 
-**第三十九轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
+⚠ **run 挂在「那次推送的 tip」上，不是挂在代码那条提交上**（2026-09-18 实测）：
+第三十九轮把代码提交和 docs 提交一起推出去，两条 run 都落在 docs 那条 tip
+`482e67bf` 上。所以「纯 docs 不触发 CI」只对**整条推送都是 docs** 成立。
+
+**第四十轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
 
 ```
-（本轮 docs 提交的 sha）   工作树干净   未推送 0
+（本轮最后一条提交的 sha）   工作树干净   未推送 0
 场景-维度 162 唯一行 0
-frontend-vue parity  completed/success  219ff7ae
-frontend-vue verify  completed/success  219ff7ae
+frontend-vue parity  completed/success
+frontend-vue verify  completed/success
 ```
+
+第三十九轮那次推送（`482e67bf`）的 CI 已确认**双绿**。
 
 ---
+
+## 第四十轮收工状态（2026-09-18）
+
+一句话：**「只有一边有问题」可能是我的进入方式造成的。**
+`workspace-changes#reasoning-menu` 从 1280px 缩下来时两边读数确实不同，截图也对得上，
+我差点判成本仓单边；分档再量才发现上游是在 800→700 之间把输入区**整块重挂**了，
+菜单关闭只是副作用。换成 700px 起点，**两边逐像素相同**——是一条两边共有缺陷。
+
+| 量 | 收工读数 |
+| --- | --- |
+| 台账 | **162 个场景-维度 / 0 唯一行** |
+| 跑时 | `e2e-parity` 175 passed / 25.7m　`make e2e` 296 passed / 2.4m　`verify` 0 |
+| React 侧 | `pnpm check` 0 · `prettier --check src` 0 |
+
+### 本轮清掉的账
+
+| 类别 | 具体 |
+| --- | --- |
+| **负结果（别重做）** | 14 条「窄屏到不了」用「桌面开 → 缩到 360」量过，**两个应用各一遍：`documentElement.scrollWidth` 全 360、非「有意横滚」的横滚容器 0 条** |
+| **两边共有缺陷** | `hidden … sm:inline-flex` 的推理深度键在 `sm` 以下塌成 0×0，菜单仍开着并停在 `[0, 4, 280]`——两边同改成受控菜单 |
+| **新常驻门禁** | `mode-hover-guide.spec.ts` 加一条，**起点宽度 700**（1280 起步永远绿） |
+
+### 顺带量清的
+
+「缩窗口会把浮层弄没」**两个应用完全一致**：`channels#runtime-config` /
+`runtime-config-edit` 对话框 1→0、`thread-history` 菜单 2→0、`thread-list-pin` 菜单 1→0。
+桌面侧栏在 <768px 卸载，挂在它下面的浮层跟着卸载。**不是本仓的毛病**，
+但也意味着这条路子对侧栏拥有的对话框无效——量不到就要显式记下来。
+
+### 一条没成立的探针
+
+想量「跨 `md` 重挂会不会丢输入区草稿」，探针写坏两次（定位器选错、`fill` 没生效）。
+**关于「丢草稿」这一轮没有任何读数，不要引用。**
+
 
 ## 第三十九轮收工状态（2026-09-18）
 
@@ -122,51 +162,66 @@ frontend-vue verify  completed/success  219ff7ae
 **先拿一个已知答案的样本验仪器，再去读它的结论。**
 本轮的已知样本是 `integrations`：设置门禁说它余量 ≥12，新尺子给 37，对上了。
 
-### 2. 「桌面开对话框 → 缩窗口到 360」会把一部分对话框弄没
+### 2. 报出「只有一边有问题」时，先问这是不是我进入方式造成的
+
+第四十轮实测：`workspace-changes#reasoning-menu` 从 **1280** 缩到 360，
+上游菜单关了、本仓没关（截图也对得上）——看起来是本仓单边。
+从 **700** 起步（已经过了上游跨 `md` 的重挂点）再量，**两边逐像素相同**。
+上游那次「关掉」是重挂的副作用，不是它处理了这件事。
+
+**一次实测能推翻推理，但两次实测可以互相推翻。**
+实验的**起点**本身是设计的一部分，换个起点可能得到相反结论。
+
+### 3. 「桌面开对话框 → 缩窗口到 360」会把一部分对话框弄没
 
 实测 `channels#runtime-config` 与 `runtime-config-edit`：
 `dialogsBeforeResize: 1 → dialogsAfter: 0`。桌面侧栏在 <768px 卸载，
 挂在它下面的对话框跟着卸载。**用这个办法扫描时，必须显式记「缩完还在不在」**，
 否则「没量到东西」会长得和「量过、没问题」一模一样。
 
-### 3. 动手改之前，先看那份文件自己怎么说的
+### 4. 动手改之前，先看那份文件自己怎么说的
 
 本轮又省下一次：`ChannelConnections.vue` 的注释早写着
 「`flex-wrap justify-end` 留着——两边都可能三颗」。那句话直接给出了
 上游缺 `flex-wrap` 这条真分叉的方向。
 **记忆 `deerflow-parity-three-docs` 的同一形状。**
 
-### 4. `hidden` 断言前面必须有一条 `visible`
+### 5. `hidden` 断言前面必须有一条 `visible`
 
 `locateTarget(...).first()` 匹配不到时是个**空 locator**，而
 `waitFor({ state: "hidden" })` 对不存在的元素**立刻通过**。
 
-### 5. 锚点不能写死英文
+### 6. 锚点不能写死英文
 
 场景跑 en-US 与 zh-CN 两维。**优先挑夹具里的字符串**（`display_name`、
 `mock.threads[].title`）——它不过词典，天生语言无关，而且证明的东西更强。
 本轮 channels 场景的注释里已经把这条写成判词了。
 
-### 6. 本机 `make verify` **不含** `e2e-mock`
+### 7. 本机 `make verify` **不含** `e2e-mock`
 
-**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2 分钟，295 条）。
+**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2.4 分钟，296 条）。
 
-### 7. 「逐字对齐上游」不是无条件正确的
+### 8. 「逐字对齐上游」不是无条件正确的
 
 本仓比上游多出来的东西，可能正扛着上游没有的约束。
 **删之前问「它在守什么」，而不是只问「上游有没有」。**
 本轮的 `flex-wrap justify-end` 就是反方向的同一条：本仓多出来的那颗类
 正是上游缺的那条账。
 
-### 8. 「余量为 0」和「守住了」长得一模一样
+### 9. 「余量为 0」和「守住了」长得一模一样
 
 只断言「溢出为 0」抓不到「余量为 0」。本轮 channels 在 **375px** 上的余量是 **−4**，
 而 `panelOverflow` 在 375 上只有 4——**门限 12 是唯一抓得住 375 那一档的东西**。
 
-### 9. 改 React 的 JSX 注释，别插进三元表达式的分支位置
+### 10. 改 React 的 JSX 注释，别插进三元表达式的分支位置
 
 `{cond ? ( {/* 注释 */} <X/> ) : null}` 是语法错误。注释要放在
-`{cond ? (` **之前**。本轮踩了一次，`pnpm check` 之前先自查 diff 更快。
+`{cond ? (` **之前**。第三十九轮踩了一次，`pnpm check` 之前先自查 diff 更快。
+
+### 11. 上游的 `import/order` 是 error 不是 warning
+
+第四十轮给 `input-box.tsx` 加了一行 import，放在文件头 import 块之后就红了
+（`@/hooks/use-mobile` 要排在 `@/core/**` 之后）。`eslint --fix` 一把过。
 
 ---
 
@@ -206,18 +261,7 @@ frontend-vue verify  completed/success  219ff7ae
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 把「窄屏到不了」那 14 条真的量掉
-
-`narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 里躺着 14 条，
-十二条同一个根因：桌面侧栏在手机上不渲染。
-**第三十九轮证明了「桌面开 → 缩到 360」够得到其中一部分**——channels 那两条
-就是这么量出来的。但它对**侧栏拥有的对话框**无效（见「别再做的事」第 2 条）。
-
-做法：给那条门禁加第二轮扫描（桌面开、缩到 360），并且**显式断言「缩完对话框还在」**；
-缩完没了的，单独一张表，各写原因。已知会掉的两条：
-`channels#runtime-config` / `channels#runtime-config-edit`。
-
-### 2. `settings-narrow-screen.spec.ts` 里仍然量空面板的四个分区
+### 1. `settings-narrow-screen.spec.ts` 里仍然量空面板的四个分区
 
 `tools` / `subagents` / `skills` / `integrations` 有列表而共享 mock 给空。
 （另外五个 `account` / `appearance` / `notification` / `memory` / `about` 本来就没有列表，
@@ -227,18 +271,26 @@ frontend-vue verify  completed/success  219ff7ae
 ⚠ 这一条的价值已经被本轮实证过一次了：同样的「覆盖了但没量到」，
 channels 那一笔一装夹具就是两边都红。
 
-### 3. 上游那一侧没有任何门禁钉着这一类
+### 2. 上游那一侧没有任何门禁钉着这一类
 
 `settings-narrow-screen` 只跑本仓；而 `channels#settings-panel` 没有 mobile 维
 （场景的 settle 要桌面侧栏），所以对照台账也看不见。
 **上游单边回归会没人发现。** 两条路：给那个场景补一条「先开抽屉」的 mobile 终态，
 或者把窄屏余量断言加进 parity 取样（单独断言，不进台账）。
 
-### 4. 挑下一条**单应用不变量**（方向已验证）
+### 3. 挑下一条**单应用不变量**（方向已验证）
 
 还没试过的，各自**先当探针量一遍、有收获再常驻**：
 `aria-hidden` 里套可聚焦元素、重复的可访问名、焦点陷阱、**dark 下的对比度**。
 ⚠ 上面那张表里标 0 条的**别重做**。
+
+### 4. 把「桌面开 → 缩到 360」做成 `narrow-screen-overflow.spec.ts` 的第二轮扫描
+
+⚠ **那 14 条第四十轮已经量过了（两个应用各一遍，0 条溢出），别重做那次扫描**；
+要做的是把它**常驻**下来，并且**显式断言「缩完浮层还在不在」**——
+已知缩完会掉的：`channels#runtime-config` / `runtime-config-edit`（对话框）、
+`thread-history` / `thread-list-pin`（菜单），**四条两边都掉，不是本仓的毛病**。
+掉了的单独一张表各写原因，否则「没量到」会长得和「量过、没问题」一模一样。
 
 ### 5. 继续扩取样面（tablet 只有 4 个样本，是最薄的一条轴）
 
