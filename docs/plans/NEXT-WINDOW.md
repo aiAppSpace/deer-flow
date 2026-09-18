@@ -134,11 +134,16 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 第三十九轮把代码提交和 docs 提交一起推出去，两条 run 都落在 docs 那条 tip
 `482e67bf` 上。所以「纯 docs 不触发 CI」只对**整条推送都是 docs** 成立。
 
-⚠ **第四十三轮收工时 CI 的实况（新窗口第一件事就是复核它）**：
-`a9cebfe2`（覆盖第四十一+四十二轮代码树）**verify 绿、parity 收工时仍在跑**；
-`21fbb92d`（第四十一轮）的 parity **被我推第四十二轮时取消了**，由 `a9cebfe2` 接手覆盖；
-第三十九轮 `482e67bf`、第四十轮 `4c3fc4dd` **均双绿**。
-之后的四条提交都是纯 docs，不触发也不取消 CI。
+**第四十三轮收工时 CI 全部落定（仍建议新窗口复核一遍）**：
+
+```
+482e67bf  第三十九轮            parity + verify  双绿
+4c3fc4dd  第四十轮              parity + verify  双绿
+a9cebfe2  第四十一+四十二轮代码树 parity + verify  双绿
+21fbb92d  第四十一轮            verify 绿；parity 被推第四十二轮时取消，由 a9cebfe2 接手覆盖
+```
+
+之后的提交都是纯 docs，不触发也不取消 CI（**当前代码树 = `a9cebfe2`**）。
 
 **第四十一轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
 
