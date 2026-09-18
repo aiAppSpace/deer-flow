@@ -22,11 +22,32 @@
 
                    **分区用 `SETTINGS_SECTIONS` 反查，不另抄一份名单**：抄一份的话，
                    新增分区默认不在门禁里，而那正是这条门禁要防的形状。
+
+                   ⚠ **「每个分区都覆盖到了」不等于「每个分区都量到了东西」**
+                   （2026-09-18 第三十九轮）。这条门禁十轮以来对 `channels` 分区一直是绿的，
+                   而共享 mock 的 `/api/channels/providers` 返回
+                   `{ enabled: false, providers: [] }`——**它量的是一块空面板**。
+                   装上 `CHANNEL_PROVIDERS` 之后同一条断言当场红：
+
+                       panelOverflow  本仓 +19   上游 +222
+                       面板右边界     本仓 338   上游 541（对话框右边界 344）
+
+                   上游那块面板**直接冲出对话框和视口 181px**。根因有三层，都已按两边同改修掉：
+                   设置对话框的栅格在 md 以下没有显式列模板（隐式列 `auto` + `min-width:auto`
+                   被内容撑开）、上游 `ItemActions` 缺 `flex-wrap`、以及
+                   「移除 provider 配置」那颗按钮的 `whitespace-nowrap`（229px）。
+
+                   **所以夹具是这条门禁的一部分，不是背景**：装了内容才叫量过。
+                   仍然量的是空面板的分区（按共享 mock 的默认值）：
+                   `account` / `appearance` / `notification` / `memory` / `about` 本来就没有列表，
+                   `tools` / `subagents` / `skills` / `integrations` 有列表但共享 mock 给空
+                   ——**那四个分区的这条门禁目前只证明了空态**，是下一笔账。
 */
 
 import { expect, test } from "@playwright/test";
 
 import { SETTINGS_SECTIONS } from "../../app/core/workspace-shell/settings-query";
+import { CHANNEL_PROVIDERS } from "../support/channel-providers";
 import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI } from "./utils/mock-api";
@@ -41,6 +62,19 @@ for (const section of SETTINGS_SECTIONS) {
     }) => {
       await page.setViewportSize({ width, height: 812 });
       mockLangGraphAPI(page);
+      // 见文件头：共享 mock 给的是空 provider 列表，那样量的是一块空面板。
+      await page.route("**/api/channels/providers", (route) =>
+        route.request().method() === "GET"
+          ? route.fulfill({
+              status: 200,
+              contentType: "application/json",
+              body: JSON.stringify({
+                enabled: true,
+                providers: CHANNEL_PROVIDERS,
+              }),
+            })
+          : route.fallback(),
+      );
 
       const dialog = await openSettingsDialog(
         page,

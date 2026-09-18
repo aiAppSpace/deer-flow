@@ -24,6 +24,7 @@
 import type { Page } from "@playwright/test";
 
 import { waitForDomQuiet, waitForFiniteAnimations } from "./settle";
+import { CHANNEL_PROVIDERS } from "../../support/channel-providers";
 
 import type { Agent } from "@/core/agents/types";
 
@@ -686,73 +687,6 @@ const MANY_THREADS = Array.from({ length: 120 }, (_, index) => {
 });
 
 const PLAIN_TEXT_SOURCE = "#include <stdio.h>";
-
-/** 与 frontend/tests/e2e/channels.spec.ts 同一份 provider 列表。 */
-/*
-  八个 provider 各站一种状态，而不是八份同样的「已连接」。
-
-  同形夹具下，侧栏里所有按钮的文案都一样，于是「连接态怎么算」这条判据整段测不到——
-  把 isConnected 写死成 true 也一样绿。这里让每一支分支各有一行：enabled=false 的
-  整行不该渲染；configured=false 走「先填运行时配置」；connection_status 非 connected
-  的显示「连接」；**已连接但 runtime 不可用**的也必须显示「连接」——最后这条是
-  provider.connection_status 与 unavailable_reason 的交叉点，两边的判据都是
-  `!unavailable_reason && connection_status === "connected"`，少一半就红。
-
-  Telegram 与 DingTalk 仍然可见，因为它们是 settle 锚点与几何锚点；这里顺手让
-  Telegram 站在「未连接」一侧，DingTalk 站在「已连接」一侧，几何锚点于是同时覆盖
-  两种按钮变体（secondary 与 outline+勾）的行高与行内布局。
-*/
-const CHANNEL_PROVIDERS = [
-  { provider: "buzz", display_name: "Buzz", auth_mode: "binding_code" },
-  {
-    provider: "telegram",
-    display_name: "Telegram",
-    auth_mode: "deep_link",
-    connection_status: "not_connected",
-  },
-  { provider: "slack", display_name: "Slack", auth_mode: "binding_code" },
-  {
-    provider: "discord",
-    display_name: "Discord",
-    auth_mode: "binding_code",
-    enabled: false,
-    configured: false,
-    connectable: false,
-    connection_status: "not_connected",
-  },
-  {
-    provider: "feishu",
-    display_name: "Feishu",
-    auth_mode: "binding_code",
-    configured: false,
-    connectable: false,
-    connection_status: "not_connected",
-  },
-  { provider: "dingtalk", display_name: "DingTalk", auth_mode: "binding_code" },
-  {
-    provider: "wechat",
-    display_name: "WeChat",
-    auth_mode: "binding_code",
-    connectable: false,
-    unavailable_reason: "WeChat runtime is not running.",
-  },
-  {
-    provider: "wecom",
-    display_name: "WeCom",
-    auth_mode: "binding_code",
-    connection_status: "revoked",
-  },
-].map((provider) => ({
-  enabled: true,
-  configured: true,
-  connectable: true,
-  connection_status: "connected",
-  unavailable_reason: null,
-  credential_fields: [
-    { name: "token", label: "Token", type: "password", required: true },
-  ],
-  ...provider,
-}));
 
 /*
   带能力位的模型目录。共享 mock 的 `/api/models` 返回**空列表**，于是工具条上的
