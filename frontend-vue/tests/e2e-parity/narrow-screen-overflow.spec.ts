@@ -69,6 +69,7 @@ import { expect, test } from "@playwright/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import {
+  DEFAULT_DIMENSION,
   PARITY_SCENARIOS,
   runScenario,
   scenarioStates,
@@ -135,6 +136,49 @@ const MOBILE_UNREACHABLE: Record<string, string> = {
     '`[role="combobox"]` 解析得到但点不动（被别的东西挡着）',
 };
 
+/*
+  缩窗口前后各拍一次：**对话框**还在不在。见第二轮扫描的判词。
+
+  **只数对话框，不数菜单**（2026-09-18 第四十二轮，第一版数了菜单，当场误报两条）：
+  - `channels#settings-panel-connected`——打开设置对话框用的那个「设置和更多」菜单
+    在快照那一刻可能还没关完，于是「缩完少了一个浮层」纯粹是时序噪音
+    （第四十轮用同一个状态量到的是不掉）；
+  - `workspace-changes#reasoning-menu`——它的菜单**现在就是该关的**
+    （第四十轮把「触发器被 CSS 隐藏时菜单跟着关」修成了两边同改）。
+
+  对话框是这一轮扫描真正要量的东西，而且它的存活是稳定的。
+  菜单类终态（`thread-history` / `thread-list-pin` / `workspace-changes#reasoning-menu`）
+  的那块浮层这一轮量不到——**这一条写在这里，不做成断言**：断言要稳，账要写清。
+*/
+function countDialogs() {
+  return document.querySelectorAll('[role="dialog"],[role="alertdialog"]')
+    .length;
+}
+
+/**
+ * 「用户得横着拖才能看全」的地方：能滚（`overflow-x` 是 auto/scroll）
+ * **而且**真的溢出了。两条用例共用同一把尺子，见文件头的判词。
+ */
+function findHorizontalScrollers() {
+  return Array.from(document.querySelectorAll("*"))
+    .filter((element) => {
+      const overflowX = getComputedStyle(element).overflowX;
+      if (overflowX !== "auto" && overflowX !== "scroll") return false;
+      if (element.scrollWidth <= element.clientWidth + 1) return false;
+      // 见 DELIBERATE_HORIZONTAL_SCROLL。
+      if (element.tagName === "PRE") return false;
+      if (element.querySelector("table")) return false;
+      return true;
+    })
+    .slice(0, 4)
+    .map(
+      (element) =>
+        `${element.tagName.toLowerCase()} ` +
+        `sw=${element.scrollWidth} cw=${element.clientWidth} ` +
+        `cls=${(element.className?.toString?.() ?? "").slice(0, 55)}`,
+    );
+}
+
 type Case = {
   key: string;
   scenario: (typeof PARITY_SCENARIOS)[number];
@@ -187,29 +231,7 @@ test("每个终态在 360px 上都不把东西推出视口", async ({ browser })
       await page.setViewportSize({ width: WIDTH, height: 812 });
       await page.waitForTimeout(600);
       void DELIBERATE_HORIZONTAL_SCROLL;
-      const escaped = await page.evaluate(() => {
-        /*
-          「需要横着拖才能看全」的地方：能滚（`overflow-x` 是 auto/scroll）
-          **而且**真的溢出了（`scrollWidth > clientWidth`）。见文件头的判词。
-        */
-        return Array.from(document.querySelectorAll("*"))
-          .filter((element) => {
-            const overflowX = getComputedStyle(element).overflowX;
-            if (overflowX !== "auto" && overflowX !== "scroll") return false;
-            if (element.scrollWidth <= element.clientWidth + 1) return false;
-            // 见 DELIBERATE_HORIZONTAL_SCROLL。
-            if (element.tagName === "PRE") return false;
-            if (element.querySelector("table")) return false;
-            return true;
-          })
-          .slice(0, 4)
-          .map(
-            (element) =>
-              `${element.tagName.toLowerCase()} ` +
-              `sw=${element.scrollWidth} cw=${element.clientWidth} ` +
-              `cls=${(element.className?.toString?.() ?? "").slice(0, 55)}`,
-          );
-      });
+      const escaped = await page.evaluate(findHorizontalScrollers);
       if (escaped.length > 0)
         overflowing.push(`${key}: ${escaped.join(" | ")}`);
     } catch {
@@ -230,5 +252,92 @@ test("每个终态在 360px 上都不把东西推出视口", async ({ browser })
   expect(
     unexpectedlyReachable,
     "这些终态已经走得到了，请从 MOBILE_UNREACHABLE 里删掉（表里有、实际没有，同样是失守）",
+  ).toEqual([]);
+});
+
+/*
+  **第二轮扫描：那 14 条「窄屏到不了」也要量**（2026-09-18 第四十一轮）。
+
+  上面那条用例从 360px 起步，`MOBILE_UNREACHABLE` 里那 14 条因此一格都没采过——
+  而「到不了」只等于**那条路径是按桌面写的**，不等于那一屏没问题。
+  第三十九轮实证了这一点：`channels#settings-panel` 就在那张表里，
+  而它在 360px 上的面板比它那格宽 19px（上游宽 222px，直接冲出视口）。
+
+  做法：**在桌面宽度把状态走到位，再把视口压到 360**，然后问同一个不变量。
+  第四十轮把这 14 条这么量过一遍，**两个应用各一遍：`documentElement.scrollWidth`
+  全是 360、非「有意横滚」的横滚容器 0 条**。这条用例把那次测量常驻下来。
+
+  ⚠ **缩窗口会把一部分对话框弄没**，所以必须显式记下来，否则「没量到」会长得和
+  「量过、没问题」一模一样。实测两条会掉，**两个应用完全一致**（桌面侧栏在
+  <768px 卸载，挂在它下面的对话框跟着卸载）——它们登记在 `DROPS_ON_RESIZE` 里，
+  仍然跑，仍然断言不溢出，只是**不声称量到了那块对话框**。
+  表里没有、实际却掉了的，同样报错：这张表要跟着应用走，不能烂掉。
+*/
+const DROPS_ON_RESIZE: Record<string, string> = {
+  "channels#runtime-config":
+    "运行时配置对话框挂在桌面侧栏的行里，侧栏在 <768px 卸载，它跟着没了（两个应用一致）",
+  "channels#runtime-config-edit": "同 `channels#runtime-config`",
+};
+
+test("窄屏下走不到的终态，用「桌面开 → 缩到 360」也要量一遍", async ({
+  browser,
+}) => {
+  test.setTimeout(1_800_000);
+
+  const overflowing: string[] = [];
+  const failed: string[] = [];
+  const unexpectedDrops: string[] = [];
+  const unexpectedSurvivors: string[] = [];
+
+  for (const { key, scenario, state } of CASES) {
+    if (!(key in MOBILE_UNREACHABLE)) continue;
+    const context = await browser.newContext({ ...PARITY_CONTEXT_OPTIONS });
+    const page = await context.newPage();
+    try {
+      // 桌面维走到位——这 14 条的步骤本来就是按桌面写的。
+      await runScenario(
+        page,
+        VUE_APP,
+        scenario,
+        DEFAULT_DIMENSION,
+        state,
+        30_000,
+      );
+      const dialogsBefore = await page.evaluate(countDialogs);
+      await page.setViewportSize({ width: WIDTH, height: 812 });
+      await page.waitForTimeout(800);
+      const dialogsAfter = await page.evaluate(countDialogs);
+
+      const dropped = dialogsBefore > dialogsAfter;
+      const expectedDrop = key in DROPS_ON_RESIZE;
+      if (dropped && !expectedDrop) unexpectedDrops.push(key);
+      if (!dropped && expectedDrop) unexpectedSurvivors.push(key);
+
+      const escaped = await page.evaluate(findHorizontalScrollers);
+      if (escaped.length > 0)
+        overflowing.push(`${key}: ${escaped.join(" | ")}`);
+    } catch (error) {
+      failed.push(`${key}: ${String(error).split("\n")[0]?.slice(0, 90)}`);
+    } finally {
+      await context.close();
+    }
+  }
+
+  expect(
+    failed,
+    "这些终态连桌面维都走不到了——那是场景本身坏了，不是窄屏的事",
+  ).toEqual([]);
+  expect(
+    overflowing,
+    "这些终态在 360px 上需要横向滚动（见文件头；第三十九轮的 channels 那两条就是这么抓到的）",
+  ).toEqual([]);
+  expect(
+    unexpectedDrops,
+    "这些终态缩到 360 之后浮层没了，而它们不在 DROPS_ON_RESIZE 里——" +
+      "那意味着这一跑没真的量到那块浮层，要么修那条路径，要么登记并写清原因",
+  ).toEqual([]);
+  expect(
+    unexpectedSurvivors,
+    "这些终态的浮层现在活下来了，请从 DROPS_ON_RESIZE 里删掉（表里有、实际没有，同样是失守）",
   ).toEqual([]);
 });
