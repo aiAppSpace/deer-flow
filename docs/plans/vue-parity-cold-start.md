@@ -212,7 +212,7 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1144 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **181 passed**（第四十四轮实测 ~28 分钟；
+make -C <abs>/frontend-vue e2e-parity     # **182 passed**（第四十五轮加 keyboard-order；
                                           #   耗时本来就没人守，机况一变就漂）
                                           #  （156 → 158 第三十七轮加 animation-settle.spec.ts；
                                           #   158 → 172 第三十八轮加 interaction-settles-first.spec.ts

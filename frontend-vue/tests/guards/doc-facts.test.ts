@@ -323,8 +323,9 @@ const PARITY_FIXED_SPECS = [
   "narrow-screen-overflow",
   "interaction-settles-first",
   "keyboard-trap",
+  "keyboard-order",
 ] as const;
-const PARITY_FIXED_TESTS = 16;
+const PARITY_FIXED_TESTS = 17;
 
 /** 全部读数只从签入基线算，一个字都不从散文里读。 */
 function measureLedger(): LedgerMeasures {
@@ -475,10 +476,10 @@ describe("计划文档里的台账读数和签入基线一致", () => {
           .length,
       0,
     );
-    // 14 个调用点 → 16 条用例（topology 最后一条与整份 keyboard-trap 各包在两项 for 里）。
+    // 15 个调用点 → 17 条用例（topology 最后一条与整份 keyboard-trap 各包在两项 for 里）。
     expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 14,
-      常量: 16,
+      调用点: 15,
+      常量: 17,
     });
 
     /*
