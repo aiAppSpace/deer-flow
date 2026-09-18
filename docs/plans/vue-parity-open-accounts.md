@@ -3999,6 +3999,35 @@ sidebar / thread-list / primitives），又是「一块屏有门禁、其余没�
 两个应用在 57 个终态上没有任何差异。
 
 
+### 十五、语言 × 窄屏扫了一遍：**0 条溢出**，外加一条潜在的账
+
+假设是「zh-CN 文案长度不同，窄屏更容易撑破」——两个轴各自都出过真账，
+所以值得合起来量一次。做法是复用已有的窄屏溢出门禁，只把 locale 换成 zh-CN。
+
+**读数：42 个可达终态、0 条溢出。** 这一档上语言轴没有东西。
+（事后想也说得通：中文可以在任意字符间断行，min-content 反而更小；
+真正撑破布局的是**不给换行机会的长 token**，那是英文那一侧的形状。
+——但这句是事后解释，读数在前。）
+
+#### 唯一一条失败是潜在账，不是活的
+
+`thread-list-pin#mobile-drawer` 在 zh-CN 下走不到：
+
+    locator.click: Timeout — getByRole('button', { name: /^(Toggle Sidebar|Open sidebar)$/ })
+    locator resolved to <button aria-label="Toggle Sidebar" data-sidebar="trigger" …>
+
+**按钮在、可见、名字也对**（`primitives.toggleSidebar` 两种语言同一串，
+上游写死英文那条约定是对的）——失败的是**点不动**，有东西挡着。
+
+它**只是潜在的**：这个终态只声明 `{ viewport: mobile, locale: "en-US" }`，
+harness 从不在 zh-CN 下跑它。**谁哪天给它加 zh-CN 维，先回来读这一条。**
+
+⚠ 顺带核过一条**不是**缺陷的：zh-CN 词典里有两个 `toggleSidebar`——
+`primitives` 那条是写死英文（对，照抄上游），`shortcuts` 那条是「切换侧边栏」，
+而它只用在**命令面板的命令名**上，是正当的产品文案。所有真正的侧栏触发器
+用的都是 `primitives.*`。
+
+
 ## 一、历史逐条台账（**读之前先看这一句**）
 
 > **2026-09-11/12 那一轮把台账上的每一行都重判了一遍**，下面这张表里
