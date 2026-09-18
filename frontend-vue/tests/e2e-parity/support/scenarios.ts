@@ -1792,9 +1792,40 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             },
           },
           { kind: "visible", target: { text: "Newest chat" } },
+          /*
+            **点开它，不要只断言它在**（2026-09-18 第三十八轮）。
+
+            此前这一步只到 `visible`，于是**会话行的 ⋯ 菜单在窄屏上一格都没采过**
+            ——而那正是 `thread-history` 与 `thread-title-sync` 两个场景在量的东西，
+            它们俩在 mobile 下都走不到（桌面侧栏不渲染，见
+            `narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE`）。
+            在这里多点一下，就把那块面接进窄屏取样，不必给它们各开一个 mobile 终态。
+
+            菜单项照 `thread-history` 的选法：置顶/重命名/删除三项 + 导出子菜单，
+            **子菜单要展开**，`exportAsMarkdown` 那两条词条只在里面出现。
+          */
+          {
+            kind: "click",
+            target: { role: "button", name: /^(More|更多)$/ },
+          },
           {
             kind: "visible",
-            target: { role: "button", name: /^(More|更多)$/ },
+            target: { role: "menuitem", name: /^(Rename|重命名)$/ },
+          },
+          {
+            kind: "visible",
+            target: { role: "menuitem", name: /^(Delete|删除)$/ },
+          },
+          {
+            kind: "click",
+            target: { role: "menuitem", name: /^(Export|导出)$/ },
+          },
+          {
+            kind: "visible",
+            target: {
+              role: "menuitem",
+              name: /^(Export as Markdown|导出为 Markdown)$/,
+            },
           },
         ],
       },

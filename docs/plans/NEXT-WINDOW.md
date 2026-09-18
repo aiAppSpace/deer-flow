@@ -270,8 +270,9 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 | --- | --- |
 | `channels` ×5 | **有**（实测）：`settings-narrow-screen.spec.ts` 按 `SETTINGS_SECTIONS` 覆盖 `?settings=channels`，375/360 两档含余量 |
 | `thread-list-pin` | **有**：同一场景的 `#mobile-drawer` 终态本来就跑 mobile |
-| `thread-history` | **大概率有**（未逐屏核）：消息流那一块由 `chat` 的 mobile 维采着 |
-| `artifact-batched-stream` | **大概率有**（未逐屏核）：`artifact-preview` 有 mobile 维，是同一块面板 |
+| `thread-history` | ~~大概率有~~ **已订正并补上**，见下 |
+| `thread-title-sync` | ~~没有~~ **已订正并补上**，见下 |
+| `artifact-batched-stream` | **大概率有**（仍未逐屏核）：`artifact-preview` 有 mobile 维，是同一块面板 |
 | `sidebar` | **部分**：移动抽屉由 `thread-list-pin#mobile-drawer` 与 `ui-polish-mobile` 采着 |
 | `agent-create-name-step` | **没有** |
 | `browser-feature` | **没有** |
@@ -279,11 +280,28 @@ Playwright 的 scroll-into-view 按当时的几何算滚动量：
 | `thread-title-sync` | **没有**（侧栏行内的 ⋯ 菜单） |
 | `workspace-changes#reasoning-menu` | **没有**（`#changes-panel` 也没有 mobile 维） |
 
-**所以下一轮该做的是那 5 块，不是 14 条。** 做法是照 `thread-list-pin#mobile-drawer`
+**所以下一轮该做的是剩下那 4 块**（`agent-create-name-step` / `browser-feature` /
+`sidecar-chat` / `workspace-changes#reasoning-menu`），**不是 14 条**。 做法是照 `thread-list-pin#mobile-drawer`
 的样子**另开一个 mobile 终态**（先开抽屉再走），而不是改现有终态的步骤——
 步骤是跨维度共用的，加一句「点开抽屉」会把桌面那几维弄坏。
 
-⚠ 表里「大概率有」那两条**是推断不是读数**，动手前先量一眼。
+⚠ 表里「大概率有」那条**是推断不是读数**，动手前先量一眼。
+
+#### 我自己那条推断当场就被量翻了（2026-09-18，同一轮）
+
+我写「`thread-history` 那块屏由 `chat` 的 mobile 维采着」——**错的**。
+去读那个场景才发现它根本不是消息流，是**侧栏会话列表 + 会话行的 ⋯ 菜单**，
+和 `thread-title-sync` 是同一块面。
+
+而 `thread-list-pin#mobile-drawer` 那个终态开了抽屉、断言 ⋯ 按钮**可见**，
+**但从没点开它**——于是那块菜单在窄屏上一格都没采过。
+所以做法不是给两个场景各开一个 mobile 终态，而是**把已有那个终态多点一下**：
+点开 ⋯ → 断言置顶/重命名/删除 → 展开导出子菜单。
+实测：新增那一维 **0 行**，窄屏溢出门禁也绿。
+
+**判据：说「那块屏别处采着呢」之前，先去读那个场景到底在量什么。**
+场景 id 常常和它实际覆盖的面对不上（`thread-history` 听起来像消息流，
+其实是侧栏）。
 
 ### 3.（旧第 1 条）对话框的窄屏扫描 —— **别再逐个手接入口**
 
