@@ -25,6 +25,7 @@ import type { Page } from "@playwright/test";
 
 import { waitForDomQuiet, waitForFiniteAnimations } from "./settle";
 import { CHANNEL_PROVIDERS } from "../../support/channel-providers";
+import { MCP_CONFIG } from "../../support/settings-fixtures";
 
 import type { Agent } from "@/core/agents/types";
 
@@ -1772,28 +1773,8 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     backend: "mock",
     path: "/workspace/chats/new?settings=tools",
     routes: [
-      {
-        pattern: "**/api/mcp/config",
-        json: {
-          mcp_servers: {
-            local: {
-              enabled: true,
-              description: "Local tools",
-              command: "uvx",
-              args: ["local-tools"],
-            },
-            remote: {
-              enabled: false,
-              description: "Remote tools",
-              type: "http",
-              url: "https://example.test/mcp",
-              headers: { "X-API-Key": "***" },
-              // 这一屏**不认识**的字段：编辑时必须原样带过去。
-              routing: { mode: "prefer" },
-            },
-          },
-        },
-      },
+      // 与 settings-narrow-screen.spec.ts 共用一份，见 support/settings-fixtures.ts 的文件头。
+      { pattern: "**/api/mcp/config", json: MCP_CONFIG },
     ],
     /*
       两边的编辑模型是同一个：**粘一段 JSON**，不是一堆字段输入框
