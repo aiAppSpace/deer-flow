@@ -419,14 +419,29 @@ skills 106 · account 74 · integrations 37 · appearance 24 · channels 22
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
+### 1. 跑那个**从没跑过**的 `aria-hidden` 探针
 
-第四十三轮把共享 mock 的五条列表选项都变异过了，**0 条空转**（读数见收工状态）。
+底稿在 `docs/plans/probes/aria-hidden-focusable.probe.ts`，拷进
+`frontend-vue/tests/e2e-parity/zz-aria-hidden.spec.ts` 直接跑，读完删掉。
+不变量：**`aria-hidden="true"` 的子树里不该有可聚焦元素**——读屏器听不到、
+键盘却能 tab 进去。**两个应用都跑**：Radix 与 reka-ui 对 `inert` 的处理可能不同，
+那会是真分叉，而这一类台账看不见。
+
+⚠ 第一跑若一片红，**先怀疑探针**（历轮第 4 次判据）。
+
+### 1b. 接着开第二个面：**dark 下的对比度**
+
+33 个 dark 样本已经在取样面里，**从没量过颜色**。
+做法照 `min-content 承重链` 那一套：单应用不变量、先当探针、有收获再常驻。
+
+### 1c. 再把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
+
+第四十三轮把共享 mock 的五条列表选项都变异过了，**0 条空转**。
 **剩下的大头是逐 spec 的 `page.route`**——28 个 spec 用它喂数据，
 而它没有统一入口，所以没法一次性变异。
 
-做法：挑那些 `page.route` 条数多、而「缺席断言」占比高的 spec 逐个来。
-排名（route 数 / 肯定断言 / 缺席断言）：
+挑那些 `page.route` 条数多、而「缺席断言」占比高的 spec 逐个来
+（route 数 / 肯定断言 / 缺席断言）：
 
 ```
 sidecar-chat 12/40/1 · agent-chat 11/25/11 · chat 7/38/3 · channels 6/40/6
