@@ -19,12 +19,12 @@
   **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
   一个 run 都不会有，`total_count: 0` 不是「没问题」。正确的问法与命令写在
   下面第十九轮清单的第 3 条里（那里有三条，第三条就是这件事）。
-- 对照台账 **0 唯一行 / 0 多重集 / 174 个场景-维度**。
+- 对照台账 **0 唯一行 / 0 多重集 / 189 个场景-维度**。
   **但唯一行是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
   按 `(档, 行文本)` 去重，**0 条不同的差异**——第三十六轮清零，起点是 170 个投影。
   **把唯一行读成「还有这么多件事」是错的**，件数看的是上面那个去重数。
-  **但 0 不等于对齐完成**：台账只覆盖这 174 个场景-维度，取样面之外它一个字都没说。
+  **但 0 不等于对齐完成**：台账只覆盖这 189 个场景-维度，取样面之外它一个字都没说。
   边界说明与下一轮三条方向写在 `NEXT-WINDOW.md`，**那份是当前版本**。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
@@ -73,10 +73,8 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
      「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
    - 开 `mobile`（同样只给 `integrations`）→ **当场量出上游一颗够不着的控件**
      （技能开关在 375px 下 `x=395.5`，手机上点不到）。
-   - **174 个场景-维度里仍有 141 个是 desktop**（tablet 13 · mobile 20）；非 desktop 的 13 族逐字是：
-     `artifact-preview` `channels` `chat` `integrations` `mcp-settings`
-     `project-detail` `scheduled-tasks` `sidecar-chat` `subtask-card`
-     `thread-history` `thread-list-pin` `ui-polish-mobile` `workspace-changes`。
+   - **189 个场景-维度里仍有 141 个是 desktop**（tablet 28 · mobile 20）；非 desktop 的 23 族逐字是：
+     `agents-feature-disabled` `artifact-panel-resize` `artifact-preview` `artifact-viewer-window` `background-tasks` `branch-thread` `browser-feature` `channels` `chat` `integrations` `mcp-settings` `project-detail` `scheduled-tasks` `sidebar-collapsed` `sidecar-chat` `subtask-card` `thread-archive` `thread-history` `thread-history-mermaid` `thread-list-infinite-scroll` `thread-list-pin` `ui-polish-mobile` `workspace-changes`。
      （第四十六轮补的四族——`channels` `sidecar-chat` `thread-history`
      `workspace-changes`——是 tablet 那一维；768 是 `md` 这条边界本身，
      一开就撞出 sidecar 正文行高 14px 那条真分叉。）
@@ -216,14 +214,14 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1144 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **191 passed**（第四十六轮加 9 个 tablet 取样点；
+make -C <abs>/frontend-vue e2e-parity     # **206 passed**（第四十七轮再加 15 个 tablet 取样点；
                                           #   耗时本来就没人守，机况一变就漂）
                                           #  （156 → 158 第三十七轮加 animation-settle.spec.ts；
                                           #   158 → 172 第三十八轮加 interaction-settles-first.spec.ts
                                           #   与 8 块色彩面的 dark 维）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
                                           #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
-                                          #  台账 0 唯一行 / 0 多重集 / 174 场景-维度（第四十六轮 accept）
+                                          #  台账 0 唯一行 / 0 多重集 / 189 场景-维度（第四十七轮 accept）
                                           #  （第十二、十三两轮基线文件都一个字节没动；
                                           #    第十二轮新挂的两个锚点报出 4 行、当轮修完归零，
                                           #    第十三轮修的四处**本来就没有锚点**——那正是问题本身）
@@ -324,6 +322,7 @@ config 会照这个 URL 的端口自己起 webServer）。
   先看 `VERIFY_EXIT`，再去 `grep` 那份日志要读数。**日志里出现 `Tests N passed`
   不等于 verify 绿**——单测只是九步里的一步，i18n / OpenAPI / 契约常量 /
   独立性 / build 都在它后面。
+
 - **重定向之前先 `mkdir -p` 目标目录**，否则整条命令根本没跑而退出码是 1（本轮踩了两次）。
 - **同一时刻只能有一个后台门禁任务**（Nuxt 构建锁）。
 - 写文件一律用绝对路径并回读确认；`cd X && …` 在 cd 失败时整条链不跑而退出码是绿的（线索 208）。
@@ -408,7 +407,7 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-台账只覆盖 174 个场景-维度，
+台账只覆盖 189 个场景-维度，
 取样面之外它一个字都没说。边界与下一步写在 `NEXT-WINDOW.md`。
 
 ### 再上一轮（2026-09-17 第三十五轮）做了什么
@@ -582,8 +581,8 @@ Claude 记忆 `measure-dont-guess`）。
 > 原来排在前面的「还台账欠账」已经没有欠账可还，**接 CI 与扩取样面升到最前**。
 >
 > **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
-ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-台账只覆盖 174 个场景-维度，取样面之外它一个字都没说。
+> ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
+> 台账只覆盖 189 个场景-维度，取样面之外它一个字都没说。
 > 完整的边界说明、下一轮三条方向、以及第三十六轮那两条教训，
 > 都写在 `NEXT-WINDOW.md`，**那份是这张单子的当前版本**。
 
@@ -632,7 +631,6 @@ ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十�
 
 **方法学**：「有一个说得通的解释」和「查过了」是两回事。查 CI 就去读 job 的**逐步结论**
 （哪一步 failure、哪些 skipped），查回归就 `git log -S` 找那段代码何时进来的。
-
 
 ### 第二十六轮踩出来的两条
 
@@ -741,6 +739,7 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
    教训与本轮主题同源——**猜测写进文档就会被下一个人当读数用**。
 
    量的过程里挖出一条**台账天生看不见**的真差异，见下面第 2 条。
+
 2. **收起态的侧栏里，Vue 有原生 tooltip 而 React 什么都没有**（第二十轮实测，未修）。
    上游的 `SidebarMenuButton` **自带 `tooltip` 属性**（`sidebar.tsx:509-548`，
    收起时渲染 Radix Tooltip），**而 workspace 侧栏一个都没传**；本仓
@@ -757,6 +756,7 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
    本仓把 `tooltip` 这个 prop 移植到自己的 `SidebarMenuButton` 上并改用它，
    撤掉临时的 `:title`。**改完这一屏仍然量不出来**（`title` 与 Radix tooltip
    都不在取样面），所以同一轮要把判据做成守卫，而不是靠台账。
+
 3. **确认 CI 那条修复真的绿了。** 第十九轮照 `external-gates` 逐字补齐了
    `real-backend` 的装配步骤，并加了门禁钉住「起真 Gateway 的 job 装配一致」，
    但**CI 结论只能靠推送验证**；每轮收工自动推，所以下一轮开工时看一眼 CI 就有结论。
@@ -768,6 +768,7 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
    gh api 'repos/aiAppSpace/deer-flow/actions/runs?branch=main-wc&per_page=3' \
      --jq '.workflow_runs[] | "\(.created_at) \(.head_sha[0:8]) → \(.status)/\(.conclusion // \"进行中\")"'
    ```
+
    ```bash
    RID=$(gh api 'repos/aiAppSpace/deer-flow/actions/runs?branch=main-wc&per_page=1' --jq '.workflow_runs[0].id') \
      && gh api "repos/aiAppSpace/deer-flow/actions/runs/$RID/jobs" \
@@ -795,6 +796,7 @@ CI 也确认了：fork 上 `frontend-vue verify` 这次推送后是 failure。
 
    `0` 的意思是「这个 sha 没被测过」，**不是「没问题」**；这时去看上一个动过
    `frontend-vue/` 的 sha，那次 run 才是当前树的结论。
+
 4. **给夹具补 `goal`，再把 `GoalStatus` 的位置对齐**（第十八轮留的）。
    上游把它和 TodoList 放在同一层包裹里，本仓的在 `ChatComposer.vue`；
    **目前没有任何场景同时喂 goal 与 todos**，改完没有读数可以验。
@@ -1125,9 +1127,11 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > loading 那一支原样手抄着三颗 primitive，注释与代码整整一轮不符。
 >
 > **起手式**（第十三轮跑过一遍，磨出了收窄口径）：
+>
 > ```bash
 > grep -rnE '不要|必须|不许|一律|禁止|只能|别再|不得' frontend-vue/app
 > ```
+>
 > 全量 **346 条 / 165 份文件**——直接做要一张大豁免表。
 > 收窄成**同一行（或下一行）里点名了具体 token 的**那些（反引号里的类 / 属性 /
 > 组件 / API），因为只有这种才可能被扫描器验证：**131 条 / 87 份**。

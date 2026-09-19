@@ -138,6 +138,22 @@ export const DARK_DIMENSION: ParityDimension = {
  * | `channels` | 设置对话框栅格**恰好在 `md` 这一格**（第三十九轮那条账的边界） |
  * | `thread-history` | 消息流的 markdown 面：代码块、表格、引用在中间宽度下的换行 |
  *
+ * **2026-09-19 第四十七轮铺开到 14 个场景**。铺之前先**全量筛了一遍**
+ * 「只有 desktop 的 24 个场景族在 768 上能不能 settle」——**28/32 个终态两边都能**，
+ * settle 不了的只有 artifact 流/表那一族的 4 个，而且**两边都不行**：
+ *
+ * ```
+ * artifact-stream-state · artifact-batched-stream(#preview-failed) · artifact-table-preview
+ * ```
+ *
+ * 它们与下面那条 `artifact-table-preview` 的判词同因（锚点在 768 上两边都不可见），
+ * **不是对照缺陷**。第四十七轮新挂的十个按「彼此不重叠」挑：
+ * artifact 面板（`artifact-panel-resize`）与弹出窗（`artifact-viewer-window`）、
+ * 消息悬停工具条（`branch-thread`）、mermaid 工具条（`thread-history-mermaid`）、
+ * 标签页 + 归档行（`thread-archive`）、会话列表行（`thread-list-infinite-scroll`）、
+ * 折叠态侧栏（`sidebar-collapsed`）、卡片网格（`agents-feature-disabled`）、
+ * 抽屉（`background-tasks`）、浏览器面板（`browser-feature`）。
+ *
  * ⚠ 原本还想挂 `artifact-table-preview`（artifact 面板 + 宽表），**量完撤掉了**：
  * 它的 settle 锚点在 768 上两个应用都不可见，读数与判词写在那个场景自己的注释里。
  */
@@ -1551,7 +1567,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     /*
@@ -1614,7 +1630,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     /*
@@ -2145,7 +2161,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       { kind: "click", target: { role: "button", name: "Toggle Sidebar" } },
       { kind: "hidden", target: { text: /^DeerFlow$/ } },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     id: "background-tasks",
@@ -2243,7 +2259,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      DARK_DIMENSION,
+      TABLET_DIMENSION,
+    ],
   },
   {
     id: "thread-archive",
@@ -2294,7 +2315,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     id: "thread-list-infinite-scroll",
@@ -2330,7 +2351,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     id: "ui-polish-mobile",
@@ -2929,6 +2950,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       DEFAULT_DIMENSION,
       { viewport: "desktop", theme: "light", locale: "zh-CN" },
       DARK_DIMENSION,
+      TABLET_DIMENSION,
     ],
   },
   {
@@ -3167,7 +3189,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       { kind: "click", target: { text: ARTIFACT_PATH } },
       { kind: "visible", target: { text: /^report\.html$/ } },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     id: "scheduled-tasks",
@@ -3767,7 +3789,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     id: "workspace-changes",
@@ -4330,7 +4352,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         target: { role: "link", name: /^(Download|下载)$/ },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   /*
     表格预览：这一屏此前一个取样点都没有。

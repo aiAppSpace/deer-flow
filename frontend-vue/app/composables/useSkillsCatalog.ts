@@ -23,6 +23,18 @@ export function useSkillsCatalog(
     queryKey: SKILLS_QUERY_KEY,
     queryFn: ({ signal }) => loadSkills({ signal }),
     enabled: computed(() => toValue(options.enabled ?? true)),
+    /*
+      目录只通过 useSkillSettings / IntegrationsSettings 的 mutation 变，
+      而那几处都会 `invalidateQueries(SKILLS_QUERY_KEY)`，所以留一个新鲜窗
+      不会挡住真更新——它挡的是**第二个观察者**去重取第一个刚取回来的东西。
+
+      与上游 `core/skills/hooks.ts` 的 `useSkills` **两边同改**（第四十七轮）：
+      那一屏（`user-message-plain-text`，正文里有一条 `/data-analysis …`，
+      于是 composer 与 `HumanSlashSkillText` 同时观察这个查询）实测
+      **上游 5 跑里 2 跑发了两次**（274ms 后又 323ms），本仓 5/5 都是一次。
+      这条重复除了对照台账的 requests 档，**没有任何门禁看得见**。
+    */
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: (count, error) => !(error instanceof SkillRequestError) && count < 3,
   });

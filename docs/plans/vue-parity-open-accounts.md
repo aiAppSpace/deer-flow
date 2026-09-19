@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-19 第四十六轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-19 第四十七轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -4409,6 +4409,106 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
   绝大多数真的依赖它们喂的数据。
 - 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
+
+
+## 2026-09-19 第四十七轮：tablet 轴铺到 14 个场景——**15 个新样本全干净**，外加一条查清的飘
+
+第四十六轮把 tablet 从 1 个场景铺到 4 个、当场掉出一条真分叉。这一轮把剩下的铺开。
+
+### 一、先筛后铺（省掉一次 12 分钟的空跑）
+
+第四十六轮吃过一次亏：`artifact-table-preview` 的 settle 锚点在 768 上不可见，
+是在**对照跑里**才发现的。这一轮改成**先全量筛一遍**——把「只有 desktop 的
+24 个场景族」逐个在 768 上跑 `runScenario`，只问「settle 得了吗」：
+
+```
+两边都能 settle   28 / 32 个终态
+settle 不了的 4 个，而且两边都不行：
+  artifact-stream-state · artifact-batched-stream(#preview-failed) · artifact-table-preview
+```
+
+**那 4 个与第四十六轮 `artifact-table-preview` 的判词同因**（锚点在 768 上两边都不可见），
+不是对照缺陷。**判据：铺维度之前先花 5 分钟筛 settle**，比在对照跑里撞出来便宜得多。
+
+### 二、按「彼此不重叠」挑的十个
+
+artifact 面板（`artifact-panel-resize`）与弹出窗（`artifact-viewer-window`）、
+消息悬停工具条（`branch-thread`）、mermaid 工具条（`thread-history-mermaid`）、
+标签页 + 归档行（`thread-archive`）、会话列表行（`thread-list-infinite-scroll`）、
+折叠态侧栏（`sidebar-collapsed`）、卡片网格（`agents-feature-disabled`）、
+抽屉（`background-tasks`）、浏览器面板（`browser-feature`）。
+
+**读数：15 个新场景-维度，全部 0 行。** tablet 样本 13 → 28，场景族 4 → 14。
+
+### 三、那条 `GET /api/skills` 查清了：上游侧偶发，不是差异
+
+它在第四十六轮（`thread-history/tablet`）和这一轮（`thread-list-infinite-scroll/tablet`）
+**同签名出现两次**，所以不能再当噪音放过。量时刻：
+
+| 场景 / 宽度 / 应用 | 三跑的发出时刻（ms，相对 goto） | settle |
+| --- | --- | --- |
+| `thread-history` desktop react | 332 · 300 · 325 | ~930 |
+| `thread-history` desktop vue | 280 · 287 · 290 | ~970 |
+| `thread-history` tablet react | 440 · 302 · 322 | ~950 |
+| `thread-history` tablet vue | 266 · 251 · 279 | ~975 |
+| `thread-list-infinite-scroll` **两个应用 × 两个宽度** | **全空** | — |
+
+两条结论：
+
+1. `thread-history` 上**两边每跑必发、且都远早于 settle**——第四十六轮那一行是噪音；
+2. `thread-list-infinite-scroll` 上**两边六跑一次都没发**，而对照跑里上游发过一次。
+   合计：**2 次完整 diff 里出现 1 次、6 次定点探针里出现 0 次**。
+
+⚠ **上面这段判词当场被推翻了，经过留着**——它是本轮最该记住的一条。
+
+写完「记成已知的飘、别再查」之后，全套对照跑又红了一次，而且这次落在
+**`user-message-plain-text/desktop/light/en-US`**——一个**桌面**的老键，
+和 tablet 毫无关系。也就是说：**我把「它总在 tablet 上出现」当成了线索，
+而那只是我恰好在 tablet 上看见它的两次。**
+
+定位靠的是把 jest 的 `@@ -2511` 行号换算回键名（每条 14 行，pretty-format 按键排序），
+比再跑一遍便宜。
+
+### 真根因：上游把技能目录取了**两遍**
+
+`user-message-plain-text` 正是第四十四轮我加了一条 `/data-analysis …` 消息的那一屏——
+于是 composer 与 `HumanSlashSkillText` **同时观察 `["skills"]` 这个查询**。
+逐跑量（各五跑，desktop）：
+
+```
+vue    [1, 1, 1, 1, 1]              （192–283ms）
+react  [1, 2, 2, 1, 1]              （第二次在 274ms 之后的 323ms）
+```
+
+两边都画出了胶囊，**功能没问题**；差的是上游那第二个观察者在第一次取**已经取回来之后**
+才挂载，而 `staleTime` 默认是 0，于是触发一次后台重取。本仓的两个观察者在同一拍挂载，
+被去重吃掉。**这是「底层不同构」，但它有一个可观察后果：多一次网络请求。**
+
+### 修法：**两边同改**，给这个查询一个新鲜窗
+
+目录只通过 mutation 变，而两边的 mutation 都会 `invalidateQueries(["skills"])`
+——所以 `staleTime` 挡不住真更新，它挡的正是「第二个观察者重取第一个刚取回来的东西」。
+
+`frontend/src/core/skills/hooks.ts` 与 `frontend-vue/app/composables/useSkillsCatalog.ts`
+各加 `staleTime: 5 * 60 * 1000`。收工读数：**两边 5/5 都是一次**，胶囊照常渲染。
+
+### 判词（本轮最该记住的）
+
+- **「偶发」不是判词，是还没找到根因的代称。** 我写下「记成已知的飘」之后，
+  它当场又出现了一次——而且证明我连它落在哪一屏都判错了。
+- **一个飘出现在哪些键上，取决于我在哪些键上看过它**，不是它的分布。
+  两次都在 tablet，只是因为那两轮我只在看 tablet 的新键。
+- **这条重复除了对照台账的 requests 档，没有任何门禁看得见**——它不改渲染、
+  不改可访问性树、不改几何，`make e2e` 与 `verify` 全绿。
+
+### 四、判词
+
+- **铺取样维度之前先筛 settle。** 5 分钟的筛换掉一次 12 分钟的对照跑，
+  而且筛出来的「两边都到不了」本身就是一条读数。
+- **同一个签名出现两次就不能再当噪音**，但**「不是噪音」和「是差异」之间还有一层**：
+  这一条查完是「偶发」，既不是稳定差异、也不是纯随机——它有一个具体的触发路径。
+- **这一轮 15 个样本 0 缺陷是有信息量的 0**：它们是十个此前完全没有非 desktop
+  样本的场景族，第一次被量。与「不开新面的 0」不是一回事。
 
 
 ## 2026-09-19 第四十六轮：重名扫完（**0 条对照缺陷**）+ tablet 轴开面
