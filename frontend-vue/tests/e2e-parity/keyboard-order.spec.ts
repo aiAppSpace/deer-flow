@@ -70,10 +70,65 @@ const VUE_APP = process.env.E2E_APP_URL ?? "http://localhost:3115";
 const REACT_APP = process.env.E2E_REACT_APP_URL ?? "http://localhost:3116";
 
 /*
-  40 次足够走完取样面里最长的一圈：实测最长的两个
-  （`thread-list-infinite-scroll` / `integrations#change-app`）各有 40 个不同落点。
+  **60 次。** 这个数是第五十轮重新量的，上一版写的是 40，配的理由是
+  「实测最长的两个（`thread-list-infinite-scroll` / `integrations#change-app`）
+  各有 40 个不同落点」——**那句话把读数读反了**：40 次按键拿到 40 个不同落点，
+  说明的是**一圈没走完**（窗口被占满），不是「环长 40、刚好够」。
+
+  重新量的读数（压缩掉相邻重复之后还有没有重复落点 = 闭没闭合）：
+
+      integrations#change-app        环长 **44**（60 与 120 次按键同号，两个应用
+                                     两个方向逐字相同）→ 40 次差 4 个
+      thread-list-infinite-scroll    **不闭合**：40 次 39 个落点、90 次 89 个、
+                                     300 次 **201–207** 个。它是无限滚动列表，
+                                     Tab 走到底就加载更多，环没有边界 → 已排除，
+                                     见 `UNSTABLE_RING`
+      其余 56 个                     都在 40 次内闭合
+
+  **窗口不够的后果不是「少比几个」，是「比的是两边各自窗口里的弧段」**：
+  下面第 ④ 条已经承认起点会漂，转移集合能抵消旋转、**抵消不了覆盖不全**。
+  第五十轮开 `Shift+Tab` 这个面时第一跑就撞上了——`thread-list-infinite-scroll`
+  报出一条分叉，定点复量两个应用**逐字相同**（同一颗 `tabIndex 0` 的按钮、
+  同样的 `223x32@16,2112`、两个方向同样的落点数）。**那是尺子的，不是应用的。**
+  同理，第四十五轮正向那次「0 条差异」在这两条环上也不构成证据。
+
+  60 给 44 留了 16 的余量。再往上加是有代价的：这一条用例的墙钟按
+  `终态数 × 2 应用 × 2 方向 × PRESSES` 线性涨。
 */
-const PRESSES = 40;
+const PRESSES = 60;
+/**
+ * **遍历动作本身会改变这一屏**的终态：跳过比对。
+ *
+ * ⚠ 排除一条就要写清为什么，否则「没量到」会长得和「量过、没问题」一模一样。
+ *
+ * `thread-list-infinite-scroll` 是无限滚动 + 虚拟列表。按键会让焦点元素滚进视野，
+ * 滚动又触发翻页与行回收，**于是环在被走的过程中就变了**。第五十轮四组读数：
+ *
+ *     全套 PRESSES=40   报一条分叉（`Settings and more → Load older chats → More`
+ *                       只在上游；本仓那一格是 `(body)`）
+ *     全套 PRESSES=60   报**逐字相同**的那一条
+ *     定点第 1 跑       两边第 5 步**都**落在 `Load older chats`；本仓 body 落点 0 次
+ *     定点第 2 跑       本仓第 5 步落在 `(body)`，而那一刻按钮**从 DOM 里消失**；
+ *                       body 落点 1 次。上游同样不稳（body 落点 1 次 / 2 次）
+ *
+ * 遍历途中的形变有读数：列表行数 `54 → 39 → 24`，那颗按钮的 y 在
+ * `2112 → 687 → 1880 → 3916` 之间跳，中间几步 `absent`。
+ *
+ * **两跑不同号即为飘**（第四十五轮判据）。所以这不是「两边走的环不同」，
+ * 是「环在被走的时候变了」——**这把尺子在这一屏上问不出那个不变量**。
+ * 全套两跑之所以逐字同号，是那种负载下两边的回收相位系统性不同，
+ * 不是两边的可达性不同：定点跑里两个应用**都**走到过那颗按钮，也**都**掉过 body。
+ *
+ * ⚠ 这是第四十五轮「钉起点的动作要先证明它不改变被测对象」的同一形状，
+ * 只不过这次改变被测对象的是**遍历本身**。
+ *
+ * ⚠ **两个方向一起排除。** 第五十轮一度只排除 `[Tab]`（理由：翻页只由正向触发，
+ * 反向的环是有界的），当场被定点跑推翻——反向同样会回收行、同样会掉 body。
+ *
+ * **翻案判据**：哪天这条场景的夹具改成有限条数、或列表不再虚拟化/自动翻页，
+ * 把它放回比对。判据是「同一终态连跑两次，落点序列逐位相同」。
+ */
+const UNSTABLE_RING = new Set(["thread-list-infinite-scroll"]);
 
 /*
   **反空转的下限**，不是快照。签入时合计 925；取 600 而不是 925，是因为它要挡的
@@ -123,15 +178,76 @@ function onlyIn(a: Set<string>, b: Set<string>): string[] {
   return [...a].filter((x) => !b.has(x)).sort();
 }
 
-test("两个应用按 Tab 走的是同一条环", async ({ browser }) => {
-  test.setTimeout(1_800_000);
+/**
+ * 环闭没闭合：**压缩掉相邻重复之后**，还有没有落点出现第二次。
+ *
+ * ⚠ 不能用「不同落点数 < 按键数」——那把「连按两次焦点没动」也算成走回了起点。
+ * 第五十轮第一版扫描就是这么写的，**把已知不闭合的 `thread-list-infinite-scroll`
+ * 漏报了**（39 个落点 / 40 次按键，看着像闭合，而它 300 次按键有 201 个落点）。
+ * 手上明明有一个已知答案的样本，却先读了新仪器的结论——第三十九轮的判词
+ * 「先拿一个已知答案的样本验仪器」这一轮又欠了一次。
+ */
+function ringClosed(sequence: string[]): boolean {
+  const squashed = sequence.filter((v, i) => i === 0 || v !== sequence[i - 1]);
+  return squashed.length > new Set(squashed).size;
+}
+
+/**
+ * 焦点被浮层吃住、整条序列一动不动的「终态×方向」：`ringClosed` 对它们是 false，
+ * 但那不是「窗口不够」，是**这一屏在这个方向上本来就只有一个落点**。
+ *
+ * 文件头最后一段早就记过这件事（「最小的 6 个各 1——菜单开着时 Tab 被浮层吃掉，
+ * 焦点停在菜单上不动，两个应用都是」）。第五十轮把它量成了一张可断言的名单，
+ * 好让「环必须闭合」那条体检对其余终态真正生效。
+ *
+ * **这 13 个键每一个都是「本仓 1 / 上游 1」——两个应用逐字相同**，
+ * 所以它们是这一屏的形状，不是分叉。
+ *
+ * ⚠ **键带方向，不是只按终态**：`workspace-changes#changes-panel` 正向走得动、
+ * 反向一步都走不了。按终态排除会把它正向那一半的体检也一起关掉。
+ *
+ * ⚠ **这张名单的读数必须来自「每个方向新开一个 page」**。第五十轮第一版扫描
+ * 图省事，在同一个 page 上先按 40 次 Tab 再按 40 次 Shift+Tab，
+ * 于是反向的起点被正向污染了——同一个 `changes-panel`，污染的读数是
+ * 「bwd 3 个落点、闭合」，干净的读数是「1 个落点」。**两次实测冲突时，
+ * 信那个起点干净的。**
+ */
+const SINGLE_STOP = new Set([
+  "thread-history[Tab]",
+  "thread-history[Shift+Tab]",
+  "thread-list-pin[Tab]",
+  "thread-list-pin[Shift+Tab]",
+  "thread-list-pin#mobile-drawer[Tab]",
+  "thread-list-pin#mobile-drawer[Shift+Tab]",
+  "ui-polish-mobile[Tab]",
+  "ui-polish-mobile[Shift+Tab]",
+  "user-message-plain-text[Tab]",
+  "user-message-plain-text[Shift+Tab]",
+  "workspace-changes#reasoning-menu[Tab]",
+  "workspace-changes#reasoning-menu[Shift+Tab]",
+  "workspace-changes#changes-panel[Shift+Tab]",
+]);
+
+const DIRECTIONS = [
+  { name: "Tab", key: "Tab" },
+  { name: "Shift+Tab", key: "Shift+Tab" },
+] as const;
+
+test("两个应用按 Tab / Shift+Tab 走的是同一条环", async ({ browser }) => {
+  test.setTimeout(3_600_000);
 
   const mismatched: string[] = [];
   const unreachable: string[] = [];
   const allBody: string[] = [];
   let distinctStops = 0;
 
-  async function walk(base: string, item: Case): Promise<string[]> {
+  const notClosed: string[] = [];
+
+  async function walk(
+    base: string,
+    item: Case,
+    pressKey: string,
+  ): Promise<string[]> {
     const context = await browser.newContext({ ...PARITY_CONTEXT_OPTIONS });
     const page = await context.newPage();
     try {
@@ -160,7 +276,7 @@ test("两个应用按 Tab 走的是同一条环", async ({ browser }) => {
       await waitForDomQuiet(page);
       const sequence: string[] = [];
       for (let i = 0; i < PRESSES; i += 1) {
-        await page.keyboard.press("Tab");
+        await page.keyboard.press(pressKey);
         sequence.push(await page.evaluate(ACTIVE));
       }
       return sequence;
@@ -169,34 +285,66 @@ test("两个应用按 Tab 走的是同一条环", async ({ browser }) => {
     }
   }
 
-  for (const item of CASES) {
-    let vue: string[];
-    let react: string[];
-    try {
-      vue = await walk(VUE_APP, item);
-      react = await walk(REACT_APP, item);
-    } catch (error) {
-      unreachable.push(
-        `${item.key}: ${String(error).split("\n")[0]?.slice(0, 90)}`,
-      );
-      continue;
+  for (const item of CASES)
+    for (const direction of DIRECTIONS) {
+      const label = `${item.key}[${direction.name}]`;
+      let vue: string[];
+      let react: string[];
+      try {
+        vue = await walk(VUE_APP, item, direction.key);
+        react = await walk(REACT_APP, item, direction.key);
+      } catch (error) {
+        unreachable.push(
+          `${label}: ${String(error).split("\n")[0]?.slice(0, 90)}`,
+        );
+        continue;
+      }
+
+      /*
+        **先体检窗口，再比环。** 窗口不够时比出来的差异是「谁在窗口内」，
+        不是「谁在环上」——见文件头 PRESSES 那段。
+      */
+      /*
+        ⚠ **先跳过，不体检**：这一屏的环在被走的过程中就变了，「闭没闭合」
+        对它是个没有意义的问题。第五十轮先写成「跳过比对但仍体检」，
+        当场收到一条误导性的红——反向那一半报「闭合了」，看起来像是可以放回比对，
+        而定点复跑证明它只是那一跑恰好稳定下来。
+      */
+      if (UNSTABLE_RING.has(item.scenario.id)) continue;
+      if (!SINGLE_STOP.has(label) && !ringClosed(vue))
+        notClosed.push(`${label} 本仓 ${new Set(vue).size} 个落点`);
+      if (!SINGLE_STOP.has(label) && !ringClosed(react))
+        notClosed.push(`${label} 上游 ${new Set(react).size} 个落点`);
+
+      const vueStops = new Set(vue.filter((stop) => stop !== "(body)"));
+      if (direction.name === "Tab") {
+        distinctStops += vueStops.size;
+        if (vueStops.size === 0) allBody.push(item.key);
+      }
+
+      const vueLinks = transitions(vue);
+      const reactLinks = transitions(react);
+      const onlyVue = onlyIn(vueLinks, reactLinks);
+      const onlyReact = onlyIn(reactLinks, vueLinks);
+      if (onlyVue.length > 0 || onlyReact.length > 0) {
+        mismatched.push(
+          `${label}: 只在本仓 ${JSON.stringify(onlyVue.slice(0, 3))}` +
+            ` / 只在上游 ${JSON.stringify(onlyReact.slice(0, 3))}`,
+        );
+      }
     }
 
-    const vueStops = new Set(vue.filter((stop) => stop !== "(body)"));
-    distinctStops += vueStops.size;
-    if (vueStops.size === 0) allBody.push(item.key);
-
-    const vueLinks = transitions(vue);
-    const reactLinks = transitions(react);
-    const onlyVue = onlyIn(vueLinks, reactLinks);
-    const onlyReact = onlyIn(reactLinks, vueLinks);
-    if (onlyVue.length > 0 || onlyReact.length > 0) {
-      mismatched.push(
-        `${item.key}: 只在本仓 ${JSON.stringify(onlyVue.slice(0, 3))}` +
-          ` / 只在上游 ${JSON.stringify(onlyReact.slice(0, 3))}`,
-      );
-    }
-  }
+  /*
+    **窗口体检**（第五十轮新加）。环没走完的时候，上面那条比对量的是弧段而不是环,
+    而它**照样会绿**——十几轮来 `integrations#change-app` 就是这么过的。
+    新增一个长环的终态会在这里当场红，而不是静默退回比弧段。
+  */
+  expect(
+    notClosed,
+    "这些终态的环在 PRESSES 次按键内没走完——比对量到的是两边各自窗口里的弧段，" +
+      "不是同一条环。要么把 PRESSES 提到够，要么确认这一屏的环会被遍历本身改掉、\n" +
+      "写进 UNSTABLE_RING 并附读数",
+  ).toEqual([]);
 
   expect(
     mismatched,
