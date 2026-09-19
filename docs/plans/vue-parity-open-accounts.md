@@ -4501,6 +4501,27 @@ react  [1, 2, 2, 1, 1]              （第二次在 274ms 之后的 323ms）
 - **这条重复除了对照台账的 requests 档，没有任何门禁看得见**——它不改渲染、
   不改可访问性树、不改几何，`make e2e` 与 `verify` 全绿。
 
+### 七、收工时 CI 又红了一次——**同一类、同一条判据，留给下一轮**
+
+第四十七轮推上去之后，CI 的 parity **第一次跑红**，两行、都在 desktop 老键上：
+
+```
+artifact-table-preview/desktop/light/en-US          requestsOnlyVue: POST /api/threads/search
+workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/threads/search
+```
+
+本机 3 次完整跑 0 行，CI 重跑（attempt 2）**绿**。计数：**CI 2 跑里 1 次**。
+
+⚠ **按本轮自己刚写下的判据，这不构成判词**：「重跑绿了」和「偶发」一样，
+只是还没找到根因。这个签名历轮判过多次（本文件搜 `threads/search`，
+第 201 行那条的判词就是「复量消失」）——**那些判词同样没有给出根因**。
+
+**留给下一轮，方法写死在交接文档第 1 条**：量时刻，两个应用各五跑，
+分出「谁多发一次」与「谁发得晚、掉出取样窗」。
+本轮 `/api/skills` 正是这么查成的。
+
+**「台账 0，macOS 与 Linux 同时」这一条因此退回待确认**，等根因查清再打勾。
+
 ### 四、判词
 
 - **铺取样维度之前先筛 settle。** 5 分钟的筛换掉一次 12 分钟的对照跑，

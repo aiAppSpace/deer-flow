@@ -18,6 +18,9 @@
 
 ⚠ **先读「✅ 已经量过、别重做」那一节再动手。**
 
+⚠ **第四十七轮收工时 CI 的 parity 红过一次、重跑绿**——新窗口量完状态后，
+**第一件事是「下一轮最该先拿的」第 1 条**，不是接着铺取样面。
+
 ---
 
 ## ⚠ 最终判据（2026-09-16 用户重申）
@@ -117,7 +120,9 @@
 能拿到的终态是这四条同时成立，目前**只差最后一条**：
 
 - 四张工单表 0 ✅
-- 台账 0，macOS 与 Linux 同时 ✅
+- 台账 0，macOS 与 Linux 同时 ⚠ **第四十七轮退回「待确认」**：macOS 3 次完整跑 0 行，
+  但 CI（Linux）出现过一次两行 `POST /api/threads/search`、重跑消失。
+  **这一条要等那两行查到根因才能重新打勾**（见「下一轮最该先拿的」第 1 条）
 - **每一类找到过的缺陷都有一条会红的门禁** ✅
   （窄屏溢出 · 面板余量 · 反空转 · 第二轮扫描 · 浮层随触发器关闭 ·
   **键盘陷阱**（44，两个应用都跑）· **键盘遍历同环**（45，跨应用））
@@ -153,7 +158,48 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 第三十九轮把代码提交和 docs 提交一起推出去，两条 run 都落在 docs 那条 tip
 `482e67bf` 上。所以「纯 docs 不触发 CI」只对**整条推送都是 docs** 成立。
 
-**第四十四轮的 CI 已确认双绿**（`2d0997db`：verify + parity 都 `completed/success`）。
+### ⚠ 当前 CI 状态（**新窗口第一件事就是复核它**）
+
+```
+08f4cb2b  第四十七轮   verify 绿   parity 第 1 次**红**、重跑（attempt 2）**绿**
+327a5dc0  第四十六轮   双绿
+8b1a7871  第四十五轮   双绿
+2d0997db  第四十四轮   双绿
+```
+
+⚠ **「重跑绿了」不是判词**——第四十七轮刚因为这句话栽过一次（见下面第 3 条）。
+当前计数：**CI 2 跑里出现 1 次，本机 3 次完整跑里 0 次**。
+
+**第四十七轮 parity 第一次在 Linux 上红了两行，本机 206 全绿不复现**：
+
+```
+artifact-table-preview/desktop/light/en-US        requestsOnlyVue: POST /api/threads/search
+workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/threads/search
+```
+
+⚠ **动手之前先读三件事**：
+
+1. **这个签名历轮判过**——open-accounts 搜 `threads/search`，第 201 行那条
+   `requestsOnlyVue: POST /api/threads/search` 的判词就是**「复量消失」**；
+2. **它落在两个 desktop 老键上**，与本轮加的 tablet 维、与 `staleTime` 那处改动
+   都没有直接关系——更像「套件变长之后 CI 机器上的竞速换了相位」；
+3. **别照着「它出现在哪些键上」找规律**——第四十七轮刚栽过一次：
+   `/api/skills` 那条连着两轮都落在 tablet 新键上，我因此判成「tablet 相关的偶发」，
+   下一次全套跑它落在一个 desktop 老键上，根因根本与断点无关。
+
+**怎么查（按这个顺序，别跳）**：
+
+```bash
+# ① 先看是不是飘：重跑同一条 CI
+gh run rerun <run-id> -R aiAppSpace/deer-flow --failed
+# ② 定点复量单个场景（读产物，别读颜色——该模式下 run 一定是绿的）
+gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow   --ref main-wc -f parity_only=artifact-table-preview
+# ③ 要判根因就量**时刻**，不要先改代码：
+#    装 page.on("request") 记 Date.now()-t0，两个应用各连跑五次，
+#    看是「谁多发一次」还是「谁发得太晚、掉出取样窗」。
+#    第四十七轮 /api/skills 那条就是这么查出来的（上游 5 跑里 2 跑发了两次）。
+```
+
 更早的几条（仍建议新窗口复核一遍）：
 
 ```
@@ -700,21 +746,50 @@ Save 键），全是那一帧 opacity 还在 0.05。补上
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 挑下一个**没打开过的取样面**（键盘那个面已经走完）
+### 1. 先把 CI 上那两行 `POST /api/threads/search` 查到根因
 
-名单上还剩的（按建议顺序）：
+第四十七轮 parity 在 Linux 上红过一次（本机 3 次完整跑都不复现，CI 重跑绿）：
 
-1. **重复的可访问名**——同一屏里两个控件叫同一个名字，读屏器用户分不出。
-   做法照第四十四/四十五轮：先当探针（`tests/e2e-parity/zz-*.spec.ts`）、
-   有收获再常驻。⚠ **先拿一个已知答案的样本验尺子**。
-2. **tablet 轴**——165 个场景-维度里只有 4 个是 tablet，是最薄的一条轴。
-   照「一个场景补一维就够」的纪律挑彼此不重叠的面补。
-3. **每个 spec 自己的 `page.route` 前提轴**——28 个 spec 用它喂数据，
-   第四十三轮验证了方法、还没铺过去（候选名单见下）。
+```
+artifact-table-preview/desktop/light/en-US          requestsOnlyVue: POST /api/threads/search
+workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/threads/search
+```
 
-⚠ **别再开这几个**（都走完了，判词在 open-accounts）：
-`aria-hidden` 里套可聚焦元素（0 条）、dark 对比度（1 条已修）、
-焦点陷阱（已常驻）、Tab 落点序列（0 条，已常驻）。
+⚠ **别把「重跑绿了」当判词。** 第四十七轮刚在同一种推理上栽过：
+`/api/skills` 那条连着两轮都落在 tablet 新键上，我判成「tablet 相关的偶发、别再查」，
+**下一次全套跑它落在一个 desktop 老键上**，根因根本与断点无关——
+是上游把目录取了两遍。**「偶发」只是还没找到根因的代称。**
+
+**方法照抄第四十七轮那次（它成了）**：
+
+```
+装 page.on("request") 记 Date.now() - t0 → 两个应用各连跑五次
+→ 看是「谁多发一次」还是「谁发得晚、掉出取样窗」
+```
+
+第四十七轮 `/api/skills` 的读数长这样，一眼就分出来了：
+
+```
+vue [1,1,1,1,1]    react [1,2,2,1,1]   （第二次 274ms → 323ms）
+```
+
+⚠ 历轮背景先读：open-accounts 搜 `threads/search`，这个签名判过多次
+（第 201 行那条的判词就是「复量消失」）——**但那些判词都没给出根因**，
+和我这次一样。`useThreads.ts:107/300/323` 与 `core/threads/infinite.ts:49`
+的注释里有它的调用路径。
+
+定点复量（读产物、别读颜色，该模式下 run 一定是绿的）：
+
+```bash
+gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
+  --ref main-wc -f parity_only=artifact-table-preview
+```
+
+### 1a. 再挑一个没打开过的取样面
+
+tablet 基本到头（14 个场景族；剩下 14 个只有 desktop 的里，5 个是
+artifact 流/表那族**两边都 settle 不了**、已判，其余多与已覆盖面重叠）。
+名单上还没铺过的那条轴是**逐 spec 的 `page.route` 前提变异**，见下。
 
 ### 1b. 再把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
 
