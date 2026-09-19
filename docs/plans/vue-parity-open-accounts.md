@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-20 第五十轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-20 第五十一轮·中途收工）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -4409,6 +4409,101 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
   绝大多数真的依赖它们喂的数据。
 - 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
+
+
+## 2026-09-20 第五十一轮（**中途收工**）：文本缩放 200%——尺子找对了，**还没跑上游对照**
+
+⚠ **这一轮没有任何产品改动，是一个进行到一半的探针轮。**
+下面每一条都是**只量了本仓**的读数，**不知道是分叉还是两边共有**。
+下一个窗口接着做的话，**第一件事是把同一把尺子在上游跑一遍**。
+
+### 一、⚠ 同一个「0 条」拿到三次，三次都不算数
+
+| 跑 | 读数 | 为什么不算 |
+| --- | --- | --- |
+| 1（1280） | 58 终态 **0 条** | 仪器未验 |
+| 2（375，加自检） | 0 条，**`root=16px`** | **`addInitScript` 没落地**，根字号从头到尾 16px |
+| 3（375，改注入方式） | 0 条，`root=32px 1rem=32px` ✅ | 注入验过了，但**尺子选错了** |
+
+第 3 跑的变异验证直接证明尺子无效：注入一个 `40rem`（=1280px）宽的元素，
+探针**照样 0 条**——这个应用是整页不滚动的 app shell，
+`narrow-screen-overflow` 那把**横滚**尺子在它身上天生无效。
+
+而且判据本身就选错了：**WCAG 1.4.4 问的是「文本放大后内容与功能丢不丢失」，
+横向滚动是 1.4.10 Reflow 的事。** 200% 文本的典型症状是
+**固定高度容器把文字裁掉**，不是页面能横拖。
+
+⚠ **报了一个好看结果的坏仪器，比报错的坏仪器危险**——报错会让人去查，
+好结果只会被写进文档。这一轮如果没加那行自检，
+「本仓在 200% 文本下完全没问题」就落盘了。
+
+### 二、换对的尺子（下一个窗口照抄）
+
+**判据：同一元素、同一页面，基线字号下内容完整，放大后被裁掉且滚不到。**
+用**同一跑里的基线**做对照，所以「本来就 truncate」的不会误报。
+
+```ts
+// 在 runScenario + settle 之后测一次基线，addStyleTag 放大后再测一次，比增量。
+// ⚠ 放大必须用 addStyleTag，不能用 addInitScript（见上面第 2 跑）。
+await page.addStyleTag({ content: `html{font-size:32px !important}` });
+
+function clipped() {                       // 索引即身份：放大只改样式，不改结构
+  const out = [];
+  const all = Array.from(document.querySelectorAll("body *"));
+  all.forEach((el, i) => {
+    const cs = getComputedStyle(el);
+    const hidesY = cs.overflowY === "hidden" || cs.overflowY === "clip";
+    const hidesX = cs.overflowX === "hidden" || cs.overflowX === "clip";
+    if (!hidesY && !hidesX) return;
+    if (el.clientWidth <= 1 || el.clientHeight <= 1) return;   // sr-only 那一类
+    if (cs.textOverflow === "ellipsis") return;                // 有意截断
+    if (cs.webkitLineClamp && cs.webkitLineClamp !== "none") return;
+    const dy = hidesY ? el.scrollHeight - el.clientHeight : 0;
+    const dx = hidesX ? el.scrollWidth - el.clientWidth : 0;
+    if (dy <= 1 && dx <= 1) return;
+    out.push({ i, dy, dx, desc: /* tag + class + innerText 前 26 字 */ "" });
+  });
+  return { total: all.length, out };
+}
+// 报「放大后比基线多裁 > 4px」的；两次 total 不等就说明 DOM 变了，索引不可比。
+```
+
+**这把尺子的变异验证过了**：给一个真实内容容器钉死 `height:40px; overflow:hidden`，
+当场报出 `+760y`。
+
+⚠ **不排除有意截断的话会淹掉**：第一版 74 处里绝大多数是 `truncate` / `line-clamp`。
+**尺子报得越多越要先分类。**
+
+### 三、本仓 1280 档的读数（**59 处，按族**）
+
+| 族 | 处数 | 形状 | 先判 |
+| --- | --- | --- | --- |
+| `a.peer/menu-button.flex.w-full` | 13 | `+2y +8x`，**基线已是 `2y/9x`** | 增量很小，基线就在裁，**优先级最低** |
+| `div.relative.overflow-hidden`（FlipDisplay，会话标题） | 12 | `+0y +17~117x`，基线 `2y/0x` | **大概率两边共有**：`AgentChat.vue` 的注释写过「上游的裁剪来自 FlipDisplay 自己的 `relative overflow-hidden`，是直接切掉而不是省略号」 |
+| `div.splitpanes__pane.workspace-panels__main-pane` | 4 | `+0~32y +204~232x` | **最像真问题**：面板主区内容横向溢出 200+px |
+| `div.focus-visible:…size-full.rounded-[in`（integrations） | 3 | `+0y +41x` | 未判 |
+| `div.ml-auto.h-full.min-w-0` | 2 | `+0y +217x` / `+13x` | 未判 |
+| `⚠ DOM 数量变了` | 2 | `branch-thread#turn-actions` 281→277 | **索引对照失效**，要换身份标识才量得了 |
+| `div.flex.flex-col.gap-1.5` | 1 | `+50y +139x`，基线 `50y/165x` | 基线就在裁 |
+
+### 四、下一个窗口接着做
+
+1. **把同一把尺子在上游跑一遍**（`PROBE_APP=$E2E_REACT_APP_URL`）。
+   两边一样坏 → 「两边同改」；只有本仓有 → 分叉。**现在这 59 处一条都还没定性。**
+2. `splitpanes__pane` 那 4 处先看——增量最大（200+px）。
+3. `DOM 数量变了` 那 2 处要换身份标识（索引不可比）：
+   建议用「tag + 父链深度 + 在父下的序号」或给元素打临时 `data-zz-id`。
+4. 375 档还没用**对的尺子**跑过（只用错的尺子跑过）。
+
+### 五、判词
+
+- **「0 条」从来不是可以直接落盘的读数**，它必须先通过「尺子会不会红」这一关。
+  这一轮同一个 0 拿到三次，三次原因都不同：注入没生效 / 尺子对这个应用无效 /
+  判据选错了标准条款。
+- **先查清楚要量的是哪一条标准**：1.4.4（文本缩放，内容不丢失）与
+  1.4.10（Reflow，不出现横滚）是两回事，尺子也是两把。
+- **尺子报得越多越要先分类**：74 处里绝大多数是有意截断，
+  不排除掉就会把真信号淹掉。
 
 
 ## 2026-09-20 第五十轮：反向遍历——**新面没掉出产品缺陷，掉出了尺子的四个洞**
