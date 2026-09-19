@@ -143,6 +143,23 @@ test.describe("artifacts accessibility shape", () => {
 
     await overview.getByText("report.md").click();
     await expect(page.locator("#artifacts")).toBeVisible();
+    /*
+      **反空转：上面那条 `toBe(0)` 需要一条肯定断言配对。**
+
+      第四十九轮的前提变异量出来的：把上面那条计数路由整个拿掉，这条用例
+      **12 条仍然全绿**——因为 `contentRequests` 恒为 0，缺席断言恒真。
+      也就是说，哪天产物内容换了端点、或者这条路由的 pattern 不再匹配，
+      「没选中不拉内容」这条守卫会**静默失效**，而且是绿的。
+
+      选中之后必须真的去拉一次，这条才证明观测器还接在被测行为上。
+      ⚠ 用 `expect.poll`：点击到发出请求之间隔着一次 Vue 的更新与 fetch 排队。
+    */
+    await expect
+      .poll(() => contentRequests, {
+        message:
+          "选中文件之后应当真的去拉一次内容——恒 0 说明上面那条计数路由已经没接在任何东西上",
+      })
+      .toBeGreaterThan(0);
   });
 
   test("panel actions carry React's generic names", async ({ page }) => {
