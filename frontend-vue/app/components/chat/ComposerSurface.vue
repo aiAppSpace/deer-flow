@@ -15,10 +15,34 @@ import { computed } from "vue";
 
 import { cn } from "@/lib/utils";
 
-const props = withDefaults(defineProps<{ testId?: string; class?: string }>(), {
-  testId: "composer-surface",
-  class: "",
-});
+const props = withDefaults(
+  defineProps<{
+    testId?: string;
+    class?: string;
+    /**
+     * 上游的两个 composer **body 那一层不同构**，所以这里必须分档：
+     *
+     * - `main`：上游 `input-box.tsx:2346` 是一个真盒子
+     *   `min-h-16 w-full min-w-0 px-3 py-3`，下面那段 CSS 逐字对着它；
+     * - `sidecar`：上游 `sidecar-panel.tsx:626` 用的是 `PromptInputBody`，
+     *   而它是 **`display: contents`**（`ai-elements/prompt-input.tsx:879`）
+     *   ——**根本不产生盒子**，内边距与 `min-h-16` 都在 textarea 自己身上
+     *   （`InputGroupTextarea` 的 `py-3` + `Textarea` 基类的 `px-3`）。
+     *
+     * 2026-09-19 第四十六轮 tablet 轴一开就撞出来：本仓两个 composer 共用
+     * `main` 那一套，于是 sidecar 的正文行比上游**高 14px**。
+     * 桌面下看不出来，是因为本仓那颗 `min-h-6!` 的 textarea 算出 36px、
+     * 与这层多出来的 30px **恰好抵消**；768 上抵消不掉。
+     * 逐层读数写在 `vue-parity-open-accounts` 第四十六轮。
+     */
+    variant?: "main" | "sidecar";
+  }>(),
+  {
+    testId: "composer-surface",
+    class: "",
+    variant: "main",
+  },
+);
 
 const classes = computed(() =>
   cn(
@@ -33,6 +57,7 @@ const classes = computed(() =>
     role="group"
     data-slot="input-group"
     :data-testid="testId"
+    :data-variant="variant"
     :class="classes"
   >
     <!--
@@ -85,6 +110,17 @@ const classes = computed(() =>
   width: 100%;
   min-width: 0;
   padding: 0.75rem;
+}
+
+/*
+  见 `variant` 那段注释：上游 sidecar 的 body 是 `display: contents`，
+  内边距与高度下限都归 textarea 自己。**不能只把这里的 padding 去掉**——
+  那样 textarea 仍然是这层的孩子、宽度还是被 `min-width: 0` 那一支约束着，
+  与上游「textarea 直接是 InputGroup 的 flex 孩子」不同构。
+*/
+.composer-surface[data-variant="sidecar"]
+  :deep([data-slot="input-group-body"]) {
+  display: contents;
 }
 
 .composer-surface :deep([data-slot="input-group-footer"]) {

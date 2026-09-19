@@ -116,6 +116,38 @@ export const DARK_DIMENSION: ParityDimension = {
 };
 
 /**
+ * 默认维度的平板孪生。
+ *
+ * **768 不是「中间那档宽度」，它是 `md` 这条边界本身**——`useIsMobile` 的门限
+ * 就是 768，桌面侧栏在它**以下**卸载、换成 Sheet 抽屉。也就是说这一档量的是
+ * 「刚好还算桌面」的那一格：`md:` 类全部生效、而可用宽度只有桌面档的 60%。
+ *
+ * **为什么值得补**（2026-09-19 第四十六轮）：这一轮开工时 165 个场景-维度里
+ * **只有 `chat` 一个场景有 tablet**（它跑满 12 维矩阵），tablet 因此是取样面上
+ * 最薄的一条轴——4 个样本。而历轮两条真账恰好都长在宽度带上：
+ * 第三十九轮是设置对话框栅格在 `md` 以下没有显式列模板，
+ * 第四十轮是上游在 **800→700 之间把输入区整块重挂**——**768 就在那条带里**。
+ *
+ * 与 `ZH_DIMENSION` / `DARK_DIMENSION` 同一条纪律：**一个场景补一维就够**
+ * （断点轴与语言/主题轴正交），并且**挑彼此不重叠的面**，不求覆盖率好看：
+ *
+ * | 场景 | 这一维能采到、别处采不到的东西 |
+ * | --- | --- |
+ * | `sidecar-chat` | 分栏：两个 composer 并排 + 拖拽把手，最吃宽度的一屏 |
+ * | `workspace-changes` | 输入区在 700–800 那条重挂带里的样子（第四十轮的读数） |
+ * | `channels` | 设置对话框栅格**恰好在 `md` 这一格**（第三十九轮那条账的边界） |
+ * | `thread-history` | 消息流的 markdown 面：代码块、表格、引用在中间宽度下的换行 |
+ *
+ * ⚠ 原本还想挂 `artifact-table-preview`（artifact 面板 + 宽表），**量完撤掉了**：
+ * 它的 settle 锚点在 768 上两个应用都不可见，读数与判词写在那个场景自己的注释里。
+ */
+export const TABLET_DIMENSION: ParityDimension = {
+  viewport: "tablet",
+  theme: "light",
+  locale: "en-US",
+};
+
+/**
  * 定位方式。四种都是两个应用共有的表达，没有第五种。
  */
 export type ParityTarget =
@@ -1172,7 +1204,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      DARK_DIMENSION,
+      TABLET_DIMENSION,
+    ],
   },
   {
     id: "agent-chat",
@@ -1664,7 +1701,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       */
       { kind: "visible", target: { role: "separator" } },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
+    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
   {
     id: "thread-list-pin",
@@ -3616,6 +3653,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       DEFAULT_DIMENSION,
       { viewport: "desktop", theme: "light", locale: "zh-CN" },
       DARK_DIMENSION,
+      TABLET_DIMENSION,
     ],
   },
   {
@@ -3873,7 +3911,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       深色下如果少了 `dark:text-*-300` 就是深字压深底。
       与 `integrations` 同一条纪律——一个场景补一维就够。
     */
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, DARK_DIMENSION],
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      DARK_DIMENSION,
+      TABLET_DIMENSION,
+    ],
   },
   {
     id: "streaming-reasoning-order",
@@ -4352,6 +4395,15 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         target: { role: "textbox", name: /^(Cell value|单元格内容)$/ },
       },
     ],
+    /*
+      ⚠ **这一条本来要补 TABLET_DIMENSION，量完撤掉了**（第四十六轮）。
+      768 上它的 settle 锚点 `rows.csv` **两个应用都不可见**，逐字同号：
+      各有两份，几何 `32×160` 与 `0×160`，`.first()` 命中 0 宽那份。
+      也就是说文件名在这一档被挤成一条 32px 宽、160px 高的竖条——
+      **是两边共有的窄布局产物，不是对照缺陷**，而这个场景在 768 上
+      settle 不了。要把这一档纳进来，得先给它换一个在 768 上稳定可见的锚点。
+      **翻案判据**：哪天 artifact 面板在 `md` 这一格的列宽改了，回来重量。
+    */
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
   /*

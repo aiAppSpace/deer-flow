@@ -450,7 +450,7 @@ async function confirmDelete() {
         :aria-busy="composerBusy"
         @submit.prevent="session.submit()"
       >
-        <ComposerSurface test-id="sidecar-composer-surface">
+        <ComposerSurface test-id="sidecar-composer-surface" variant="sidecar">
           <!--
             引用块在**框内**，和附件筹码同属一个 header。上游把
             ReferenceAttachmentSummary 放进 PromptInputHeader
@@ -492,7 +492,7 @@ async function confirmDelete() {
               :readonly="composerDisabled"
               :aria-disabled="composerDisabled || undefined"
               rows="1"
-              class="field-sizing-content max-h-48 min-h-6! w-full min-w-0 resize-none bg-transparent p-0! text-sm leading-6! outline-none focus-visible:ring-0 focus-visible:outline-none"
+              class="field-sizing-content max-h-36 min-h-16 w-full min-w-0 resize-none bg-transparent px-3 py-3 text-sm outline-none focus-visible:ring-0 focus-visible:outline-none"
               @keydown="onKeydown"
               @compositionstart="compositionActive = true"
               @compositionend="compositionActive = false"

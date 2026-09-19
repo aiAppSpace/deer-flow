@@ -19,12 +19,12 @@
   **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
   一个 run 都不会有，`total_count: 0` 不是「没问题」。正确的问法与命令写在
   下面第十九轮清单的第 3 条里（那里有三条，第三条就是这件事）。
-- 对照台账 **0 唯一行 / 0 多重集 / 165 个场景-维度**。
+- 对照台账 **0 唯一行 / 0 多重集 / 174 个场景-维度**。
   **但唯一行是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
   按 `(档, 行文本)` 去重，**0 条不同的差异**——第三十六轮清零，起点是 170 个投影。
   **把唯一行读成「还有这么多件事」是错的**，件数看的是上面那个去重数。
-  **但 0 不等于对齐完成**：台账只覆盖这 165 个场景-维度，取样面之外它一个字都没说。
+  **但 0 不等于对齐完成**：台账只覆盖这 174 个场景-维度，取样面之外它一个字都没说。
   边界说明与下一轮三条方向写在 `NEXT-WINDOW.md`，**那份是当前版本**。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
@@ -73,9 +73,13 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
      「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
    - 开 `mobile`（同样只给 `integrations`）→ **当场量出上游一颗够不着的控件**
      （技能开关在 375px 下 `x=395.5`，手机上点不到）。
-   - **165 个场景-维度里仍有 141 个是 desktop**；非 desktop 的 9 族逐字是：
-     `artifact-preview` `chat` `integrations` `mcp-settings` `project-detail`
-     `scheduled-tasks` `subtask-card` `thread-list-pin` `ui-polish-mobile`。
+   - **174 个场景-维度里仍有 141 个是 desktop**（tablet 13 · mobile 20）；非 desktop 的 13 族逐字是：
+     `artifact-preview` `channels` `chat` `integrations` `mcp-settings`
+     `project-detail` `scheduled-tasks` `sidecar-chat` `subtask-card`
+     `thread-history` `thread-list-pin` `ui-polish-mobile` `workspace-changes`。
+     （第四十六轮补的四族——`channels` `sidecar-chat` `thread-history`
+     `workspace-changes`——是 tablet 那一维；768 是 `md` 这条边界本身，
+     一开就撞出 sidecar 正文行高 14px 那条真分叉。）
      （`subtask-card` 是第三十八轮补的：窄屏逐状态扫描在 360px 上量到本仓那一格
      漏抄 `min-w-0`，状态图标被推出视口，而它此前只有 desktop/zh/dark 三维。）
      （这一行此前写「129 个里 110 个 desktop，非 desktop 只有 4 族」——**两个数
@@ -212,14 +216,14 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1144 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **182 passed**（第四十五轮加 keyboard-order；
+make -C <abs>/frontend-vue e2e-parity     # **191 passed**（第四十六轮加 9 个 tablet 取样点；
                                           #   耗时本来就没人守，机况一变就漂）
                                           #  （156 → 158 第三十七轮加 animation-settle.spec.ts；
                                           #   158 → 172 第三十八轮加 interaction-settles-first.spec.ts
                                           #   与 8 块色彩面的 dark 维）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
                                           #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
-                                          #  台账 0 唯一行 / 0 多重集 / 165 场景-维度（第四十四轮 accept）
+                                          #  台账 0 唯一行 / 0 多重集 / 174 场景-维度（第四十六轮 accept）
                                           #  （第十二、十三两轮基线文件都一个字节没动；
                                           #    第十二轮新挂的两个锚点报出 4 行、当轮修完归零，
                                           #    第十三轮修的四处**本来就没有锚点**——那正是问题本身）
@@ -404,7 +408,7 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-台账只覆盖 165 个场景-维度，
+台账只覆盖 174 个场景-维度，
 取样面之外它一个字都没说。边界与下一步写在 `NEXT-WINDOW.md`。
 
 ### 再上一轮（2026-09-17 第三十五轮）做了什么
@@ -579,7 +583,7 @@ Claude 记忆 `measure-dont-guess`）。
 >
 > **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-台账只覆盖 165 个场景-维度，取样面之外它一个字都没说。
+台账只覆盖 174 个场景-维度，取样面之外它一个字都没说。
 > 完整的边界说明、下一轮三条方向、以及第三十六轮那两条教训，
 > 都写在 `NEXT-WINDOW.md`，**那份是这张单子的当前版本**。
 
