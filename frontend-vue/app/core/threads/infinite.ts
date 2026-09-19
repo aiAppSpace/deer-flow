@@ -240,9 +240,24 @@ export function upsertThreadInInfiniteCache(
     单场景实测：只失效那版 React 4 次 / 本仓 **6 次**，方向反了过来。
     插 + 失效之后是 React 4 次 / 本仓 4 次。
 
-    插进去也不会猜错成员关系：**走到这个函数的只有「刚建出来的 thread」那条路**
-    （`useThreads.upsert()` 的 else 支），而新建的 thread 不可能已归档；
-    真要有出入，紧跟着这次失效带回来的服务端那一份会纠正它。
+    ⚠ **这里原来写着「走到这个函数的只有『刚建出来的 thread』那条路」——那句话是错的**
+    （第四十八轮订正）。`useThreads.upsert()` 的 else 支真正的含义是「**这条线程不在
+    我当前这份列表里**」：列表首取还在飞时 `threads.value` 是空的，于是**每一条既有
+    线程都会走到那里**（`AgentChat.vue` 那条 metadata watcher 每开一屏都调一次）。
+
+    这句话写错的代价是实打实的：它让人以为下面这次失效只会落在新建线程上，
+    于是调用方那边「先把这条放进空缓存、再调这个函数」看起来无害。
+    **而对空缓存来说，上面的 `setQueriesData` 本来就是空操作
+    （`infinite.test.ts` 第一条用例钉着），唯一实际发生的就是下面这次失效**——
+    放进缓存那一步已经让查询变成「idle 且有数据」，失效于是不再与在飞的首取合并，
+    **另发一次体逐字相同的 `POST /api/threads/search`**。对照台账上那两行
+    `requestsOnlyVue: POST /api/threads/search` 就是它。
+    **`useThreads.upsert()` 现在在空缓存那一支放完就 `return`，不再走到这里**，
+    完整读数与判词写在那里。
+
+    走到这里的（列表已经有数据、但没有这条）仍然不会猜错成员关系：
+    新建的 thread 不可能已归档；既有线程只会被**合并**进已有页（`exists` 分支）
+    或插到第一页最前，紧跟着这次失效带回来的服务端那一份会纠正它。
   */
   void queryClient.invalidateQueries({
     queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,

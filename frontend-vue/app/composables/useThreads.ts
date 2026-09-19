@@ -190,11 +190,56 @@ export function useThreads(
       );
       return;
     }
+    /*
+      **列表缓存还是空的时候，只把这条线程放进去，不要顺手失效**（第四十八轮）。
+
+      `upsert()` 的这条 `else` 支真正的含义是「**这条线程不在我当前这份列表里**」，
+      而不是「它是新建的」：列表首取**还在飞**的时候 `threads.value` 是空的，
+      于是**每一条既有线程都会走到这里**（`AgentChat.vue` 那条 `threadMetadata.data`
+      的 watcher 每开一屏都调一次，它与列表首取是两条并行请求，谁先回来是赛跑）。
+
+      此前这里是「播一页 + 调 `upsertThreadInInfiniteCache`」。对空缓存来说，
+      那个函数的插入部分本来就是空操作（`infinite.test.ts` 第一条用例钉着），
+      **唯一实际发生的是它末尾那次 `invalidateQueries`**——而那一次在这条支上
+      要么无效、要么有害，query-core 5.90 四种组合逐个量过：
+
+          只 seed、不失效（桌面）        queryFn 1 次，最终缓存是服务端那份
+          seed + 失效（此前的写法）      queryFn 2 次   ← 多出来的那一次
+          只 seed、不失效（窄屏）        queryFn 0 次
+          seed + 失效（窄屏）            queryFn 0 次   ← 失效在这里根本不重取
+
+      窄屏侧栏是抽屉，关着时 `RecentChatList` 整棵不挂载，这个 key 没有 enabled 的
+      观察者，`invalidateQueries` 默认只重取 active 查询——所以窄屏那两行相同。
+      桌面上首取还在飞时，seed 让查询变成「idle 且有数据」，失效于是不再与在飞的
+      那次合并，**另发一次体逐字相同的 `POST /api/threads/search`**。
+      对照台账上那两行
+      `artifact-table-preview/desktop/light/en-US · workspace-changes#changes-panel/desktop/dark/en-US`
+      的 `requestsOnlyVue: POST /api/threads/search` 就是它——本机几乎总是列表先回
+      （0 行），CI 上整套跑得慢（205 条 50.9 分钟，本机同一套约 34 分钟），
+      偶尔换个相位就露出来，历轮判词一直是「复量消失」。
+      **把搜索响应推迟 300/900/2000ms 就 12/12 稳定发两次**（延迟 0 时 4/4 一次，
+      上游四档共 16/16 全是一次）。
+
+      ⚠ **seed 本身不能删**，第四十八轮试过、当场被台账按回来：
+      `AgentChat` 有四处（标题 / artifacts / goal / todos）把
+      `threads.threads.find(...)` 当作「当前线程的服务端快照」在读，而窄屏下那份
+      缓存永远是空的——删掉 seed，`subtask-card/mobile/light/en-US` 立刻掉出
+      `ariaOnlyReact: - text: Stopped subtask`（标题没了），
+      `ui-polish-mobile` 的 artifacts 抽屉也打不开了。
+      桌面上 seed 会被首取的结果覆盖（上表第一行的「最终缓存是服务端那份」）。
+
+      **更彻底的方向**（没做，留判据）：上游那四处根本不读列表缓存——标题走
+      `<ThreadTitle canonicalTitle={threadMetadata.data?.values?.title}>`，
+      其余走 stream 的 thread state。把 `AgentChat` 那四处逐一换到同样的源，
+      seed 就可以整个去掉。**翻案判据**：哪天要动 `AgentChat` 的服务端快照读取，
+      连同这四处一起换，并用 `subtask-card/mobile` 与 `ui-polish-mobile` 两处验收。
+    */
     if (!queryClient.getQueryData(queryKey.value)) {
       queryClient.setQueryData(queryKey.value, {
         pages: [[thread]],
         pageParams: [0],
       });
+      return;
     }
     upsertThreadInInfiniteCache(queryClient, thread);
   }

@@ -246,9 +246,34 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     ).toBeGreaterThanOrEqual(10);
   }
 
+  mkdirSync(dirname(REPORT.pathname), { recursive: true });
+  /*
+    **诊断模式也要落盘**（第四十八轮修）。
+
+    这里原来写着「不写报告」，而 `writeFileSync(REPORT, ...)` 在下面的 `return`
+    之后——于是 `PARITY_ONLY` 的那次 CI 跑**什么产物都没有**：
+    `gh run download -n parity-failures` 报 `no valid artifacts found`
+    （`if-no-files-found: ignore` 把空目录静默吞掉），结论只剩下几万行日志里的
+    一段 `console.log`。而 workflow 那一步的 `if: failure() || inputs.parity_only != ''`
+    配着一整段注释写明「PARITY_ONLY 这次跑**唯一的产物**就是这份 report」
+    ——**两处对不上，而且是「拿不到东西」和「量过、没问题」长得一模一样的那种。**
+
+    诊断模式多写两份：`rawRequests` / `rawTabbables` 只有 ONLY 才收，
+    而查「谁多发了一次请求」「那颗可 tab 的到底排第几」要看的正是完整序列，
+    差集看不出来。整套模式保持原来的形状（顶层就是 entries），不给读它的人换格式。
+  */
+  writeFileSync(
+    REPORT,
+    JSON.stringify(
+      ONLY ? { entries, rawRequests, rawTabbables } : entries,
+      null,
+      2,
+    ),
+  );
+
   if (ONLY) {
     /*
-      诊断模式：把这一个场景的差异打出来就结束，**不写报告、不比基线、不 accept**。
+      诊断模式：把这一个场景的差异打出来就结束，**不比基线、不 accept**。
       要它一条都没有匹配上也算错——`PARITY_ONLY` 拼错了不该静默地「全绿」。
     */
     expect(
@@ -267,9 +292,6 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     );
     return;
   }
-
-  mkdirSync(dirname(REPORT.pathname), { recursive: true });
-  writeFileSync(REPORT, JSON.stringify(entries, null, 2));
 
   if (ACCEPT) {
     const previous = existsSync(BASELINE)

@@ -332,4 +332,70 @@ describe("useThreads server-state owner", () => {
     wrapper.unmount();
     queryClient.clear();
   });
+
+  /*
+    **列表首取在飞时 upsert，不许多发一次 `POST /api/threads/search`。**
+
+    第四十八轮的账：`AgentChat.vue` 的 `threadMetadata.data` watcher 一到就
+    `threads.upsert(metadata)`，它和侧栏列表的首取是两条并行请求。谁先回来是赛跑，
+    而 `upsert()` 的 else 支判的是「这条线程不在我当前这份列表里」——首取还没回来时
+    列表是空的，于是**每一条既有线程都会走到 else 支**。
+
+    此前那一支在播完一页之后还会走 `upsertThreadInInfiniteCache`，而对空缓存来说
+    那个函数的插入是空操作，**唯一实际发生的是它末尾那次 `invalidateQueries`**：
+    播一页让查询变成「idle 且有数据」，失效于是不再与在飞的首取合并，
+    而是另发一次体逐字相同的请求（`{"archived":false,"limit":50,"offset":0}`）。
+
+    表现在对照台账上是 `requestsOnlyVue: POST /api/threads/search`：本机几乎总是列表
+    先回（0 行），CI 整套跑得慢（205 条 50.9 分钟 vs 本机约 34 分钟），偶尔换个相位
+    就露出来，历轮判词一直是「复量消失」。把搜索响应推迟 300/900/2000ms，
+    浏览器里 12/12 稳定发两次（延迟 0 时 4/4 一次），上游四档共 16/16 全是一次。
+
+    ⚠ **这条用例的前提是「首取必须停在半空」**：用 `mockResolvedValue` 的话首取当场
+    就回来、命中 `existing` 支，**它会在修好之前就绿**——守的正是那个在飞的窗口。
+
+    ⚠ **播进去的那一页要留着**，不是缺陷：`AgentChat` 有四处把
+    `threads.threads.find(...)` 当「当前线程的服务端快照」在读，而窄屏下侧栏是抽屉、
+    列表查询根本不跑，那份缓存只有这里会填。桌面上它会被首取的结果覆盖。
+    删掉它，`subtask-card/mobile` 与 `ui-polish-mobile` 当场红（第四十八轮实测）。
+  */
+  it("列表首取在飞时 upsert 只落缓存，不再发一次搜索", async () => {
+    searchThreadsByArchive
+      .mockReset()
+      .mockReturnValue(new Promise<AgentThread[]>(() => {}));
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let threads: ReturnType<typeof useThreads> | undefined;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          threads = useThreads();
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    );
+
+    await flushPromises();
+    expect(
+      searchThreadsByArchive,
+      "前提：首取必须已经发出且仍在飞，否则这条用例量的是另一个窗口",
+    ).toHaveBeenCalledTimes(1);
+
+    threads!.upsert(thread("already-on-the-server"));
+    await flushPromises();
+
+    expect(
+      searchThreadsByArchive,
+      "多出来的那一次就是空缓存上那次多余的 invalidateQueries",
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      threads!.threads.map((item) => item.thread_id),
+      "落进缓存的那一条要留着——窄屏下 AgentChat 的标题/artifacts 只有它",
+    ).toEqual(["already-on-the-server"]);
+
+    wrapper.unmount();
+    queryClient.clear();
+  });
 });
