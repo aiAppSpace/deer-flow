@@ -18,8 +18,9 @@
 
 ⚠ **先读「✅ 已经量过、别重做」那一节再动手。**
 
-⚠ **第四十七轮收工时 CI 的 parity 红过一次、重跑绿**——新窗口量完状态后，
-**第一件事是「下一轮最该先拿的」第 1 条**，不是接着铺取样面。
+⚠ **第四十八轮把那条 `POST /api/threads/search` 查到根因并修掉了**（本仓单边，
+读数与判词见 open-accounts 第四十八轮）。所以新窗口量完状态后，
+**第一件事是「下一轮最该先拿的」第 1 条——开一个新取样面**，别再去查那个签名。
 
 ---
 
@@ -62,15 +63,14 @@
 ```
 台账   189 个场景-维度 / 58 个不同场景状态 / 0 唯一行
 断点   desktop 141 · mobile 20 · tablet 28     ← 四十六轮 4→13、四十七轮 13→28
-主题   light 131 · dark 34
-语言   en-US 104 · zh-CN 61
-规模   frontend/src 214 tsx / 42485 行 · frontend-vue/app 276 vue / 38571 行 ·
-       frontend-vue/tests 408 个 spec/test
+主题   light 155 · dark 34
+语言   en-US 128 · zh-CN 61
 ```
 
-⚠ 上面每一行都是 2026-09-18 第四十四轮**当场量的**（量法见下面「现场量一遍」）。
-「不同场景状态」此前这份文档写的是 84，和本轮的量法（`entries` 的键按第一段去重）
-对不上——**以自己量的为准，别引用这一行的历史值**。
+⚠ 上面每一行都是 2026-09-19 第四十八轮**当场量的**（量法见下面「现场量一遍」）。
+⚠ **主题与语言这两行此前写的是 `light 131` / `en-US 104`**——那是第四十四轮的值，
+四十六/四十七轮铺 tablet 之后没同步。**以自己量的为准，别引用这份文档里的历史值**；
+「不同场景状态」同理（更早写过 84）。
 
 ### ⚠ 历轮规律：**打开新取样面就掉出缺陷，不开新面就是 0**
 
@@ -98,8 +98,9 @@
 2. ~~**dark 下的对比度**~~ —— **第四十四轮走完，1 条跨应用分叉（已修）**，
    其余 14 个低对比度签名**两边逐值相同**、是上游的配色取舍。
    读数逐条写在 open-accounts 第四十四轮第二节。**别去重新配色。**
-3. **每个 spec 自己的 `page.route` 前提轴**——28 个 spec 用它喂数据，
-   第四十三轮验证了方法、还没铺过去（候选名单见下面「下一轮最该先拿的」）；
+3. **每个 spec 自己的 `page.route` 前提轴**——**这是名单上唯一还没开的面，
+   下一轮就该是它**。31 个 spec 用它喂数据（第四十八轮重量的，此前写 28），
+   第四十三轮验证了方法、还没铺过去。做法与候选名单见下面「下一轮最该先拿的」第 1 条；
 4. ~~**tablet 轴**~~ —— 四十六轮 4→13、**四十七轮 13→28 个样本（14 个场景族）**，
    共掉出 1 条真分叉（已修）。**仍有 14 个场景族只有 desktop**，其中 5 个
    （artifact 流/表那一族）**两边都 settle 不了**、已判；剩下 9 个多与已覆盖的面重叠；
@@ -114,15 +115,20 @@
 > **连续 3 轮、每轮都打开一个新取样面、且产品缺陷 0 条 → 收工。**
 
 不是「跑满 N 轮」——不开新面的轮次天然是 0，凑不出信息。
-按这个判据估**还要 6–8 轮**（5 轮走完上面那张名单 + 3 轮确认，有收获则顺延）。
+
+⚠ **名单本身快走空了**：六条里只剩第 3 条（逐 spec 的 `page.route` 前提变异）没开。
+所以这个判据接下来会卡在「**想不出新面**」而不是「还没跑完」——
+**下一轮开完那条之后，真正的工作是造新面，不是从名单里挑。**
+按这个判据估**还要 4 轮左右**（1 轮走完名单 + 3 轮确认，有收获或造出新面则顺延）。
 
 **「完全一致」证不出来**（没有方法能证明两个八万行的应用在所有未取样处相同）。
 能拿到的终态是这四条同时成立，目前**只差最后一条**：
 
 - 四张工单表 0 ✅
-- 台账 0，macOS 与 Linux 同时 ⚠ **第四十七轮退回「待确认」**：macOS 3 次完整跑 0 行，
-  但 CI（Linux）出现过一次两行 `POST /api/threads/search`、重跑消失。
-  **这一条要等那两行查到根因才能重新打勾**（见「下一轮最该先拿的」第 1 条）
+- 台账 0，macOS 与 Linux 同时 ⚠ **仍是「待确认」，但性质变了**：第四十七轮那两行
+  `POST /api/threads/search` **第四十八轮查到根因并修掉了**（本仓单边，
+  `useThreads.upsert()` 里一行上一版设计的残留；按开关稳定复现、修后 32/32 全对）。
+  **要打勾还差一次 Linux 全套绿**——修在 macOS 上验的，CI 上还没跑过完整一轮
 - **每一类找到过的缺陷都有一条会红的门禁** ✅
   （窄屏溢出 · 面板余量 · 反空转 · 第二轮扫描 · 浮层随触发器关闭 ·
   **键盘陷阱**（44，两个应用都跑）· **键盘遍历同环**（45，跨应用））
@@ -161,66 +167,116 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 ### ⚠ 当前 CI 状态（**新窗口第一件事就是复核它**）
 
 ```
+<第四十八轮那条提交>  待新窗口复核
 08f4cb2b  第四十七轮   verify 绿   parity 第 1 次**红**、重跑（attempt 2）**绿**
 327a5dc0  第四十六轮   双绿
 8b1a7871  第四十五轮   双绿
 2d0997db  第四十四轮   双绿
 ```
 
-⚠ **「重跑绿了」不是判词**——第四十七轮刚因为这句话栽过一次（见下面第 3 条）。
-当前计数：**CI 2 跑里出现 1 次，本机 3 次完整跑里 0 次**。
-
-**第四十七轮 parity 第一次在 Linux 上红了两行，本机 206 全绿不复现**：
+**第四十七轮那次红的两行已经结清了**（第四十八轮）：
 
 ```
-artifact-table-preview/desktop/light/en-US        requestsOnlyVue: POST /api/threads/search
+artifact-table-preview/desktop/light/en-US          requestsOnlyVue: POST /api/threads/search
 workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/threads/search
 ```
 
-⚠ **动手之前先读三件事**：
+根因是 `useThreads.upsert()` 里一行 `eaf9d6a7`（列表还是 `enabled: false` 手动查询
+那一版）留下来的「给缓存播一页假数据」。完整链条、五步读数、修法与门禁写在
+**open-accounts 第四十八轮**。一句话版：列表首取还在飞时，`upsert` 会把**每一条既有
+线程**都当成新行，播一页假数据让查询变成「idle 且有数据」，紧跟着的 `invalidateQueries`
+就不再与在飞的首取合并，而是另发一次体逐字相同的请求。上游同一处从来不播。
 
-1. **这个签名历轮判过**——open-accounts 搜 `threads/search`，第 201 行那条
-   `requestsOnlyVue: POST /api/threads/search` 的判词就是**「复量消失」**；
-2. **它落在两个 desktop 老键上**，与本轮加的 tablet 维、与 `staleTime` 那处改动
-   都没有直接关系——更像「套件变长之后 CI 机器上的竞速换了相位」；
-3. **别照着「它出现在哪些键上」找规律**——第四十七轮刚栽过一次：
-   `/api/skills` 那条连着两轮都落在 tablet 新键上，我因此判成「tablet 相关的偶发」，
-   下一次全套跑它落在一个 desktop 老键上，根因根本与断点无关。
+⚠ **这一条留着，因为它是「怎么查一个查不出来的飘」的范本**：
 
-**怎么查（按这个顺序，别跳）**：
+- CPU 降速（×4/×8，32 跑）**查不出来**——它把触发和取样窗一起拉长，比值不变；
+- **推迟某一条响应**才是有效旋钮——竞态住在两条并行请求的**相对顺序**里，
+  只有单独移动其中一条的相位才掰得动它。`page.addInitScript` 包 `window.fetch`，
+  命中就 `await sleep(D)` 再返回，D 扫 0/300/900/2000。
+- **先分「谁多发」再查「为什么」**：`requestsOnly*` 是**多重集**差、
+  `requestBodies` 是**集合**差。请求那一档多一行、体那一档没动 → 一定是
+  「同一侧发了两次、体逐字相同」。扒 CI 原始日志（`gh api .../attempts/1/logs`）
+  就能看到这两档，比重跑便宜得多。
 
-```bash
-# ① 先看是不是飘：重跑同一条 CI
-gh run rerun <run-id> -R aiAppSpace/deer-flow --failed
-# ② 定点复量单个场景（读产物，别读颜色——该模式下 run 一定是绿的）
-gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow   --ref main-wc -f parity_only=artifact-table-preview
-# ③ 要判根因就量**时刻**，不要先改代码：
-#    装 page.on("request") 记 Date.now()-t0，两个应用各连跑五次，
-#    看是「谁多发一次」还是「谁发得太晚、掉出取样窗」。
-#    第四十七轮 /api/skills 那条就是这么查出来的（上游 5 跑里 2 跑发了两次）。
-```
-
-更早的几条（仍建议新窗口复核一遍）：
-
-```
-482e67bf  第三十九轮            parity + verify  双绿
-4c3fc4dd  第四十轮              parity + verify  双绿
-a9cebfe2  第四十一+四十二轮代码树 parity + verify  双绿
-21fbb92d  第四十一轮            verify 绿；parity 被推第四十二轮时取消，由 a9cebfe2 接手覆盖
-```
-
-**当前代码树 = 第四十五轮那条提交**（第四十四轮是 `2d0997db`，双绿）。
-
-**第四十五轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
+**第四十八轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
 
 ```
 （本轮最后一条提交的 sha）   工作树干净   未推送 0
-场景-维度 165 唯一行 0
+场景-维度 189 唯一行 0
 frontend-vue parity  completed/success
 frontend-vue verify  completed/success
 ```
 
 ---
+
+## 第四十八轮收工状态（2026-09-19）
+
+一句话：**那条判了四次「复量消失」的飘，查到根因了——本仓单边，一行上一版设计的残留。**
+
+| 量 | 收工读数 |
+| --- | --- |
+| 台账 | **189 个场景-维度 / 0 唯一行**（无新增终态；本轮没开新面） |
+| 跑时 | `verify` 0（337 文件 / **2726** 单测）　`make e2e` 296 passed / 1.9m　`e2e-parity` 见提交说明 |
+| 修前/修后 | 同一把尺子（延迟 0/300/900/2000 × 2 场景 × 2 应用 × 各 2 跑 = 32 跑）：修前 Vue 在非零延迟上 **12/12 发两次**、延迟 0 时 4/4 一次，上游 16/16 恒一次；修后 **32/32 全是一次** |
+
+### 本轮清掉的账
+
+| 类别 | 具体 |
+| --- | --- |
+| **本仓单边缺陷** | `useThreads.upsert()` 的空缓存那一支会顺手走到 `upsertThreadInInfiniteCache` 末尾的 `invalidateQueries`。列表首取还在飞时，**每一条既有线程**都会走到这一支；放进缓存那一步让查询变成「idle 且有数据」，失效于是不再与在飞的首取合并，**另发一次体逐字相同的 `POST /api/threads/search`**。改成「放进缓存之后直接 return」 |
+| **写错的注释**（同一笔修复） | `infinite.ts` 里「走到这个函数的只有『刚建出来的 thread』那条路」——正是这句话让人以为这一支只处理新建线程。已订正 |
+| **两条门禁（互为反向）** | ① `use-threads.dom.test.ts`「首取在飞时 upsert 只落缓存，不再发一次搜索」，带反空转断言（先断言首取确实已发出）；② `ui-polish-mobile.spec.ts`「窄屏顶栏在列表缓存没取过时仍显示标题」，带反空转断言（抽屉必须关着）。**两条都做了变异验证** |
+| **工具修复** | `PARITY_ONLY` 模式下 `diff.spec.ts` 提前 `return`，`report.json` **从来没落过盘**，而 workflow 那一步的注释写着「这次跑唯一的产物就是这份 report」。产物十几轮来一直是空的（`gh run download` 报 `no valid artifacts found`）。已把落盘挪到 ONLY 分支之前，并把只有 ONLY 才收的 `rawRequests`/`rawTabbables` 一起写进去 |
+| **交接文档的端口清单** | 漏了 `e2e-mock` 自己的 3101，照着清完下一跑照样报 `already used`。已补 |
+
+### ⚠ 本轮最贵的一次错：**过度修复，而且三道绿都没拦住**
+
+第一版修法是把「放进缓存」那 5 行整个删掉——理由看着很硬：`git log -S` 只有一条命中、
+来自手动查询那一版；上游从来不播；上游那一侧连触发点都没有。
+`verify` 0、`make e2e` 296 全绿、针对性探针 32/32 全对。
+
+**整套 `e2e-parity` 红了一行**：`subtask-card/mobile/light/en-US ·
+ariaOnlyReact: - text: Stopped subtask`——窄屏下顶栏没标题了。
+接着 `ui-polish-mobile` 的 artifacts 抽屉也打不开。
+
+根因：`AgentChat` 有**四处**（标题 / artifacts / goal / todos）把
+`threads.threads.find(...)` 当「当前线程的服务端快照」在读，
+而窄屏侧栏是抽屉、列表查询根本不跑，那份缓存**只有这 5 行会填**。
+
+### 负结果（**别重做**）
+
+- **CPU 降速查不出这类竞态**：`Emulation.setCPUThrottlingRate` ×4/×8、32 跑，
+  两边恒为 1 次；请求时刻 290→1073→2252ms，取样窗同比例变长，**余量始终 ~3 秒**。
+  降速把触发和窗口一起拉长，比值不变。
+- **「上游发得太晚掉出取样窗」结构上不可能**：上游的请求只等水合，
+  而 settle 锚点要等水合＋数据＋渲染，所以它恒在锚点之前。
+- `setQueryData` 本身**不会**引发重取（query-core 单独验过）；
+  引发重取的是「**先** setQueryData **再** invalidate」这个组合。
+  `cancelRefetch: false` 挡不住它（也是 2 次）——因为 seed 之后查询已经算「idle」了。
+
+### ⚠ 最该记住的一条：**「它在守什么」要问「谁在读」，不是「谁在写」**
+
+交接文档第 8 条写着「本仓比上游多出来的东西，删之前问『它在守什么』」。
+这一轮我**问了**——`git log -S` 查来历、查 `upsertThreadInInfiniteCache` 的单测、
+查 `upsert` 的全部调用方——**全是「谁在写这份缓存」，一条都没问「谁在读」**。
+扛事的那**四处**（`AgentChat` 的 `headerTitle` / `authoritativeArtifacts` /
+`authoritativeGoal` / `authoritativeTodos`）是**读**方，隔着一个组件、四个 computed。
+
+**正确的问法**：删掉一处写缓存的代码之前，`grep` 那份缓存的**读取点**，
+逐个问「它在那条写入不存在时还拿得到东西吗」。
+
+**还有一条同样贵的**：⚠ **单向的门禁挡不住过度修复。** 第一版修法从「多做」
+滑到了「少做」，而当时手上那条门禁只守「别多做」。这一轮最后留了**互为反向**的两条。
+
+**而且三道读数全绿也没拦住它**：`verify` 0、`make e2e` 296 全绿、
+针对性探针 32/32 全对——抓到它的是整套 189 个取样点里的**一个 mobile 维**。
+**取样面的价值不在于它今天报了什么，在于它替你记住了你没想到要看的地方。**
+
+### ⚠ 本轮的仪器账（第六次）
+
+新探针第一跑报 `page.evaluate: TypeError: Failed to construct 'URL': Invalid URL`
+——`fetch("/api/...")` 是相对 URL，`new URL()` 不带 base 会抛。
+**又一次「第一跑红先怀疑探针」**，这次只花了一次重跑。
 
 ## 第四十七轮收工状态（2026-09-19）
 
@@ -649,6 +705,34 @@ Save 键），全是那一帧 opacity 还在 0.05。补上
 浮层自己的焦点管理，而那正是要量的东西。
 **换成「比相邻关系」绕开相位漂**，比「强行统一起点」稳。
 
+### 4f. 查竞态：CPU 降速无效，**推迟某一条响应**才是旋钮（第四十八轮）
+
+同一个飘，两种旋钮的读数：
+
+```
+CDP CPU 降速 ×4 / ×8，32 跑        两边恒 1 次（触发与取样窗同比例变长，余量始终 ~3s）
+把某一条响应推迟 300/900/2000ms    Vue 12/12 发两次、上游 16/16 全 1 次 —— 当场复现
+```
+
+**竞态住在两条并行请求的相对顺序里**，全局降速动不了这个顺序；
+只有单独移动其中一条的相位才掰得动。做法：`page.addInitScript` 里包 `window.fetch`，
+命中目标就 `const r = await orig(...); await sleep(D); return r;`。
+⚠ 相对 URL 不能直接 `new URL()`（第一跑就栽在这）。
+
+### 4g. 先分「谁多发」，再查「为什么」（第四十八轮）
+
+`requestsOnly*` 是**多重集**差，`requestBodies` 是**集合**差
+（`diff-entry.ts` 里有判词）。所以：
+
+```
+请求那一档多一行 + 体那一档没动  →  同一侧发了两次，体逐字相同
+请求那一档多一行 + 体那一档也动  →  发了一条不一样的请求
+```
+
+扒 CI 那次红的原始日志就能同时看到这两档
+（`gh api repos/<owner>/<repo>/actions/runs/<id>/attempts/1/logs` 下回来是 zip），
+**比重跑一次 50 分钟的 CI 便宜得多**，而且方向一开始就定死了。
+
 ### 5. `hidden` 断言前面必须有一条 `visible`
 
 `locateTarget(...).first()` 匹配不到时是个**空 locator**，而
@@ -717,7 +801,8 @@ Save 键），全是那一帧 opacity 还在 0.05。补上
 | dark 文本对比度（两边各 ~1990 个元素） | 唯一签名 15/15，**跨应用分叉只有 1 条**（免责声明 `/70` vs `/67`，已修） | 其余 14 条两边逐值相同，是上游配色取舍，**别重新配色** |
 | Tab 会不会被吸住 | 上游 `browser-feature` 吸住（已修），其余两边全过 | **已常驻**成 `keyboard-trap.spec.ts`，两个应用都跑 |
 
-⚠ 同一个面上**还没做的**是「逐位比 Tab 序列」，见「下一轮最该先拿的」第 1 条。
+⚠ 同一个面上「逐位比 Tab 序列」**第四十五轮已经走完**（0 条差异，已常驻），
+见下面那一节。这里原来指向「下一轮最该先拿的第 1 条」，那个位置早就换人了。
 
 ### 第四十五轮把键盘面走完（**别重做**）
 
@@ -746,64 +831,36 @@ Save 键），全是那一帧 opacity 还在 0.05。补上
 
 ## 下一轮最该先拿的（按顺序）
 
-### 1. 先把 CI 上那两行 `POST /api/threads/search` 查到根因
+### 1. **逐 spec 的 `page.route` 前提变异**——名单上唯一还没开的面
 
-第四十七轮 parity 在 Linux 上红过一次（本机 3 次完整跑都不复现，CI 重跑绿）：
+第四十三轮把**共享 mock** 的五条列表选项变异过了，**0 条空转**。
+剩下的大头是**每个 spec 自己的 `page.route`**：31 个 spec 用它喂数据
+（第四十八轮重量的；此前文档写 28）。
 
-```
-artifact-table-preview/desktop/light/en-US          requestsOnlyVue: POST /api/threads/search
-workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/threads/search
-```
-
-⚠ **别把「重跑绿了」当判词。** 第四十七轮刚在同一种推理上栽过：
-`/api/skills` 那条连着两轮都落在 tablet 新键上，我判成「tablet 相关的偶发、别再查」，
-**下一次全套跑它落在一个 desktop 老键上**，根因根本与断点无关——
-是上游把目录取了两遍。**「偶发」只是还没找到根因的代称。**
-
-**方法照抄第四十七轮那次（它成了）**：
+**⚠ 「它没有统一入口」这句话是可以绕开的**（第四十八轮想到、**还没跑**）：
+几乎每个 spec 都先调 `mockLangGraphAPI(page, ...)` 再注册自己的路由，
+所以在 `mockLangGraphAPI` 的**末尾**把 `page.route` 换成一个记数的空操作，
+就等于「一次性关掉所有 spec 级路由、保留共享 mock」——
+**一个开关变异 31 个 spec**。已量过的前提：
 
 ```
-装 page.on("request") 记 Date.now() - t0 → 两个应用各连跑五次
-→ 看是「谁多发一次」还是「谁发得晚、掉出取样窗」
+用了 page.route 但从不调 mockLangGraphAPI 的： chat-dataflow.spec.ts（1 个）
+第一处 .route( 出现在第一处 mockLangGraphAPI( 之前的：
+  channels.spec.ts · settings.spec.ts · thread-without-checkpoint.spec.ts
+  （文本序，不等于执行序——这三个要单独核，别默认它们被盖到了）
 ```
 
-第四十七轮 `/api/skills` 的读数长这样，一眼就分出来了：
+跑法：`ZZ_KILL_SPEC_ROUTES=1 make e2e` → 按 spec 聚合失败 →
+**整份仍然全绿的 spec 就是候选**，再逐条判是真空转还是「那些路由本来就不是它断言的对象」。
+⚠ 跑完**一定要还原并 grep 核验残留为 0**（第四十三轮的纪律）。
+
+各 spec 的 `page.route` 条数 / 肯定断言 / 缺席断言（第四十八轮量的，正则见提交说明）：
 
 ```
-vue [1,1,1,1,1]    react [1,2,2,1,1]   （第二次 274ms → 323ms）
-```
-
-⚠ 历轮背景先读：open-accounts 搜 `threads/search`，这个签名判过多次
-（第 201 行那条的判词就是「复量消失」）——**但那些判词都没给出根因**，
-和我这次一样。`useThreads.ts:107/300/323` 与 `core/threads/infinite.ts:49`
-的注释里有它的调用路径。
-
-定点复量（读产物、别读颜色，该模式下 run 一定是绿的）：
-
-```bash
-gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
-  --ref main-wc -f parity_only=artifact-table-preview
-```
-
-### 1a. 再挑一个没打开过的取样面
-
-tablet 基本到头（14 个场景族；剩下 14 个只有 desktop 的里，5 个是
-artifact 流/表那族**两边都 settle 不了**、已判，其余多与已覆盖面重叠）。
-名单上还没铺过的那条轴是**逐 spec 的 `page.route` 前提变异**，见下。
-
-### 1b. 再把前提变异铺到「每个 spec 自己的 `page.route`」那条轴上
-
-第四十三轮把共享 mock 的五条列表选项都变异过了，**0 条空转**。
-**剩下的大头是逐 spec 的 `page.route`**——28 个 spec 用它喂数据，
-而它没有统一入口，所以没法一次性变异。
-
-挑那些 `page.route` 条数多、而「缺席断言」占比高的 spec 逐个来
-（route 数 / 肯定断言 / 缺席断言）：
-
-```
-sidecar-chat 12/40/1 · agent-chat 11/25/11 · chat 7/38/3 · channels 6/40/6
-scheduled-tasks 6/30/4 · artifact-preview 6/26/2 · integrations 5/24/3
-artifacts-a11y-shape 1/14/13 · thread-history 2/24/11 · workspace-shell 2/17/8
+channels 23/58/9 · agent-chat 19/20/6 · sidecar-chat 17/57/20 · chat 16/92/14
+integrations 13/24/3 · settings 7/17/3 · scheduled-tasks 6/36/6 · artifact-preview 6/39/2
+thread-history 5/50/12 · chat-dataflow 5/9/1 · thread-list-a11y-shape 3/30/7
+artifacts-a11y-shape 3/9/9 · workspace-shell 2/22/9 · …共 31 个
 ```
 
 ⚠ **别再写静态扫描**（第四十二轮两条全是死路）。
@@ -817,11 +874,12 @@ artifacts-a11y-shape 1/14/13 · thread-history 2/24/11 · workspace-shell 2/17/8
 两条路：给那个场景补一条「先开抽屉」的 mobile 终态，
 或者把窄屏余量断言加进 parity 取样（单独断言，不进台账）。
 
-### 3. 挑下一条**单应用不变量**（方向已验证）
+### 3. 挑下一条**单应用不变量**（方向已验证，但**现成的都用完了**）
 
-还没试过的，**先当探针量一遍、有收获再常驻**：**重复的可访问名**。
-⚠ `aria-hidden` 里套可聚焦元素（0 条）、焦点陷阱（已常驻）、
-dark 下的对比度（1 条已修，其余两边相同）**第四十四轮都走完了，别重做**。
+⚠ **这一条现在是空的，别照着上一版去做**：`aria-hidden` 里套可聚焦元素（0 条）、
+焦点陷阱（已常驻）、dark 下的对比度（1 条已修）**第四十四轮走完**；
+**重复的可访问名第四十六轮走完（0 条）**，而「缺可访问名」第三十八轮就判死过。
+要用这条路，得先想出一条**新的**单应用不变量，而不是从名单里挑。
 
 ### 4. 把「桌面开 → 缩到 360」做成 `narrow-screen-overflow.spec.ts` 的第二轮扫描
 
@@ -831,7 +889,7 @@ dark 下的对比度（1 条已修，其余两边相同）**第四十四轮都�
 `thread-history` / `thread-list-pin`（菜单），**四条两边都掉，不是本仓的毛病**。
 掉了的单独一张表各写原因，否则「没量到」会长得和「量过、没问题」一模一样。
 
-### 5. 继续扩取样面（tablet 只有 4 个样本，是最薄的一条轴）
+### 5. 继续扩取样面（⚠ tablet 已经 28 个样本 / 14 个场景族，**不再是最薄的那条轴**）
 
 - `baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由取样点最少；
 - 对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景（棘轮会红）；
@@ -901,6 +959,11 @@ gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
 **读产物，别读颜色**——该模式下那次 run 一定是绿的，结论在 artifact
 `parity-failures` 的 `e2e-parity/report.json` 里。
 
+⚠ **第四十八轮之前这条路是断的**：`diff.spec.ts` 在 ONLY 分支里提前 `return`，
+report **从来没落过盘**，产物是空的（`gh run download` 报 `no valid artifacts found`），
+结论只在**日志**里。本轮已修，`rawRequests` / `rawTabbables` 也一起进产物。
+**在更早的提交上定点复量时，去日志里搜 `PARITY_ONLY=` 那一行。**
+
 ### 截图归属
 
 `diff.spec.ts` 里 `captureScenario` **先采 Vue、再采 React**，
@@ -939,7 +1002,14 @@ gh workflow run "frontend-vue parity" -R aiAppSpace/deer-flow \
 日志停在构建、没有退出码行，而任务通知显示「completed」。
 
 ⚠ **被掐掉的跑会留下占着端口的进程**，下一跑报 `http://localhost:3115 is already used`。
-清理：`for p in 8021 3115 3116; do lsof -ti tcp:$p | xargs -r kill -9; done`
+⚠ **这份清单原来漏了 `e2e-mock` 自己的端口 3101**（`playwright.config.ts` 的
+`E2E_PORT ?? "3101"`）——第四十八轮照着它清完，下一跑照样报
+`localhost:3101 is already used`。两套端口一起清：
+
+```bash
+pkill -9 -f playwright; pkill -9 -f nuxt
+for p in 3101 3113 3114 3115 3116 8021 8022; do lsof -ti tcp:$p | xargs -r kill -9; done
+```
 
 ⚠ **改文件的脚本不要放后台**：`AssertionError` 会进任务输出文件而你不会去读，
 于是你拿着「已经改好」的假前提去读后面的红（第四十二轮第三次栽在这上面）。

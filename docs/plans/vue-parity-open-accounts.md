@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-19 第四十七轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-19 第四十八轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -4410,6 +4410,195 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
 - 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
 
+
+## 2026-09-19 第四十八轮：那条反复判成「复量消失」的 `threads/search` **查到根因了**
+
+这个签名从 wave 214 一路判到第四十七轮，判词一直是「复量消失」「时序」「偶发」——
+**全是「还没找到根因」的代称**。这一轮把它变成了一个**按开关复现**的东西。
+
+### 一、先把「是谁多发」定下来：**不是上游少发，是本仓多发**
+
+第四十七轮的交接文档写的是「两行 `requestsOnlyVue`」，但没说清是哪一侧不对。
+扒 CI 那次红的**原始日志**（`gh api .../runs/35432167446/attempts/1/logs`）看到关键一行：
+
+```
+      "requestBodies": Array [],          ← 这一档**没变**
+-     "requestsOnlyVue": Array [],
++     "requestsOnlyVue": Array [
++       "POST /api/threads/search",
+```
+
+`diffRequestBodies` 按「不同的体的集合」比，`diffMultiset` 按**多重集**比。
+体那一档没动、请求那一档多一行，只有一种解释：**本仓发了两次，体逐字相同**。
+（同一形状第二十九轮记过一次，方向相反：`thread-list-pin#mobile-drawer` 上
+上游发两次、本仓一次。）
+
+### 二、五步读数（**前三步全是否定**，第四步才把它钉住，第五步给机理）
+
+| # | 实验 | 读数 | 排除了什么 |
+| --- | --- | --- | --- |
+| 1 | 本机原速，两个应用各 5 跑 × 2 个场景 | **20/20 都是 1 次**，落在 200–576ms，取样窗 1.6–3.4s | 本机不复现，与交接文档一致 |
+| 2 | CDP `Emulation.setCPUThrottlingRate` ×4 / ×8 | **32/32 仍是 1 次**；请求时刻 290→1073→2252ms，窗口同比例变长，余量始终 ~3s | **不是「CI 机器慢」**——CPU 降速会把触发和窗口一起拉长，比值不变 |
+| 3 | 推算「上游会不会发得太晚掉出窗口」 | 上游的请求恒在 settle 锚点**之前**（锚点要等水合＋数据＋渲染，请求只要水合） | 「React 发晚了」结构上不可能 |
+| 4 | **把 `/api/threads/search` 的响应推迟 D 毫秒**（`addInitScript` 包 `fetch`） | **D=0 → Vue 4/4 发 1 次；D=300/900/2000 → Vue 12/12 发 2 次**；上游四档 **16/16 全是 1 次** | **稳定复现，且是本仓单边** |
+| 5 | 拿 `@tanstack/query-core@5.90.20` 在 Node 里搭同样时序 | 在飞时**只失效** → queryFn **1** 次；**先 `setQueryData` 再失效** → **2** 次 | 机理与应用无关，是库的语义 |
+
+两次请求的体逐字相同，都是 `{"archived":false,"limit":50,"offset":0}`，
+调用栈都落在 `Query.fetch → infiniteQueryBehavior → useThreads 的 queryFn`
+（**不是 `fetchNextPage`**）。
+
+### 三、根因：**空缓存上那次多余的 `invalidateQueries`**
+
+```js
+// useThreads.upsert()
+const existing = threads.value.find(...);   // ← 判的是「在不在我当前这份列表里」
+if (existing) { merge; return; }
+if (!queryClient.getQueryData(queryKey.value)) {                 // 列表还没数据
+  queryClient.setQueryData(queryKey.value, { pages: [[thread]], pageParams: [0] });
+}
+upsertThreadInInfiniteCache(queryClient, thread);   // 末尾 invalidateQueries ← 有害的是它
+```
+
+链条：
+
+1. `AgentChat.vue` 有一条 `watch(() => threadMetadata.data.value, … threads.upsert(metadata),
+   {immediate:true})`。它与侧栏列表首取是**两条并行请求**，谁先回来是赛跑。
+2. 这条 `else` 支真正的含义是「**这条线程不在我当前这份列表里**」——列表首取还在飞时
+   `threads.value` 是空的，于是**每一条既有线程都走到这里**。
+   （`infinite.ts` 当时的注释写的是「走到这个函数的只有刚建出来的 thread」，
+   **那句话是错的**，本轮已订正。）
+3. 对空缓存来说，`upsertThreadInInfiniteCache` 的插入部分本来就是空操作
+   （`infinite.test.ts` 第一条用例钉着），**唯一实际发生的是它末尾那次
+   `invalidateQueries`**。而放进缓存那一步让查询变成「idle 且有数据」，
+   于是这次失效不再与在飞的首取合并，**另发一次体逐字相同的请求**。
+4. 本机列表几乎总是先回（走 `existing` 支，早早 return）→ 0 行；
+   CI 整套 205 条 50.9 分钟（本机同一套约 34 分钟），偶尔相位一换就露出来。
+
+### 四、修法：**去掉那次失效，而不是去掉放进缓存那一步**
+
+第一版我把「放进缓存」那 5 行整个删了——**理由看起来很硬**：
+`git log -S "pages: [[thread]]"` 只有一条命中，来自 `eaf9d6a7`，
+正是把列表写成 `enabled: false` 手动查询的那次提交；那时没有任何人会去填这个 key，
+不播就永远看不见，2026-09-11 查询改成自己会跑之后它「显然多余」。
+**而且上游从来不播**（`hooks.ts:1272` 的 `if (!oldData) return oldData`），
+上游那一侧连触发点都没有（`chat-page.tsx:191` 的 `useThreadMetadata` 结果只被读去渲染）。
+
+**这个判断是错的，见下一节。** 正确的修法是精确到那一次失效：
+
+```js
+if (!queryClient.getQueryData(queryKey.value)) {
+  queryClient.setQueryData(queryKey.value, { pages: [[thread]], pageParams: [0] });
+  return;                                   // ← 不再往下走到 invalidateQueries
+}
+upsertThreadInInfiniteCache(queryClient, thread);
+```
+
+query-core 5.90 把四种组合逐个量过，这张表是判据：
+
+```
+                              queryFn 次数   最终缓存
+只 seed、不失效（桌面）            1          服务端那份（seed 被首取覆盖）
+seed + 失效（此前的写法）          2          服务端那份   ← 多出来的那一次
+只 seed、不失效（窄屏 disabled）    0          seed
+seed + 失效（窄屏 disabled）        0          seed         ← 失效在这里根本不重取
+```
+
+**两行读数一起看，结论是唯一的**：那次失效在这条支上要么无效（窄屏没有 enabled 的
+观察者，`invalidateQueries` 默认只重取 active 查询），要么有害（桌面首取在飞时多发一次）。
+**它没有任何一种情况是有用的。**
+
+### 四之二、⚠ **「它在守什么」我问了，但问的是「谁在写」**
+
+删掉那 5 行之后 `verify` 0、`make e2e` 296 全绿、针对性探针 32/32 全对。
+**整套 `e2e-parity` 红了一行**：
+
+```
+subtask-card/mobile/light/en-US · ariaOnlyReact: ['- text: Stopped subtask']
+```
+
+`Stopped subtask` 是那条夹具线程的**标题**——**窄屏下本仓的会话页顶栏没标题了**。
+接着单跑 `ui-polish-mobile.spec.ts`，既有那条 artifacts 抽屉用例也红了
+（`artifact-trigger` 等不到）。
+
+根因是同一个：`AgentChat` 有**四处**把 `threads.threads.find(...)` 当作
+「当前线程的服务端快照」在读——`headerTitle`、`authoritativeArtifacts`、
+`authoritativeGoal`、`authoritativeTodos`。而窄屏的侧栏是抽屉，关着时
+`RecentChatList` 整棵不挂载、列表查询**根本不跑**（第三十四轮两边同改的结果），
+那份缓存唯一的填充点就是这 5 行。
+
+交接文档第 8 条写着「本仓比上游多出来的东西，删之前问『它在守什么』」。
+这一轮我**问了**——`git log -S` 查来历、查 `upsertThreadInInfiniteCache` 的单测、
+查 `upsert` 的全部调用方——**全是「谁在写这份缓存」，一条都没问「谁在读」**。
+扛事的那四处是**读**方，隔着一个组件、四个 computed。
+
+**正确的问法**：删掉一处写缓存的代码之前，`grep` 那份缓存的**读取点**，
+逐个问「它在那条写入不存在时还拿得到东西吗」。
+
+**而且三道读数全绿也没拦住它**：`verify` 0、`make e2e` 296 全绿、
+针对性探针 32/32 全对——抓到它的是整套 189 个取样点里的**一个 mobile 维**。
+**取样面的价值不在于它今天报了什么，在于它替你记住了你没想到要看的地方。**
+
+⚠ **更彻底的方向没做，判据留在代码里**：上游那四处根本不读列表缓存
+（标题走 `canonicalTitle={threadMetadata.data?.values?.title}`，其余走 stream 的
+thread state）。把 `AgentChat` 那四处逐一换过去，这 5 行就可以整个去掉。
+**翻案判据**：哪天要动 `AgentChat` 的服务端快照读取，连同四处一起换，
+并用 `subtask-card/mobile` 与 `ui-polish-mobile` 两处验收。
+**这一轮不做**，因为它是四处联动的重构，而本轮的账只要求去掉那次失效。
+
+
+### 五、两条门禁（都做了变异验证）
+
+| 门禁 | 守什么 | 变异验证 |
+| --- | --- | --- |
+| `use-threads.dom.test.ts`「列表首取在飞时 upsert 只落缓存，不再发一次搜索」 | 空缓存那一支不许再走到 `invalidateQueries` | 去掉那行 `return` → 当场红，`expected 1 times, but got 2 times`；还原绿 |
+| `ui-polish-mobile.spec.ts`「窄屏顶栏在列表缓存没取过时仍显示标题」 | 放进缓存那一步不许被删 | 删掉那 5 行 → 当场红；还原绿 |
+
+两条**互为反向**：一条守「别多做」，一条守「别少做」。
+这一轮之所以需要两条，是因为第一版修法正好从「多做」滑到了「少做」——
+**单向的门禁挡不住过度修复。**
+
+⚠ 单测那条的前提是「首取必须停在半空」：用 `mockResolvedValue` 首取当场就回来、
+命中 `existing` 支，**它会在修好之前就绿**。
+⚠ e2e 那条**必须跑在 375**：桌面下侧栏展开、列表查询会跑，
+**它在 1280 上永远绿**；并且带一条反空转断言（抽屉必须关着）。
+
+### 六、顺带查出第二笔账：**`PARITY_ONLY` 的 CI 产物一直是空的**
+
+交接文档第四十七轮写着「定点复量：**读产物**，结论在 artifact `parity-failures` 的
+`e2e-parity/report.json` 里」。本轮照着跑了一次（run 35441283188，绿），
+**产物列表是空的**——`gh run download` 报 `no valid artifacts found`。
+
+根因：`diff.spec.ts` 在 `if (ONLY) { console.log(...); return; }` 里**提前 return**，
+`writeFileSync(REPORT, ...)` 在那之后，所以 ONLY 模式**不落盘**；
+而 workflow 那一步的 `if: failure() || inputs.parity_only != ''` 配着一整段注释写明
+「PARITY_ONLY 这次跑**唯一的产物**就是这份 report」——**两处对不上**，
+`if-no-files-found: ignore` 让它十几轮来静默上传了个空。
+
+这正是本仓反复警告的那个形状：**「拿不到东西」和「量过、没问题」长得一模一样。**
+本轮把 report 的落盘挪到 ONLY 分支之前，并把 ONLY 模式下才收的
+`rawRequests` / `rawTabbables` 一起写进产物——那两份才是查「谁多发一次」要看的东西。
+
+### 七、判词
+
+- **「偶发」不是判词，是还没找到根因的代称**（第四十七轮写下这句，这一轮兑现了它）。
+  这个签名被判过至少四次「复量消失」，每次都只是没找到那个开关。
+- **找不到复现，就去找能把相位掰过来的旋钮。** CPU 降速不行，因为它把触发和窗口
+  一起拉长；**推迟某一条响应**才是有效的旋钮——它单独移动一条并行请求的相位，
+  而竞态恰恰住在两条并行请求的相对顺序里。
+- **多重集差与集合差要分清。** `requestsOnly*` 是多重集（「多发一次」看得见），
+  `requestBodies` 是集合（「体一样的两次」看不见）。这两档放在一起读，
+  一眼就能把「谁多发」和「谁发了不一样的东西」分开——本轮的方向就是这么定下来的。
+- **一行代码在它被写下的那一版里可能是对的。** 判「该不该删」不能只问「上游有没有」，
+  要问「它当时守的那个前提还在不在」。
+- **注释写错的杀伤力比代码大**：`infinite.ts` 那句「走到这个函数的只有刚建出来的
+  thread」让人以为这一支只处理新建线程。**订正注释和改代码是同一笔修复。**
+- ⚠ **「它在守什么」要问「谁在读」，不是「谁在写」。** 这一轮我问了，
+  但查的全是写方（git 来历 / 单测 / 调用方），扛事的四处是读方。
+- ⚠ **单向的门禁挡不住过度修复。** 第一版修法从「多做」滑到了「少做」，
+  而当时手上那条门禁只守「别多做」。最后留了互为反向的两条。
+- ⚠ **三道读数全绿不等于没回归。** `verify` 0、`make e2e` 296 全绿、
+  针对性探针 32/32 全对，抓到它的是整套 189 个取样点里的一个 mobile 维。
+  **取样面的价值不在于它今天报了什么，在于它替你记住了你没想到要看的地方。**
 
 ## 2026-09-19 第四十七轮：tablet 轴铺到 14 个场景——**15 个新样本全干净**，外加一条查清的飘
 
