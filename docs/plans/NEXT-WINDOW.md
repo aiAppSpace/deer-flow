@@ -12,16 +12,39 @@
 先按下面「现场量一遍」那段命令**把状态量出来**，量完把读数说给我看；
 **不要引用文档里的散文当读数**。
 
-然后从「下一轮最该先拿的」第 1 条开始做，**做完自动开下一轮**，一直推到我喊停。
+然后**接着第五十一轮往下做**（那一轮是中途收工的，下面「第一步」写死了），
+**做完自动开下一轮**，一直推到我喊停。
 中途不要问「要不要继续 / 提交 / 推送」——提交与推送是 2026-09-06 就给的长期授权
 （Claude 记忆 `deerflow-no-midway-questions`），取舍自己定并写进提交说明。
 
 ⚠ **先读「✅ 已经量过、别重做」那一节再动手。**
 
-⚠ **第五十一轮是一个「中途收工」的探针轮**（用户喊停）：文本缩放 200% 那把尺子
-**找对了、变异验证过了**，本仓 1280 档量出 **59 处**，但**一条都还没定性**
-——**上游对照还没跑**。下一个窗口的第一件事就是它，做法与可照抄的尺子
-写在 open-accounts 第五十一轮，**别重新设计尺子**（这一轮在尺子上栽了三次）。
+---
+
+## 🚩 第一步（量完状态就做这个，别再找）
+
+**把第五十一轮那把文本缩放的尺子在上游跑一遍。**
+
+```bash
+cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/frontend-vue
+# ① 探针全文在 open-accounts 第五十一轮「二之二」的 <details> 里，整份照抄，
+#    存成 tests/e2e-parity/zz-zoom.spec.ts。别重新设计尺子——第五十一轮在尺子上栽了三次。
+# ② 先做变异验证，确认尺子会红：
+PROBE_MUTATE=1 PROBE_LIMIT=2 PROBE_WIDTH=1280 node scripts/with-loopback-no-proxy.mjs --   python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test   -c playwright.parity.config.ts zz-zoom.spec.ts        # 必须报出 +760y
+# ③ 再跑上游：
+PROBE_APP=http://localhost:3116 PROBE_WIDTH=1280 node scripts/with-loopback-no-proxy.mjs --   python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test   -c playwright.parity.config.ts zz-zoom.spec.ts
+```
+
+**要回答的问题**：本仓那 59 处（按族：`peer/menu-button` 13 · FlipDisplay 12 ·
+`splitpanes__pane` 4 · integrations 3 · `ml-auto.h-full` 2 · DOM 变了 2 · 其他 1）
+**哪些上游也有、哪些只有本仓**。两边一样坏走「两边同改」，只有本仓有才是分叉。
+**现在一条都还没定性。**
+
+之后的顺序写在「下一轮最该先拿的」的 1b 里（`splitpanes__pane` 那 4 处优先，
+增量 200+px；`branch-thread#turn-actions` 那 2 处要换身份标识；375 档还没用对的尺子跑过）。
+
+⚠ 第四十八轮那条 `POST /api/threads/search` 已查到根因并修掉（本仓单边），
+**别再去查那个签名**。
 
 ⚠ 第四十八轮那条 `POST /api/threads/search` 已查到根因并修掉（本仓单边），
 **别再去查那个签名**。
@@ -175,15 +198,21 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 第三十九轮把代码提交和 docs 提交一起推出去，两条 run 都落在 docs 那条 tip
 `482e67bf` 上。所以「纯 docs 不触发 CI」只对**整条推送都是 docs** 成立。
 
-### ⚠ 当前 CI 状态（**新窗口第一件事就是复核它**）
+### ⚠ 当前 CI 状态（**新窗口仍然要自己复核一遍**）
 
 ```
-<第四十八轮那条提交>  待新窗口复核
-08f4cb2b  第四十七轮   verify 绿   parity 第 1 次**红**、重跑（attempt 2）**绿**
-327a5dc0  第四十六轮   双绿
-8b1a7871  第四十五轮   双绿
-2d0997db  第四十四轮   双绿
+ea5ab279  第五十一轮  纯 docs，**不触发 CI**——total_count: 0 不是「没问题」
+1a4a0d91  第五十轮    verify + parity **双绿**（attempt 1，收工时已复核）
+4a6577eb  第四十九轮  双绿
+be7bb74d  第四十八轮  **被取消**（推第四十九轮时 cancel-in-progress 掐的）。
+                      不用补跑：第四十九轮那条 run 覆盖的树**包含**第四十八轮的全部应用改动
+ce0a8f3d  第四十七轮末 双绿
+08f4cb2b  第四十七轮   verify 绿   parity 第 1 次**红**、重跑（attempt 2）绿
 ```
+
+⚠ **run 挂在「那次推送的 tip」上，不是挂在代码那条提交上**：第五十轮的代码在
+`b5a37c29`，run 却挂在同一次推送的 docs tip `1a4a0d91` 上——**直接查 `b5a37c29`
+会得到空**。查不到就往那次推送的最后一条提交上查。
 
 **第四十七轮那次红的两行已经结清了**（第四十八轮）：
 
@@ -209,13 +238,24 @@ workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/t
   「同一侧发了两次、体逐字相同」。扒 CI 原始日志（`gh api .../attempts/1/logs`）
   就能看到这两档，比重跑便宜得多。
 
-**第四十八轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
+**第五十一轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
 
 ```
-（本轮最后一条提交的 sha）   工作树干净   未推送 0
-场景-维度 189 唯一行 0
-frontend-vue parity  completed/success
+HEAD ea5ab279   工作树干净   未推送 0
+场景-维度 189   唯一行 0   不同场景状态 58
+四张工单表：路由 0 · 文案 0 · 取样路由 0（exempt 4）· spec pending 1（有判词）
+断点 desktop 141 · tablet 28 · mobile 20
+主题 light 155 · dark 34      语言 en-US 128 · zh-CN 61
+frontend-vue parity  completed/success（挂在 1a4a0d91 上）
 frontend-vue verify  completed/success
+```
+
+**本机门禁最近一次全绿的读数**（第五十轮收工时）：
+
+```
+verify      0   337 文件 / 2726 单测
+make e2e    0   297 passed / 2.1m
+e2e-parity  0   206 passed / 42.0m   ← keyboard-order 改双向后从 4.5m 涨到 10.5m
 ```
 
 ---

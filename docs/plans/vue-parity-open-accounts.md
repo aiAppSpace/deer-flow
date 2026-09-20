@@ -4474,6 +4474,152 @@ function clipped() {                       // 索引即身份：放大只改样�
 ⚠ **不排除有意截断的话会淹掉**：第一版 74 处里绝大多数是 `truncate` / `line-clamp`。
 **尺子报得越多越要先分类。**
 
+### 二之二、**跑得起来的那份探针（整份照抄，别重写）**
+
+存成 `frontend-vue/tests/e2e-parity/zz-zoom.spec.ts`，跑法：
+
+```bash
+cd frontend-vue
+# 本仓；上游对照把 PROBE_APP 换成 $E2E_REACT_APP_URL（默认 http://localhost:3116）
+PROBE_WIDTH=1280 node scripts/with-loopback-no-proxy.mjs -- \
+  python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test \
+  -c playwright.parity.config.ts zz-zoom.spec.ts
+# 变异验证（必须先跑一次，确认尺子会红）：PROBE_MUTATE=1 PROBE_LIMIT=2
+```
+
+⚠ **用完即删**，并 `grep -c zz-zoom` 核验残留为 0。
+
+<details><summary>探针全文</summary>
+
+```ts
+/* 一次性探针（用完即删）v2：文本缩放 200%（WCAG 1.4.4）——**内容会不会被裁掉**。
+
+   ⚠ v1 用的是 narrow-screen-overflow 的横滚尺子，**变异验证当场证明它抓不到**：
+   注入一个 40rem（=1280px）宽的元素，探针照样报 0 条——这个应用是整页不滚动的
+   app shell，横滚那一档在它身上天生无效。而且 1.4.4 问的本来就不是横滚
+   （那是 1.4.10 Reflow），是「文本放大后内容与功能丢不丢失」。
+
+   v2 的判据：**同一元素、同一页面，基线字号下内容完整，放大后被裁掉且滚不到。**
+   用同一跑里的基线做对照，所以「本来就 truncate」的不会误报。 */
+import { test } from "@playwright/test";
+
+import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
+import {
+  DEFAULT_DIMENSION,
+  PARITY_SCENARIOS,
+  runScenario,
+  scenarioStates,
+} from "./support/scenarios";
+
+const APP = process.env.PROBE_APP ?? process.env.E2E_APP_URL ?? "http://localhost:3115";
+const ROOT_PX = Number(process.env.PROBE_ROOT_PX ?? "32");
+const WIDTH = Number(process.env.PROBE_WIDTH ?? "1280");
+const LIMIT = Number(process.env.PROBE_LIMIT ?? "9999");
+
+/** 每个元素的「被裁掉多少」。索引即身份：放大只改样式，不改 DOM 结构。 */
+function clipped() {
+  const out: { i: number; dy: number; dx: number; desc: string }[] = [];
+  const all = Array.from(document.querySelectorAll("body *"));
+  all.forEach((el, i) => {
+    const cs = getComputedStyle(el);
+    const hidesY = cs.overflowY === "hidden" || cs.overflowY === "clip";
+    const hidesX = cs.overflowX === "hidden" || cs.overflowX === "clip";
+    if (!hidesY && !hidesX) return;
+    /* sr-only 那一类（1px×1px + overflow:hidden）天生就在"裁"，不是缺陷。 */
+    if (el.clientWidth <= 1 || el.clientHeight <= 1) return;
+    /*
+      **有意截断的不算**：`truncate`（text-overflow:ellipsis）与 `line-clamp-*`
+      本来就是"切掉并给出省略号"，放大之后切得更多是设计如此，两边也一样。
+      第一版没排除它们，74 处里绝大多数都是这一类——**尺子报的越多越要先分类**。
+    */
+    if (cs.textOverflow === "ellipsis") return;
+    if (cs.webkitLineClamp && cs.webkitLineClamp !== "none") return;
+    const dy = hidesY ? el.scrollHeight - el.clientHeight : 0;
+    const dx = hidesX ? el.scrollWidth - el.clientWidth : 0;
+    if (dy <= 1 && dx <= 1) return;
+    out.push({
+      i,
+      dy,
+      dx,
+      desc:
+        `${el.tagName.toLowerCase()}` +
+        `.${(el.className?.toString?.() ?? "").split(/\s+/).slice(0, 3).join(".").slice(0, 48)}` +
+        `"${(el as HTMLElement).innerText?.trim().replace(/\s+/g, " ").slice(0, 26) ?? ""}"`,
+    });
+  });
+  return { total: all.length, out };
+}
+
+test("probe: 文本缩放 200% 下内容会不会被裁掉", async ({ browser }) => {
+  test.setTimeout(1_800_000);
+  const findings: string[] = [];
+  let scanned = 0;
+  let selfCheck = "";
+  for (const scenario of PARITY_SCENARIOS.slice(0, LIMIT))
+    for (const state of scenarioStates(scenario)) {
+      const key = `${scenario.id}${state.id && state.id !== "default" ? `#${state.id}` : ""}`;
+      const dimension =
+        state.dimensions?.[0] ?? scenario.dimensions?.[0] ?? DEFAULT_DIMENSION;
+      const ctx = await browser.newContext({
+        ...PARITY_CONTEXT_OPTIONS,
+        viewport: { width: WIDTH, height: 900 },
+      });
+      const page = await ctx.newPage();
+      try {
+        await runScenario(page, APP, scenario, dimension, state, 30_000);
+        await waitForFiniteAnimations(page);
+        await waitForDomQuiet(page);
+        const before = await page.evaluate(clipped);
+        await page.addStyleTag({
+          content: `html{font-size:${ROOT_PX}px !important}`,
+        });
+        if (process.env.PROBE_MUTATE === "1")
+          await page.evaluate(() => {
+            // 变异：给一个真实的内容容器钉死高度，放大后必然裁掉文本。
+            const t = document.querySelector("main, [role=main], body > div");
+            if (t instanceof HTMLElement) {
+              t.style.overflow = "hidden";
+              t.style.height = "40px";
+            }
+          });
+        await waitForFiniteAnimations(page);
+        await waitForDomQuiet(page);
+        const after = await page.evaluate(clipped);
+        if (!selfCheck)
+          selfCheck = await page.evaluate(
+            () => `root=${getComputedStyle(document.documentElement).fontSize}`,
+          );
+        scanned += 1;
+        if (before.total !== after.total) {
+          findings.push(`${key}: ⚠ DOM 数量变了 ${before.total}→${after.total}，索引不可比`);
+          continue;
+        }
+        const was = new Map(before.out.map((o) => [o.i, o]));
+        for (const o of after.out) {
+          const b = was.get(o.i);
+          const grewY = o.dy - (b?.dy ?? 0);
+          const grewX = o.dx - (b?.dx ?? 0);
+          if (grewY > 4 || grewX > 4)
+            findings.push(
+              `${key}: +${grewY}y +${grewX}x ${o.desc}（基线 ${b?.dy ?? 0}y/${b?.dx ?? 0}x）`,
+            );
+        }
+      } catch (e) {
+        findings.push(`${key}: 跑不到位 ${String(e).split("\n")[0]?.slice(0, 60)}`);
+      } finally {
+        await ctx.close();
+      }
+    }
+  console.log(
+    `\n===ZOOM2===\n${selfCheck} 视口 ${WIDTH} 扫了 ${scanned} 个终态，` +
+      `新裁掉的 ${findings.length} 处：\n${findings.slice(0, 40).join("\n")}\n===END===`,
+  );
+});
+```
+
+</details>
+
 ### 三、本仓 1280 档的读数（**59 处，按族**）
 
 | 族 | 处数 | 形状 | 先判 |
