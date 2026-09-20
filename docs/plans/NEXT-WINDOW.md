@@ -59,6 +59,9 @@ aria-hidden · dark 对比度 · tablet 轴 · 重复可访问名 · Tab 落点 
 最后两轮       57 forced-colors 0 条 · 58 同应用幂等 0 条（**连续 2 轮**）
 ```
 
+⚠ **第五十六轮那次 CI 红已在第五十八轮收尾时修掉**（子菜单视口 clamp，两边同改）。
+**新门禁上线第一跑就在 CI 上抓到一条本机看不见的真账**——这条要记在它的功劳簿上。
+
 ⚠ **「连续三轮开新面 0 条」差最后一轮**——但那条判据**用户从没拍板**
 （它一直写着「建议，用户尚未拍板」）。用户拍的是 B，而 B 已经满足。
 **要不要为了凑那一轮再造个面，是用户的决定，不是判据的。**
@@ -287,7 +290,13 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 ### ⚠ 当前 CI 状态（**新窗口仍然要自己复核一遍**）
 
 ```
-<第五十六轮>  **两个应用都改了菜单宽度 + 新增一条门禁**，**推完必须自己复核这条 run**
+<第五十八轮收尾>  修 61e80bcd 那次 CI 红（子菜单视口 clamp），**推完必须自己复核**
+61e80bcd  第五十六轮   verify **绿** · parity **红**（attempt 1，211 passed / 1 failed）
+                      ⚠ 红的是**这一轮新加的 viewport-fit（vue）**，而且**抓到的是真账**：
+                      本仓子菜单 200% 下本机 344 装得下、**Linux 384 溢出 9px**
+                      （`Export as Markdown` 在 Linux 字体回退里更宽）。
+                      第五十八轮收尾时用 `max-w-[calc(100vw-1rem)]` 两边同改。
+                      **判词 4u：「在我这台机器上装得下」不是「装得下」。**
 0ac29806  第五十五轮   verify + parity **双绿**（attempt 1，第五十六轮收工前查到 completed/success）
 f3745b59  第五十四轮   verify + parity **双绿**（attempt 1）
                       ⚠ 这条 parity 也跑了约 **70 分钟**（07:49 → 08:5x UTC），
@@ -356,7 +365,7 @@ workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/t
 ```
 verify      0   337 文件 / 2726 单测        ← 第五十五轮实测
 make e2e    0   297 passed / 2.0m           ← 第五十五轮实测
-e2e-parity  0   **212 passed / 52.0m**      ← 第五十六轮实测（加 viewport-fit +2；台账那条 18.2m）
+e2e-parity  0   **212 passed / 51.8m**      ← 第五十八轮收尾实测（台账那条 18.0m）
                  52 轮 +2 content-reachable · 53 轮 +2 overlay-survives-resize
                  diff.spec 那条（台账本体）18.1m · keyboard-order 双向 8.5m
 ```
@@ -1514,6 +1523,29 @@ bodyPE=none   htmlPE=auto   每颗 button 的 computed pointerEvents = none
 > **判词：结构判据（有没有某个属性）和体验判据（用户能不能分辨）不是一回事。
 > 做对照之前先跑阴性对照：它报几百条，就说明你量的不是你想问的那件事。**
 > 这是第四十四轮 4c（`aria-hidden` 那次）在另一个面上的同一条。
+
+### 4u. 「在我这台机器上装得下」不是「装得下」（第五十八轮，CI 抓到）
+
+第五十六轮那次推送的 parity 在 **Linux** 上红了一条，而本机（macOS）全绿：
+
+```
+本机  本仓子菜单 200% 下 w=344，视口 375 —— 正好装得下
+CI    同一处 w=384 —— **溢出 9px**
+```
+
+内容一模一样，`Export as Markdown` 在 Linux 的字体回退里更宽。
+
+> **判词：内容撑开的盒子只是「刚好」够时，靠的是字体度量的运气。
+> 换平台、换字体回退就破。要么给它约束，要么它是定时炸弹。**
+
+⚠ 这也是「本机全绿 ≠ CI 绿」的一个新实例：
+**字体度量是 macOS/Linux 的系统性差异**，凡是「内容宽度贴着某个边界」的读数，
+本机的那一份都只能当**下界**。收工判据里那条「台账 0，macOS 与 Linux 同时」
+就是为这件事写的——**它对新门禁同样成立**。
+
+⚠ 修法上还有一条：夹这类盒子要夹**视口**（`calc(100vw-1rem)`），
+不要夹 popper 的 `available-width`——后者在两个 primitive 上算法不同
+（上游 174 / 本仓 375），而且**基线字号就会咬**（第五十六轮实测已撤回）。
 
 ### 5. `hidden` 断言前面必须有一条 `visible`
 

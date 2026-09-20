@@ -20,6 +20,21 @@
                    wave 95 给对照加了「公共节点相对顺序」这一档才量出来——
                    aria 那一档按多重集比，顺序天然测不出来（天生看不见的第④类）。
 
+                   **子菜单夹的是「视口」，不是 popper 的 available-width**，
+                   上游同一处同改（第五十八轮收尾）。这个区别是量出来的，不是风格：
+
+                       available-width   上游 174px / 本仓 375px——radix 从翻转那侧
+                                         量，**基线字号就会咬**，把上游子菜单夹到
+                                         129px、条目换行；为修 200% 弄坏基线，
+                                         还把本来一致的两边弄得不一致（第五十六轮实测，已撤）
+                       100vw - 1rem      默认字号 359px（子菜单内容 181px，不生效）；
+                                         200% 下 343px。**只在屏幕真的装不下时才咬。**
+
+                   逼出这一条的是 CI：Linux 上这颗菜单量到 `x=[0,384]`、视口 375，
+                   而 macOS 上是 344 正好装得下——**内容一样，"Export as Markdown"
+                   在 Linux 的字体回退里就是更宽**。内容撑开的浮层在手机宽度 ×
+                   200% 文本下本来就贴着边，所以它需要一个视口上界，而不是靠运气。
+
                    `inheritAttrs: false` 留着：调用方的 data-testid 要落在内容元素上。
 -->
 
@@ -53,7 +68,7 @@ const delegated = computed(() => {
     v-bind="{ ...$attrs, ...delegated }"
     :class="
       cn(
-        'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-80 min-w-32 origin-(--reka-dropdown-menu-content-transform-origin) overflow-hidden rounded-md border p-1 shadow-lg',
+        'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-80 max-w-[calc(100vw-1rem)] min-w-32 origin-(--reka-dropdown-menu-content-transform-origin) overflow-hidden rounded-md border p-1 shadow-lg',
         props.class,
       )
     "

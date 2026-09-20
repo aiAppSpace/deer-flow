@@ -63,13 +63,20 @@ const LAYER_SELECTOR =
   ⚠ 现在**只有两行，而且是同一条账的两档**：
 
       react/thread-list-pin#mobile-drawer  基线  x=[246,427]  视口 375（右边溢出 52px）
-      react/thread-list-pin#mobile-drawer  200%  x=[201,545]  视口 375（右边溢出 170px）
+      react/thread-list-pin#mobile-drawer  200%  x=[201,544]  视口 375（右边溢出 169px）
 
   那是会话 ⋯ 菜单里 **Export 子菜单**。**本仓同一处 0 行**：reka 把它翻到左边
   （基线 x=[194,375] / 200% x=[31,375]），完整可见；Radix 不翻也不移。
 
-  **两边的子菜单宽度在这一轮之后是逐字相同的**（基线 181 / 200% 344），
-  差的**只有 x** —— 所以这不是尺寸问题，是两个 primitive 的碰撞策略不同。
+  **两边的子菜单宽度是逐字相同的**（基线 181 / 200% 343，第五十八轮起被
+  `max-w-[calc(100vw-1rem)]` 夹住），差的**只有 x** ——
+  所以这不是尺寸问题，是两个 primitive 的碰撞策略不同。
+
+  ⚠ **那条视口 clamp 是这条门禁自己在 CI 上逼出来的**（第五十八轮收尾）：
+  本仓这颗子菜单在 macOS 上量到 344 正好装得下，**Linux 上是 384、溢出 9px**
+  ——内容一样，`Export as Markdown` 在 Linux 的字体回退里更宽。
+  **「macOS 上装得下」不等于装得下。** 内容撑开的浮层在手机宽度 × 200% 文本下
+  本来就贴着边，靠的是运气而不是约束。
 
   ⚠ **三条改法都被读数否掉了，别重走**（全文见 open-accounts 第五十五/五十六轮）：
 
@@ -77,6 +84,8 @@ const LAYER_SELECTOR =
                                           crossAxis:false，右侧子菜单根本不在那条轴上移
       给 SubContent 加 max-w-(available)  上游被夹到 129px、条目换行，
                                           **基线当场退化**；本仓那个值是 375，夹不住
+                                          （换成 `calc(100vw-1rem)` 才对：基线 359px
+                                           不咬、200% 343px 才咬）
       改成 portal 让变量生效              ✗ 本仓「不 portal」是 wave 95 拿
                                           可访问性树读数判的，不能为这个翻
 

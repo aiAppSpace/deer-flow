@@ -238,6 +238,27 @@ function DropdownMenuSubTrigger({
   );
 }
 
+/*
+  Sub-menus are clamped to the *viewport*, not to the popper's available
+  width. The distinction is measured, not stylistic:
+
+    available-width   174px here / 375px in reka — Radix measures from the
+                      flip side, so it bites even at the default font size
+                      and shrank this submenu to 129px with its items
+                      wrapping. That traded a 200% fix for a baseline
+                      regression, and made the two apps differ where they
+                      had agreed.
+    100vw - 1rem      359px at the default root size (submenu content is
+                      181px, so no effect) and 343px at 200% text. Only
+                      bites when the screen genuinely cannot hold it.
+
+  What forced the issue: CI on Linux reported this menu at x=[0,384] on a
+  375px viewport at 200% text, where macOS measured 344px and fit. The
+  content is the same; "Export as Markdown" is simply wider in the Linux
+  font fallback. A content-sized popover on a phone-width viewport at 200%
+  text sits right at the edge, so it needs a viewport bound rather than
+  luck. Mirrored in the Vue app.
+*/
 function DropdownMenuSubContent({
   className,
   ...props
@@ -246,7 +267,7 @@ function DropdownMenuSubContent({
     <DropdownMenuPrimitive.SubContent
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-md border p-1 shadow-lg",
+        "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-w-[calc(100vw-1rem)] min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-md border p-1 shadow-lg",
         className,
       )}
       {...props}
