@@ -214,7 +214,8 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1144 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **210 passed**（第五十三轮加 overlay-survives-resize.spec.ts；
+make -C <abs>/frontend-vue e2e-parity     # **212 passed**（第五十六轮加 viewport-fit.spec.ts；
+                                          #   第五十三轮加 overlay-survives-resize.spec.ts；
                                           #   第五十二轮加 content-reachable.spec.ts，
                                           #   两个应用各一条；第四十七轮再加 15 个 tablet 取样点；
                                           #   耗时本来就没人守，机况一变就漂）

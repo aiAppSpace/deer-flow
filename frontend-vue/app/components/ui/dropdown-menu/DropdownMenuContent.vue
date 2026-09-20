@@ -16,6 +16,25 @@
                    + zoom/slide 那四条：上游的菜单是从触发器那一侧展开的，
                    本仓只有淡入。
                    `z-80` 是本仓自己的一层统一（上游 `z-50`），有意保留。
+
+                   ③ **横向那一半是第五十六轮补的，上游同一处同改**：
+                   `max-w-(--reka-dropdown-menu-content-available-width)`
+                   + `min-w-[min(8rem,var(…available-width,8rem))]`。
+                   只有 ① 那条竖的时候，菜单**横着**照样能比屏幕宽：
+                   实测 200% 文本 / 375px 视口下这颗会话 ⋯ 菜单是 **384px**，
+                   摆在 x=-46，左边整整切掉 46px。
+
+                   ⚠ **`min-w` 那一半不能省。** `min-w-32` = 8rem 在 200% 下是
+                   **256px**，它是个 rem 下限，会把 `max-w` 顶回去——
+                   只加 `max-w` 时量到的是 256（而不是可用的 210）。
+                   改完两应用逐字相同：基线 `[59,314 192x243]`（一格没动）、
+                   200% `[0,209 210x603]`（归位）。
+
+                   ⚠ **同一个 clamp 不要加到 `DropdownMenuSubContent` 上**
+                   （第五十六轮试过并撤回）：子菜单那一侧两个 primitive 算出来的
+                   available-width 不一样（本仓 375 / 上游 174），
+                   加上去会把上游基线的子菜单夹到 129px、条目换行，
+                   **为修 200% 弄坏基线**。判词与读数在 open-accounts 第五十六轮。
 -->
 
 <script setup lang="ts">
@@ -61,7 +80,7 @@ const delegated = computed(() => {
       v-bind="{ ...$attrs, ...delegated }"
       :class="
         cn(
-          'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-80 max-h-(--reka-dropdown-menu-content-available-height) min-w-32 origin-(--reka-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md',
+          'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-80 max-h-(--reka-dropdown-menu-content-available-height) max-w-(--reka-dropdown-menu-content-available-width) min-w-[min(8rem,var(--reka-dropdown-menu-content-available-width,8rem))] origin-(--reka-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md',
           props.class,
         )
       "

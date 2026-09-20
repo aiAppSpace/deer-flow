@@ -31,6 +31,22 @@ function DropdownMenuTrigger({
   );
 }
 
+/*
+  The width half of the available-size contract, added alongside the existing
+  `max-h-(…-available-height)`. Without it a menu can still be wider than the
+  screen: measured at 200% text on a 375px viewport, the thread "…" menu came
+  out 384px wide at x=-46, with 46px cut off the left edge.
+
+  The `min-w` half is not optional — `min-w-[8rem]` is 256px at 200% text, a
+  rem floor that overrides the max, so clamping only the max measured 256px
+  instead of the 210px actually available. Mirrored in the Vue app.
+
+  Deliberately NOT applied to DropdownMenuSubContent: the two primitives
+  compute a sub-menu's available width differently (174px here, 375px in
+  reka), and clamping there shrank this app's submenu to 129px at the default
+  font size and wrapped its items — trading a 200% fix for a baseline
+  regression.
+*/
 function DropdownMenuContent({
   className,
   sideOffset = 4,
@@ -42,7 +58,7 @@ function DropdownMenuContent({
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         className={cn(
-          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",
+          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(8rem,var(--radix-dropdown-menu-content-available-width,8rem))] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",
           className,
         )}
         {...props}
