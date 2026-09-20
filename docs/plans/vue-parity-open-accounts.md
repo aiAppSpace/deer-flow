@@ -1,4 +1,4 @@
-# React → Vue 平替：挂账总清单（截至 2026-09-20 第五十四轮）
+# React → Vue 平替：挂账总清单（截至 2026-09-20 第五十五轮）
 
 ## 零之前、2026-09-16：**按最终目标重排——台账的目标是 0**
 
@@ -4410,6 +4410,345 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
 - 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
 
+
+## 2026-09-20 第五十五轮：开「点得动吗 × 200%」这个面——**一条共有缺陷，外加三笔仪器账**
+
+照交接的 1a 造面：第三十八轮那条「点得动吗」的单应用不变量**只在基线字号上跑过**，
+这一轮把它搬到 200% 文本，并且**改成两个应用对照**。
+
+| 量 | 收工读数 |
+| --- | --- |
+| 新面 | 「点得动吗」× 200% 文本 × 两个应用（58 终态 × 2 档 × 2 应用） |
+| 取样规模 | considered **2767**（本仓）/ **2769**（上游）· modalSkips 1260 · inertSkips 122/120 |
+| 仪器自检 | 阳性对照 **covered=10 / considered=10**，两个应用都成立 |
+| 产品缺陷 | **1 条，两边共有，已两边同改** |
+| 已量未修 | **2 条**（都在下面，带读数与翻案判据） |
+| 仪器账 | **3 笔**——而其中两笔各让这把尺子整场报 0 |
+| 失败的假设 | **2 个**，都实测过、都已还原 |
+
+### 那条缺陷：移动端抽屉在 200% 下比屏幕还宽
+
+`thread-list-pin#mobile-drawer` @200%、视口 375。两个应用**逐字相同**：
+
+```
+改前
+  dialog（抽屉本体）        rect=[0,0 576x812]     ← 18rem 在 200% 下 = 576px > 375 视口
+  ⋯ 触发器                  rect=[511,628 40x40]   ← 它自己就在屏幕外
+  父菜单                    rect=[123,329 384x483]
+  Export 子菜单   本仓      rect=[   0,530 344x146]  贴左边缘，勉强可读
+                  上游      rect=[-212,530 344x146]  **只剩「…arkdown」「…SON」**（有截图）
+改后（两个应用同值）
+  dialog                    rect=[0,0 279x812]     ✓ 进视口
+  ⋯ 触发器                  rect=[214,628 40x40]   ✓ 进视口
+```
+
+**根因是一个尺度错配，和第五十四轮那三处同形**：`18rem` 是**文字尺度**，
+而这个抽屉只在手机宽度上出现。里面每一层都继承这份溢出——
+所以**要修的是这一处，不是逐个 popper 去修**。
+
+改法：`min(18rem, calc(100vw - 3rem))`（上游 `SIDEBAR_WIDTH_MOBILE` / 本仓 `w-72` 同改）。
+
+⚠ **「基线没动」是量出来的，不是算出来的**——台账**证不了**这一条：
+两个应用改的是同一处，真要一起变宽台账照样 0（「台账 0 不等于这一屏对齐」）。
+所以单独定点量了一遍，两个应用逐字相同：
+
+```
+基线  drawer=[0,0 288x812]   ← 与改前一致（18rem @ root 16 = 288）
+200%  drawer=[0,0 279x812]   ← 夹住了，375 的视口里留 96px 给遮罩
+```
+
+279 差不多正好是 `SheetContent` 默认的 `w-3/4`。
+
+### ⚠ 这一条**没修完**，剩下的两截已量、已判、留给下一轮
+
+```
+父菜单      改后 rect=[-46,289 256x523]（两应用同值）——仍然 256 > 视口能给的宽度，
+            现在是挂到**左边** 46px（改前是挂右边 141px）。**两边一样坏，不是对照缺陷。**
+子菜单      本仓 [31,490 344x146]   上游 [201,490 344x146]
+            **两边位置仍然不同**，但都已在视口内。
+```
+
+**为什么没接着修**：往下就是 popper 的碰撞策略，而**试过的两条路都被读数否掉了**，
+见下面「两个失败的假设」。**继续往下改会造出新的两边不一致，所以停在这里。**
+
+### ⚠ 两个失败的假设（**都实测过，都已还原；写在这里免得下一个人再试**）
+
+1. **给上游 `DropdownMenuSubContent` 传 `sticky="always"`** —— **读数一格没动**（仍 `-212`）。
+   我的推断是「Radix 用 `limitShift()` 限住了 shift」，**错了**：
+   Radix 的 shift 配的是 `mainAxis: true, crossAxis: false`，
+   而 `side="right"` 的子菜单要移的是 **x（cross 轴）**——它根本不在那条轴上 shift，
+   `sticky` 管的是 y 轴上的 limiter。**推断说得通，读数不认。**
+
+2. **两边都补 `max-w-(--*-content-available-width)`**（两个应用都已经在用
+   `max-h-(--*-content-available-height)`，看起来只是补上对称的另一半）——
+   **上游生效**（子菜单 344→256、条目换行到 104px 高），
+   **本仓 reka 侧两个变量名都不生效**：`--reka-dropdown-menu-content-available-width`
+   与 `--reka-popper-available-width` 都试过，子菜单仍是 344。
+   本仓 `DropdownMenuSubContent` **故意不 portal**（见该文件头），大概率与此有关。
+   结果是**只有上游变了 = 造出一条新的两边不一致**，所以**整组还原**。
+
+> **判词：一个「看起来只是补上对称另一半」的改动，在两个不同构的 primitive 上
+> 可能只有一边生效。两边同改的前提是两边都量过，不是两边都写过。**
+
+### ⚠ 三笔仪器账——**其中两笔各让这把尺子整场报 0**
+
+1. **`top.contains(el)` 让「被盖住」永远检测不出来。**
+   我照着 v4 探针写了 `el.contains(top) || top.contains(el)`，
+   而**`body.contains(el)` 恒真**——盖住时 `elementFromPoint` 常常回的就是 body/祖先。
+   `capture.ts` 那套原本只写 `element.contains(topmost)`，**是我抄的时候加错了**。
+   抓到它的是阳性对照：盖一层整屏遮罩，报出来 **0 条**。
+
+2. **浮层开着时 primitive 把整页设成不可点，尺子整场失效。** 实测：
+
+   ```
+   body 的 style 属性 = "pointer-events: none; overflow: hidden;"
+   bodyPE=none   htmlPE=auto   每颗 button 的 computed pointerEvents = none
+   于是 elementFromPoint 对**每一个点**都返回 <html>
+   ```
+
+   这些控件**确实点不动，而且那是对的**（判据与第四十四轮 `aria-hidden` 同形）。
+   ⚠ 它同时解释了为什么**修好第 1 笔之后阳性对照还是 0**：
+   **`pointer-events` 是继承属性**，盖上去的遮罩是 body 的孩子，自己也变成 none 了。
+   遮罩必须显式写 `pointer-events: auto`，写了才 `top=div#zz-overlay`。
+
+3. ⚠ **把「改文件的脚本」放进后台命令里，第三次踩。**
+   编辑脚本的 `AssertionError` 进了后台任务的输出文件，我没去读，
+   于是**拿着「已经改好」的假前提读完了一整跑的读数**，
+   还纳闷为什么读数和上一跑逐字相同。
+   判词文档里早就有这一条（「改文件的脚本不要放后台 …… 改完当场 grep 核验落地结果」）。
+   **这一次是靠「两跑读数逐字相同」才起疑的——那本身就该是个信号。**
+
+### 这一面掉出来的东西，和现有门禁**不重复**（有读数）
+
+`content-reachable` 守的是「盒子把自己裁了且滚不到」。这一面守的是
+「**在屏幕上但点不到**」与「**被推出视口**」，两者都不是裁剪：
+
+- 第五十四轮本仓 sidecar 发送键 200% 下 `x=[1229,1293]`、视口 1280，**出界 13px**——
+  它不是「盒子裁自己」，13px 也够不到 `content-reachable` 的 24 门限，**那把尺子看不见它**；
+- 这一轮上游子菜单 `x=-212`，同理。
+
+### ⚠ 门禁缺口（**明写，别当成已经守住了**）
+
+**「固定 rem 尺寸的容器在 200% 文本下宽过视口」这一类，目前没有任何门禁。**
+这一轮改的抽屉、第五十四轮改的工具条/状态格，都属于这一类。
+
+**没有当轮做成常驻门禁，是刻意的**：这一面今天还剩 3(本仓) + 13(上游) + 2(原因不同)
+条稳定差异（多数是上面那两截没修完的），现在常驻就要配一张十几行的登记表——
+而第五十四轮刚证明**登记表会长假账**。
+**先把那两截修完、行数归零，再常驻。** 探针全文留在下一节。
+
+### 探针全文（第五十五轮，已验过两侧对照；下一轮直接拿去用）
+
+放回 `frontend-vue/tests/e2e-parity/zz-hit200.spec.ts` 即可跑。
+⚠ **它的两条自检都不能删**：阳性对照（盖整屏遮罩必须报满）与
+`inertSkips`／`modalSkips` 计数——这一轮两次「整场报 0」全是它们抓到的。
+
+<details><summary>zz-hit200.spec.ts</summary>
+
+```ts
+/* 一次性探针（第五十五轮）：「点得动吗」× 200% 文本，两个应用对照。用完即删。 */
+import { test } from "@playwright/test";
+
+import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
+import {
+  DEFAULT_DIMENSION,
+  PARITY_SCENARIOS,
+  runScenario,
+  scenarioStates,
+} from "./support/scenarios";
+
+const APPS = [
+  ["vue", process.env.E2E_APP_URL ?? "http://localhost:3115"],
+  ["react", process.env.E2E_REACT_APP_URL ?? "http://localhost:3116"],
+] as const;
+
+/* 阳性对照：往页面上盖一层整屏透明遮罩，探针必须把底下的控件全报出来。 */
+const POSITIVE_CONTROL_STATE = "thread-history";
+
+/**
+ * 「这颗控件点得动吗」。
+ *
+ * ⚠ 判据与选择器**照抄 capture.ts 的 `clickable`**，不另起一套——
+ * 第三十八轮那一遍扫的就是它，换一套选择器就没法和那个 0 比较了。
+ * `page.evaluate` 的函数闭包不到模块作用域，所以选择器当参数传（判词 4i）。
+ */
+function unhittable(args: { selector: string }) {
+  const { selector } = args;
+  const nameOf = (el: Element) =>
+    (
+      el.getAttribute("aria-label") ??
+      (el as HTMLElement).innerText?.trim().replace(/\s+/g, " ") ??
+      ""
+    ).slice(0, 40) || `<${el.tagName.toLowerCase()}>`;
+  const vw = document.documentElement.clientWidth;
+  const vh = document.documentElement.clientHeight;
+  /*
+    **两支分开记，因为它们的含义完全不同**：
+
+      covered      在屏幕上，但点下去打到别的东西——**没有任何现有门禁在守它**，
+                   这一面新增的信息量全在这一支。
+      offViewport  中心点不在视口里。**它不等于「够不到」**：翻到折线以下
+                   的按钮本来就要滚一下。`content-reachable` 已经在守
+                   「裁掉且滚不到」那一半，所以这一支**只看两个应用差不差**，
+                   绝对值不当缺陷读（实测 showcase-public-thread 基线就有 12 条）。
+  */
+  const covered: string[] = [];
+  const offViewport: string[] = [];
+  let considered = 0;
+  let modalSkips = 0;
+  let inertSkips = 0;
+  document.querySelectorAll(selector).forEach((el) => {
+    const cs = getComputedStyle(el);
+    if (cs.visibility === "hidden" || cs.display === "none") return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    /*
+      **模态开着时背景被 aria-hidden / inert 正是正确写法**（第四十四轮判词）：
+      那些按钮点不动不是缺陷，是模态该挡住它们。不排掉的话 `integrations`
+      一屏就报 48 条，全是噪声——第五十四轮当探针时实测过。
+    */
+    if (el.closest('[aria-hidden="true"], [inert]')) {
+      modalSkips += 1;
+      return;
+    }
+    /*
+      ⚠ **浮层开着时 primitive 会把整页设成不可点**（第五十五轮实测），
+      这也是这把尺子第一版整个失效的原因：
+
+          浮层打开时 body 的 style 属性 = "pointer-events: none; overflow: hidden;"
+          于是每颗背景按钮的 computed pointerEvents 都是 none，
+          `elementFromPoint` 一路落到 <html>——**每一个点都返回 html**。
+
+      这些控件**确实点不动，而且那是对的**：判据与第四十四轮 aria-hidden 那条
+      同形，模态开着时背景本来就该挡住。不排掉整屏都是噪声。
+
+      ⚠ 它同时解释了为什么阳性对照报 0：盖上去的遮罩是 body 的孩子，
+      **`pointer-events` 是继承属性**，遮罩自己也变成 none 了。
+      对照必须显式写 `pointer-events: auto`（实测那样才 top=div#zz-overlay）。
+    */
+    if (cs.pointerEvents === "none") {
+      inertSkips += 1;
+      return;
+    }
+    considered += 1;
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const inViewport = cx >= 0 && cy >= 0 && cx <= vw && cy <= vh;
+    if (!inViewport) {
+      offViewport.push(`${nameOf(el)} :: off-viewport`);
+      return;
+    }
+    /*
+      ⚠ **判据逐字照抄 capture.ts：只有 `element.contains(topmost)` 算命中。**
+      第一版多写了一个 `top.contains(el)`，而 `body.contains(el)` 恒真——
+      于是「被盖住」这一支永远检测不出来，**阳性对照当场报 miss=0**。
+      （被盖住时 `elementFromPoint` 常常回的就是 body / 某个祖先。）
+    */
+    const top = document.elementFromPoint(cx, cy);
+    if (top && el.contains(top)) return;
+    covered.push(
+      `${nameOf(el)} :: covered-by ${top ? top.tagName.toLowerCase() : "nothing"}`,
+    );
+  });
+  return {
+    covered: covered.sort(),
+    offViewport: offViewport.sort(),
+    considered,
+    modalSkips,
+    inertSkips,
+    vw,
+    vh,
+  };
+}
+
+const CLICKABLE =
+  "a[href],button,input,select,textarea,summary,[role=button]," +
+  "[role=menuitem],[role=menuitemradio],[role=option],[role=tab]," +
+  "[role=switch],[role=checkbox],[role=separator],[contenteditable=true]";
+
+for (const [name, base] of APPS) {
+  test(`hit200 ${name}`, async ({ browser }) => {
+    test.setTimeout(900_000);
+    const lines: string[] = [];
+    let totalConsidered = 0;
+    let totalModalSkips = 0;
+    let totalInertSkips = 0;
+    let positiveControlRows = -1;
+    for (const scenario of PARITY_SCENARIOS)
+      for (const state of scenarioStates(scenario)) {
+        const key = `${scenario.id}${state.id && state.id !== "default" ? `#${state.id}` : ""}`;
+        const dimension =
+          state.dimensions?.[0] ??
+          scenario.dimensions?.[0] ??
+          DEFAULT_DIMENSION;
+        const context = await browser.newContext(PARITY_CONTEXT_OPTIONS);
+        const page = await context.newPage();
+        try {
+          await runScenario(page, base, scenario, dimension, state, 30_000);
+          await waitForFiniteAnimations(page);
+          await waitForDomQuiet(page);
+          for (const phase of ["base", "200"] as const) {
+            if (phase === "200") {
+              await page.addStyleTag({
+                content: `html{font-size:32px !important}`,
+              });
+              await waitForFiniteAnimations(page);
+              await waitForDomQuiet(page);
+            }
+            const r = await page.evaluate(unhittable, { selector: CLICKABLE });
+            totalConsidered += r.considered;
+            totalModalSkips += r.modalSkips;
+            totalInertSkips += r.inertSkips;
+            lines.push(
+              `@@ ${name}|${key}|${phase}|considered=${r.considered}` +
+                `|modalSkips=${r.modalSkips}|inertSkips=${r.inertSkips}` +
+                `|covered=${r.covered.length}|off=${r.offViewport.length}`,
+            );
+            for (const row of r.covered)
+              lines.push(`@@cov ${name}|${key}|${phase}|${row}`);
+            for (const row of r.offViewport)
+              lines.push(`@@off ${name}|${key}|${phase}|${row}`);
+          }
+          /* 阳性对照：盖一层整屏遮罩，报出来的条数必须 > 0。 */
+          if (key === POSITIVE_CONTROL_STATE) {
+            /*
+              ⚠ 遮罩必须是**真元素**且显式 `pointer-events: auto`：
+              伪元素那版与不写 pointer-events 那版都盖不住，见上面的判词。
+            */
+            await page.evaluate(() => {
+              const d = document.createElement("div");
+              d.id = "zz-positive-control";
+              d.style.cssText =
+                "position:fixed;inset:0;z-index:2147483647;pointer-events:auto;" +
+                "background:rgba(0,0,0,0.01)";
+              document.body.appendChild(d);
+            });
+            await waitForDomQuiet(page);
+            const r = await page.evaluate(unhittable, { selector: CLICKABLE });
+            positiveControlRows = r.covered.length;
+            lines.push(
+              `@@control ${name}|${key}|盖整屏遮罩后 covered=${r.covered.length} / considered=${r.considered}`,
+            );
+          }
+        } catch (error) {
+          lines.push(
+            `@@fail ${name}|${key}|${String(error).split("\n")[0]?.slice(0, 80)}`,
+          );
+        } finally {
+          await context.close();
+        }
+      }
+    lines.push(
+      `@@total ${name}|considered=${totalConsidered}|modalSkips=${totalModalSkips}` +
+        `|inertSkips=${totalInertSkips}|positiveControl=${positiveControlRows}`,
+    );
+    console.log(`\n@@PROBE-START@@\n${lines.join("\n")}\n@@PROBE-END@@\n`);
+  });
+}
+```
+
+</details>
 
 ## 2026-09-20 第五十四轮：两张登记表 11+1 行全部还清——**其中 3 行是尺子，8 行是两边一样坏**
 

@@ -62,10 +62,24 @@ const emit = defineEmits<{ "update:open": [boolean] }>();
     :open="props.open"
     @update:open="emit('update:open', $event)"
   >
+    <!--
+      **宽度要夹进视口**，上游 `SIDEBAR_WIDTH_MOBILE` 同一处同改（第五十五轮）。
+
+      `w-72` = 18rem 是**文字尺度**，而这个抽屉只在手机宽度上出现：200% 文本下
+      它是 576px，比 375px 的视口还宽。实测那一档整个抽屉挂在屏幕外——
+      它自己的 ⋯ 触发器在 x=511、它打开的菜单在 x=123..507，
+      而那个菜单的 Export 子菜单被推到 x=-212，屏幕上只剩「…arkdown」「…SON」。
+      里面每一层都继承这份溢出，**所以要修的是这一处，不是逐个 popper 去修**。
+
+      `min()` 让 18rem 在放得下的地方原样保留（默认字号下视口 ≥336px 一格不动），
+      只有真的放不下才夹。3rem 的余量特意写成 rem：点遮罩关闭的那块热区
+      跟着文字一起长；200% 在 375 视口上算出来是 279px，
+      差不多正好是 SheetContent 默认的 `w-3/4`。
+    -->
     <SheetContent
       side="left"
       :close-label="props.closeLabel"
-      class="bg-sidebar text-sidebar-foreground border-sidebar-border w-72 gap-0 border-r p-0 [&>button]:hidden"
+      class="bg-sidebar text-sidebar-foreground border-sidebar-border w-[min(18rem,calc(100vw-3rem))] gap-0 border-r p-0 [&>button]:hidden"
     >
       <SheetHeader class="sr-only">
         <SheetTitle>{{ props.title }}</SheetTitle>

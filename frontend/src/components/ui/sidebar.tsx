@@ -28,7 +28,23 @@ import {
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
-const SIDEBAR_WIDTH_MOBILE = "18rem";
+/*
+  The mobile drawer is opened on a phone-sized viewport, but 18rem is a *text*
+  measure: at 200% text it is 576px, which is wider than the 375px viewport it
+  is supposed to fit inside. Measured there, the whole drawer hung off the
+  screen — its own "…" trigger sat at x=511, the menu it opens at x=123..507,
+  and that menu's Export submenu was pushed to x=-212, leaving only "…arkdown"
+  and "…SON" visible. Everything inside inherits the overflow, so this is the
+  one place worth fixing rather than each popper in turn.
+
+  `min()` keeps the 18rem measure wherever it fits — unchanged at the default
+  root size for any viewport at least 336px wide — and only clamps once the
+  text (or the screen) makes it impossible. The 3rem gutter is in rem on
+  purpose, so the dismiss-by-tapping-the-overlay target grows with the text
+  too; at 200% on a 375px viewport that lands at 279px, almost exactly the
+  `w-3/4` that SheetContent falls back to by default.
+*/
+const SIDEBAR_WIDTH_MOBILE = "min(18rem, calc(100vw - 3rem))";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
