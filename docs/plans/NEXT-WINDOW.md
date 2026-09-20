@@ -23,34 +23,68 @@
 
 ## 🚩 第一步（量完状态就做这个，别再找）
 
-**把第五十一轮那把文本缩放的尺子在上游跑一遍。**
+**名单空了，而且第五十二轮把「造新面」那条路也走过一遍了。**
+这一轮的工作**是造一个新的取样面**，不是从名单里挑。
 
-```bash
-cd /Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/frontend-vue
-# ① 探针全文在 open-accounts 第五十一轮「二之二」的 <details> 里，整份照抄，
-#    存成 tests/e2e-parity/zz-zoom.spec.ts。别重新设计尺子——第五十一轮在尺子上栽了三次。
-# ② 先做变异验证，确认尺子会红：
-PROBE_MUTATE=1 PROBE_LIMIT=2 PROBE_WIDTH=1280 node scripts/with-loopback-no-proxy.mjs --   python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test   -c playwright.parity.config.ts zz-zoom.spec.ts        # 必须报出 +760y
-# ③ 再跑上游：
-PROBE_APP=http://localhost:3116 PROBE_WIDTH=1280 node scripts/with-loopback-no-proxy.mjs --   python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test   -c playwright.parity.config.ts zz-zoom.spec.ts
+下面三条是**建议**，不是判过的账——自己先当探针量一遍，**有收获再常驻**。
+按「便宜且有先例」排序：
+
+### 1a. 把 `content-reachable` 那把尺子换一个自变量：**断点**
+
+第五十二轮那条门禁量的是「字号」这条轴（16px / 32px），
+而 ⚠ **每个终态只量了它自己的第一个维度**（`state.dimensions?.[0]`）——
+58 个终态里绝大多数是 desktop。**同一把尺子换成 375 / 768 再跑一遍**，
+工具是现成的，成本只是多两轮循环。
+
+⚠ **别用 `PROBE_WIDTH` 那种外部 viewport**，它是死的：
+`runScenario` → `applyDimension` 会 `setViewportSize(VIEWPORTS[...])` 覆盖掉它
+（第五十二轮实测，判词见 open-accounts 第五十二轮第五节）。
+要换断点得在 `runScenario` **之后**再 `setViewportSize`。
+
+### 1b. 还 `content-reachable` 的两张登记表（**里面有一条上游单边的真账**）
+
+门禁按纵横分了两张表，**两张都是欠账，不是结清**：
+
+**纵向表（1 条，两边逐字相同）**
+
+```
+thread-list-pin#mobile-drawer   50px（基线）/ 100px（200%）   窄屏侧栏抽屉，两边都滚不到
 ```
 
-**要回答的问题**：本仓那 59 处（按族：`peer/menu-button` 13 · FlipDisplay 12 ·
-`splitpanes__pane` 4 · integrations 3 · `ml-auto.h-full` 2 · DOM 变了 2 · 其他 1）
-**哪些上游也有、哪些只有本仓**。两边一样坏走「两边同改」，只有本仓有才是分叉。
-**现在一条都还没定性。**
+**横向表（11 条，属 WCAG 1.4.10 Reflow）**
 
-之后的顺序写在「下一轮最该先拿的」的 1b 里（`splitpanes__pane` 那 4 处优先，
-增量 200+px；`branch-thread#turn-actions` 那 2 处要换身份标识；375 档还没用对的尺子跑过）。
+```
+vue/react thread-list-pin#mobile-drawer  165x（基线）/ 304x（200%）  两边逐字相同
+vue/react browser-feature                0y/217x   两边同值，层不同（本仓 ml-auto / 上游 aside）
+vue/react integrations ×3                0y/41x    两边逐字相同
+react/sidecar-chat                       0y/70x    ⚠ **只有上游**，本仓同处仅 13x
+```
 
-⚠ 第四十八轮那条 `POST /api/threads/search` 已查到根因并修掉（本仓单边），
-**别再去查那个签名**。
+⚠ `mobile-drawer` **纵横都中**，两张表各记一半。**拆轴之前它整个终态被跳过，
+所以横向那一半从来没显形过**——这是「一条门禁只该守一个不变量」的正面收益。
 
-⚠ 第四十八轮那条 `POST /api/threads/search` 已查到根因并修掉（本仓单边），
-**别再去查那个签名**。
+⚠ **`react/sidecar-chat` 那条是上游单边的真缺陷**，登记只是因为它属于横向那一族、
+要跟整族一起还——**别把它当成「两边一样所以不算」**。
+
+按用户那条「两边都不对时取业界做法两边同改」，这两张表都该还。
+还完把表清空；**清表之前先跑变异验证**，确认表空了之后门禁还会红。
+
+### 1c. 第五十二轮**没定性**的两条小的（门禁看不见它们，因为它们够得到）
+
+| 场景 | 读数 | 为什么没判 |
+| --- | --- | --- |
+| `agent-chat#completed-turn` | 本仓分栏格 `+0y+24x`，上游在分栏**根**上 `+0y+8x` | 不同层、不同量级 |
+| 37 个终态 | 上游分栏根 `+0y+8x`（基线 8x），本仓 splitpanes 根**不裁** | 上游单边、只有 8px |
+
+⚠ 这两条**不在** `content-reachable` 的任何一张表里，因为它们**够得到**
+（内层有滚动容器）——门禁按判据不报它们，不是漏了。
+
+它们是「尺子报了差异、但可能用户看不出区别」那一类。要定性就直接**截图比**
+（交接文档「手上的工具」第 4 条：最后判「用户看得见吗」只有截图说了算），
+别再堆新尺子。⚠ 也完全可能判成「不是账」——**8px 的横向裁剪在两个不同构的
+分栏 primitive 之间，很可能只是实现字面**。
 
 ---
-
 ## ⚠ 最终判据（2026-09-16 用户重申）
 
 用户原话：**「最终目的是 vue 版本和 react 版本在功能，体验，交互逻辑，界面上保持
@@ -150,10 +184,16 @@ PROBE_APP=http://localhost:3116 PROBE_WIDTH=1280 node scripts/with-loopback-no-p
 
 不是「跑满 N 轮」——不开新面的轮次天然是 0，凑不出信息。
 
-⚠ **名单本身快走空了**：六条里只剩第 3 条（逐 spec 的 `page.route` 前提变异）没开。
-所以这个判据接下来会卡在「**想不出新面**」而不是「还没跑完」——
-**下一轮开完那条之后，真正的工作是造新面，不是从名单里挑。**
-按这个判据估**还要 4 轮左右**（1 轮走完名单 + 3 轮确认，有收获或造出新面则顺延）。
+⚠ **名单已经走空了**（第四十九轮走完最后一条，第五十轮起全靠造新面）。
+造出来的两个新面的产出对照：
+
+| 轮 | 造的新面 | 产品缺陷 |
+| --- | --- | --- |
+| 50 | `Shift+Tab` 反向遍历 | **0 条**（产出是修对了一条量了十几轮的门禁） |
+| 51–52 | 文本缩放 200%（WCAG 1.4.4） | **2 条**，都在本仓，都已修 |
+
+**所以「造新面」这条路是有产出的**，只是一轮不一定够——第五十一轮中途收工，
+第五十二轮才把它走完。下一轮的建议写在最上面「第一步」那一节。
 
 **「完全一致」证不出来**（没有方法能证明两个八万行的应用在所有未取样处相同）。
 能拿到的终态是这四条同时成立，目前**只差最后一条**：
@@ -201,8 +241,10 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 ### ⚠ 当前 CI 状态（**新窗口仍然要自己复核一遍**）
 
 ```
-ea5ab279  第五十一轮  纯 docs，**不触发 CI**——total_count: 0 不是「没问题」
-1a4a0d91  第五十轮    verify + parity **双绿**（attempt 1，收工时已复核）
+<第五十二轮>  改了应用代码 + 新门禁，**推完必须自己复核这条 run**
+47aa0f92  第五十一轮末 纯 docs，**不触发 CI**——total_count: 0 不是「没问题」（第五十二轮开工时复核过）
+ea5ab279  第五十一轮  纯 docs，同上
+1a4a0d91  第五十轮    verify + parity **双绿**（attempt 1；第五十二轮开工时复核过，仍是 success）
 4a6577eb  第四十九轮  双绿
 be7bb74d  第四十八轮  **被取消**（推第四十九轮时 cancel-in-progress 掐的）。
                       不用补跑：第四十九轮那条 run 覆盖的树**包含**第四十八轮的全部应用改动
@@ -238,10 +280,10 @@ workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/t
   「同一侧发了两次、体逐字相同」。扒 CI 原始日志（`gh api .../attempts/1/logs`）
   就能看到这两档，比重跑便宜得多。
 
-**第五十一轮收工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
+**第五十二轮开工时这几条命令给出的是（拿它对照，不一致就先查为什么）：**
 
 ```
-HEAD ea5ab279   工作树干净   未推送 0
+HEAD 47aa0f92   工作树干净   未推送 0
 场景-维度 189   唯一行 0   不同场景状态 58
 四张工单表：路由 0 · 文案 0 · 取样路由 0（exempt 4）· spec pending 1（有判词）
 断点 desktop 141 · tablet 28 · mobile 20
@@ -249,6 +291,8 @@ HEAD ea5ab279   工作树干净   未推送 0
 frontend-vue parity  completed/success（挂在 1a4a0d91 上）
 frontend-vue verify  completed/success
 ```
+
+⚠ 这几个数**第五十二轮收工时一个都没动**（这一轮改的是渲染与可达性，不改取样面）。
 
 **本机门禁最近一次全绿的读数**（第五十轮收工时）：
 
@@ -259,6 +303,51 @@ e2e-parity  0   206 passed / 42.0m   ← keyboard-order 改双向后从 4.5m 涨
 ```
 
 ---
+
+## 第五十二轮收工状态（2026-09-20）
+
+一句话：**文本缩放那 59 处全部定性，掉出两条本仓单边的真缺陷——
+而其中最大的那一条，上一轮的「按族归类」表里根本没有它。**
+
+| 量 | 收工读数 |
+| --- | --- |
+| 新面 | 文本缩放 200%（WCAG 1.4.4）**走完**，常驻成 `content-reachable.spec.ts` |
+| 产品缺陷 | **2 条**，都在本仓，都已修 |
+| zz-zoom 本仓档 | 59 → **45**（消失 14 条，**新增 0 条**） |
+| 「够不到」的终态 | 3 → **1**（剩的那条两边逐字相同，已进豁免表） |
+| 仪器账 | **3 笔** |
+
+### 两条真分叉
+
+1. **`scheduled-tasks` 整页内容够不到，而且基线字号就在丢。**
+   本仓内容壳裁掉 1086px（200% 下 4375px）而 `docScrollable=0`、祖先与内层都不滚；
+   上游同一屏 `docScrollable=1086 / 4376`。改 `layouts/workspace.vue` 那层为
+   `overflow-y-auto`。改后定点读数：末尾控件 `y 4402 → 27`、`inView false → true`，
+   **与上游的 `y=27` 同号**；页头 `-4375`（上游 `-4376`）、侧栏 y=0 不动。
+2. **会话标题上游给省略号、本仓硬切。** 上游 `ThreadTitle` 传
+   `min-w-0 [&>div]:truncate`，本仓一个类都没传，12 个终态横向溢出 17~117px。已补。
+
+### ⚠ 三笔仪器账
+
+| # | 洞 | 怎么露出来的 |
+| --- | --- | --- |
+| 1 | 第五十一轮的「按族归类」表是在 `slice(0, 40)` **截断过**的输出上做的：总数 59 对，表里只有 37 | 各族之和 ≠ 总数；**整族漏掉的正是最大的那条** |
+| 2 | `PROBE_WIDTH` 是死的——`applyDimension` 会 `setViewportSize` 覆盖掉它 | context 显式设 900，量回来 `clientH=800`（= `VIEWPORTS.desktop.height`） |
+| 3 | （我自己的）探针 `writeFileSync` 抛 `ENOENT`，而它在 `console.log` **之前**，58 个终态的数据全丢 | 跑满 1.7m 然后 ✘ |
+
+**最该记的**：第 1 笔说明 **总数对不等于表对**——一个会截断的报告配一个不截断的
+计数，长出来的是「自洽但不完整」。第 2 笔与第五十一轮「`addInitScript` 没落地」
+同形状：**「换个自变量再跑一遍」之前，先确认那个自变量真的进得去。**
+
+### 顺带结清的
+
+- **v3 探针（`data-zz-id` 认身份）把那 2 个「DOM 变了」的终态量出来了**：
+  `branch-thread#turn-actions` 281→277、`streaming-reasoning-order` 245→234，
+  **两个终态各报 0 条差异**。仪器验证先拿已知答案对过：v3 在其余 56 个终态上
+  与 v2 **集合完全一致**（43 == 43）。
+- 上游 `branch-thread` 那条 `+998y` 判成**尺子的**：`use-stick-to-bottom` 的
+  `StickToBottom` 外层 `overflow-y-hidden`、**滚动条在内层**，内容够得到。
+
 
 ## 第五十一轮收工状态（2026-09-20，**中途收工**）
 
@@ -1015,37 +1104,15 @@ CDP CPU 降速 ×4 / ×8，32 跑        两边恒 1 次（触发与取样窗同
 
 </details>
 
-#### 1b. 文本缩放 200%（WCAG 1.4.4）——⚠ **第五十一轮开了头，没做完，从这里接**
+#### ~~1b. 文本缩放 200%（WCAG 1.4.4）~~ —— **第五十二轮走完了，别重做**
 
-**已经做完的**（读数与可照抄的尺子在 open-accounts 第五十一轮）：
+**产出 2 条本仓单边的真缺陷（都已修）+ 一条常驻门禁 `content-reachable.spec.ts`。**
+59 处按「场景键 × 族」全部定性：20 组两边逐字相同、16 组只有本仓、40 组只有上游。
+读数与三笔仪器账见 open-accounts 第五十二轮。
 
-- 尺子找对了：**同一元素、同一页面，基线字号下完整、放大后被裁掉且滚不到**，
-  用同一跑里的基线做对照。**变异验证过**（钉死一个容器的高度 → 报 `+760y`）。
-- ⚠ **放大必须用 `page.addStyleTag`，不能用 `addInitScript`**（后者不落地，
-  自检读回 `root=16px`，害得同一个「0 条」拿了两次假读数）。
-- ⚠ **要排除有意截断**（`text-overflow: ellipsis` / `-webkit-line-clamp`）
-  与 sr-only（`clientWidth<=1`），否则 74 处里绝大多数是它们。
-- 本仓 1280 档 **59 处**，已按族归类（`peer/menu-button` 13 · FlipDisplay 12 ·
-  `splitpanes__pane` 4 · integrations 3 · `ml-auto.h-full` 2 · DOM 变了 2 · 其他 1）。
-
-**没做的，按顺序**：
-
-1. **把同一把尺子在上游跑一遍**（`PROBE_APP=$E2E_REACT_APP_URL`）。
-   **这 59 处一条都还没定性**——两边一样坏走「两边同改」，只有本仓有才是分叉。
-2. `splitpanes__pane` 那 4 处先看（增量最大，横向 200+px）。
-3. `branch-thread#turn-actions` 那 2 处「DOM 数量变了 281→277」要换身份标识
-   （索引不可比），建议打临时 `data-zz-id`。
-4. 375 档还没用**对的**尺子跑过。
-
-已量过的「窄屏溢出」走的是**视口宽度**那条轴；**字号**是另一条，两者会给出不同的
-答案：`rem` 布局在 200% 下等比放大（看不出问题），而写死 `px` 的容器、
-`max-h-*`、`truncate` 的那些会当场露馅。做法是把根字号从 16px 调到 32px
-（或 `page.emulateMedia` 之外直接改 `document.documentElement.style.fontSize`），
-在 1280 与 375 两档上量 `documentElement.scrollWidth` 与越界元素——
-**与第三十八轮那套窄屏扫描同一把尺子，只换自变量**，所以工具是现成的。
-
-⚠ 两条都要**先当探针量一遍、有收获再常驻**（第四十四轮的做法），
-并且**先拿一个已知答案的样本验仪器**（第三十九轮判词）。
+⚠ **别再照着「375 档还没跑过」去做**——那条问法是错的：
+`PROBE_WIDTH` 这类外部 viewport 会被 `applyDimension` 覆盖掉，
+这把尺子没有「档」这个自变量。真正的缺口写在最上面「第一步」的 1a。
 
 ### 2. 上游那一侧的门禁——**第四十四轮开了个头，还没铺完**
 
@@ -1083,6 +1150,7 @@ CDP CPU 降速 ×4 / ×8，32 跑        两边恒 1 次（触发与取样窗同
 react-parity-scope.json  → pendingRoutes.routes  0     （注意它是个对象，不是数组）
 upstream-i18n-map.json   → pending.keys          0
 parity-route-sampling.json → pending             0     （exempt 4）
+e2e-parity 用例数                             208   （第五十二轮 206 → 208，加 content-reachable）
 parity-scenario-coverage.json → pending          1     artifact-table-performance
                                                        **已有完整判词，别重新问**
 ```

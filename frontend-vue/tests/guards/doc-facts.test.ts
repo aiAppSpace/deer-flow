@@ -296,9 +296,10 @@ type LedgerMeasures = {
 
 /*
   `PARITY_FIXED_SPECS` 那几份 spec 里的固定用例数（**不随场景目录变**的那些）。
-  为什么 16 > 14 个 `test(` 调用点：两处包在两项的 `for` 里——`topology.spec`
-  最后那条（vue / react 各一条）与 `keyboard-trap.spec` 整份（同样两个应用）。
-  下面那条用例钉住「调用点还是 14 个」——有人加一条用例，调用点数变了就红，
+  为什么 19 > 16 个 `test(` 调用点：三处包在两项的 `for` 里——`topology.spec`
+  最后那条（vue / react 各一条）、`keyboard-trap.spec` 整份，以及
+  `content-reachable.spec` 整份（同样两个应用）。
+  下面那条用例钉住「调用点还是 16 个」——有人加一条用例，调用点数变了就红，
   逼着这个常量和文档一起跟进。
   **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
   失效时会明确报出来。
@@ -324,8 +325,9 @@ const PARITY_FIXED_SPECS = [
   "interaction-settles-first",
   "keyboard-trap",
   "keyboard-order",
+  "content-reachable",
 ] as const;
-const PARITY_FIXED_TESTS = 17;
+const PARITY_FIXED_TESTS = 19;
 
 /** 全部读数只从签入基线算，一个字都不从散文里读。 */
 function measureLedger(): LedgerMeasures {
@@ -476,10 +478,11 @@ describe("计划文档里的台账读数和签入基线一致", () => {
           .length,
       0,
     );
-    // 15 个调用点 → 17 条用例（topology 最后一条与整份 keyboard-trap 各包在两项 for 里）。
+    // 16 个调用点 → 19 条用例（topology 最后一条、整份 keyboard-trap、
+    // 整份 content-reachable，三处各包在两项 for 里）。
     expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 15,
-      常量: 17,
+      调用点: 16,
+      常量: 19,
     });
 
     /*

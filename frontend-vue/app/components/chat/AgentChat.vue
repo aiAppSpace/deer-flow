@@ -1766,16 +1766,29 @@ onUnmounted(() => {
           <div class="flex min-w-0 flex-1 items-center text-sm font-medium">
             <!--
               标题走 FlipDisplay，与上游 ThreadTitle 同构
-              （frontend/src/components/workspace/thread-title.tsx 就是
-              `<FlipDisplay uniqueKey={threadId}>`）。换线程时标题翻页式切换，
-              而不是原地跳变。
+              （frontend/src/components/workspace/thread-title.tsx）。换线程时标题
+              翻页式切换，而不是原地跳变。
 
-              这一层因此**不再** `truncate`：上游的裁剪来自 FlipDisplay 自己的
-              `relative overflow-hidden`，是直接切掉而不是省略号。省略号看着更好，
-              但它会让两边在同一条长标题上画出不同的东西，而这一处并不是 React
-              坏了——是它选的裁剪方式。
+              `min-w-0 [&>div]:truncate` 是**逐字照抄上游 ThreadTitle 的 className**
+              （`cn("min-w-0 [&>div]:truncate", className)`）。两边的 FlipDisplay 本体
+              完全同构（外层 `relative overflow-hidden` + 一个内层 div），所以长标题
+              画成什么样，全由调用方传的这两个类决定：
+              `min-w-0` 让它在 flex 行里缩得下去，`[&>div]:truncate` 给内层那个
+              div（上游是 motion.div、本仓是 .flip-display__item，**同一个位置**）
+              加省略号。
+
+              ⚠ 这里原来一个类都没传，注释还写着「上游的裁剪来自 FlipDisplay 自己的
+              `relative overflow-hidden`，是直接切掉而不是省略号……不是 React 坏了」
+              ——**那句话是错的**，上游恰恰传了 `[&>div]:truncate`。第五十二轮用
+              200% 文本量出来：12 个终态上本仓标题横向溢出 17~117px（硬切），
+              上游同样 12 个终态一处都不溢出（内层 truncate 之后不再溢出）。
+              判词：**行内注释是线索不是证据**——这一条劝退过一次本该发生的修复。
             -->
-            <FlipDisplay v-if="headerTitle" :unique-key="routeThreadId ?? ''">
+            <FlipDisplay
+              v-if="headerTitle"
+              class="min-w-0 [&>div]:truncate"
+              :unique-key="routeThreadId ?? ''"
+            >
               {{ headerTitle }}
             </FlipDisplay>
           </div>
