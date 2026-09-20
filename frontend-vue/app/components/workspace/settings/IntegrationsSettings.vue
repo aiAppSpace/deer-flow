@@ -729,13 +729,20 @@ onUnmounted(() => {
           <AlertDescription>{{ loadError }}</AlertDescription>
         </Alert>
         <template v-else-if="status">
+          <!--
+            列数要跟着**文字**能装多少走，不是跟着窗口多宽走，**上游同一处同改**。
+
+            `md:grid-cols-4` 是视口断点，而这几格里每一件都按 rem 排：第五十四轮
+            实测 200% 文本下四列还是 166px 宽，而格里那颗状态徽标涨到 151px、
+            旁边的标签再也放不下——面板被 `overflow-x: hidden` 横着裁掉 41px
+            且滚不到（WCAG 1.4.10）。
+
+            `auto-fit` 配一个 rem 门限自己就会重排：默认字号 4 列、200% 2 列、
+            手机 1 列。顺带 3/4 那个三元也不需要了——空轨道会塌掉，
+            三张卡片排出来与原先的 `grid-cols-3` 逐格相同。
+          -->
           <div
-            :class="
-              cn(
-                'grid gap-3',
-                showSandboxRuntime ? 'md:grid-cols-4' : 'md:grid-cols-3',
-              )
-            "
+            class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3"
           >
             <LarkStatusItem
               v-for="item in statusCards"

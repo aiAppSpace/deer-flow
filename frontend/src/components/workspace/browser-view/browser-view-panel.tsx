@@ -354,7 +354,25 @@ export function BrowserViewPanel({
         event.stopPropagation();
       }}
     >
-      <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+      {/*
+        `flex-wrap` + the container query on the URL form are what keep this
+        toolbar usable at 200% text (WCAG 1.4.4 / 1.4.10). The side pane is
+        sized as a percentage of the viewport, so it stays ~307px wide while
+        everything inside it doubles: measured at 200% the row needs 524px,
+        and without wrapping the URL field, the live-control button and the
+        close button all end up *outside the 1280px viewport* — there is no
+        scrollbar and no way to close the panel.
+
+        The form needs `basis-full` and not just `flex-1`: once the row wraps,
+        a `flex-basis: 0` item lands on whichever line still has room and grows
+        into its leftovers, which measured out at 5px of URL bar. The threshold
+        is in `rem` on purpose — that is the whole point, the row has to reflow
+        when the *text* gets bigger, not when the window does. 12rem is 192px
+        at the default root size, well under the 283px this header has at 100%,
+        so nothing moves until the text actually grows (or the user drags the
+        splitter in that far, where wrapping is what you want anyway).
+      */}
+      <header className="@container flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
         <MonitorIcon className="size-4 shrink-0" />
         {/* This panel label was a hardcoded literal while `common.browser`
             sat unused in the dictionary, so zh-CN rendered "Browser" here. */}
@@ -382,7 +400,7 @@ export function BrowserViewPanel({
           </Button>
         </div>
         <form
-          className="relative flex min-w-0 flex-1 items-center"
+          className="relative flex min-w-0 grow basis-0 items-center @max-[12rem]:basis-full"
           onSubmit={(event) => {
             event.preventDefault();
             void handleNavigate();

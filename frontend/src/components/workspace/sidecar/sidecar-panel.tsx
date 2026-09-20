@@ -635,8 +635,21 @@ export function SidecarPanel({ className }: { className?: string }) {
                 readOnly={disabled}
               />
             </PromptInputBody>
-            <PromptInputFooter className="@container flex flex-nowrap gap-2">
-              <PromptInputTools className="min-w-0 flex-1 flex-nowrap overflow-hidden">
+            {/*
+              This row has to reflow at 200% text, and `flex-1` is what stopped
+              it: a `flex-basis: 0` item has a hypothetical size of 0, so the
+              line never counted as full and never wrapped — the left group was
+              handed 113px for the 183px it needed and quietly clipped 70px of
+              itself, taking the mode label with it. `grow` keeps the same
+              rendered layout (both groups still fill the row, the right one
+              still ends flush right) while letting the content's own width
+              decide when the row breaks. `grow` on the right group too, so
+              that once it is alone on the second line its `justify-end` still
+              holds the submit button against the right edge instead of
+              letting `justify-between` park it on the left.
+            */}
+            <PromptInputFooter className="@container flex flex-wrap gap-2">
+              <PromptInputTools className="min-w-0 grow flex-nowrap overflow-hidden">
                 <SidecarAddAttachmentsButton uploadLimits={uploadLimits} />
                 <SidecarModeMenu
                   context={sidecar.context}
@@ -644,7 +657,7 @@ export function SidecarPanel({ className }: { className?: string }) {
                   onModeSelect={handleModeSelect}
                 />
               </PromptInputTools>
-              <PromptInputTools className="min-w-0 justify-end">
+              <PromptInputTools className="min-w-0 grow justify-end">
                 <SidecarModelSelector
                   className="max-w-40 min-w-0 sm:max-w-56 @max-[240px]:hidden"
                   context={sidecar.context}

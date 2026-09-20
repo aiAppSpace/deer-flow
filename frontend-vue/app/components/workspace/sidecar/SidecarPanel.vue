@@ -504,199 +504,235 @@ async function confirmDelete() {
             照抄了这一条，只有 sidecar 这份手搓副本漏了，于是可访问性树里 React 比
             本仓多一个分组。
           -->
-          <div role="group" data-slot="input-group-footer">
-            <!--
-              纸夹是**按钮**，file input 是 `hidden` 的旁路——不是 `sr-only` 的 label。
-              ChatComposer.vue 里那段注释记着同一条：sr-only 的 input 仍然在可访问性
-              树里，读屏器会在纸夹旁边再念出一个同义按钮，凭空多一个入口。本仓这里
-              原来就是那个写法，而且名字读的是 `inputBox.uploadFiles`，上游读的是
-              `inputBox.addAttachments`。
-            -->
-            <!--
-              上游 sidecar-panel.tsx:738 是
-              `<Tooltip content={…}><PromptInputButton className="px-2!">`，
-              也就是 `<Button variant="ghost" size="sm">`——与主输入框那颗纸夹
-              **同一个形状**，wave 71 改了主输入框那一份、漏了 sidecar 这一份。
-              差的是 Tooltip（上游那句提示写着单文件与总量上限）、
-              `h-8 px-2!` 的尺寸、3px 焦点环与 `disabled:*`。
-              颜色不写在按钮上：`input-group-footer` 容器（ComposerSurface 的
-              scoped CSS）已经是 muted-foreground。
-            -->
-            <Tooltip>
-              <TooltipTrigger>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="px-2!"
-                  data-testid="sidecar-add-attachments-button"
-                  :aria-label="$i18n.t.value.inputBox.addAttachments"
-                  @click="fileInput?.click()"
-                >
-                  <!-- 上游 sidecar-panel.tsx:745 是 `size-3` = 12px。 -->
-                  <Paperclip class="size-3" aria-hidden="true" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" align="start" class="w-56">
-                {{ $i18n.t.value.inputBox.addAttachments }}
-              </TooltipContent>
-            </Tooltip>
-            <input
-              ref="fileInput"
-              type="file"
-              multiple
-              :aria-label="$i18n.t.value.inputBox.uploadFiles"
-              class="hidden"
-              @change="chooseFiles"
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger>
-                <ModeHoverGuide
-                  :label="activeMode.label"
-                  :description="activeMode.description"
-                >
-                  <!--
+          <!--
+            **这一行要能在 200% 文本下重排**，而且要和上游断在同一处。
+
+            上游 `PromptInputFooter` 里是**两个** `PromptInputTools`
+            （sidecar-panel.tsx:639/647），本仓原来是一个分组加一根
+            `<span class="flex-1" />` 撑开。两种写法在 100% 下渲染逐格相同，
+            换行时却完全不同：`flex-1` 的撑杆假想尺寸是 0，永远不会把行挤满，
+            于是发送键被推出去而不是折到下一行——第五十四轮实测 200% 下
+            本仓发送键 `x=[1229,1293]`、视口 1280，**右边缘出界 13px**，
+            而上游同一颗 `x=[1159,1223]` 完整在内。
+
+            所以按上游的分层补两层真容器、撤掉撑杆：左组 `grow` 让内容自己的宽度
+            决定何时断行，右组 `grow` + `justify-end`，这样它单独落到第二行时
+            发送键仍然贴右。上游同一处同改（它那一侧丢的是档位标签，70x）。
+
+            **`gap-2!` 是上游这个调用点的覆盖，本仓一直漏着**（第五十四轮实测）：
+            上游 `InputGroupAddon` 的 cva 基类是 `gap-2`，`PromptInputFooter` 用
+            `cn("justify-between gap-1", className)` 把它压回 `gap-1`，
+            **而这个调用点又传 `gap-2` 压回去**（sidecar-panel.tsx:638）。
+            本仓 ComposerSurface 的 scoped CSS 只实现到 `gap: 0.25rem` 那一层。
+
+            不换行时这 4px 看不出来：两个组都 `grow`，多出来的间距被吸收掉，
+            外沿逐像素相同（实测 submit / 档位键两边 x 全等）——**所以台账报不出它**。
+            一换行它就是行间距：实测 200% 下本仓 rowGap 8px、上游 16px，
+            footer 高 172 vs 180，第一行 y 差 8px。
+
+            带 `!` 是因为要压过 scoped CSS 的 `(0,2,0)`——普通工具类 `(0,1,0)` 压不过。
+            与本仓别处的 `gap-1!` / `px-2!` 同一个写法。
+          -->
+          <div
+            role="group"
+            data-slot="input-group-footer"
+            class="flex-wrap gap-2!"
+          >
+            <div class="flex min-w-0 grow items-center gap-1 overflow-hidden">
+              <!--
+                纸夹是**按钮**，file input 是 `hidden` 的旁路——不是 `sr-only` 的 label。
+                ChatComposer.vue 里那段注释记着同一条：sr-only 的 input 仍然在可访问性
+                树里，读屏器会在纸夹旁边再念出一个同义按钮，凭空多一个入口。本仓这里
+                原来就是那个写法，而且名字读的是 `inputBox.uploadFiles`，上游读的是
+                `inputBox.addAttachments`。
+              -->
+              <!--
+                上游 sidecar-panel.tsx:738 是
+                `<Tooltip content={…}><PromptInputButton className="px-2!">`，
+                也就是 `<Button variant="ghost" size="sm">`——与主输入框那颗纸夹
+                **同一个形状**，wave 71 改了主输入框那一份、漏了 sidecar 这一份。
+                差的是 Tooltip（上游那句提示写着单文件与总量上限）、
+                `h-8 px-2!` 的尺寸、3px 焦点环与 `disabled:*`。
+                颜色不写在按钮上：`input-group-footer` 容器（ComposerSurface 的
+                scoped CSS）已经是 muted-foreground。
+              -->
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="px-2!"
+                    data-testid="sidecar-add-attachments-button"
+                    :aria-label="$i18n.t.value.inputBox.addAttachments"
+                    @click="fileInput?.click()"
+                  >
+                    <!-- 上游 sidecar-panel.tsx:745 是 `size-3` = 12px。 -->
+                    <Paperclip class="size-3" aria-hidden="true" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="start" class="w-56">
+                  {{ $i18n.t.value.inputBox.addAttachments }}
+                </TooltipContent>
+              </Tooltip>
+              <input
+                ref="fileInput"
+                type="file"
+                multiple
+                :aria-label="$i18n.t.value.inputBox.uploadFiles"
+                class="hidden"
+                @change="chooseFiles"
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger>
+                  <ModeHoverGuide
+                    :label="activeMode.label"
+                    :description="activeMode.description"
+                  >
+                    <!--
                     上游 sidecar-panel.tsx:768 是
                     `<PromptInputActionMenuTrigger className="max-w-20 min-w-0 gap-1! px-2!">`
                     ——同样是 `<Button variant="ghost" size="sm">`。
                     与主输入框那颗档位键写法一致（wave 71 已改那一份）。
                   -->
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    data-testid="sidecar-mode-trigger"
-                    class="max-w-20 min-w-0 gap-1! px-2!"
-                  >
-                    <div>
-                      <component
-                        :is="activeMode.icon"
-                        class="size-3"
-                        :class="activeMode.golden ? 'text-[#dabb5e]' : ''"
-                      />
-                    </div>
-                    <div
-                      class="truncate text-xs font-normal"
-                      :class="activeMode.golden ? 'golden-text' : ''"
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      data-testid="sidecar-mode-trigger"
+                      class="max-w-20 min-w-0 gap-1! px-2!"
                     >
-                      {{ activeMode.label }}
-                    </div>
-                  </Button>
-                </ModeHoverGuide>
-              </DropdownMenuTrigger>
-              <!--
+                      <div>
+                        <component
+                          :is="activeMode.icon"
+                          class="size-3"
+                          :class="activeMode.golden ? 'text-[#dabb5e]' : ''"
+                        />
+                      </div>
+                      <div
+                        class="truncate text-xs font-normal"
+                        :class="activeMode.golden ? 'golden-text' : ''"
+                      >
+                        {{ activeMode.label }}
+                      </div>
+                    </Button>
+                  </ModeHoverGuide>
+                </DropdownMenuTrigger>
+                <!--
                 与上游 SidecarModeMenu 同构：w-80、组内标题、每项「名字 + 说明」。
                 本仓原来是 w-32 的裸标签列表，于是同一个下拉在主输入框里读得出
                 「Flash 快速高效……」、在 sidecar 里只读得出「Flash」。
               -->
-              <DropdownMenuContent align="start" side="top" class="w-80">
-                <DropdownMenuRadioGroup
-                  :model-value="resolvedActiveMode"
-                  @update:model-value="selectMode(String($event))"
-                >
-                  <DropdownMenuLabel class="text-muted-foreground text-xs">
-                    {{ $i18n.t.value.inputBox.mode }}
-                  </DropdownMenuLabel>
-                  <DropdownMenuRadioItem
-                    v-for="mode in availableModeOptions"
-                    :key="mode.id"
-                    :value="mode.id"
-                    class="py-2"
-                    :class="
-                      resolvedActiveMode === mode.id
-                        ? 'text-accent-foreground'
-                        : 'text-muted-foreground/65'
-                    "
+                <DropdownMenuContent align="start" side="top" class="w-80">
+                  <DropdownMenuRadioGroup
+                    :model-value="resolvedActiveMode"
+                    @update:model-value="selectMode(String($event))"
                   >
-                    <span class="flex flex-col gap-2">
-                      <span class="flex items-center gap-1 font-bold">
-                        <component
-                          :is="mode.icon"
-                          class="mr-2 size-4"
-                          :class="
-                            resolvedActiveMode === mode.id
-                              ? mode.golden
-                                ? 'text-[#dabb5e]'
-                                : 'text-accent-foreground'
-                              : ''
-                          "
-                        />
-                        <span
-                          :class="
-                            resolvedActiveMode === mode.id && mode.golden
-                              ? 'golden-text'
-                              : ''
-                          "
-                          >{{ mode.label }}</span
-                        >
+                    <DropdownMenuLabel class="text-muted-foreground text-xs">
+                      {{ $i18n.t.value.inputBox.mode }}
+                    </DropdownMenuLabel>
+                    <DropdownMenuRadioItem
+                      v-for="mode in availableModeOptions"
+                      :key="mode.id"
+                      :value="mode.id"
+                      class="py-2"
+                      :class="
+                        resolvedActiveMode === mode.id
+                          ? 'text-accent-foreground'
+                          : 'text-muted-foreground/65'
+                      "
+                    >
+                      <span class="flex flex-col gap-2">
+                        <span class="flex items-center gap-1 font-bold">
+                          <component
+                            :is="mode.icon"
+                            class="mr-2 size-4"
+                            :class="
+                              resolvedActiveMode === mode.id
+                                ? mode.golden
+                                  ? 'text-[#dabb5e]'
+                                  : 'text-accent-foreground'
+                                : ''
+                            "
+                          />
+                          <span
+                            :class="
+                              resolvedActiveMode === mode.id && mode.golden
+                                ? 'golden-text'
+                                : ''
+                            "
+                            >{{ mode.label }}</span
+                          >
+                        </span>
+                        <span class="pl-7 text-xs">{{ mode.description }}</span>
                       </span>
-                      <span class="pl-7 text-xs">{{ mode.description }}</span>
-                    </span>
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <span class="flex-1" />
-            <!--
-              **只有 sidecar 这一支**在没有选中模型时整个不渲染：上游
-              SidecarModelSelector 开头就是 `if (!selectedModel) return null`
-              （sidecar-panel.tsx:920）。主输入框那一支不是这样，它照样渲染一个
-              没有名字的触发器，所以 ComposerModelSelector 自己的默认行为
-              （见它的文件头）对主输入框是对的，只是不适用于这里。
-              两边差的就是台账里那条 `ariaOnlyVue - button`：一颗没有可访问名的按钮。
-            -->
-            <ComposerModelSelector
-              v-if="selectedModel"
-              class="sidecar-model-control"
-              test-id="sidecar-model-selector"
-              :models="models"
-              :selected-model="selectedModel"
-              @select="selectModel"
-            />
-            <!--
-              上游 sidecar-panel.tsx:652 是
-              `<Tooltip content={t.sidecar.send}><PromptInputSubmit
-              className="rounded-full" variant="outline"
-              status={thread.isLoading || creatingThread || queuedSubmit
-                ? "submitted" : "ready"} /></Tooltip>`。
-              手写那版差三样：
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+            <div class="flex min-w-0 grow items-center justify-end gap-1">
+              <!--
+                **只有 sidecar 这一支**在没有选中模型时整个不渲染：上游
+                SidecarModelSelector 开头就是 `if (!selectedModel) return null`
+                （sidecar-panel.tsx:920）。主输入框那一支不是这样，它照样渲染一个
+                没有名字的触发器，所以 ComposerModelSelector 自己的默认行为
+                （见它的文件头）对主输入框是对的，只是不适用于这里。
+                两边差的就是台账里那条 `ariaOnlyVue - button`：一颗没有可访问名的按钮。
+              -->
+              <ComposerModelSelector
+                v-if="selectedModel"
+                class="sidecar-model-control"
+                test-id="sidecar-model-selector"
+                :models="models"
+                :selected-model="selectedModel"
+                @select="selectModel"
+              />
+              <!--
+                上游 sidecar-panel.tsx:652 是
+                `<Tooltip content={t.sidecar.send}><PromptInputSubmit
+                className="rounded-full" variant="outline"
+                status={thread.isLoading || creatingThread || queuedSubmit
+                  ? "submitted" : "ready"} /></Tooltip>`。
+                手写那版差三样：
 
-              ① **实心 vs 描边。** 上游是 `variant="outline"` 的描边圆钮，
-                 手写那版画的是 `bg-primary text-primary-foreground` 实心蓝。
-                 与主输入框那颗同一条（wave 71 已改那一份）。
-                 `shadow-none` 不能省：InputGroupButton 的 base 里有它，
-                 用来盖掉 outline 变体的 `shadow-xs`。
+                ① **实心 vs 描边。** 上游是 `variant="outline"` 的描边圆钮，
+                   手写那版画的是 `bg-primary text-primary-foreground` 实心蓝。
+                   与主输入框那颗同一条（wave 71 已改那一份）。
+                   `shadow-none` 不能省：InputGroupButton 的 base 里有它，
+                   用来盖掉 outline 变体的 `shadow-xs`。
 
-              ② **提交中要转圈。** 上游这个调用点**会**传 `submitted`，
-                 于是发送期间图标换成 `Loader2Icon animate-spin`。
-                 wave 71 在 ChatComposer 里记过一句「submitted 分支够不着」——
-                 那句话只对 chat-page.tsx 那个调用点成立，**sidecar 这个调用点
-                 传的就是它**。手写那版恒为箭头：点下去之后没有任何进行中的反馈。
+                ② **提交中要转圈。** 上游这个调用点**会**传 `submitted`，
+                   于是发送期间图标换成 `Loader2Icon animate-spin`。
+                   wave 71 在 ChatComposer 里记过一句「submitted 分支够不着」——
+                   那句话只对 chat-page.tsx 那个调用点成立，**sidecar 这个调用点
+                   传的就是它**。手写那版恒为箭头：点下去之后没有任何进行中的反馈。
 
-              ③ **没有 Tooltip。** 上游包了一层，提示语是 sidecar 下的 send。
+                ③ **没有 Tooltip。** 上游包了一层，提示语是 sidecar 下的 send。
 
-              另外可访问名照上游写死的英文走 primitives 下的 submit
-              （PromptInputSubmit 的 aria-label 是硬编码 "Submit"，只有
-              streaming 时才变 "Stop"，而这个调用点算不出 streaming）。
-            -->
-            <Tooltip>
-              <TooltipTrigger>
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="icon-sm"
-                  class="rounded-full shadow-none"
-                  :aria-label="$i18n.t.value.primitives.submit"
-                  :disabled="composerDisabled"
-                >
-                  <Loader2 v-if="composerBusy" class="size-4 animate-spin" />
-                  <ArrowUp v-else class="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {{ $i18n.t.value.sidecar.send }}
-              </TooltipContent>
-            </Tooltip>
+                另外可访问名照上游写死的英文走 primitives 下的 submit
+                （PromptInputSubmit 的 aria-label 是硬编码 "Submit"，只有
+                streaming 时才变 "Stop"，而这个调用点算不出 streaming）。
+              -->
+              <Tooltip>
+                <TooltipTrigger>
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="icon-sm"
+                    class="rounded-full shadow-none"
+                    :aria-label="$i18n.t.value.primitives.submit"
+                    :disabled="composerDisabled"
+                  >
+                    <Loader2 v-if="composerBusy" class="size-4 animate-spin" />
+                    <ArrowUp v-else class="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {{ $i18n.t.value.sidecar.send }}
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </ComposerSurface>
       </form>

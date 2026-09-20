@@ -1765,10 +1765,21 @@ defineExpose({ replaceDraft, offerFollowup });
           `flex-wrap sm:flex-nowrap` 也照抄：窄屏放不下时上游是换行，
           本仓原来只会把这一排压扁。
         -->
+        <!--
+          `gap-2!`：上游 input-box.tsx:2418 这个调用点传的是
+          `flex flex-wrap gap-2 sm:flex-nowrap`——**`gap-2` 本仓一直漏着**
+          （第五十四轮在 sidecar 上量到同一条，两处一起补）。
+          上游 `InputGroupAddon` 的 cva 基类就是 `gap-2`，`PromptInputFooter` 用
+          `cn("justify-between gap-1", …)` 压回 `gap-1`，调用点再传 `gap-2` 压回去；
+          本仓 ComposerSurface 的 scoped CSS 只实现到 `gap: 0.25rem` 那一层。
+          不换行时两个组一个 `flex-1` 一个右对齐，这 4px 被free space 吸收、看不出来；
+          **`sm` 以下换行时它就是行间距**。
+          带 `!` 是因为要压过 scoped CSS 的 `(0,2,0)`。
+        -->
         <div
           role="group"
           data-slot="input-group-footer"
-          class="flex-wrap justify-between sm:flex-nowrap"
+          class="flex-wrap justify-between gap-2! sm:flex-nowrap"
         >
           <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             <div class="relative">

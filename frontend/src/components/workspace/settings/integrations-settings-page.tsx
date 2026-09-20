@@ -694,12 +694,21 @@ function LarkIntegrationCard() {
           </Alert>
         ) : data ? (
           <>
-            <div
-              className={cn(
-                "grid gap-3",
-                showSandboxRuntime ? "md:grid-cols-4" : "md:grid-cols-3",
-              )}
-            >
+            {/*
+              The column count has to follow how much *text* fits, not how
+              wide the window is. `md:grid-cols-4` is a viewport breakpoint
+              while everything inside these cells is sized in rem, so at 200%
+              text the four columns stayed 166px wide while the status badge
+              they carry grew to 151px and the label beside it could not fit:
+              measured 41px of the panel clipped off with `overflow-x: hidden`
+              and nothing to scroll (WCAG 1.4.10).
+
+              `auto-fit` + a rem-based minimum reflows on its own — 4 columns
+              at the default root size, 2 at 200%, 1 on a phone — and it also
+              makes the 3-vs-4 branch unnecessary: an empty track collapses,
+              so three cards lay out exactly as `grid-cols-3` did.
+            */}
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
               <StatusItem
                 label={t.settings.integrations.lark.skillPack}
                 ok={data.installed}

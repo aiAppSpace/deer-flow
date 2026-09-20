@@ -86,26 +86,33 @@ const ZOOM_ROOT_PX = 32;
                基线 2px、200% 下 4px，**两个应用逐字相同**。
                32px 高的按钮里文字基线溢出 2px，看不出来也够不着，两边一样。
       真账簇   `scheduled-tasks` 1086 / 4375（本仓单边，已修）
-               `thread-list-pin#mobile-drawer` 50 / 100（**两边相同**，见豁免表）
+               `integrations` 41x（两边相同，第五十四轮已两边同改）
 
   24px 落在两簇中间：比噪声的 6 倍还高，比最小的真账还低一半。
-  ⚠ 门限调低之前先看豁免表——低于 24 会把那一族 2px 的噪声全放进来。
+  ⚠ 门限调低之前先想清楚：低于 24 会把那一族 2px 的噪声全放进来，
+  而两张登记表现在都是空的，噪声一进来就是红。
+  ⚠ 第五十二轮列在这里的第三条（`thread-list-pin#mobile-drawer` 50 / 100）
+  **不在这个簇里**——它是尺子把 `p-4 sr-only` 当成了内容，见 `clippedAway`。
 */
 const THRESHOLD_PX = 24;
 
 /*
-  **纵向**的登记表：只有一条，而且两个应用逐字相同。
-  两边一样坏不是对照缺陷，但它也不是「没问题」——留在这里是为了下一轮
-  按「两边同改」去还它，而不是让它悄悄消失。
+  **纵向**的登记表：**第五十四轮清空，现在一条都没有。**
+
+  清空之前它只有一条 `thread-list-pin#mobile-drawer`（50y 基线 / 100y 200%，
+  两个应用逐字相同），而那一条**根本不是账**：命中的元素是 Sheet 的
+  `<SheetHeader className="sr-only">`，读数与判词写在上面 `clippedAway` 那一段。
+  尺子认出读屏器专用内容之后它自己就不见了，**不是把它豁免掉的**。
+
+  ⚠ **这张表要一直是空的。** 纵向裁掉是「内容掉到看不见的地方」，
+  第五十二轮 `scheduled-tasks` 那条真缺陷就是这个形状。
+  下面那条断言的说明里也写着「这一条不许加豁免」——真报出东西就去修产品，
+  或者证明它像上面那条一样根本没画在屏幕上，而不是往这里加一行。
 */
-const VERTICAL_KNOWN: Record<string, string> = {
-  "thread-list-pin#mobile-drawer":
-    "窄屏侧栏抽屉裁掉 50px（基线）/ 100px（200%），两个应用逐字相同——" +
-    "翻案判据：哪天两边读数不再相同，或者哪一轮按「两边同改」把它还了，就从这里删掉",
-};
+const VERTICAL_KNOWN: Record<string, string> = {};
 
 /*
-  **横向**的登记表（棘轮）：登记 = 已量过、已判、排队等「两边同改」；**没登记的一律红**。
+  **横向**的登记表（棘轮）：**第五十四轮清空，现在一条都没有。**
 
   ⚠ **横向和纵向不是同一件事，所以分两张表**：
   纵向裁掉是「内容掉到看不见的地方」，那是第五十二轮抓到的那条缺陷的形状；
@@ -113,53 +120,81 @@ const VERTICAL_KNOWN: Record<string, string> = {
   与这条门禁主攻的 1.4.4 是两条不同的标准条款。把它们混在一个断言里，
   结果就是第五十二轮那次：两个应用**同时**红，而报出来的东西一条也不是对照缺陷。
 
-  下面每一行都是第五十二轮全量跑出来的**实测值**，键是「应用/终态」：
+  ── 第五十四轮把这 11 行还清的经过（读数逐条留档）──
 
-      vue/browser-feature          0y/217x   上游同一屏同样 217x（层不同：本仓在
-                                             ml-auto 那层、上游在 aside 那层）→ 两边共有
-      react/browser-feature        0y/217x
-      vue/integrations             0y/41x    三个 integrations 终态两边**逐字相同**
-      vue/integrations#permission-request  0y/41x
-      vue/integrations#change-app  0y/41x
-      react/integrations           0y/41x
-      react/integrations#permission-request 0y/41x
-      react/integrations#change-app 0y/41x
-      react/sidecar-chat           0y/70x    ⚠ **只有上游**：模型名那一行
-                                             （`div.flex.items-center.gap-1"Flash"`）
-                                             本仓同一处只有 13x，够不到门限
+  清空前的 11 行是三处，**没有一处是「两边一样所以不算」**：
 
-  ⚠ **`react/sidecar-chat` 是一条上游单边的真账，不是「两边一样所以不算」**——
-  它登记在这里只是因为它属于横向那一族、要跟整族一起还。**别把它当成已结清。**
+      thread-list-pin#mobile-drawer  165x / 304x   两应用逐字相同
+        → **尺子的洞**：命中的是 `p-4 sr-only` 的 Sheet 页头，屏幕上不画。
+          见上面 `clippedAway`。**不是改了产品才没的。**
 
-  ⚠ 分栏格那几条（`+200~232x`）**没有**出现在这张表里，不是漏了：
+      browser-feature               217x           两应用逐字相同（层不同）
+        → **真缺陷，两边同改。** 侧栏格宽度按视口百分比算（~307px），
+          而里面每件都按 rem：200% 下这条工具条要 524px。实测那一档
+          URL 框 / 实时控制键 / **关闭按钮**三件 `inViewport=false`
+          （关闭键 x 起 1433，视口 1280）——面板关不掉。
+          两边给 header 加 `flex-wrap`、给 URL 表单加
+          `@max-[12rem]:basis-full`。改后两应用同为 `clips=0`，
+          关闭键 `x=[1107,1171] fullyInView=true`，基线那档一格没动。
+
+      integrations ×3 × 两应用      41x            六行逐字相同
+        → **真缺陷，两边同改。** `md:grid-cols-4` 是视口断点而格里按 rem 排，
+          200% 下四列还是 166px 而状态徽标涨到 151px。换成
+          `grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]`（rem 门限自己重排，
+          顺带吃掉 3/4 那个三元）。改后两应用同为 `clips=0`。
+
+      react/sidecar-chat            70x            **只有上游**
+        → **真缺陷，两边同改——而查它的时候掉出本仓的另一半。**
+          上游那一侧 `flex-1` 的假想尺寸是 0，行永远挤不满也就永远不换行，
+          左组拿到 113px 去装 183px，自己把档位标签裁掉 70px。
+          本仓同一行不裁（只有 13x，够不到门限）**但发送键被推出视口**：
+          实测 200% 下本仓 `x=[1229,1293]` / 视口 1280（出界 13px），
+          上游 `x=[1159,1223]` 完整在内。两边改法见各自文件头的注释。
+
+  ⚠ **分栏格那几条（`+200~232x`）从来不在这张表里**，不是漏了：
   它们有内层滚动容器，判定为**够得到**。这正是这把尺子与 zz-zoom 的区别。
+
+  ⚠ **往这张表里加行之前先问「它是不是画在屏幕上的」**——第五十四轮 11 行里
+  有 3 行是尺子把读屏器专用内容当成了内容。加行是最后一步，不是第一步。
 */
-const HORIZONTAL_KNOWN: Record<string, string> = {
-  /*
-    ⚠ `mobile-drawer` **纵横都中**，而且两张表各记一半：
-    纵向 50y（基线）/ 100y（200%）在 VERTICAL_KNOWN，横向 165x / 304x 在这里。
-    **拆轴之前它整个终态被跳过，所以横向那一半从来没有显形过**——
-    这正是「一条门禁只该守一个不变量」那条判词的正面收益。
-    两边读数逐字相同（`50y/165x` · `100y/304x`），是两边共有。
-  */
-  "vue/thread-list-pin#mobile-drawer": "165x / 304x，两边逐字相同",
-  "react/thread-list-pin#mobile-drawer": "165x / 304x，两边逐字相同",
-  "vue/browser-feature": "217x，上游同屏同值（不同层）→ 两边共有",
-  "react/browser-feature": "217x，同上",
-  "vue/integrations": "41x，两边逐字相同",
-  "vue/integrations#permission-request": "41x，两边逐字相同",
-  "vue/integrations#change-app": "41x，两边逐字相同",
-  "react/integrations": "41x，两边逐字相同",
-  "react/integrations#permission-request": "41x，两边逐字相同",
-  "react/integrations#change-app": "41x，两边逐字相同",
-  "react/sidecar-chat":
-    "70x，⚠ **上游单边**（本仓同处仅 13x）——是真账，随横向那一族一起还",
-};
+const HORIZONTAL_KNOWN: Record<string, string> = {};
 
 type Clip = { label: string; dy: number; dx: number };
 
 /** 量「这一屏有哪些内容被裁掉了，而且滚不到」。 */
 function unreachableClips(threshold: number) {
+  /*
+    **读屏器专用内容整个不画在屏幕上，所以「裁掉」对它没有意义。**
+
+    ⚠ 认它**不能用 1×1**（第五十四轮实测）：Sheet 的页头是
+    `<SheetHeader className="sr-only">`，而 `SheetHeader` 自带 `p-4`——
+    `p-4` 压过 `sr-only` 的 `padding:0`，盒子因此是 **32×32**（200% 下 64×64），
+    1×1 那条一个都拦不住。于是 `thread-list-pin#mobile-drawer` 这一条
+    **在两个应用上逐字相同地**被报成「裁掉 50y/165x（200% 下 100y/304x）」，
+    两轮都挂在登记表里当成欠账——而它一个像素都没画出来过。
+
+    认它的是**把自己整个裁没**的那两条声明，也正是 `sr-only` 藏起来的手段：
+
+        clip: rect(0px, 0px, 0px, 0px)      （Tailwind v4 的 `sr-only`）
+        clip-path: inset(50%)               （同一目的的现代写法）
+
+    ⚠ 判据是「**屏幕上画不画得出来**」，不是「类名叫不叫 sr-only」：
+    扫类名会漏掉自己手写这两条声明的地方，也会被 `sr-only` 被别的类推翻时骗过。
+  */
+  const clippedAway = (cs: CSSStyleDeclaration) => {
+    const rect = /^rect\((.+)\)$/.exec(cs.clip ?? "");
+    if (rect) {
+      const [top, right, bottom, left] = rect[1]!
+        .split(/,\s*|\s+/)
+        .map((part) => Number.parseFloat(part));
+      if (
+        [top, right, bottom, left].every((n) => Number.isFinite(n)) &&
+        (bottom! - top! <= 0 || right! - left! <= 0)
+      )
+        return true;
+    }
+    return /^inset\(50%\s*\)?$/.test(cs.clipPath ?? "");
+  };
   const canScroll = (el: Element) => {
     const cs = getComputedStyle(el);
     const oy = cs.overflowY;
@@ -176,13 +211,25 @@ function unreachableClips(threshold: number) {
     de.scrollHeight - de.clientHeight > 1 ||
     de.scrollWidth - de.clientWidth > 1;
   const out: Clip[] = [];
+  /*
+    反空转之三：上面那条 `clippedAway` **必须真的挡下过东西**。
+    它是一条「跳过」分支——写错了（选择器变了、Tailwind 换了藏法）只会让它
+    一次都不命中，而那时候这把尺子**照样绿**，只是多报几条被登记表吸收掉的噪声。
+    这个计数回传出去、在用例里断言 > 0，那条分支才有人守着。
+  */
+  let clippedAwaySkips = 0;
   document.querySelectorAll("body *").forEach((el) => {
     const cs = getComputedStyle(el);
     const hidesY = cs.overflowY === "hidden" || cs.overflowY === "clip";
     const hidesX = cs.overflowX === "hidden" || cs.overflowX === "clip";
     if (!hidesY && !hidesX) return;
-    /* sr-only 那一类（1px×1px + overflow:hidden）天生就在裁，不是缺陷。 */
+    /* 1px×1px 的盒子天生就在裁，不是缺陷。 */
     if (el.clientWidth <= 1 || el.clientHeight <= 1) return;
+    /* 读屏器专用内容：屏幕上一个像素都不画，见上面 `clippedAway` 的判词。 */
+    if (clippedAway(cs)) {
+      clippedAwaySkips += 1;
+      return;
+    }
     /* 有意截断：truncate / line-clamp 就是「切掉并给出省略号」，设计如此。 */
     if (cs.textOverflow === "ellipsis") return;
     if (cs.webkitLineClamp && cs.webkitLineClamp !== "none") return;
@@ -206,7 +253,7 @@ function unreachableClips(threshold: number) {
       dx,
     });
   });
-  return out;
+  return { clips: out, clippedAwaySkips };
 }
 
 const readRootPx = () =>
@@ -229,6 +276,8 @@ for (const [name, base] of APPS) {
     let clippersSeenAtAll = 0;
     /* 反空转之二：放大到底有没有落地。`addInitScript` 那条坑就是这么来的。 */
     const zoomRootPx: number[] = [];
+    /* 反空转之三：读屏器专用那条跳过分支有没有真的命中过，见 `clippedAway`。 */
+    let clippedAwaySkips = 0;
 
     for (const scenario of PARITY_SCENARIOS)
       for (const state of scenarioStates(scenario)) {
@@ -258,9 +307,10 @@ for (const [name, base] of APPS) {
               zoomRootPx.push(await page.evaluate(readRootPx));
             }
             clippersSeenAtAll += (await page.evaluate(unreachableClips, 1))
-              .length;
-            const clips = await page.evaluate(unreachableClips, THRESHOLD_PX);
-            for (const clip of clips) {
+              .clips.length;
+            const survey = await page.evaluate(unreachableClips, THRESHOLD_PX);
+            clippedAwaySkips += survey.clippedAwaySkips;
+            for (const clip of survey.clips) {
               const where = `${key}[${phase}]: 裁掉 ${clip.dy}y/${clip.dx}x 且滚不到 ${clip.label}`;
               /*
                 纵横**分开记**：两者是不同的标准条款，混在一个断言里会让
@@ -312,5 +362,11 @@ for (const [name, base] of APPS) {
       zoomRootPx.every((px) => px === ZOOM_ROOT_PX),
       `放大没落地：根字号读回 ${[...new Set(zoomRootPx)].join("/")}，应为 ${ZOOM_ROOT_PX}`,
     ).toBe(true);
+    expect(
+      clippedAwaySkips,
+      "「读屏器专用内容」那条跳过分支一次都没命中——它写错了也会长成这样，" +
+        "而那时候这把尺子照样绿（多报的噪声会被登记表吸收）。" +
+        "⚠ 真的一个 sr-only 都没有了，就把这条断言连同 `clippedAway` 一起删掉，别调成 >= 0",
+    ).toBeGreaterThan(0);
   });
 }

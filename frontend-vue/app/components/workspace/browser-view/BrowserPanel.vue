@@ -492,8 +492,23 @@ onBeforeUnmount(() => {
     @compositionstart="composing = true"
     @compositionend="onCompositionEnd"
   >
+    <!--
+      `flex-wrap` 与下面 URL 表单那条容器查询是这条工具条在 200% 文本下还能用的
+      全部理由（WCAG 1.4.4 / 1.4.10），**上游同一处同改**。
+
+      侧栏格的宽度按视口百分比算，放大文本它还是 ~307px，而里面每一件都翻倍：
+      第五十四轮实测这一行要 524px，不换行时 URL 框、实时控制键与**关闭按钮**
+      三件整个落在 1280 视口之外（`inViewport=false`），既没有滚动条也关不掉面板。
+
+      表单要 `basis-full` 而不只是 `flex-1`：一旦换了行，`flex-basis: 0` 的那件
+      会落进「还剩点空的那一行」再去长剩余空间，实测长出来 **5px 的地址栏**。
+
+      门限写 `rem` 是判据本身——这一行要随**文字**变大而重排，不是随窗口。
+      12rem 在默认字号下是 192px，而这条 header 在 100% 下有 283px，
+      所以不放大就一格都不动；用户真把分栏拖到那么窄时，换行也正是想要的。
+    -->
     <header
-      class="border-border flex shrink-0 items-center gap-2 border-b px-3 py-2"
+      class="border-border @container flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2"
     >
       <Monitor class="size-4 shrink-0" />
       <span class="shrink-0 text-sm font-medium">
@@ -527,7 +542,7 @@ onBeforeUnmount(() => {
         </Button>
       </div>
       <form
-        class="relative flex min-w-0 flex-1 items-center"
+        class="relative flex min-w-0 grow basis-0 items-center @max-[12rem]:basis-full"
         @submit.prevent="navigate"
       >
         <Globe
