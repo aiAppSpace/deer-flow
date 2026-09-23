@@ -903,8 +903,13 @@ export const WORKSPACE_CHANGES_RUN_ID = "00000000-0000-0000-0000-0000000009c1";
 
   只有一页（`has_more: false`）：场景的路由覆盖是**静态 JSON**，同一份应答会喂给
   每一次 `before_seq` 请求，`has_more: true` 会让列表无限往前翻。
-  上游 `thread-ordering.spec.ts` 的另外两例（翻页后刷新保序、提交中途压缩）
-  因此不在这条场景里，理由记在 docs/plans/vue-full-parity-backlog.md。
+  上游 `frontend/tests/e2e/thread-ordering.spec.ts` 的另外两例
+  （`paginated long history ... survives refresh`、
+  `a live compaction during submit ...`）**因此不在这条场景里**——
+  两例都要翻页，而翻页要能翻到头。
+  ⚠ 这里原来写「理由记在 docs/plans/vue-full-parity-backlog.md」，
+  2026-09-21 实测那份文档里**根本没有这段理由**（全文搜不到 `thread-ordering`），
+  文档本身当天也删了。理由就是上面这一段，不在别处。
 */
 const ORDERING_TURNS = 8;
 const ORDERING_ROWS = (() => {

@@ -340,6 +340,8 @@ const NON_REPO_PATHS: Record<string, string> = {
 };
 
 const NON_REPO_FILENAMES: Record<string, string> = {
+  "vue-parity-handoff.md":
+    "2026-09-21 删掉的对照文档（第 1–37 轮的轮次叙事）。doc-facts 的注释点名它，讲的正是「这份文档已经不在了、所以那个扫描面也撤了」——换成一个存在的文件名，那两段注释就变成假的。取回：git show 52f61c0d:docs/plans/vue-parity-handoff.md。真有人把它 checkout 回来，下面那条过期检查会红，正好逼人回头读这两段。",
   "Untitled.md":
     "上游导出无标题会话时产出的文件名。那段注释讲的就是本仓导出成了别的名字，不是在指一个仓库文件。",
   "client.js":

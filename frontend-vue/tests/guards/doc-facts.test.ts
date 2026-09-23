@@ -249,12 +249,19 @@ describe("文档里的数字和代码一致", () => {
   });
 });
 /*
-  仓库根 `docs/plans/` 那三份计划文档里的**台账读数**。
+  仓库根 `docs/plans/` 那几份计划文档里的**台账读数**。
 
-  为什么要单独守这一处：两份历史快照（`vue-parity-handoff.md` 的「历史快照」节、
-  `vue-parity-open-accounts.md` 的「收工时的门禁读数」节）都自带「数字已过期」
-  并把读者指向冷启动文档——**于是全仓唯一活着的台账读数只写在那两个地方**，
+  为什么要单独守这一处：历史快照都自带「数字已过期」并把读者指向冷启动文档
+  ——**于是全仓唯一活着的台账读数只写在计划文档里**，
   而此前 `doc-facts` 的扫描面止于 `frontend-vue/`，够不到它们。
+
+  ⚠ **2026-09-21 扫描面从两份缩到一份**：`vue-parity-handoff.md`（第 1–37 轮的
+  轮次叙事，11189 行）当天连同另外六份历史快照一起删了——它覆盖的轮次
+  `vue-parity-open-accounts.md` 是完整超集，而它开头那句「每一轮开工的第一读物」
+  在第三十七轮之后就不成立了，留着只会把新窗口引到 22 轮前的状态块上。
+  取回：`git show 52f61c0d:docs/plans/vue-parity-handoff.md`。
+  **所以 `SCOPES` 现在只有冷启动文档一份**，下面那条「逐类都还有活命中点」
+  因此全靠它——某一类在冷启动文档里没有活读数，这道门会红，那是对的。
   第十九轮实测的偏差：冷启动文档两处写 `138 个场景-维度`（实际 140）、
   一处写 `129 个场景-维度里仍有 110 个是 desktop`（实际 140 里 118），
   交接文档写 `138 个场景-维度`。第十八轮把场景-维度从 138 加到 140 时，
@@ -423,22 +430,14 @@ const PLAN_CLAIMS: PlanClaim[] = [
 ];
 
 /*
-  交接文档整篇有大量**历史**读数（`137 → 154 唯一行`、`131 → 133 场景-维度`），
-  不能整篇扫。活着的那段是开头那个 blockquote，按**结构**取（连续的 `>` 行），
-  不按行号取——行号会随每一轮追加而漂。
+  ⚠ 这里原来有个 `leadBlockquote(doc)`：按结构取文档开头那个 blockquote，
+  专给 `vue-parity-handoff.md` 用——那篇整篇都是历史读数
+  （`137 → 154 唯一行`、`131 → 133 场景-维度`），整篇扫会把历史判成现状，
+  只有抬头那段是活的。那份文档 2026-09-21 已删（取回见本文件上方那段注释），
+  于是这个取法也一并删了，**别照着旧版本把它加回来**：
+  下一份「整篇历史、只有抬头活着」的文档要是又出现，
+  `git show 52f61c0d:frontend-vue/tests/guards/doc-facts.test.ts` 里有原文。
 */
-function leadBlockquote(doc: string): string {
-  const lines = doc.split("\n");
-  const start = lines.findIndex((l) => l.startsWith(">"));
-  if (start < 0) return "";
-  let end = start;
-  while (
-    end < lines.length &&
-    (lines[end]!.startsWith(">") || lines[end]!.trim() === "")
-  )
-    end += 1;
-  return lines.slice(start, end).join("\n");
-}
 
 describe("计划文档里的台账读数和签入基线一致", () => {
   const measures = measureLedger();
@@ -506,10 +505,7 @@ describe("计划文档里的台账读数和签入基线一致", () => {
     ).toEqual([...PARITY_FIXED_SPECS].sort());
   });
 
-  const SCOPES = [
-    ["vue-parity-cold-start.md", (d: string) => d],
-    ["vue-parity-handoff.md", leadBlockquote],
-  ] as const;
+  const SCOPES = [["vue-parity-cold-start.md", (d: string) => d]] as const;
 
   /** 每一类断言在整组文档里命中了几处。 */
   const hits = new Map(PLAN_CLAIMS.map((c) => [c.label, 0]));
@@ -598,13 +594,7 @@ describe("计划文档里的台账读数和签入基线一致", () => {
   it("活读数不许用绕过受控措辞的旧写法", () => {
     const cold = readPlanDoc("vue-parity-cold-start.md");
     if (cold === null) return;
-    const handoff = readPlanDoc("vue-parity-handoff.md");
-    const offenders = [
-      ...staleLedgerHits(cold).map((h) => `cold-start: ${h}`),
-      ...(handoff ? staleLedgerHits(leadBlockquote(handoff)) : []).map(
-        (h) => `handoff 活跃块: ${h}`,
-      ),
-    ];
+    const offenders = staleLedgerHits(cold).map((h) => `cold-start: ${h}`);
     expect(
       offenders,
       "台账的活读数只许用 `N 唯一行` / `N 多重集` / `N 个场景-维度` / " +
@@ -619,7 +609,7 @@ describe("计划文档里的台账读数和签入基线一致", () => {
     const dead = [...hits].filter(([, n]) => n === 0).map(([label]) => label);
     expect(
       dead,
-      "这一类在两份文档里一处都没命中——要么那句话被改写了（跟进正则），" +
+      "这一类在冷启动文档里一处都没命中——要么那句话被改写了（跟进正则），" +
         "要么那个读数被删了（删掉这一类）。**别让它留在表里空转。**",
     ).toEqual([]);
   });

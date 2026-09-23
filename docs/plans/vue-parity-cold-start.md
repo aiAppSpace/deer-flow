@@ -1,8 +1,14 @@
-# 冷启动 prompt：继续 React → Vue 平替的下一轮
+# React → Vue 平替：怎么接手（方法论与硬规则）
 
-> **用法**：新开一个窗口，把下面「开工指令」整段贴进去（或者直接说
-> 「读 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/docs/plans/vue-parity-cold-start.md` 并按它执行」）。
-> 这份文件只写「怎么接手」，**深度背景不在这里**——在下面点名的三份东西里。
+> ⚠⚠ **这份不是入口。新窗口的入口是
+> `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/docs/plans/NEXT-WINDOW.md`**
+> ——那份写「这一轮干什么」，每轮重写；这份写「怎么接手」，很少变。
+> 2026-09-21 之前这里写着「把下面开工指令整段贴进去」，**那句话已经作废**：
+> 两份文档同时自称入口，新窗口会拿着一份 22 轮前的状态块开工。
+>
+> 分工：**NEXT-WINDOW.md = 这一轮的第一步** · **本文件 = 硬规则、量法、判据的来历** ·
+> `vue-parity-open-accounts.md` = 每一笔账的判词。
+> **下面「接手时的状态」那一段是快照，不是断言**——数一律现场量。
 
 ---
 
@@ -12,7 +18,7 @@
 目标是「移走 `frontend/` 之后 Vue 仍能自足」。仓库在
 `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow`，分支 `main-wc`。
 
-**接手时的状态（2026-09-16 收工时的快照，**不是断言**——下面每个数都现场量一遍）**：
+**接手时的状态（2026-09-21 量的快照，**不是断言**——下面每个数都现场量一遍）**：
 
 - 上一轮收工时工作区干净、**已推送到 `origin/main-wc`**。
   **领先多少、有没有未提交改动、CI 是绿是红，一律现场量**（命令见下一段）。
@@ -94,27 +100,37 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 
 ### 第一步：按这个顺序读，不要跳
 
-1. `docs/plans/vue-parity-open-accounts.md` —— 挂账总清单，**2668 行 / 236K**
+1. `docs/plans/NEXT-WINDOW.md` —— **入口**，**1942 行 / 112K**（2026-09-21 实测）。
+   开头的「🚩 第一步」就是这一轮要干的事，每轮重写。
+   接着必读「⚠ 别再做的事」和「✅ 已经量过、别重做」两节。
+2. `docs/plans/vue-parity-open-accounts.md` —— 挂账总清单，**7459 行 / 520K**
    （名字叫「一页账」是历史叫法，早就不是一页了）。
-   **只读开头的「零、全面审查」那一节**就够开工——它是 2026-09-16 逐条量出来的现状，
-   含 41 条不同差异的分组、两笔新账（F / G）与全部现场读数。后面是历史，按需查。
-2. `docs/plans/vue-parity-handoff.md` —— 轮次交接文档，**11189 行 / 736K**。
-   **按轮次倒序排**：开头是「当前状态」，紧接着是最近几轮（第二十一轮 → 第十九轮 →
-   第十八轮 …），越往后越旧。**只读开头的「当前状态」和最近两三轮**；
-   结尾的「其他常踩的坑」按需查（线索编号已到 **339**、坑编号到 **316**）。
-3. Claude 记忆 `deerflow-parity-harness-plan`
+   **按轮次正序追加，最新的在最后**。开工不用整篇读：
+   NEXT-WINDOW 点到哪一轮就查哪一轮，**要判某条账之前一定先搜这里**
+   （很多条早就判过并写了翻案判据，见记忆 `deerflow-parity-three-docs`）。
+3. 本文件 —— 硬规则、量法、判据的来历。**不写「这一轮干什么」。**
+4. Claude 记忆 `deerflow-parity-harness-plan`
    （`/Users/wangcheng/.claude/projects/-Users-wangcheng-Documents-workSpace-frontEnd-aiAppSpace-deer-flow/memory/`）
-   —— 每一轮的实测记录与踩坑线索全文（编号已到 **339**）。同目录下另有
+   —— 状态与接手判据。同目录下另有
    `deerflow-fork-boundary` / `deerflow-vue-replacement-goal` /
-   `deerflow-no-midway-questions` / `deerflow-vue-alignment-scope`。
-4. `AGENTS.md`（仓库根）与 `frontend-vue/README.md` —— 命令与门禁。
+   `deerflow-no-midway-questions` / `deerflow-vue-alignment-scope` /
+   `deerflow-long-term-top-tier-goal`。
+5. `AGENTS.md`（仓库根）与 `frontend-vue/README.md` —— 命令与门禁。
 
-**`docs/plans/` 下其余那几份带日期的文件一律不要读、更不要引用它们的数字**
-（`vue-parity-2026-09-1*-re*.md`、`upstream-merge-202609-review.md`、
-`vue-parity-fix-audit-2026-09-08.md`、`vue-full-parity-backlog.md`）。
-它们是历史快照，每一份开头都盖了章说明这一点——**但 grep 是不看抬头的**，
-所以这里再说一遍：搜到它们里面的台账数字、「还剩多少」「未推送」这类话，
-一律当历史，现状只看上面第 1、2 条。
+**`docs/plans/` 下已经没有别的对照文档了**——2026-09-21 把七份被超越的历史快照
+**删掉了**，因为它们每一份都盖着「已过期」的章、而 **grep 是不看抬头的**：
+新窗口搜到里面的台账数字和「还剩多少 / 未推送 / 等你拍板」照样会当真。
+删的是 `vue-parity-handoff.md`（第 1–37 轮的轮次叙事）、`vue-full-parity-backlog.md`、
+`upstream-merge-202609-review.md`、`vue-parity-fix-audit-2026-09-08.md`、
+以及三份 `vue-parity-2026-09-1*-report.md`。
+**要查它们**：`git show 52f61c0d:docs/plans/<文件名>`（`52f61c0d` 是删除前的最后一条提交）。
+⚠ **别把它们 checkout 回工作树**——那等于把这次清理原样撤销。
+
+⚠ **一条实测订正**：删的时候我先写了「handoff 的轮次覆盖是 open-accounts 的真子集」，
+**当场按轮次号数了一遍，这句是错的**——`第四轮` 与 `第十五轮` 这两轮
+**只有 handoff 有**，open-accounts 全文一次都没出现过。
+所以要查这两轮，只能 `git show`。其余 32 轮 open-accounts 都有对应条目。
+（量法：把两份文档里 `第N轮` 全抓出来转成整数取差集。）
 
 ### 硬规则（违反会白干一轮）
 
@@ -1158,8 +1174,10 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > 只看**被 ≥2 份文件点名**的那些——16 个，一眼看完。
 >
 > ```bash
-> # 见 vue-parity-handoff.md 第十五轮那节；要点是把 token 当聚类键，
-> # 同一个 token 被多份文件的断言点名 = 跨文件同形 = 三轮出货的形状
+> # 要点是把 token 当聚类键：同一个 token 被多份文件的断言点名
+> # = 跨文件同形 = 三轮出货的形状
+> # （原文在已删的 vue-parity-handoff.md 第十五轮那节，
+> #  取回：git show 52f61c0d:docs/plans/vue-parity-handoff.md）
 > ```
 >
 > **16 个里已成门的**：`ui/input` / `ui/textarea` / `<Input>` / `<Textarea>`

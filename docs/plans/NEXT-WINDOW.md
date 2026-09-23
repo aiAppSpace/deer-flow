@@ -3,6 +3,18 @@
 > 这份文件只有一个用途：**新窗口第一句话贴什么**。
 > 深度背景在 `vue-parity-cold-start.md`（怎么接手）与
 > `vue-parity-open-accounts.md`（每一笔账的判词）里。
+>
+> ⚠ **2026-09-21：`docs/plans/` 下的对照文档只剩这三份。** 当天把七份被超越的
+> 历史快照**删了**——`vue-parity-handoff.md`（第 1–37 轮的轮次叙事）、
+> `vue-full-parity-backlog.md`、
+> `upstream-merge-202609-review.md`、`vue-parity-fix-audit-2026-09-08.md`、
+> 三份 `vue-parity-2026-09-1*-report.md`。
+> 理由：它们每份抬头都盖着「已过期」的章，**而 grep 不看抬头**——
+> 新窗口搜到里面十几轮前的台账数字和「还剩多少 / 未推送 / 等你拍板」照样会当真。
+> 要查：`git show 52f61c0d:docs/plans/<文件名>`。
+> ⚠ `第四轮` 与 `第十五轮` **只有 handoff 有**（按轮次号数过差集），open-accounts 里一次都没出现——那两轮只能 git show。
+> ⚠ **别 checkout 回工作树**，那等于把这次清理原样撤销。
+> open-accounts 的历史条目里仍会提到这些文件名，那是当时的原文，没改。
 
 ---
 
