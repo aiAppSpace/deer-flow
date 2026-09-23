@@ -125,6 +125,12 @@ EOF
 grep -c 'REACT_APP\|reactApp' frontend-vue/tests/e2e-parity/narrow-screen-overflow.spec.ts
 ```
 
+✅ **第六十轮**：判死 `sidebar` 那条路（窄屏上 settle 与 steps 互斥），
+并给 `channels#mobile-drawer` 补上**抽屉里三行导航的几何锚点**——
+几何档只采声明过的锚点，而**第十二轮那条真缺陷正好长在这三行上**，窄屏至今没人守。
+阴性对照 diff 3 passed / 0 行；阳性对照把那条缺陷造回去，两行 fontWeight 400→500，
+**门禁是活的**。台账仍是 190/0/0，基线一个字节没动。
+
 ✅ **第五十九轮已经做掉 `channels` 那 5 条**（一个 `#mobile-drawer` 终态走完渠道列表
 + 运行时配置对话框的新建分支），并掉出**一条真账**：本仓移动端把 `data-sidebar` /
 `data-slot` / `data-mobile` 挂在面板**里层**、上游挂在**面板本身**——渲染一样，
@@ -143,13 +149,17 @@ grep -c 'REACT_APP\|reactApp' frontend-vue/tests/e2e-parity/narrow-screen-overfl
 + 先 `click` 那颗 Toggle Sidebar）：
 
 ```
-sidebar / sidebar#slash-selected          2 条   侧栏 Chats/Agents 导航 + 斜杠建议
-                                                 ⚠ 这个场景的注释明写**不能有 click 步骤**
-                                                 （活动项跟着指针走），而开抽屉要点一下。
-                                                 **先量它稳不稳，别照搬。**
 thread-title-sync 的重命名对话框那一半     半条   #mobile-drawer 只到「Rename 可见」
-agent-create-name-step                    ❌ 已关掉：两个应用在 375px 下都不渲染侧栏、
-                                             也没有开抽屉的键（实测两边逐字一致）。不是缺陷。
+                                                 ——**这是名单上还剩的唯一一条侧栏根因的**
+
+sidebar / sidebar#slash-selected          ❌ 第六十轮判死：它在窄屏上**不自洽**——
+                                             settle 要导航行（抽屉开着）、steps 要在
+                                             composer 打 `/`（抽屉关着），两者互斥。
+                                             那个 click 坑不用碰，这条路本身不成立。
+                                             它要量的面实测两边逐字相同，且几何已由
+                                             `channels#mobile-drawer` 的三条导航锚点守住。
+agent-create-name-step                    ❌ 第五十九轮判死：两个应用在 375px 下都不渲染
+                                             侧栏、也没有开抽屉的键（实测逐字一致）。
 channels 那 5 条                          ✅ 第五十九轮做完
 ```
 

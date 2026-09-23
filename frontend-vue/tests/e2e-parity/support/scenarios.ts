@@ -3757,6 +3757,50 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             },
           },
           { kind: "visible", target: { selector: "[data-sidebar='sidebar']" } },
+          /*
+            **抽屉里那三行导航的几何**（第六十轮补）。
+
+            几何档**只采 settle / steps 里声明过的 `visible` 锚点**
+            （见 capture.ts 的 `sampleGeometry`），而这三行在窄屏上
+            **一个终态都没声明过**——aria 档有它们（`ariaSnapshot()` 采整个 body），
+            但**字重、底色、圆角、位置这几样 aria 树一概不带**。
+
+            **这正是第十二轮那条真缺陷所在的地方**：本仓那四颗菜单键是手抄的类串，
+            把 `data-[active=true]:font-medium` 抄成了**无条件** `font-medium`。
+            那一轮是在桌面维上抓到的；窄屏抽屉里同一组行**至今没人守**。
+
+            第六十轮实测（两应用各一遍，375px，抽屉开着）：
+            三行的 rect / fontSize / fontWeight / radius / opacity / data-active
+            **逐字相同**，`/workspace/chats/new` 两边都是激活态（500 + 底色），
+            另两行两边都是 400 + 透明。**所以这三条是回归门禁，不是在追一条现有缺陷。**
+
+            ⚠ **为什么挂在这里、而不是给 `sidebar` 开一个 mobile 终态**：
+            `sidebar` 那个场景在窄屏上**不自洽**——它的 settle 要导航行（抽屉得开着），
+            它的 steps 要在 composer 里打 `/`（抽屉得关着），两者互斥。
+            而这个终态本来就停在 `/workspace/chats/new`、抽屉开着，
+            **激活态那一半正好在这里能量到**。
+            ⚠ 反过来那一半（`/workspace/agents/new` 上两行的激活态互换）
+            **窄屏量不了**：第五十九轮实测那一页在 375px 下两个应用都不渲染侧栏。
+          */
+          {
+            kind: "visible",
+            target: {
+              selector:
+                "[data-sidebar='sidebar'] a[href='/workspace/chats/new']",
+            },
+          },
+          {
+            kind: "visible",
+            target: {
+              selector: "[data-sidebar='sidebar'] a[href='/workspace/chats']",
+            },
+          },
+          {
+            kind: "visible",
+            target: {
+              selector: "[data-sidebar='sidebar'] a[href='/workspace/agents']",
+            },
+          },
           { kind: "visible", target: { text: "Telegram" } },
           { kind: "visible", target: { text: "DingTalk" } },
           {

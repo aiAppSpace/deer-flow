@@ -4421,6 +4421,84 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
 
 
+## 2026-09-23 第六十轮：`sidebar` 那条路判死，改守抽屉里的导航行
+
+### 判死的：`sidebar` 不该有 mobile 终态
+
+交接文档里挂着「`sidebar` / `sidebar#slash-selected` 两条，⚠ 那个场景注释明写
+不能有 click 步骤，先量稳定性别照搬」。**那个 click 坑压根不用碰**——
+这条路本身不成立：
+
+```
+sidebar 的 settle  → 侧栏两行导航     窄屏上要抽屉**开着**
+sidebar 的 steps   → 在 composer 打 /  窄屏上要抽屉**关着**（抽屉是模态的）
+                                        ——两者互斥
+```
+
+而且它要量的那块面**两边已经逐字相同**（第六十轮实测，375px，抽屉开着，两应用各一遍）：
+
+```
+                            rect          fontSize  fontWeight  radius  opacity  data-active
+/workspace/chats/new  两边   8,56 271x32     14px       500       8px      1        true
+/workspace/chats      两边   8,92 271x32     14px       400       8px      1        false
+/workspace/agents     两边   8,128 271x32    14px       400       8px      1        false
+```
+
+`color` / `background` 只是写法不同（本仓 `oklch(...)`、上游 `lab(...)`），
+**归一成 rgba 之后一致**——这一条本轮另有硬证据，见下。
+
+### 补上的：抽屉里那三行导航的几何**此前没人守**
+
+几何档**只采 settle / steps 里声明过的 `visible` 锚点**（`capture.ts` 的
+`sampleGeometry`）；`ariaSnapshot()` 虽然采整个 body，但**aria 树不带字重、
+底色、圆角、位置**。于是窄屏抽屉里这三行**一个终态都没声明过**。
+
+**而第十二轮那条真缺陷正好就长在这三行上**：本仓那四颗菜单键是手抄的类串，
+把 `data-[active=true]:font-medium` 抄成了**无条件** `font-medium`。
+那一轮在桌面维抓到并修了，**窄屏同一组行至今没人守**。
+
+做法：三条 `visible` 锚点挂进 `channels#mobile-drawer` 的 steps，
+**不新开终态**（因此也不碰那个 click 坑）——那个终态本来就停在
+`/workspace/chats/new`、抽屉开着，**激活态那一半正好在这里能量到**。
+⚠ 反过来那一半（`/workspace/agents/new` 上两行激活态互换）**窄屏量不了**：
+第五十九轮实测那一页在 375px 下两个应用都不渲染侧栏。
+
+### 两侧对照（门禁签入前必做）
+
+**阴性**：整轮 `diff.spec` **3 passed / 19.8m，退出码 0，基线一个字节没动**
+——三个新锚点掉出 0 行，与探针预测一致。
+
+**阳性**：直接调 `sampleGeometry` 量采样集，确认三条真的在里面：
+
+```
+selector:[data-sidebar='sidebar'] a[href='/workspace/chats/new']  → 271x32 fontWeight=500 bg=rgba(233,230,223,255)
+selector:[data-sidebar='sidebar'] a[href='/workspace/chats']      → 271x32 fontWeight=400 bg=rgba(0,0,0,0)
+selector:[data-sidebar='sidebar'] a[href='/workspace/agents']     → 271x32 fontWeight=400 bg=rgba(0,0,0,0)
+```
+
+然后把第十二轮那条缺陷的形状**故意造回去**（给 `menu-button-variants.ts` 的基类
+加一个无条件 `font-medium`），重量：
+
+```
+/workspace/chats    fontWeight 400 → **500**
+/workspace/agents   fontWeight 400 → **500**
+```
+
+上游仍是 400，所以 `diffGeometry` 会报出两行。**门禁是活的。**
+改完按备份逐字节还原（`git diff --stat` 无输出）。
+
+⚠ **这里用的是「直接调 `sampleGeometry`」而不是跑整轮 diff**：整轮 20 分钟，
+而这把探针 2 分钟，且量的就是门禁自己用的那个函数。
+**它没有替换被测对象的任何一部分**——这正是第五十九轮那笔仪器账的反例：
+那次探针把 `settle` 换掉了，于是验的不是门禁走的那条路。
+
+### 顺带结清的一条
+
+`[data-sidebar='sidebar']` 的采样值是 `rgba(246,243,236,255)`，
+与第五十九轮那条差异行里的 React 值**逐字相同**——
+**「本仓写 `oklch` / 上游写 `lab` 是不是同一个颜色」这个问题到此有了硬证据**，
+不必再问。
+
 ## 2026-09-23 第五十九轮：窄屏抽屉这条路——**范围被读数连收三次**
 
 问的是：`narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 那 15 条，
