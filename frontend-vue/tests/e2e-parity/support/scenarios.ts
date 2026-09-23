@@ -3465,14 +3465,27 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       },
       { pattern: "**/api/channels/connections", json: { connections: [] } },
     ],
-    settle: [
-      {
-        kind: "visible",
-        target: { selector: "[data-sidebar='sidebar']" },
-      },
-      { kind: "visible", target: { text: "Telegram" } },
-      { kind: "visible", target: { text: "DingTalk" } },
-    ],
+    /*
+      **settle 只等两个断点上都在的东西**（第五十九轮；形状与 `thread-list-pin`
+      wave 147 那次逐字相同，判词抄在那个场景的 settle 上方）。
+
+      原来这里等的是 `[data-sidebar='sidebar']` 与两条渠道名——**它们只在桌面侧栏里**，
+      而移动端侧栏是抽屉、默认关着。于是 `#mobile-drawer` 那个终态
+      **还没跑到自己第一步的「开抽屉」，就先在 settle 上超时了**。
+      第五十九轮实测（`content-reachable` 单跑，真实退出码 1）：
+
+          Error: 这些终态跑不到位，门禁因此什么都没量到（空转就是失守）
+          + "channels#mobile-drawer: TimeoutError: locator.waitFor: Timeout 30000ms exceeded."
+
+      三条锚点挪进**每一个桌面终态**的 steps——**`steps` 里的 `visible` 同样进取样面**
+      （wave 76），所以一格几何都不少。
+      ⚠ **别把它们留在 settle 里、再给 mobile 开个豁免**：settle 是所有终态共用的，
+      豁免会连「桌面上这三样还在不在」一起不守。
+      ⚠ 也别拿探针「替换 settle 之后跑通了」当证据——第五十九轮就是这么被骗过一次：
+      `runScenario` 的顺序是 **settle → 动画/静默 → state.steps**，
+      把 settle 换掉的探针验的根本不是门禁走的那条路。
+    */
+    settle: [{ kind: "visible", target: { selector: "textarea" } }],
     /*
       侧栏这一行上「点一下才出现」的只有一样：运行时配置对话框。它有**两条互斥的
       分支**，走哪一条由 provider 的状态决定（见 core/channels/provider-state.ts）：
@@ -3497,10 +3510,26 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       两种语言下也逐字相同，所以 `role: textbox` + `name: "Token"` 不用写正则。
     */
     states: [
-      { id: "default", steps: [] },
+      {
+        id: "default",
+        steps: [
+          {
+            kind: "visible",
+            target: { selector: "[data-sidebar='sidebar']" },
+          },
+          { kind: "visible", target: { text: "Telegram" } },
+          { kind: "visible", target: { text: "DingTalk" } },
+        ],
+      },
       {
         id: "runtime-config",
         steps: [
+          {
+            kind: "visible",
+            target: { selector: "[data-sidebar='sidebar']" },
+          },
+          { kind: "visible", target: { text: "Telegram" } },
+          { kind: "visible", target: { text: "DingTalk" } },
           {
             kind: "click",
             target: {
@@ -3526,6 +3555,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       {
         id: "runtime-config-edit",
         steps: [
+          {
+            kind: "visible",
+            target: { selector: "[data-sidebar='sidebar']" },
+          },
+          { kind: "visible", target: { text: "Telegram" } },
+          { kind: "visible", target: { text: "DingTalk" } },
           {
             kind: "click",
             target: {
@@ -3575,6 +3610,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       {
         id: "settings-panel",
         steps: [
+          {
+            kind: "visible",
+            target: { selector: "[data-sidebar='sidebar']" },
+          },
+          { kind: "visible", target: { text: "Telegram" } },
+          { kind: "visible", target: { text: "DingTalk" } },
           {
             kind: "click",
             target: {
@@ -3657,6 +3698,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         ],
         steps: [
           {
+            kind: "visible",
+            target: { selector: "[data-sidebar='sidebar']" },
+          },
+          { kind: "visible", target: { text: "Telegram" } },
+          { kind: "visible", target: { text: "DingTalk" } },
+          {
             kind: "click",
             target: {
               role: "button",
@@ -3673,6 +3720,57 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           },
           { kind: "visible", target: { selector: "[role=dialog]" } },
           { kind: "visible", target: { text: /parity-account/ } },
+        ],
+      },
+      /*
+        **窄屏抽屉里的渠道行**（第五十九轮）——这一屏此前一行台账都没有。
+
+        这个场景的五个终态**全部**登记在 `narrow-screen-overflow.spec.ts` 的
+        `MOBILE_UNREACHABLE` 里，卡的是同一处：settle 要 `[data-sidebar='sidebar']`，
+        而桌面侧栏在 <768px 不渲染，换成 Sheet 抽屉。
+
+        **为什么只加一个 mobile 终态、不给五个各加一个**：照
+        `thread-list-pin#mobile-drawer` 第三十八轮那条判词——「在这里多点一下，
+        就把那块面接进窄屏取样，不必给它们各开一个 mobile 终态」。
+        这一条把**渠道列表**与**运行时配置对话框的新建分支**一次走完；
+        编辑分支与设置面板那两支的差异点在文案，不在窄屏几何，
+        桌面四档已经守着，再各开一个终态只会让取样时间翻倍。
+        哪天窄屏上量出「只有编辑分支坏」，再单独给它加，那时才有读数支撑。
+
+        **进入动作逐字抄 `thread-list-pin#mobile-drawer`**：
+        `Toggle Sidebar`（本仓）/ `Open sidebar`（上游）——两个应用写死的英文，
+        一条正则吃掉。⚠ 别自己发明开抽屉的写法。
+
+        **实测（第五十九轮探针，本仓 375px）**：开抽屉之后
+        `[data-sidebar='sidebar']` / `Telegram` / `DingTalk` **三个 settle 锚点
+        全部可见**，Feishu 那行的按钮也可见——所以这条路是通的，不是碰运气。
+      */
+      {
+        id: "mobile-drawer",
+        dimensions: [{ viewport: "mobile", theme: "light", locale: "en-US" }],
+        steps: [
+          {
+            kind: "click",
+            target: {
+              role: "button",
+              name: /^(Toggle Sidebar|Open sidebar)$/,
+            },
+          },
+          { kind: "visible", target: { selector: "[data-sidebar='sidebar']" } },
+          { kind: "visible", target: { text: "Telegram" } },
+          { kind: "visible", target: { text: "DingTalk" } },
+          {
+            kind: "click",
+            target: {
+              selector: '[data-sidebar="menu-item"]:has-text("Feishu") button',
+            },
+          },
+          { kind: "visible", target: { selector: "[role=dialog]" } },
+          { kind: "visible", target: { role: "textbox", name: "Token" } },
+          {
+            kind: "visible",
+            target: { role: "button", name: /^(Save and connect|保存并连接)$/ },
+          },
         ],
       },
     ],

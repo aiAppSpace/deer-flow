@@ -30,12 +30,12 @@
   **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
   一个 run 都不会有，`total_count: 0` 不是「没问题」。正确的问法与命令写在
   下面第十九轮清单的第 3 条里（那里有三条，第三条就是这件事）。
-- 对照台账 **0 唯一行 / 0 多重集 / 189 个场景-维度**。
+- 对照台账 **0 唯一行 / 0 多重集 / 190 个场景-维度**。
   **但唯一行是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
   按 `(档, 行文本)` 去重，**0 条不同的差异**——第三十六轮清零，起点是 170 个投影。
   **把唯一行读成「还有这么多件事」是错的**，件数看的是上面那个去重数。
-  **但 0 不等于对齐完成**：台账只覆盖这 189 个场景-维度，取样面之外它一个字都没说。
+  **但 0 不等于对齐完成**：台账只覆盖这 190 个场景-维度，取样面之外它一个字都没说。
   边界说明与下一轮三条方向写在 `NEXT-WINDOW.md`，**那份是当前版本**。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
@@ -84,7 +84,7 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
      「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
    - 开 `mobile`（同样只给 `integrations`）→ **当场量出上游一颗够不着的控件**
      （技能开关在 375px 下 `x=395.5`，手机上点不到）。
-   - **189 个场景-维度里仍有 141 个是 desktop**（tablet 28 · mobile 20）；非 desktop 的 23 族逐字是：
+   - **190 个场景-维度里仍有 141 个是 desktop**（tablet 28 · mobile 21）；非 desktop 的 23 族逐字是：
      `agents-feature-disabled` `artifact-panel-resize` `artifact-preview` `artifact-viewer-window` `background-tasks` `branch-thread` `browser-feature` `channels` `chat` `integrations` `mcp-settings` `project-detail` `scheduled-tasks` `sidebar-collapsed` `sidecar-chat` `subtask-card` `thread-archive` `thread-history` `thread-history-mermaid` `thread-list-infinite-scroll` `thread-list-pin` `ui-polish-mobile` `workspace-changes`。
      （第四十六轮补的四族——`channels` `sidecar-chat` `thread-history`
      `workspace-changes`——是 tablet 那一维；768 是 `md` 这条边界本身，
@@ -240,7 +240,8 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1144 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **212 passed**（第五十六轮加 viewport-fit.spec.ts；
+make -C <abs>/frontend-vue e2e-parity     # **213 passed**（第五十九轮给 channels 加窄屏抽屉终态；
+                                          #   第五十六轮加 viewport-fit.spec.ts；
                                           #   第五十三轮加 overlay-survives-resize.spec.ts；
                                           #   第五十二轮加 content-reachable.spec.ts，
                                           #   两个应用各一条；第四十七轮再加 15 个 tablet 取样点；
@@ -250,7 +251,9 @@ make -C <abs>/frontend-vue e2e-parity     # **212 passed**（第五十六轮加 
                                           #   与 8 块色彩面的 dark 维）
                                           #  `make parity-accept` 只跑 diff.spec.ts（3 passed，
                                           #   第二十三轮实测 13.1 分钟——它一条用例里抓全部场景）
-                                          #  台账 0 唯一行 / 0 多重集 / 189 场景-维度（第四十七轮 accept）
+                                          #  台账 0 唯一行 / 0 多重集（第四十七轮 accept 时取样点是 189 个——
+                                          #    ⚠ 这个历史值**故意不写成受控措辞**：那条判据是全称的，
+                                          #    正则不分「现状」和「引述」，写成受控措辞会把这一行判红）
                                           #  （第十二、十三两轮基线文件都一个字节没动；
                                           #    第十二轮新挂的两个锚点报出 4 行、当轮修完归零，
                                           #    第十三轮修的四处**本来就没有锚点**——那正是问题本身）
@@ -436,7 +439,7 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-台账只覆盖 189 个场景-维度，
+台账只覆盖 190 个场景-维度，
 取样面之外它一个字都没说。边界与下一步写在 `NEXT-WINDOW.md`。
 
 ### 再上一轮（2026-09-17 第三十五轮）做了什么
@@ -611,7 +614,7 @@ Claude 记忆 `measure-dont-guess`）。
 >
 > **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 > ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-> 台账只覆盖 189 个场景-维度，取样面之外它一个字都没说。
+> 台账只覆盖 190 个场景-维度，取样面之外它一个字都没说。
 > 完整的边界说明、下一轮三条方向、以及第三十六轮那两条教训，
 > 都写在 `NEXT-WINDOW.md`，**那份是这张单子的当前版本**。
 
@@ -1254,7 +1257,7 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > ⚠ **别再照着「41 条 / 6 组」去找活**，也别去一页账的「零、全面审查」节取现状
 > ——那一节的数同样停在第二十三轮（它自己已就地标注）。
 > **活读数只看本文开头那一处**，2026-09-23 实测：
-> **0 唯一行 / 0 多重集 / 189 个场景-维度 / 0 条不同的差异**。
+> **0 唯一行 / 0 多重集 / 190 个场景-维度 / 0 条不同的差异**。
 
 一页纸清单「真正还开着的」当时是 **5 条**，且**全部是「已决定 / 够不着」**：
 覆盖率棘轮的 pending 1 条（wave 101 按判据量到底，**不翻案**）、

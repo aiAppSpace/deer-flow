@@ -76,22 +76,44 @@ const emit = defineEmits<{ "update:open": [boolean] }>();
       跟着文字一起长；200% 在 375 视口上算出来是 279px，
       差不多正好是 SheetContent 默认的 `w-3/4`。
     -->
+    <!--
+      **`data-sidebar="sidebar"` 挂在面板上，不是挂在里面那层**（第五十九轮）。
+
+      上游 `sidebar.tsx:221` 把 `data-sidebar` / `data-slot` / `data-mobile`
+      三个都写在 `SheetContent` 自己身上，里面那层 `flex h-full w-full flex-col`
+      **一个 data-* 都没有**。本仓此前反过来：面板上什么都没有，三个属性全挂在内层。
+
+      两边**画出来是一样的**（各自的面板都有 `bg-sidebar`），但 `data-sidebar`
+      是**契约属性**——门禁和场景目录都按它选元素，两边指向不同的盒子就是真不一致。
+      第五十九轮把 `channels` 接进窄屏取样时当场掉出来一行：
+
+          channels#mobile-drawer/mobile/light/en-US
+          geometry: selector:[data-sidebar='sidebar'] background
+                    React=rgba(246,243,236,255) Vue=rgba(0,0,0,0)
+
+      本仓量到透明，是因为尺子选中的是**内层**那个没有底色的 div（287x812），
+      而上游选中的是**面板**（288x812，带底色）。**不是底色缺陷，是谁叫 sidebar。**
+
+      ⚠ `id="workspace-sidebar"` **留在内层不要动**：它是本仓独有的（上游没有这个 id），
+      `tests/e2e-infra/auth-disabled.spec.ts`、`tests/e2e/i18n-theme.spec.ts`、
+      `tests/e2e/sidebar-ime-a11y.spec.ts` 都按它选。
+      ⚠ 内层的 `data-slot="sidebar-inner"` 按上游去掉了；
+      `tests/unit/workspace-shell/sidebar-skeleton.test.ts` 扫的是四份文件的源文本，
+      宽屏那一支仍然写着它，所以那道门照样绿。
+    -->
     <SheetContent
       side="left"
       :close-label="props.closeLabel"
+      data-sidebar="sidebar"
+      data-slot="sidebar"
+      data-mobile="true"
       class="bg-sidebar text-sidebar-foreground border-sidebar-border w-[min(18rem,calc(100vw-3rem))] gap-0 border-r p-0 [&>button]:hidden"
     >
       <SheetHeader class="sr-only">
         <SheetTitle>{{ props.title }}</SheetTitle>
         <SheetDescription>{{ props.description }}</SheetDescription>
       </SheetHeader>
-      <div
-        id="workspace-sidebar"
-        data-slot="sidebar-inner"
-        data-sidebar="sidebar"
-        data-mobile="true"
-        class="flex h-full w-full flex-col"
-      >
+      <div id="workspace-sidebar" class="flex h-full w-full flex-col">
         <slot />
       </div>
     </SheetContent>

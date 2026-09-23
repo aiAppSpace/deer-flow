@@ -76,6 +76,16 @@
                                         thread-list-pin / thread-title-sync）
    根因                                  桌面侧栏在手机上不渲染，换成 Sheet 抽屉
 
+   ⚠⚠ 但那 11 条里**已经有 3 条的面被别人覆盖了**（2026-09-23 逐条比步骤链量的）：
+      thread-list-pin      自己就有 `#mobile-drawer` 终态（`dimensions: [mobile]`），
+                           进入动作是 `click role=button name=/^(Toggle Sidebar|Open sidebar)$/`
+                           ——**窄屏开抽屉的现成写法就是这一条，照抄，别自己发明**
+      thread-history       **已全覆盖**：它的步骤链（⋯ → Rename/Delete → Export →
+                           Export as Markdown）与 `#mobile-drawer` 的尾巴**逐字同形**，
+                           第三十八轮就是为此故意把它接在那里的。**别给它开 mobile 终态。**
+      thread-title-sync    **只覆盖了一半**：`#mobile-drawer` 到「Rename 这一项可见」为止，
+                           而它自己要量的是 **Rename 对话框 + 改名 + Save**——那一半窄屏没采过
+
 ② 台账的 mobile 维        10 个场景      这 15 条落在 10 个场景上，
                                         **一个 mobile 维都没有**；其中 4 个
                                         （sidebar / channels / workspace-changes /
@@ -115,9 +125,51 @@ EOF
 grep -c 'REACT_APP\|reactApp' frontend-vue/tests/e2e-parity/narrow-screen-overflow.spec.ts
 ```
 
-**要做的事**：给这些场景补一条「窄屏先开抽屉」的 settle 分支，把 ① 补上；
+✅ **第五十九轮已经做掉 `channels` 那 5 条**（一个 `#mobile-drawer` 终态走完渠道列表
++ 运行时配置对话框的新建分支），并掉出**一条真账**：本仓移动端把 `data-sidebar` /
+`data-slot` / `data-mobile` 挂在面板**里层**、上游挂在**面板本身**——渲染一样，
+但那是契约属性，门禁按它选元素。已按上游改，台账 190/0/0。逐条读数见 open-accounts 第五十九轮。
+
+⚠ **做之前先读那一轮的两笔账**，第二笔会直接坑住你：
+① `runScenario` 的顺序是 **settle → 动画/静默 → state.steps**。场景的 settle 只要
+等了「只在桌面侧栏里有」的东西，窄屏终态就会在 settle 上超时，
+**你写在 steps 里的「开抽屉」永远轮不到**。改法是把 settle 换成两个断点上都在的锚点，
+侧栏锚点挪进各个桌面终态的 steps（**不是**给 mobile 开豁免）。
+② **别拿探针「替换 settle 之后跑通了」当证据**——探针改了被测对象的哪一部分，
+就等于放弃了对那一部分的验证。我在这条上白跑了一轮。
+
+**接着要做的**：给**下面这 3 条 + 半条**补 mobile 终态（照抄 `thread-list-pin#mobile-drawer`
+与 `channels#mobile-drawer` 的写法：`dimensions: [{viewport:"mobile",…}]`
++ 先 `click` 那颗 Toggle Sidebar）：
+
+```
+sidebar / sidebar#slash-selected          2 条   侧栏 Chats/Agents 导航 + 斜杠建议
+                                                 ⚠ 这个场景的注释明写**不能有 click 步骤**
+                                                 （活动项跟着指针走），而开抽屉要点一下。
+                                                 **先量它稳不稳，别照搬。**
+thread-title-sync 的重命名对话框那一半     半条   #mobile-drawer 只到「Rename 可见」
+agent-create-name-step                    ❌ 已关掉：两个应用在 375px 下都不渲染侧栏、
+                                             也没有开抽屉的键（实测两边逐字一致）。不是缺陷。
+channels 那 5 条                          ✅ 第五十九轮做完
+```
+
+⚠ **另外 4 条不是侧栏根因，各有各的卡点，先量再说**：
+`browser-feature`（`getByText(/^(Browser|浏览器)$/)`）、
+`sidecar-chat`（`getByRole('separator')`——**窄屏两边都不渲染那条分隔线**，
+这一条大概率不是「接回来」而是「本来就没有」）、
+`workspace-changes#reasoning-menu`（输入区推理深度键）、
+`artifact-batched-stream`（`[role=combobox]` 解析得到但点不动）。
+
 ① 补上之后 ② 才做得了（场景有了 mobile 终态才能加 mobile 维）。
 **③ 是第二步，见下一节。**
+
+⚠ **这一节 2026-09-21 到 09-23 连着收窄了两次，教训写在这里**：
+第一次把「表里有 15 条」读成「15 条都没量过」（实际同份 spec 第二条用例在量）；
+第二次把「11 条同根因」读成「11 条都要接」（实际 3 条的**面**已被
+`thread-list-pin#mobile-drawer` 覆盖）。
+**判据：「有没有被量过」要按「面」查，不是按场景名查**——
+一个场景要量的那块面，可能挂在**另一个场景的终态**上。
+查法：把两边的 `steps` 链逐字比一遍，别看场景名。
 
 **为什么这条比「造一个新面」强**（两条，都带读数）：
 
@@ -177,8 +229,9 @@ aria-hidden · dark 对比度 · tablet 轴 · 重复可访问名 · Tab 落点 
 
 ```
 四张工单表     路由 0 · 文案 0 · 取样路由 0（exempt 4）· spec pending 1（有判词）
-台账           189 场景-维度 · 0 唯一行 · 58 个不同场景状态
+台账           189 场景-维度 · 0 唯一行 · 58 个不同场景状态   ← 方案 B 交付时的读数
 门禁           e2e-parity 212 passed；每一类找到过的缺陷都有一条会红的门禁
+               ⚠ 第五十九轮把 channels 接进窄屏取样，现在是 **190 / 0 / 59**、213 passed
 最后两轮       57 forced-colors 0 条 · 58 同应用幂等 0 条
 ```
 
@@ -248,8 +301,8 @@ aria-hidden · dark 对比度 · tablet 轴 · 重复可访问名 · Tab 落点 
 ### 真正的限制是取样面，不是待办
 
 ```
-台账   189 个场景-维度 / 58 个不同场景状态 / 0 唯一行
-断点   desktop 141 · mobile 20 · tablet 28     ← 四十六轮 4→13、四十七轮 13→28
+台账   190 个场景-维度 / 59 个不同场景状态 / 0 唯一行
+断点   desktop 141 · mobile 21 · tablet 28     ← 四十六轮 4→13、四十七轮 13→28
 主题   light 155 · dark 34
 语言   en-US 128 · zh-CN 61
 ```
@@ -487,16 +540,25 @@ workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/t
 主题 light 155 · dark 34      语言 en-US 128 · zh-CN 61
 ```
 
-⚠ 这几个数**第五十二到第五十五这四轮一个都没动**——那几轮改的是渲染、
-可达性与门禁，**没有动取样面**。所以新窗口量出来应当与上面逐字相同；
-对不上就先查为什么，别往下做。
+⚠⚠ **第五十九轮动了取样面，上面那块读数因此作废，别拿它对照。**
+那一轮给 `channels` 加了 `#mobile-drawer` 终态（窄屏抽屉），
+现在应当量到的是：
+
+```
+场景-维度 190   唯一行 0   不同场景状态 59
+断点 desktop 141 · tablet 28 · mobile 21
+```
+
+（第五十二到第五十五那四轮确实一个都没动——那几轮改的是渲染、可达性与门禁，
+没有动取样面。**动取样面的轮次要像这一轮一样就地把这段改掉**，
+否则下一个人会拿一组过期的数去「先查为什么」。）
 
 **本机门禁最近一次全绿的读数**（**每行各自带轮次戳，以行内标注为准**，都是真跑出来的）：
 
 ```
 verify      0   337 文件 / 2726 单测        ← 第五十五轮实测
 make e2e    0   297 passed / 2.0m           ← 第五十五轮实测
-e2e-parity  0   **212 passed / 51.8m**      ← 第五十八轮收尾实测（台账那条 18.0m）
+e2e-parity  0   **213 passed / 53.0m**      ← 第五十九轮实测（台账那条 18.3m）
                  52 轮 +2 content-reachable · 53 轮 +2 overlay-survives-resize
                  diff.spec 那条（台账本体）18.1m · keyboard-order 双向 8.5m
 ```

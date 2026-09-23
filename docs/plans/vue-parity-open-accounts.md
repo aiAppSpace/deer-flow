@@ -38,7 +38,7 @@
 > 它停更在第三十五轮，而同一个引用块下面那行「现状读数」写的是
 > **0 唯一行 / 0 多重集 / 0 条不同的差异**——两者对不上就是因为这一列没人再动。
 > **今天的活读数一律现场量 `baseline/parity-diff.json`**（2026-09-23 实测
-> 189 个场景-维度 / 0 唯一行 / 0 多重集 / 0 条不同的差异）。
+> 190 个场景-维度 / 0 唯一行 / 0 多重集 / 0 条不同的差异）。
 >
 > | 族 | 当时 | 到第三十五轮时 | 谁改的 |
 > | --- | --- | --- | --- |
@@ -102,7 +102,7 @@ EOF
 > ——⚠ **这是历史读数，别引用**（`git log -L 95,95` 实测：这四个数由 `af54c536`
 > 第二十三轮写入，此后再没被改过，而它当时写的词是「现状是」）。
 > **活读数一律现场量 `baseline/parity-diff.json`**；2026-09-23 实测
-> **0 唯一行 / 0 多重集 / 189 个场景-维度 / 0 条不同的差异**。
+> **0 唯一行 / 0 多重集 / 190 个场景-维度 / 0 条不同的差异**。
 > 变更与三处格子的订正写在本文件的「2026-09-16 第二十三轮」条目里；
 > 账 C 见「2026-09-16 第二十四轮」条目（**它一行台账都没动**，理由写在那里）。
 
@@ -4419,6 +4419,146 @@ locator、`settings-narrow-screen` 的空面板），不是扫源码。
   绝大多数真的依赖它们喂的数据。
 - 还没试过的轴：每个 spec **自己的** `page.route`（28 个 spec 用它喂数据），
   那才是剩下的大头，但它是逐 spec 的，没有统一入口。
+
+
+## 2026-09-23 第五十九轮：窄屏抽屉这条路——**范围被读数连收三次**
+
+问的是：`narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 那 15 条，
+能不能用「窄屏先开抽屉」接回取样面、并补上台账的 mobile 维。
+
+### ⚠ 开工时的说法被自己的读数推翻了三次，逐次记下来
+
+| 说法（09-21 写的） | 实测 | 怎么量的 |
+| --- | --- | --- |
+| 「这 15 条从来没在 360px 上被量过」 | **错**。同一份 spec 的第二条常驻用例（`:292`，`a9cebfe2` 起）就在量它们：桌面维走到位 → 压到 360 → 查横滚 + 查对话框掉没掉，读数 0 条 | 读 spec 主体，`if (!(key in MOBILE_UNREACHABLE)) continue;` |
+| 「11 条同根因，都要接回来」 | **只有 8 条**。`thread-history` 的步骤链与 `thread-list-pin#mobile-drawer` 的尾巴**逐字同形**，第三十八轮就是为此故意接在那里的；`thread-list-pin` 自己有 mobile 终态 | 把两边 `steps` 链逐条比 |
+| （顺带）`thread-title-sync` 也算覆盖了 | **只覆盖一半**。`#mobile-drawer` 到「Rename 这一项可见」为止，而它要量的是 **Rename 对话框 + 改名 + Save**——那一半窄屏没采过 | 同上 |
+
+**判词**：**「有没有被量过」要按「面」查，不是按场景名查。**
+一个场景要量的那块面，可能挂在**另一个场景的终态**上。
+查法是把两边的 `steps` 链逐字比一遍，别看场景名，也别看 `MOBILE_UNREACHABLE`
+这张表的条数——那张表说的是「这个 id 的原生路径走不到」，
+不是「这块面没人量」。
+
+### 探针读数（本机 375px，只跑本仓，1.6 分钟）
+
+开抽屉动作逐字抄 `thread-list-pin#mobile-drawer`：
+`click role=button name=/^(Toggle Sidebar|Open sidebar)$/`。
+
+```
+sidebar#default            抽屉打开 OK  settle 两条锚点全可见
+sidebar#slash-selected     抽屉打开 OK  settle 两条锚点全可见
+channels#default           抽屉打开 OK  [data-sidebar='sidebar'] / Telegram / DingTalk 全可见
+channels#runtime-config    抽屉打开 OK  Feishu 那行的按钮可见
+channels#runtime-config-edit 抽屉打开 OK  DingTalk 那行的按钮可见
+channels#settings-panel    抽屉打开 OK  「设置和更多」可见
+channels#settings-panel-connected 同上
+agent-create-name-step     ✗ 开抽屉的 click 超时 20s
+```
+
+⚠ **这次探针自己有一笔仪器账**：我给 `runScenario` 传了 `steps: []`，
+所以后面那些 `steps[1..]` 的「解析不到」**不是读数**——那些步骤压根没跑，
+我量的是「它是不是已经可见」。**只有 `steps[0]` 有意义。**
+（同一形状第五十五、五十七轮各踩过一次：**先问这把尺子量的是不是我以为的那个量**。）
+
+### `agent-create-name-step` 定性：**不是缺陷，关掉**
+
+第二把探针**两个应用各跑一遍**，`/workspace/agents/new` 在 375px 下：
+
+```
+vue    innerWidth=375  [data-sidebar='sidebar'] 节点 0  按钮只有 Back to Gallery [32x32] / Continue [343x36]
+react  innerWidth=375  [data-sidebar='sidebar'] 节点 0  按钮只有 Back to Gallery [32x32] / Continue [343x36]
+```
+
+**两边逐字一致：这一页在窄屏上本来就没有侧栏，也没有开抽屉的键。**
+所以它不可能「接回来」，也没有可比的差异。**别再试。**
+
+### 本轮的改动
+
+给 `channels` 加一个 `#mobile-drawer` 终态（`dimensions: [mobile/light/en-US]`），
+一次走完**渠道列表**与**运行时配置对话框的新建分支**。
+**只加一个、不给五个终态各加一个**——照第三十八轮那条判词
+（「在这里多点一下，就把那块面接进窄屏取样，不必给它们各开一个 mobile 终态」）。
+编辑分支与设置面板那两支的差异点在文案不在窄屏几何，桌面四档已经守着；
+哪天窄屏上量出「只有编辑分支坏」，再单独加，那时才有读数支撑。
+
+### 账一（仪器）：settle 跑在 steps 前面，窄屏那条路根本没轮到
+
+加完终态整轮一跑，`content-reachable` 当场红，报的是：
+
+```
+Error: 这些终态跑不到位，门禁因此什么都没量到（空转就是失守）
++ "channels#mobile-drawer: TimeoutError: locator.waitFor: Timeout 30000ms exceeded."
+```
+
+**根因在 `runScenario` 的顺序：settle → 动画/静默 → state.steps。**
+`channels` 的 settle 等的是 `[data-sidebar='sidebar']` / `Telegram` / `DingTalk`
+——**只在桌面侧栏里有**，窄屏上侧栏是抽屉、默认关着，
+于是 settle 先超时，写在 steps 里的「开抽屉」**永远轮不到执行**。
+
+⚠ **而我的探针跑通了。** 因为探针把 `settle` 换成了「只开抽屉」——
+**它验的根本不是门禁走的那条路**。这是这一轮最贵的一笔仪器账：
+**探针改了被测对象的哪一部分，就等于放弃了对那一部分的验证**
+（同形状第四十五轮踩过：「钉住实验起点的动作，本身要先证明它不改变被测对象」）。
+
+**改法照 `thread-list-pin` wave 147 的先例，不是给 mobile 开豁免**
+（settle 是所有终态共用的，豁免会连「桌面上这三样还在不在」一起不守）：
+
+```
+settle  →  [{ kind: "visible", target: { selector: "textarea" } }]   两个断点上都在
+三条侧栏锚点 → 挪进五个桌面终态的 steps（steps 里的 visible 同样进取样面，wave 76）
+```
+
+变异验证（两侧都有读数，不是只看退出码）：
+
+```
+改前   红   报的正是 "channels#mobile-drawer: TimeoutError…"
+改后   绿   1 passed (3.3m)
+```
+
+### 账二（真账）：`data-sidebar` 在移动端挂错了盒子
+
+settle 修好之后整轮再跑，**1 failed / 212 passed / 53.0m**，唯一的红是
+`diff.spec`，新取样点掉出**一行**：
+
+```
+channels#mobile-drawer/mobile/light/en-US
+geometry: selector:[data-sidebar='sidebar'] background
+          React=rgba(246,243,236,255)  Vue=rgba(0,0,0,0)
+```
+
+⚠ **不是底色缺陷。** 探针沿祖先链两边各量一遍：
+
+| | `[data-sidebar='sidebar']` 命中哪个盒子 | 尺寸 | 底色 |
+| --- | --- | --- | --- |
+| 上游 | **抽屉面板本身**（SheetContent） | 288×812 | 不透明 |
+| 本仓（改前） | 面板**里面**那层 `flex h-full w-full flex-col` | 287×812 | **透明**（底色在父节点） |
+
+**画出来是一样的**——两边面板都有 `bg-sidebar`，抽屉中心点最上层都是同一个 `input`。
+差的是**谁叫 sidebar**：上游 `sidebar.tsx:221` 把 `data-sidebar` / `data-slot` /
+`data-mobile` 三个都写在 `SheetContent` 上、内层那个 div 一个 `data-*` 都没有；
+本仓正好反过来。**桌面那一支两边是一致的，只有移动端这一支反了。**
+
+**这条不能按「实现字面差异」放掉**：`data-sidebar` 是**契约属性**，
+门禁与场景目录都按它选元素（`MOBILE_UNREACHABLE` 那一批卡的就是这个选择器）。
+两边指向不同的盒子，是真不一致。
+
+改法：本仓移动端这一支按上游摆（只动 `frontend-vue/`）。
+⚠ `id="workspace-sidebar"` 留在内层不动——本仓独有（上游没有这个 id），
+`auth-disabled` / `i18n-theme` / `sidebar-ime-a11y` 三个 e2e 按它选。
+
+改后复量：**两边都是命中 1 个、`data-slot="sidebar"`、288×812、都有底色。**
+台账从 `Received +16`（键 + 1 行）降到 `+14`（键，12 个档全空）——
+**这同时证明了归一成 rgba 之后两边是同一个颜色**，否则 geometry 还会报。
+
+### 收工读数
+
+```
+台账        190 个场景-维度 / 0 唯一行 / 0 多重集 / 0 条不同的差异 / 59 个不同场景状态
+断点        desktop 141 · tablet 28 · mobile 21        ← mobile 20 → 21
+e2e-parity  213 passed（212 → 213，scenarios.spec 多一条）
+基线        只加 14 行（新键 + 12 个空档），既有的行一个字没动
+```
 
 
 ## 2026-09-20 第五十八轮：同应用两跑幂等——**名单上最后一个面，0 条稳定缺陷**
