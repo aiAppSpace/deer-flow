@@ -24,7 +24,11 @@
 先按下面「现场量一遍」那段命令**把状态量出来**，量完把读数说给我看；
 **不要引用文档里的散文当读数**。
 
-**上一段（方案 B）是完整交付的**：已推送、CI 双绿、工作树干净。
+**上一段（方案 B）的代码已推送、CI 双绿。**
+⚠ **「工作树干净」这一条不要信文档，开工第一件事自己跑 `git status --short`**
+——2026-09-23 审计实测撞到过一次：文档写着干净，实际有 12 个文件未提交
+（含三份 `frontend-vue/tests/` 的守卫改动），照着做要么 `git commit -a` 一把梭、
+要么 `git restore .` 把别人的活清掉。**这一行永远只能靠现场量。**
 2026-09-21 用户明确说**要继续开工做后续任务**——所以这一轮
 （**第五十九轮**）**直接开工，不要再问「要不要继续」**。
 
@@ -34,9 +38,13 @@
 
 ⚠ **开工先做这三件事，缺一件后面都会白做：**
 
-1. **复核 CI**。上一段最后一次**带代码**的推送是 `41c84808`，verify + parity
-   **双绿**（attempt 1，2026-09-21 复核过）；`117497be` 是**纯 docs、不触发 CI**
-   ——`total_count: 0` 不是「没问题」。查法见下面「现场量一遍」，
+1. **复核 CI**。判据是**路径命中 `frontend-vue/**` 就会触发**，
+   跟改的是不是可执行代码无关——`52f61c0d` 只改了一份 spec 的**块注释**，
+   照样触发了两条 run（verify + parity **双绿**，attempt 1，2026-09-23 复核过）。
+   ⚠ **别照着「上一次带代码的推送是哪条」去找**，那个说法 2026-09-21 就把
+   `52f61c0d` 自己漏掉了。**直接查当前 tip**；只有整条推送都在 `frontend-vue/`
+   之外时才会 `total_count: 0`，而 `total_count: 0` 不是「没问题」。
+   查法见下面「现场量一遍」，
    ⚠ `head_sha` 必须传**全 sha**，短 sha 永远返回 `total_count: 0`；
    ⚠ run 挂在**那次推送的 tip** 上，不是挂在代码那条提交上。
 2. **读「✅ 已经量过、别重做」那一节**——很多面判过了，重开就是白跑一轮。
@@ -48,32 +56,76 @@
 
 ### 这一轮不造新面，补一条**已登记的取样缺口**
 
-`frontend-vue/tests/e2e-parity/narrow-screen-overflow.spec.ts` 里有一张
-`MOBILE_UNREACHABLE` 表：**这些终态在 360px 上根本走不到，所以从来没被量过。**
+⚠⚠ **先读这一段，它订正了 2026-09-21 写错的一句。**
+`narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 那 15 条，
+**不是「从来没在 360px 上被量过」**——那句话是错的，**同一份 spec 里就有第二条
+常驻用例在量它们**（`narrow-screen-overflow.spec.ts:292`，`a9cebfe2` 起常驻，
+「桌面维走到位 → 压到 360 → 查横滚 + 查对话框掉没掉」，读数 0 条）。
+⚠ **这里引的是提交 sha，不是轮次**：spec 自己的注释写「第四十一轮」，
+而 `a9cebfe2` 紧跟在「交接文档更新到第四十一轮」那条之后——轮次归属对不上，
+**sha 是能量的，轮次是推的**。
+**别去重跑那次扫描。**
+
+现场量出来的真实缺口是**三块**（量法都写在旁边，自己重量）：
 
 ```
-MOBILE_UNREACHABLE  15 条      ← ⚠ 自己重数（文件头散文里写的「十四条」是旧数，
-                                   2026-09-21 实数 15；散文会漂，表不会）
-其中根因同一个        11 条      ← 8 条卡在 `[data-sidebar='sidebar']` 上，
-                                   3 条卡在侧栏里的会话行（thread-history /
-                                   thread-list-pin / thread-title-sync）
-根因                            桌面侧栏在手机上不渲染，换成 Sheet 抽屉，
-                                于是场景 settle 用的侧栏定位器**永远解析不到**
+① 原生窄屏进入路径        15 条         第一条用例从 360px 起步，这 15 条一条都走不到
+                                        （它们的 settle 用的是桌面定位器）
+   其中根因同一个          11 条         8 条卡 `[data-sidebar='sidebar']`，
+                                        3 条卡侧栏会话行（thread-history /
+                                        thread-list-pin / thread-title-sync）
+   根因                                  桌面侧栏在手机上不渲染，换成 Sheet 抽屉
+
+② 台账的 mobile 维        10 个场景      这 15 条落在 10 个场景上，
+                                        **一个 mobile 维都没有**；其中 4 个
+                                        （sidebar / channels / workspace-changes /
+                                        artifact-batched-stream）**根本不在台账里**
+                                        ——所以对照台账对这批屏一个字都没说
+
+③ 上游那一侧              两条用例       `narrow-screen-overflow.spec.ts` 里只有
+                                        `VUE_APP`，两条用例都只跑本仓
 ```
 
-**要做的事**：给这些场景补一条「窄屏先开抽屉」的 settle 分支，
-把那 11 个终态接回 360px 的量程，然后跑门禁看掉不掉东西。
+量法（**别抄上面的数**）：
 
-**为什么这条比「造一个新面」强**（三条，都带读数）：
+```bash
+# ① 表有几条、几条是侧栏根因
+python3 - <<'EOF'
+import re
+src = open("frontend-vue/tests/e2e-parity/narrow-screen-overflow.spec.ts").read()
+body = re.sub(r'/\*.*?\*/', '', re.search(r'const MOBILE_UNREACHABLE[^=]*= \{(.*?)\n\};', src, re.S).group(1), flags=re.S)
+keys = re.findall(r'^\s*"?([A-Za-z0-9_#-]+)"?\s*:', body, re.M)
+print(len(keys), "条"); print(*keys, sep="\n")
+EOF
 
-1. **它不是猜测。** 这 11 个终态**从来没在 360px 上被量过**——而第三十八轮那条
-   真缺陷（`subtask-card` 折叠头漏抄 `min-w-0`，360px 上从 144 涨到 214、
-   把状态图标推到 364–380 **整个跑出视口**）正是掉在「从没采到的窄屏状态」上。
-   **同一种缺口，上一次打开就掉出东西。**
-2. **它同时补台账。** `channels#settings-panel` 现在**没有 mobile 维**
-   （场景的 settle 要桌面侧栏），所以**对照台账也看不见它**。补完抽屉步骤，
-   这些场景才能加 mobile 维。
-3. **它取样的正是唯一还在产出的那个根因家族**——`rem` 尺寸遇上视口像素。
+# ② 这些场景在台账里有哪些维度
+python3 - <<'EOF'
+import json, collections
+d = json.load(open("frontend-vue/baseline/parity-diff.json"))["entries"]
+dims = collections.defaultdict(set)
+for k in d:
+    a, b = k.split("/")[:2]
+    dims[a].add(b)
+for s in ["sidebar","channels","agent-create-name-step","thread-history","thread-list-pin",
+          "thread-title-sync","browser-feature","sidecar-chat","workspace-changes","artifact-batched-stream"]:
+    print(f"{s:26s}", sorted(dims.get(s, [])) or "——不在台账里——")
+EOF
+
+# ③ 跑几个应用
+grep -c 'REACT_APP\|reactApp' frontend-vue/tests/e2e-parity/narrow-screen-overflow.spec.ts
+```
+
+**要做的事**：给这些场景补一条「窄屏先开抽屉」的 settle 分支，把 ① 补上；
+① 补上之后 ② 才做得了（场景有了 mobile 终态才能加 mobile 维）。
+**③ 是第二步，见下一节。**
+
+**为什么这条比「造一个新面」强**（两条，都带读数）：
+
+1. **它不是猜测。** 第三十八轮那条真缺陷（`subtask-card` 折叠头漏抄 `min-w-0`，
+   360px 上从 144 涨到 214、把状态图标推到 364–380 **整个跑出视口**）
+   正是掉在「**那个场景当时只有 desktop/zh/dark 三维、窄屏根本没被采样**」上
+   ——和这里的 ② 是同一种缺口。
+2. **它取样的正是唯一还在产出的那个根因家族**——`rem` 尺寸遇上视口像素。
    第五十四到五十六轮那五处 + 收尾那两处，**七处全是这一族**。
 
 ⚠ **它不是白捡的**：`MOBILE_UNREACHABLE` 的文件头注释明写「到不了 ≠ 没问题，
@@ -81,9 +133,14 @@ MOBILE_UNREACHABLE  15 条      ← ⚠ 自己重数（文件头散文里写的�
 按「⚠ 别再做的事 · 1」处理：**新仪器第一跑的结果，先假设是仪器错了**，
 逐条量清楚是真溢出还是抽屉没开到位，再决定报还是登记。
 
-⚠ **改 settle 之前先读 `support/scenarios.ts` 里那条 settle 是谁共用的**——
-`sidebar` 和 `sidebar#slash-selected` 共用一条，`channels` 那四条共用一条。
-改一条会动四个终态，**改完要重新量整片，不只量你打算改的那一处**（判词 4n）。
+⚠ **改 settle 之前先读 `support/scenarios.ts` 里那条 settle 是谁共用的。**
+一条 settle 管的是整个场景块下的**所有** state，实测（`scenarioStates` 跑出来的）：
+**`sidebar` 那条管 2 个**（`default` / `slash-selected`）、
+**`channels` 那条管 5 个**（`default` / `runtime-config` / `runtime-config-edit` /
+`settings-panel` / `settings-panel-connected`）。
+**改一条会动 5 个终态**，**改完要重新量整片，不只量你打算改的那一处**（判词 4n）。
+⚠ **数就数 `scenarios.ts` 的 states 和 `MOBILE_UNREACHABLE` 表本身，别抄这段散文**
+——2026-09-21 这里就写成过「channels 那四条」，实测是五条。
 
 ### 第二步（第一步就算 0 条也要做）：窄屏这一类**上游那一侧没人守**
 
@@ -355,12 +412,16 @@ gh api "repos/aiAppSpace/deer-flow/actions/runs?head_sha=$(git log -1 --format=%
 ### ⚠ 当前 CI 状态（**新窗口仍然要自己复核一遍**）
 
 ```
-41c84808  **收尾最终态**  verify + parity **双绿**（attempt 1，2026-09-21 复核过）
-                      ← 方案 B 的最后一次推送，**这条绿就是整段工作的收尾凭据**
+52f61c0d  **交接提交**   verify + parity **双绿**（attempt 1，2026-09-23 复核过）
+                      ← ⚠ **它不是纯 docs**：改了 `frontend-vue/tests/e2e-parity/
+                        narrow-screen-overflow.spec.ts` 的块注释（十四/十二 → 15/11），
+                        路径命中 `frontend-vue/**` 就触发了 CI。
+                        **覆盖当时那棵 frontend-vue 树的就是这两条 run。**
+41c84808  收尾最终态   verify + parity **双绿**（attempt 1，2026-09-21 复核过）
+                      ← 方案 B 那一段的收尾凭据（**只覆盖到它那棵树**，不是当前树）
 6b81d12c  收尾第 1 次   parity 未跑完就被下一次推送取消；verify **红**——
                       不是测试红，是 `/login` 首屏预算超 139 B，**只在 Linux 上超**。
                       判词 4v：阈值要按跑它的那台机器的读数设
-<第五十八轮收尾>  修 61e80bcd 那次 CI 红（子菜单视口 clamp），**推完必须自己复核**
 61e80bcd  第五十六轮   verify **绿** · parity **红**（attempt 1，211 passed / 1 failed）
                       ⚠ 红的是**这一轮新加的 viewport-fit（vue）**，而且**抓到的是真账**：
                       本仓子菜单 200% 下本机 344 装得下、**Linux 384 溢出 9px**
@@ -430,7 +491,7 @@ workspace-changes#changes-panel/desktop/dark/en-US  requestsOnlyVue: POST /api/t
 可达性与门禁，**没有动取样面**。所以新窗口量出来应当与上面逐字相同；
 对不上就先查为什么，别往下做。
 
-**本机门禁最近一次全绿的读数**（第五十三轮收工时，都是真跑出来的）：
+**本机门禁最近一次全绿的读数**（**每行各自带轮次戳，以行内标注为准**，都是真跑出来的）：
 
 ```
 verify      0   337 文件 / 2726 单测        ← 第五十五轮实测
@@ -1654,7 +1715,11 @@ CI    同一处 w=384 —— **溢出 9px**
 
 ### 7. 本机 `make verify` **不含** `e2e-mock`
 
-**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2.4 分钟，296 条）。
+**改动碰到布局 / primitive 时，本机要额外跑 `make e2e`**（约 2 分钟）。
+⚠ **这里不再写用例数**：同一个数原本在本文件写了两处，其中一处没人维护，
+2026-09-23 实测 `npx playwright test -c playwright.config.ts --list` 是
+`Total: 297 tests in 44 files`，而这里写着 296。
+**用例数只看「现场量一遍」那一节的基准读数块，对不上先查为什么。**
 
 ### 8. 「逐字对齐上游」不是无条件正确的
 
@@ -1744,7 +1809,10 @@ CI    同一处 w=384 —— **溢出 9px**
 十二个面全部走完（方案 B 交付）。**别再从名单里挑。**
 ⚠ **也别急着造新面**——最上面「第一步」那一节指的是另一条路：
 `narrow-screen-overflow.spec.ts` 的 `MOBILE_UNREACHABLE` 里
-**15 个终态从来没在 360px 上被量过**，其中 11 条根因相同（桌面侧栏换抽屉）。
+**15 个终态走不到原生窄屏路径**，其中 11 条根因相同（桌面侧栏换 Sheet 抽屉）。
+⚠ **别读成「没量过」**——「360px 上有没有横滚」这个不变量
+`narrow-screen-overflow.spec.ts:292` 已经对这 15 条全量过并常驻，读数 0 条。
+缺的是**原生窄屏进入路径**与**台账的 mobile 维**，逐条读数见最上面「第一步」。
 **那是已登记的取样缺口，不是猜测**，产出率也不是「造新面约一半」那个数。
 造新面的产出率与立对照的纪律，见最上面那一节的末尾。下面两条是留档的旧计划。
 
@@ -1800,7 +1868,14 @@ CI    同一处 w=384 —— **溢出 9px**
 
 ### 4. ~~把「桌面开 → 缩到 360」做成第二轮扫描~~ —— **第五十三轮落地了，别重做**
 
-已经常驻为 `overlay-survives-resize.spec.ts`（**两个应用都跑**）。
+⚠ **原计划说的那件事，落在的是另一份 spec**：
+「桌面开 → 缩到 360 的第二轮扫描」= `narrow-screen-overflow.spec.ts:292`
+（`WIDTH = 360`，**只跑本仓**——文件里只有 `VUE_APP`），
+而且它**已经带了「浮层掉没掉」的断言**（`DROPS_ON_RESIZE` / `unexpectedDrops` /
+`unexpectedSurvivors`）——所以下面留档里「要做的是把它常驻下来并显式断言浮层
+还在不在」**已经全部兑现了，别再照着做**。
+另一份 `overlay-survives-resize.spec.ts`（第五十三轮常驻，**两个应用都跑**）
+问的是**另一个问题**：缩过断点之后**还开着的**浮层还能不能用。
 ⚠ 它**故意不断言「浮层还在不在」**：第五十三轮量清楚了本仓 5 个终态留着、
 上游 5 个全关，而上游那个「关掉」是 `chat-box.tsx` 的 `if (isMobile)`
 **整棵换树**的副作用，不是它处理了这件事。
@@ -1814,7 +1889,11 @@ CI    同一处 w=384 —— **溢出 9px**
 `thread-history` / `thread-list-pin`（菜单），**四条两边都掉，不是本仓的毛病**。
 掉了的单独一张表各写原因，否则「没量到」会长得和「量过、没问题」一模一样。
 
-### 5. 继续扩取样面（⚠ tablet 已经 28 个样本 / 14 个场景族，**不再是最薄的那条轴**）
+### 5. 继续扩取样面（⚠ tablet 已经 28 个样本，**不再是最薄的那条轴**）
+
+⚠ **这里原本写着「14 个场景族」，2026-09-23 实测是 15**（按 `#` 前的族名去重）。
+**族数别写死**——自己数 `baseline/parity-diff.json`；结论「不再是最薄的那条轴」
+实测仍成立（desktop 141 / tablet 28 / mobile 20）。
 
 - `baseline/parity-route-sampling.json` 是路由坐标系，先看哪些路由取样点最少；
 - 对照场景 id **就是上游 spec 文件名**，想不出对应 spec 就加不了新场景（棘轮会红）；
@@ -1935,7 +2014,12 @@ report **从来没落过盘**，产物是空的（`gh run download` 报 `no vali
 
 ```bash
 pkill -9 -f playwright; pkill -9 -f nuxt
-for p in 3101 3113 3114 3115 3116 8021 8022; do lsof -ti tcp:$p | xargs -r kill -9; done
+# 端口从 playwright*.config.ts 现场取，新增套件自动跟上——
+# ⚠ 手抄清单已经漏过两次（第四十八轮漏 3101；这行此前只写 7 个，实测有 23 个）
+for p in $(grep -hoE '\?\? "[0-9]{4}"' frontend-vue/playwright*.config.ts \
+             | grep -oE '[0-9]{4}' | sort -u); do
+  lsof -ti tcp:$p | xargs -r kill -9
+done
 ```
 
 ⚠ **改文件的脚本不要放后台**：`AssertionError` 会进任务输出文件而你不会去读，

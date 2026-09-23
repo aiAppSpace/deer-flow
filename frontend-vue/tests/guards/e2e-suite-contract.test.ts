@@ -94,12 +94,16 @@ describe("E2E 套件布局", () => {
     for (const match of makefile.matchAll(aggregate)) {
       for (const name of match[1]!.trim().split(/\s+/)) listed.add(name);
     }
-    // 刻意不进聚合入口的三个套件，每个都必须写清为什么：
+    // 刻意不进聚合入口的四个套件，每个都必须写清为什么：
     //   external —— 需要后端的 browser extra，普通 CI 装不到；
     //   visual   —— 截图基线只有 -darwin，Linux CI 上必然红（见 Makefile 注释）；
     //   parity   —— 需要**兄弟应用** ../frontend 才能跑，而本仓的
     //               install/build/test/e2e 都不依赖它（见 make standalone-check）。
     //               把它放进聚合入口，等于把独立性这条硬要求悄悄降级成建议。
+    //   parity-auth —— 同 parity，也要兄弟应用；与 parity 分开只是因为
+    //               auth 模式是构建期决定的。⚠ 它 2026-09-09 加进下面这个集合时
+    //               没人同步这段注释（当时写着「三个套件」而集合里是四个）——
+    //               **加一条就要在这里补一条理由**，这正是这段注释的用途。
     const standalone = new Set(["external", "visual", "parity", "parity-auth"]);
     /*
       反方向（wave 111）：这三个 id 必须真的还是 config。此前只有正方向——
