@@ -117,7 +117,7 @@ onUnmounted(() => observer?.disconnect());
   <WorkspaceContainer>
     <Tabs v-model="view" class="flex size-full flex-col">
       <header
-        class="mx-auto flex w-full max-w-[var(--container-width-md)] shrink-0 flex-col gap-3 pt-8"
+        class="mx-auto flex w-full max-w-[var(--container-width-md)] shrink-0 flex-col gap-3 pt-8 [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:pt-[8px]"
       >
         <TabsList :aria-label="$i18n.t.value.pages.chats">
           <TabsTrigger value="active">
@@ -140,7 +140,7 @@ onUnmounted(() => observer?.disconnect());
           type="search"
           autofocus
           :placeholder="$i18n.t.value.chats.searchChats"
-          class="h-12 max-w-[var(--container-width-md)] text-xl"
+          class="h-12 max-w-[var(--container-width-md)] text-xl [@media(max-height:360px)]:h-[48px]"
         />
       </header>
       <TabsContent :value="view" class="min-h-0 flex-1">
@@ -188,8 +188,13 @@ onUnmounted(() => observer?.disconnect());
                     归档页签下每行多一颗「恢复」。边框挪到这一层：链接只占左半边，
                     分隔线要横跨整行（上游同形）。
                   -->
-                  <div class="flex items-center gap-2 border-b">
-                    <NuxtLink class="min-w-0 flex-1" :to="pathOfThread(thread)">
+                  <div
+                    class="flex min-w-0 flex-wrap items-center gap-2 border-b"
+                  >
+                    <NuxtLink
+                      class="min-w-0 flex-1 max-[361px]:basis-full"
+                      :to="pathOfThread(thread)"
+                    >
                       <div class="flex flex-col gap-2 p-4">
                         <div class="flex min-w-0 items-center gap-2">
                           <ThreadChannelIcon
@@ -213,7 +218,7 @@ onUnmounted(() => observer?.disconnect());
                     </NuxtLink>
                     <Button
                       v-if="archived"
-                      class="mr-4 shrink-0"
+                      class="mr-4 h-auto max-w-[calc(100%-2rem)] min-w-0 shrink-0 whitespace-normal max-[361px]:ml-4 max-[361px]:basis-full"
                       variant="outline"
                       size="sm"
                       :disabled="archiveAction.isPending.value"

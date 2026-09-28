@@ -320,8 +320,7 @@ export function ArtifactFileDetail({
         ["artifact", filepathFromProps, threadId, isMock, fullContentRequested],
         (
           current:
-            | { content?: string; url?: string; sha256?: string }
-            | undefined,
+            { content?: string; url?: string; sha256?: string } | undefined,
         ) => ({
           ...current,
           content: savedContent,
@@ -394,8 +393,13 @@ export function ArtifactFileDetail({
     }
   }, [threadId, filepath, isInstalling, t]);
   return (
-    <Artifact className={cn(className)}>
-      <ArtifactHeader className="px-2">
+    <Artifact
+      className={cn(
+        "@container overflow-x-hidden overflow-y-auto [@media(max-height:360px)]:h-auto [@media(max-height:360px)]:min-h-full",
+        className,
+      )}
+    >
+      <ArtifactHeader className="min-w-0 px-2 max-[361px]:grid max-[361px]:grid-cols-[minmax(0,1fr)] @max-[28rem]:flex-wrap @max-[28rem]:gap-y-2">
         {/* The title column must be allowed to shrink. A flex item defaults to
             min-width:auto, so without min-w-0 this column refuses to go below
             its content width: a long artifact name (measured with a 59-char
@@ -404,8 +408,8 @@ export function ArtifactFileDetail({
             entirely off-screen, 199px beyond the clip edge, so the file cannot
             be downloaded or the panel closed. The middle column already carries
             min-w-0 and grows; it is the title that has to give. */}
-        <div className="flex min-w-0 items-center gap-2">
-          <ArtifactTitle>
+        <div className="flex max-w-full min-w-0 items-center gap-2 max-[361px]:w-full @max-[28rem]:grow @max-[28rem]:basis-0">
+          <ArtifactTitle className="max-w-full min-w-0">
             {isWriteFile ? (
               <div className="truncate px-2">{getFileName(filepath)}</div>
             ) : (
@@ -423,7 +427,7 @@ export function ArtifactFileDetail({
                 {/* max-w-full lets the trigger follow the shrunken column;
                     SelectTrigger is w-fit, which otherwise ignores it. The
                     value inside is already line-clamp-1. */}
-                <SelectTrigger className="max-w-full border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0">
+                <SelectTrigger className="w-full max-w-full border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0">
                   <SelectValue placeholder="Select a file" />
                 </SelectTrigger>
                 <SelectContent className="select-none">
@@ -439,7 +443,7 @@ export function ArtifactFileDetail({
             )}
           </ArtifactTitle>
         </div>
-        <div className="flex min-w-0 grow items-center justify-center gap-2">
+        <div className="flex min-w-0 grow items-center justify-center gap-2 max-[361px]:w-full @max-[28rem]:order-3 @max-[28rem]:basis-full">
           {artifactViewState.canPreview && (!truncated || isTabular) && (
             <ToggleGroup
               className="mx-auto"
@@ -488,8 +492,8 @@ export function ArtifactFileDetail({
         {/* shrink-0 keeps the actions at their natural width once the title
             column starts giving way. The buttons themselves are shrink-0, so
             without it this box would shrink and let them overflow it. */}
-        <div className="flex shrink-0 items-center gap-2">
-          <ArtifactActions>
+        <div className="flex shrink-0 items-center gap-2 max-[361px]:w-full max-[361px]:min-w-0">
+          <ArtifactActions className="max-[361px]:w-full max-[361px]:flex-wrap">
             {canEdit && !isEditing && (
               <ArtifactAction
                 icon={PencilIcon}
@@ -648,14 +652,19 @@ export function ArtifactFileDetail({
       </ArtifactHeader>
       <ArtifactContent className="flex flex-col p-0">
         {truncated && !(isTabular && effectiveViewMode === "preview") && (
-          <div className="border-border bg-muted/40 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 text-sm">
+          <div className="border-border bg-muted/40 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-sm">
             <span className="text-muted-foreground">
               {t.artifactPreview.limited(
                 formatArtifactBytes(previewBytes) ?? "1 MiB",
                 formatArtifactBytes(totalBytes),
               )}
             </span>
-            <Button size="sm" variant="outline" onClick={loadFullContent}>
+            <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
+              size="sm"
+              variant="outline"
+              onClick={loadFullContent}
+            >
               {t.artifactPreview.loadFullFile}
             </Button>
           </div>
@@ -666,7 +675,7 @@ export function ArtifactFileDetail({
             {t.artifactPreview.loadingFullFile}
           </div>
         )}
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 [@media(max-height:360px)]:min-h-[160px] [@media(max-height:360px)]:flex-none">
           {error && (
             <ArtifactPreviewError
               filepath={filepath}

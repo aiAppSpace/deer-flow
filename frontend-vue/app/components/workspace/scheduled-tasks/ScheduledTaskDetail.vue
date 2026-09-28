@@ -85,10 +85,15 @@ const threadLine = computed(() =>
 </script>
 
 <template>
-  <div class="flex flex-col gap-3">
-    <div class="flex items-start justify-between gap-3">
-      <div class="text-lg font-semibold">{{ task.title }}</div>
-      <Button variant="outline" size="sm" @click="emit('toggleEdit')">
+  <div class="flex max-w-full min-w-0 flex-col gap-3">
+    <div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0 text-lg font-semibold">{{ task.title }}</div>
+      <Button
+        class="h-auto max-w-full whitespace-normal"
+        variant="outline"
+        size="sm"
+        @click="emit('toggleEdit')"
+      >
         {{ editing ? labels.actions.cancelEdit : labels.actions.edit }}
       </Button>
     </div>

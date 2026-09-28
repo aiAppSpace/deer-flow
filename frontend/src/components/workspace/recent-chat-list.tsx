@@ -106,7 +106,7 @@ export function ThreadSidebarItem({
       thread_id: string;
       agent_name?: string;
     }>();
-  const { state: sidebarState, openMobile } = useSidebar();
+  const { state: sidebarState, openMobile, isMobile } = useSidebar();
   const sidebarExpanded = sidebarState === "expanded" || openMobile;
   // Deleting a conversation is destructive and used to fail silently: the row
   // stayed, nothing was said, and the click looked like it had done nothing.
@@ -379,7 +379,7 @@ export function ThreadSidebarItem({
                 <Download className="text-muted-foreground" />
                 <span>{t.common.export}</span>
               </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
+              <DropdownMenuSubContent sideOffset={isMobile ? -190 : 0}>
                 <DropdownMenuItem
                   onSelect={() => void handleExport("markdown")}
                 >

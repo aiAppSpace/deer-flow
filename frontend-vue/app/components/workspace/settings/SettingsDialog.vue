@@ -170,6 +170,11 @@ function setSectionButton(
   }
 }
 
+function keepSectionFocusVisible(event: FocusEvent) {
+  if (event.currentTarget instanceof HTMLElement)
+    event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
 /*
   **打开时把焦点放在当前分区那颗导航键上**，接管 reka 的 `open-auto-focus`。
 
@@ -220,7 +225,7 @@ function onOpenChange(open: boolean) {
       data-testid="settings-dialog"
       :close-label="$i18n.t.value.primitives.close"
       :aria-describedby="undefined"
-      class="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-5xl md:max-w-6xl"
+      class="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col overflow-y-hidden! sm:max-w-5xl md:max-w-6xl [@media(max-height:360px)]:h-[calc(100dvh-32px)] [@media(max-height:360px)]:max-h-[calc(100dvh-32px)] [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:p-[8px]"
       @open-auto-focus="focusInitial"
       @close-auto-focus="restoreFocus"
     >
@@ -258,37 +263,42 @@ function onOpenChange(open: boolean) {
         翻案判据：哪天有读数证明隐式列不会被撑开。
       -->
       <div
-        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)]"
+        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] [@media(max-height:360px)]:grid-rows-[minmax(1rem,1fr)_minmax(1rem,1fr)]"
       >
-        <nav class="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
-          <ul class="space-y-1 pr-1">
+        <nav
+          class="bg-sidebar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border p-2"
+        >
+          <ul class="min-w-0 space-y-1 pr-1">
             <li v-for="item in sections" :key="item.id">
               <button
                 :ref="(element) => setSectionButton(item.id, element)"
                 type="button"
                 :class="
                   cn(
-                    'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                    'flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium whitespace-normal transition-colors',
                     settings.section.value === item.id
                       ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                   )
                 "
                 @click="settings.section.value = item.id"
+                @focus="keepSectionFocusVisible"
               >
-                <component :is="item.icon" class="size-4" />
-                <span>{{ item.label }}</span>
+                <component :is="item.icon" class="size-4 shrink-0" />
+                <span class="min-w-0 wrap-anywhere">{{ item.label }}</span>
               </button>
             </li>
           </ul>
         </nav>
-        <ScrollArea class="h-full min-h-0 rounded-lg border">
+        <ScrollArea
+          class="h-full min-h-0 min-w-0 rounded-lg border [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0!"
+        >
           <!--
             窄屏（<sm）下对话框只有 343px 宽，这一层自己的内边距再加上集成页那张卡的
             px-6，内容列只剩 167px——比它里面的按钮与 OAuth scope 示例还窄，于是溢出。
             小屏降一档；sm 以上仍是桌面那一版量过的 24px。
           -->
-          <div class="space-y-8 p-4 sm:p-6">
+          <div class="w-full max-w-full min-w-0 space-y-8 p-4 sm:p-6">
             <AccountSettings v-if="settings.section.value === 'account'" />
             <AppearanceSettings
               v-else-if="settings.section.value === 'appearance'"

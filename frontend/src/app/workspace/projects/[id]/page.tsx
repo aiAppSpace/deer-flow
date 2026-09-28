@@ -73,8 +73,8 @@ export default function ProjectPage() {
     <WorkspaceContainer>
       <WorkspaceHeader />
       <WorkspaceBody>
-        <ScrollArea className="size-full">
-          <div className="mx-auto flex w-full max-w-(--container-width-md) flex-col gap-8 p-6 pt-8">
+        <ScrollArea className="size-full min-w-0 [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0!">
+          <div className="mx-auto flex w-full max-w-(--container-width-md) min-w-0 flex-col gap-8 p-6 pt-8">
             {projectQuery.isError ? (
               <ProjectNotFoundState />
             ) : project == null ? (
@@ -125,7 +125,10 @@ function ProjectHeader({ project }: { project: Project }) {
         <Badge variant="secondary">{t.projects.archived}</Badge>
       )}
       {project.status !== "archived" && (
-        <Button asChild>
+        <Button
+          className="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+          asChild
+        >
           <Link href={newProjectChatPath(project.id)}>
             <MessageSquarePlus />
             {t.projects.newChat}

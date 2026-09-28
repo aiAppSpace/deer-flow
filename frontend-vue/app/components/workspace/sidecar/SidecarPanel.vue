@@ -324,7 +324,7 @@ async function confirmDelete() {
     本仓是 `rgba(253,250,243,255)`（实心米白）。两层都涂底色时看不出差别，
     外层一换主题/换容器就露馅。
   -->
-  <section data-testid="sidecar-panel" class="flex size-full min-h-0 flex-col">
+  <div data-testid="sidecar-panel" class="flex size-full min-h-0 flex-col">
     <!--
       头部照 sidecar-panel.tsx:527 重排。原来这里有四处分叉，都不是笔误级别的：
 
@@ -744,7 +744,7 @@ async function confirmDelete() {
         {{ session.fileError.value || session.errorMessage.value }}
       </p>
     </div>
-  </section>
+  </div>
 
   <AlertDialog
     :open="deleteDialog"

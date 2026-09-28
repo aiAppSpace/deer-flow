@@ -195,6 +195,7 @@ const ChatBox: React.FC<{
   // would interpolate every pointer frame and make the handle feel laggy.
   const [animatingRightPanel, setAnimatingRightPanel] = useState(false);
   const rightPanelOpenRef = useRef(rightPanelOpen);
+  const isMobileRef = useRef(isMobile);
   // Read once: `defaultSize` only applies on mount, the effect below owns every
   // later open/close.
   const [initialRightPanelSize] = useState(() =>
@@ -211,6 +212,7 @@ const ChatBox: React.FC<{
   const handlePanelGroupLayoutChanged = useCallback(
     (layout: Layout) => {
       if (
+        isMobile ||
         !rightPanelOpenRef.current ||
         layout[`${resizableIdBase}-side`] !== 0
       ) {
@@ -228,14 +230,35 @@ const ChatBox: React.FC<{
         setArtifactsOpen(false);
       }
     },
-    [activeRightPanel, browserView, resizableIdBase, setArtifactsOpen, sidecar],
+    [
+      activeRightPanel,
+      browserView,
+      isMobile,
+      resizableIdBase,
+      setArtifactsOpen,
+      sidecar,
+    ],
   );
 
   useEffect(() => {
-    if (rightPanelOpenRef.current === rightPanelOpen) {
+    const openStateChanged = rightPanelOpenRef.current !== rightPanelOpen;
+    const viewportModeChanged = isMobileRef.current !== isMobile;
+    if (!openStateChanged && !viewportModeChanged) {
       return;
     }
     rightPanelOpenRef.current = rightPanelOpen;
+    isMobileRef.current = isMobile;
+
+    // Mobile renders the same panel contents in a Sheet. Keep the desktop
+    // resizable panel mounted so open portals and composer state survive the
+    // breakpoint, but give it no layout share; `display: none` on the panel's
+    // inner wrapper cannot override the library's sized outer `[data-panel]`.
+    if (isMobile) {
+      setAnimatingRightPanel(false);
+      setPinnedContentWidth(null);
+      sidePanelRef.current?.collapse();
+      return;
+    }
 
     setAnimatingRightPanel(true);
     if (!rightPanelOpen) {
@@ -268,7 +291,7 @@ const ChatBox: React.FC<{
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [rightPanelOpen, sidePanelRef]);
+  }, [isMobile, rightPanelOpen, sidePanelRef]);
 
   useEffect(() => {
     if (activeRightPanel) {
@@ -380,122 +403,131 @@ const ChatBox: React.FC<{
     setArtifactsOpen,
   ]);
 
-  if (isMobile) {
-    return (
-      <>
-        <div className="relative size-full min-w-0">{children}</div>
-        <Sheet
-          open={rightPanelOpen}
-          onOpenChange={(open) => {
-            if (open) {
-              return;
-            }
-            if (sidecarOpen) {
-              sidecar?.close();
-            }
-            if (browserViewOpen) {
-              browserView?.close();
-            }
-            if (artifactsOpen) {
-              setArtifactsOpen(false);
-            }
-          }}
-        >
-          <SheetContent
-            className="w-[calc(100vw-1rem)] max-w-none gap-0 p-0 sm:max-w-md [&>button]:hidden"
-            side="right"
-          >
-            <SheetHeader className="sr-only">
-              <SheetTitle>
-                {renderedRightPanel === "sidecar"
-                  ? "Sidecar"
-                  : renderedRightPanel === "browser"
-                    ? "Browser"
-                    : "Artifacts"}
-              </SheetTitle>
-              <SheetDescription>
-                Browse the side panel for this conversation.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 p-3 pt-10">{rightPanelContent}</div>
-          </SheetContent>
-        </Sheet>
-      </>
-    );
-  }
-
   return (
-    <ResizablePanelGroup
-      id={`${resizableIdBase}-group`}
-      orientation="horizontal"
-      onLayoutChanged={handlePanelGroupLayoutChanged}
-      className={cn(
-        "@container size-full min-h-0",
-        // The sized flex item is the library's own `[data-panel]` element, not
-        // the child `className` lands on, so the open/close transition has to be
-        // addressed from here.
-        animatingRightPanel &&
-          "*:data-panel:transition-[flex-grow] *:data-panel:duration-280 *:data-panel:ease-out motion-reduce:*:data-panel:transition-none",
-      )}
-    >
-      <ResizablePanel
-        id={`${resizableIdBase}-chat`}
-        minSize="30%"
-        className="relative min-h-0 min-w-0"
-      >
-        <div
-          ref={chatRegionRef}
-          className="relative size-full min-h-0 min-w-0"
-          id="chat"
-          tabIndex={-1}
-        >
-          {children}
-        </div>
-      </ResizablePanel>
-      <ResizableHandle
-        id={`${resizableIdBase}-separator`}
-        withHandle
-        disabled={!rightPanelOpen}
+    <>
+      {/* Keep the chat subtree under one stable owner across the md breakpoint.
+          Replacing this whole tree used to unmount every open composer/sheet
+          portal during a resize, losing Model Selector, Background Tasks and
+          Workspace Changes even though none of those controls had closed. */}
+      <ResizablePanelGroup
+        id={`${resizableIdBase}-group`}
+        orientation="horizontal"
+        onLayoutChanged={handlePanelGroupLayoutChanged}
         className={cn(
-          "opacity-33 transition-opacity duration-200 ease-out hover:opacity-100 motion-reduce:transition-none",
-          !rightPanelOpen && "pointer-events-none opacity-0",
+          "@container size-full min-h-0",
+          // The sized flex item is the library's own `[data-panel]` element, not
+          // the child `className` lands on, so the open/close transition has to be
+          // addressed from here.
+          animatingRightPanel &&
+            "*:data-panel:transition-[flex-grow] *:data-panel:duration-280 *:data-panel:ease-out motion-reduce:*:data-panel:transition-none",
         )}
-      />
-      <ResizablePanel
-        id={`${resizableIdBase}-side`}
-        panelRef={sidePanelRef}
-        collapsible
-        collapsedSize="0%"
-        defaultSize={initialRightPanelSize}
-        minSize="20%"
-        onResize={handleSidePanelResize}
-        className="min-h-0 min-w-0"
       >
-        <aside
-          ref={rightPanelContainerRef}
-          aria-hidden={rightPanelHiddenFromA11y}
-          className={cn(
-            "size-full min-h-0 min-w-0 overflow-hidden transition-opacity duration-280 ease-out motion-reduce:transition-none",
-            rightPanelOpen ? "opacity-100" : "pointer-events-none opacity-0",
-          )}
-          id="artifacts"
+        <ResizablePanel
+          id={`${resizableIdBase}-chat`}
+          minSize="30%"
+          className="relative min-h-0 min-w-0"
         >
           <div
+            ref={chatRegionRef}
+            className="relative size-full min-h-0 min-w-0"
+            id="chat"
+            tabIndex={-1}
+          >
+            {children}
+          </div>
+        </ResizablePanel>
+        <ResizableHandle
+          id={`${resizableIdBase}-separator`}
+          withHandle
+          disabled={!rightPanelOpen}
+          className={cn(
+            "hidden opacity-33 transition-opacity duration-200 ease-out hover:opacity-100 motion-reduce:transition-none md:flex",
+            !rightPanelOpen && "pointer-events-none opacity-0",
+          )}
+        />
+        <ResizablePanel
+          id={`${resizableIdBase}-side`}
+          panelRef={sidePanelRef}
+          collapsible
+          collapsedSize="0%"
+          defaultSize={initialRightPanelSize}
+          minSize="20%"
+          onResize={handleSidePanelResize}
+          className="hidden min-h-0 min-w-0 md:block"
+        >
+          <aside
+            ref={rightPanelContainerRef}
+            aria-hidden={rightPanelHiddenFromA11y}
             className={cn(
-              "ml-auto h-full",
-              renderedRightPanel === "artifacts" ? "p-4" : "p-0",
+              "size-full min-h-0 min-w-0 overflow-hidden transition-opacity duration-280 ease-out motion-reduce:transition-none",
+              rightPanelOpen ? "opacity-100" : "pointer-events-none opacity-0",
             )}
-            style={
-              pinnedContentWidth === null
-                ? undefined
-                : { width: pinnedContentWidth }
+            id="artifacts"
+          >
+            <div
+              className={cn(
+                "ml-auto h-full",
+                renderedRightPanel === "artifacts" ? "p-4" : "p-0",
+              )}
+              style={
+                pinnedContentWidth === null
+                  ? undefined
+                  : { width: pinnedContentWidth }
+              }
+            >
+              {isMobile ? null : rightPanelContent}
+            </div>
+          </aside>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+      <Sheet
+        open={isMobile && rightPanelOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            return;
+          }
+          if (sidecarOpen) {
+            sidecar?.close();
+          }
+          if (browserViewOpen) {
+            browserView?.close();
+          }
+          if (artifactsOpen) {
+            setArtifactsOpen(false);
+          }
+        }}
+      >
+        <SheetContent
+          className="w-[calc(100vw-1rem)] max-w-none gap-0 p-0 sm:max-w-md [&>button]:hidden"
+          side="right"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>
+              {renderedRightPanel === "sidecar"
+                ? "Sidecar"
+                : renderedRightPanel === "browser"
+                  ? "Browser"
+                  : "Artifacts"}
+            </SheetTitle>
+            <SheetDescription>
+              Browse the side panel for this conversation.
+            </SheetDescription>
+          </SheetHeader>
+          {/* This wrapper owns mobile scrolling for every right-panel kind.
+              At narrow width + low height + 200% text, sidecar and browser
+              content exceed the Sheet; without this route their lower controls
+              are rendered but unreachable. */}
+          <div
+            className="min-h-0 flex-1 overflow-y-auto p-3 pt-10"
+            onFocusCapture={(event) =>
+              event.target.scrollIntoView({ block: "nearest" })
             }
           >
-            {rightPanelContent}
+            {isMobile ? rightPanelContent : null}
           </div>
-        </aside>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 };
 

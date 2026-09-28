@@ -50,7 +50,7 @@ export function NotificationSettingsPage() {
     <SettingsSection
       title={t.settings.notification.title}
       description={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div>{t.settings.notification.description}</div>
           <div>
             <Switch
@@ -67,7 +67,11 @@ export function NotificationSettingsPage() {
     >
       <div className="flex flex-col gap-4">
         {permission === "default" && (
-          <Button onClick={handleRequestPermission} variant="default">
+          <Button
+            className="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+            onClick={handleRequestPermission}
+            variant="default"
+          >
             <BellIcon className="mr-2 size-4" />
             {t.settings.notification.requestPermission}
           </Button>
@@ -81,7 +85,11 @@ export function NotificationSettingsPage() {
 
         {permission === "granted" && settings.notification.enabled && (
           <div className="flex flex-col gap-4">
-            <Button onClick={handleTestNotification} variant="outline">
+            <Button
+              className="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+              onClick={handleTestNotification}
+              variant="outline"
+            >
               <BellIcon className="mr-2 size-4" />
               {t.settings.notification.testButton}
             </Button>

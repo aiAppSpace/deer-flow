@@ -22,9 +22,9 @@ const { $i18n } = useNuxtApp();
 </script>
 
 <template>
-  <div class="rounded-lg border p-3">
-    <div class="mb-2 flex items-center justify-between gap-2">
-      <div class="text-sm font-medium">{{ label }}</div>
+  <div class="max-w-full min-w-0 rounded-lg border p-3">
+    <div class="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+      <div class="min-w-0 text-sm font-medium">{{ label }}</div>
       <Badge :variant="ok ? 'secondary' : 'outline'">
         <CheckCircle2 v-if="ok" class="size-3" />
         <XCircle v-else class="size-3" />

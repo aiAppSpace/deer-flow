@@ -11,6 +11,7 @@ import { QueryClientProvider } from "@/components/query-client-provider";
 */
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { WorkspaceChannelRuntimeConfigHost } from "@/components/workspace/channels/workspace-channels-list";
 import { CommandPalette } from "@/components/workspace/command-palette";
 import { GatewayOfflineBanner } from "@/components/workspace/gateway-offline-banner";
 import { ModelLoadErrorBanner } from "@/components/workspace/model-load-error-banner";
@@ -49,6 +50,7 @@ export async function WorkspaceContent({
         </SidebarInset>
       </SidebarProvider>
       <CommandPalette />
+      <WorkspaceChannelRuntimeConfigHost />
       <SettingsDialogHost />
       <WorkspaceSettingsDeepLink />
       <Toaster position="top-center" />

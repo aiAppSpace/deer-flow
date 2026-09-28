@@ -12,6 +12,7 @@ import CommandPalette from "@/components/workspace/CommandPalette.vue";
 import GatewayStatusBanner from "@/components/workspace/GatewayStatusBanner.vue";
 import ModelLoadErrorBanner from "@/components/workspace/ModelLoadErrorBanner.vue";
 import ThreadSidebar from "@/components/workspace/ThreadSidebar.vue";
+import WorkspaceChannelRuntimeConfigHost from "@/components/workspace/channels/WorkspaceChannelRuntimeConfigHost.vue";
 import WorkspaceToaster from "@/components/workspace/WorkspaceToaster.vue";
 import SettingsDialog from "@/components/workspace/settings/SettingsDialog.vue";
 import { provideWorkspaceToast } from "@/core/workspace-shell/toast";
@@ -61,6 +62,7 @@ onUnmounted(() => toast.clear());
       </div>
     </main>
     <CommandPalette />
+    <WorkspaceChannelRuntimeConfigHost />
     <SettingsDialog />
     <WorkspaceToaster />
   </div>

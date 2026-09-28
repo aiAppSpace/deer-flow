@@ -66,7 +66,7 @@ const streaming = inject(
   <Dialog v-model:open="open">
     <DialogContent
       :close-label="$i18n.t.value.markdown.exitFullscreen"
-      class="bg-background/95 flex size-full max-w-none translate-x-0 translate-y-0 items-center justify-center rounded-none border-0 p-4 backdrop-blur-sm sm:max-w-none"
+      class="bg-background/95 flex size-full max-w-none translate-x-0 translate-y-0 items-center justify-center rounded-none border-0 backdrop-blur-sm sm:max-w-none sm:p-4"
       overlay-class="bg-transparent"
     >
       <DialogHeader class="sr-only">

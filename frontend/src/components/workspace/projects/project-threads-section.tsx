@@ -43,6 +43,7 @@ export function ProjectThreadsSection({
             renderItem={(thread, index) => (
               <Link
                 key={thread.thread_id}
+                className="block max-w-full min-w-0"
                 href={pathOfThread({
                   thread_id: thread.thread_id,
                   metadata: thread.metadata,
@@ -50,7 +51,7 @@ export function ProjectThreadsSection({
               >
                 <div
                   className={cn(
-                    "hover:bg-muted/50 flex min-w-0 items-center gap-2 p-4 transition-colors",
+                    "hover:bg-muted/50 flex min-w-0 flex-wrap items-center gap-2 p-4 transition-colors",
                     index !== threads.length - 1 && "border-b",
                   )}
                 >
@@ -60,7 +61,7 @@ export function ProjectThreadsSection({
                       : t.projects.untitled}
                   </div>
                   {thread.updated_at && (
-                    <div className="text-muted-foreground shrink-0 text-sm">
+                    <div className="text-muted-foreground shrink-0 text-sm max-[361px]:basis-full">
                       {formatTimeAgo(thread.updated_at)}
                     </div>
                   )}

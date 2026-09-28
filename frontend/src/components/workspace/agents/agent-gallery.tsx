@@ -16,8 +16,8 @@ export function AgentGallery() {
   return (
     <div className="flex size-full flex-col">
       {/* Page header */}
-      <div className="flex items-center justify-between border-b px-6 py-4">
-        <div>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-6">
+        <div className="min-w-0">
           <h1 className="text-xl font-semibold">{t.agents.title}</h1>
           <p className="text-muted-foreground mt-0.5 text-sm">
             {t.agents.description}
@@ -38,7 +38,7 @@ export function AgentGallery() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
         {/*
           The loading placeholder is a live region: without role="status" a
           screen reader never hears that the gallery is fetching, and the
@@ -70,7 +70,7 @@ export function AgentGallery() {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {agents.map((agent) => (
               <AgentCard key={agent.name} agent={agent} />
             ))}

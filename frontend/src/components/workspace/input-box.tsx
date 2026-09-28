@@ -115,7 +115,6 @@ import {
   type BrowserSpeechRecognition,
   type SpeechRecognitionErrorKind,
 } from "@/core/voice-input/speech-recognition";
-import { useMediaQuery } from "@/hooks/use-mobile";
 import { isIMEComposing } from "@/lib/ime";
 import { cn } from "@/lib/utils";
 
@@ -165,14 +164,6 @@ import { Tooltip } from "./tooltip";
 type InputMode = "flash" | "thinking" | "pro" | "ultra";
 
 const COMPOSER_DRAFT_SAVE_DELAY_MS = 300;
-
-/*
-  The `sm:` breakpoint that `PromptInputActionMenuTrigger` below uses to hide the
-  reasoning-effort button. Kept in sync by hand with the `sm:inline-flex` on that
-  trigger; see `useMediaQuery` in hooks/use-mobile.ts for why the menu has to be
-  controlled at all, and settings-narrow-screen-style gates for the readings.
-*/
-const REASONING_TRIGGER_VISIBLE_QUERY = "(min-width: 40rem)";
 
 function focusContentEditableEnd(element: HTMLElement | null) {
   if (!element) {
@@ -373,18 +364,7 @@ export function InputBox({
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
-  /*
-    Controlled so the menu can be closed when its trigger stops being rendered:
-    a `hidden sm:inline-flex` trigger collapses to a 0x0 box below `sm` while the
-    menu stays open and re-anchors to the viewport origin. Mirrored in Vue.
-  */
   const [reasoningMenuOpen, setReasoningMenuOpen] = useState(false);
-  const reasoningTriggerVisible = useMediaQuery(
-    REASONING_TRIGGER_VISIBLE_QUERY,
-  );
-  useEffect(() => {
-    if (!reasoningTriggerVisible) setReasoningMenuOpen(false);
-  }, [reasoningTriggerVisible]);
   const { models } = useModels();
   const { user } = useAuth();
   const { thread, isMock } = useThread();
@@ -447,6 +427,9 @@ export function InputBox({
   const [followupsHidden, setFollowupsHidden] = useState(false);
   const [followupsLoading, setFollowupsLoading] = useState(false);
   const [polishingInput, setPolishingInput] = useState(false);
+  const [skillSuggestionsMaxHeight, setSkillSuggestionsMaxHeight] =
+    useState("18rem");
+  const [skillSuggestionsInline, setSkillSuggestionsInline] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const [inputPolishUndo, setInputPolishUndo] = useState<{
     originalText: string;
@@ -1405,6 +1388,59 @@ export function InputBox({
     slashSkillQuery !== null &&
     skillSuggestions.length > 0 &&
     dismissedSkillSuggestionValue !== textInput.value;
+  const syncSkillSuggestionsMaxHeight = useCallback(() => {
+    const root = promptRootRef.current;
+    if (!root) {
+      return;
+    }
+    const rootFontSize = Number.parseFloat(
+      window.getComputedStyle(document.documentElement).fontSize,
+    );
+    const remCap = Number.isFinite(rootFontSize) ? rootFontSize * 18 : 288;
+    // The popup sits 8px above the composer; retain another 8px at the top of
+    // the viewport instead of letting the first options escape above it.
+    const available = Math.max(
+      0,
+      Math.floor(root.getBoundingClientRect().top - 16),
+    );
+    // `bottom-full` needs enough room above the composer for at least one
+    // option. Under narrow + low + 200% text the composer can itself exceed the
+    // viewport, leaving a 16px listbox. In that case normal flow lets the chat's
+    // existing scroll owner traverse the catalog and composer together.
+    const minimumOverlayHeight = Math.min(160, rootFontSize * 3.5);
+    const inline = available < minimumOverlayHeight;
+    setSkillSuggestionsInline(inline);
+    const inlineAvailable = Math.max(0, window.innerHeight - 32);
+    setSkillSuggestionsMaxHeight(
+      `${Math.min(remCap, inline ? inlineAvailable : available)}px`,
+    );
+  }, []);
+  useLayoutEffect(() => {
+    if (!showSkillSuggestions) {
+      return;
+    }
+    syncSkillSuggestionsMaxHeight();
+    const root = promptRootRef.current;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(syncSkillSuggestionsMaxHeight);
+    if (root) observer?.observe(root);
+    observer?.observe(document.documentElement);
+    window.addEventListener("resize", syncSkillSuggestionsMaxHeight);
+    window.visualViewport?.addEventListener(
+      "resize",
+      syncSkillSuggestionsMaxHeight,
+    );
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", syncSkillSuggestionsMaxHeight);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        syncSkillSuggestionsMaxHeight,
+      );
+    };
+  }, [showSkillSuggestions, syncSkillSuggestionsMaxHeight]);
   /*
    * Menu group headings must name their group. Radix's DropdownMenuLabel is a
    * plain div, so without this wiring the group is announced unnamed and the
@@ -2237,11 +2273,19 @@ export function InputBox({
         </div>
       )}
       {showSkillSuggestions && (
-        <div className="absolute right-0 bottom-full left-0 z-40 mb-2 px-1">
+        <div
+          className={cn(
+            "z-40 mb-2 px-1",
+            skillSuggestionsInline
+              ? "relative"
+              : "absolute right-0 bottom-full left-0",
+          )}
+        >
           <div
             aria-label="Skill suggestions"
-            className="bg-popover/95 text-popover-foreground border-border max-h-72 overflow-y-auto rounded-xl border p-1 shadow-lg backdrop-blur-sm"
+            className="bg-popover/95 text-popover-foreground border-border overflow-y-auto rounded-xl border p-1 shadow-lg backdrop-blur-sm"
             role="listbox"
+            style={{ maxHeight: skillSuggestionsMaxHeight }}
           >
             {skillSuggestions.map((suggestion, index) => {
               const selected = index === skillSuggestionIndex;
@@ -2648,7 +2692,7 @@ export function InputBox({
                 onOpenChange={setReasoningMenuOpen}
               >
                 <PromptInputActionMenuTrigger
-                  className="hidden gap-1! px-2! sm:inline-flex"
+                  className="gap-1! px-2!"
                   disabled={composerLocked}
                 >
                   <div className="text-xs font-normal">

@@ -77,6 +77,19 @@ const delegated = computed(() => {
   void _modal;
   return rest;
 });
+
+/*
+  Radix/Reka 的焦点循环保证焦点还在 dialog 里，却不保证低高度 + 文本放大后
+  新焦点仍落在 dialog 的滚动视口内。等浏览器完成本次 Tab 的默认滚动后，再由
+  真正的滚动所有者把焦点送到最近可见位置；正向与反向循环共用这一条合同。
+*/
+function keepFocusedControlVisible(event: FocusEvent) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  requestAnimationFrame(() => {
+    if (target.isConnected) target.scrollIntoView({ block: "nearest" });
+  });
+}
 </script>
 
 <template>
@@ -88,7 +101,7 @@ const delegated = computed(() => {
       v-bind="{ ...$attrs, ...delegated }"
       :class="
         cn(
-          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-80 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border p-6 shadow-lg duration-200 outline-none sm:max-w-lg',
+          'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-1/2 left-1/2 z-80 grid max-h-[calc(100dvh-32px)] w-full max-w-[calc(100%-32px)] min-w-0 -translate-x-1/2 -translate-y-1/2 grid-cols-[minmax(0,1fr)] gap-4 overflow-x-hidden overflow-y-auto rounded-lg border p-4 shadow-lg duration-200 outline-none sm:max-w-lg sm:p-6',
           props.class,
         )
       "
@@ -98,6 +111,7 @@ const delegated = computed(() => {
       @interact-outside="emits('interactOutside', $event)"
       @open-auto-focus="emits('openAutoFocus', $event)"
       @close-auto-focus="emits('closeAutoFocus', $event)"
+      @focusin="keepFocusedControlVisible"
     >
       <slot />
       <DialogClose

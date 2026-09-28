@@ -70,11 +70,11 @@ function hrefOf(thread: ProjectThread) {
         scroll-parent-selector='[data-slot="scroll-area-viewport"]'
       >
         <template #default="{ thread, index }">
-          <NuxtLink :to="hrefOf(thread)">
+          <NuxtLink class="block max-w-full min-w-0" :to="hrefOf(thread)">
             <div
               :class="
                 cn(
-                  'hover:bg-muted/50 flex min-w-0 items-center gap-2 p-4 transition-colors',
+                  'hover:bg-muted/50 flex min-w-0 flex-wrap items-center gap-2 p-4 transition-colors',
                   index !== items.length - 1 && 'border-b',
                 )
               "
@@ -82,7 +82,7 @@ function hrefOf(thread: ProjectThread) {
               <div class="min-w-0 flex-1 truncate">{{ titleOf(thread) }}</div>
               <div
                 v-if="thread.updated_at"
-                class="text-muted-foreground shrink-0 text-sm"
+                class="text-muted-foreground shrink-0 text-sm max-[361px]:basis-full"
               >
                 {{ formatTimeAgo(thread.updated_at, $i18n.locale.value) }}
               </div>

@@ -150,8 +150,10 @@ export const ChainOfThoughtStep = memo(
           {isValidElement(Icon) ? Icon : <Icon className="size-4" />}
           <div className="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
         </div>
-        <div className="flex-1 space-y-2 overflow-hidden">
-          <div>{label}</div>
+        <div className="min-w-0 flex-1 space-y-2 overflow-hidden wrap-anywhere">
+          <div className="max-w-full min-w-0 [overflow-wrap:anywhere] whitespace-normal">
+            {label}
+          </div>
           {description && (
             <div className="text-muted-foreground text-xs">{description}</div>
           )}
@@ -181,7 +183,10 @@ export type ChainOfThoughtSearchResultProps = ComponentProps<typeof Badge>;
 export const ChainOfThoughtSearchResult = memo(
   ({ className, children, ...props }: ChainOfThoughtSearchResultProps) => (
     <Badge
-      className={cn("gap-1 px-2 py-0.5 text-xs font-normal", className)}
+      className={cn(
+        "max-w-full gap-1 px-2 py-0.5 text-xs font-normal max-[361px]:[overflow-wrap:anywhere] max-[361px]:whitespace-normal",
+        className,
+      )}
       variant="secondary"
       {...props}
     >

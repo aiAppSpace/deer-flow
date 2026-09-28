@@ -266,7 +266,7 @@ export default function AgentChatPage() {
                   : "bg-background/80 z-30 shadow-xs backdrop-blur",
               )}
             >
-              <SidebarTrigger className="md:hidden" />
+              <SidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
               {/* Agent badge */}
               <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-2 py-1">
                 <BotIcon className="text-primary h-3.5 w-3.5" />
@@ -290,7 +290,7 @@ export default function AgentChatPage() {
                     />
                   )}
               </div>
-              <div className="flex shrink-0 items-center sm:mr-4">
+              <div className="flex shrink-0 items-center max-[361px]:min-w-0 max-[361px]:flex-1 max-[361px]:shrink max-[361px]:flex-nowrap max-[361px]:justify-end max-[361px]:gap-[8px] sm:mr-4 max-[361px]:[&_[data-slot=button]]:size-[36px]! max-[361px]:[&_[data-slot=button]]:p-0! max-[361px]:[&_[data-slot=button]_svg]:size-[16px]!">
                 {!isNewThread &&
                   !isMock &&
                   env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
@@ -337,13 +337,16 @@ export default function AgentChatPage() {
               </div>
             </header>
 
-            <main className="flex min-h-0 max-w-full grow flex-col">
+            <main className="flex min-h-0 max-w-full grow flex-col max-[361px]:overflow-y-auto">
               <div className="flex min-h-0 flex-1 justify-center">
                 <MessageList
                   archiveDownloadsEnabled={
                     isNewThread || isMock || threadMetadata.data != null
                   }
-                  className={cn("size-full", !isWelcomeMode && "pt-10")}
+                  className={cn(
+                    "size-full max-[361px]:h-auto! max-[361px]:flex-none max-[361px]:overflow-visible! max-[361px]:[&>div]:h-auto! max-[361px]:[&>div]:overflow-visible!",
+                    !isWelcomeMode && "pt-10",
+                  )}
                   testId="main-message-list"
                   threadId={threadId}
                   thread={thread}
@@ -383,13 +386,15 @@ export default function AgentChatPage() {
                 className={cn(
                   "right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4",
                   isWelcomeMode ? "absolute" : "relative shrink-0 pb-4",
+                  isWelcomeMode &&
+                    "max-[361px]:relative max-[361px]:shrink-0 max-[361px]:pb-4",
                 )}
               >
                 <div
                   className={cn(
                     "relative w-full",
                     isWelcomeMode &&
-                      "-translate-y-[calc(50vh-48px)] sm:-translate-y-[calc(50vh-96px)]",
+                      "-translate-y-[calc(50vh-48px)] max-[361px]:translate-y-0 sm:-translate-y-[calc(50vh-96px)]",
                     isWelcomeMode
                       ? "max-w-(--container-width-sm)"
                       : "max-w-(--container-width-md)",
@@ -423,7 +428,8 @@ export default function AgentChatPage() {
                   <InputBox
                     className={cn(
                       "bg-background/5 w-full",
-                      isWelcomeMode && "-translate-y-2 sm:-translate-y-4",
+                      isWelcomeMode &&
+                        "-translate-y-2 max-[361px]:translate-y-0 sm:-translate-y-4",
                     )}
                     isWelcomeMode={isWelcomeMode}
                     threadId={threadId}

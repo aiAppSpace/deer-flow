@@ -123,10 +123,15 @@ const view = computed(() => buildAgentCardViewModel(props.agent));
       **2026-09-11 上游已同改**成 `<Button asChild><Link>`（顺带把 agent 名
       encodeURIComponent——上游原来是裸拼进路径的）。
     -->
-    <div class="mt-auto flex gap-2 pt-5">
+    <div class="mt-auto flex min-w-0 flex-wrap gap-2 pt-5">
       <NuxtLink
         :to="`/workspace/agents/${encodeURIComponent(agent.name)}/chats/new`"
-        :class="buttonVariants({ size: 'sm', class: 'flex-1' })"
+        :class="
+          buttonVariants({
+            size: 'sm',
+            class: 'h-auto min-h-8 min-w-0 flex-1 whitespace-normal',
+          })
+        "
       >
         <MessageSquare class="mr-1.5 size-3.5" />
         {{ $i18n.t.value.agents.chat }}

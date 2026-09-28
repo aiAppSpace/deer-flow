@@ -84,6 +84,11 @@ function onResized(payload: SplitpanesResizedPayload) {
   else emit("update:panelSize", clampOpenSize(finalSize));
 }
 
+function keepNarrowPanelFocusVisible(event: FocusEvent) {
+  if (event.target instanceof HTMLElement)
+    event.target.scrollIntoView({ block: "nearest" });
+}
+
 /*
   splitpanes 是在挂载后用 createElement 直接插入 splitter 的，模板上没有它，
   aria-disabled 只能在这里补。React 那边由 react-resizable-panels 自己写
@@ -133,6 +138,17 @@ watch(
     mainRegion.value?.focus({ preventScroll: true });
   },
 );
+
+/*
+  React 的 Radix Sheet 打开后把焦点停在 Content 容器，而不是第一个可聚焦控件。
+  这里显式复现同一落点：否则 Reka 会聚焦面板头部的 Close，并立即展开它的
+  Tooltip，导致窄屏初始状态既多一块浮层，也跳过标题与说明。
+*/
+function focusNarrowPanelItself(event: Event) {
+  event.preventDefault();
+  const panel = event.currentTarget;
+  if (panel instanceof HTMLElement) panel.focus({ preventScroll: true });
+}
 </script>
 
 <template>
@@ -213,13 +229,22 @@ watch(
       side="right"
       :close-label="$i18n.t.value.primitives.close"
       class="w-[calc(100vw-1rem)] max-w-none gap-0 p-0 sm:max-w-md [&>button]:hidden"
+      @open-auto-focus="focusNarrowPanelItself"
     >
       <!-- 标题与说明只给读屏器，与 React 的 sr-only SheetHeader 一致。 -->
       <SheetHeader class="sr-only">
         <SheetTitle>{{ panelLabel }}</SheetTitle>
         <SheetDescription>{{ panelDescription }}</SheetDescription>
       </SheetHeader>
-      <div class="min-h-0 flex-1 p-3 pt-10">
+      <!--
+        三轴回流下（窄宽 + 低高度 + 200% 文本）sidecar / browser 的内容会高于
+        Sheet。这里才是三种右栏共享的移动端滚动所有者；让各业务面板各补一根
+        滚动条会把关闭键、composer 和浏览器工具条拆成三套不一致的行为。
+      -->
+      <div
+        class="min-h-0 flex-1 overflow-y-auto p-3 pt-10"
+        @focusin="keepNarrowPanelFocusVisible"
+      >
         <slot name="panel" />
       </div>
     </SheetContent>

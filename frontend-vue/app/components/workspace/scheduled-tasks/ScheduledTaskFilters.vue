@@ -57,6 +57,7 @@ const TYPES = [
     <Button
       v-for="[value, labelKey] in STATUSES"
       :key="`status-${value}`"
+      class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
       :data-testid="`scheduled-task-status-filter-${value}`"
       :variant="status === value ? 'default' : 'outline'"
       :aria-pressed="status === value"
@@ -68,6 +69,7 @@ const TYPES = [
     <Button
       v-for="[value, labelKey] in TYPES"
       :key="`type-${value}`"
+      class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
       :data-testid="`scheduled-task-type-filter-${value}`"
       :variant="scheduleType === value ? 'default' : 'outline'"
       :aria-pressed="scheduleType === value"

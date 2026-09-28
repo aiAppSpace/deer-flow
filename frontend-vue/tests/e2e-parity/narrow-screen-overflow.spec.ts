@@ -3,9 +3,18 @@
   【架构位置】     对照套件（e2e-parity）
   【主要导出】     无；Playwright 用例
   【依赖关系】     support/scenarios.ts 的 runScenario · support/context-options.ts
-  【边界与注意】   **只跑一个应用。** 问的是「这一屏溢不溢出」，不是「两边一不一样」
+  【边界与注意】   **两个应用都跑。** 问的是「这一屏溢不溢出」，不是「两边一不一样」
                    ——这一类缺陷两边往往一样坏，而**台账按定义看不见那种**。
-                   跑两个应用只会让时间翻倍，抓到的还是同一条。
+
+                   第三十八轮初版只守 Vue，理由是「跑两端只会重复」。
+                   **wave 63 用 React 全量单次探针否定了这个未验证假设**：
+                   61 个终态里唯一新掉出的 `sidebar-collapsed` 暴露的不是
+                   React 产品回归，而是一条 Vue 旧假绿——两端在窄屏点
+                   `Toggle Sidebar` 都只打开抽屉，不会进入桌面 `collapsed`；
+                   Vue 原用「`DeerFlow` 隐藏」当终态，但正则漏了 SFC
+                   文本节点两边的空白，从页面初始就匹配不到、`hidden` 恒真。
+                   **既然只守一端已经让这种错分类长期存在，就不再用“省时”
+                   当另一端缺席的理由。**
 
                    **为什么值得常驻**（2026-09-18 第三十八轮）：把它当一次性探针跑过一遍，
                    43 个可达状态里量出 **1 条真缺陷**——`subtask-card` 折叠头右侧那格
@@ -75,7 +84,16 @@ import {
   scenarioStates,
 } from "./support/scenarios";
 
-const VUE_APP = process.env.E2E_APP_URL ?? "http://localhost:3115";
+const APPS = [
+  {
+    name: "vue",
+    baseUrl: process.env.E2E_APP_URL ?? "http://localhost:3115",
+  },
+  {
+    name: "react",
+    baseUrl: process.env.E2E_REACT_APP_URL ?? "http://localhost:3116",
+  },
+] as const;
 
 /** 最窄的受支持宽度。360 是常见的 Android 宽度。 */
 const WIDTH = 360;
@@ -97,10 +115,13 @@ const DELIBERATE_HORIZONTAL_SCROLL = `
   **窄屏下走不到的终态，连同它卡在哪一步**（2026-09-18 逐条量出来的定位器）。
 
   ⚠ **「到不了」不等于「没问题」**，只等于**那条路径是按桌面写的**：
-  **十五条里十一条**的根因是同一个——桌面侧栏在手机上不渲染（换成 Sheet 抽屉），
+  **十三条里十一条**的根因是同一个——桌面侧栏在手机上不渲染（换成 Sheet 抽屉），
   于是 `[data-sidebar='sidebar']`（8 条）以及侧栏里那些会话行（3 条）的定位器
   永远解析不到。想把它们纳进来，要先给场景补一条「先开抽屉」的步骤，那是另一笔账。
-  ⚠ 这里原本写的是「十四条里十二条」——2026-09-21 重数是 **15 / 11**。
+  ⚠ 这里原本写的是「十四条里十二条」——2026-09-21 重数是 **15 / 11**；
+  wave 62 把 browser / reasoning / artifact 三条真实移动路径接通后是 **12 / 11**；
+  wave 63 把「窄屏点抽屉触发器」误当「桌面收起」的
+  `sidebar-collapsed` 归回不可达表，现在是 **13 / 11**。
   **散文会漂，表不会：要数就数这张表本身，别抄这段话。**
 */
 const MOBILE_UNREACHABLE: Record<string, string> = {
@@ -125,7 +146,8 @@ const MOBILE_UNREACHABLE: Record<string, string> = {
   "thread-list-pin": "侧栏会话行：`getByText('Newest chat')`",
   "thread-title-sync":
     "侧栏行内的 ⋯：`getByRole('button', { name: /^(More|更多)$/ })`",
-  "browser-feature": "`getByText(/^(Browser|浏览器)$/)`",
+  "sidebar-collapsed":
+    "窄屏 `Toggle Sidebar` 切的是 mobileOpen/openMobile 抽屉，不是桌面 collapsed；展开标题仍可见",
   /*
     ⚠ **这一条的失败点变过一次，经过值得留着**（2026-09-18）。
 
@@ -140,10 +162,6 @@ const MOBILE_UNREACHABLE: Record<string, string> = {
     **它现在到不了是两边共有的原因**：那条 `separator` 在窄屏下两边都不渲染。
   */
   "sidecar-chat": "`getByRole('separator')`——窄屏下两边都不渲染那条分隔线",
-  "workspace-changes#reasoning-menu":
-    "输入区的推理深度键：`getByRole('button', { name: /^(Reasoning Effort|推理深度)[:：]/ })`",
-  "artifact-batched-stream":
-    '`[role="combobox"]` 解析得到但点不动（被别的东西挡着）',
 };
 
 /*
@@ -209,63 +227,69 @@ const CASES: Case[] = PARITY_SCENARIOS.flatMap((scenario) =>
   })),
 );
 
-test("每个终态在 360px 上都不把东西推出视口", async ({ browser }) => {
-  test.setTimeout(1_800_000);
+for (const app of APPS) {
+  test(`${app.name}: 每个终态在 360px 上都不把东西推出视口`, async ({
+    browser,
+  }) => {
+    test.setTimeout(1_800_000);
 
-  const overflowing: string[] = [];
-  const unexpectedlyUnreachable: string[] = [];
-  const unexpectedlyReachable: string[] = [];
+    const overflowing: string[] = [];
+    const unexpectedlyUnreachable: string[] = [];
+    const unexpectedlyReachable: string[] = [];
 
-  for (const { key, scenario, state } of CASES) {
-    const expectedUnreachable = key in MOBILE_UNREACHABLE;
-    const context = await browser.newContext({
-      ...PARITY_CONTEXT_OPTIONS,
-      viewport: { width: WIDTH, height: 812 },
-    });
-    const page = await context.newPage();
-    try {
-      await runScenario(
-        page,
-        VUE_APP,
-        scenario,
-        { viewport: "mobile", theme: "light", locale: "en-US" },
-        state,
-        // 预期到不了的给短超时：它们就是来证明「仍然到不了」的。
-        expectedUnreachable ? 4_000 : 30_000,
-      );
-      if (expectedUnreachable) {
-        unexpectedlyReachable.push(key);
-        continue;
+    for (const { key, scenario, state } of CASES) {
+      const expectedUnreachable = key in MOBILE_UNREACHABLE;
+      const context = await browser.newContext({
+        ...PARITY_CONTEXT_OPTIONS,
+        viewport: { width: WIDTH, height: 812 },
+      });
+      const page = await context.newPage();
+      try {
+        await runScenario(
+          page,
+          app.baseUrl,
+          scenario,
+          { viewport: "mobile", theme: "light", locale: "en-US" },
+          state,
+          // 预期到不了的给短超时：它们就是来证明「仍然到不了」的。
+          expectedUnreachable ? 4_000 : 30_000,
+        );
+        if (expectedUnreachable) {
+          unexpectedlyReachable.push(key);
+          continue;
+        }
+        // ⚠ 见文件头：applyDimension 刚把视口设回 375，这里才是 360。
+        await page.setViewportSize({ width: WIDTH, height: 812 });
+        await page.waitForTimeout(600);
+        void DELIBERATE_HORIZONTAL_SCROLL;
+        const escaped = await page.evaluate(findHorizontalScrollers);
+        if (escaped.length > 0)
+          overflowing.push(`${key}: ${escaped.join(" | ")}`);
+      } catch (error) {
+        if (!expectedUnreachable)
+          unexpectedlyUnreachable.push(
+            `${key}: ${String(error).split("\n")[0]?.slice(0, 120)}`,
+          );
+      } finally {
+        await context.close();
       }
-      // ⚠ 见文件头：applyDimension 刚把视口设回 375，这里才是 360。
-      await page.setViewportSize({ width: WIDTH, height: 812 });
-      await page.waitForTimeout(600);
-      void DELIBERATE_HORIZONTAL_SCROLL;
-      const escaped = await page.evaluate(findHorizontalScrollers);
-      if (escaped.length > 0)
-        overflowing.push(`${key}: ${escaped.join(" | ")}`);
-    } catch {
-      if (!expectedUnreachable) unexpectedlyUnreachable.push(key);
-    } finally {
-      await context.close();
     }
-  }
 
-  expect(
-    overflowing,
-    "这些终态在 360px 上需要横向滚动——要么修内容，要么说明它本来就该横滚、并把判据补进 DELIBERATE_HORIZONTAL_SCROLL（见文件头）",
-  ).toEqual([]);
-  expect(
-    unexpectedlyUnreachable,
-    "这些终态在窄屏下走不到了——要么修那条路径，要么登记进 MOBILE_UNREACHABLE 并写清卡在哪一步",
-  ).toEqual([]);
-  expect(
-    unexpectedlyReachable,
-    "这些终态已经走得到了，请从 MOBILE_UNREACHABLE 里删掉（表里有、实际没有，同样是失守）",
-  ).toEqual([]);
-});
+    expect(
+      overflowing,
+      "这些终态在 360px 上需要横向滚动——要么修内容，要么说明它本来就该横滚、并把判据补进 DELIBERATE_HORIZONTAL_SCROLL（见文件头）",
+    ).toEqual([]);
+    expect(
+      unexpectedlyUnreachable,
+      "这些终态在窄屏下走不到了——要么修那条路径，要么登记进 MOBILE_UNREACHABLE 并写清卡在哪一步",
+    ).toEqual([]);
+    expect(
+      unexpectedlyReachable,
+      "这些终态已经走得到了，请从 MOBILE_UNREACHABLE 里删掉（表里有、实际没有，同样是失守）",
+    ).toEqual([]);
+  });
 
-/*
+  /*
   **第二轮扫描：`MOBILE_UNREACHABLE` 里那些「窄屏到不了」的也要量**
   （`a9cebfe2`，2026-09-18；⚠ 条数一律数上面那张表，**别写死**——
   这段散文里原本四处写着「14 条」，2026-09-23 实测表里是 15 条）。
@@ -277,83 +301,67 @@ test("每个终态在 360px 上都不把东西推出视口", async ({ browser })
 
   做法：**在桌面宽度把状态走到位，再把视口压到 360**，然后问同一个不变量。
   第四十轮把它们这么量过一遍，**两个应用各一遍：`documentElement.scrollWidth`
-  全是 360、非「有意横滚」的横滚容器 0 条**。这条用例把那次测量常驻下来——
-  ⚠ **但只常驻了本仓这一半**：本文件里只有 `VUE_APP`，`REACT` 相关标识 0 处
-  （2026-09-23 实测 `grep -c 'REACT_APP\|reactApp\|REACT'` = 0）。
-  **上游那一侧至今没有常驻门禁**，别把「第四十轮两个应用各量过一遍」
-  读成「现在两边都守着」。
+  全是 360、非「有意横滚」的横滚容器 0 条**。但当时只把 Vue
+  常驻下来；wave 63 一次性 React 全量探针抓到 `sidebar-collapsed`
+  的错分类后，这里正式改为 **Vue + React 双端常驻**。
 
-  ⚠ **缩窗口会把一部分对话框弄没**，所以必须显式记下来，否则「没量到」会长得和
-  「量过、没问题」一模一样。实测两条会掉，**两个应用完全一致**（桌面侧栏在
-  <768px 卸载，挂在它下面的对话框跟着卸载）——它们登记在 `DROPS_ON_RESIZE` 里，
-  仍然跑，仍然断言不溢出，只是**不声称量到了那块对话框**。
-  表里没有、实际却掉了的，同样报错：这张表要跟着应用走，不能烂掉。
+  ⚠ **缩窗口后对话框也必须存活**，否则「没量到」会长得和「量过、没问题」
+  一模一样。wave 66 把 channel 运行配置对话框移到 workspace 级宿主；桌面侧栏在
+  <768px 卸载时，两个应用都不再丢掉那两条终态。因此这里不保留历史豁免：任何
+  dialog 数量下降都直接报错。
 */
-const DROPS_ON_RESIZE: Record<string, string> = {
-  "channels#runtime-config":
-    "运行时配置对话框挂在桌面侧栏的行里，侧栏在 <768px 卸载，它跟着没了（两个应用一致）",
-  "channels#runtime-config-edit": "同 `channels#runtime-config`",
-};
+  test(`${app.name}: 窄屏下走不到的终态，用「桌面开 → 缩到 360」也要量一遍`, async ({
+    browser,
+  }) => {
+    test.setTimeout(1_800_000);
 
-test("窄屏下走不到的终态，用「桌面开 → 缩到 360」也要量一遍", async ({
-  browser,
-}) => {
-  test.setTimeout(1_800_000);
+    const overflowing: string[] = [];
+    const failed: string[] = [];
+    const unexpectedDrops: string[] = [];
 
-  const overflowing: string[] = [];
-  const failed: string[] = [];
-  const unexpectedDrops: string[] = [];
-  const unexpectedSurvivors: string[] = [];
+    for (const { key, scenario, state } of CASES) {
+      if (!(key in MOBILE_UNREACHABLE)) continue;
+      const context = await browser.newContext({ ...PARITY_CONTEXT_OPTIONS });
+      const page = await context.newPage();
+      try {
+        // 桌面维走到位——`MOBILE_UNREACHABLE` 里这些的步骤本来就是按桌面写的。
+        await runScenario(
+          page,
+          app.baseUrl,
+          scenario,
+          DEFAULT_DIMENSION,
+          state,
+          30_000,
+        );
+        const dialogsBefore = await page.evaluate(countDialogs);
+        await page.setViewportSize({ width: WIDTH, height: 812 });
+        await page.waitForTimeout(800);
+        const dialogsAfter = await page.evaluate(countDialogs);
 
-  for (const { key, scenario, state } of CASES) {
-    if (!(key in MOBILE_UNREACHABLE)) continue;
-    const context = await browser.newContext({ ...PARITY_CONTEXT_OPTIONS });
-    const page = await context.newPage();
-    try {
-      // 桌面维走到位——`MOBILE_UNREACHABLE` 里这些的步骤本来就是按桌面写的。
-      await runScenario(
-        page,
-        VUE_APP,
-        scenario,
-        DEFAULT_DIMENSION,
-        state,
-        30_000,
-      );
-      const dialogsBefore = await page.evaluate(countDialogs);
-      await page.setViewportSize({ width: WIDTH, height: 812 });
-      await page.waitForTimeout(800);
-      const dialogsAfter = await page.evaluate(countDialogs);
+        const dropped = dialogsBefore > dialogsAfter;
+        if (dropped) unexpectedDrops.push(key);
 
-      const dropped = dialogsBefore > dialogsAfter;
-      const expectedDrop = key in DROPS_ON_RESIZE;
-      if (dropped && !expectedDrop) unexpectedDrops.push(key);
-      if (!dropped && expectedDrop) unexpectedSurvivors.push(key);
-
-      const escaped = await page.evaluate(findHorizontalScrollers);
-      if (escaped.length > 0)
-        overflowing.push(`${key}: ${escaped.join(" | ")}`);
-    } catch (error) {
-      failed.push(`${key}: ${String(error).split("\n")[0]?.slice(0, 90)}`);
-    } finally {
-      await context.close();
+        const escaped = await page.evaluate(findHorizontalScrollers);
+        if (escaped.length > 0)
+          overflowing.push(`${key}: ${escaped.join(" | ")}`);
+      } catch (error) {
+        failed.push(`${key}: ${String(error).split("\n")[0]?.slice(0, 90)}`);
+      } finally {
+        await context.close();
+      }
     }
-  }
 
-  expect(
-    failed,
-    "这些终态连桌面维都走不到了——那是场景本身坏了，不是窄屏的事",
-  ).toEqual([]);
-  expect(
-    overflowing,
-    "这些终态在 360px 上需要横向滚动（见文件头；第三十九轮的 channels 那两条就是这么抓到的）",
-  ).toEqual([]);
-  expect(
-    unexpectedDrops,
-    "这些终态缩到 360 之后浮层没了，而它们不在 DROPS_ON_RESIZE 里——" +
-      "那意味着这一跑没真的量到那块浮层，要么修那条路径，要么登记并写清原因",
-  ).toEqual([]);
-  expect(
-    unexpectedSurvivors,
-    "这些终态的浮层现在活下来了，请从 DROPS_ON_RESIZE 里删掉（表里有、实际没有，同样是失守）",
-  ).toEqual([]);
-});
+    expect(
+      failed,
+      "这些终态连桌面维都走不到了——那是场景本身坏了，不是窄屏的事",
+    ).toEqual([]);
+    expect(
+      overflowing,
+      "这些终态在 360px 上需要横向滚动（见文件头；第三十九轮的 channels 那两条就是这么抓到的）",
+    ).toEqual([]);
+    expect(
+      unexpectedDrops,
+      "这些终态缩到 360 之后浮层没了——那意味着这一跑没真的量到那块浮层，请修宿主生命周期",
+    ).toEqual([]);
+  });
+}

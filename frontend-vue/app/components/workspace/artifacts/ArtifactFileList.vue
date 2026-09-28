@@ -60,7 +60,7 @@ function fileName(path: string): string {
     实测不写这一条时，59 字符的文件名会把整排动作键推出面板的 `overflow-hidden`
     盒子（本仓 181px、上游 199px），下载与关闭都点不到。**两边同改。**
   -->
-  <div class="text-foreground text-sm font-medium">
+  <div class="text-foreground max-w-full min-w-0 text-sm font-medium">
     <Select
       :model-value="current"
       @update:model-value="
@@ -71,7 +71,7 @@ function fileName(path: string): string {
       "
     >
       <SelectTrigger
-        class="max-w-full border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0"
+        class="w-full max-w-full border-none bg-transparent! shadow-none select-none focus:outline-0 active:outline-0"
       >
         <SelectValue :placeholder="$i18n.t.value.primitives.selectAFile" />
       </SelectTrigger>

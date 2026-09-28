@@ -145,29 +145,19 @@ test("lets the reasoning effort be overridden independently of the mode", async 
 });
 
 /*
-  **触发器被 CSS 隐藏时，它那块菜单必须跟着关。**
+  **移动端不能静默丢掉推理强度。**
 
-  那颗键的类是 `hidden gap-1! px-2! sm:inline-flex`——`sm`（40rem）以下它的盒子
-  塌成 0×0，而 popper 会**老老实实锚在那个 0×0 上**。2026-09-18 第三十九轮实测
-  （700px 开菜单，缩到 600px 跨过 `sm`）：
+  两端原来都给触发器写了 `hidden sm:inline-flex`。wave 62 在 375px 上先做负向
+  DOM 变异：只解除 display:none，不改任何布局，两个应用的按钮都变成
+  161.94×32，菜单均可操作，document scrollWidth/clientWidth 仍为 375/375，
+  横向滚动容器仍是 0。也就是说隐藏不是空间约束，只是把一项能力从手机上删掉。
 
-      触发器  [180, 739, 162]  →  [0, 0, 0]
-      菜单    [180, 409, 280]  →  [0, 4, 280]，aria-expanded 一直是 "true"
-
-  也就是一块悬在左上角、离输入区十万八千里的菜单，再 resize 也不纠正。
-  **两个应用当时一模一样**，按两边同改修（上游是 input-box.tsx 的
-  `REASONING_TRIGGER_VISIBLE_QUERY`）。
-
-  ⚠ 这条账差点被判成本仓单边：从 1280px 缩下来时上游先跨 `md`、把输入区整块重挂，
-  菜单跟着没了，看起来上游是对的。**从 700px 起步才看得见共有的那一半。**
-  所以这条用例的起点宽度是 700，不是 1280——改它之前先读这一段。
-
-  断言挑 `aria-expanded` 与菜单节点数，不挑几何：几何是症状，状态才是判据。
+  这里钉三件事：入口可见、菜单真的能开、恢复入口没有制造横向滚动。
 */
-test("closes the reasoning effort menu when its trigger stops being rendered", async ({
+test("keeps the reasoning effort menu operable on narrow screens", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 700, height: 800 });
+  await page.setViewportSize({ width: 375, height: 812 });
   await openWorkspace(page, "/workspace/chats/new");
 
   const effortTrigger = page.getByTestId("composer-reasoning-effort-trigger");
@@ -175,12 +165,14 @@ test("closes the reasoning effort menu when its trigger stops being rendered", a
   await effortTrigger.click();
   await expect(page.getByRole("menu")).toBeVisible();
   await expect(effortTrigger).toHaveAttribute("aria-expanded", "true");
-
-  // 跨过 `sm`：那颗键从这里开始是 `hidden`。
-  await page.setViewportSize({ width: 600, height: 800 });
-
-  await expect(page.getByRole("menu")).toHaveCount(0);
-  await expect(effortTrigger).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("menuitemradio")).toHaveCount(4);
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(0);
 });
 
 test("hides the reasoning effort control in flash mode", async ({ page }) => {

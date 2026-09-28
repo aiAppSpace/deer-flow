@@ -144,9 +144,8 @@ describe("selection toolbar anchoring", () => {
     // 中线 200 + 120/2；上沿 300 - 8。
     expect(bar.attributes("style")).toContain("left: 260px");
     expect(bar.attributes("style")).toContain("top: 292px");
-    expect(bar.classes()).toContain("-translate-x-1/2");
-    expect(bar.classes()).toContain("-translate-y-full");
-    expect(bar.classes()).not.toContain("translate-y-0");
+    expect(bar.classes()).toContain("max-w-[calc(100vw-1rem)]");
+    expect(bar.classes()).toContain("flex-wrap");
   });
 
   /*
@@ -166,8 +165,6 @@ describe("selection toolbar anchoring", () => {
     expect(bar.attributes("style")).toContain("left: 120px");
     // 下沿 73 + 8。
     expect(bar.attributes("style")).toContain("top: 81px");
-    expect(bar.classes()).toContain("translate-y-0");
-    expect(bar.classes()).not.toContain("-translate-y-full");
   });
 
   it("stays above at exactly the boundary", async () => {
@@ -179,7 +176,32 @@ describe("selection toolbar anchoring", () => {
       rect: { left: 100, width: 40, top: 56, bottom: 74 },
     });
 
-    expect(toolbar(wrapper).classes()).toContain("-translate-y-full");
+    // 上沿 56 - 8；happy-dom 没有布局，所以实测高度为 0。
+    expect(toolbar(wrapper).attributes("style")).toContain("top: 48px");
+  });
+
+  it("clamps the measured wrapped toolbar to every viewport edge", async () => {
+    vi.stubGlobal("innerWidth", 360);
+    vi.stubGlobal("innerHeight", 360);
+    const wrapper = mountList();
+    await flushPromises();
+
+    await selectInTurn(wrapper, {
+      text: "I am DeerFlow",
+      rect: { left: 300, width: 80, top: 300, bottom: 318 },
+    });
+
+    const bar = toolbar(wrapper);
+    Object.defineProperties(bar.element, {
+      offsetWidth: { configurable: true, value: 344 },
+      offsetHeight: { configurable: true, value: 152 },
+    });
+    globalThis.dispatchEvent(new Event("resize"));
+
+    // x=340 原本会把右边推出视口；实测宽 344 后只能放在 8px 安全边距。
+    expect(bar.attributes("style")).toContain("left: 8px");
+    // 优先上方：292 - 152 = 140，仍在上下安全区内。
+    expect(bar.attributes("style")).toContain("top: 140px");
   });
 });
 

@@ -48,6 +48,7 @@ function SheetContent({
   className,
   children,
   side = "right",
+  onFocusCapture,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
@@ -69,6 +70,15 @@ function SheetContent({
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className,
         )}
+        onFocusCapture={(event) => {
+          onFocusCapture?.(event);
+          const target = event.target;
+          window.requestAnimationFrame(() => {
+            if (target.isConnected) {
+              target.scrollIntoView({ block: "nearest" });
+            }
+          });
+        }}
         {...props}
       >
         {children}

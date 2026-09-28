@@ -85,9 +85,11 @@ const previewedSize = computed(
 </script>
 
 <template>
-  <div class="bg-background flex h-screen flex-col">
+  <div
+    class="bg-background flex h-screen max-w-full min-w-0 flex-col overflow-x-hidden"
+  >
     <header
-      class="border-border bg-background/95 sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b px-4 py-3 backdrop-blur"
+      class="border-border bg-background/95 sticky top-0 z-10 flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b px-4 py-3 backdrop-blur"
     >
       <div class="text-muted-foreground shrink-0">
         <component :is="artifactFileIcon(filepath)" class="size-4" />
@@ -96,13 +98,23 @@ const previewedSize = computed(
         <div class="truncate font-medium" :title="filepath">{{ filename }}</div>
         <div class="text-muted-foreground truncate text-xs">{{ filepath }}</div>
       </div>
-      <Button variant="ghost" size="sm" as-child>
+      <Button
+        class="h-auto max-w-full min-w-0 whitespace-normal"
+        variant="ghost"
+        size="sm"
+        as-child
+      >
         <a :href="sourceUrl" target="_blank" rel="noopener noreferrer">
           <ExternalLink class="size-4" />
           {{ $i18n.t.value.artifactPreview.viewSource }}
         </a>
       </Button>
-      <Button variant="outline" size="sm" as-child>
+      <Button
+        class="h-auto max-w-full min-w-0 whitespace-normal"
+        variant="outline"
+        size="sm"
+        as-child
+      >
         <a :href="downloadUrl">
           <Download class="size-4" />
           {{ $i18n.t.value.common.download }}
@@ -112,9 +124,9 @@ const previewedSize = computed(
 
     <div
       v-if="truncated && !isTabular"
-      class="border-border bg-muted/40 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 text-sm"
+      class="border-border bg-muted/40 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-sm"
     >
-      <span class="text-muted-foreground">
+      <span class="text-muted-foreground min-w-0 wrap-anywhere">
         {{
           $i18n.t.value.artifactPreview.limited(
             previewedSize,
@@ -122,7 +134,12 @@ const previewedSize = computed(
           )
         }}
       </span>
-      <Button size="sm" variant="outline" @click="loadFullContent">
+      <Button
+        class="h-auto max-w-full min-w-0 whitespace-normal"
+        size="sm"
+        variant="outline"
+        @click="loadFullContent"
+      >
         {{ $i18n.t.value.artifactPreview.loadFullFile }}
       </Button>
     </div>

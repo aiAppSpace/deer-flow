@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckIcon, LoaderCircleIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -51,15 +51,103 @@ function getProviderUnavailableReason(
   return provider.unavailable_reason ?? undefined;
 }
 
+let runtimeConfigProvider: ChannelProvider | null = null;
+const runtimeConfigListeners = new Set<() => void>();
+
+function subscribeRuntimeConfig(listener: () => void) {
+  runtimeConfigListeners.add(listener);
+  return () => runtimeConfigListeners.delete(listener);
+}
+
+function setRuntimeConfigProvider(provider: ChannelProvider | null) {
+  runtimeConfigProvider = provider;
+  runtimeConfigListeners.forEach((listener) => listener());
+}
+
+function useRuntimeConfigProvider() {
+  return useSyncExternalStore(
+    subscribeRuntimeConfig,
+    () => runtimeConfigProvider,
+    () => null,
+  );
+}
+
+export function WorkspaceChannelRuntimeConfigHost() {
+  const provider = useRuntimeConfigProvider();
+  const { t } = useI18n();
+  const connectMutation = useConnectChannelProvider();
+  const configureMutation = useConfigureChannelProvider();
+
+  useEffect(() => () => setRuntimeConfigProvider(null), []);
+
+  const startConnect = (
+    nextProvider: ChannelProvider,
+    preparedWindow?: Window | null,
+  ) => {
+    const connectWindow =
+      preparedWindow !== undefined
+        ? preparedWindow
+        : nextProvider.auth_mode === "deep_link"
+          ? prepareConnectWindow()
+          : null;
+    void connectMutation
+      .mutateAsync(nextProvider.provider)
+      .then((result) => {
+        if (result.url) {
+          openConnectUrl(result.url, connectWindow);
+          return;
+        }
+        closeConnectWindow(connectWindow);
+        toast.success(result.instruction);
+      })
+      .catch((error) => {
+        closeConnectWindow(connectWindow);
+        toast.error(
+          error instanceof Error ? error.message : t.channels.unavailable,
+        );
+      });
+  };
+
+  return (
+    <ChannelRuntimeConfigDialog
+      provider={provider}
+      open={provider !== null}
+      submitting={configureMutation.isPending}
+      onOpenChange={(open) => {
+        if (!open) setRuntimeConfigProvider(null);
+      }}
+      onSubmit={(submitProvider, values) => {
+        const connectWindow =
+          submitProvider.auth_mode === "deep_link"
+            ? prepareConnectWindow()
+            : null;
+        void configureMutation
+          .mutateAsync({ provider: submitProvider.provider, values })
+          .then((updated) => {
+            setRuntimeConfigProvider(null);
+            if (providerCanConnect(updated)) {
+              startConnect(updated, connectWindow);
+              return;
+            }
+            closeConnectWindow(connectWindow);
+            toast.success(t.channels.connected);
+          })
+          .catch((error) => {
+            closeConnectWindow(connectWindow);
+            toast.error(
+              error instanceof Error ? error.message : t.channels.unavailable,
+            );
+          });
+      }}
+    />
+  );
+}
+
 export function WorkspaceChannelsList() {
   const { open: isSidebarOpen } = useSidebar();
   const { t } = useI18n();
   const { enabled, providers, isLoading, error } = useChannelProviders();
   const connectMutation = useConnectChannelProvider();
-  const configureMutation = useConfigureChannelProvider();
-  const [setupProvider, setSetupProvider] = useState<ChannelProvider | null>(
-    null,
-  );
   const visibleProviders = providers.filter((provider) => provider.enabled);
 
   const startConnect = (
@@ -121,10 +209,8 @@ export function WorkspaceChannelsList() {
             !provider.unavailable_reason &&
             provider.connection_status === "connected";
           const isPending =
-            (connectMutation.isPending &&
-              connectMutation.variables === provider.provider) ||
-            (configureMutation.isPending &&
-              configureMutation.variables?.provider === provider.provider);
+            connectMutation.isPending &&
+            connectMutation.variables === provider.provider;
           const canConnect = providerCanConnect(provider);
           const unavailableReason = getProviderUnavailableReason(provider, t);
 
@@ -153,7 +239,7 @@ export function WorkspaceChannelsList() {
                       providerNeedsRuntimeConfig(provider) ||
                       (isConnected && canEditRuntimeConfig)
                     ) {
-                      setSetupProvider(provider);
+                      setRuntimeConfigProvider(provider);
                       return;
                     }
 
@@ -179,37 +265,6 @@ export function WorkspaceChannelsList() {
           );
         })}
       </SidebarMenu>
-      <ChannelRuntimeConfigDialog
-        provider={setupProvider}
-        open={setupProvider !== null}
-        submitting={configureMutation.isPending}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSetupProvider(null);
-          }
-        }}
-        onSubmit={(provider, values) => {
-          const connectWindow =
-            provider.auth_mode === "deep_link" ? prepareConnectWindow() : null;
-          void configureMutation
-            .mutateAsync({ provider: provider.provider, values })
-            .then((updated) => {
-              setSetupProvider(null);
-              if (providerCanConnect(updated)) {
-                startConnect(updated, connectWindow);
-                return;
-              }
-              closeConnectWindow(connectWindow);
-              toast.success(t.channels.connected);
-            })
-            .catch((error) => {
-              closeConnectWindow(connectWindow);
-              toast.error(
-                error instanceof Error ? error.message : t.channels.unavailable,
-              );
-            });
-        }}
-      />
     </SidebarGroup>
   );
 }

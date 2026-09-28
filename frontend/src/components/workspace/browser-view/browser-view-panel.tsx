@@ -317,6 +317,7 @@ export function BrowserViewPanel({
   return (
     <div
       ref={panelRef}
+      data-testid="browser-panel"
       className={cn(
         "bg-background relative flex flex-col",
         "size-full",

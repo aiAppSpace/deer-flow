@@ -95,7 +95,7 @@ export default function ChatsPage() {
           onValueChange={setView}
           className="flex size-full flex-col"
         >
-          <header className="mx-auto flex w-full max-w-(--container-width-md) shrink-0 flex-col gap-3 pt-8">
+          <header className="mx-auto flex w-full max-w-(--container-width-md) shrink-0 flex-col gap-3 pt-8 [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:pt-[8px]">
             {!staticWebsite && (
               <TabsList aria-label={t.pages.chats}>
                 <TabsTrigger value="active">{t.chats.activeChats}</TabsTrigger>
@@ -106,7 +106,7 @@ export default function ChatsPage() {
             )}
             <Input
               type="search"
-              className="h-12 w-full max-w-(--container-width-md) text-xl"
+              className="h-12 w-full max-w-(--container-width-md) text-xl [@media(max-height:360px)]:h-[48px]"
               placeholder={t.chats.searchChats}
               autoFocus
               value={search}
@@ -146,10 +146,10 @@ export default function ChatsPage() {
                       return (
                         <div
                           key={thread.thread_id}
-                          className="flex items-center gap-2 border-b"
+                          className="flex min-w-0 flex-wrap items-center gap-2 border-b"
                         >
                           <Link
-                            className="min-w-0 flex-1"
+                            className="min-w-0 flex-1 max-[361px]:basis-full"
                             href={pathOfThread(thread)}
                           >
                             <div className="flex flex-col gap-2 p-4">
@@ -172,7 +172,7 @@ export default function ChatsPage() {
                           </Link>
                           {archived && (
                             <Button
-                              className="mr-4 shrink-0"
+                              className="mr-4 h-auto max-w-[calc(100%-2rem)] min-w-0 shrink-0 whitespace-normal max-[361px]:ml-4 max-[361px]:basis-full"
                               variant="outline"
                               size="sm"
                               disabled={archiveAction.isPending}

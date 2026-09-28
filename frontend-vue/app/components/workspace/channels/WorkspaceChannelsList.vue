@@ -35,7 +35,7 @@
 */
 
 import { Check, LoaderCircle } from "lucide-vue-next";
-import { computed, ref } from "vue";
+import { computed } from "vue";
 
 import ChannelProviderIcon from "./ChannelProviderIcon.vue";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthSession } from "@/composables/useAuthSession";
 import { useChannelConnections } from "@/composables/useChannelConnections";
+import { useWorkspaceChannelRuntimeConfig } from "@/composables/useWorkspaceChannelRuntimeConfig";
 import {
   AUTH_DISABLED_USER,
   isAuthDisabledMode,
@@ -66,8 +67,6 @@ import {
 import type { ChannelProvider } from "@/core/channels/types";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 
-import ChannelRuntimeConfigDialog from "./ChannelRuntimeConfigDialog.vue";
-
 const { $i18n } = useNuxtApp();
 const text = computed(() => $i18n.t.value.channels);
 const toast = useWorkspaceToast();
@@ -85,7 +84,7 @@ const channels = useChannelConnections({
   withConnections: false,
 });
 
-const setupProvider = ref<ChannelProvider | null>(null);
+const runtimeConfig = useWorkspaceChannelRuntimeConfig();
 
 const visibleProviders = computed(() =>
   channels.providers.value.filter((provider) => provider.enabled),
@@ -144,7 +143,7 @@ function onProviderAction(provider: ChannelProvider) {
     providerNeedsRuntimeConfig(provider) ||
     (isConnected(provider) && providerCanEditRuntimeConfig(provider))
   ) {
-    setupProvider.value = provider;
+    runtimeConfig.open(provider);
     return;
   }
   if (!providerCanConnect(provider)) {
@@ -152,31 +151,6 @@ function onProviderAction(provider: ChannelProvider) {
     return;
   }
   void startConnect(provider);
-}
-
-async function onRuntimeConfigSubmit(
-  provider: ChannelProvider,
-  values: Record<string, string>,
-) {
-  const connectWindow =
-    provider.auth_mode === "deep_link" ? prepareConnectWindow() : null;
-  try {
-    const updated = await channels.configure(provider.provider, values);
-    setupProvider.value = null;
-    if (providerCanConnect(updated)) {
-      await startConnect(updated, connectWindow);
-      return;
-    }
-    closeConnectWindow(connectWindow);
-    toast.success(text.value.connected);
-  } catch (cause) {
-    closeConnectWindow(connectWindow);
-    toast.error(
-      cause instanceof Error && cause.message
-        ? cause.message
-        : text.value.unavailable,
-    );
-  }
 }
 </script>
 
@@ -238,14 +212,4 @@ async function onRuntimeConfigSubmit(
       </SidebarMenuItem>
     </SidebarMenu>
   </SidebarGroup>
-
-  <ChannelRuntimeConfigDialog
-    :provider="setupProvider"
-    :open="setupProvider !== null"
-    :submitting="
-      setupProvider ? channels.isProviderPending(setupProvider.provider) : false
-    "
-    @update:open="!$event && (setupProvider = null)"
-    @submit="onRuntimeConfigSubmit"
-  />
 </template>

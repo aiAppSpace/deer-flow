@@ -30,12 +30,12 @@
   **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
   一个 run 都不会有，`total_count: 0` 不是「没问题」。正确的问法与命令写在
   下面第十九轮清单的第 3 条里（那里有三条，第三条就是这件事）。
-- 对照台账 **0 唯一行 / 0 多重集 / 190 个场景-维度**。
+- 对照台账 **0 唯一行 / 0 多重集 / 195 个场景-维度**。
   **但唯一行是投影数，不是待办数**（2026-09-16 全面审查量出来的）：它数的是
   `场景-维度 × 档 × 行`，同一处差异投影到多少个场景-维度就数多少次。
   按 `(档, 行文本)` 去重，**0 条不同的差异**——第三十六轮清零，起点是 170 个投影。
   **把唯一行读成「还有这么多件事」是错的**，件数看的是上面那个去重数。
-  **但 0 不等于对齐完成**：台账只覆盖这 190 个场景-维度，取样面之外它一个字都没说。
+  **但 0 不等于对齐完成**：台账只覆盖这 195 个场景-维度，取样面之外它一个字都没说。
   边界说明与下一轮三条方向写在 `NEXT-WINDOW.md`，**那份是当前版本**。
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
@@ -53,6 +53,9 @@ k = json.load(open("frontend-vue/baseline/i18n-keys.json"))
 print("词典", k["total"], "key /", k["unusedTotal"], "unused")
 EOF
 ```
+
+当前签入基线现场应输出 `词典 1144 key / 15 unused`；这两个活读数由
+`tests/guards/doc-facts.test.ts` 逐项反算，基线变化时必须同步更新。
 
 （`frontend-vue/scripts/parity-ledger-report.mjs` 也能报，但它**要有上一次 e2e-parity
 的运行产物**才跑得出来；签入的基线是随时可数的，所以上面直接数基线。）
@@ -84,8 +87,8 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
      「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
    - 开 `mobile`（同样只给 `integrations`）→ **当场量出上游一颗够不着的控件**
      （技能开关在 375px 下 `x=395.5`，手机上点不到）。
-   - **190 个场景-维度里仍有 141 个是 desktop**（tablet 28 · mobile 21）；非 desktop 的 23 族逐字是：
-     `agents-feature-disabled` `artifact-panel-resize` `artifact-preview` `artifact-viewer-window` `background-tasks` `branch-thread` `browser-feature` `channels` `chat` `integrations` `mcp-settings` `project-detail` `scheduled-tasks` `sidebar-collapsed` `sidecar-chat` `subtask-card` `thread-archive` `thread-history` `thread-history-mermaid` `thread-list-infinite-scroll` `thread-list-pin` `ui-polish-mobile` `workspace-changes`。
+   - **195 个场景-维度里仍有 141 个是 desktop**（tablet 28 · mobile 26）；非 desktop 的 25 族逐字是：
+     `agents-feature-disabled` `artifact-batched-stream` `artifact-panel-resize` `artifact-preview` `artifact-viewer-window` `background-tasks` `branch-thread` `browser-feature` `channels` `chat` `integrations` `mcp-settings` `project-detail` `scheduled-tasks` `sidebar-collapsed` `sidecar-chat` `subtask-card` `thread-archive` `thread-history` `thread-history-mermaid` `thread-list-infinite-scroll` `thread-list-pin` `thread-title-sync` `ui-polish-mobile` `workspace-changes`。
      （第四十六轮补的四族——`channels` `sidecar-chat` `thread-history`
      `workspace-changes`——是 tablet 那一维；768 是 `md` 这条边界本身，
      一开就撞出 sidecar 正文行高 14px 那条真分叉。）
@@ -239,8 +242,39 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   **没有门禁的是**：verify 的「文件 / 单测」条数、各条耗时、e2e-mock /
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
-make -C <abs>/frontend-vue verify         # exit 0；**332 文件 / 2700** 单测；词典 1144 key / 15 unused
-make -C <abs>/frontend-vue e2e-parity     # **213 passed**（第五十九轮给 channels 加窄屏抽屉终态；
+make -C <abs>/frontend-vue verify         # 第七十一轮实测 lint、类型、全部 Vitest + production build，exit 0
+E2E_PARITY_BROWSER_CHANNEL=chrome make -C <abs>/frontend-vue e2e-parity  # **233 collected**；第七十一轮最终实测 233 passed / 1.6h / exit 0
+                                          #   （第七十一轮在同一 triple-overlay-keyboard 两条固定用例中继续加入
+                                          #   Space、重复 typeahead、submenu traversal 与 disabled-item skip；
+                                          #   无筛选产品扫描双端各 61 状态、7 个浮层，新增轴分别
+                                          #   5/5、2/2、2/2、1/1，failures=[]；三条 mutation 精确报红；
+                                          #   首趟完整套件唯一红是 147→195 取样面后过期的 25 分钟 diff 墙钟，
+                                          #   不减覆盖地提高到 40 分钟后专项 1 passed / 21.9m / exit 0；
+                                          #   第二趟 stable Chrome 233 passed / 1.6h / exit 0，第七十一轮已封账。）
+                                          #   （第七十轮在同一 triple-overlay-keyboard 两条固定用例中继续加入
+                                          #   ArrowUp / Home / End / typeahead 与 submenu Right / Left；
+                                          #   无筛选产品扫描双端各 61 状态、7 个浮层，ArrowUp 7/7、
+                                          #   menu Home / End 5/5、typeahead 7/7、submenu 双向 1/1；
+                                          #   产品扫描 1 passed / 7.5m / exit 0，六条 mutation 精确报红；
+                                          #   verify 337 文件 / 2726 单测 + production build、exit 0；
+                                          #   stable Chrome 233 passed / 1.6h / exit 0，第七十轮已封账。）
+                                          #   （第六十九轮增加 triple-overlay-keyboard：三轴浮层量具 1 条 +
+                                          #   双端 61 终态运行时发现 1 条；产品扫描两端各 7 个浮层，
+                                          #   ArrowDown / Enter / Escape 均 7/7；正常正控 exit 0，
+                                          #   三条独立 mutation 分别精确红在对应轴并 exit 1；
+                                          #   最终 stable Chrome 233 passed / 1.6h / exit 0，第六十九轮已封账。）
+                                          #   （第六十八轮增加 triple-keyboard：三轴吞键阳性对照 1 条 + 两端各 61 状态；
+                                          #   产品矩阵 244 份 context 全绿；第一次整套 229 passed / 2 failed / 1.5h，
+                                          #   双端 triple-reflow 都是 lost=7；workspace header 根修后定向 3 passed / 5.8m，
+                                          #   最终整套 231/231；Vue 730/730、React 637/637，horizontal/lost/clipped 全 0；
+                                          #   第六十七轮 stable Chrome 完整实测 228 passed / 1.3h / exit 0；
+                                          #   triple-reflow 的三轴阳性对照 1 条 + 两端各 61 状态已纳入最终全量；
+                                          #   combined-reflow 的交集阳性对照 1 条 + 两端各 61 状态已纳入第六十六轮最终全量；
+                                          #   第六十五轮加 low-height-reachability 两端各 61 状态，增加 2 条固定用例；
+                                          #   第六十三轮把 narrow-screen-overflow 从 Vue 单端改为双端，增加 2 条固定用例；
+                                          #   第六十二轮增加 4 个 mobile 场景-维度；
+                                          #   第六十一轮给 thread-title-sync 加窄屏抽屉终态；
+                                          #   第五十九轮给 channels 加窄屏抽屉终态；
                                           #   第五十六轮加 viewport-fit.spec.ts；
                                           #   第五十三轮加 overlay-survives-resize.spec.ts；
                                           #   第五十二轮加 content-reachable.spec.ts，
@@ -439,7 +473,7 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 
 **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-台账只覆盖 190 个场景-维度，
+台账只覆盖 195 个场景-维度，
 取样面之外它一个字都没说。边界与下一步写在 `NEXT-WINDOW.md`。
 
 ### 再上一轮（2026-09-17 第三十五轮）做了什么
@@ -614,7 +648,7 @@ Claude 记忆 `measure-dont-guess`）。
 >
 > **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 > ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
-> 台账只覆盖 190 个场景-维度，取样面之外它一个字都没说。
+> 台账只覆盖 195 个场景-维度，取样面之外它一个字都没说。
 > 完整的边界说明、下一轮三条方向、以及第三十六轮那两条教训，
 > 都写在 `NEXT-WINDOW.md`，**那份是这张单子的当前版本**。
 
@@ -1257,7 +1291,7 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > ⚠ **别再照着「41 条 / 6 组」去找活**，也别去一页账的「零、全面审查」节取现状
 > ——那一节的数同样停在第二十三轮（它自己已就地标注）。
 > **活读数只看本文开头那一处**，2026-09-23 实测：
-> **0 唯一行 / 0 多重集 / 190 个场景-维度 / 0 条不同的差异**。
+> **0 唯一行 / 0 多重集 / 195 个场景-维度 / 0 条不同的差异**。
 
 一页纸清单「真正还开着的」当时是 **5 条**，且**全部是「已决定 / 够不着」**：
 覆盖率棘轮的 pending 1 条（wave 101 按判据量到底，**不翻案**）、

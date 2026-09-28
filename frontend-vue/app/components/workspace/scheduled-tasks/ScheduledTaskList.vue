@@ -22,13 +22,13 @@ const { $i18n } = useNuxtApp();
 </script>
 
 <template>
-  <div class="flex flex-col gap-3" data-testid="scheduled-task-list">
+  <div class="flex min-w-0 flex-col gap-3" data-testid="scheduled-task-list">
     <button
       v-for="task in tasks"
       :key="task.id"
       type="button"
       :data-testid="`scheduled-task-item-${task.id}`"
-      class="rounded-lg border p-4 text-left"
+      class="min-w-0 rounded-lg border p-4 text-left"
       :class="selectedId === task.id ? 'border-foreground' : 'border-border'"
       @click="emit('select', task.id)"
     >

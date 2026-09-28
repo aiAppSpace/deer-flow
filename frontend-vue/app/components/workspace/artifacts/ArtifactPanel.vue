@@ -595,7 +595,7 @@ onBeforeUnmount(() => {
     在上游折行、本仓不折，整张表错开一个行高（E 组那 3 行）。
   -->
   <section
-    class="bg-background flex size-full min-h-0 flex-col overflow-hidden rounded-lg border shadow-lg"
+    class="bg-background @container flex size-full min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-lg border shadow-lg [@media(max-height:360px)]:h-auto [@media(max-height:360px)]:min-h-full"
   >
     <!--
       `data-testid` 是给 e2e 定位用的锚点，不进 aria 快照、不影响对照台账。
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
     -->
     <header
       data-testid="artifact-panel-header"
-      class="bg-muted/50 border-border flex shrink-0 items-center justify-between border-b px-2 py-3"
+      class="bg-muted/50 border-border flex min-w-0 shrink-0 items-center justify-between border-b px-2 py-3 max-[361px]:grid max-[361px]:grid-cols-[minmax(0,1fr)] @max-[28rem]:flex-wrap @max-[28rem]:gap-y-2"
     >
       <!--
         标题栏必须**能缩**。flex item 默认 `min-width:auto`，不写 `min-w-0` 它就
@@ -640,7 +640,9 @@ onBeforeUnmount(() => {
         面板也关不掉。**两边同改**（判据「这处不改，React 自己是不是也是坏的？」→ 是）。
         中间那一栏本来就有 `min-w-0` 且 `grow`，该让位的是标题。
       -->
-      <div class="flex min-w-0 items-center gap-2">
+      <div
+        class="flex max-w-full min-w-0 items-center gap-2 max-[361px]:w-full @max-[28rem]:grow @max-[28rem]:basis-0"
+      >
         <ArtifactFileList
           v-if="!isWrite"
           :current="filepath"
@@ -657,7 +659,9 @@ onBeforeUnmount(() => {
           <div class="truncate px-2">{{ filename }}</div>
         </div>
       </div>
-      <div class="flex min-w-0 grow items-center justify-center gap-2">
+      <div
+        class="flex min-w-0 grow items-center justify-center gap-2 max-[361px]:w-full @max-[28rem]:order-3 @max-[28rem]:basis-full"
+      >
         <!--
         代码 / 预览是一对**单选**，不是一颗会变名字的开关。
 
@@ -681,13 +685,13 @@ onBeforeUnmount(() => {
         `hover:text-accent-foreground` 与 sm 档的 `min-w-8 px-1.5`。
       -->
         <ToggleGroup
-          class="mx-auto"
           v-if="
             policy.kind === 'text' &&
             (isTabular || ['html', 'markdown'].includes(policy.language)) &&
             previewAllowed &&
             (!truncated || isTabular)
           "
+          class="mx-auto"
           type="single"
           variant="outline"
           size="sm"
@@ -755,8 +759,12 @@ onBeforeUnmount(() => {
         `shrink-0`：标题让位之后，这一栏不能跟着缩。里面那几颗 Button 自己带
         `shrink-0`，容器一缩它们就溢出容器盒子。
       -->
-      <div class="flex shrink-0 items-center gap-2">
-        <div class="flex items-center gap-1">
+      <div
+        class="flex shrink-0 items-center gap-2 max-[361px]:w-full max-[361px]:min-w-0"
+      >
+        <div
+          class="flex items-center gap-1 max-[361px]:w-full max-[361px]:flex-wrap"
+        >
           <ArtifactActions
             :can-edit="canEdit"
             :editing="editing"
@@ -821,12 +829,18 @@ onBeforeUnmount(() => {
     -->
     <div
       v-if="truncated"
-      class="border-border bg-muted/40 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 text-sm"
+      class="border-border bg-muted/40 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-sm"
     >
       <span class="text-muted-foreground">
         {{ $i18n.t.value.artifactPreview.limited(previewedSize, totalSize) }}
       </span>
-      <Button size="sm" variant="outline" :disabled="loading" @click="loadFull">
+      <Button
+        class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
+        size="sm"
+        variant="outline"
+        :disabled="loading"
+        @click="loadFull"
+      >
         {{ $i18n.t.value.artifactPreview.loadFullFile }}
       </Button>
     </div>
@@ -836,7 +850,9 @@ onBeforeUnmount(() => {
     >
       {{ $i18n.t.value.artifactPreview.loadingFullFile }}
     </div>
-    <div class="relative min-h-0 flex-1 overflow-auto">
+    <div
+      class="relative min-h-0 flex-1 overflow-auto [@media(max-height:360px)]:min-h-[160px] [@media(max-height:360px)]:flex-none"
+    >
       <!--
         预览失败给的是一句固定说明 + 一个下载入口，不是把后端的错误串原样弹成 alert。
         React 的 ArtifactPreviewError 就是这个形状（同上文件）：用户要的是「还能怎么

@@ -72,6 +72,14 @@ const delegated = computed(() => {
   void _modal;
   return rest;
 });
+
+function keepFocusedControlVisible(event: FocusEvent) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  requestAnimationFrame(() => {
+    if (target.isConnected) target.scrollIntoView({ block: "nearest" });
+  });
+}
 </script>
 
 <template>
@@ -97,6 +105,7 @@ const delegated = computed(() => {
       @interact-outside="emits('interactOutside', $event)"
       @open-auto-focus="emits('openAutoFocus', $event)"
       @close-auto-focus="emits('closeAutoFocus', $event)"
+      @focusin="keepFocusedControlVisible"
     >
       <slot />
       <DialogClose

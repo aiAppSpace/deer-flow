@@ -12,6 +12,7 @@ import { nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import WorkspaceChannelsList from "@/components/workspace/channels/WorkspaceChannelsList.vue";
+import WorkspaceChannelRuntimeConfigHost from "@/components/workspace/channels/WorkspaceChannelRuntimeConfigHost.vue";
 import type { ChannelProvider } from "@/core/channels/types";
 import { enUS } from "@/core/i18n/locales/en-US";
 
@@ -164,6 +165,12 @@ describe("WorkspaceChannelsList", () => {
         ],
       }),
     ]);
+    // The dialog deliberately lives above the desktop sidebar so crossing the
+    // mobile breakpoint cannot unmount an open form. Mount that real owner here
+    // as the workspace layout does; the list now only publishes the provider.
+    const host = mount(WorkspaceChannelRuntimeConfigHost, {
+      attachTo: document.body,
+    });
 
     await wrapper.get("li button").trigger("click");
     await nextTick();
@@ -171,6 +178,7 @@ describe("WorkspaceChannelsList", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
       "Connect Slack",
     );
+    host.unmount();
   });
 
   it("refuses to connect an unconnectable provider and says so once", async () => {

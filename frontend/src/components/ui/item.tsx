@@ -31,7 +31,7 @@ function ItemSeparator({
 }
 
 const itemVariants = cva(
-  "group/item flex items-center border border-transparent text-sm rounded-md transition-colors [a]:hover:bg-accent/50 [a]:transition-colors duration-100 flex-wrap outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]",
+  "group/item flex items-center border border-transparent text-sm rounded-md transition-colors [a]:hover:bg-accent/50 [a]:transition-colors duration-100 flex-wrap outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] max-[361px]:flex-col max-[361px]:items-stretch",
   {
     variants: {
       variant: {
@@ -40,8 +40,8 @@ const itemVariants = cva(
         muted: "bg-muted/50",
       },
       size: {
-        default: "p-4 gap-4 ",
-        sm: "py-3 px-4 gap-2.5",
+        default: "p-4 gap-4 max-[361px]:p-2 ",
+        sm: "py-3 px-4 gap-2.5 max-[361px]:px-2",
       },
     },
     defaultVariants: {
@@ -108,7 +108,7 @@ function ItemContent({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="item-content"
       className={cn(
-        "flex flex-1 flex-col gap-1 [&+[data-slot=item-content]]:flex-none",
+        "flex min-w-0 flex-1 flex-col gap-1 max-[361px]:w-full max-[361px]:max-w-full [&+[data-slot=item-content]]:flex-none",
         className,
       )}
       {...props}
@@ -121,7 +121,7 @@ function ItemTitle({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="item-title"
       className={cn(
-        "flex w-fit items-center gap-2 text-sm leading-snug font-medium",
+        "flex w-fit max-w-full min-w-0 items-center gap-2 text-sm leading-snug font-medium wrap-anywhere max-[361px]:w-full max-[361px]:flex-wrap",
         className,
       )}
       {...props}
@@ -134,7 +134,7 @@ function ItemDescription({ className, ...props }: React.ComponentProps<"p">) {
     <p
       data-slot="item-description"
       className={cn(
-        "text-muted-foreground line-clamp-2 text-sm leading-normal font-normal text-balance",
+        "text-muted-foreground line-clamp-2 max-w-full min-w-0 text-sm leading-normal font-normal text-balance wrap-anywhere",
         "[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4",
         className,
       )}
@@ -147,7 +147,10 @@ function ItemActions({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="item-actions"
-      className={cn("flex items-center gap-2", className)}
+      className={cn(
+        "flex max-w-full min-w-0 flex-wrap items-center gap-2 max-[361px]:ml-0 max-[361px]:w-full max-[361px]:flex-col max-[361px]:items-stretch [&>*]:max-w-full [&>*]:min-w-0 max-[361px]:[&>*]:h-auto max-[361px]:[&>*]:w-full max-[361px]:[&>*]:whitespace-normal",
+        className,
+      )}
       {...props}
     />
   );

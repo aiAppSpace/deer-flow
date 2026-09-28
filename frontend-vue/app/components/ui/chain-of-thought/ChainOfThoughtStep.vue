@@ -56,8 +56,12 @@ const classes = computed(() =>
       </slot>
       <div class="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
     </div>
-    <div class="flex-1 space-y-2 overflow-hidden">
-      <div><slot name="label" /></div>
+    <div class="min-w-0 flex-1 space-y-2 overflow-hidden wrap-anywhere">
+      <div
+        class="max-w-full min-w-0 [overflow-wrap:anywhere] whitespace-normal"
+      >
+        <slot name="label" />
+      </div>
       <div v-if="slots.description" class="text-muted-foreground text-xs">
         <slot name="description" />
       </div>

@@ -676,13 +676,15 @@ onUnmounted(() => {
     :title="copy.settings.integrations.title"
     :description="copy.settings.integrations.description"
   >
-    <Card>
+    <Card class="max-w-full min-w-0 wrap-anywhere">
       <!--
         设置页里只有这一页包了 Card，于是窄屏（<sm）下它的 px-6 叠在面板内边距和
         里面那几个状态盒上：375px 屏上内容列只剩 167px，比「在浏览器重新注册」
         那颗按钮（191px）和 OAuth scope 示例都窄，两者当场溢出。sm 以上不变。
       -->
-      <CardHeader class="px-4 sm:px-6">
+      <CardHeader
+        class="px-4 has-data-[slot=card-action]:grid-cols-[minmax(0,1fr)] sm:px-6 sm:has-data-[slot=card-action]:grid-cols-[minmax(0,1fr)_auto]"
+      >
         <!--
           `min-w-0` + `shrink-0` 不是装饰，是这张卡片在窄屏下装不装得下的唯一变量
           （两边同改，上游 integrations-settings-page.tsx:642 同一处）。
@@ -698,7 +700,9 @@ onUnmounted(() => {
           把视口收窄到 366px 能在本机复现同一个数（溢出 8），越界者自始至终
           只有 `[data-slot="card-action"]`。
         -->
-        <div class="flex min-w-0 items-center gap-3">
+        <div
+          class="flex min-w-0 items-center gap-3 @max-[12rem]:flex-col @max-[12rem]:items-start"
+        >
           <div class="bg-primary/10 text-primary shrink-0 rounded-lg p-2">
             <PlugZap class="size-5" />
           </div>
@@ -707,8 +711,11 @@ onUnmounted(() => {
             <CardDescription>{{ larkCopy.description }}</CardDescription>
           </div>
         </div>
-        <CardAction>
+        <CardAction
+          class="col-start-1 row-span-1 row-start-2 justify-self-start sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:justify-self-end"
+        >
           <Button
+            class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
             variant="outline"
             size="sm"
             :disabled="fetching"
@@ -719,7 +726,7 @@ onUnmounted(() => {
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent class="space-y-4 px-4 sm:px-6">
+      <CardContent class="max-w-full min-w-0 space-y-4 px-2 sm:px-6">
         <div v-if="loading" class="text-muted-foreground text-sm">
           {{ copy.common.loading }}
         </div>
@@ -742,7 +749,7 @@ onUnmounted(() => {
             三张卡片排出来与原先的 `grid-cols-3` 逐格相同。
           -->
           <div
-            class="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3"
+            class="grid max-w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(min(10rem,100%),1fr))] gap-3"
           >
             <LarkStatusItem
               v-for="item in statusCards"
@@ -786,7 +793,7 @@ onUnmounted(() => {
 
           <div
             v-if="status.installed && status.cli.available"
-            class="rounded-lg border p-3"
+            class="max-w-full min-w-0 rounded-lg border p-3"
           >
             <div class="space-y-1">
               <div class="text-sm font-medium">
@@ -796,7 +803,7 @@ onUnmounted(() => {
                 {{ larkCopy.permissionDescription }}
               </p>
             </div>
-            <div class="mt-3 flex flex-wrap gap-2">
+            <div class="mt-3 flex min-w-0 flex-wrap gap-2">
               <!--
                 选中只是换了个 variant，不加 aria-pressed 的话读屏器听不出哪些域
                 被选上了——颜色是唯一的线索。与 ScheduledTaskScheduleInput 的
@@ -805,6 +812,7 @@ onUnmounted(() => {
               <Button
                 v-for="domain in permissionDomains"
                 :key="domain.id"
+                class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
                 size="sm"
                 :variant="
                   selectedDomains.includes(domain.id) ? 'default' : 'outline'
@@ -842,7 +850,11 @@ onUnmounted(() => {
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <Button :disabled="installDisabled" @click="install">
+            <Button
+              class="h-auto min-h-9 max-w-full py-2 whitespace-normal"
+              :disabled="installDisabled"
+              @click="install"
+            >
               <RefreshCw v-if="installPending" class="size-4 animate-spin" />
               {{
                 installPending
@@ -853,6 +865,7 @@ onUnmounted(() => {
               }}
             </Button>
             <Button
+              class="h-auto min-h-9 max-w-full py-2 whitespace-normal"
               variant="outline"
               :disabled="authActionDisabled"
               @click="connect"
@@ -870,6 +883,7 @@ onUnmounted(() => {
                 status.app_configured
               "
               variant="ghost"
+              class="h-auto min-h-9 max-w-full py-2 whitespace-normal"
               :disabled="integrationBusy"
               @click="showChangeApp = !showChangeApp"
             >
@@ -882,7 +896,7 @@ onUnmounted(() => {
 
           <div
             v-if="showChangeApp && status.installed && status.cli.available"
-            class="space-y-3 rounded-lg border p-3"
+            class="space-y-3 rounded-lg border p-2 sm:p-3"
           >
             <div class="space-y-1">
               <div class="text-sm font-medium">
@@ -931,8 +945,11 @@ onUnmounted(() => {
                 {{ larkCopy.changeAppAuthResetNote }}
               </p>
             </div>
-            <div class="flex flex-wrap gap-2">
+            <div
+              class="flex flex-wrap gap-2 max-[361px]:flex-col max-[361px]:items-stretch"
+            >
               <Button
+                class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
                 size="sm"
                 :disabled="
                   integrationBusy ||
@@ -956,7 +973,7 @@ onUnmounted(() => {
               <Button
                 size="sm"
                 variant="outline"
-                class="h-auto min-h-8 py-1 whitespace-normal"
+                class="h-auto min-h-8 max-w-full min-w-0 py-1 whitespace-normal max-[361px]:w-full"
                 :disabled="integrationBusy"
                 @click="reRegister"
               >

@@ -218,6 +218,7 @@ function unreachableClips(threshold: number) {
     这个计数回传出去、在用例里断言 > 0，那条分支才有人守着。
   */
   let clippedAwaySkips = 0;
+  let nativeTextInputSkips = 0;
   document.querySelectorAll("body *").forEach((el) => {
     const cs = getComputedStyle(el);
     const hidesY = cs.overflowY === "hidden" || cs.overflowY === "clip";
@@ -236,6 +237,31 @@ function unreachableClips(threshold: number) {
     const dy = hidesY ? el.scrollHeight - el.clientHeight : 0;
     const dx = hidesX ? el.scrollWidth - el.clientWidth : 0;
     if (dy < threshold && dx < threshold) return;
+    /*
+      单行原生文本输入框本身就是可横向导航的值视口：光标、选区与 Home/End
+      都能显出完整值。Blink 给它报 `overflow-x: clip` 不代表值永久不可达；
+      若输入框这个盒子被祖先裁了，祖先仍会作为独立元素继续进入下面的判定。
+    */
+    if (
+      el instanceof HTMLInputElement &&
+      [
+        "text",
+        "search",
+        "email",
+        "url",
+        "tel",
+        "password",
+        "number",
+        "date",
+        "time",
+        "month",
+        "week",
+        "datetime-local",
+      ].includes(el.type)
+    ) {
+      nativeTextInputSkips += 1;
+      return;
+    }
     /* 够得到吗：整页能滚 / 祖先能滚 / 里面有能滚的，任一成立就算够得到。 */
     if (docScrolls) return;
     let ancestor: Element | null = el.parentElement;
@@ -253,7 +279,7 @@ function unreachableClips(threshold: number) {
       dx,
     });
   });
-  return { clips: out, clippedAwaySkips };
+  return { clips: out, clippedAwaySkips, nativeTextInputSkips };
 }
 
 const readRootPx = () =>
@@ -278,6 +304,15 @@ for (const [name, base] of APPS) {
     const zoomRootPx: number[] = [];
     /* 反空转之三：读屏器专用那条跳过分支有没有真的命中过，见 `clippedAway`。 */
     let clippedAwaySkips = 0;
+    let nativeTextInputSkips = 0;
+    /*
+      agent 页与普通聊天页的头部类不同。Wave 64 曾把普通页的 gap-2 误套到
+      agent 页：200% 文本下主 pane 多出 24px，却因为内部另有可滚容器而被上面的
+      通用「够得到」判据放过。这里守住真实承载头部的第一块 pane，不拿分栏根量——
+      根还包含 splitter 的透明拖拽命中区，那个不是内容。
+    */
+    const agentHeaderReflow: string[] = [];
+    let agentHeaderProbes = 0;
 
     for (const scenario of PARITY_SCENARIOS)
       for (const state of scenarioStates(scenario)) {
@@ -305,11 +340,28 @@ for (const [name, base] of APPS) {
               await waitForFiniteAnimations(page);
               await waitForDomQuiet(page);
               zoomRootPx.push(await page.evaluate(readRootPx));
+              if (key === "agent-chat#completed-turn") {
+                agentHeaderProbes += 1;
+                const pane = await page
+                  .locator(
+                    '[data-slot="resizable-panel-group"] [data-panel]:first-of-type, .workspace-panels > .workspace-panels__main-pane',
+                  )
+                  .first()
+                  .evaluate((element) => ({
+                    clientWidth: element.clientWidth,
+                    scrollWidth: element.scrollWidth,
+                  }));
+                if (pane.scrollWidth > pane.clientWidth + 1)
+                  agentHeaderReflow.push(
+                    `${name}/${key}: main pane ${pane.clientWidth}→${pane.scrollWidth}`,
+                  );
+              }
             }
             clippersSeenAtAll += (await page.evaluate(unreachableClips, 1))
               .clips.length;
             const survey = await page.evaluate(unreachableClips, THRESHOLD_PX);
             clippedAwaySkips += survey.clippedAwaySkips;
+            nativeTextInputSkips += survey.nativeTextInputSkips;
             for (const clip of survey.clips) {
               const where = `${key}[${phase}]: 裁掉 ${clip.dy}y/${clip.dx}x 且滚不到 ${clip.label}`;
               /*
@@ -368,5 +420,15 @@ for (const [name, base] of APPS) {
         "而那时候这把尺子照样绿（多报的噪声会被登记表吸收）。" +
         "⚠ 真的一个 sr-only 都没有了，就把这条断言连同 `clippedAway` 一起删掉，别调成 >= 0",
     ).toBeGreaterThan(0);
+    expect(
+      nativeTextInputSkips,
+      "原生单行输入值视口分支一次都没命中——若浏览器不再用内部裁剪，" +
+        "应连同这条分支一起删除，不能把断言调成 >= 0",
+    ).toBeGreaterThan(0);
+    expect(agentHeaderProbes, "agent 页 200% 头部探针没有跑到").toBe(1);
+    expect(
+      agentHeaderReflow,
+      "agent 页 200% 文本把右侧工具条撑出主 pane，用户会看到末端控件被裁",
+    ).toEqual([]);
   });
 }

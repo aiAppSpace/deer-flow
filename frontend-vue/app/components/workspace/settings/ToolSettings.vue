@@ -384,7 +384,7 @@ async function toggle(name: string, enabled: boolean) {
     >
       <Textarea
         v-model="definition"
-        class="min-h-52 font-mono text-xs"
+        class="field-sizing-fixed max-h-[50dvh] min-h-52 overflow-y-auto font-mono text-xs"
         :aria-label="t.settings.tools.serverDefinitionLabel"
         spellcheck="false"
         :placeholder="t.settings.tools.addServerPlaceholder"

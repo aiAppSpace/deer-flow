@@ -309,11 +309,18 @@ type LedgerMeasures = {
 
 /*
   `PARITY_FIXED_SPECS` 那几份 spec 里的固定用例数（**不随场景目录变**的那些）。
-  为什么 23 > 18 个 `test(` 调用点：五处包在两项的 `for` 里——`topology.spec`
+  为什么 38 > 27 个 `test(` 调用点：十一处包在两项的 `for` 里——`topology.spec`
   最后那条（vue / react 各一条）、`keyboard-trap.spec` 整份、
   `content-reachable.spec` 整份、`overlay-survives-resize.spec` 整份，
-  以及 `viewport-fit.spec` 整份（第五十六轮加）。
-  下面那条用例钉住「调用点还是 18 个」——有人加一条用例，调用点数变了就红，
+  `viewport-fit.spec` 整份（第五十六轮加），以及
+  `narrow-screen-overflow.spec` 的两个调用点（wave 63 改为双端，各多一条）、
+  `low-height-reachability.spec` 整份（wave 65 加），以及
+  `combined-reflow.spec` 的 61 终态用例（wave 66 加；另一条是单独的阳性对照），
+  以及 `triple-reflow.spec` 的 61 终态用例（wave 67 加；另一条验证七种非三轴组合都不响），
+  以及 `triple-keyboard.spec` 的 61 终态用例（wave 68 加；另一条是吞键阳性对照）。
+  `triple-overlay-keyboard.spec`（wave 69 加）的产品用例在一个 Playwright test 内部遍历
+  两端 61 终态，连同 Arrow / Enter / Escape 阳性对照共新增两个普通固定调用点。
+  下面那条用例钉住「调用点还是 27 个」——有人加一条用例，调用点数变了就红，
   逼着这个常量和文档一起跟进。
   **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
   失效时会明确报出来。
@@ -341,9 +348,14 @@ const PARITY_FIXED_SPECS = [
   "keyboard-order",
   "content-reachable",
   "overlay-survives-resize",
+  "low-height-reachability",
+  "combined-reflow",
+  "triple-reflow",
+  "triple-keyboard",
+  "triple-overlay-keyboard",
   "viewport-fit",
 ] as const;
-const PARITY_FIXED_TESTS = 23;
+const PARITY_FIXED_TESTS = 38;
 
 /** 全部读数只从签入基线算，一个字都不从散文里读。 */
 function measureLedger(): LedgerMeasures {
@@ -429,9 +441,13 @@ const PLAN_CLAIMS: PlanClaim[] = [
     label: "词典 unused",
   },
   {
-    pattern: /e2e-parity[^\n]*?\*\*(\d+) passed\*\*/g,
+    /*
+      `parityTests` 来自用例目录，不来自一次执行结果。措辞故意钉成 `collected`：
+      浏览器中途退出时目录数仍然可信，但不能把它写成整套 `passed`。
+    */
+    pattern: /e2e-parity[^\n]*?\*\*(\d+) collected\*\*/g,
     actual: (m) => m.parityTests,
-    label: "e2e-parity 用例数",
+    label: "e2e-parity 收集用例数",
   },
 ];
 
@@ -486,12 +502,15 @@ describe("计划文档里的台账读数和签入基线一致", () => {
           .length,
       0,
     );
-    // 18 个调用点 → 23 条用例（topology 最后一条、整份 keyboard-trap、
+    // 27 个调用点 → 38 条用例（topology 最后一条、整份 keyboard-trap、
     // 整份 content-reachable、整份 overlay-survives-resize、整份 viewport-fit，
-    // 五处各包在两项 for 里）。
+    // narrow-screen-overflow 的两个调用点、整份 low-height-reachability
+    // combined-reflow、triple-reflow 与 triple-keyboard 的终态调用点；
+    // triple-overlay-keyboard 在一个固定调用点内部扫描双端，
+    // 共十一处包在两项 for 里）。
     expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 18,
-      常量: 23,
+      调用点: 27,
+      常量: 38,
     });
 
     /*

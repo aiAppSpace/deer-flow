@@ -36,7 +36,7 @@ const formatted = computed(() => {
     data-context-usage-placeholder="true"
     :aria-label="$i18n.t.value.contextUsage.title"
     :title="$i18n.t.value.contextUsage.title"
-    class="text-muted-foreground bg-background/70 flex size-7 shrink-0 items-center justify-center rounded-full border"
+    class="text-muted-foreground bg-background/70 flex size-7 shrink-0 items-center justify-center rounded-full border max-[361px]:size-[36px] max-[361px]:[&_svg]:size-[16px]"
   >
     <Gauge :size="14" />
   </div>
@@ -44,7 +44,7 @@ const formatted = computed(() => {
     v-else
     role="status"
     :aria-label="$i18n.t.value.contextUsage.badgeAriaLabel(formatted)"
-    class="text-muted-foreground bg-background/70 flex h-auto shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-normal"
+    class="text-muted-foreground bg-background/70 flex h-auto shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-normal max-[361px]:size-[36px] max-[361px]:justify-center max-[361px]:gap-0 max-[361px]:p-0 max-[361px]:[&_svg]:size-[16px] max-[361px]:[&>span]:hidden"
   >
     <Gauge :size="14" />
     <span>{{ $i18n.t.value.contextUsage.label }}</span>

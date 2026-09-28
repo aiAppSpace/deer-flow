@@ -44,8 +44,8 @@ export function ArtifactViewer({
   const isLoadingFullContent = fullContentRequested && isLoading;
 
   return (
-    <div className="bg-background flex h-screen flex-col">
-      <header className="border-border bg-background/95 sticky top-0 z-10 flex shrink-0 items-center gap-3 border-b px-4 py-3 backdrop-blur">
+    <div className="bg-background flex h-screen max-w-full min-w-0 flex-col overflow-x-hidden">
+      <header className="border-border bg-background/95 sticky top-0 z-10 flex min-w-0 shrink-0 flex-wrap items-center gap-3 border-b px-4 py-3 backdrop-blur">
         <div className="text-muted-foreground shrink-0">
           {getFileIcon(filepath, "size-4")}
         </div>
@@ -57,7 +57,12 @@ export function ArtifactViewer({
             {filepath}
           </div>
         </div>
-        <Button variant="ghost" size="sm" asChild>
+        <Button
+          className="h-auto max-w-full min-w-0 whitespace-normal"
+          variant="ghost"
+          size="sm"
+          asChild
+        >
           <a
             href={urlOfArtifact({ filepath, threadId, isMock })}
             target="_blank"
@@ -67,7 +72,12 @@ export function ArtifactViewer({
             {t.artifactPreview.viewSource}
           </a>
         </Button>
-        <Button variant="outline" size="sm" asChild>
+        <Button
+          className="h-auto max-w-full min-w-0 whitespace-normal"
+          variant="outline"
+          size="sm"
+          asChild
+        >
           <a
             href={urlOfArtifact({
               filepath,
@@ -83,14 +93,19 @@ export function ArtifactViewer({
       </header>
 
       {truncated && !isTabular && (
-        <div className="border-border bg-muted/40 flex shrink-0 items-center justify-between gap-3 border-b px-4 py-2 text-sm">
-          <span className="text-muted-foreground">
+        <div className="border-border bg-muted/40 flex min-w-0 shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-sm">
+          <span className="text-muted-foreground min-w-0 wrap-anywhere">
             {t.artifactPreview.limited(
               formatArtifactBytes(previewBytes) ?? "1 MiB",
               formatArtifactBytes(totalBytes),
             )}
           </span>
-          <Button size="sm" variant="outline" onClick={loadFullContent}>
+          <Button
+            className="h-auto max-w-full min-w-0 whitespace-normal"
+            size="sm"
+            variant="outline"
+            onClick={loadFullContent}
+          >
             {t.artifactPreview.loadFullFile}
           </Button>
         </div>

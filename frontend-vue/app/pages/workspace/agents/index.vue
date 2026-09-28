@@ -127,8 +127,10 @@ async function remove(agent: Agent) {
   <AgentsFeatureDisabled v-if="featureDisabled" />
   <div v-else class="size-full">
     <section class="flex size-full flex-col">
-      <header class="flex items-center justify-between border-b px-6 py-4">
-        <div>
+      <header
+        class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-6"
+      >
+        <div class="min-w-0">
           <h1 class="text-xl font-semibold">
             {{ $i18n.t.value.agents.title }}
           </h1>
@@ -167,7 +169,7 @@ async function remove(agent: Agent) {
           {{ $i18n.t.value.agents.newAgent }}
         </NuxtLink>
       </header>
-      <div class="flex-1 overflow-y-auto p-6">
+      <div class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <!--
           加载占位是一个**居中的 h-40 盒子**，不是左上角一行字：上游
           `frontend/src/components/workspace/agents/agent-gallery.tsx:40` 是
@@ -196,7 +198,7 @@ async function remove(agent: Agent) {
         </p>
         <div
           v-if="featureEnabled && !agentCatalog.loading.value && !listError"
-          class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
           <AgentCard
             v-for="agent in agentCatalog.agents.value"

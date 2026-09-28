@@ -198,18 +198,23 @@ function archiveErrorOptions(cause: unknown) {
       -->
       <header
         v-if="!skills.error.value && !skills.loading.value"
-        class="flex flex-wrap justify-between gap-2"
+        class="flex max-w-full min-w-0 flex-wrap justify-between gap-2"
       >
-        <div class="flex gap-2">
-          <Tabs v-model="filter">
+        <div class="flex max-w-full min-w-0 gap-2 max-[361px]:w-full">
+          <Tabs v-model="filter" class="max-w-full min-w-0 max-[361px]:w-full">
             <!--
               给这组标签取个名字。没有名字的 tablist 只会被念成「选项卡列表」，
               说不出它在筛什么（上游同处有同样一句注释）。
             -->
-            <TabsList variant="line" :aria-label="t.settings.skills.title">
+            <TabsList
+              class="max-w-full max-[361px]:h-auto max-[361px]:w-full max-[361px]:flex-col"
+              variant="line"
+              :aria-label="t.settings.skills.title"
+            >
               <TabsTrigger
                 v-for="kind in ['public', 'custom'] as const"
                 :key="kind"
+                class="max-[361px]:w-full"
                 :value="kind"
               >
                 {{ kind === "public" ? t.common.public : t.common.custom }}
@@ -224,7 +229,9 @@ function archiveErrorOptions(cause: unknown) {
           **3px**，和「恰好装得下」长得一模一样（第二十一轮与第三十八轮各栽过一次的
           就是这个形状）。两边同改。
         -->
-        <div class="flex flex-wrap gap-2">
+        <div
+          class="flex max-w-full min-w-0 flex-wrap gap-2 max-[361px]:w-full max-[361px]:flex-col"
+        >
           <!--
             文件选择器是**隐藏的 input**，按钮点它。原生 file input 的外观各浏览器
             各不相同，也没法按设计系统画。
@@ -247,6 +254,7 @@ function archiveErrorOptions(cause: unknown) {
           />
           <Button
             v-if="access.canManageSkills.value"
+            class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
             size="sm"
             variant="outline"
             data-testid="install-skill-archive"
@@ -267,7 +275,12 @@ function archiveErrorOptions(cause: unknown) {
             手写那版**没有图标**，尺寸也是 default 一档（sm 是 `h-8 gap-1.5 px-3`），
             而且少 `hover:bg-primary/90`、`cursor-pointer`、3px 焦点环与 `disabled:*`。
           -->
-          <Button size="sm" data-testid="create-skill" @click="createSkill">
+          <Button
+            class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+            size="sm"
+            data-testid="create-skill"
+            @click="createSkill"
+          >
             <Sparkles class="size-4" />
             {{ t.settings.skills.createSkill }}
           </Button>

@@ -448,7 +448,7 @@ function showConnectAction(view: ChannelProviderView) {
             <div
               v-for="connection in view.connections"
               :key="connection.id"
-              class="bg-muted/40 flex items-center justify-between gap-3 rounded-md px-3 py-2"
+              class="bg-muted/40 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md px-3 py-2"
               :data-testid="`channel-connection-${connection.id}`"
             >
               <div class="min-w-0">
@@ -461,6 +461,7 @@ function showConnectAction(view: ChannelProviderView) {
               </div>
               <Button
                 v-if="connection.status !== 'revoked'"
+                class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
                 type="button"
                 variant="outline"
                 size="sm"
@@ -568,7 +569,7 @@ function showConnectAction(view: ChannelProviderView) {
             type="button"
             variant="outline"
             size="sm"
-            class="text-destructive hover:text-destructive h-auto min-h-8 py-1 whitespace-normal"
+            class="text-destructive hover:text-destructive h-auto min-h-8 max-w-full min-w-0 py-1 whitespace-normal"
             :disabled="channels.isProviderPending(view.provider.provider)"
             :aria-label="`${text.removeProviderConfig}: ${view.provider.display_name}`"
             @click="removingProvider = view.provider"

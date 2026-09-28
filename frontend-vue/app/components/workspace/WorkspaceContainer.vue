@@ -70,8 +70,15 @@ const { mobileOpen: sidebarMobileOpen, toggleSidebar } = useWorkspaceSidebar();
 <template>
   <div class="flex h-screen w-full flex-col">
     <header
-      class="top-0 right-0 left-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b backdrop-blur-sm transition-[width,height] ease-out"
+      class="top-0 right-0 left-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b backdrop-blur-sm transition-[width,height] ease-out [@media(max-height:360px)]:h-auto [@media(max-height:360px)]:min-h-[48px]"
     >
+      <!--
+        低高度下 48px 是紧凑下限，不是硬上限。三轴回流（360×360×200%）里，
+        sidebar trigger 自然高 56px，scheduled-tasks 的可换行 breadcrumb 自然高
+        80px；把 header 固定成 48px 会让 `items-center` 把它们顶到 y=-4/-16，
+        且 header 本身不是滚动容器，用户没有任何路径把上沿找回来。
+        `h-auto + min-h` 保留 100% 文本下的 48px，同时让放大后的真实内容定高。
+      -->
       <div class="flex min-w-0 items-center gap-2 px-2 sm:px-4">
         <!--
           带着 `md:hidden`，只在窄屏出现，所以读的是抽屉的 `mobileOpen`

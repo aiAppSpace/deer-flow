@@ -28,7 +28,7 @@ export function ContextUsageBadge({
         aria-label={t.contextUsage.title}
         title={t.contextUsage.title}
         className={cn(
-          "text-muted-foreground bg-background/70 flex size-7 items-center justify-center rounded-full border",
+          "text-muted-foreground bg-background/70 flex size-7 items-center justify-center rounded-full border max-[361px]:size-[36px] max-[361px]:[&_svg]:size-[16px]",
           className,
         )}
       >
@@ -42,7 +42,7 @@ export function ContextUsageBadge({
       role="status"
       aria-label={t.contextUsage.badgeAriaLabel(formatted)}
       className={cn(
-        "text-muted-foreground bg-background/70 flex h-auto items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-normal",
+        "text-muted-foreground bg-background/70 flex h-auto items-center gap-1.5 rounded-full border px-2 py-1 text-xs font-normal max-[361px]:size-[36px] max-[361px]:justify-center max-[361px]:gap-0 max-[361px]:p-0 max-[361px]:[&_svg]:size-[16px] max-[361px]:[&>span]:hidden",
         className,
       )}
     >

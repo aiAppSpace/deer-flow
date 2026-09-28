@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import MoveToProjectMenu from "@/components/workspace/projects/MoveToProjectMenu.vue";
+import { useMediaQuery } from "@/composables/useMediaQuery";
 import { useThreadArchiveAction } from "@/composables/useThreadArchiveAction";
 import { getAPIClient } from "@/core/api/api-client";
 import { writeTextToClipboard } from "@/core/clipboard";
@@ -61,6 +62,7 @@ const { $i18n } = useNuxtApp();
 const toast = useWorkspaceToast();
 const exporting = ref<ThreadExportFormat | null>(null);
 const sharing = ref(false);
+const isNarrow = useMediaQuery("(max-width: 767px)");
 
 async function shareThread() {
   if (sharing.value) return;
@@ -198,7 +200,7 @@ async function exportConversation(format: ThreadExportFormat) {
         <DropdownMenuSubTrigger data-testid="thread-export-submenu">
           <Download /> {{ $i18n.t.value.common.export }}
         </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent>
+        <DropdownMenuSubContent :side-offset="isNarrow ? -190 : 0">
           <DropdownMenuItem
             data-testid="thread-export-markdown"
             :disabled="Boolean(exporting)"

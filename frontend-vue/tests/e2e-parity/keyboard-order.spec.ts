@@ -45,9 +45,13 @@
                    跨应用差异 0 → **4**、同应用两跑不稳 0 → **2**。
                    菜单开着时 blur 会扰动浮层自己的焦点管理，而那正是要量的东西。
 
-                   **`(body)` 是一个合法落点**，不是失败：走到最后一个可聚焦元素
-                   之后焦点会离开这份文档（`artifact-preview` 那一屏还有 iframe）。
-                   它参与比对——两边**从同一个落点**离开文档，本身就是一条判据。
+                   **`(body)` 是浏览器 chrome 边界的哨兵，不是应用落点**：走到最后
+                   一个可聚焦元素之后焦点会离开这份文档；system Chrome 有时让
+                   `activeElement` 在 body 停一拍，有时下一次按键直接环回。第六十四轮
+                   同一构建的全量与单场景探针给了决定性对照：两端 trigger 几何、
+                   tabIndex 与 60 步文档内序列逐项相同，但全量 56 条假分叉全部长成
+                   `末项 → body → 首项` 对 `末项 → 首项`。所以转移与闭环要先剥掉 body，
+                   比较真正的文档内环；`allBody` 仍看原序列，整场塌成 body 照样会红。
 
                    ⚠ **别把「两边都空」当成绿**：下面两条反空转断言堵这件事。
                    第四十五轮签入时的读数：58 个终态、不同非 body 落点合计 **925**，
@@ -168,9 +172,10 @@ const CASES: Case[] = PARITY_SCENARIOS.flatMap((scenario) =>
 
 /** 相邻关系：`前一个落点 → 后一个落点`。见文件头第④条，这是旋转无关的那一层。 */
 function transitions(sequence: string[]): Set<string> {
+  const documentStops = sequence.filter((stop) => stop !== "(body)");
   const out = new Set<string>();
-  for (let i = 0; i < sequence.length - 1; i += 1)
-    out.add(`${sequence[i]} → ${sequence[i + 1]}`);
+  for (let i = 0; i < documentStops.length - 1; i += 1)
+    out.add(`${documentStops[i]} → ${documentStops[i + 1]}`);
   return out;
 }
 
@@ -188,7 +193,10 @@ function onlyIn(a: Set<string>, b: Set<string>): string[] {
  * 「先拿一个已知答案的样本验仪器」这一轮又欠了一次。
  */
 function ringClosed(sequence: string[]): boolean {
-  const squashed = sequence.filter((v, i) => i === 0 || v !== sequence[i - 1]);
+  const documentStops = sequence.filter((stop) => stop !== "(body)");
+  const squashed = documentStops.filter(
+    (v, i) => i === 0 || v !== documentStops[i - 1],
+  );
   return squashed.length > new Set(squashed).size;
 }
 
@@ -200,8 +208,11 @@ function ringClosed(sequence: string[]): boolean {
  * 焦点停在菜单上不动，两个应用都是」）。第五十轮把它量成了一张可断言的名单，
  * 好让「环必须闭合」那条体检对其余终态真正生效。
  *
- * **这 13 个键每一个都是「本仓 1 / 上游 1」——两个应用逐字相同**，
+ * **这 14 个键每一个都是「本仓 1 / 上游 1」——两个应用逐字相同**，
  * 所以它们是这一屏的形状，不是分叉。
+ * `sidecar-chat#mobile-sheet[Shift+Tab]` 是第六十四轮完整 220 项第一次把
+ * 第六十二轮新增的移动 Sheet 走进这把尺子时量到的：两端都只有 Content 这一个
+ * 停住的落点；正向能走动，所以只登记反向，不能按终态整块排除。
  *
  * ⚠ **键带方向，不是只按终态**：`workspace-changes#changes-panel` 正向走得动、
  * 反向一步都走不了。按终态排除会把它正向那一半的体检也一起关掉。
@@ -219,6 +230,7 @@ const SINGLE_STOP = new Set([
   "thread-list-pin[Shift+Tab]",
   "thread-list-pin#mobile-drawer[Tab]",
   "thread-list-pin#mobile-drawer[Shift+Tab]",
+  "sidecar-chat#mobile-sheet[Shift+Tab]",
   "ui-polish-mobile[Tab]",
   "ui-polish-mobile[Shift+Tab]",
   "user-message-plain-text[Tab]",
@@ -235,6 +247,13 @@ const DIRECTIONS = [
 
 test("两个应用按 Tab / Shift+Tab 走的是同一条环", async ({ browser }) => {
   test.setTimeout(3_600_000);
+
+  /*
+    仪器自检：是否观察到浏览器 chrome 的那一拍，不得改变应用内的相邻关系与闭环。
+    这两条是第六十四轮 system Chrome 全量/单场景对照的最小复现。
+  */
+  expect(transitions(["a", "(body)", "b"])).toEqual(transitions(["a", "b"]));
+  expect(ringClosed(["a", "b", "(body)", "a"])).toBe(true);
 
   const mismatched: string[] = [];
   const unreachable: string[] = [];

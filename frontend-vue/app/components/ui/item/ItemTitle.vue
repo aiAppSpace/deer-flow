@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const props = withDefaults(defineProps<{ class?: string }>(), { class: "" });
 const classes = computed(() =>
   cn(
-    "flex w-fit items-center gap-2 text-sm leading-snug font-medium",
+    "flex w-fit max-w-full min-w-0 items-center gap-2 text-sm leading-snug font-medium max-[361px]:w-full max-[361px]:flex-wrap wrap-anywhere",
     props.class,
   ),
 );

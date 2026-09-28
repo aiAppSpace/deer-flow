@@ -12,7 +12,13 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.9855 0.0098 87.47);
+  /*
+    Next 的 production Lightning CSS 会把上游同一个 OKLCH token 编译成下面的
+    Lab 值，Nuxt/Vite 则原样保留 OKLCH。纯色看不出差别，但 `bg-background/50`
+    再做一次 OKLab 混色后会差 2 个蓝通道单位（241 vs 243）。这里钉最终生产
+    表示，保持 token 的颜色语义不变，同时让半透明像素与 React 真正一致。
+  */
+  --background: lab(98.3628% 0.136942 3.74554);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0.0098 87.47);
   --card-foreground: oklch(0.145 0 0);
@@ -44,7 +50,7 @@
 }
 
 .dark {
-  --background: oklch(0.24 0.0036 106.64);
+  --background: lab(11.8704% -0.349946 1.31819);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.238 0.0036 106.64);
   --card-foreground: oklch(0.985 0 0);

@@ -54,7 +54,12 @@ export function WorkspaceHeader({
   return (
     <header
       className={cn(
-        "top-0 right-0 left-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b backdrop-blur-sm transition-[width,height] ease-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12",
+        // 48px is the compact low-height floor, not a hard ceiling. At 200%
+        // text the trigger is 56px tall and a wrapping breadcrumb can be 80px;
+        // a fixed-height, centered header pushes their top edge above the viewport
+        // with no scroll route. Let real content size the header while preserving
+        // the 48px minimum at the default text scale.
+        "top-0 right-0 left-0 z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b backdrop-blur-sm transition-[width,height] ease-out group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 [@media(max-height:360px)]:h-auto [@media(max-height:360px)]:min-h-[48px]",
         className,
       )}
       {...props}

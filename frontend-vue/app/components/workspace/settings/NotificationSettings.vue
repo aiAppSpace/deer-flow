@@ -60,7 +60,7 @@ function sendTestNotification() {
   </SettingsSection>
   <SettingsSection v-else :title="$i18n.t.value.settings.notification.title">
     <template #description>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <div>{{ $i18n.t.value.settings.notification.description }}</div>
         <div>
           <Switch
@@ -84,6 +84,7 @@ function sendTestNotification() {
       -->
       <Button
         v-if="notifications.permission.value === 'default'"
+        class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
         type="button"
         @click="requestPermission"
       >
@@ -106,7 +107,12 @@ function sendTestNotification() {
         v-if="notifications.permission.value === 'granted' && enabled"
         class="flex flex-col gap-4"
       >
-        <Button type="button" variant="outline" @click="sendTestNotification">
+        <Button
+          class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+          type="button"
+          variant="outline"
+          @click="sendTestNotification"
+        >
           <Bell class="mr-2 size-4" />
           {{ $i18n.t.value.settings.notification.testButton }}
         </Button>

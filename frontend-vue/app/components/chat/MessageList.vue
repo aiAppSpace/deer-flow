@@ -94,7 +94,6 @@ import type { Message } from "@/core/types/message";
 import { readReferenceMessageContexts } from "@/core/sidecar";
 import { writeTextToClipboard } from "@/core/clipboard";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
-import { cn } from "@/lib/utils";
 
 /*
   **多根模板必须自己接 attrs**（wave 124）：下面把划词工具条挪出了 `role="log"`
@@ -234,7 +233,7 @@ type SelectionPayload = {
   而选区的位置只有 mouseup 那一刻的 Range 知道。
 */
 type SelectionToolbarState = SelectionPayload & {
-  /** 选区中线的视口 x；工具条自己再 -translate-x-1/2 居中。 */
+  /** 选区中线的视口 x；渲染后用工具条实测宽度居中并夹在视口内。 */
   x: number;
   /** 选区上沿（placement top）或下沿（placement bottom）加上边距后的视口 y。 */
   y: number;
@@ -511,8 +510,10 @@ const historySentinel = ref<HTMLElement | null>(null);
 const windowStart = ref<number | null>(null);
 const followingTail = ref(true);
 const selection = ref<SelectionToolbarState | null>(null);
+const selectionToolbarElement = ref<HTMLElement | null>(null);
 let userScrollIntent = false;
 let contentResizeObserver: ResizeObserver | undefined;
+let selectionToolbarResizeObserver: ResizeObserver | undefined;
 let historyObserver: IntersectionObserver | undefined;
 let historyAnchor: { scrollHeight: number; scrollTop: number } | null = null;
 const historyInteractionArmed = ref(false);
@@ -847,9 +848,8 @@ function onSelection(event: MouseEvent, index: number) {
   }
 
   /*
-    工具条带着 `-translate-y-full`，锚在 rect.top 时会被它自己的高度顶上去；
-    选区贴近视口顶端时上方放不下，就翻到选区下方，保证两颗按钮都够得着
-    （上游 #3551）。
+    工具条还没进 DOM 时先选一个优先方向；渲染后再实测换行后的宽高，把完整盒子
+    夹进视口。这样窄屏/高倍文字下也不会因为固定高度估算而丢按钮（上游 #3551）。
   */
   const rect = domSelection.getRangeAt(0).getBoundingClientRect();
   const fitsAbove =
@@ -877,6 +877,43 @@ function onKey(event: KeyboardEvent) {
 function onSelectionScroll() {
   if (selection.value) selection.value = null;
 }
+function positionSelectionToolbar() {
+  const toolbar = selectionToolbarElement.value;
+  const current = selection.value;
+  if (!toolbar || !current) return;
+
+  const width = toolbar.offsetWidth;
+  const height = toolbar.offsetHeight;
+  const maxLeft = Math.max(
+    SELECTION_TOOLBAR_MARGIN,
+    globalThis.innerWidth - width - SELECTION_TOOLBAR_MARGIN,
+  );
+  const maxTop = Math.max(
+    SELECTION_TOOLBAR_MARGIN,
+    globalThis.innerHeight - height - SELECTION_TOOLBAR_MARGIN,
+  );
+  const preferredLeft = current.x - width / 2;
+  const preferredTop =
+    current.placement === "top" ? current.y - height : current.y;
+
+  toolbar.style.left = `${Math.min(Math.max(preferredLeft, SELECTION_TOOLBAR_MARGIN), maxLeft)}px`;
+  toolbar.style.top = `${Math.min(Math.max(preferredTop, SELECTION_TOOLBAR_MARGIN), maxTop)}px`;
+}
+watch(selection, async (current) => {
+  selectionToolbarResizeObserver?.disconnect();
+  selectionToolbarResizeObserver = undefined;
+  if (!current) return;
+
+  await nextTick();
+  positionSelectionToolbar();
+  const toolbar = selectionToolbarElement.value;
+  if (toolbar && "ResizeObserver" in globalThis) {
+    selectionToolbarResizeObserver = new ResizeObserver(
+      positionSelectionToolbar,
+    );
+    selectionToolbarResizeObserver.observe(toolbar);
+  }
+});
 function dispatchSelection(action: "ask" | "add") {
   const current = selection.value;
   if (!current) return;
@@ -1139,11 +1176,14 @@ watch(historySentinel, (element, previous) => {
 onMounted(() => {
   globalThis.addEventListener("keydown", onKey);
   globalThis.addEventListener("scroll", onSelectionScroll, true);
+  globalThis.addEventListener("resize", positionSelectionToolbar);
 });
 onUnmounted(() => {
   globalThis.removeEventListener("keydown", onKey);
   globalThis.removeEventListener("scroll", onSelectionScroll, true);
+  globalThis.removeEventListener("resize", positionSelectionToolbar);
   contentResizeObserver?.disconnect();
+  selectionToolbarResizeObserver?.disconnect();
   historyObserver?.disconnect();
   if (followAnimationFrame !== undefined) {
     cancelAnimationFrame(followAnimationFrame);
@@ -1156,11 +1196,11 @@ onUnmounted(() => {
     v-bind="$attrs"
     :data-testid="testId"
     role="log"
-    class="min-h-0 flex-1 transition-[padding]"
+    class="min-h-0 flex-1 transition-[padding] max-[361px]:h-auto! max-[361px]:flex-none max-[361px]:overflow-visible!"
   >
     <div
       ref="scroller"
-      class="h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]"
+      class="h-full overflow-y-auto [scrollbar-gutter:stable_both-edges] max-[361px]:h-auto! max-[361px]:overflow-visible!"
       @scroll="onScroll"
       @wheel="onWheel"
       @touchstart="onScrollIntent"
@@ -1712,19 +1752,16 @@ onUnmounted(() => {
   />
   <div
     v-if="selection"
+    ref="selectionToolbarElement"
     data-sidecar-selection-toolbar
-    :class="
-      cn(
-        'bg-popover text-popover-foreground border-border fixed z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border p-1 shadow-lg',
-        selection.placement === 'bottom'
-          ? 'translate-y-0'
-          : '-translate-y-full',
-      )
-    "
-    :style="{ left: `${selection.x}px`, top: `${selection.y}px` }"
+    class="bg-popover text-popover-foreground border-border fixed z-50 flex max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-1 overflow-y-auto rounded-full border p-1 shadow-lg"
+    :style="{
+      left: `${SELECTION_TOOLBAR_MARGIN}px`,
+      top: `${SELECTION_TOOLBAR_MARGIN}px`,
+    }"
   >
     <Button
-      class="h-8 rounded-full px-2.5 text-xs"
+      class="h-auto min-h-8 max-w-full min-w-0 rounded-full px-2.5 text-xs whitespace-normal"
       size="sm"
       type="button"
       variant="ghost"
@@ -1736,7 +1773,7 @@ onUnmounted(() => {
     </Button>
     <Button
       v-if="selectionMode === 'main'"
-      class="h-8 rounded-full px-2.5 text-xs"
+      class="h-auto min-h-8 max-w-full min-w-0 rounded-full px-2.5 text-xs whitespace-normal"
       size="sm"
       type="button"
       variant="ghost"

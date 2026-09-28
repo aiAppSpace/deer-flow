@@ -1692,6 +1692,14 @@ onUnmounted(() => {
   suggestionController?.abort();
   suggestionController = null;
 });
+
+function keepTripleReflowFocusVisible(event: FocusEvent) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  requestAnimationFrame(() => {
+    if (target.isConnected) target.scrollIntoView({ block: "nearest" });
+  });
+}
 </script>
 
 <template>
@@ -1742,7 +1750,7 @@ onUnmounted(() => {
             v-if="!isDemo"
             :open="sidebarMobileOpen"
             :aria-label="$i18n.t.value.primitives.toggleSidebar"
-            class="md:hidden"
+            class="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]"
             @click="toggleSidebar"
           />
           <div
@@ -1822,12 +1830,18 @@ onUnmounted(() => {
             <TooltipContent>{{ $i18n.t.value.agents.newChat }}</TooltipContent>
           </Tooltip>
           <!--
-            右侧控件有一层分组容器，与上游 chat-page.tsx 同构：
-            `<div class="flex shrink-0 items-center gap-2">`。它不改变横向节奏
-            （标题是唯一的 flex-1，容器内外都是同样多个 gap-2），改变的是收缩行为——
-            标题变长时缩的是标题，不是这排按钮。
+            右侧控件有一层分组容器，但两个上游页面并不共用同一串类：普通聊天页
+            `chat-page.tsx` 是 `gap-2`，agent 页是无 gap 的 `sm:mr-4`。本组件同时服务
+            两条路由，必须按 `agentName` 选择；把普通聊天的 gap 套到 agent 页，
+            200% 文本下会把这排控件多撑 24px 并由主 pane 静默裁掉。
+
+            两支都保留 `shrink-0`：标题是唯一的 flex-1，标题变长时缩的是标题，
+            不是这排按钮。
           -->
-          <div class="flex shrink-0 items-center gap-2">
+          <div
+            class="flex shrink-0 items-center max-[361px]:min-w-0 max-[361px]:flex-1 max-[361px]:shrink max-[361px]:flex-nowrap max-[361px]:justify-end max-[361px]:gap-[8px] max-[361px]:[&_[data-slot=button]]:size-[36px]! max-[361px]:[&_[data-slot=button]]:p-0! max-[361px]:[&_[data-slot=button]_svg]:size-[16px]!"
+            :class="agentName ? 'sm:mr-4' : 'gap-2'"
+          >
             <!--
               后台任务排在这一组的最前，与上游 chat-page.tsx 的顺序一致
               （ThreadBackgroundTasks 在 ThreadScheduledTasksLink 上面）。
@@ -1857,7 +1871,12 @@ onUnmounted(() => {
               v-if="routeThreadId && !agentName && !isDemo"
               :to="`/workspace/scheduled-tasks?thread_id=${encodeURIComponent(routeThreadId)}`"
               :aria-label="$i18n.t.value.sidebar.scheduledTasks"
-              :class="buttonVariants({ variant: 'outline', size: 'sm' })"
+              :class="
+                cn(
+                  buttonVariants({ variant: 'outline', size: 'sm' }),
+                  'max-[361px]:size-[36px]! max-[361px]:p-0! max-[361px]:[&_svg]:size-[16px]!',
+                )
+              "
             >
               <CalendarClock :size="16" />
               <span class="hidden sm:inline">{{
@@ -1995,7 +2014,10 @@ onUnmounted(() => {
           不属于对话本身，所以 main 从消息流开始——读屏器的「跳到主内容」应当落在对话，
           而不是落在标题栏。
         -->
-        <main class="flex min-h-0 max-w-full grow flex-col">
+        <main
+          class="flex min-h-0 max-w-full grow flex-col max-[361px]:overflow-y-auto"
+          @focusin="keepTripleReflowFocusVisible"
+        >
           <div v-if="showSaveHint" class="px-4 pt-4">
             <div class="mx-auto w-full max-w-[var(--container-width-md)]">
               <Alert>
@@ -2160,7 +2182,11 @@ onUnmounted(() => {
           </div>
           <div
             class="right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4"
-            :class="isWelcomeMode ? 'absolute' : 'relative shrink-0 pb-4'"
+            :class="
+              isWelcomeMode
+                ? 'absolute max-[361px]:relative max-[361px]:shrink-0 max-[361px]:pb-4'
+                : 'relative shrink-0 pb-4'
+            "
           >
             <!--
             欢迎态把输入框抬到视口中线：窄屏减 48px、sm 以上减 96px，与 React 的
@@ -2172,7 +2198,7 @@ onUnmounted(() => {
               class="relative w-full"
               :class="[
                 isWelcomeMode
-                  ? 'max-w-[var(--container-width-sm)] -translate-y-[calc(50vh-48px)] sm:-translate-y-[calc(50vh-96px)]'
+                  ? 'max-w-[var(--container-width-sm)] -translate-y-[calc(50vh-48px)] max-[361px]:translate-y-0 sm:-translate-y-[calc(50vh-96px)]'
                   : 'max-w-[var(--container-width-md)]',
               ]"
             >
@@ -2396,7 +2422,9 @@ onUnmounted(() => {
                 v-else-if="!bootstrap"
                 ref="composer"
                 :surface-class="
-                  isWelcomeMode ? '-translate-y-2 sm:-translate-y-4' : ''
+                  isWelcomeMode
+                    ? '-translate-y-2 sm:-translate-y-4 max-[361px]:translate-y-0'
+                    : ''
                 "
                 :thread-key="routeThreadId ?? 'new'"
                 :target-thread-id="routeThreadId ?? draftThreadId"

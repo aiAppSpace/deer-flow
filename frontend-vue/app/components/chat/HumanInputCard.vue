@@ -418,7 +418,7 @@ watch(
                   :key="option.id"
                   :class="
                     cn(
-                      'h-8 w-fit rounded-md px-2.5 text-left leading-5 whitespace-normal',
+                      'h-8 w-fit max-w-full rounded-md px-2.5 text-left leading-5 whitespace-normal',
                       selectedFieldValues(field.name).includes(option.value) &&
                         'border-primary/40 bg-primary/10',
                     )
@@ -498,7 +498,7 @@ watch(
             </p>
             <span v-else />
             <Button
-              class="min-w-24"
+              class="min-w-24 max-[361px]:w-full max-[361px]:min-w-0 max-[361px]:whitespace-normal"
               :disabled="isDisabled"
               type="submit"
               variant="secondary"
@@ -509,7 +509,10 @@ watch(
           </div>
         </form>
 
-        <div v-if="!isForm && options.length > 0" class="grid gap-2">
+        <div
+          v-if="!isForm && options.length > 0"
+          class="grid grid-cols-[minmax(0,1fr)] gap-2"
+        >
           <Button
             v-for="option in options"
             :key="option.id"
@@ -562,7 +565,7 @@ watch(
             </p>
             <span v-else />
             <Button
-              class="min-w-24"
+              class="min-w-24 max-[361px]:w-full max-[361px]:min-w-0 max-[361px]:whitespace-normal"
               :disabled="isDisabled"
               type="submit"
               variant="secondary"

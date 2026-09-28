@@ -177,7 +177,11 @@ async function handleDelete() {
             <Badge v-if="isArchived" variant="secondary">
               {{ $i18n.t.value.projects.archived }}
             </Badge>
-            <Button v-else as-child>
+            <Button
+              v-else
+              class="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+              as-child
+            >
               <NuxtLink
                 :to="`/workspace/chats/new?project=${encodeURIComponent(project.id)}`"
               >

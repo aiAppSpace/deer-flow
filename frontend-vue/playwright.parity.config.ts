@@ -34,6 +34,17 @@ const port = process.env.E2E_PARITY_PORT ?? "3115";
 const reactPort = process.env.E2E_PARITY_REACT_PORT ?? "3116";
 const gatewayPort = process.env.E2E_PARITY_GATEWAY_PORT ?? "8021";
 
+function requestedBrowserChannel(): "chrome" | undefined {
+  const channel = process.env.E2E_PARITY_BROWSER_CHANNEL;
+  if (channel === undefined || channel === "") return undefined;
+  if (channel === "chrome") return channel;
+  throw new Error(
+    `Unsupported E2E_PARITY_BROWSER_CHANNEL=${channel}; only the installed stable Chrome channel is accepted`,
+  );
+}
+
+const browserChannel = requestedBrowserChannel();
+
 // 对照用例要用绝对 URL 同时访问两个应用，React 那一侧从这里取地址。
 process.env.E2E_REACT_APP_URL ??= reactAppUrl(reactPort);
 
@@ -59,5 +70,8 @@ export default defineSuite({
       : []),
   ],
   // 取样条件与 diff.spec.ts 为每个场景新开的 context 共用一份，见该文件头。
-  use: PARITY_USE_OPTIONS,
+  use: {
+    ...PARITY_USE_OPTIONS,
+    ...(browserChannel ? { channel: browserChannel } : {}),
+  },
 });

@@ -166,7 +166,7 @@ function FormFieldInput({
             <Button
               key={option.id}
               className={cn(
-                "h-8 w-fit rounded-md px-2.5 text-left leading-5 whitespace-normal",
+                "h-8 w-fit max-w-full rounded-md px-2.5 text-left leading-5 whitespace-normal",
                 selected && "border-primary/40 bg-primary/10",
               )}
               aria-pressed={selected}
@@ -358,7 +358,7 @@ export function HumanInputCard({
         <span />
       )}
       <Button
-        className="min-w-24"
+        className="min-w-24 max-[361px]:w-full max-[361px]:min-w-0 max-[361px]:whitespace-normal"
         disabled={isDisabled}
         type="submit"
         variant="secondary"
@@ -513,7 +513,7 @@ export function HumanInputCard({
           ) : null}
 
           {!isForm && options.length > 0 ? (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-2">
               {options.map((option) => (
                 <Button
                   key={option.id}
@@ -574,7 +574,7 @@ export function HumanInputCard({
                   <span />
                 )}
                 <Button
-                  className="min-w-24"
+                  className="min-w-24 max-[361px]:w-full max-[361px]:min-w-0 max-[361px]:whitespace-normal"
                   disabled={isDisabled}
                   type="submit"
                   variant="secondary"

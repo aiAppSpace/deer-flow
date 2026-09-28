@@ -630,7 +630,7 @@ function LarkIntegrationCard() {
   }));
 
   return (
-    <Card>
+    <Card className="max-w-full min-w-0 wrap-anywhere">
       {/*
         This is the only settings page wrapped in a Card, so below sm its
         px-6 stacks on top of the panel padding and the status boxes inside:
@@ -653,8 +653,8 @@ function LarkIntegrationCard() {
         the old overflow locally and the only element past the edge was the
         card-action.
       */}
-      <CardHeader className="px-4 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
+      <CardHeader className="px-4 has-data-[slot=card-action]:grid-cols-[minmax(0,1fr)] sm:px-6 sm:has-data-[slot=card-action]:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 items-center gap-3 @max-[12rem]:flex-col @max-[12rem]:items-start">
           <div className="bg-primary/10 text-primary shrink-0 rounded-lg p-2">
             <PlugZapIcon className="size-5" />
           </div>
@@ -665,8 +665,9 @@ function LarkIntegrationCard() {
             </CardDescription>
           </div>
         </div>
-        <CardAction>
+        <CardAction className="col-start-1 row-span-1 row-start-2 justify-self-start sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:justify-self-end">
           <Button
+            className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
             variant="outline"
             size="sm"
             onClick={() => void refetch()}
@@ -679,7 +680,7 @@ function LarkIntegrationCard() {
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent className="space-y-4 px-4 sm:px-6">
+      <CardContent className="max-w-full min-w-0 space-y-4 px-2 sm:px-6">
         {isLoading ? (
           <div className="text-muted-foreground text-sm">
             {t.common.loading}
@@ -708,7 +709,7 @@ function LarkIntegrationCard() {
               makes the 3-vs-4 branch unnecessary: an empty track collapses,
               so three cards lay out exactly as `grid-cols-3` did.
             */}
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3">
+            <div className="grid max-w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(min(10rem,100%),1fr))] gap-3">
               <StatusItem
                 label={t.settings.integrations.lark.skillPack}
                 ok={data.installed}
@@ -794,7 +795,7 @@ function LarkIntegrationCard() {
               credentialsConfigured={credentialsConfigured}
             />
             {data.installed && data.cli.available && (
-              <div className="rounded-lg border p-3">
+              <div className="max-w-full min-w-0 rounded-lg border p-3">
                 <div className="space-y-1">
                   <div className="text-sm font-medium">
                     {t.settings.integrations.lark.permissionTitle}
@@ -803,12 +804,13 @@ function LarkIntegrationCard() {
                     {t.settings.integrations.lark.permissionDescription}
                   </p>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex min-w-0 flex-wrap gap-2">
                   {permissionDomains.map((domain) => {
                     const selected = selectedAuthDomains.includes(domain.id);
                     return (
                       <Button
                         key={domain.id}
+                        className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
                         type="button"
                         size="sm"
                         variant={selected ? "default" : "outline"}
@@ -858,7 +860,11 @@ function LarkIntegrationCard() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={handleInstall} disabled={installDisabled}>
+              <Button
+                className="h-auto min-h-9 max-w-full py-2 whitespace-normal"
+                onClick={handleInstall}
+                disabled={installDisabled}
+              >
                 {install.isPending ? (
                   <RefreshCwIcon className="size-4 animate-spin" />
                 ) : null}
@@ -869,6 +875,7 @@ function LarkIntegrationCard() {
                     : t.settings.integrations.install}
               </Button>
               <Button
+                className="h-auto min-h-9 max-w-full py-2 whitespace-normal"
                 variant="outline"
                 onClick={() => void handleConnect()}
                 disabled={authDisabled}
@@ -880,6 +887,7 @@ function LarkIntegrationCard() {
               </Button>
               {data.installed && data.cli.available && data.app_configured && (
                 <Button
+                  className="h-auto min-h-9 max-w-full py-2 whitespace-normal"
                   variant="ghost"
                   onClick={() => setShowChangeApp((current) => !current)}
                   disabled={
@@ -897,7 +905,7 @@ function LarkIntegrationCard() {
               )}
             </div>
             {showChangeApp && data.installed && data.cli.available && (
-              <div className="space-y-3 rounded-lg border p-3">
+              <div className="space-y-3 rounded-lg border p-2 sm:p-3">
                 <div className="space-y-1">
                   <div className="text-sm font-medium">
                     {t.settings.integrations.lark.changeAppTitle}
@@ -955,8 +963,9 @@ function LarkIntegrationCard() {
                     {t.settings.integrations.lark.changeAppAuthResetNote}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 max-[361px]:flex-col max-[361px]:items-stretch">
                   <Button
+                    className="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
                     size="sm"
                     onClick={handleChangeAppSubmit}
                     disabled={
@@ -981,7 +990,7 @@ function LarkIntegrationCard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-auto min-h-8 py-1 whitespace-normal"
+                    className="h-auto min-h-8 max-w-full min-w-0 py-1 whitespace-normal max-[361px]:w-full"
                     onClick={handleReRegisterInBrowser}
                     disabled={integrationBusy}
                   >
@@ -1102,9 +1111,9 @@ function StatusItem({
 }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-lg border p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-sm font-medium">{label}</div>
+    <div className="max-w-full min-w-0 rounded-lg border p-3">
+      <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 text-sm font-medium">{label}</div>
         <Badge variant={ok ? "secondary" : "outline"}>
           {ok ? (
             <CheckCircle2Icon className="size-3" />

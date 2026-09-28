@@ -164,7 +164,7 @@ async function save() {
 <template>
   <Dialog :open="value !== null" @update:open="!$event && emit('close')">
     <DialogContent
-      class="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
+      class="max-h-[90vh] sm:max-w-2xl"
       :close-label="$i18n.t.value.primitives.close"
       data-testid="subagent-editor"
     >
@@ -174,27 +174,29 @@ async function save() {
         </DialogTitle>
         <DialogDescription>{{ labels.description }}</DialogDescription>
       </DialogHeader>
-      <div class="grid gap-4 py-1 sm:grid-cols-2">
-        <label class="space-y-1.5">
+      <div
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 py-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]"
+      >
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.name }}</span>
           <Input v-model="draft.name" :disabled="!isNew" />
           <p v-if="isNew" class="text-muted-foreground text-xs">
             {{ labels.nameHint }}
           </p>
         </label>
-        <label class="space-y-1.5">
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.displayName }}</span>
           <Input v-model="draft.displayName" />
         </label>
-        <label class="space-y-1.5 sm:col-span-2">
+        <label class="min-w-0 space-y-1.5 sm:col-span-2">
           <span class="text-sm font-medium">{{ labels.descriptionLabel }}</span>
           <Textarea v-model="draft.description" />
         </label>
-        <label class="space-y-1.5 sm:col-span-2">
+        <label class="min-w-0 space-y-1.5 sm:col-span-2">
           <span class="text-sm font-medium">{{ labels.systemPrompt }}</span>
           <Textarea v-model="draft.systemPrompt" class="min-h-32" />
         </label>
-        <label class="space-y-1.5">
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.model }}</span>
           <Select v-model="draft.model">
             <SelectTrigger class="w-full" :aria-label="labels.model">
@@ -212,7 +214,7 @@ async function save() {
             </SelectContent>
           </Select>
         </label>
-        <label class="space-y-1.5">
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.tools }}</span>
           <OptionalNameListField
             :mode="draft.toolsMode"
@@ -222,7 +224,7 @@ async function save() {
             @update:text="draft.tools = $event"
           />
         </label>
-        <label class="space-y-1.5">
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.skills }}</span>
           <OptionalNameListField
             :mode="draft.skillsMode"
@@ -232,11 +234,11 @@ async function save() {
             @update:text="draft.skills = $event"
           />
         </label>
-        <label class="space-y-1.5">
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.maxTurns }}</span>
           <Input v-model="draft.maxTurns" type="number" min="1" step="1" />
         </label>
-        <label class="space-y-1.5">
+        <label class="min-w-0 space-y-1.5">
           <span class="text-sm font-medium">{{ labels.timeout }}</span>
           <Input
             v-model="draft.timeoutSeconds"

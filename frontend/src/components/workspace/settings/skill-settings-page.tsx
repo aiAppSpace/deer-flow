@@ -162,16 +162,28 @@ function SkillSettingsList({
         with the hit probe unable to reach it. reka's viewport has no such
         wrapper, which is why only this app was affected.
       */}
-      <header className="flex flex-wrap justify-between gap-2">
-        <div className="flex gap-2">
+      <header className="flex max-w-full min-w-0 flex-wrap justify-between gap-2">
+        <div className="flex max-w-full min-w-0 gap-2 max-[361px]:w-full">
           {/* #5039 made this controlled (`value`, not `defaultValue`) so
               installing a local archive can switch the tab for you. */}
-          <Tabs value={filter} onValueChange={setFilter}>
+          <Tabs
+            className="max-w-full min-w-0 max-[361px]:w-full"
+            value={filter}
+            onValueChange={setFilter}
+          >
             {/* Name the tab set. An unnamed tablist is announced as a bare
                 "tab list", which says nothing about what it filters. */}
-            <TabsList variant="line" aria-label={t.settings.skills.title}>
-              <TabsTrigger value="public">{t.common.public}</TabsTrigger>
-              <TabsTrigger value="custom">{t.common.custom}</TabsTrigger>
+            <TabsList
+              className="max-w-full max-[361px]:h-auto max-[361px]:w-full max-[361px]:flex-col"
+              variant="line"
+              aria-label={t.settings.skills.title}
+            >
+              <TabsTrigger className="max-[361px]:w-full" value="public">
+                {t.common.public}
+              </TabsTrigger>
+              <TabsTrigger className="max-[361px]:w-full" value="custom">
+                {t.common.custom}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -180,7 +192,7 @@ function SkillSettingsList({
             117.2px of min-content) stay glued into one 240.7px block, which
             left the skills panel 3px of slack on a 360px screen — the same
             zero-slack shape that looks exactly like fitting. */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex max-w-full min-w-0 flex-wrap gap-2 max-[361px]:w-full max-[361px]:flex-col">
           {/* The visible Button is the affordance; this input only carries the
               file dialog. Left in the accessibility tree it is a second,
               anonymous "button" that does the same thing — so hide it from AT
@@ -198,6 +210,7 @@ function SkillSettingsList({
           />
           {isAdmin && (
             <Button
+              className="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
               size="sm"
               variant="outline"
               disabled={isArchiveUploadDisabled}
@@ -213,7 +226,11 @@ function SkillSettingsList({
                 : t.settings.skills.installFromFile}
             </Button>
           )}
-          <Button size="sm" onClick={handleCreateSkill}>
+          <Button
+            className="h-auto max-w-full min-w-0 whitespace-normal max-[361px]:w-full"
+            size="sm"
+            onClick={handleCreateSkill}
+          >
             <SparklesIcon className="size-4" />
             {t.settings.skills.createSkill}
           </Button>

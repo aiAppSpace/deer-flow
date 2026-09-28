@@ -223,11 +223,11 @@ async function install(filepath: string) {
       <div
         v-for="entry in entries"
         :key="entry.filepath"
-        class="bg-card text-card-foreground relative cursor-pointer rounded-xl border p-3 shadow-sm"
+        class="bg-card text-card-foreground relative max-w-full min-w-0 cursor-pointer rounded-xl border p-3 shadow-sm"
         @click="emit('select', entry.filepath)"
       >
         <div
-          class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 pr-2 pl-1"
+          class="grid max-w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 pr-2 pl-1 max-[361px]:grid-cols-[minmax(0,1fr)]"
         >
           <div class="relative min-w-0 pl-8 leading-tight font-semibold">
             <div class="min-w-0 [overflow-wrap:anywhere] break-words">
@@ -249,7 +249,7 @@ async function install(filepath: string) {
           按钮比标题行高，占一行时第一行被它撑开，占两行时两行一起分担。
         -->
           <div
-            class="col-start-2 row-span-1 row-start-1 self-center justify-self-end"
+            class="col-start-2 row-span-1 row-start-1 self-center justify-self-end max-[361px]:col-start-1 max-[361px]:row-start-3 max-[361px]:flex max-[361px]:w-full max-[361px]:flex-wrap max-[361px]:justify-self-stretch"
           >
             <!--
             Install 在下载**左边**，与上游同序（artifact-file-list.tsx 的 CardAction

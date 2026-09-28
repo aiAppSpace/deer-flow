@@ -241,7 +241,7 @@ const loadError = computed(() => {
 <template>
   <WorkspaceContainer>
     <div
-      class="mx-auto flex w-full max-w-[var(--container-width-md)] flex-col gap-4 p-6"
+      class="mx-auto flex w-full max-w-[var(--container-width-md)] flex-col gap-4 p-4 sm:p-6"
     >
       <h1 class="text-2xl font-semibold">
         {{ $i18n.t.value.sidebar.scheduledTasks }}
@@ -278,13 +278,18 @@ const loadError = computed(() => {
         v-model:schedule-type="scheduleTypeFilter"
       />
 
-      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div
+        class="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
+      >
         <ScheduledTaskList
           :tasks="filteredTasks"
           :selected-id="selectedTask?.id ?? null"
           @select="selectedId = $event"
         />
-        <div class="rounded-lg border p-4" data-testid="scheduled-task-detail">
+        <div
+          class="max-w-full min-w-0 rounded-lg border p-4 wrap-anywhere"
+          data-testid="scheduled-task-detail"
+        >
           <ScheduledTaskDetail
             v-if="selectedTask && editDraft"
             v-model:edit-draft="editDraft"

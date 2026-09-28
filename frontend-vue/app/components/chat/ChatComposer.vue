@@ -48,7 +48,6 @@ import ComposerSurface from "@/components/chat/ComposerSurface.vue";
 import WelcomeSuggestionList from "@/components/chat/WelcomeSuggestionList.vue";
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
 import type { SidecarReference } from "@/composables/useSidecar";
-import { useMediaQuery } from "@/composables/useMediaQuery";
 import { useComposerDraft } from "@/composables/useComposerDraft";
 import { useModels } from "@/composables/useModels";
 import { useSkillsCatalog } from "@/composables/useSkillsCatalog";
@@ -368,6 +367,38 @@ const activeMode = computed(
 );
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const chipInput = ref<HTMLElement | null>(null);
+const composerRoot = ref<HTMLElement | null>(null);
+const skillSuggestionsMaxHeight = ref("18rem");
+const skillSuggestionsInline = ref(false);
+let skillSuggestionsResizeObserver: ResizeObserver | null = null;
+function syncSkillSuggestionsMaxHeight() {
+  const root = composerRoot.value;
+  if (!root) return;
+  const rootFontSize = Number.parseFloat(
+    globalThis.getComputedStyle(document.documentElement).fontSize,
+  );
+  const remCap = Number.isFinite(rootFontSize) ? rootFontSize * 18 : 288;
+  // The popup sits 8px above the composer; retain another 8px at the top of
+  // the viewport instead of letting the first options escape above it.
+  const available = Math.max(
+    0,
+    Math.floor(root.getBoundingClientRect().top - 16),
+  );
+  /*
+    `bottom-full` only works while at least one option fits above the composer.
+    In the triple-reflow case the composer itself can be taller than the low
+    viewport, leaving a 16px popup viewport: its buttons exist but no option can
+    enter it. Put the catalog back in normal flow in that case so the chat's
+    existing scroll owner can traverse catalog and composer as one document.
+  */
+  const minimumOverlayHeight = Math.min(160, rootFontSize * 3.5);
+  skillSuggestionsInline.value = available < minimumOverlayHeight;
+  const inlineAvailable = Math.max(0, globalThis.innerHeight - 32);
+  skillSuggestionsMaxHeight.value = `${Math.min(
+    remCap,
+    skillSuggestionsInline.value ? inlineAvailable : available,
+  )}px`;
+}
 /*
   空态占位靠 `data-empty` 驱动（上游 input-box.tsx:2281 是
   `data-empty={textInput.value.length === 0}`）。判据取 `input`，不取
@@ -569,6 +600,11 @@ watch(selectedSkill, async () => {
 watch([slashQuery, () => suggestions.value.length], () => {
   suggestionIndex.value = 0;
 });
+watch(showSuggestions, async (visible) => {
+  if (!visible) return;
+  await nextTick();
+  syncSkillSuggestionsMaxHeight();
+});
 
 watch(
   [
@@ -612,32 +648,7 @@ function selectModel(model: Model) {
 const supportsReasoningEffort = computed(
   () => selectedModel.value?.supports_reasoning_effort === true,
 );
-/*
-  **`sm:` 以下那颗推理深度键被 CSS 隐藏，但菜单会留在开着的状态**
-  （2026-09-18 第三十九轮实测，两边共有）。
-
-  在 700px 上打开菜单再缩到 600px（跨 `sm` = 40rem）：
-
-      触发器  [180, 739, 162]  →  [0, 0, 0]
-      菜单    [180, 409, 280]  →  [0, 4, 280]，aria-expanded 一直是 "true"
-
-  也就是**一块悬在左上角、离输入区十万八千里的菜单**，再 resize 也不纠正
-  ——popper 老老实实锚在那个 0×0 的盒子上。Radix 与 reka-ui 都不管这件事。
-
-  ⚠ **这条账差一点被判成「本仓单边」**：从 1280px 缩下来时上游先跨 `md`，
-  那一下把输入区整块重挂（实测触发器节点身份变了），菜单跟着没了，
-  于是上游看起来是对的。从 700px 起步——已经过了重挂点——**两边逐像素相同**。
-  判据：推翻一次实测只能靠另一次实测。
-
-  所以菜单改成受控，并在触发器不再渲染时关掉。查询字符串与下面那颗按钮的
-  `sm:inline-flex` 是同一档，改一处要改两处。上游同改
-  （input-box.tsx 的 REASONING_TRIGGER_VISIBLE_QUERY）。
-*/
-const reasoningTriggerVisible = useMediaQuery("(min-width: 40rem)");
 const reasoningMenuOpen = ref(false);
-watch(reasoningTriggerVisible, (visible) => {
-  if (!visible) reasoningMenuOpen.value = false;
-});
 
 const reasoningEfforts = computed(() => [
   {
@@ -706,6 +717,19 @@ function selectModeById(id: string) {
 onMounted(() => {
   // 见 autoFocus prop 的注释：这里是上游 autoFocus 的等价实现。
   if (props.autoFocus) textarea.value?.focus();
+  if (typeof ResizeObserver !== "undefined") {
+    skillSuggestionsResizeObserver = new ResizeObserver(
+      syncSkillSuggestionsMaxHeight,
+    );
+    if (composerRoot.value)
+      skillSuggestionsResizeObserver.observe(composerRoot.value);
+    skillSuggestionsResizeObserver.observe(document.documentElement);
+  }
+  window.addEventListener("resize", syncSkillSuggestionsMaxHeight);
+  window.visualViewport?.addEventListener(
+    "resize",
+    syncSkillSuggestionsMaxHeight,
+  );
 });
 // 见 followupsSuppressedChange 的注释。上游那两条判据在 input-box.tsx:1984-1985。
 watch(
@@ -726,6 +750,12 @@ onBeforeUnmount(() => {
   voiceStopRequested = true;
   if (voiceRestartTimer) clearTimeout(voiceRestartTimer);
   voiceRecognition.value?.abort();
+  skillSuggestionsResizeObserver?.disconnect();
+  window.removeEventListener("resize", syncSkillSuggestionsMaxHeight);
+  window.visualViewport?.removeEventListener(
+    "resize",
+    syncSkillSuggestionsMaxHeight,
+  );
 });
 
 function voiceErrorMessage(kind: SpeechRecognitionErrorKind) {
@@ -1456,6 +1486,7 @@ defineExpose({ replaceDraft, offerFollowup });
 
 <template>
   <div
+    ref="composerRoot"
     class="relative flex min-w-0 flex-col"
     :class="isWelcome ? 'gap-4' : 'gap-2'"
   >
@@ -1508,12 +1539,18 @@ defineExpose({ replaceDraft, offerFollowup });
     -->
     <div
       v-if="showSuggestions"
-      class="absolute right-0 bottom-full left-0 z-40 mb-2 px-1"
+      class="z-40 mb-2 px-1"
+      :class="
+        skillSuggestionsInline
+          ? 'relative'
+          : 'absolute right-0 bottom-full left-0'
+      "
     >
       <div
         role="listbox"
         :aria-label="$i18n.t.value.primitives.skillSuggestions"
-        class="bg-popover/95 text-popover-foreground border-border max-h-72 overflow-y-auto rounded-xl border p-1 shadow-lg backdrop-blur-sm"
+        class="bg-popover/95 text-popover-foreground border-border overflow-y-auto rounded-xl border p-1 shadow-lg backdrop-blur-sm"
+        :style="{ maxHeight: skillSuggestionsMaxHeight }"
       >
         <!--
           `mouseenter` 把活动项挪到指针下那一项，与上游 input-box.tsx:2160 一致。
@@ -2047,8 +2084,8 @@ defineExpose({ replaceDraft, offerFollowup });
             >
               <DropdownMenuTrigger>
                 <!--
-                上游是 `PromptInputActionMenuTrigger className="hidden gap-1!
-                px-2! sm:inline-flex"`，也就是一颗 ghost Button，文字包在
+                上游是 `PromptInputActionMenuTrigger className="gap-1! px-2!"`，
+                也就是一颗 ghost Button，文字包在
                 `<div className="text-xs font-normal">` 里（input-box.tsx:2561）。
                 可见字号两边都是 12px/400；差的是**按钮自己**：手写那版没有
                 `cursor-pointer`（实测 React 是 pointer、本仓是 default——
@@ -2060,7 +2097,7 @@ defineExpose({ replaceDraft, offerFollowup });
                   variant="ghost"
                   size="sm"
                   data-testid="composer-reasoning-effort-trigger"
-                  class="hidden gap-1! px-2! sm:inline-flex"
+                  class="gap-1! px-2!"
                   :disabled="disabled"
                 >
                   <div class="text-xs font-normal">

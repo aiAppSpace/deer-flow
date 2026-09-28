@@ -276,7 +276,7 @@ function MCPServerList({
             </DialogDescription>
           </DialogHeader>
           <Textarea
-            className="min-h-52 font-mono text-xs"
+            className="field-sizing-fixed max-h-[50dvh] min-h-52 overflow-y-auto font-mono text-xs"
             aria-label={t.settings.tools.serverDefinitionLabel}
             spellCheck={false}
             value={definition}

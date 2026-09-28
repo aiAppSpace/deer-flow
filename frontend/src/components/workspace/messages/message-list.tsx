@@ -11,6 +11,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -162,9 +163,9 @@ export const MESSAGE_LIST_DEFAULT_PADDING_BOTTOM = 24;
 const LOAD_MORE_HISTORY_THROTTLE_MS = 1200;
 
 const SELECTION_TOOLBAR_MARGIN = 8;
-// Approximate rendered height of the pill (p-1 padding + h-8 button). Used only
-// to decide whether the toolbar fits above the selection; exact height isn't
-// needed because we flip below when space is tight.
+// Initial side preference before the toolbar exists in the DOM. Once rendered,
+// the layout effect measures its wrapped size and clamps the exact box to the
+// viewport.
 const SELECTION_TOOLBAR_ESTIMATED_HEIGHT = 48;
 
 type SelectionToolbarState = {
@@ -342,6 +343,7 @@ export function MessageList({
   const sidecar = useMaybeSidecar();
   const [selectionToolbar, setSelectionToolbar] =
     useState<SelectionToolbarState | null>(null);
+  const selectionToolbarRef = useRef<HTMLDivElement | null>(null);
   const messages = thread.messages;
   const groupedMessages = useStableMessageGroups(messages, thread.isLoading);
   const chapters = useMemo(
@@ -756,6 +758,43 @@ export function MessageList({
     };
   }, [selectionToolbar]);
 
+  useLayoutEffect(() => {
+    const toolbar = selectionToolbarRef.current;
+    if (!selectionToolbar || !toolbar) {
+      return;
+    }
+
+    const positionToolbar = () => {
+      const width = toolbar.offsetWidth;
+      const height = toolbar.offsetHeight;
+      const maxLeft = Math.max(
+        SELECTION_TOOLBAR_MARGIN,
+        window.innerWidth - width - SELECTION_TOOLBAR_MARGIN,
+      );
+      const maxTop = Math.max(
+        SELECTION_TOOLBAR_MARGIN,
+        window.innerHeight - height - SELECTION_TOOLBAR_MARGIN,
+      );
+      const preferredLeft = selectionToolbar.x - width / 2;
+      const preferredTop =
+        selectionToolbar.placement === "top"
+          ? selectionToolbar.y - height
+          : selectionToolbar.y;
+
+      toolbar.style.left = `${Math.min(Math.max(preferredLeft, SELECTION_TOOLBAR_MARGIN), maxLeft)}px`;
+      toolbar.style.top = `${Math.min(Math.max(preferredTop, SELECTION_TOOLBAR_MARGIN), maxTop)}px`;
+    };
+
+    positionToolbar();
+    const resizeObserver = new ResizeObserver(positionToolbar);
+    resizeObserver.observe(toolbar);
+    window.addEventListener("resize", positionToolbar);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", positionToolbar);
+    };
+  }, [selectionToolbar]);
+
   const handleAssistantTextSelection = useCallback(
     (
       event: MouseEvent<HTMLDivElement>,
@@ -812,10 +851,9 @@ export function MessageList({
         return;
       }
 
-      // The pill is rendered with `-translate-y-full`, so anchoring it at
-      // `rect.top` moves it up by its own height. When the selection sits near
-      // the viewport top there isn't room above, so flip it below the selection
-      // to keep both actions reachable (#3551).
+      // Choose the preferred side before the toolbar exists in the DOM. The
+      // layout effect then measures the wrapped toolbar and clamps its exact
+      // box to the viewport, including narrow/high-zoom layouts (#3551).
       const rect = selection.getRangeAt(0).getBoundingClientRect();
       const fitsAbove =
         rect.top -
@@ -1080,7 +1118,10 @@ export function MessageList({
   return (
     <>
       <Conversation
-        className={cn("flex size-full flex-col justify-center", className)}
+        className={cn(
+          "flex size-full flex-col justify-center max-[361px]:justify-start",
+          className,
+        )}
         data-testid={testId}
         initial={initialScroll}
         resize={resizeScroll}
@@ -1462,17 +1503,18 @@ export function MessageList({
       )}
       {selectionToolbar && sidecar && (
         <div
+          ref={selectionToolbarRef}
           className={cn(
-            "bg-popover text-popover-foreground border-border fixed z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border p-1 shadow-lg",
-            selectionToolbar.placement === "bottom"
-              ? "translate-y-0"
-              : "-translate-y-full",
+            "bg-popover text-popover-foreground border-border fixed z-50 flex max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-1 overflow-y-auto rounded-full border p-1 shadow-lg",
           )}
           data-sidecar-selection-toolbar
-          style={{ left: selectionToolbar.x, top: selectionToolbar.y }}
+          style={{
+            left: SELECTION_TOOLBAR_MARGIN,
+            top: SELECTION_TOOLBAR_MARGIN,
+          }}
         >
           <Button
-            className="h-8 rounded-full px-2.5 text-xs"
+            className="h-auto min-h-8 max-w-full min-w-0 rounded-full px-2.5 text-xs whitespace-normal"
             size="sm"
             type="button"
             variant="ghost"
@@ -1484,7 +1526,7 @@ export function MessageList({
           </Button>
           {!sidecarSurface && (
             <Button
-              className="h-8 rounded-full px-2.5 text-xs"
+              className="h-auto min-h-8 max-w-full min-w-0 rounded-full px-2.5 text-xs whitespace-normal"
               size="sm"
               type="button"
               variant="ghost"

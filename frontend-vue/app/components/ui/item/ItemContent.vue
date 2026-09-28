@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 const props = withDefaults(defineProps<{ class?: string }>(), { class: "" });
 const classes = computed(() =>
   cn(
-    "flex flex-1 flex-col gap-1 [&+[data-slot=item-content]]:flex-none",
+    "flex min-w-0 flex-1 flex-col gap-1 max-[361px]:w-full max-[361px]:max-w-full [&+[data-slot=item-content]]:flex-none",
     props.class,
   ),
 );

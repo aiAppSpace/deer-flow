@@ -18,8 +18,7 @@
                    `z-80` 是本仓自己的一层统一（上游 `z-50`），有意保留。
 
                    ③ **横向那一半是第五十六轮补的，上游同一处同改**：
-                   `max-w-(--reka-dropdown-menu-content-available-width)`
-                   + `min-w-[min(8rem,var(…available-width,8rem))]`。
+                   available-width 上限 + capped 8rem 最小宽度。
                    只有 ① 那条竖的时候，菜单**横着**照样能比屏幕宽：
                    实测 200% 文本 / 375px 视口下这颗会话 ⋯ 菜单是 **384px**，
                    摆在 x=-46，左边整整切掉 46px。
@@ -60,6 +59,15 @@ const props = withDefaults(
   defineProps<DropdownMenuContentProps & { class?: HTMLAttributes["class"] }>(),
   {
     sideOffset: 4,
+    /*
+      Keep an already-open menu inside the collision boundary even when a
+      low-height/text-zoom reflow moves its trigger partly outside the window.
+      `partial` (the primitive default) keeps following that hidden trigger and
+      can leave the scroll viewport itself below the screen, so its final items
+      remain unreachable even at max scroll.
+    */
+    sticky: "always",
+    collisionPadding: 8,
     class: undefined,
   },
 );
@@ -71,6 +79,49 @@ const delegated = computed(() => {
   void _class;
   return rest;
 });
+
+/*
+  Reka 的 shift middleware 在触发器整体落到 collision boundary 外时，仍可能把
+  fixed wrapper 留在触发器的屏外坐标。不要改写它拥有的 transform（下一次定位会
+  覆盖），而是在键盘进入/操作菜单时用独立的 CSS translate 补最后一段越界距离。
+  这保留正常锚点坐标，只修 viewport 两轴真实越界的部分。
+*/
+function keepKeyboardMenuInsideViewport(event: Event) {
+  const content = event.currentTarget;
+  if (!(content instanceof HTMLElement)) return;
+  requestAnimationFrame(() => {
+    const wrapper = content.parentElement;
+    if (
+      !wrapper?.hasAttribute("data-reka-popper-content-wrapper") ||
+      !content.isConnected
+    )
+      return;
+    wrapper.style.translate = "";
+    const rect = content.getBoundingClientRect();
+    const padding =
+      typeof props.collisionPadding === "number"
+        ? props.collisionPadding
+        : Math.max(
+            props.collisionPadding?.top ?? 0,
+            props.collisionPadding?.right ?? 0,
+            props.collisionPadding?.bottom ?? 0,
+            props.collisionPadding?.left ?? 0,
+          );
+    const dx =
+      rect.left < padding
+        ? padding - rect.left
+        : rect.right > innerWidth - padding
+          ? innerWidth - padding - rect.right
+          : 0;
+    const dy =
+      rect.top < padding
+        ? padding - rect.top
+        : rect.bottom > innerHeight - padding
+          ? innerHeight - padding - rect.bottom
+          : 0;
+    if (dx || dy) wrapper.style.translate = `${dx}px ${dy}px`;
+  });
+}
 </script>
 
 <template>
@@ -89,6 +140,8 @@ const delegated = computed(() => {
       @focus-outside="emits('focusOutside', $event)"
       @interact-outside="emits('interactOutside', $event)"
       @close-auto-focus="emits('closeAutoFocus', $event)"
+      @focusin="keepKeyboardMenuInsideViewport"
+      @keydown.capture="keepKeyboardMenuInsideViewport"
     >
       <slot />
     </DropdownMenuContent>

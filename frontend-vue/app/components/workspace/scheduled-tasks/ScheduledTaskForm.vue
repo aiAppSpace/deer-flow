@@ -87,6 +87,7 @@ const submitDisabled = computed(
       <Button
         v-for="recipe in RECIPES"
         :key="recipe.id"
+        class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
         :data-testid="`scheduled-task-recipe-${recipe.id}`"
         variant="outline"
         size="sm"
@@ -97,8 +98,9 @@ const submitDisabled = computed(
       </Button>
     </div>
 
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <Button
+        class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
         data-testid="scheduled-task-context-fresh"
         :variant="
           draft.contextMode === 'fresh_thread_per_run' ? 'default' : 'outline'
@@ -110,6 +112,7 @@ const submitDisabled = computed(
         {{ labels.context.fresh }}
       </Button>
       <Button
+        class="h-auto min-h-8 max-w-full py-1 whitespace-normal"
         data-testid="scheduled-task-context-reuse"
         :variant="draft.contextMode === 'reuse_thread' ? 'default' : 'outline'"
         :aria-pressed="draft.contextMode === 'reuse_thread'"

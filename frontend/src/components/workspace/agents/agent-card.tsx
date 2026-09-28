@@ -125,8 +125,8 @@ export function AgentCard({ agent }: AgentCardProps) {
 
   return (
     <>
-      <Card className="group flex flex-col transition-shadow hover:shadow-md">
-        <CardHeader className="pb-3">
+      <Card className="group flex max-w-full min-w-0 flex-col transition-shadow hover:shadow-md">
+        <CardHeader className="min-w-0 px-4 pb-3 sm:px-6">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2">
               <div className="bg-primary/10 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
@@ -158,7 +158,7 @@ export function AgentCard({ agent }: AgentCardProps) {
         </CardHeader>
 
         {(agent.tool_groups?.length ?? agent.skills?.length ?? 0) > 0 && (
-          <CardContent className="pt-0 pb-3">
+          <CardContent className="min-w-0 px-4 pt-0 pb-3 sm:px-6">
             <div className="flex flex-wrap gap-1">
               {agent.tool_groups?.map((group) => (
                 <TruncatedBadge
@@ -180,7 +180,7 @@ export function AgentCard({ agent }: AgentCardProps) {
           </CardContent>
         )}
 
-        <CardFooter className="mt-auto flex items-center justify-between gap-2 pt-3">
+        <CardFooter className="mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 px-4 pt-3 sm:px-6">
           {/*
             This was a <button onClick={router.push(...)}>. Navigation belongs
             in a link: a button cannot be middle-clicked, opened in a new tab,
@@ -188,7 +188,11 @@ export function AgentCard({ agent }: AgentCardProps) {
             button rather than a link (WCAG 4.1.2). The agent name also went
             into the path unencoded.
           */}
-          <Button size="sm" className="flex-1" asChild>
+          <Button
+            size="sm"
+            className="h-auto min-h-8 min-w-0 flex-1 whitespace-normal"
+            asChild
+          >
             <Link
               href={`/workspace/agents/${encodeURIComponent(agent.name)}/chats/new`}
             >
@@ -196,7 +200,7 @@ export function AgentCard({ agent }: AgentCardProps) {
               {t.agents.chat}
             </Link>
           </Button>
-          <div className="flex gap-1">
+          <div className="flex shrink-0 gap-1">
             <Button
               size="icon"
               variant="ghost"

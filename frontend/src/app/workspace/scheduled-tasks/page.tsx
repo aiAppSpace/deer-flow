@@ -234,7 +234,7 @@ export default function ScheduledTasksPage() {
     <WorkspaceContainer>
       <WorkspaceHeader />
       <WorkspaceBody>
-        <div className="mx-auto flex w-full max-w-(--container-width-md) flex-col gap-4 p-6">
+        <div className="mx-auto flex w-full max-w-(--container-width-md) flex-col gap-4 p-4 sm:p-6">
           <h1 className="text-2xl font-semibold">{t.sidebar.scheduledTasks}</h1>
           <div
             ref={createFormRef}
@@ -252,6 +252,7 @@ export default function ScheduledTasksPage() {
               {RECIPES.map((recipe) => (
                 <Button
                   key={recipe.id}
+                  className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
                   variant="outline"
                   size="sm"
                   onClick={() => applyRecipe(recipe)}
@@ -261,8 +262,9 @@ export default function ScheduledTasksPage() {
                 </Button>
               ))}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button
+                className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
                 variant={
                   contextMode === "fresh_thread_per_run" ? "default" : "outline"
                 }
@@ -276,6 +278,7 @@ export default function ScheduledTasksPage() {
                 {st.context.fresh}
               </Button>
               <Button
+                className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
                 variant={contextMode === "reuse_thread" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setContextMode("reuse_thread")}
@@ -387,6 +390,7 @@ export default function ScheduledTasksPage() {
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={statusFilter === "all" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("all")}
@@ -395,6 +399,7 @@ export default function ScheduledTasksPage() {
               {st.filters.allStatuses}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={statusFilter === "enabled" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("enabled")}
@@ -403,6 +408,7 @@ export default function ScheduledTasksPage() {
               {st.filters.enabled}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={statusFilter === "paused" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("paused")}
@@ -411,6 +417,7 @@ export default function ScheduledTasksPage() {
               {st.filters.paused}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={statusFilter === "completed" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("completed")}
@@ -419,6 +426,7 @@ export default function ScheduledTasksPage() {
               {st.filters.completed}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={statusFilter === "failed" ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter("failed")}
@@ -427,6 +435,7 @@ export default function ScheduledTasksPage() {
               {st.filters.failed}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={typeFilter === "all" ? "default" : "outline"}
               size="sm"
               onClick={() => setTypeFilter("all")}
@@ -435,6 +444,7 @@ export default function ScheduledTasksPage() {
               {st.filters.allTypes}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={typeFilter === "cron" ? "default" : "outline"}
               size="sm"
               onClick={() => setTypeFilter("cron")}
@@ -443,6 +453,7 @@ export default function ScheduledTasksPage() {
               {st.filters.cron}
             </Button>
             <Button
+              className="h-auto min-h-8 max-w-full py-1 whitespace-normal"
               variant={typeFilter === "once" ? "default" : "outline"}
               size="sm"
               onClick={() => setTypeFilter("once")}
@@ -451,10 +462,10 @@ export default function ScheduledTasksPage() {
               {st.filters.once}
             </Button>
           </div>
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div
               data-testid="scheduled-task-list"
-              className="flex flex-col gap-3"
+              className="flex min-w-0 flex-col gap-3"
             >
               {filteredData.map((task) => {
                 const isSelected = selectedTask?.id === task.id;
@@ -465,7 +476,7 @@ export default function ScheduledTasksPage() {
                     onClick={() => setSelectedTaskId(task.id)}
                     data-testid={`scheduled-task-item-${task.id}`}
                     className={cn(
-                      "rounded-lg border p-4 text-left",
+                      "min-w-0 rounded-lg border p-4 text-left",
                       isSelected ? "border-foreground" : "border-border",
                     )}
                   >
@@ -478,16 +489,17 @@ export default function ScheduledTasksPage() {
               })}
             </div>
             <div
-              className="rounded-lg border p-4"
+              className="max-w-full min-w-0 rounded-lg border p-4 wrap-anywhere"
               data-testid="scheduled-task-detail"
             >
               {selectedTask ? (
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="text-lg font-semibold">
+                <div className="flex max-w-full min-w-0 flex-col gap-3">
+                  <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 text-lg font-semibold">
                       {selectedTask.title}
                     </div>
                     <Button
+                      className="h-auto max-w-full whitespace-normal"
                       variant="outline"
                       size="sm"
                       onClick={() => setEditing((value) => !value)}

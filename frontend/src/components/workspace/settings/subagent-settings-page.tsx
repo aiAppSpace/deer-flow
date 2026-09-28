@@ -305,7 +305,7 @@ function SubagentEditor({
 
   return (
     <Dialog open={value !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {isNew
@@ -316,7 +316,7 @@ function SubagentEditor({
             {t.settings.subagents.description}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-1 sm:grid-cols-2">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 py-1 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
           <Field label={t.settings.subagents.name}>
             <Input
               value={draft.name}
@@ -490,7 +490,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className={`space-y-1.5 ${className ?? ""}`}>
+    <label className={`min-w-0 space-y-1.5 ${className ?? ""}`}>
       <span className="text-sm font-medium">{label}</span>
       {children}
     </label>

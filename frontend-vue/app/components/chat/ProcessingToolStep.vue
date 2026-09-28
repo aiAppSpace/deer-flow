@@ -242,8 +242,12 @@ const browserPreviewURL = computed(() => {
       <component :is="icon" :size="16" />
       <div class="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
     </div>
-    <div class="min-w-0 flex-1 space-y-2 overflow-hidden">
-      <div>{{ label }}</div>
+    <div class="min-w-0 flex-1 space-y-2 overflow-hidden wrap-anywhere">
+      <div
+        class="max-w-full min-w-0 [overflow-wrap:anywhere] whitespace-normal"
+      >
+        {{ label }}
+      </div>
 
       <div
         v-if="name === 'web_search' && webSearchResults.length"
@@ -317,7 +321,7 @@ const browserPreviewURL = computed(() => {
       <Badge
         v-else-if="name === 'web_fetch' && webFetchTarget"
         variant="secondary"
-        class="gap-1 px-2 py-0.5 text-xs font-normal"
+        class="max-w-full gap-1 px-2 py-0.5 text-xs font-normal max-[361px]:[overflow-wrap:anywhere] max-[361px]:whitespace-normal"
       >
         <a
           :href="webFetchTarget.url"
@@ -332,7 +336,7 @@ const browserPreviewURL = computed(() => {
       <Badge
         v-else-if="(name === 'ls' || name === 'read_file') && filePath"
         variant="secondary"
-        class="cursor-pointer gap-1 px-2 py-0.5 text-xs font-normal"
+        class="max-w-full cursor-pointer gap-1 px-2 py-0.5 text-xs font-normal max-[361px]:[overflow-wrap:anywhere] max-[361px]:whitespace-normal"
       >
         {{ filePath }}
       </Badge>
@@ -340,7 +344,7 @@ const browserPreviewURL = computed(() => {
       <Badge
         v-else-if="filePath && icon === NotebookPen"
         variant="secondary"
-        class="cursor-pointer gap-1 px-2 py-0.5 text-xs font-normal"
+        class="max-w-full cursor-pointer gap-1 px-2 py-0.5 text-xs font-normal max-[361px]:[overflow-wrap:anywhere] max-[361px]:whitespace-normal"
       >
         {{ filePath }}
       </Badge>

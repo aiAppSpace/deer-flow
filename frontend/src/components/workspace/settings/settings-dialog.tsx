@@ -205,7 +205,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       onOpenChange={(open) => props.onOpenChange?.(open)}
     >
       <DialogContent
-        className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col sm:max-w-5xl md:max-w-6xl"
+        className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col overflow-y-hidden! sm:max-w-5xl md:max-w-6xl [@media(max-height:360px)]:h-[calc(100dvh-32px)] [@media(max-height:360px)]:max-h-[calc(100dvh-32px)] [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:p-[8px]"
         aria-describedby={undefined}
         onOpenAutoFocus={focusActiveSection}
       >
@@ -224,9 +224,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
           edge landed at 541 while the dialog ends at 344 (`overflow: visible`),
           i.e. the panel ran 181px past the viewport. Mirrored in the Vue app.
         */}
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="bg-sidebar min-h-0 overflow-y-auto rounded-lg border p-2">
-            <ul className="space-y-1 pr-1">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 [@media(max-height:360px)]:grid-rows-[minmax(1rem,1fr)_minmax(1rem,1fr)] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+          <nav className="bg-sidebar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border p-2">
+            <ul className="min-w-0 space-y-1 pr-1">
               {sections.map(({ id, label, icon: Icon }) => {
                 const active = activeSection === id;
                 return (
@@ -240,22 +240,28 @@ export function SettingsDialog(props: SettingsDialogProps) {
                         );
                       }}
                       onClick={() => setActiveSection(id as SettingsSection)}
+                      onFocus={(event) =>
+                        event.currentTarget.scrollIntoView({
+                          block: "nearest",
+                          inline: "nearest",
+                        })
+                      }
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        "flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium whitespace-normal transition-colors",
                         active
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
-                      <Icon className="size-4" />
-                      <span>{label}</span>
+                      <Icon className="size-4 shrink-0" />
+                      <span className="min-w-0 wrap-anywhere">{label}</span>
                     </button>
                   </li>
                 );
               })}
             </ul>
           </nav>
-          <ScrollArea className="h-full min-h-0 rounded-lg border">
+          <ScrollArea className="h-full min-h-0 min-w-0 rounded-lg border [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0!">
             {/*
               Below sm the dialog is 343px wide and this panel's own padding
               plus a nested card's px-6 left the integrations column at 167px
@@ -263,7 +269,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               which then overflowed. Step the padding down on small screens;
               sm+ keeps the 24px the desktop layout was measured at.
             */}
-            <div className="space-y-8 p-4 sm:p-6">
+            <div className="w-full max-w-full min-w-0 space-y-8 p-4 sm:p-6">
               {activeSection === "account" && <AccountSettingsPage />}
               {activeSection === "appearance" && <AppearanceSettingsPage />}
               {activeSection === "memory" && <MemorySettingsPage />}

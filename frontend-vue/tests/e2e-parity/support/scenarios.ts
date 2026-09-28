@@ -163,6 +163,13 @@ export const TABLET_DIMENSION: ParityDimension = {
   locale: "en-US",
 };
 
+/** 最窄一档只挂在明确拥有移动端交互路径的终态上，不铺全矩阵。 */
+export const MOBILE_DIMENSION: ParityDimension = {
+  viewport: "mobile",
+  theme: "light",
+  locale: "en-US",
+};
+
 /**
  * 定位方式。四种都是两个应用共有的表达，没有第五种。
  */
@@ -844,6 +851,39 @@ const BATCHED_ARTIFACT_MARKDOWN = [
   "![Chart](/parity-fixtures/chart.svg)",
   "",
 ].join("\n");
+
+/*
+  sidecar 草稿态在桌面与移动端共享的完整功能路径。桌面终态会在末尾再加一条
+  separator 锚点；移动 Sheet 没有分栏、自然也没有拖拽把手，不能为了复用桌面
+  步骤而把一条不存在的桌面控件当成移动端产品缺陷。
+*/
+const SIDECAR_CHAT_DRAFT_STEPS: ParityStep[] = [
+  {
+    kind: "select-text",
+    scope: { testId: "main-message-list" },
+    text: "Build it as a side conversation.",
+  },
+  {
+    kind: "click",
+    target: {
+      role: "button",
+      name: /^(Ask in side chat|在侧边聊天中提问)$/,
+    },
+  },
+  { kind: "visible", target: { testId: "sidecar-panel" } },
+  { kind: "visible", target: { text: /^(Side chat|侧边对话)$/ } },
+  {
+    kind: "visible",
+    target: { text: /^1 (selected text fragment|个已选文本片段)$/ },
+  },
+  { kind: "visible", target: { text: /^(Ask a follow-up|继续深入追问)$/ } },
+  {
+    kind: "visible",
+    target: {
+      text: /^(Ask a follow-up grounded in the referenced text\.|基于引用内容单独追问。)$/,
+    },
+  },
+];
 
 /** 与 frontend/tests/e2e/artifact-preview.spec.ts 的 writeFileMessages() 同形。 */
 const ARTIFACT_MESSAGES = [
@@ -1612,7 +1652,15 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     settle: [
       { kind: "visible", target: { testId: "browser-trigger" } },
       { kind: "click", target: { testId: "browser-trigger" } },
-      { kind: "visible", target: { text: /^(Browser|浏览器)$/ } },
+      /*
+        窄屏 Sheet 自己还有一颗 sr-only 的同名 h2，裸 `getByText().first()` 会先命中
+        那颗 0 宽标题并永远等不到 visible。锚到面板根里的可见标签，既保留这格几何
+        样本，也不把移动端结构误判成不可达。两端根节点共用 browser-panel testid。
+      */
+      {
+        kind: "visible",
+        target: { selector: '[data-testid="browser-panel"] header > span' },
+      },
       { kind: "visible", target: { role: "button", name: /^(Back|后退)$/ } },
       { kind: "visible", target: { role: "button", name: /^(Forward|前进)$/ } },
       {
@@ -1635,7 +1683,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         },
       },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
+    dimensions: [
+      DEFAULT_DIMENSION,
+      ZH_DIMENSION,
+      TABLET_DIMENSION,
+      MOBILE_DIMENSION,
+    ],
   },
   {
     /*
@@ -1682,45 +1735,32 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     settle: [
       { kind: "visible", target: { text: "Build it as a side conversation." } },
     ],
-    steps: [
+    states: [
       {
-        kind: "select-text",
-        scope: { testId: "main-message-list" },
-        text: "Build it as a side conversation.",
-      },
-      {
-        kind: "click",
-        target: {
-          role: "button",
-          name: /^(Ask in side chat|在侧边聊天中提问)$/,
-        },
-      },
-      { kind: "visible", target: { testId: "sidecar-panel" } },
-      { kind: "visible", target: { text: /^(Side chat|侧边对话)$/ } },
-      {
-        kind: "visible",
-        target: { text: /^1 (selected text fragment|个已选文本片段)$/ },
-      },
-      { kind: "visible", target: { text: /^(Ask a follow-up|继续深入追问)$/ } },
-      {
-        kind: "visible",
-        target: {
-          text: /^(Ask a follow-up grounded in the referenced text\.|基于引用内容单独追问。)$/,
-        },
-      },
-      /*
-        分栏的拖拽把手。**这一屏是它第一次进取样面**（wave 146）。
+        /* 空 id 保留改成多终态之前的 baseline key：sidecar-chat/<dimension>。 */
+        id: "",
+        steps: [
+          ...SIDECAR_CHAT_DRAFT_STEPS,
+          /*
+            分栏的拖拽把手。**这一屏是它第一次进取样面**（wave 146）。
 
-        挂它的直接理由是伪元素那一档：整套里此前只有技能页那颗 tab 的 `::after`
-        被采到（4 个样本），而 `after:` 在两个应用里总共只有九处，
-        **上游 `ui/resizable.tsx` 那一处正是「把 1px 的分隔线放大成可以抓住的区域」**
-        ——一件纯粹画在伪元素上、其余七档全都看不见的事。
+            挂它的直接理由是伪元素那一档：整套里此前只有技能页那颗 tab 的
+            `::after` 被采到（4 个样本），而 `after:` 在两个应用里总共只有九处，
+            **上游 `ui/resizable.tsx` 那一处正是「把 1px 的分隔线放大成可以抓住
+            的区域」**——一件纯粹画在伪元素上、其余七档全都看不见的事。
 
-        按 wave 131 的规矩先数过：`[role=separator]`（含 `hr`）在这一屏
-        **两个应用各恰好 1 个**，盒模型也逐字相同（1.0×800.0 @870,0），
-        所以这个锚点不会落到别的东西上。
-      */
-      { kind: "visible", target: { role: "separator" } },
+            按 wave 131 的规矩先数过：`[role=separator]`（含 `hr`）在这一屏
+            **两个应用各恰好 1 个**，盒模型也逐字相同（1.0×800.0 @870,0），
+            所以这个锚点不会落到别的东西上。
+          */
+          { kind: "visible", target: { role: "separator" } },
+        ],
+      },
+      {
+        id: "mobile-sheet",
+        steps: SIDECAR_CHAT_DRAFT_STEPS,
+        dimensions: [MOBILE_DIMENSION],
+      },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
@@ -1933,30 +1973,45 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       `document.title` 不进可访问性树，所以那一半仍然只有两侧各自的 spec 在守
       （本仓 tests/e2e/、上游 frontend/tests/e2e/）；这里守的是**看得见的那两处**。
     */
-    settle: [{ kind: "visible", target: { text: "Original title" } }],
-    steps: [
-      { kind: "hover", target: { text: "Original title" } },
-      { kind: "click", target: { role: "button", name: /^(More|更多)$/ } },
+    /*
+      **settle 只等两个断点上都在的东西**（第六十一轮；形状同 `channels`
+      第五十九轮那次，判词抄在那里）。原来等的是侧栏那一行会话标题
+      ——窄屏上侧栏是抽屉、默认关着，`#mobile-drawer` 那个终态
+      **还没跑到自己第一步的「开抽屉」就会先在 settle 上超时**。
+      标题锚点挪进各终态的 steps（`steps` 里的 `visible` 同样进取样面，wave 76）。
+    */
+    settle: [{ kind: "visible", target: { selector: "textarea" } }],
+    states: [
       {
-        kind: "click",
-        target: { role: "menuitem", name: /^(Rename|重命名)$/ },
-      },
-      {
-        kind: "fill",
-        target: { selector: '[role="dialog"] input' },
-        value: "Renamed title",
-      },
-      { kind: "click", target: { role: "button", name: /^(Save|保存)$/ } },
-      /*
+        /* 第一个终态不取名字，台账的键因此逐字不变（`key()` 只在 id 非空时加 `#`）。 */
+        id: "",
+        steps: [
+          { kind: "visible", target: { text: "Original title" } },
+          { kind: "hover", target: { text: "Original title" } },
+          { kind: "click", target: { role: "button", name: /^(More|更多)$/ } },
+          {
+            kind: "click",
+            target: { role: "menuitem", name: /^(Rename|重命名)$/ },
+          },
+          {
+            kind: "fill",
+            target: { selector: '[role="dialog"] input' },
+            value: "Renamed title",
+          },
+          { kind: "click", target: { role: "button", name: /^(Save|保存)$/ } },
+          /*
         **等对话框真的关掉再取样。** 「新标题出现」不是终态：那一刻焦点还在
         往回还（对话框把它交还给触发它的那颗 ⋯ 键），取样早一点就会量到
         `focus: React=body Vue=button "更多"` 这种**只在一个语言维度上出现**的幻影差异
         ——实测它在一轮里有、下一轮里没有。语言不对称的差异基本都是取样时机，
         不是渲染规则（同 chat-thread-init-ordering 那次）。
       */
-      { kind: "hidden", target: { role: "dialog", name: /^(Rename|重命名)$/ } },
-      { kind: "visible", target: { text: "Renamed title" } },
-      /*
+          {
+            kind: "hidden",
+            target: { role: "dialog", name: /^(Rename|重命名)$/ },
+          },
+          { kind: "visible", target: { text: "Renamed title" } },
+          /*
         **「对话框消失」也还不是终态。** 2026-09-11 这条幻影差异**又出现了一次，
         而且方向反了**——上一次记的是 `focus: React=body Vue=button "更多"`，
         这次量到的是 `React=button "More" Vue=body`。**方向会翻，就是竞态的签名**：
@@ -1971,7 +2026,60 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         **要是哪一边真的把焦点丢在 body 上，这一步会超时**——那正是该被看见的缺陷，
         不该被一个「等一会儿」盖过去。
       */
-      { kind: "visible", target: { selector: "button:focus" } },
+          { kind: "visible", target: { selector: "button:focus" } },
+        ],
+      },
+      /*
+        **窄屏抽屉里的重命名对话框**（第六十一轮）——这一屏此前没进过取样面。
+
+        `thread-title-sync` 整条都登记在 `narrow-screen-overflow.spec.ts` 的
+        `MOBILE_UNREACHABLE` 里，卡的是侧栏那行会话标题。
+        ⚠ **它只有一半是被别人覆盖的**：`thread-list-pin#mobile-drawer`
+        走到「Rename 这一项可见」为止，而这条场景真正要量的是
+        **对话框 + 改名 + Save + 标题回写**，那一半窄屏没人采过。
+
+        **不要 `hover`。** 桌面那一支先 hover 是因为 ⋯ 键要悬停才显形；
+        窄屏上它是常驻的（`md:opacity-0` 那条只在 ≥768px 生效，见
+        `thread-list-pin#mobile-drawer` 的判词）。第六十一轮实测两个应用
+        在 375px 下都是 `⋯ 按钮个数=1` 且直接点得开，**多一步 hover 只会
+        把虚拟指针留在那儿**。
+
+        **实测（两应用各一遍，375px）**：开抽屉 → `Original title` 可见 →
+        ⋯ 1 个 → `Rename` 可见 → 对话框 input 可见 → `Save` 可见，
+        **两边逐字相同**。尾部那三步（等对话框关掉、等新标题、等焦点落回按钮）
+        逐字照抄桌面支——那三步防的是焦点归还的竞态，与断点无关。
+      */
+      {
+        id: "mobile-drawer",
+        dimensions: [{ viewport: "mobile", theme: "light", locale: "en-US" }],
+        steps: [
+          {
+            kind: "click",
+            target: {
+              role: "button",
+              name: /^(Toggle Sidebar|Open sidebar)$/,
+            },
+          },
+          { kind: "visible", target: { text: "Original title" } },
+          { kind: "click", target: { role: "button", name: /^(More|更多)$/ } },
+          {
+            kind: "click",
+            target: { role: "menuitem", name: /^(Rename|重命名)$/ },
+          },
+          {
+            kind: "fill",
+            target: { selector: '[role="dialog"] input' },
+            value: "Renamed title",
+          },
+          { kind: "click", target: { role: "button", name: /^(Save|保存)$/ } },
+          {
+            kind: "hidden",
+            target: { role: "dialog", name: /^(Rename|重命名)$/ },
+          },
+          { kind: "visible", target: { text: "Renamed title" } },
+          { kind: "visible", target: { selector: "button:focus" } },
+        ],
+      },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
   },
@@ -2161,10 +2269,15 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       `group-hover/workspace-header:*`，而 click 之后鼠标还停在头部，
       悬停态下它们的可见性会翻转；`DeerFlow` 只在展开支里渲染、不受悬停影响，
       **两边都是**（workspace-header.tsx:41/45 与 ThreadSidebar.vue:454）。
+
+      ⚠ **正则两边要兼容模板空白**（wave 63）。Vue SFC 产物的文本节点是
+      `" DeerFlow "`，旧 `/^DeerFlow$/` 在正则模式下匹配不到，于是 `hidden`
+      从点击前就恒真；桌面点击失效也会假绿。改成 `/^\s*DeerFlow\s*$/`
+      后，桌面只有标题真消失才通过，窄屏打开抽屉则两端都明确不通过这个桌面终态。
     */
     steps: [
       { kind: "click", target: { role: "button", name: "Toggle Sidebar" } },
-      { kind: "hidden", target: { text: /^DeerFlow$/ } },
+      { kind: "hidden", target: { text: /^\s*DeerFlow\s*$/ } },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
@@ -3809,7 +3922,22 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
               selector: '[data-sidebar="menu-item"]:has-text("Feishu") button',
             },
           },
-          { kind: "visible", target: { selector: "[role=dialog]" } },
+          /*
+            **这里必须写 `[data-slot="dialog-content"]`，不能写 `[role=dialog]`**
+            （第六十一轮实测订正）。
+
+            窄屏上 `[role=dialog]` **命中两个**——Sheet 抽屉本身就是一个 Dialog：
+
+                sidebar         288x812   "Sidebar Displays the mobile si…"   ← .first() 选中的是它
+                dialog-content  343x288   "Connect Feishu Enter the value…"
+
+            于是这个锚点量的是抽屉、和上一行 `[data-sidebar='sidebar']` 逐字重复，
+            **而运行时配置对话框的几何一格都没被采到**——名字看着像在守它，其实没有。
+          */
+          {
+            kind: "visible",
+            target: { selector: '[data-slot="dialog-content"]' },
+          },
           { kind: "visible", target: { role: "textbox", name: "Token" } },
           {
             kind: "visible",
@@ -4023,6 +4151,19 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     states: [
       {
         id: "reasoning-menu",
+        /*
+          Wave 62 实测：两端原来的 `hidden sm:inline-flex` 都把这项能力从手机上
+          整块删掉；解除隐藏后 375px 上按钮同为 161.94×32，菜单可操作，页面
+          scrollWidth 仍等于 clientWidth，横滚容器为 0。移动维不是缩短桌面链路，
+          而是把恢复后的真实入口纳入同一终态。
+        */
+        dimensions: [
+          DEFAULT_DIMENSION,
+          ZH_DIMENSION,
+          DARK_DIMENSION,
+          TABLET_DIMENSION,
+          MOBILE_DIMENSION,
+        ],
         steps: [
           {
             kind: "click",
@@ -4361,6 +4502,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     states: [
       {
         id: "default",
+        /*
+          移动 Sheet 走完整的文件切换链，不另造一条“只看得见标题”的缩水终态。
+          Wave 62 修的是三栏头部重叠：修前下拉视觉宽 174.67px、所属标题栏只有
+          94.91px，中心点在两端都命中 View source；这条链会在第一次 click 当场红。
+        */
+        dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, MOBILE_DIMENSION],
         steps: [
           { kind: "click", target: { testId: "artifact-trigger" } },
           { kind: "visible", target: { text: "batched-report.md" } },

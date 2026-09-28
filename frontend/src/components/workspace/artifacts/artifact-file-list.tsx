@@ -173,10 +173,10 @@ export function ArtifactFileList({
         {files.map((file) => (
           <Card
             key={file}
-            className="relative cursor-pointer p-3"
+            className="relative max-w-full min-w-0 cursor-pointer p-3"
             onClick={() => handleClick(file)}
           >
-            <CardHeader className="grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 pr-2 pl-1">
+            <CardHeader className="max-w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 pr-2 pl-1 max-[361px]:has-data-[slot=card-action]:grid-cols-[minmax(0,1fr)]">
               <CardTitle className="relative min-w-0 pl-8 leading-tight [overflow-wrap:anywhere] break-words">
                 <div className="min-w-0">{getFileName(file)}</div>
                 <div className="absolute top-2 -left-0.5">
@@ -186,7 +186,7 @@ export function ArtifactFileList({
               <CardDescription className="min-w-0 pl-8 text-xs">
                 {t.artifacts.fileTypeLabel(getFileExtensionDisplayName(file))}
               </CardDescription>
-              <CardAction className="row-span-1 self-center">
+              <CardAction className="row-span-1 self-center max-[361px]:col-start-1 max-[361px]:row-start-3 max-[361px]:flex max-[361px]:w-full max-[361px]:flex-wrap max-[361px]:justify-self-stretch">
                 {file.endsWith(".skill") && isAdmin && (
                   <Button
                     variant="ghost"

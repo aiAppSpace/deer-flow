@@ -10,8 +10,9 @@
                       `bg-background/80` 与 `bg-background/0` 会同时留在 class 上，
                       赢家由样式表顺序决定而不是模板顺序——同一份模板在不同的样式
                       产物里会画出不同的东西。
-                   2. 右侧控件的分组容器。它不改变横向节奏（标题是唯一的 flex-1），
-                      改变的是标题变长时缩谁。
+                   2. 右侧控件的分组容器。普通聊天沿用上游 gap-2；Agent 页沿用上游
+                      的无 gap + sm:mr-4，避免 200% 文本缩放时额外挤掉 24px 主面板。
+                      两路都必须保持 shrink-0，标题变长时只能缩标题。
                    3. 标题走 FlipDisplay，与上游 ThreadTitle 同构。
                    4. 会话页真的挂了 useHead——本仓此前一个都不设，标签页永远停在
                       根标题。
@@ -57,8 +58,16 @@ describe("chat header composition", () => {
     expect(source).not.toContain("z-40 flex h-12");
   });
 
-  it("groups the right-hand controls in one shrink-0 container", () => {
-    expect(source).toContain('<div class="flex shrink-0 items-center gap-2">');
+  it("keeps the right controls non-shrinking with route-specific spacing", () => {
+    expect(source).toMatch(
+      /<div\s+class="flex shrink-0 items-center [^"]*"\s+:class="agentName \? 'sm:mr-4' : 'gap-2'"\s*>/,
+    );
+    expect(source).toContain("max-[361px]:min-w-0 max-[361px]:flex-1");
+    expect(source).toContain("max-[361px]:shrink");
+    // 不能退回普通页和 Agent 页共享静态 gap；它曾令 Agent 主面板在 200% 下多裁 24px。
+    expect(source).not.toContain(
+      '<div class="flex shrink-0 items-center gap-2">',
+    );
   });
 
   it("names the browser tab after the thread", () => {
