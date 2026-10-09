@@ -29,12 +29,17 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useI18n } from "@/core/i18n/hooks";
 import { env } from "@/env";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 import { useArtifacts } from "../artifacts/context";
 import { useMaybeBrowserView } from "../browser-view/context";
+import {
+  MessageDetailsProvider,
+  useMaybeMessageDetails,
+} from "../message-details/context";
 import { useThread } from "../messages/context";
 import { useMaybeSidecar } from "../sidecar/context";
 
@@ -75,16 +80,50 @@ const SidecarPanel = dynamic(
   { loading: RightPanelLoading },
 );
 
+const MessageDetailsPanel = dynamic(
+  () =>
+    import("../message-details/message-details-panel").then(
+      (module) => module.MessageDetailsPanel,
+    ),
+  { loading: RightPanelLoading },
+);
+
 const RIGHT_PANEL_ANIMATION_MS = 280;
 const RIGHT_PANEL_DEFAULT_SIZE = "40%";
 
-type RightPanelKind = "sidecar" | "artifacts" | "browser";
+type RightPanelKind = "sidecar" | "artifacts" | "browser" | "details";
 
-const ChatBox: React.FC<{
+interface ChatBoxProps {
   children: React.ReactNode;
   threadId: string;
   browserEnabled?: boolean;
-}> = ({ children, threadId, browserEnabled = true }) => {
+}
+
+function ChatBox(props: ChatBoxProps) {
+  const { setOpen: setArtifactsOpen } = useArtifacts();
+  const sidecar = useMaybeSidecar();
+  const browserView = useMaybeBrowserView();
+  const closeOtherPanels = useCallback(() => {
+    setArtifactsOpen(false);
+    sidecar?.close();
+    browserView?.close();
+  }, [setArtifactsOpen, sidecar, browserView]);
+
+  return (
+    <MessageDetailsProvider key={props.threadId} onSelect={closeOtherPanels}>
+      <ChatBoxContent {...props} />
+    </MessageDetailsProvider>
+  );
+}
+
+const ChatBoxContent: React.FC<ChatBoxProps> = ({
+  children,
+  threadId,
+  browserEnabled = true,
+}) => {
+  const { t } = useI18n();
+  const messageDetails = useMaybeMessageDetails();
+  const detailsOpen = messageDetails?.open ?? false;
   const { thread } = useThread();
   const isMobile = useIsMobile();
   const pathname = usePathname();
@@ -167,7 +206,9 @@ const ChatBox: React.FC<{
       ? "browser"
       : artifactPanelOpen
         ? "artifacts"
-        : null;
+        : detailsOpen
+          ? "details"
+          : null;
   const rightPanelOpen = activeRightPanel !== null;
   const [renderedRightPanel, setRenderedRightPanel] =
     useState<RightPanelKind | null>(activeRightPanel);
@@ -226,6 +267,8 @@ const ChatBox: React.FC<{
         sidecar?.close();
       } else if (activeRightPanel === "browser") {
         browserView?.close();
+      } else if (activeRightPanel === "details") {
+        messageDetails?.close();
       } else if (activeRightPanel === "artifacts") {
         setArtifactsOpen(false);
       }
@@ -234,6 +277,7 @@ const ChatBox: React.FC<{
       activeRightPanel,
       browserView,
       isMobile,
+      messageDetails,
       resizableIdBase,
       setArtifactsOpen,
       sidecar,
@@ -341,7 +385,22 @@ const ChatBox: React.FC<{
     }
   }, [browserEnabled, browserView]);
 
+  useEffect(() => {
+    if (detailsOpen && (sidecarOpen || browserViewOpen || artifactPanelOpen)) {
+      messageDetails?.close({ restoreFocus: false });
+    }
+  }, [
+    detailsOpen,
+    sidecarOpen,
+    browserViewOpen,
+    artifactPanelOpen,
+    messageDetails,
+  ]);
+
   const rightPanelContent = useMemo(() => {
+    if (renderedRightPanel === "details") {
+      return <MessageDetailsPanel />;
+    }
     if (renderedRightPanel === "browser") {
       return <BrowserViewPanel threadId={threadId} className="size-full" />;
     }
@@ -402,6 +461,55 @@ const ChatBox: React.FC<{
     artifacts,
     setArtifactsOpen,
   ]);
+
+  if (isMobile) {
+    return (
+      <>
+        <div className="relative size-full min-w-0">{children}</div>
+        <Sheet
+          open={rightPanelOpen}
+          onOpenChange={(open) => {
+            if (open) {
+              return;
+            }
+            if (detailsOpen) {
+              messageDetails?.close();
+            }
+            if (sidecarOpen) {
+              sidecar?.close();
+            }
+            if (browserViewOpen) {
+              browserView?.close();
+            }
+            if (artifactsOpen) {
+              setArtifactsOpen(false);
+            }
+          }}
+        >
+          <SheetContent
+            className="w-[calc(100vw-1rem)] max-w-none gap-0 p-0 sm:max-w-md [&>button]:hidden"
+            side="right"
+          >
+            <SheetHeader className="sr-only">
+              <SheetTitle>
+                {renderedRightPanel === "sidecar"
+                  ? "Sidecar"
+                  : renderedRightPanel === "browser"
+                    ? "Browser"
+                    : renderedRightPanel === "details"
+                      ? (messageDetails?.selectedDetail?.title ?? t.common.more)
+                      : "Artifacts"}
+              </SheetTitle>
+              <SheetDescription>
+                Browse the side panel for this conversation.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 p-3 pt-10">{rightPanelContent}</div>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
 
   return (
     <>

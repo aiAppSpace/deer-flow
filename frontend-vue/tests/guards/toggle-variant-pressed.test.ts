@@ -1,7 +1,7 @@
 /*
   【文件职责】     把「选中态只靠换色，读屏器听不出来」这一类挡在门外：凡是
                    `variant` 在 `default` / `outline` 之间条件切换的 `<Button>`，
-                   都必须带 `aria-pressed`。**两个应用一起扫。**
+                   选中开关必须带 `aria-pressed`；动作随状态变化的按钮必须有不同的可访问名称。**两个应用一起扫。**
   【架构位置】     门禁测试
   【主要导出】     无；Vitest cases
   【依赖关系】     scripts/lib/i18n-source-guard.mjs（Vue 扫描面 + unscanned 自证）·
@@ -23,7 +23,8 @@
                    压根不可交互、状态就在徽标文字里。
                    **所以这条规则收得住，一条豁免都不需要**——豁免表为空才说明
                    收口选对了（线索 180）。真遇到一颗「就是不该有 aria-pressed」的，
-                   先想清楚它凭什么让读屏器听出选中态，再谈加豁免。
+                   先想清楚它凭什么让读屏器听出状态；同一个条件改变不同的动作名
+                   （例如 WeChat 连接前 Close、连接后 Done）不需要 aria-pressed。
 
                    **扫描面要能自证盖全**（线索 229）：Vue 那一半直接复用
                    `productVueInventory()`，并断言它的 `unscanned` 恒为空；
@@ -96,10 +97,27 @@ export function isSelectionToggle(tag: string): boolean {
 
 const hasPressed = (tag: string) => /\baria-pressed\b/.test(tag);
 
+/** 状态改变动作名称（例如连接后 Done、连接前 Close）不是选择开关。 */
+function hasNamedStateAction(tag: string): boolean {
+  const label = /\baria-label=\{([^{}]+)\}/.exec(tag)?.[1];
+  if (!label) return false;
+  const branches = /^(.+?)\?\s*([^?:]+)\s*:\s*([^?:]+)$/.exec(label);
+  const variantCondition = /\bvariant=\{([^?{}]+)\?/.exec(tag)?.[1];
+  const normalize = (value: string | undefined) => value?.replace(/\s+/g, "");
+  return Boolean(
+    branches &&
+    normalize(branches[1]) === normalize(variantCondition) &&
+    branches[2]?.trim() !== branches[3]?.trim(),
+  );
+}
+
 /** 报告一行：文件 + 那颗按钮的 variant 表达式（够定位，又不至于贴一整段 JSX）。 */
 function offenders(file: string, source: string): string[] {
   return buttonTags(source)
-    .filter((tag) => isSelectionToggle(tag) && !hasPressed(tag))
+    .filter(
+      (tag) =>
+        isSelectionToggle(tag) && !hasPressed(tag) && !hasNamedStateAction(tag),
+    )
     .map((tag) => {
       const variant = /\bvariant=(\{[^]*?\}|"[^"]*")/.exec(tag)![1]!;
       return `${file}  variant=${variant.replace(/\s+/g, " ")}`;
@@ -117,6 +135,34 @@ function tsxFiles(dir: string): string[] {
 }
 
 describe("选中态必须念得出来", () => {
+  it("distinguishes named actions from an unnamed selection toggle", () => {
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={connected ? "default" : "outline"} aria-label={connected ? done : close} onClick={onDone}>Done</Button>',
+      ),
+    ).toEqual([]);
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={selected ? "default" : "outline"}>Daily</Button>',
+      ),
+    ).toHaveLength(1);
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={selected ? "default" : "outline"} aria-label={other ? done : close}>Done</Button>',
+      ),
+    ).toHaveLength(1);
+
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={selected ? "default" : "outline"} aria-label={selected ? daily : daily}>Daily</Button>',
+      ),
+    ).toHaveLength(1);
+  });
+
   it("Vue 产品 SFC 里没有只靠换色表达选中的 Button", () => {
     const inventory = productVueInventory() as {
       checked: string[];

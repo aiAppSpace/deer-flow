@@ -10,11 +10,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from app.channels.base import Channel
+from app.channels.base import Channel, ChannelStopTimeout
 from app.channels.manager import DEFAULT_CHANNEL_MAX_CONCURRENCY, DEFAULT_CHANNEL_SHUTDOWN_GRACE_PERIOD_SECONDS, DEFAULT_GATEWAY_URL, DEFAULT_LANGGRAPH_URL, ChannelManager
 from app.channels.message_bus import DEFAULT_INBOUND_QUEUE_MAXSIZE, MessageBus
 from app.channels.runtime_config_store import merge_runtime_channel_configs
 from app.channels.store import ChannelStore
+from deerflow.utils.file_io import await_drained
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ _CHANNEL_REGISTRY: dict[str, str] = {
     "discord": "app.channels.discord:DiscordChannel",
     "feishu": "app.channels.feishu:FeishuChannel",
     "github": "app.channels.github:GitHubChannel",
+    "qq": "app.channels.qq:QQChannel",
     "slack": "app.channels.slack:SlackChannel",
     "telegram": "app.channels.telegram:TelegramChannel",
     "wechat": "app.channels.wechat:WechatChannel",
@@ -42,6 +44,7 @@ _CHANNEL_CREDENTIAL_KEYS: dict[str, list[str]] = {
     "dingtalk": ["client_id", "client_secret"],
     "discord": ["bot_token"],
     "feishu": ["app_id", "app_secret"],
+    "qq": ["app_id", "client_secret"],
     "slack": ["bot_token", "app_token"],
     "telegram": ["bot_token"],
     "wecom": ["bot_id", "bot_secret"],
@@ -157,7 +160,9 @@ class ChannelService:
         self._channels: dict[str, Any] = {}  # name -> Channel instance
         self._config = config
         self._running = False
+        self._stopping = False
         self._readiness_locks: dict[str, asyncio.Lock] = {}
+        self._config_epochs: dict[str, int] = {}
 
     @classmethod
     def from_app_config(
@@ -198,6 +203,8 @@ class ChannelService:
         """Start the manager and all enabled channels."""
         if self._running:
             return
+        if self._stopping:
+            raise RuntimeError("cannot start ChannelService while shutdown is incomplete")
 
         await self.manager.start()
         self._running = True
@@ -236,13 +243,19 @@ class ChannelService:
             logger.warning("ChannelService is not running; cannot ensure channel readiness")
             return False
 
-        if config is not None:
-            self._config[name] = dict(config)
+        epoch = self._config_epochs.get(name, 0)
+        async with self._channel_lock(name):
+            if not self._running:
+                return False
 
-        # Serialize per channel: readiness is polled from request handlers, so
-        # concurrent calls must not stop/start the same channel worker twice.
-        lock = self._readiness_locks.setdefault(name, asyncio.Lock())
-        async with lock:
+            if config is not None:
+                if self._config_epochs.get(name, 0) == epoch:
+                    self._config[name] = dict(config)
+                else:
+                    logger.info(
+                        "Ignoring stale config snapshot for channel %s after concurrent reconfiguration",
+                        name,
+                    )
             channel_config = self._config.get(name)
             if not channel_config or not isinstance(channel_config, dict):
                 logger.warning("No config for requested channel")
@@ -255,22 +268,36 @@ class ChannelService:
                 return True
 
             if channel is not None:
-                try:
-                    await channel.stop()
-                except Exception:
-                    logger.exception("Error stopping non-running channel before readiness retry")
-                self._channels.pop(name, None)
+                # Ownership-preserving cleanup: the instance is retained when
+                # its stop() fails or is cancelled, and this round must NOT
+                # start a replacement over it — _start_channel would overwrite
+                # the tracked entry and orphan the still-subscribed listener
+                # one hop later (the gap this closes from the review on 5227).
+                await self._stop_and_discard_channel(name, channel)
+                if self._channels.get(name) is channel:
+                    logger.warning("Readiness retry deferred: previous %s channel failed to stop and remains tracked", name)
+                    return False
 
             max_attempts = max(1, attempts)
             for attempt in range(max_attempts):
+                if not self._running:
+                    return False
                 if attempt > 0:
                     logger.info("Retrying channel startup after readiness check")
                 if await self._start_channel(name, channel_config):
                     return True
+                # A failed attempt whose cleanup retained the instance ends
+                # the loop for this round: the next attempt would be refused
+                # by _start_channel's retained-instance guard anyway, and the
+                # still-tracked channel must not be replaced one hop later.
+                if self._channels.get(name) is not None:
+                    logger.warning("Readiness retries deferred: %s channel failed to clean up after a failed start and remains tracked", name)
+                    return False
             return False
 
     async def stop(self) -> None:
         """Drain accepted messages while channels can still deliver replies."""
+        self._stopping = True
         self._running = False
         # Reject new provider work first. Existing workers keep draining during
         # manager.stop(), and channel transports remain alive until that drain
@@ -286,6 +313,9 @@ class ChannelService:
                 # The Gateway deadline interrupted shutdown, so detaching them
                 # would hide resources that may still be in use.
                 raise
+            except ChannelStopTimeout as exc:
+                logger.warning("Channel %s remains retained after bounded stop timeout: %s", name, exc)
+                stop_errors.append(exc)
             except Exception as exc:
                 logger.exception("Error stopping channel")
                 stop_errors.append(exc)
@@ -297,6 +327,7 @@ class ChannelService:
         if stop_errors:
             raise ExceptionGroup("one or more channels failed to stop", stop_errors)
 
+        self._stopping = False
         logger.info("ChannelService stopped")
 
     def _load_channel_config(self, name: str) -> dict[str, Any] | None:
@@ -308,7 +339,8 @@ class ChannelService:
         The UI runtime-config overlay applied at startup is re-applied here
         so a file-driven reload neither drops credentials entered from the
         browser nor resurrects a channel disconnected from it.
-        Falls back to the cached ``self._config`` when config loading fails.
+        Returns a snapshot without mutating shared state, or ``None`` when
+        unavailable. The restart caller owns publication and cached fallback.
         """
         try:
             from deerflow.config.app_config import get_app_config
@@ -319,26 +351,49 @@ class ChannelService:
             _merge_channel_connection_runtime_config(channels_config, app_config)
             channel_config = channels_config.get(name)
             if isinstance(channel_config, dict):
-                # Update the cached config so get_status() stays consistent.
-                self._config[name] = channel_config
                 return channel_config
         except Exception:
-            logger.exception("Failed to reload config for channel %s, using cached version", name)
-        return self._config.get(name)
+            logger.exception("Failed to load config snapshot for channel %s", name)
+        return None
+
+    def _channel_lock(self, name: str) -> asyncio.Lock:
+        """Return the per-channel lifecycle lock ensuring serialized mutations."""
+        return self._readiness_locks.setdefault(name, asyncio.Lock())
+
+    def _bump_config_epoch(self, name: str) -> int:
+        """Bump and return the configuration epoch for a channel.
+
+        Invalidates queued readiness checks carrying an earlier config snapshot.
+        """
+        self._config_epochs[name] = self._config_epochs.get(name, 0) + 1
+        return self._config_epochs[name]
 
     async def restart_channel(self, name: str, *, reload_config: bool = True) -> bool:
         """Restart a specific channel. Returns True if successful."""
+        async with self._channel_lock(name):
+            return await self._restart_channel_locked(name, reload_config=reload_config)
+
+    async def _restart_channel_locked(self, name: str, *, reload_config: bool = True) -> bool:
+        """Restart a specific channel. The caller must already hold ``_channel_lock(name)``."""
         if name in self._channels:
-            try:
-                await self._channels[name].stop()
-            except Exception:
-                logger.exception("Error stopping channel for restart")
-            del self._channels[name]
+            channel = self._channels[name]
+            # Same ownership rule as readiness retries: retain an instance
+            # whose stop() fails, and decline the restart rather than
+            # overwriting a still-tracked (still-listening) channel.
+            await self._stop_and_discard_channel(name, channel)
+            if self._channels.get(name) is channel:
+                logger.warning("Restart deferred: %s channel failed to stop and remains tracked", name)
+                return False
 
         if reload_config:
             # Reading config.yaml and the runtime store is disk IO; keep it
             # off the event loop.
-            config = await asyncio.to_thread(self._load_channel_config, name)
+            loaded_config = await asyncio.to_thread(self._load_channel_config, name)
+            # Publish under the lifecycle lock after await; abandoned workers stay read-only.
+            if loaded_config is not None:
+                self._config[name] = loaded_config
+            config = self._config.get(name)
+            self._bump_config_epoch(name)
         else:
             config = self._config.get(name)
         if not config or not isinstance(config, dict):
@@ -353,33 +408,105 @@ class ChannelService:
 
     async def configure_channel(self, name: str, config: dict[str, Any]) -> bool:
         """Apply runtime config for a channel and restart it if the service is running."""
-        self._config[name] = dict(config)
-        if not self._running:
-            return True
-        # The caller just supplied the authoritative config (e.g. credentials
-        # entered in the browser that are never written to config.yaml) — a
-        # file reload here would clobber it with the stale on-disk entry.
-        return await self.restart_channel(name, reload_config=False)
+        async with self._channel_lock(name):
+            self._bump_config_epoch(name)
+            try:
+                self._config[name] = dict(config)
+                if not self._running:
+                    return True
+                # The caller just supplied the authoritative config (e.g. credentials
+                # entered in the browser that are never written to config.yaml) — a
+                # file reload here would clobber it with the stale on-disk entry.
+                return await self._restart_channel_locked(name, reload_config=False)
+            finally:
+                self._bump_config_epoch(name)
 
     async def remove_channel(self, name: str) -> bool:
         """Remove runtime config for a channel and stop it if currently running."""
-        self._config.pop(name, None)
-        channel = self._channels.pop(name, None)
-        if channel is None:
-            return True
+        async with self._channel_lock(name):
+            self._bump_config_epoch(name)
+            try:
+                self._config.pop(name, None)
+                channel = self._channels.get(name)
+                if channel is None:
+                    return True
+                # Stop-then-drop with the shared ownership rule: a channel whose
+                # stop() fails stays tracked (and returns False) instead of being
+                # popped first and leaking its subscribed listener on failure.
+                await self._stop_and_discard_channel(name, channel)
+                if self._channels.get(name) is channel:
+                    logger.warning("Removal incomplete: %s channel failed to stop and remains tracked", name)
+                    return False
+                logger.info("Channel stopped and removed")
+                return True
+            finally:
+                self._bump_config_epoch(name)
+
+    async def _stop_and_discard_channel(self, name: str, channel: Channel) -> None:
+        """Stop a channel and drop it only once its ``stop()`` has completed.
+
+        This is the single ownership-preserving cleanup every discard path
+        routes through (failed startup, readiness retry, restart, removal).
+        ``start()`` subscribes the outbound listener before the transport is
+        up, so an instance that never reached ``is_running`` — or a running
+        one being torn down — must be ``stop()``-ed before it is discarded:
+        otherwise the bus keeps a strong reference to the dead listener and
+        every future outbound for this channel name fans out to it, while
+        repeated attempts accumulate more stale listeners the service can no
+        longer clean up (the instances are untracked by then). Discord's
+        fail-fast ``is_running`` makes this reachable for a client thread that
+        dies immediately (invalid token); the same hygiene applies to any
+        channel that subscribes before its transport is confirmed.
+
+        Ownership mirrors ``ChannelService.stop()``: the instance is dropped
+        only after its ``stop()`` actually completes. A cancellation arriving
+        mid-cleanup (or a ``stop()`` that raises) leaves it tracked, so a
+        retried readiness attempt stops it again before replacing it and
+        service shutdown can still reach it — untracking first would orphan
+        resources nobody can clean up anymore. Callers check for retention
+        (``self._channels.get(name) is channel``) and defer starting or
+        removing a replacement for that round, so startup cannot silently
+        overwrite a still-listening retained instance; all per-channel
+        lifecycle mutations (``ensure_channel_ready``, ``restart_channel``,
+        ``configure_channel``, ``remove_channel``) additionally serialize on
+        the per-channel lock.
+        """
         try:
             await channel.stop()
-            logger.info("Channel stopped and removed")
-            return True
+        except asyncio.CancelledError:
+            # Keep this transport owned by the service: the Gateway deadline
+            # interrupted cleanup, so detaching it here would hide resources
+            # that may still be in use (mirrors ChannelService.stop()).
+            raise
+        except ChannelStopTimeout as exc:
+            logger.warning("Channel %s remains retained after bounded stop timeout: %s", name, exc)
+            return
         except Exception:
-            logger.exception("Error stopping channel for removal")
-            return False
+            logger.exception("Error stopping channel %s during discard", name)
+            return
+        if self._channels.get(name) is channel:
+            self._channels.pop(name, None)
 
     async def _start_channel(self, name: str, config: dict[str, Any]) -> bool:
         """Instantiate and start a single channel."""
+        if self._stopping or not self._running:
+            logger.warning("Refusing to start %s while ChannelService is stopped or stopping", name)
+            return False
+
         import_path = _CHANNEL_REGISTRY.get(name)
         if not import_path:
             logger.warning("Unknown channel type")
+            return False
+
+        # Never install a fresh instance over a retained one: a channel whose
+        # failed cleanup kept it tracked still holds a subscribed outbound
+        # listener, and overwriting the entry here is the one remaining way to
+        # orphan it (nothing would be able to stop it afterwards). Callers
+        # decline the operation when they see the name still tracked; this
+        # guard makes the invariant hold at the mechanism itself.
+        retained = self._channels.get(name)
+        if retained is not None:
+            logger.warning("Refusing to start %s: another channel instance is still tracked under this name (previous cleanup incomplete, or the instance is still running)", name)
             return False
 
         try:
@@ -390,6 +517,7 @@ class ChannelService:
             logger.exception("Failed to import channel class")
             return False
 
+        channel: Channel | None = None
         try:
             config = dict(config)
             config["channel_store"] = self.store
@@ -400,21 +528,42 @@ class ChannelService:
                 # (tests, tooling) stay free of filesystem side effects.
                 from deerflow.config.paths import get_paths
 
-                config["seen_event_store_path"] = str(Path(get_paths().base_dir) / "channels" / "buzz_seen_events.json")
+                def _default_seen_store_path() -> str:
+                    # Worker thread: ``base_dir`` resolves through realpath, and a
+                    # channel start runs on the Gateway event loop — including the
+                    # per-request ``POST /api/channels/{name}/restart`` path.
+                    return str(Path(get_paths().base_dir) / "channels" / "buzz_seen_events.json")
+
+                config["seen_event_store_path"] = await asyncio.to_thread(_default_seen_store_path)
             if self._connection_repo is not None:
                 config["connection_repo"] = self._connection_repo
+            # A stop may have started while this coroutine was suspended in
+            # pre-start I/O above. Fence publication again immediately before
+            # the new instance becomes service-owned.
+            if self._stopping or not self._running:
+                logger.warning("Refusing to publish %s channel while ChannelService is stopped or stopping", name)
+                return False
             channel = channel_cls(bus=self.bus, config=config)
             self._channels[name] = channel
             await channel.start()
+            # A concurrent service stop may finish while channel.start() is
+            # suspended, removing this instance before it subscribes. Drain
+            # the late-started transport rather than leaving an orphan.
+            if self._stopping or not self._running:
+                await self._stop_and_discard_channel(name, channel)
+                return False
             if not channel.is_running:
-                self._channels.pop(name, None)
                 logger.error("Channel did not enter a running state after start()")
+                await self._stop_and_discard_channel(name, channel)
                 return False
             logger.info("Channel started")
             return True
         except Exception:
-            self._channels.pop(name, None)
             logger.exception("Failed to start channel")
+            if channel is not None:
+                await self._stop_and_discard_channel(name, channel)
+            else:
+                self._channels.pop(name, None)
             return False
 
     def get_status(self) -> dict[str, Any]:
@@ -502,9 +651,30 @@ async def start_channel_service(
     # from_app_config reads the JSON channel store and runtime config files;
     # keep that disk IO off the event loop. asyncio.to_thread forwards both
     # args and kwargs to the target callable.
-    _channel_service = await asyncio.to_thread(ChannelService.from_app_config, app_config, get_stream_bridge=get_stream_bridge)
-    await _channel_service.start()
-    return _channel_service
+    service = await asyncio.to_thread(ChannelService.from_app_config, app_config, get_stream_bridge=get_stream_bridge)
+    _channel_service = service
+
+    async def rollback_failed_start() -> None:
+        global _channel_service
+        await service.stop()
+        if _channel_service is service:
+            _channel_service = None
+
+    try:
+        await service.start()
+    except BaseException:
+        try:
+            await await_drained(rollback_failed_start())
+        except asyncio.CancelledError:
+            # A repeated caller cancellation arrives only after the owned
+            # rollback has drained; preserve cancellation semantics.
+            raise
+        except Exception:
+            # Retain the singleton when cleanup itself fails so shutdown can
+            # retry it instead of orphaning partially-started resources.
+            logger.exception("Failed to stop ChannelService after startup failure; retaining singleton")
+        raise
+    return service
 
 
 async def stop_channel_service() -> None:

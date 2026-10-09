@@ -7,9 +7,12 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from deerflow.community.ragflow.sources import durable_source_artifact
 from deerflow.config.app_config import AppConfig, get_app_config
 from deerflow.config.subagent_batches_config import SubagentBatchesConfig
 from deerflow.config.subagent_runtime_config import SubagentRuntimeConfig
+from deerflow.extensions import LoadedExtensions, get_loaded_extensions
+from deerflow.mcp_scope import THREAD_INCARNATION_CONTEXT_KEY
 from deerflow.subagents.batch_acceptance import check_batch_acceptance
 from deerflow.subagents.batch_runtime import BatchSubmitRequest
 from deerflow.subagents.capacity import SubagentExecutionCapacity
@@ -21,6 +24,7 @@ from deerflow.subagents.executor import (
     get_background_task_result,
     request_cancel_background_task,
 )
+from deerflow.utils.assembly_io import run_assembly
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,10 @@ def _usage(records: list[dict[str, Any]] | None) -> dict[str, int] | None:
 class SubagentBatchService:
     """Lease, execute, and recover durable native-subagent batch items."""
 
+    # Also used by focused shutdown tests constructing an instance via __new__.
+    _stopping: bool = False
+    _stop_drains: int = 0
+
     def __init__(
         self,
         *,
@@ -46,43 +54,76 @@ class SubagentBatchService:
         runtime_config: SubagentRuntimeConfig,
         app_config: AppConfig | None = None,
         execution_capacity: SubagentExecutionCapacity | None = None,
+        extensions: LoadedExtensions | None = None,
     ) -> None:
         self._repository = repository
         self._config = config
         self._runtime_config = runtime_config
         self._app_config = app_config
         self._execution_capacity = execution_capacity
+        # One worker owns one generation, including recovered durable items.
+        # Never persist this Python object in the serializable execution_spec.
+        self._extensions = extensions if extensions is not None else get_loaded_extensions()
         self._lease_owner = f"{socket.gethostname()}:{uuid.uuid4().hex}"
         self._stop = asyncio.Event()
         self._poller: asyncio.Task[None] | None = None
+        self._stopping = False
+        self._stop_drains = 0
         self._executions: dict[str, asyncio.Task[None]] = {}
         self._execution_ids: dict[str, str] = {}
         self._item_batches: dict[str, str] = {}
 
     async def start(self) -> None:
+        if self._stopping:
+            raise RuntimeError("cannot start subagent batch poller before stop completes")
         if self._poller is not None:
             return
         self._stop.clear()
         self._poller = asyncio.create_task(self._run(), name="subagent-batch-poller")
 
     async def stop(self) -> None:
+        # Keep poller ownership visible until the entire drain finishes.
+        # Otherwise start() could create a fresh poller during this await.
+        self._stop_drains += 1
+        self._stopping = True
         self._stop.set()
         poller = self._poller
-        self._poller = None
-        if poller is not None:
-            poller.cancel()
-            await asyncio.gather(poller, return_exceptions=True)
+
+        # Issue every owned-work cancellation before the first await. The
+        # Gateway wraps this stop hook in a deadline; if poller teardown is
+        # slow, cancellation of this coroutine must not prevent native/item
+        # cancellation from being requested.
         execution_ids = list(self._execution_ids.values())
         for execution_id in execution_ids:
             request_cancel_background_task(execution_id)
         tasks = list(self._executions.values())
+
+        if poller is not None:
+            poller.cancel()
         for task in tasks:
             task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        self._executions.clear()
-        self._execution_ids.clear()
-        self._item_batches.clear()
+
+        completed = False
+        try:
+            if poller is not None:
+                # Caller cancellation must return even if owned work temporarily
+                # suppresses cancellation. Keep ownership/start fencing intact
+                # so a later stop can finish the drain.
+                await asyncio.shield(asyncio.gather(poller, return_exceptions=True))
+            if tasks:
+                await asyncio.shield(asyncio.gather(*tasks, return_exceptions=True))
+            self._executions.clear()
+            self._execution_ids.clear()
+            self._item_batches.clear()
+            if self._poller is poller:
+                self._poller = None
+            completed = True
+        finally:
+            # A cancelled caller cannot leave a phantom drain count. Keep
+            # start fenced until a subsequent successful stop retries cleanup.
+            self._stop_drains -= 1
+            if completed and self._stop_drains == 0:
+                self._stopping = False
 
     async def _run(self) -> None:
         while not self._stop.is_set():
@@ -130,8 +171,11 @@ class SubagentBatchService:
         total = len(request.items)
         if total < 1 or total > self._config.max_items_per_batch:
             raise ValueError(f"Batch item count must be between 1 and {self._config.max_items_per_batch}")
-        max_live = request.max_live_items or self._config.default_max_live_items
-        max_running = request.max_running_items or self._config.default_max_running_items
+        # `or` would read an explicit 0 as "unset", substitute the configured
+        # default, and hide the caller's value from the range guards below --
+        # a negative already fails there, so 0 was the asymmetric case.
+        max_live = self._config.default_max_live_items if request.max_live_items is None else request.max_live_items
+        max_running = self._config.default_max_running_items if request.max_running_items is None else request.max_running_items
         if not 1 <= max_live <= self._config.max_live_items_per_batch:
             raise ValueError(f"max_live_items must be between 1 and {self._config.max_live_items_per_batch}")
         if not 1 <= max_running <= self._config.max_running_items_per_batch:
@@ -162,6 +206,17 @@ class SubagentBatchService:
     ) -> dict[str, Any] | None:
         return await self._repository.get_batch(batch_id, user_id=user_id)
 
+    async def read_batch_item(self, *, batch_id: str, user_id: str, thread_id: str, position: int) -> dict[str, Any] | None:
+        """Read one current-thread result; never expose worker execution context."""
+        batch = await self._repository.get_batch(batch_id, user_id=user_id)
+        if batch is None or batch["thread_id"] != thread_id:
+            return None
+        items = await self._repository.list_items(batch_id, user_id=user_id, offset=position, limit=1, include_result=True)
+        if not items:
+            return None
+        fields = ("id", "item_key", "position", "status", "attempt", "result", "result_truncated", "error", "stop_reason", "acceptance_criteria", "acceptance_verdict")
+        return {key: items[0].get(key) for key in fields}
+
     async def cancel_batch(
         self,
         *,
@@ -186,7 +241,12 @@ class SubagentBatchService:
             batch = item["batch"]
             self._item_batches[item_id] = batch["id"]
             spec = batch["execution_spec"]
-            config = SubagentConfig(**spec["subagent_config"])
+            config_data = spec["subagent_config"]
+            if "prompt_overlay" in config_data:
+                from deerflow.config.prompt_overlay import PromptOverlay
+
+                config_data = {**config_data, "prompt_overlay": PromptOverlay.model_validate(config_data["prompt_overlay"])}
+            config = SubagentConfig(**config_data)
             app_config = self._app_config or get_app_config()
             from deerflow.tools import get_available_tools
 
@@ -195,13 +255,38 @@ class SubagentBatchService:
                 spec.get("parent_model"),
                 app_config=app_config,
             )
-            tools = get_available_tools(
+            # Assemble off-loop: tool assembly may block on MCP cache
+            # initialization, which must not stall the calling event loop (issue #5172).
+            tools = await run_assembly(
+                get_available_tools,
                 groups=spec.get("tool_groups"),
+                mcp_plugins=spec.get("mcp_plugins"),
                 model_name=effective_model,
                 subagent_enabled=False,
                 include_upload_tool=False,
                 app_config=app_config,
+                extensions=self._extensions,
             )
+            # Revalidate durable state before launching: cancel_batch may have
+            # terminalized this item (or its lease may have been lost) while
+            # assembly blocked in the worker thread — the poll loop's checks
+            # only start after execute_async(), so launching without this
+            # check would run work the user already cancelled.
+            lease = await self._repository.renew_item_lease(
+                item_id,
+                lease_owner=self._lease_owner,
+                lease_seconds=self._config.lease_seconds,
+                now=datetime.now(UTC),
+            )
+            if not lease["valid"]:
+                logger.info(
+                    "Durable batch item %s cancelled or lease lost during tool assembly; skipping launch",
+                    item_id,
+                )
+                return
+            executor_kwargs = {}
+            if THREAD_INCARNATION_CONTEXT_KEY in spec:
+                executor_kwargs[THREAD_INCARNATION_CONTEXT_KEY] = spec[THREAD_INCARNATION_CONTEXT_KEY]
             executor = SubagentExecutor(
                 config=config,
                 tools=tools,
@@ -216,8 +301,11 @@ class SubagentBatchService:
                 channel_user_id=spec.get("channel_user_id"),
                 is_internal=spec.get("is_internal") is True,
                 authz_attributes=spec.get("authz_attributes"),
+                knowledge_scope=spec.get("knowledge_scope"),
                 execution_capacity=self._execution_capacity,
+                extensions=self._extensions,
                 acceptance_criteria=item.get("acceptance_criteria"),
+                **executor_kwargs,
             )
             prompt = f"Durable batch item key: {item['item_key']}\nThis item may be retried after a worker crash. Keep side effects idempotent and use the item key as the idempotency identity.\n\n{item['prompt']}"
             execution_id = executor.execute_async(prompt, task_id=item_id)
@@ -278,6 +366,11 @@ class SubagentBatchService:
             truncated = len(raw_result) > self._config.max_result_chars
             stored_result = raw_result[: self._config.max_result_chars] if raw_result else None
             preview = raw_result[: self._config.result_preview_max_chars] if raw_result else None
+            result_artifact = durable_source_artifact(
+                getattr(result, "ai_messages", None) or [],
+                stored_result or "",
+                max_chars=self._config.max_result_chars,
+            )
             acceptance_verdict = None
             if result.status is SubagentStatus.COMPLETED and item.get("acceptance_criteria"):
                 try:
@@ -301,6 +394,7 @@ class SubagentBatchService:
                 model_name=effective_model,
                 completed_at=datetime.now(UTC),
                 acceptance_verdict=acceptance_verdict,
+                result_artifact=result_artifact,
             )
         except asyncio.CancelledError:
             if execution_id is not None:

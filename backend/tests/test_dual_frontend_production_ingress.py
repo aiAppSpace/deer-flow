@@ -187,14 +187,12 @@ def test_vue_dockerfile_and_dev_launcher_expose_the_vue_hmr_service() -> None:
     assert "WATCH_PID_FILE" not in docker_script
     assert "--frontend)" not in docker_script
 
-    # **先剥注释再扫。** 断言的是「Makefile 里没有 docker-logs-frontend 这个
-    # 目标」，而一句*解释*为什么没有它的注释同样含这个字符串——不剥的话，
-    # 写下那句解释就会让这条守卫红。同一个坑在本仓已经踩到第三次
-    # （frontend-vue 的 e2e-suite-contract 与 tooling-contracts 各一次）。
+    # Retain the upstream frontend alias alongside explicit React/Vue targets.
     makefile = "\n".join(line for line in (REPO_ROOT / "Makefile").read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#"))
     assert "docker-logs-react" in makefile
     assert "docker-logs-vue" in makefile
-    assert "docker-logs-frontend" not in makefile
+    assert "docker-logs-frontend:" in makefile
+    assert "./scripts/docker.sh logs --frontend" in makefile
 
     for ignored_path in (
         "frontend-vue/node_modules",

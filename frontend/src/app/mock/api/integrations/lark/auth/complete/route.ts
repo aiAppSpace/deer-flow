@@ -39,6 +39,7 @@ export function POST() {
         verified: true,
       },
       sandbox_runtime_mode: "init-container",
+      sandbox_runtime_probed: true,
       sandbox_runtime_ready: true,
       sandbox_runtime_detail: null,
     },

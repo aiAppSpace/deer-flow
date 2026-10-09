@@ -56,6 +56,28 @@ data:
             ''      '';
         }
 
+        # Loopback has two spellings and browsers scope cookies per host, so
+        # serving both "localhost" and "127.0.0.1" (or "[::1]") splits the login
+        # session into separate jars (#6156). Canonicalize on "localhost", the
+        # spelling every banner and doc prints, keeping the caller's port.
+        map $http_host $loopback_canonical_host {
+            default                                  "";
+            "127.0.0.1"                              "localhost";
+            "~*^127\.0\.0\.1:(?<loopback_port>\d+)$" "localhost:$loopback_port";
+            "[::1]"                                  "localhost";
+            "~*^\[::1\]:(?<loopback_port>\d+)$"      "localhost:$loopback_port";
+        }
+
+        # Safe methods only: redirecting an API POST would strand clients that
+        # do not re-send bodies across the redirect. A GET carrying an Upgrade
+        # header (a WebSocket handshake) must proxy straight through instead:
+        # WebSocket clients never follow the 301.
+        map $request_method:$http_upgrade:$loopback_canonical_host $loopback_origin {
+            default      "";
+            "~*^GET::."  $loopback_canonical_host;
+            "~*^HEAD::." $loopback_canonical_host;
+        }
+
         # K8s Services resolve at config-parse time (no resolver directive needed).
         upstream gateway_upstream {
             server gateway:8001;
@@ -76,6 +98,11 @@ data:
             listen 2026 default_server;
             listen [::]:2026 default_server;
             server_name _;
+
+            # Canonicalize the loopback origin (#6156); see the maps above.
+            if ($loopback_origin != "") {
+                return 301 $scheme://$loopback_origin$request_uri;
+            }
 
             proxy_buffering off;
             proxy_cache off;
@@ -99,6 +126,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
                 proxy_set_header Connection '';
                 proxy_set_header X-Accel-Buffering no;
@@ -119,6 +147,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -128,6 +157,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -137,6 +167,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -147,6 +178,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
 
                 client_max_body_size 101M;
@@ -160,7 +192,12 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                # Installing a .skill archive runs one LLM security scan per file, and a
+                # custom-skill edit or rollback runs one more; none sets its own timeout.
+                # The upload endpoint above already allows 600s for the same work.
+                proxy_read_timeout 600s;
             }
 
             location /api/agents {
@@ -169,6 +206,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -179,6 +217,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
                 client_max_body_size 100M;
                 proxy_request_buffering off;
@@ -196,6 +235,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection 'upgrade';
@@ -207,13 +247,36 @@ data:
                 proxy_read_timeout 600s;
             }
 
+            # Project documents — multipart upload plus the promote/attach/content/
+            # delete routes. Without its own location the upload fell through to
+            # /api/ and nginx's 1m default returned 413 before Gateway saw it,
+            # although Gateway allows uploads.max_file_size (50 MiB by default).
+            # Same ceiling as uploads; the read timeout keeps what /api/ granted.
+            location ~ ^/api/projects/[^/]+/documents {
+                proxy_pass http://gateway_upstream;
+                proxy_http_version 1.1;
+                proxy_set_header Host $http_host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
+                proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                client_max_body_size 100M;
+                proxy_request_buffering off;
+                proxy_read_timeout 600s;
+            }
+
             location ~ ^/api/threads {
                 proxy_pass http://gateway_upstream;
                 proxy_http_version 1.1;
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                # /compact and /suggestions hold the response open for a model call,
+                # /runs/wait for a whole run. nginx's 60s default would 504 them mid-work:
+                # the compaction still commits, and the waited run is cancelled.
+                proxy_read_timeout 600s;
             }
 
             location /docs {
@@ -222,6 +285,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -231,6 +295,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -240,6 +305,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -249,6 +315,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
 
@@ -262,6 +329,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
             }
             {{- end }}
@@ -273,7 +341,12 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
+                # /api/runs/wait blocks on a whole run and /api/input-polish on a model
+                # call. nginx's 60s default would 504 them mid-work, and the waited run is
+                # cancelled on the disconnect.
+                proxy_read_timeout 600s;
             }
 
             # Everything else -> frontend (with WebSocket upgrade for HMR/sockets).
@@ -283,6 +356,7 @@ data:
                 proxy_set_header Host $http_host;
                 proxy_set_header X-Real-IP $remote_addr;
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Host $http_host;
                 proxy_set_header X-Forwarded-Proto $forwarded_proto;
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection $connection_upgrade;

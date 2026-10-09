@@ -1,9 +1,9 @@
 import type { AnchorHTMLAttributes } from "react";
 
-import { useI18n } from "@/core/i18n/hooks";
+import { knowledgeSourceId } from "@/core/knowledge/sources";
 import { cn } from "@/lib/utils";
 
-import { isSafeHref } from "../messages/markdown-link";
+import { isSafeHref, UnsafeLink } from "../messages/markdown-link";
 
 import { CitationLink, extractReactNodeText } from "./citation-link";
 
@@ -11,9 +11,8 @@ function isExternalUrl(href: string | undefined): boolean {
   return !!href && /^https?:\/\//.test(href);
 }
 
-/** Link renderer for artifact markdown: citation: prefix → CitationLink, otherwise underlined text. */
+/** Knowledge destinations and citation-prefixed links use the source renderer. */
 export function ArtifactLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
-  const { t } = useI18n();
   // Reject unsafe schemes so prompt-injected [label](javascript:...) in a .md
   // artifact preview cannot execute in the main document, matching the guard in
   // createMarkdownLinkComponent (markdown-link.tsx).
@@ -23,17 +22,13 @@ export function ArtifactLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
     // into the DOM / trigger React DOM warnings.
     const { className, children } = props;
     return (
-      <span
-        className={cn(
-          "text-muted-foreground cursor-not-allowed underline decoration-dotted underline-offset-2",
-          className,
-        )}
-        aria-label={t.markdown.unsafeLink}
-        title={t.markdown.unsafeLinkTitle(props.href)}
-      >
+      <UnsafeLink href={props.href} className={className}>
         {children}
-      </span>
+      </UnsafeLink>
     );
+  }
+  if (knowledgeSourceId(props.href)) {
+    return <CitationLink {...props} />;
   }
   const childrenText = extractReactNodeText(props.children);
   if (childrenText !== null) {

@@ -1,7 +1,8 @@
-import type { AnchorHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, ComponentProps } from "react";
 
 import { resolveMarkdownArtifactURL } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
+import { knowledgeSourceId } from "@/core/knowledge/sources";
 import { cn } from "@/lib/utils";
 
 import { CitationLink, extractReactNodeText } from "../citations/citation-link";
@@ -50,6 +51,31 @@ export function isSafeHref(href: string | undefined): boolean {
   }
 }
 
+/**
+ * Inert stand-in for a link whose href failed `isSafeHref`. It keeps the
+ * visible label and marks the omission on hover and for assistive tech, so
+ * every surface that applies the allowlist degrades the same way. Extra props
+ * pass through for wrappers such as Radix `asChild` triggers.
+ */
+export function UnsafeLink({
+  href,
+  className,
+  ...props
+}: ComponentProps<"span"> & { href: string }) {
+  const { t } = useI18n();
+  return (
+    <span
+      {...props}
+      className={cn(
+        "text-muted-foreground cursor-not-allowed underline decoration-dotted underline-offset-2",
+        className,
+      )}
+      aria-label={t.markdown.unsafeLink}
+      title={t.markdown.unsafeLinkTitle(href)}
+    />
+  );
+}
+
 function isExternalUrl(href: string | undefined): boolean {
   if (typeof href !== "string") {
     return false;
@@ -67,7 +93,6 @@ export function createMarkdownLinkComponent(threadId?: string) {
     href,
     ...props
   }: AnchorHTMLAttributes<HTMLAnchorElement>) {
-    const { t } = useI18n();
     // Reject unsafe schemes up front so a prompt-injected / pasted href can
     // never reach the rendered anchor — including through the citation
     // branch (which renders <a href={href}> directly). Check before the
@@ -80,17 +105,14 @@ export function createMarkdownLinkComponent(threadId?: string) {
       // <span> and would trigger React DOM warnings.
       const { className, children } = props;
       return (
-        <span
-          className={cn(
-            "text-muted-foreground cursor-not-allowed underline decoration-dotted underline-offset-2",
-            className,
-          )}
-          aria-label={t.markdown.unsafeLink}
-          title={t.markdown.unsafeLinkTitle(href)}
-        >
+        <UnsafeLink href={href} className={className}>
           {children}
-        </span>
+        </UnsafeLink>
       );
+    }
+    // Knowledge destinations also appear as ordinary [Title](URL) Sources links.
+    if (knowledgeSourceId(href)) {
+      return <CitationLink {...props} href={href} />;
     }
     // Safe-href check passed — citation links now route through CitationLink.
     const childrenText = extractReactNodeText(props.children);

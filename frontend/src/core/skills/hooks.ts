@@ -13,7 +13,7 @@ import { loadSkills } from ".";
  * that screen that the Vue app made none of.
  */
 export function useSkills(options?: { enabled?: boolean }) {
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["skills"],
     queryFn: () => loadSkills(),
     enabled: options?.enabled ?? true,
@@ -34,7 +34,7 @@ export function useSkills(options?: { enabled?: boolean }) {
     staleTime: 5 * 60 * 1000,
     retry: (count, err) => !(err instanceof SkillRequestError) && count < 3,
   });
-  return { skills: data ?? [], isLoading, error };
+  return { skills: data ?? [], isLoading, isFetching, error, refetch };
 }
 
 export function useEnableSkill() {

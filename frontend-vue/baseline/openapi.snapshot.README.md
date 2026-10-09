@@ -33,9 +33,9 @@ cd ../frontend-vue && make gen-api-types
 `DEER_FLOW_ALLOW_UNVERIFIED_GITHUB_WEBHOOKS=1` 是**必需的**：不设它
 `/api/webhooks/github` 不挂载，快照会少一条路径而且**没有任何报错**——
 `create_app()` 只打一行 warning。当前快照就是带着这个变量抓的：
-103 条路径 / 128 个 schema，不设变量是 102 条。
+签入快照为 103 条路径 / 128 个 schema（本次 main 合并尚未刷新快照），不设变量是 102 条。
 
-`app.py` 里唯一按条件 `include_router` 的就是这一个（其余 26 个 router 无条件挂载），
+`app.py` 里唯一按条件 `include_router` 的就是这一个（其余 34 个 router 无条件挂载），
 所以路由集只受这一个变量影响。**没有验证过**的是 `config.yaml` 的
 memory / scheduler / tracing 开关会不会改变 schema 细节——它们看上去只影响启动期
 行为，但没实测。刷新快照时如果 diff 出意料之外的东西，先怀疑这里。

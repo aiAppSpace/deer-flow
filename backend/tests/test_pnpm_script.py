@@ -3,10 +3,12 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -23,6 +25,9 @@ def _load_pnpm_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+PNPM_MODULE = runpy.run_path(str(PNPM_SCRIPT))
 
 
 def _write_fake_command(bin_dir: Path, name: str, label: str, exit_code: int = 0) -> Path:
@@ -71,6 +76,30 @@ def test_runner_prefers_direct_pnpm_and_forwards_arguments(tmp_path: Path):
     assert result.returncode == 0
     assert result.stdout.strip() == f"direct|{FRONTEND_DIR}|run dev --host 127.0.0.1"
     assert "via Corepack" not in result.stderr
+
+
+def test_runner_prefers_cmd_shim_on_windows(monkeypatch):
+    paths = {
+        "pnpm": r"C:\tools\pnpm.exe",
+        "pnpm.cmd": r"C:\tools\pnpm.cmd",
+    }
+    find_pnpm_command = PNPM_MODULE["find_pnpm_command"]
+    monkeypatch.setitem(find_pnpm_command.__globals__, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setitem(find_pnpm_command.__globals__, "shutil", SimpleNamespace(which=paths.get))
+
+    assert find_pnpm_command() == [paths["pnpm.cmd"]]
+
+
+def test_runner_prefers_corepack_cmd_shim_on_windows(monkeypatch):
+    paths = {
+        "corepack": r"C:\tools\corepack.exe",
+        "corepack.cmd": r"C:\tools\corepack.cmd",
+    }
+    find_pnpm_command = PNPM_MODULE["find_pnpm_command"]
+    monkeypatch.setitem(find_pnpm_command.__globals__, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setitem(find_pnpm_command.__globals__, "shutil", SimpleNamespace(which=paths.get))
+
+    assert find_pnpm_command() == [paths["corepack.cmd"], "pnpm"]
 
 
 def test_runner_uses_corepack_pnpm_from_frontend_directory(tmp_path: Path):

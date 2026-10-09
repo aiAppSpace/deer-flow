@@ -1,6 +1,6 @@
 """What the Vue README says CI runs has to be what CI runs.
 
-`frontend-vue/README.md` now states which gates CI executes and which three run
+`frontend-vue/README.md` now states which gates CI executes and which gate runs
 only locally, with a reason for each.  A paragraph like that is worth nothing
 on its own -- it is a rule written down with no machine enforcing it, which is
 the exact failure this repo keeps finding (a compose service documented as
@@ -29,8 +29,8 @@ README = REPO_ROOT / "frontend-vue/README.md"
 # Stated by the README's "What CI actually runs" paragraph. Kept here rather
 # than parsed out of the prose: a regex over a sentence would quietly match
 # less as the sentence is edited, and this list is the thing under test.
-CI_RUN = frozenset({"verify", "asset-budget", "audit", "container-smoke", "e2e-mock", "e2e-backend"})
-LOCAL_ONLY = frozenset({"icon-parity", "standalone-sim", "e2e-parity", "e2e-parity-auth"})
+CI_RUN = frozenset({"verify", "asset-budget", "audit", "container-smoke", "e2e-mock", "e2e-backend", "standalone-sim", "icon-parity", "e2e-parity", "e2e-parity-auth"})
+LOCAL_ONLY = frozenset({"e2e-visual"})
 
 
 def _workflow_make_targets() -> set[str]:

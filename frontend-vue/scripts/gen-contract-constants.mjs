@@ -17,8 +17,8 @@
                    后端新加一份契约，`--check` 照样绿，Vue 这边没有任何征兆。
                    现在 `CONSUMED` 与 `NOT_CONSUMED` 必须**恰好划分**
                    `contracts/*.json`：新来一份就得表态，要么接进来，要么写清
-                   为什么前端用不到。`NOT_CONSUMED` **现在是空的**——豁免表为空，
-                   才说明判据收口选对了（线索 180）。
+                   为什么当前 Vue 界面不消费它。上游新增功能尚未迁入 Vue 时，
+                   明确记录原因；这不构成 React/Vue 完整对齐的证据。
 */
 
 import {
@@ -56,7 +56,14 @@ const CONSUMED = [
  * 认得、但前端用不到的契约：键是文件名，值是**为什么用不到**。
  * 空表是正常状态；往里加一条就是在说「这份契约前端故意不跟」。
  */
-const NOT_CONSUMED = {};
+const NOT_CONSUMED = {
+  "scheduled_goal_notes_contract.json":
+    "Vue 当前任务页不解释 host goal verdict/lifecycle codes，也没有 scheduled-run prompt cards；后续迁移这些界面时须改为 CONSUMED。",
+  "scheduled_task_errors_contract.json":
+    "Vue 当前 API adapter 统一通过 GatewayResponseError 展示 detail，不按调度错误码生成专用提示；专用提示迁移时须改为 CONSUMED。",
+  "thread_origin_contract.json":
+    "Vue 当前线程行只显示 legacy channel_source，未实现新 server-owned origin icon/unread UI；迁移 origin 投影时须改为 CONSUMED。",
+};
 
 /*
   读取由 CONSUMED 驱动，不是另写三行 readContract——否则那张表会与真正读了

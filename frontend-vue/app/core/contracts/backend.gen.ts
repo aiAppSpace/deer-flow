@@ -32,6 +32,7 @@ export type BackendSubagentStopReason = (typeof SUBAGENT_STOP_REASON_VALUES)[num
 export const RESERVED_SLASH_SKILL_NAMES = [
   "agent",
   "bootstrap",
+  "context",
   "goal",
   "help",
   "memory",

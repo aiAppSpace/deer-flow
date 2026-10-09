@@ -1,10 +1,21 @@
 "use client";
 
-import { BotIcon, PlusIcon } from "lucide-react";
+import { BotIcon, PlusIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
+import { type ChangeEvent, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { useAgents } from "@/core/agents";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { useAgents, useImportAgentPackage } from "@/core/agents";
 import { useI18n } from "@/core/i18n/hooks";
 
 import { AgentCard } from "./agent-card";
@@ -12,6 +23,53 @@ import { AgentCard } from "./agent-card";
 export function AgentGallery() {
   const { t } = useI18n();
   const { agents, isLoading } = useAgents();
+  const importAgent = useImportAgentPackage();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [packageDocument, setPackageDocument] = useState<unknown>(null);
+  const [importName, setImportName] = useState("");
+
+  const closeImportDialog = () => {
+    setPackageDocument(null);
+    setImportName("");
+  };
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      const sourceName =
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "agent" in parsed &&
+        typeof parsed.agent === "object" &&
+        parsed.agent !== null &&
+        "name" in parsed.agent &&
+        typeof parsed.agent.name === "string"
+          ? parsed.agent.name
+          : "";
+      setPackageDocument(parsed);
+      setImportName(sourceName);
+    } catch {
+      toast.error(t.agents.importInvalidFile);
+    }
+  };
+
+  const handleImport = async () => {
+    if (packageDocument === null) return;
+    try {
+      await importAgent.mutateAsync({
+        agentPackage: packageDocument,
+        name: importName.trim() || undefined,
+      });
+      toast.success(t.agents.importSuccess);
+      closeImportDialog();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
+
 
   return (
     <div className="flex size-full flex-col">
@@ -23,18 +81,28 @@ export function AgentGallery() {
             {t.agents.description}
           </p>
         </div>
-        {/*
-          "New Agent" goes to a URL, so it is a link. As a <button
-          onClick={router.push(...)}> it could not be middle-clicked, opened in
-          a new tab or have its address copied, and a screen reader announced it
-          as a button. Same change as the card's chat action.
-        */}
-        <Button asChild>
-          <Link href="/workspace/agents/new">
-            <PlusIcon className="mr-1.5 h-4 w-4" />
-            {t.agents.newAgent}
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            className="hidden"
+            type="file"
+            accept="application/json,.json"
+            onChange={handleImportFile}
+          />
+          <Button
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <UploadIcon className="mr-1.5 h-4 w-4" />
+            {t.agents.importAgent}
+          </Button>
+          <Button asChild>
+            <Link href="/workspace/agents/new">
+              <PlusIcon className="mr-1.5 h-4 w-4" />
+              {t.agents.newAgent}
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Content */}
@@ -77,6 +145,44 @@ export function AgentGallery() {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={packageDocument !== null}
+        onOpenChange={(open) => !open && closeImportDialog()}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.agents.importTitle}</DialogTitle>
+            <DialogDescription>{t.agents.importDescription}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <label htmlFor="agent-import-name" className="text-sm font-medium">
+              {t.agents.importName}
+            </label>
+            <Input
+              id="agent-import-name"
+              value={importName}
+              onChange={(event) => setImportName(event.target.value)}
+              placeholder={t.agents.nameStepPlaceholder}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={closeImportDialog}
+              disabled={importAgent.isPending}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={importAgent.isPending || importName.trim().length === 0}
+            >
+              {importAgent.isPending ? t.common.loading : t.agents.importAgent}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

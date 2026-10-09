@@ -91,6 +91,40 @@ function presentFilesMessages(path = PRESENTED_ARTIFACT_PATH) {
 }
 
 test.describe("Artifact preview stability", () => {
+  for (const [index, filename] of ["constructor", "data.__proto__"].entries()) {
+    test(`keeps ${filename} artifacts on the download fallback`, async ({
+      page,
+    }) => {
+      const threadId = `00000000-0000-0000-0000-00000000313${index}`;
+      const filepath = `/mnt/user-data/outputs/${filename}`;
+      mockLangGraphAPI(page, {
+        threads: [
+          {
+            thread_id: threadId,
+            title: "Unknown artifact type",
+            messages: presentFilesMessages(filepath),
+            artifacts: [filepath],
+          },
+        ],
+      });
+
+      await page.goto(`/workspace/chats/${threadId}`);
+      await page.getByText(filename, { exact: true }).first().click();
+
+      const artifactsPanel = page.locator("#artifacts");
+      const download = artifactsPanel.getByRole("link", { name: "Download" });
+      await expect(download).toBeVisible();
+      await expect(download).toHaveAttribute(
+        "href",
+        `/api/threads/${threadId}/artifacts${filepath}?download=true`,
+      );
+      await expect(artifactsPanel.locator(".cm-editor")).toHaveCount(0);
+      await expect(
+        artifactsPanel.getByRole("button", { name: "Edit", exact: true }),
+      ).toHaveCount(0);
+    });
+  }
+
   test("renders preview iframe for an in-progress write artifact", async ({
     page,
   }) => {
@@ -428,7 +462,7 @@ test.describe("Artifact preview stability", () => {
     ).toBeVisible();
   });
 
-  test("renders sandboxed iframe for a browser-previewable non-code file (urlOfArtifact path)", async ({
+  test("renders a PDF in an unsandboxed iframe so Chromium's viewer can display it (urlOfArtifact path)", async ({
     page,
   }) => {
     mockLangGraphAPI(page, {
@@ -463,9 +497,16 @@ test.describe("Artifact preview stability", () => {
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.pdf")).toBeVisible();
 
-    const urlOfArtifactIframe = artifactsPanel.locator("iframe:not([title])");
+    // Chromium blocks its built-in PDF viewer inside a sandbox="" iframe, so
+    // PDFs render unsandboxed; the endpoint declares application/pdf and the
+    // Gateway adds X-Content-Type-Options: nosniff, so the response cannot be
+    // reinterpreted as active markup. Non-PDF previewable binaries (images,
+    // audio, video) keep the sandbox.
+    const urlOfArtifactIframe = artifactsPanel.locator(
+      'iframe[title="report.pdf"]',
+    );
     await expect(urlOfArtifactIframe).toBeVisible();
-    await expect(urlOfArtifactIframe).toHaveAttribute("sandbox", "");
+    await expect(urlOfArtifactIframe).not.toHaveAttribute("sandbox", "");
   });
 
   test("renders video artifacts with a native media element instead of a sandboxed iframe", async ({

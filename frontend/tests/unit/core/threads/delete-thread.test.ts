@@ -1,10 +1,18 @@
-import { expect, rs, test } from "@rstest/core";
+import { beforeEach, expect, rs, test } from "@rstest/core";
 
 import {
   deleteThreadWithSidecars,
   findSidecarThreadIdsForParent,
 } from "@/core/threads/hooks";
 import type { AgentThread } from "@/core/threads/types";
+
+const cleanupFetch = rs.hoisted(() => rs.fn());
+rs.mock("@/core/api/fetcher", () => ({ fetch: cleanupFetch }));
+beforeEach(() => {
+  cleanupFetch
+    .mockReset()
+    .mockResolvedValue(new Response(null, { status: 204 }));
+});
 
 function makeThread(
   threadId: string,
@@ -78,6 +86,17 @@ test("deletes parent and sidecars exactly once through the canonical thread API"
     ),
   ).resolves.toEqual(["sidecar-1"]);
 
+  expect(cleanupFetch).toHaveBeenCalledTimes(2);
+  expect(cleanupFetch).toHaveBeenNthCalledWith(
+    1,
+    expect.stringContaining("/api/threads/sidecar-1"),
+    { method: "DELETE" },
+  );
+  expect(cleanupFetch).toHaveBeenNthCalledWith(
+    2,
+    expect.stringContaining("/api/threads/parent-1"),
+    { method: "DELETE" },
+  );
   expect(deleteThread).toHaveBeenCalledTimes(2);
   expect(deleteThread).toHaveBeenNthCalledWith(1, "sidecar-1");
   expect(deleteThread).toHaveBeenNthCalledWith(2, "parent-1");
