@@ -12,24 +12,24 @@ import {
   BrowserConnectionController,
   type BrowserConnectionSnapshot,
 } from "@/core/browser/connection";
-import type {
-  BrowserInputEvent,
-  BrowserNavigateIntent,
-} from "@/core/browser/protocol";
+import type { BrowserInputEvent } from "@/core/browser/protocol";
 
 import { browserStreamURL } from "./browser-api";
 import { LatestBrowserFrameBuffer } from "./frame-buffer";
 
 export type { BrowserInputEvent } from "@/core/browser/protocol";
 
-export interface BrowserFallbackNavigate extends BrowserNavigateIntent {
-  requestId: number;
-}
-
 export function useBrowserStream(
   threadId: Ref<string>,
   enabled: Ref<boolean>,
   seedUrl?: Ref<string | undefined>,
+  callbacks: {
+    onNavigationRejected?: (
+      url: string | undefined,
+      message: string | undefined,
+    ) => void;
+    onReconnectExhausted?: () => void;
+  } = {},
 ) {
   const status = ref<BrowserConnectionSnapshot["status"]>("idle");
   const frameUrl = ref<string | null>(null);
@@ -40,9 +40,7 @@ export function useBrowserStream(
   const rejectedUrl = ref<string | null>(null);
   const reconnectAttempt = ref(0);
   const canRetry = ref(false);
-  const fallbackNavigate = ref<BrowserFallbackNavigate | null>(null);
   const buffer = new LatestBrowserFrameBuffer((url) => (frameUrl.value = url));
-  let fallbackRequestId = 0;
   let currentThreadId: string | undefined;
 
   function publish(snapshot: BrowserConnectionSnapshot) {
@@ -72,10 +70,8 @@ export function useBrowserStream(
         buffer.replaceWithUrl(`data:image/jpeg;base64,${frame}`);
       }
     },
-    onFallbackNavigate(intent) {
-      fallbackRequestId += 1;
-      fallbackNavigate.value = { ...intent, requestId: fallbackRequestId };
-    },
+    onNavigationRejected: callbacks.onNavigationRejected,
+    onReconnectExhausted: callbacks.onReconnectExhausted,
   });
 
   watch(
@@ -84,7 +80,6 @@ export function useBrowserStream(
       if (nextThreadId !== currentThreadId) {
         currentThreadId = nextThreadId;
         buffer.dispose();
-        fallbackNavigate.value = null;
       }
       if (nextEnabled && nextThreadId) {
         controller.start(nextThreadId, seedUrl?.value);
@@ -117,7 +112,6 @@ export function useBrowserStream(
     rejectedUrl,
     reconnectAttempt,
     canRetry,
-    fallbackNavigate,
     sendInput: (event: BrowserInputEvent) => controller.sendInput(event),
     retry: () => controller.retry(),
     clearError: () => controller.clearError(),

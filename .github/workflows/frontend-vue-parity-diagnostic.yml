@@ -1,0 +1,111 @@
+# Diagnostic measurements never publish the formal parity aggregate check.
+name: frontend-vue parity diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      parity_only:
+        description: "Measure one scenario id; diagnostic evidence only"
+        type: string
+        required: true
+
+concurrency:
+  group: fe-vue-parity-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PARITY_REQUIRE_REACT: "1"
+
+jobs:
+  parity-diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+
+      - name: Require an explicit diagnostic scenario
+        id: diagnostic-scope
+        env:
+          PARITY_ONLY: ${{ inputs.parity_only }}
+        run: node -e 'if (!process.env.PARITY_ONLY?.trim()) process.exit(1)'
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          # Must match backend/Dockerfile's UV_IMAGE tag; pinned by backend/tests/test_ci_uv_version_pin.py
+          version: "0.11.1"
+
+      # Verbatim the same two lines as real-backend and external-gates: this job
+      # starts a *real* replay Gateway too, and Gateway startup loads the browser
+      # tools declared in the repo-root config.yaml. Pinned by
+      # tests/guards/tooling-contracts.test.ts.
+      - name: Install replay Gateway and browser dependencies
+        working-directory: backend
+        run: |
+          uv sync --frozen --group dev --extra browser
+          uv run playwright install --with-deps chromium
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install frontend-vue dependencies
+        run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
+
+      # The sibling app. `scripts/pnpm.py` runs Corepack from the selected
+      # workspace, so frontend/'s own pinned pnpm is used here, not this one's.
+      # The formal workflow owns strict-peer acceptance for both frontends.
+      - name: Install frontend dependencies
+        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        working-directory: frontend-vue
+        run: make e2e-install
+
+      # Icons, icon sizes and button variants never enter the accessibility
+      # tree, so no ARIA or screenshot gate can reach them. It was local-only
+      # for one reason only — "no existing workflow installs both apps'
+      # node_modules" — which stopped being true two steps ago. Cheap (a source
+      # scan, no servers), and it fails on a stale exemption, so it runs first.
+      - name: Compare icons, icon sizes and button variants
+        working-directory: frontend-vue
+        run: make icon-parity
+
+      - name: Measure the React-vs-Vue parity ledger
+        working-directory: frontend-vue
+        env:
+          # This manual workflow measures only the explicitly named scenario.
+          PARITY_ONLY: ${{ inputs.parity_only }}
+        run: |
+          make e2e-preflight
+          node scripts/keep-e2e-failure-artifacts.mjs -- node scripts/with-loopback-no-proxy.mjs -- python3 ../scripts/pnpm.py --dir frontend-vue exec playwright test -c playwright.parity.config.ts diff.spec.ts
+
+      # The ledger's own failure evidence. `keep-e2e-failure-artifacts.mjs`
+      # moves the run's traces to test-results/failures/ precisely so a rerun
+      # cannot erase them; on a hosted runner "the files are still on disk"
+      # means nothing unless they leave the runner.
+      # `failure()` alone would throw away the whole point of a PARITY_ONLY run:
+      # that run is *expected* to pass (filtered mode skips the baseline
+      # comparison), and its only product is the report inside this artifact.
+      - name: Upload the measured ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-diagnostic-${{ github.run_attempt }}
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14

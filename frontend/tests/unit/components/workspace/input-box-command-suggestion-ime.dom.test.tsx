@@ -101,6 +101,25 @@ afterEach(() => {
 });
 
 describe("InputBox command suggestion IME handling", () => {
+  it("keeps slash options owned by the textbox across blur and reopen", () => {
+    const { container } = renderComposer("thread-command-focus-owner");
+    const input = openCommandCatalog(container);
+    const list = screen.getByRole("listbox", { name: "Command suggestions" });
+    const option = screen.getByRole("option");
+    expect(option.tabIndex).toBe(-1);
+    expect(input.getAttribute("aria-controls")).toBe(list.id);
+    expect(input.getAttribute("aria-activedescendant")).toBe(option.id);
+    fireEvent.blur(input);
+    expect(list.isConnected).toBe(true);
+    expect(input.hasAttribute("aria-controls")).toBe(false);
+    fireEvent.focus(input);
+    expect(screen.getByRole("listbox", { name: "Command suggestions" })).toBe(
+      list,
+    );
+    fireEvent.keyDown(input, { key: "Tab" });
+    expect(input.value).toBe("/goal ");
+  });
+
   it("leaves Enter to the IME candidate window while the catalog is open", () => {
     const { container } = renderComposer("thread-ime-composing");
     const textarea = openCommandCatalog(container);

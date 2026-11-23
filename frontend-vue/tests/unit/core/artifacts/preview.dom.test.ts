@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 
 import {
+  appendHtmlPreviewBaseHref,
   appendHtmlPreviewScrollRestoration,
   buildWriteFileDraftContent,
   collectHtmlPreviewResourceUrls,
@@ -10,6 +11,26 @@ import {
   resolveHtmlPreviewResourceReference,
   rewriteHtmlPreviewResourceUrls,
 } from "@/core/artifacts/preview";
+
+test("gives script-created relative URLs the artifact base without replacing a real base tag", () => {
+  const url = "/api/threads/thread-1/artifacts/mnt/user-data/outputs/page.html";
+  const html =
+    '<html><head></head><body><script>fetch("data.json")</script></body></html>';
+  expect(
+    appendHtmlPreviewBaseHref(html, url, "https://deer.example/workspace"),
+  ).toContain(
+    '<head><base href="https://deer.example/api/threads/thread-1/artifacts/mnt/user-data/outputs/">',
+  );
+  const withBase =
+    '<html><head><base href="https://example.com/"></head></html>';
+  expect(appendHtmlPreviewBaseHref(withBase, url)).toBe(withBase);
+  expect(
+    appendHtmlPreviewBaseHref(
+      '<!-- <base href="fake"> --><header>Hi</header>',
+      url,
+    ),
+  ).toMatch(/^<base href=/);
+});
 
 const ARTIFACT_PATH = "/artifact-fixtures/report.html";
 const UNSUPPORTED_ARTIFACT_PATH = "/artifact-fixtures/data.csv";

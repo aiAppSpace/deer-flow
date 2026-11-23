@@ -27,6 +27,7 @@ const USER = {
 };
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   navigateToMock.mockReset();
@@ -76,5 +77,26 @@ describe("OIDC callback Nuxt page", () => {
         ),
       { timeout: 2_500 },
     );
+  });
+  it("does not navigate after unmount while the session probe is pending", async () => {
+    let resolve!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((done) => {
+            resolve = done;
+          }),
+      ),
+    );
+    const wrapper = await mountSuspended(AuthCallbackPage, {
+      route: "/auth/callback?next=%2Fworkspace",
+    });
+    vi.useFakeTimers();
+    wrapper.unmount();
+    resolve(Response.json(USER));
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(navigateToMock).not.toHaveBeenCalled();
   });
 });

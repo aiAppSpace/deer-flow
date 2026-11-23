@@ -542,3 +542,102 @@ describe("values 快照里的位置键", () => {
       expect(isSyntheticValuesMessageId(id)).toBe(false);
   });
 });
+
+describe("current Gateway rendered-channel reducers", () => {
+  const entry = (handle: string) => ({
+    handle,
+    tool_name: "make_report",
+    tool_call_id: `call_${handle}`,
+    call_index: 0,
+    artifact_type: "file",
+    display_name: `${handle}.csv`,
+    real_ref: `/mnt/user-data/outputs/${handle}.csv`,
+    consumed_by: [] as string[],
+  });
+  it("merges artifact paths across frames and multiple nodes in one frame", () => {
+    const { store } = harness();
+    send(store, "values", { artifacts: ["a"], messages: [] });
+    send(store, "updates", {
+      first: { artifacts: ["b", "a"] },
+      second: { artifacts: ["c"] },
+    });
+    send(store, "updates", {
+      untouched: { artifacts: null },
+      empty: { artifacts: [] },
+    });
+    expect(store.getSnapshot().state.artifacts).toEqual(["a", "b", "c"]);
+  });
+  it("preserves todos and goal on null writes, but lets an empty todo list clear", () => {
+    const { store } = harness();
+    const goal = {
+      objective: "finish",
+      status: "active",
+      created_at: "now",
+      updated_at: "now",
+    };
+    send(store, "values", {
+      todos: [{ content: "one", status: "pending" }],
+      goal,
+      messages: [],
+    });
+    send(store, "updates", { node: { todos: null, goal: null } });
+    expect(store.getSnapshot().state.todos).toEqual([
+      { content: "one", status: "pending" },
+    ]);
+    expect(store.getSnapshot().state.goal).toEqual(goal);
+    send(store, "updates", { node: { todos: [] } });
+    expect(store.getSnapshot().state.todos).toEqual([]);
+  });
+  it("merges tool capture and consumption by handle without values frames", () => {
+    const { store } = harness();
+    const first = entry("art_first"),
+      second = entry("art_second"),
+      third = entry("art_third");
+    send(store, "updates", { capture: { tool_artifacts: [first] } });
+    const consumed = { ...first, consumed_by: ["reader"] };
+    send(store, "updates", {
+      capture: { tool_artifacts: [second] },
+      consume: { tool_artifacts: [consumed] },
+    });
+    expect(store.getSnapshot().state.tool_artifacts).toEqual([
+      consumed,
+      second,
+    ]);
+    send(store, "updates", {
+      capture: { tool_artifacts: [third, { op: "trim_to", keep: 2 }] },
+    });
+    expect(store.getSnapshot().state.tool_artifacts).toEqual([second, third]);
+  });
+  it("preserves empty registry updates, validates entries, and enforces the ceiling", () => {
+    const { store } = harness();
+    const entries = Array.from({ length: 1001 }, (_, i) => entry(`art_${i}`));
+    send(store, "updates", {
+      capture: { tool_artifacts: [null, { handle: "invalid" }, ...entries] },
+    });
+    expect(store.getSnapshot().state.tool_artifacts).toEqual(
+      entries.slice(-1000),
+    );
+    send(store, "updates", {
+      capture: { tool_artifacts: [] },
+      untouched: { tool_artifacts: null },
+    });
+    expect(store.getSnapshot().state.tool_artifacts).toEqual(
+      entries.slice(-1000),
+    );
+  });
+  it("still replaces rendered state on authoritative values snapshots", () => {
+    const { store } = harness();
+    send(store, "updates", {
+      capture: { artifacts: ["old"], tool_artifacts: [entry("art_old")] },
+    });
+    send(store, "values", {
+      messages: [],
+      artifacts: ["new"],
+      tool_artifacts: [],
+    });
+    expect(store.getSnapshot().state).toEqual({
+      artifacts: ["new"],
+      tool_artifacts: [],
+    });
+  });
+});

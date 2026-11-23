@@ -518,6 +518,31 @@ function collectCssResourceUrls(value: string) {
   return urls;
 }
 
+/** A blob document needs the artifact URL as its base for script-created relative URLs. */
+export function appendHtmlPreviewBaseHref(
+  content: string,
+  url?: string,
+  currentHref = globalThis.location?.href ?? "http://localhost/",
+) {
+  if (!url) return content;
+  if (/base/i.test(content)) {
+    const template = document.createElement("template");
+    template.innerHTML = content;
+    if (template.content.querySelector("base")) return content;
+  }
+  const baseHref = htmlBaseHref(url, currentHref)
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;");
+  const baseElement = `<base href="${baseHref}">`;
+  if (/<head(?:\s[^>]*)?>/i.test(content)) {
+    return content.replace(
+      /<head(?:\s[^>]*)?>/i,
+      (headTag) => `${headTag}${baseElement}`,
+    );
+  }
+  return `${baseElement}${content}`;
+}
+
 export const HTML_PREVIEW_SCROLL_MESSAGE_SOURCE =
   "deerflow-artifact-preview-scroll";
 
@@ -570,10 +595,18 @@ function htmlScrollRestorationScript(messageKey: string) {
   });
   window.addEventListener("scroll", save, { passive: true });
   window.addEventListener("pagehide", save);
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => post("restore-request"), { once: true });
-  } else {
+  const ready = () => {
+    // An opaque-origin document with no controls is skipped by native Tab.
+    // Give the preview document its own keyboard entry without changing authored tabindex.
+    if (document.body && !document.body.hasAttribute("tabindex")) {
+      document.body.tabIndex = 0;
+    }
     post("restore-request");
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ready, { once: true });
+  } else {
+    ready();
   }
   window.addEventListener("load", () => post("restore-request"), { once: true });
 })();

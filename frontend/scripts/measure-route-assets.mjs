@@ -122,25 +122,37 @@ function run(command, args, options = {}) {
   });
 }
 
-async function waitForServer(baseUrl, child) {
+async function waitForServer(baseUrl, signal) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`Next.js server exited with ${child.exitCode}`);
-    }
+    signal.throwIfAborted();
     try {
-      const response = await fetch(baseUrl, { redirect: "manual" });
+      const response = await fetch(baseUrl, {
+        redirect: "manual",
+        signal: AbortSignal.any([
+          signal,
+          AbortSignal.timeout(
+            Math.max(1, Math.min(2_000, deadline - Date.now())),
+          ),
+        ]),
+      });
       if (response.status < 500) return;
     } catch {
-      // The server is still starting.
+      // Retry only readiness failures. A child error, exit or parent signal is
+      // the original failure and must not be replaced by a readiness timeout.
+      signal.throwIfAborted();
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+  signal.throwIfAborted();
   throw new Error("Timed out waiting for the Next.js production server");
 }
 
-async function measureRoute(baseUrl, route) {
-  const response = await fetch(`${baseUrl}${route}`, { redirect: "manual" });
+async function measureRoute(baseUrl, route, signal) {
+  const response = await fetch(`${baseUrl}${route}`, {
+    redirect: "manual",
+    signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+  });
   if (!response.ok) {
     throw new Error(`${route} returned HTTP ${response.status}`);
   }
@@ -153,21 +165,34 @@ async function measureRoute(baseUrl, route) {
       totals[kind] += (await stat(assetPath)).size;
     }
   }
+  signal.throwIfAborted();
   return { ...totals, assets, html: Buffer.byteLength(html) };
 }
 
 async function measureBuild(routes, staticWebsiteOnly) {
   const env = createBuildEnvironment(staticWebsiteOnly);
-  await run("pnpm", ["exec", "next", "build"], {
-    env,
-  });
+  await run(
+    env.PYTHON ?? (process.platform === "win32" ? "python" : "python3"),
+    [
+      path.resolve(frontendDir, "../scripts/pnpm.py"),
+      "--dir",
+      "frontend",
+      "exec",
+      "next",
+      "build",
+    ],
+    {
+      env,
+    },
+  );
 
   const port = await getFreePort();
   const server = spawn(
-    "pnpm",
+    process.execPath,
     [
-      "exec",
-      "next",
+      fileURLToPath(
+        new URL("../node_modules/next/dist/bin/next", import.meta.url),
+      ),
       "start",
       "--hostname",
       "127.0.0.1",
@@ -181,29 +206,78 @@ async function measureBuild(routes, staticWebsiteOnly) {
     },
   );
 
+  // One lifetime owns launch failures, child exit, HTTP operations and parent
+  // interruption. The awaited stop targets the actual Next listener process.
+  const lifetime = new AbortController();
+  let ended = false;
+  let termSent = false;
+  let killSent = false;
+  const stopped = new Promise((resolve) => {
+    server.on("error", (error) => {
+      lifetime.abort(error);
+      // A failed spawn has no process to await. Signal-delivery errors after
+      // spawn are not exits: keep waiting and retain the forced-stop timer.
+      if (server.pid === undefined) {
+        ended = true;
+        resolve();
+      }
+    });
+    server.once("exit", (code, signal) => {
+      ended = true;
+      // Next handles SIGTERM and deliberately exits 143 rather than exposing
+      // a signal exit. Admit that code only after our own successful delivery.
+      const expectedStop =
+        (termSent && (code === 0 || code === 143 || signal === "SIGTERM")) ||
+        (killSent && signal === "SIGKILL");
+      if (!expectedStop) {
+        lifetime.abort(
+          new Error(`Next.js server exited with ${code ?? signal}`),
+        );
+      }
+      resolve();
+    });
+  });
+  const interrupt = (name, code) => {
+    process.exitCode = code;
+    lifetime.abort(new Error(`Route measurement interrupted by ${name}`));
+  };
+  const onInterrupt = () => interrupt("SIGINT", 130);
+  const onTerminate = () => interrupt("SIGTERM", 143);
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onTerminate);
+  const measurements = {};
   try {
     const baseUrl = `http://127.0.0.1:${port}`;
-    await waitForServer(baseUrl, server);
-    const measurements = {};
+    await waitForServer(baseUrl, lifetime.signal);
     for (const route of routes) {
       measurements[route] = {
-        ...(await measureRoute(baseUrl, route)),
+        ...(await measureRoute(baseUrl, route, lifetime.signal)),
         buildMode: staticWebsiteOnly ? "static-demo" : "normal",
       };
     }
-    return measurements;
+    lifetime.signal.throwIfAborted();
   } finally {
-    if (server.exitCode === null) {
-      await new Promise((resolve) => {
-        const forceStop = setTimeout(() => server.kill("SIGKILL"), 5_000);
-        server.once("exit", () => {
+    try {
+      if (!ended) {
+        const forceStop = setTimeout(() => {
+          killSent = server.kill("SIGKILL");
+        }, 5_000);
+        try {
+          termSent = server.kill("SIGTERM");
+          await stopped;
+        } finally {
           clearTimeout(forceStop);
-          resolve();
-        });
-        server.kill("SIGTERM");
-      });
+        }
+      }
+    } finally {
+      process.removeListener("SIGINT", onInterrupt);
+      process.removeListener("SIGTERM", onTerminate);
     }
   }
+  // A parent interruption during awaited shutdown must also prevent the next
+  // build. Normal owned shutdown does not abort this lifetime.
+  lifetime.signal.throwIfAborted();
+  return measurements;
 }
 
 async function main() {
@@ -244,6 +318,6 @@ if (
     process.stderr.write(
       `${error instanceof Error ? error.stack : String(error)}\n`,
     );
-    process.exitCode = 1;
+    process.exitCode = process.exitCode || 1;
   });
 }

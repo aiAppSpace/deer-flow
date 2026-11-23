@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const python = process.platform === "win32" ? "python" : "python3";
+
 const defaultFrontendPort = process.env.E2E_FRONTEND_PORT ?? "3002";
 const baseURL =
   process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${defaultFrontendPort}`;
@@ -31,7 +33,7 @@ export default defineConfig({
   webServer: skipWebServer
     ? undefined
     : {
-        command: "pnpm exec next build && pnpm exec next start",
+        command: `${python} ../scripts/pnpm.py --dir frontend exec next build && ${python} ../scripts/pnpm.py --dir frontend exec next start`,
         url: baseURL,
         reuseExistingServer: false,
         timeout: 120_000,

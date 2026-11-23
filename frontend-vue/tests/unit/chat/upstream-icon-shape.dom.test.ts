@@ -18,15 +18,22 @@
                    但它是顾问工具（要读 `../frontend`），不能当门禁。
 */
 
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { defineComponent, h, ref } from "vue";
 
+import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
+import {
+  createWorkspaceToastStore,
+  workspaceToastKey,
+} from "@/core/workspace-shell/toast";
 import ArtifactTrigger from "@/components/workspace/artifacts/ArtifactTrigger.vue";
 import GoalStatus from "@/components/workspace/GoalStatus.vue";
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
 import SidecarTrigger from "@/components/workspace/sidecar/SidecarTrigger.vue";
+import { useMessageTurnActions } from "@/composables/useMessageTurnActions";
 import { enUS } from "@/core/i18n/locales/en-US";
+import type { Message } from "@/core/types/message";
 
 vi.stubGlobal("useNuxtApp", () => ({
   $i18n: { t: ref(enUS), locale: ref("en-US") },
@@ -56,50 +63,75 @@ describe("上游图标字形", () => {
     expect(source).not.toContain("CheckCircle2");
   });
 
-  /*
-    wave 72：复制键上游也是手写 `<button>`（citation-sources-panel.tsx:122），
-    所以不改走 Button——但本仓照抄时**漏了三条**，而这三条一条测试都没盯着：
-    悬停反馈、`shrink-0`，以及复制成功那颗对勾的 `text-green-500`
-    （可访问名换了、视觉没换，用户看不出复制成没成）。
-    钉源码串而不是渲染：这一颗要挂在 MessageList 的引用面板里才渲染，
-    单独 mount 的成本远大于它挡住的回归。
-  */
-  it("引用面板的复制键抄全了上游那一串", async () => {
-    const source = await import("node:fs").then((fs) =>
-      fs.readFileSync("app/components/chat/CitationSourcesPanel.vue", "utf8"),
-    );
-    /*
-      **先剥注释再找**（坑 202，这一节自己踩的第四次）：第一版直接在整份源码里
-      找那四个 class 名，而上面那段说明文字**逐字引用了它们**——把 class 从按钮上
-      删掉，断言照样绿。剥完之后再从复制键**自己的 class 串**里找。
-    */
-    const stripped = source
-      .replaceAll(/<!--[\s\S]*?-->/g, "")
-      .replaceAll(/\/\*[\s\S]*?\*\//g, "");
-    const copyButton = /<button\b[^>]*copySource\(source\)[^>]*>/s.exec(
-      stripped,
-    )?.[0];
-    expect(copyButton, "找不到引用面板的复制键").toBeDefined();
-    const copyClass = /\bclass="([^"]*)"/.exec(copyButton!)?.[1] ?? "";
-    for (const token of [
-      "hover:bg-muted",
-      "hover:text-foreground",
-      "shrink-0",
-      "transition-colors",
-    ]) {
-      expect(copyClass.split(/\s+/), `复制键少了 ${token}`).toContain(token);
+  it("引用面板的实际复制键保留上游反馈和可缩放图形", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const descriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const toast = createWorkspaceToastStore();
+    const wrapper = mount(CitationSourcesPanel, {
+      props: {
+        sources: [
+          {
+            id: "s1",
+            title: "Reference",
+            url: "https://example.com/reference",
+            domain: "example.com",
+            count: 1,
+            occurrences: [{ index: 1, title: "Reference" }],
+          },
+        ],
+      },
+      global: { provide: { [workspaceToastKey as symbol]: toast } },
+    });
+    try {
+      const button = wrapper.get(
+        `button[aria-label="${enUS.citations.copyReference("Reference")}"]`,
+      );
+      for (const token of [
+        "hover:bg-muted",
+        "hover:text-foreground",
+        "shrink-0",
+        "transition-colors",
+      ]) {
+        expect(button.classes()).toContain(token);
+      }
+      expect(button.get("svg").classes()).toContain("size-3.5");
+      await button.trigger("click");
+      await flushPromises();
+      expect(writeText).toHaveBeenCalledTimes(1);
+      expect(button.get("svg").classes()).toContain("text-green-500");
+      expect(button.get("svg").classes()).toContain("size-3.5");
+    } finally {
+      wrapper.unmount();
+      toast.clear();
+      if (descriptor) Object.defineProperty(navigator, "clipboard", descriptor);
+      else Reflect.deleteProperty(navigator, "clipboard");
     }
-    // 复制成功那颗对勾上游是绿的。
-    expect(stripped).toContain('class="text-green-500"');
   });
 
-  it("引用面板的外链图标是上游的 14px", async () => {
-    const source = await import("node:fs").then((fs) =>
-      fs.readFileSync("app/components/chat/CitationSourcesPanel.vue", "utf8"),
-    );
-    // 上游 citation-sources-panel.tsx:69 是 `size-3.5`。
-    expect(source).toContain('<ExternalLink :size="14" />');
-    expect(source).not.toContain('<ExternalLink :size="13" />');
+  it("引用面板的外链图标使用上游的size-3.5尺寸token", () => {
+    const wrapper = mount(CitationSourcesPanel, {
+      props: {
+        sources: [
+          {
+            id: "s1",
+            title: "Reference",
+            url: "https://example.com/reference",
+            domain: "example.com",
+            count: 1,
+            occurrences: [{ index: 1, title: "Reference" }],
+          },
+        ],
+      },
+      global: {
+        provide: { [workspaceToastKey as symbol]: createWorkspaceToastStore() },
+      },
+    });
+    expect(wrapper.get("a svg").classes()).toContain("size-3.5");
+    wrapper.unmount();
   });
 
   it("sidecar 的回形针是上游的 12px", async () => {
@@ -290,15 +322,56 @@ describe("手写按钮丢掉的那些（源码档）", () => {
   });
 
   it("改完重跑：草稿为空或一个字没改时不许提交", async () => {
-    const source = await read("app/components/chat/AgentChat.vue");
-    /*
-      上游 `editSubmitDisabled`（message-list-item.tsx:176）是四条或，
-      其中两条是「去空白后为空」与「与原文逐字相同」。两条都没有的话，
-      可以把一条 human 消息改成空串再重跑、也可以一个字不改就重跑，
-      而两种都会**丢掉这一轮之后的全部消息**。
-    */
-    expect(source).toContain("draft.length === 0");
-    expect(source).toContain("draft === state.original.trim()");
-    expect(source).toContain(':disabled="editSubmitDisabled"');
+    const submit = vi.fn(async () => true);
+    let actions!: ReturnType<typeof useMessageTurnActions>;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          actions = useMessageTurnActions({
+            owner: () => ["thread-1", "user-1/agent-1"],
+            submit: () => submit,
+            groupIds: () => ["human-1"],
+            onBeginEdit: vi.fn(),
+            notifyError: vi.fn(),
+            copyFailed: () => "Copy failed",
+          });
+          return () =>
+            h("button", { disabled: actions.editSubmitDisabled.value });
+        },
+      }),
+    );
+    try {
+      await actions.beginEdit(
+        {
+          id: "human-1",
+          type: "human",
+          content: "Original question",
+        } as Message,
+        0,
+      );
+      for (const draft of [
+        "Original question",
+        "   ",
+        "  Original question  ",
+      ]) {
+        actions.editState.value!.text = draft;
+        await wrapper.vm.$nextTick();
+        expect(wrapper.get("button").attributes("disabled")).toBeDefined();
+        await actions.updateAndRerun();
+        expect(submit).not.toHaveBeenCalled();
+      }
+      actions.editState.value!.text = "  Revised question  ";
+      await wrapper.vm.$nextTick();
+      expect(wrapper.get("button").attributes("disabled")).toBeUndefined();
+      await actions.updateAndRerun();
+      expect(submit).toHaveBeenCalledExactlyOnceWith(
+        "human-1",
+        "Revised question",
+        ["human-1"],
+      );
+      expect(actions.editState.value).toBeNull();
+    } finally {
+      wrapper.unmount();
+    }
   });
 });

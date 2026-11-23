@@ -5,7 +5,7 @@
   【主要导出】     CROSS_APP_BY_DESIGN · KINDS
   【依赖关系】     无
   【边界与注意】   两个消费者：`scripts/standalone-check.mjs`（静态证明没有跨应用
-                   引用）与 `scripts/standalone-sim.mjs`（真把兄弟应用移走跑一遍）。
+                   引用）与 `scripts/standalone-sim.mjs`（在无兄弟应用的隔离副本中安装、构建并运行）。
 
                    **`kind` 存在的理由**：wave 83 第一次真做这个实验时发现，
                    `note` 里那句「缺席时整组 skipIf 跳过」在
@@ -34,7 +34,7 @@
  * - `test`   vitest 用例：缺席时必须跳过或照常绿（`standalone-sim` 真跑）
  * - `script` node 脚本：缺席时必须打印一行后 exit 0（`standalone-sim` 真跑）
  * - `data`   纯数据：命中的是文件内容里的一句出处说明，没有可执行行为
- * - `e2e`    由 `make e2e-parity` 整组跳过覆盖（`standalone-sim --with-e2e` 真跑）
+ * - `e2e`    隔离副本仅验证收集能力；双端执行标为 UNRUN，正式 parity 命令缺少 React 必须失败
  */
 export const KINDS = ["test", "script", "data", "e2e"];
 
@@ -46,6 +46,22 @@ export const KINDS = ["test", "script", "data", "e2e"];
  * 只是数据里的一句出处说明。任何一条做不到，它就不是对照工具，而是依赖。
  */
 export const CROSS_APP_BY_DESIGN = {
+  "tests/unit/tooling/standalone-workspace.test.ts": {
+    kind: "test",
+    note: "在临时目录创建假的 React 应用文件，验证副本排除规则及原文件保留；不读取真实兄弟应用，缺席时照常运行。",
+  },
+  "tests/unit/tooling/upstream-drift.test.ts": {
+    kind: "test",
+    note: "在临时 Git 仓库创建 React 源码夹具，验证提交、WIP 与审阅标记；不读取真实兄弟应用，缺席时照常运行。",
+  },
+  "tests/unit/tooling/container-ingress-fixture.test.ts": {
+    kind: "test",
+    note: "React 输出目录只用于禁止把容器状态写入测试清理目录的负向夹具；不读取或启动 React，缺席时照常运行。",
+  },
+  "baseline/openapi.snapshot.json": {
+    kind: "data",
+    note: "后端 OpenAPI description 保留 ProjectThread 的 React 契约出处；纯 JSON 数据，没有跨应用执行依赖。",
+  },
   "tests/parity/product-surface.test.ts": {
     kind: "test",
     note: "产品表面对照；缺席时整组 describe.skipIf 跳过。",
@@ -60,7 +76,7 @@ export const CROSS_APP_BY_DESIGN = {
   },
   "tests/unit/chat/welcome-yields-to-goal.test.ts": {
     kind: "test",
-    note: "欢迎区让位给目标/待办这条判据的**全部依据就是照上游**，所以两侧都钉：本仓那条钉「照着做了」，上游那两条钉「照的还是那个样子」；缺席时**上游那两条** it.skipIf 跳过，本仓那条照常跑。",
+    note: "此文件保留欢迎区让位给目标/待办的两条上游源码检查；缺席时仅这两条 it.skipIf 跳过。Vue 的真实挂载行为由 tests/unit/chat/agent-chat-consumer-contracts.dom.test.ts 验证，不依赖兄弟应用。",
   },
   "tests/guards/toggle-variant-pressed.test.ts": {
     kind: "test",
@@ -116,7 +132,11 @@ export const CROSS_APP_BY_DESIGN = {
   },
   "tests/e2e-parity/support/react-preview.ts": {
     kind: "e2e",
-    note: "对照套件启动兄弟应用的地方；缺席时不启动它，e2e-parity 整组跳过，不进任何聚合入口。",
+    note: "对照套件启动兄弟应用的地方；缺席时不启动 React；隔离副本只验证收集。正式 parity 入口要求 React，不把跳过算作双端 PASS。",
+  },
+  "tests/e2e-parity/support/saved-showcase-history.ts": {
+    kind: "e2e",
+    note: "双端 Showcase 套件通过同一入口读取 React 保存会话夹具并提供只读 history route；隔离副本只验证收集，正式双端执行要求 React，不能把收集算作 PASS。",
   },
   "tests/parity/scenario-coverage.test.ts": {
     kind: "test",

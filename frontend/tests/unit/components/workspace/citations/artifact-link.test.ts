@@ -1,9 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import {
-  createElement,
-  type ComponentProps,
-  type ReactElement,
-} from "react";
+import { createElement, type ComponentProps, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ArtifactLink } from "@/components/workspace/citations/artifact-link";
@@ -30,7 +26,6 @@ function render(element: ReactElement, locale: Locale = "en-US") {
     createElement(I18nProvider, providerProps, element),
   );
 }
-
 
 // Render-level coverage for the .md artifact preview link renderer: a
 // prompt-injected javascript:/data: href must never reach a real anchor in
@@ -94,9 +89,7 @@ describe("ArtifactLink rendering", () => {
   it("renders scheme-less relative hrefs as navigable anchors", () => {
     const tests = ["report.md", "./report.md", "../assets/chart.png"];
     for (const href of tests) {
-      const html = render(
-        createElement(ArtifactLink, { href }, "doc"),
-      );
+      const html = render(createElement(ArtifactLink, { href }, "doc"));
       expect(html).toContain("<a");
       expect(html).toContain(`href="${href}"`);
     }

@@ -3,8 +3,9 @@
   【架构位置】     L2
   【主要导出】     DropdownMenu 组件
   【依赖关系】     Reka DropdownMenuRoot
-  【边界与注意】   菜单项是 menuitem，不是 button 列表：方向键在项之间移动、
-                   Tab 直接离开菜单，这条差别是替换手搓弹层的全部理由。
+  【边界与注意】   菜单项是 menuitem，不是 button 列表：方向键在项之间移动。
+                   Content 与 React Radix 一致消费 Tab；Escape、选择与外部交互
+                   仍由原生菜单 owner 处理，非模态模式不改成焦点陷阱。
 -->
 
 <script setup lang="ts">

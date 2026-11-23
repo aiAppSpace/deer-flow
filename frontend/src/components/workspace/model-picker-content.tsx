@@ -8,6 +8,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 } from "@/core/models/favorites";
 import { type Model } from "@/core/models/types";
 import { useModelFavorites } from "@/core/models/use-model-favorites";
+import { useOpenMenuAnchorRetention } from "@/hooks/use-open-menu-anchor-retention";
 import { cn } from "@/lib/utils";
 
 export const ModelPicker = PopoverPrimitive.Root;
@@ -58,6 +60,8 @@ export function ModelPickerContent({
   onModelSelect,
 }: ModelPickerContentProps) {
   const { t } = useI18n();
+  const [content, setContent] = useState<HTMLDivElement | null>(null);
+  useOpenMenuAnchorRetention(content);
   const { user, isLoading } = useAuth();
   const favorites = useModelFavorites(user?.id ?? null);
   const modelButtonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -254,6 +258,8 @@ export function ModelPickerContent({
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
+        ref={setContent}
+        updatePositionStrategy="always"
         role="dialog"
         aria-label={t.modelPicker.title}
         side="top"

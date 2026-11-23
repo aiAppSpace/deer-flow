@@ -141,14 +141,17 @@ test("empty chat", async ({ page }) => {
     "Create",
   ]);
   await expect(page.locator('[data-slot="suggestions-list"]')).toHaveCount(1);
-  const suggestionTops = await suggestions
-    .getByRole("button")
-    .evaluateAll((buttons) =>
-      buttons.map((button) => button.getBoundingClientRect().top),
-    );
-  expect(
-    Math.max(...suggestionTops) - Math.min(...suggestionTops),
-  ).toBeLessThan(2);
+  // Staggered entrance transforms are finite; compare the settled geometry.
+  await expect
+    .poll(async () => {
+      const tops = await suggestions
+        .getByRole("button")
+        .evaluateAll((buttons) =>
+          buttons.map((button) => button.getBoundingClientRect().top),
+        );
+      return Math.max(...tops) - Math.min(...tops);
+    })
+    .toBeLessThan(2);
   const suggestionCenterOffset = await suggestions.evaluate((element) => {
     const row = element.getBoundingClientRect();
     const composerRoot = element.parentElement!.getBoundingClientRect();
@@ -406,6 +409,9 @@ test("dark mode", async ({ page }) => {
   await prepare(page);
   await page.goto("/workspace/chats/new");
   await expect(page.locator("html")).toHaveClass(/dark/);
+  // The theme bootstrap runs before hydration; a dark root alone can be an empty page.
+  await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
+  await expect(page.getByTestId("welcome-suggestions")).toBeVisible();
   await snapshot(page, "dark-mode.png");
 });
 

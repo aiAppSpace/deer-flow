@@ -1,6 +1,6 @@
 <!--
   【文件职责】     会话头部的「批次」入口与抽屉。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认 ThreadSubagentBatches 组件
   【依赖关系】     composables/useSubagentBatches · composables/useWorkspaceFeatures · ui/sheet · ui/button
   【边界与注意】   出不出现由**两个独立能力**共同决定，不是一个布尔：

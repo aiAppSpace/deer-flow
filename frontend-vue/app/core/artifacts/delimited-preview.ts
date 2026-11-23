@@ -58,7 +58,13 @@ export function parseDelimitedPreview({
   truncated,
 }: DelimitedPreviewInput): DelimitedPreviewResult {
   // Papa 自己也会剥 BOM；这里先剥，好让 cursor 与 length 用同一套坐标。
-  const input = content.startsWith("﻿") ? content.slice(1) : content;
+  let input = content.startsWith("\uFEFF") ? content.slice(1) : content;
+  const newline = detectRecordNewline(input, delimiter);
+  // A byte-limited sample can split CRLF after the CR. The incomplete record
+  // must be dropped rather than parsed as malformed quoted CSV/TSV.
+  if (truncated && newline !== "\r" && input.endsWith("\r")) {
+    input = input.slice(0, -1);
+  }
   const result: DelimitedPreviewResult = {
     rows: [],
     columnCount: 0,
@@ -70,7 +76,7 @@ export function parseDelimitedPreview({
 
   Papa.parse<string[]>(input, {
     delimiter,
-    newline: detectRecordNewline(input, delimiter),
+    newline,
     header: false,
     dynamicTyping: false,
     skipEmptyLines: false,

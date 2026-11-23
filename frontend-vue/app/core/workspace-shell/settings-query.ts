@@ -1,34 +1,13 @@
-/*
-  【文件职责】     校验 settings 深链并构造只移除 settings 的关闭路由。
-  【架构位置】     L3 workspace shell
-  【主要导出】     SettingsSection · SETTINGS_SECTIONS · readSettingsSection
-                   buildSettingsCloseLocation
-  【依赖关系】     vue-router types
-  【边界与注意】   保留其他 query/hash；组件用 push 形成可回放 history。
-
-                   数组顺序就是导航里的显示顺序，逐项对照 React
-                   frontend/src/components/workspace/settings/settings-dialog.tsx 的 sections。
-                   ~~对照台账按多重集比可访问性树，顺序天然测不出来——所以这一行只能靠
-                   人盯着两边看，改动前先回那个文件核一遍。~~
-                   **⚠️ 这句话自 wave 95 起就不成立了，wave 106 实测推翻**：
-                   `diffAriaOrder` 那一档比的就是公共节点的相对顺序。把 `channels`
-                   与 `memory` 对调之后 `make e2e-parity` **当场红 8 行**
-                   （`integrations` 的三个终态 + `settings-notification`，各两种语言），
-                   报的是「第 14 个公共节点 React=- button "Channels" Vue=- button "Memory"」。
-                   **改这张表的顺序不需要人肉对照，跑一次 e2e-parity 就行。**
-*/
 import type { LocationQueryRaw, RouteLocationRaw } from "vue-router";
 
 export const SETTINGS_SECTIONS = [
+  "models",
   "account",
   "appearance",
   "notification",
   "channels",
-  "integrations",
   "memory",
-  "tools",
   "subagents",
-  "skills",
   "about",
 ] as const;
 

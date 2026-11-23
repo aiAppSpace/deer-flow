@@ -3,7 +3,7 @@
   【架构位置】     L3 Vue 状态适配
   【主要导出】     useThreadSettings
   【依赖关系】     core/settings/local · store
-  【边界与注意】   scope 由 agent + 实际 thread/new-session id 构成，不存临时组件 override。
+  【边界与注意】   scope 使用实际或预创建的 thread id，与 React 共用模型覆盖键。
 */
 
 import {
@@ -23,6 +23,7 @@ import {
   getBaseSettingsSnapshot,
   getThreadModelSnapshot,
   subscribe,
+  resolveThreadContext,
   updateThreadSettings,
   type LocalSettingsSetter,
 } from "@/core/settings/store";
@@ -47,5 +48,9 @@ export function useThreadSettings(scopeInput: MaybeRefOrGetter<string>) {
     updateThreadSettings(scope.value, key, value);
   };
 
-  return { settings, update };
+  const resolve = (context: Partial<LocalSettings["context"]>) => {
+    resolveThreadContext(scope.value, context);
+  };
+
+  return { settings, update, resolve };
 }

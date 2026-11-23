@@ -80,7 +80,7 @@ describe("availableActions", () => {
     });
     expect(actions.pause).toEqual(open);
     expect(actions.edit).toEqual(blocked("queued"));
-    expect(actions.delete).toEqual(blocked("queued"));
+    expect(actions.delete).toEqual(open);
     expect(actions.runNow).toEqual(blocked("alreadyQueued"));
   });
 
@@ -94,7 +94,7 @@ describe("availableActions", () => {
       expect(actions.pause.visible).toBe(false);
       expect(actions.resume).toEqual(blocked("queuedNoPause"));
       expect(actions.edit).toEqual(blocked("queuedNoPause"));
-      expect(actions.delete).toEqual(blocked("queuedNoPause"));
+      expect(actions.delete).toEqual(open);
       expect(actions.runNow).toEqual(blocked("alreadyQueued"));
     },
   );

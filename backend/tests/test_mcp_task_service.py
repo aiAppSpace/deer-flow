@@ -3283,12 +3283,17 @@ class BatchNotificationRepository(FakeRepository):
     def __init__(self, rows):
         super().__init__(rows)
         self.notification_releases = []
+        self.notification_dispatches = []
 
     async def claim_notification_work(self, **_kwargs):
         if self.claimed:
             return []
         self.claimed = True
         return [dict(row) for row in self.rows]
+
+    async def mark_notification_dispatched(self, task_id, **kwargs):
+        self.notification_dispatches.append((task_id, kwargs))
+        return True
 
     async def release_notification_claim(self, task_id, **kwargs):
         self.notification_releases.append((task_id, kwargs))
@@ -3408,7 +3413,7 @@ async def _run_batch_probe(service, phase):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("phase", ["poll", "cancel", "notification"])
-async def test_outer_cancel_returns_before_suppressing_child_and_releases_all_once(phase, monkeypatch):
+async def test_outer_cancel_returns_before_suppressing_child_and_releases_all_once(phase, monkeypatch, caplog):
     monkeypatch.setattr(service_module, "_CANCELLATION_DRAIN_TIMEOUT_SECONDS", 0.05)
     release_gate = asyncio.Event()
     driver = SuppressingBatchDriver(release_gate=release_gate)
@@ -3448,30 +3453,44 @@ async def test_outer_cancel_returns_before_suppressing_child_and_releases_all_on
         )
 
     caller = asyncio.create_task(_run_batch_probe(service, phase))
-    await driver.started.wait()
-    caller.cancel("first cancellation")
-    timed_out = False
     try:
-        with pytest.raises(asyncio.CancelledError) as caught:
-            await asyncio.wait_for(caller, timeout=0.2)
-        assert caught.value.args == ("first cancellation",)
-    except TimeoutError:
-        timed_out = True
+        await driver.started.wait()
+        caller.cancel("first cancellation")
+        timed_out = False
+        try:
+            with pytest.raises(asyncio.CancelledError) as caught:
+                await asyncio.wait_for(caller, timeout=0.2)
+            assert caught.value.args == ("first cancellation",)
+        except TimeoutError:
+            timed_out = True
 
-    assert timed_out is False
-    assert driver.swallowed.is_set()
-    if phase == "poll":
-        released = repo.released
-    elif phase == "cancel":
-        released = repo.cancel_releases
-    else:
-        released = repo.notification_releases
-    assert sorted(task_id for task_id, _kwargs in released) == ["task-1", "task-2"]
-    assert len(service._compensation_tasks) == 1
+        assert timed_out is False
+        assert driver.swallowed.is_set()
+        if phase == "poll":
+            released = repo.released
+        elif phase == "cancel":
+            released = repo.cancel_releases
+        else:
+            released = repo.notification_releases
+        assert sorted(task_id for task_id, _kwargs in released) == ["task-1", "task-2"]
+        assert len(service._compensation_tasks) == 1
+    finally:
+        release_gate.set()
+        await _wait_for_compensation_tasks_to_clear(service)
 
-    release_gate.set()
-    await _wait_for_compensation_tasks_to_clear(service)
     assert len(released) == 2
+    if phase == "notification":
+        assert [(task_id, kwargs["run_id"]) for task_id, kwargs in repo.notification_dispatches] == [
+            ("task-2", "notify-task-2"),
+            ("task-1", "notify-task-1"),
+        ]
+        for _task_id, kwargs in repo.notification_dispatches:
+            assert set(kwargs) == {"lease_owner", "notification_lease_token", "dispatch_version", "run_id", "now"}
+            assert kwargs["lease_owner"] == service._lease_owner
+            assert kwargs["notification_lease_token"] == "notify-lease-token-1"
+            assert kwargs["dispatch_version"] == 1
+            assert isinstance(kwargs["now"], datetime)
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
 
 
 @pytest.mark.asyncio

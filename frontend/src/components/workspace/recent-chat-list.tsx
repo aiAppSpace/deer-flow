@@ -14,7 +14,14 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -136,7 +143,18 @@ export function ThreadSidebarItem({
   );
   const archiveAction = useThreadArchiveAction();
 
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpenState] = useState(false);
+  const renameGeneration = useRef(0);
+  const setRenameDialogOpen = useCallback((open: boolean) => {
+    renameGeneration.current += 1;
+    setRenameDialogOpenState(open);
+  }, []);
+  useLayoutEffect(() => {
+    renameGeneration.current += 1;
+    return () => {
+      renameGeneration.current += 1;
+    };
+  }, [user?.id, thread.thread_id]);
   /*
     Send focus back to this row's "More" button when the rename dialog closes.
 
@@ -158,14 +176,17 @@ export function ThreadSidebarItem({
 
   const handleRenameSubmit = useCallback(() => {
     if (renameValue.trim()) {
+      const generation = renameGeneration.current;
       renameThread(
         { threadId: thread.thread_id, title: renameValue.trim() },
         {
           onSuccess: () => {
+            if (generation !== renameGeneration.current) return;
             setRenameDialogOpen(false);
             setRenameValue("");
           },
           onError: (error) => {
+            if (generation !== renameGeneration.current) return;
             toast.error(
               error instanceof Error && error.message
                 ? error.message
@@ -175,7 +196,13 @@ export function ThreadSidebarItem({
         },
       );
     }
-  }, [renameThread, thread.thread_id, renameValue, t.common.renameFailed]);
+  }, [
+    renameThread,
+    thread.thread_id,
+    renameValue,
+    t.common.renameFailed,
+    setRenameDialogOpen,
+  ]);
 
   const handleTogglePin = useCallback(() => {
     updatePinnedThread(

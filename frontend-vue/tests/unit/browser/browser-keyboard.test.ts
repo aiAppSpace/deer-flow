@@ -46,7 +46,7 @@ describe("decideBrowserKeyInput", () => {
     ).toBeNull();
   });
 
-  it("forwards remote editing chords but preserves browser/system shortcuts", () => {
+  it("matches React remote chords including named keys and unsupported keys", () => {
     expect(decideBrowserKeyInput(context({ key: "c", metaKey: true }))).toEqual(
       {
         type: "key",
@@ -59,29 +59,28 @@ describe("decideBrowserKeyInput", () => {
         key: "Control+A",
       },
     );
-    for (const shortcut of [
-      { key: "l", metaKey: true },
-      { key: "r", ctrlKey: true },
-      { key: "w", metaKey: true },
-      { key: "m", metaKey: true },
-      { key: " ", metaKey: true },
-      { key: "ArrowLeft", metaKey: true },
-      { key: "F5" },
-    ]) {
-      expect(decideBrowserKeyInput(context(shortcut))).toBeNull();
-    }
+    for (const key of ["l", "r", "w", "m", " "])
+      expect(decideBrowserKeyInput(context({ key, metaKey: true }))).toEqual({
+        type: "key",
+        key: `Meta+${key.toUpperCase()}`,
+      });
+    expect(
+      decideBrowserKeyInput(context({ key: "ArrowLeft", metaKey: true })),
+    ).toEqual({ type: "key", key: "ArrowLeft" });
+    expect(decideBrowserKeyInput(context({ key: "F5" }))).toBeNull();
   });
 
-  it("does not forward editable, inactive, alt, or IME-owned key events", () => {
+  it("does not forward editable, inactive, or IME-owned key events", () => {
     expect(
       decideBrowserKeyInput(context({ key: "Enter", editableTarget: true })),
     ).toBeNull();
     expect(
       decideBrowserKeyInput(context({ key: "Enter", live: false })),
     ).toBeNull();
-    expect(
-      decideBrowserKeyInput(context({ key: "a", altKey: true })),
-    ).toBeNull();
+    expect(decideBrowserKeyInput(context({ key: "a", altKey: true }))).toEqual({
+      type: "text",
+      text: "a",
+    });
     expect(
       decideBrowserKeyInput(context({ key: "Enter", composing: true })),
     ).toBeNull();

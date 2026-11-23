@@ -5,8 +5,9 @@
   【依赖关系】     runtime config · shared Gateway error parser
   【边界与注意】   GET 无 CSRF；透传 Query AbortSignal，非 2xx 保留 status/detail/body。
 */
+import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
-import { throwGatewayResponseError } from "@/core/api/errors";
+import { throwGatewayApiError } from "@/core/api/errors";
 
 import type { WorkspaceChangesResponse } from "./types";
 
@@ -35,10 +36,7 @@ export async function fetchWorkspaceChanges({
   );
 
   if (!response.ok) {
-    await throwGatewayResponseError(
-      response,
-      "Failed to load workspace changes.",
-    );
+    await throwGatewayApiError(response, "Failed to load workspace changes.");
   }
 
   return response.json();

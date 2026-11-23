@@ -85,6 +85,7 @@ describe("对照场景覆盖率", () => {
     const exemptIds = coverage.exempt.map((entry) => entry.id);
     const classified = new Set([
       ...coverage.covered,
+      ...PARITY_SCENARIOS.flatMap((scenario) => scenario.upstreamSpecs ?? []),
       ...coverage.pending,
       ...exemptIds,
     ]);

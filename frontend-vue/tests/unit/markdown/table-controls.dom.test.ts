@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StreamMarkdown from "@/components/markdown/StreamMarkdown.vue";
 import MessageMarkdown from "@/components/chat/MessageMarkdown.vue";
+// Preload the real async adapter so unit flushes wait for rendering, not Vite transforms.
+import "@/components/chat/MessageMarkdownContent.vue";
 import { richContentComponents } from "@/components/markdown/components";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { appRemarkPlugins } from "@/core/markdown/plugins";
@@ -74,8 +76,7 @@ describe("markdown table controls", () => {
     expect(wrapper.find('[title="Download table"]').exists()).toBe(true);
     expect(wrapper.find('[title="View fullscreen"]').exists()).toBe(true);
 
-    // 复制/下载现在是 DropdownMenu：菜单项 portal 到 body，且只响应 select，
-    // 所以断言从 wrapper 子树移到 document。
+    // Streamdown menus keep ordinary buttons beside their trigger, including in fullscreen.
     await wrapper.get('[title="Copy table"]').trigger("click");
     await flushPromises();
     document

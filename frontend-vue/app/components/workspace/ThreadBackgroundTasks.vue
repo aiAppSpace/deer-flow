@@ -1,6 +1,6 @@
 <!--
   【文件职责】     会话头部的「后台任务」入口与抽屉。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认 ThreadBackgroundTasks 组件
   【依赖关系】     composables/useBackgroundTasks · composables/useWorkspaceFeatures · ui/sheet · ui/button
   【边界与注意】   **能力没开就整块不渲染**，不是渲染一个禁用的键。老 Gateway 不认识

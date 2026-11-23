@@ -264,7 +264,11 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
 （`docker compose version`）。更旧的 Compose 客户端无法解析
 `docker/docker-compose.yaml` 与 `docker/docker-compose-dev.yaml` 里的可选 `env_file` 语法。
 
-**开发模式**（支持热更新，挂载源码）：
+Debian 镜像构建时，`APT_MIRROR=mirrors.example.org` 保留原软件源协议；完整地址如
+`APT_MIRROR=https://mirrors.ustc.edu.cn` 会明确使用 HTTPS。Gateway、provisioner 与两个
+Lark CLI 构建入口都支持此参数，不支持的协议或含账号信息的值会在改写软件源前被拒绝，
+HTTPS 证书验证保持开启。
+
 **开发模式**（React、Vue 与 Gateway 均通过 Compose Watch 热更新）：
 
 ```bash

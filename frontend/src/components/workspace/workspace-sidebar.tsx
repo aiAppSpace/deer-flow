@@ -33,7 +33,7 @@ export function WorkspaceSidebar({
         <SidebarHeader className="py-0">
           <WorkspaceHeader />
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="min-h-8">
           <WorkspaceNavChatList />
           <PluginNavigation />
           <WorkspaceChannelsList />

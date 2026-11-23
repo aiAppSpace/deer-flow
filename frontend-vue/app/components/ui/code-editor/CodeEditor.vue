@@ -4,7 +4,7 @@
   【主要导出】     CodeEditor 组件
   【依赖关系】     core/code-editor/{editor,language} · cn
   【边界与注意】   CodeMirror 只在 mount 后动态 import，所以第一帧没有编辑器。
-                   这一帧渲染只读 <pre> 兜底，而不是空白——artifact 面板刚
+                   这一帧渲染与 React 相同的只读 Textarea 兜底，而不是空白——artifact 面板刚
                    把内容读出来就闪一下空编辑器，看起来和「内容丢了」一模一样。
 
                    primitive 不持有产品文案：可访问名字由调用方以 contentLabel 传入，
@@ -14,12 +14,15 @@
 
 <script setup lang="ts">
 import {
+  nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
   watch,
   type HTMLAttributes,
 } from "vue";
+
+import { Textarea } from "@/components/ui/textarea";
 
 import type { CodeEditorHandle } from "@/core/code-editor/editor";
 import { normalizeCodeEditorLanguage } from "@/core/code-editor/language";
@@ -89,6 +92,10 @@ onMounted(async () => {
   if (currentLanguage !== requestedLanguage) {
     void created.setLanguage(currentLanguage);
   }
+  // Wait for Vue to retire the fallback and remove the pending host's inert
+  // boundary before giving focus to CodeMirror. Unmount can retire this await.
+  await nextTick();
+  if (current !== generation) return;
   if (props.autofocus) created.focus();
 });
 
@@ -119,15 +126,23 @@ watch(
 
 <template>
   <div :class="cn('relative size-full overflow-hidden', props.class)">
-    <div ref="host" class="size-full" />
+    <div
+      ref="host"
+      class="size-full overflow-auto px-2 py-0 font-mono"
+      :aria-hidden="ready ? undefined : true"
+      :inert="!ready"
+    />
     <!--
       兜底层覆盖在宿主之上而不是替换它：宿主必须从第一帧起就存在且可见，
       否则 CodeMirror 会在一个 display:none 的容器里完成首次测量。
+      初始化中的宿主仍参与布局，但 inert/aria-hidden 保证交接前只有兜底可读、可聚焦。
     -->
-    <pre
+    <Textarea
       v-if="!ready"
-      aria-busy="true"
-      class="bg-background absolute inset-0 overflow-auto p-4 font-mono text-xs leading-normal whitespace-pre-wrap"
-      >{{ modelValue }}</pre>
+      :model-value="modelValue"
+      readonly
+      :aria-label="contentLabel"
+      class="absolute inset-0 h-full resize-none overflow-auto border-none p-4! font-mono [&_.cm-editor]:h-full [&_.cm-focused]:outline-none! [&_.cm-line]:px-2! [&_.cm-line]:py-0!"
+    />
   </div>
 </template>

@@ -19,7 +19,7 @@
                    `vue 460 / react 411` 而红——做过变异验证。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { reactAppPresent } from "./support/react-preview";
@@ -39,7 +39,7 @@ test.skip(
 );
 
 /*
-  挑 `integrations#permission-request`：它是唯一一个**实测**在这上面分岔过的终态
+  挑 `integrations#permissions`：它是唯一一个**实测**在这上面分岔过的终态
   （三个交互步骤，第一步就把两边滚到不同位置）。一个场景够了——守的是
   `runScenario` 的行为，不是这一屏。
 */
@@ -54,18 +54,23 @@ test("同一串交互跑完，两个应用停在同一个滚动位置", async ({
     const context = await browser.newContext(PARITY_CONTEXT_OPTIONS);
     const page = await context.newPage();
     const scenario = PARITY_SCENARIOS.find((s) => s.id === "integrations")!;
-    const state = scenarioStates(scenario).find(
-      (s) => s.id === "permission-request",
-    )!;
+    const state = scenarioStates(scenario).find((s) => s.id === "permissions")!;
+    expect(state, "the current permissions state must exist").toBeDefined();
     await runScenario(page, base, scenario, DEFAULT_DIMENSION, state);
 
-    const scrollTop = await page.evaluate(() => {
-      const viewport = document
-        .querySelector("[role=dialog]")
-        ?.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
-      if (!viewport) throw new Error("设置对话框里没有可滚动的取景框");
-      return Math.round(viewport.scrollTop);
-    });
+    // The integration now lives in a capability dialog; DialogContent itself
+    // owns vertical overflow, rather than the retired settings ScrollArea.
+    const viewport = await page.getByRole("dialog").evaluate((element) => ({
+      top: Math.round(element.scrollTop),
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }));
+    expect(viewport.scrollHeight).toBeGreaterThan(viewport.clientHeight);
+    expect(
+      viewport.top,
+      "the permissions interaction must actually scroll",
+    ).toBeGreaterThan(0);
+    const scrollTop = viewport.top;
     measured[app] = scrollTop;
     await context.close();
   }

@@ -27,6 +27,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
+import {
+  observeUploadLimits,
+  type ThreadConsumptionObservation,
+} from "@/core/diagnostics/parity-observation";
 
 import {
   deleteUploadedFile,
@@ -41,10 +45,21 @@ export const UPLOAD_QUERY_KEYS = {
   list: (threadId: string) => ["uploads", "list", threadId] as const,
 } as const;
 
-export function useUploadLimits(threadId: MaybeRefOrGetter<string>) {
+export function useUploadLimits(
+  threadId: MaybeRefOrGetter<string>,
+  options?: {
+    observation?: MaybeRefOrGetter<
+      ThreadConsumptionObservation | null | undefined
+    >;
+  },
+) {
   return useQuery({
     queryKey: computed(() => UPLOAD_QUERY_KEYS.limits(toValue(threadId))),
-    queryFn: () => getUploadLimits(toValue(threadId)),
+    queryFn: () => {
+      const raw = toValue(threadId);
+      observeUploadLimits(raw, () => toValue(options?.observation));
+      return getUploadLimits(raw);
+    },
     enabled: computed(() => Boolean(toValue(threadId))),
     retry: false,
     staleTime: 60_000,

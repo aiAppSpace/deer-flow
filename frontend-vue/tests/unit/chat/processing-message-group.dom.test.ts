@@ -14,6 +14,16 @@ import {
   workspaceToastKey,
 } from "@/core/workspace-shell/toast";
 
+// These tests own message-group and interaction state, not the Markdown renderer.
+// Mock its module boundary so the async content pipeline cannot outlive the fixture.
+vi.mock("@/components/chat/MessageMarkdown.vue", () => ({
+  default: {
+    name: "MessageMarkdown",
+    props: ["content"],
+    template: "<div data-testid='markdown'>{{ content }}</div>",
+  },
+}));
+
 const toastStore = createWorkspaceToastStore();
 
 const messages = [
@@ -68,12 +78,7 @@ describe("ProcessingMessageGroup", () => {
       props: { messages, streaming: true, threadId: "thread-1" },
       global: {
         provide: { [workspaceToastKey as symbol]: toastStore },
-        stubs: {
-          StreamMarkdown: {
-            props: ["content"],
-            template: "<div data-testid='markdown'>{{ content }}</div>",
-          },
-        },
+        stubs: {},
       },
     });
 
@@ -109,6 +114,7 @@ describe("ProcessingMessageGroup", () => {
       "I should find a current source before answering.",
     );
     expect(wrapper.text()).toContain("Less steps");
+    wrapper.unmount();
   });
 
   it("routes the complete processing group through one projection at the MessageList boundary", () => {
@@ -127,10 +133,6 @@ describe("ProcessingMessageGroup", () => {
         provide: { [workspaceToastKey as symbol]: toastStore },
         plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
         stubs: {
-          StreamMarkdown: {
-            props: ["content"],
-            template: "<div data-testid='markdown'>{{ content }}</div>",
-          },
           ReferenceAttachment: true,
           WorkspaceChangesBadge: true,
           MessageTokenUsage: true,
@@ -146,26 +148,72 @@ describe("ProcessingMessageGroup", () => {
     wrapper.unmount();
   });
 
+  it("keeps a streamed answer with reasoning in its bubble until a tool call actually arrives", async () => {
+    const answer: Message = {
+      id: "reasoned-answer",
+      type: "ai",
+      content: "The answer is ready.",
+      additional_kwargs: { reasoning_content: "Checked the evidence." },
+    };
+    const human: Message = {
+      id: "question",
+      type: "human",
+      content: "Explain.",
+    };
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [human, answer],
+        streaming: true,
+        loading: false,
+        threadId: "reasoned-thread",
+      },
+      global: {
+        provide: { [workspaceToastKey as symbol]: toastStore },
+        plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: {
+          ReferenceAttachment: true,
+          WorkspaceChangesBadge: true,
+          MessageTokenUsage: true,
+        },
+      },
+    });
+    try {
+      expect(wrapper.findAllComponents(ProcessingMessageGroup)).toHaveLength(0);
+      expect(wrapper.findAllComponents(ReasoningDisclosure)).toHaveLength(1);
+      expect(wrapper.text()).toContain("The answer is ready.");
+      await wrapper.setProps({
+        messages: [
+          human,
+          {
+            ...answer,
+            tool_calls: [
+              { id: "verify", name: "web_search", args: { query: "evidence" } },
+            ],
+          },
+        ],
+      });
+      expect(wrapper.findAllComponents(ProcessingMessageGroup)).toHaveLength(1);
+      expect(wrapper.findAllComponents(ReasoningDisclosure)).toHaveLength(0);
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it("auto-closes settled reasoning once and leaves later user toggles alone", async () => {
     vi.useFakeTimers();
     const wrapper = mount(ReasoningDisclosure, {
       props: {
         content: "Private chain of thought",
-        streaming: false,
+        streaming: true,
       },
       global: {
         provide: { [workspaceToastKey as symbol]: toastStore },
-        stubs: {
-          StreamMarkdown: {
-            props: ["content"],
-            template:
-              "<div data-testid='reasoning-markdown'>{{ content }}</div>",
-          },
-        },
+        stubs: {},
       },
     });
 
     expect(wrapper.text()).toContain("Private chain of thought");
+    await wrapper.setProps({ streaming: false });
     await vi.advanceTimersByTimeAsync(1_001);
     expect(wrapper.text()).not.toContain("Private chain of thought");
 
@@ -175,6 +223,20 @@ describe("ProcessingMessageGroup", () => {
     expect(wrapper.text()).toContain("Private chain of thought");
     wrapper.unmount();
     vi.useRealTimers();
+  });
+
+  it("mounts completed historical reasoning collapsed with its compact duration header", () => {
+    const wrapper = mount(ReasoningDisclosure, {
+      props: {
+        content: "Historical reasoning",
+        streaming: false,
+        durationSeconds: 31,
+      },
+    });
+    expect(wrapper.get("button").attributes("aria-expanded")).toBe("false");
+    expect(wrapper.get("button").text()).toBe("Took 31s Reasoning");
+    expect(wrapper.text()).not.toContain("Historical reasoning");
+    wrapper.unmount();
   });
 
   it("shows the same live run activity state before an assistant answer exists", async () => {
@@ -205,5 +267,85 @@ describe("ProcessingMessageGroup", () => {
     expect(shimmer.text()).toContain("Working");
     expect(row.find(".animate-pulse").exists()).toBe(false);
     wrapper.unmount();
+  });
+});
+
+describe("tool registry through the actual MessageList", () => {
+  beforeEach(() =>
+    vi.stubGlobal("useNuxtApp", () => ({
+      $i18n: { t: ref(enUS), locale: ref("en-US") },
+    })),
+  );
+  it("renders and updates only the current tool call's text-safe badges", async () => {
+    const call: Message = {
+      id: "tool-ai",
+      type: "ai",
+      content: "",
+      tool_calls: [{ id: "make-1", name: "make_report", args: {} }],
+    };
+    const entries = [
+      {
+        handle: "art_one",
+        tool_name: "make_report",
+        tool_call_id: "make-1",
+        call_index: 0,
+        artifact_type: "file",
+        display_name: "<report>.csv",
+        real_ref: "/outputs/report.csv",
+      },
+      {
+        handle: "art_other",
+        tool_name: "make_report",
+        tool_call_id: "unrelated",
+        call_index: 0,
+        artifact_type: "file",
+        display_name: "Other",
+        real_ref: "/outputs/other.csv",
+      },
+    ];
+    const wrapper = mount(MessageList, {
+      props: {
+        messages: [call],
+        streaming: true,
+        loading: false,
+        threadId: "registry",
+        toolArtifacts: entries,
+      },
+      global: {
+        provide: { [workspaceToastKey as symbol]: toastStore },
+        plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
+        stubs: {
+          ReferenceAttachment: true,
+          WorkspaceChangesBadge: true,
+          MessageTokenUsage: true,
+        },
+      },
+    });
+    try {
+      const badge = wrapper.get(".artifact-badges > span");
+      expect(badge.text()).toContain("<report>.csv");
+      expect(badge.get("code").text()).toBe("art_one");
+      expect(badge.attributes("title")).toBe("/outputs/report.csv");
+      expect(badge.classes()).toContain("text-xs");
+      expect(badge.find("report").exists()).toBe(false);
+      expect(wrapper.text()).not.toContain("art_other");
+      await wrapper.setProps({
+        toolArtifacts: [
+          {
+            ...entries[0]!,
+            display_name: "Updated folder",
+            artifact_type: "folder",
+          },
+        ],
+      });
+      expect(wrapper.get(".artifact-badges > span").text()).toContain(
+        "Updated folder",
+      );
+      expect(wrapper.get(".artifact-badges svg").classes()).toContain(
+        "lucide-files",
+      );
+    } finally {
+      wrapper.unmount();
+    }
   });
 });

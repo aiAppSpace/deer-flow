@@ -206,3 +206,18 @@ Writable-directory cases remain portable.
 of an existing entry on failure. A cleanup failure must preserve the original
 publish exception, including interruption. Import the scanner during fixture
 setup, after the autouse fixtures initialize runtime, to avoid the package cycle.
+
+## Owned loopback HTTP fixtures
+
+`support.loopback_http.loopback_http_proxy_environment` is an explicit context
+for test-owned IPv4 HTTP server lifetimes, including their client work and
+teardown. Keep the real sockets/default clients; do not apply it as an autouse
+fixture, whole-suite environment override or production proxy policy change.
+It retains explicit nonempty proxy environment mappings and their precedence.
+With an empty environment mapping it materializes the effective system scheme
+mappings before adding the owned loopback bypass, retaining effective bypass
+entries and exact wildcard semantics. Empty proxy keys may temporarily receive
+the effective system value; context exit restores their original bytes, including
+exceptions and nested contexts. macOS `exclude_simple` and other system bypass
+rules are not fully reproduced: use this only for the owned IPv4 endpoints, not
+arbitrary external traffic or a general IPv6 routing contract.

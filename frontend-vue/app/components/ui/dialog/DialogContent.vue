@@ -16,13 +16,15 @@
 -->
 
 <script setup lang="ts">
-import { computed, type HTMLAttributes } from "vue";
+import { computed, onBeforeUnmount, watch, type HTMLAttributes } from "vue";
 import {
   DialogClose,
   DialogContent,
+  Primitive,
   DialogPortal,
   type DialogContentEmits,
   type DialogContentProps,
+  useForwardExpose,
   useForwardProps,
 } from "reka-ui";
 import { X } from "lucide-vue-next";
@@ -30,6 +32,11 @@ import { X } from "lucide-vue-next";
 import { cn } from "@/lib/utils";
 
 import DialogOverlay from "./DialogOverlay.vue";
+import {
+  useDialogFocusBoundary,
+  enterDialogContent,
+  focusInitialDialogContent,
+} from "./focus-boundary";
 
 /*
   内容 portal 到 body，组件根是 Portal 而不是内容元素。不关掉 attribute 继承，
@@ -59,10 +66,18 @@ const props = withDefaults(
   },
 );
 const emits = defineEmits<DialogContentEmits>();
+function onOpenAutoFocus(event: Event) {
+  emits("openAutoFocus", event);
+  focusInitialDialogContent(event);
+}
+const { forwardRef, currentElement } = useForwardExpose();
+useDialogFocusBoundary(currentElement);
 
 const forwarded = useForwardProps(props);
 const delegated = computed(() => {
   const {
+    as: _as,
+    asChild: _asChild,
     class: _class,
     overlayClass: _overlayClass,
     closeLabel: _closeLabel,
@@ -70,6 +85,8 @@ const delegated = computed(() => {
     modal: _modal,
     ...rest
   } = forwarded.value;
+  void _as;
+  void _asChild;
   void _class;
   void _overlayClass;
   void _closeLabel;
@@ -78,24 +95,112 @@ const delegated = computed(() => {
   return rest;
 });
 
-/*
-  Radix/Reka 的焦点循环保证焦点还在 dialog 里，却不保证低高度 + 文本放大后
-  新焦点仍落在 dialog 的滚动视口内。等浏览器完成本次 Tab 的默认滚动后，再由
-  真正的滚动所有者把焦点送到最近可见位置；正向与反向循环共用这一条合同。
-*/
-function keepFocusedControlVisible(event: FocusEvent) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  requestAnimationFrame(() => {
-    if (target.isConnected) target.scrollIntoView({ block: "nearest" });
-  });
+// Native keyboard pan centers the current control inside overflowing content.
+// Pointer focus must not move its target between pointerdown and click/caret.
+let focusModality: "keyboard" | "pointer" = "keyboard";
+// The first Tab after nested content closes can originate outside this host.
+watch(
+  currentElement,
+  (host, _previous, onCleanup) => {
+    if (!host) return;
+    const recordKeyboard = (event: KeyboardEvent) => {
+      if (!event.altKey && !event.ctrlKey && !event.metaKey)
+        focusModality = "keyboard";
+    };
+    host.ownerDocument.addEventListener("keydown", recordKeyboard, true);
+    onCleanup(() =>
+      host.ownerDocument.removeEventListener("keydown", recordKeyboard, true),
+    );
+  },
+  { flush: "sync" },
+);
+
+let focusRevision = 0;
+let pendingReveal: { view: Window; id: number } | undefined;
+
+function retireFocusReveal() {
+  focusRevision++;
+  if (pendingReveal) {
+    pendingReveal.view.cancelAnimationFrame(pendingReveal.id);
+    pendingReveal = undefined;
+  }
 }
+
+function ownedFocusTarget(event: Event) {
+  const host = event.currentTarget as HTMLElement;
+  const view = host.ownerDocument.defaultView;
+  const target = event.target;
+  if (
+    !view ||
+    !(target instanceof view.HTMLElement) ||
+    !host.contains(target) ||
+    target.closest('[data-slot="dialog-content"]') !== host
+  )
+    return;
+  return { host, target, view };
+}
+
+function recordPointerFocus(event: PointerEvent) {
+  if (!ownedFocusTarget(event)) return;
+  retireFocusReveal();
+  focusModality = "pointer";
+}
+
+function recordKeyboardFocus(event: KeyboardEvent) {
+  if (!ownedFocusTarget(event)) return;
+  focusModality = "keyboard";
+}
+
+function retireDepartedFocus(event: FocusEvent) {
+  if (ownedFocusTarget(event)) retireFocusReveal();
+}
+
+function keepFocusedControlVisible(event: FocusEvent) {
+  const owner = ownedFocusTarget(event);
+  if (!owner || owner.target.ownerDocument.activeElement !== owner.target)
+    return;
+  retireFocusReveal();
+  if (event.defaultPrevented || focusModality === "pointer") return;
+  const { host, target, view } = owner;
+  const revision = focusRevision;
+  const id = view.requestAnimationFrame(() => {
+    if (
+      revision !== focusRevision ||
+      !host.isConnected ||
+      host.dataset.state === "closed" ||
+      !host.contains(target) ||
+      target.ownerDocument.activeElement !== target
+    )
+      return;
+    pendingReveal = undefined;
+    let block: ScrollLogicalPosition = "nearest";
+    for (
+      let node: HTMLElement | null = target;
+      node;
+      node = node.parentElement
+    ) {
+      if (
+        /^(auto|scroll)$/.test(view.getComputedStyle(node).overflowY) &&
+        node.scrollHeight > node.clientHeight
+      ) {
+        block = "center";
+        break;
+      }
+      if (node === host) break;
+    }
+    target.scrollIntoView({ block });
+  });
+  pendingReveal = { view, id };
+}
+
+onBeforeUnmount(retireFocusReveal);
 </script>
 
 <template>
   <DialogPortal>
     <DialogOverlay :class="props.overlayClass" />
     <DialogContent
+      as-child
       data-slot="dialog-content"
       :aria-modal="props.modal ? 'true' : undefined"
       v-bind="{ ...$attrs, ...delegated }"
@@ -109,19 +214,25 @@ function keepFocusedControlVisible(event: FocusEvent) {
       @pointer-down-outside="emits('pointerDownOutside', $event)"
       @focus-outside="emits('focusOutside', $event)"
       @interact-outside="emits('interactOutside', $event)"
-      @open-auto-focus="emits('openAutoFocus', $event)"
+      @open-auto-focus="onOpenAutoFocus"
       @close-auto-focus="emits('closeAutoFocus', $event)"
+      @pointerdown.capture="recordPointerFocus"
+      @keydown.capture="recordKeyboardFocus"
       @focusin="keepFocusedControlVisible"
+      @focusout="retireDepartedFocus"
+      @keydown="enterDialogContent"
     >
-      <slot />
-      <DialogClose
-        v-if="props.showClose"
-        data-slot="dialog-close"
-        :aria-label="props.closeLabel"
-        class="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 flex size-7 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none"
-      >
-        <X :size="16" aria-hidden="true" />
-      </DialogClose>
+      <Primitive :ref="forwardRef" :as="props.as" :as-child="props.asChild">
+        <slot />
+        <DialogClose
+          v-if="props.showClose"
+          data-slot="dialog-close"
+          :aria-label="props.closeLabel"
+          class="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 flex size-7 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:pointer-events-none"
+        >
+          <X aria-hidden="true" class="size-4" />
+        </DialogClose>
+      </Primitive>
     </DialogContent>
   </DialogPortal>
 </template>

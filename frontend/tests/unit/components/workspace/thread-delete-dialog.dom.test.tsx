@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it, rs } from "@rstest/core";
+import { afterEach, beforeEach, describe, expect, it, rs } from "@rstest/core";
 import {
   QueryClient,
   QueryClientProvider,
   useMutation,
 } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -13,6 +14,7 @@ import {
 } from "@testing-library/react";
 import { toast } from "sonner";
 
+import { resetThreadChatAfterDelete } from "@/components/workspace/chats/use-thread-chat";
 import {
   ThreadDeleteDialogProvider,
   useThreadDeleteDialog,
@@ -20,11 +22,18 @@ import {
 import { DEFAULT_LOCALE } from "@/core/i18n";
 import { I18nProvider } from "@/core/i18n/context";
 
-const { deleteThread } = rs.hoisted(() => ({ deleteThread: rs.fn() }));
+const { deleteThread, replace, route } = rs.hoisted(() => ({
+  deleteThread: rs.fn(),
+  replace: rs.fn(),
+  route: { pathname: "/workspace/chats/new", threadId: "new" },
+}));
 rs.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: rs.fn() }),
-  usePathname: () => "/workspace/chats/new",
-  useParams: () => ({}),
+  useRouter: () => ({ replace }),
+  usePathname: () => route.pathname,
+  useParams: () => ({ thread_id: route.threadId }),
+}));
+rs.mock("@/core/auth/AuthProvider", () => ({
+  useAuth: () => ({ user: { id: "user-a" } }),
 }));
 rs.mock("sonner", () => ({ toast: { error: rs.fn() } }));
 rs.mock("@/components/workspace/chats/use-thread-chat", () => ({
@@ -56,6 +65,15 @@ function Trigger() {
     </button>
   );
 }
+
+beforeEach(() => {
+  route.pathname = "/workspace/chats/new";
+  route.threadId = "new";
+  window.history.replaceState({}, "", route.pathname);
+  deleteThread.mockReset();
+  replace.mockReset();
+  rs.mocked(resetThreadChatAfterDelete).mockClear();
+});
 
 afterEach(() => {
   cleanup();
@@ -102,3 +120,47 @@ describe("thread deletion failure feedback", () => {
     });
   }
 });
+
+for (const navigate of [false, true]) {
+  it(`resets only a still-current conversation after deletion (navigate=${navigate})`, async () => {
+    route.pathname = "/workspace/chats/thread-1";
+    route.threadId = "thread-1";
+    window.history.replaceState({}, "", route.pathname);
+    let resolve!: () => void;
+    deleteThread.mockImplementationOnce(
+      async ({ onDeleted }: { onDeleted?: () => void }) => {
+        await new Promise<void>((yes) => {
+          resolve = yes;
+        });
+        onDeleted?.();
+      },
+    );
+    const client = new QueryClient({
+      defaultOptions: { mutations: { retry: false } },
+    });
+    const tree = () => (
+      <I18nProvider initialLocale={DEFAULT_LOCALE}>
+        <QueryClientProvider client={client}>
+          <ThreadDeleteDialogProvider>
+            <Trigger />
+          </ThreadDeleteDialogProvider>
+        </QueryClientProvider>
+      </I18nProvider>
+    );
+    const rendered = render(tree());
+    fireEvent.click(screen.getByRole("button", { name: "Open deletion" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(deleteThread).toHaveBeenCalledOnce());
+    if (navigate) {
+      route.pathname = "/workspace/chats/newer-thread";
+      route.threadId = "newer-thread";
+      window.history.replaceState({}, "", route.pathname);
+      rendered.rerender(tree());
+    }
+    await act(async () => resolve());
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(resetThreadChatAfterDelete).toHaveBeenCalledTimes(navigate ? 0 : 1);
+    expect(replace).toHaveBeenCalledTimes(navigate ? 0 : 1);
+    client.clear();
+  });
+}

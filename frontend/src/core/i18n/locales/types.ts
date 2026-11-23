@@ -1545,6 +1545,8 @@ export interface Translations {
       disable: string;
       formDescription: string;
       provider: string;
+      providerOpenAICompatible: string;
+      apiKey: string;
       name: string;
       displayName: string;
       endpoint: string;
@@ -1921,6 +1923,27 @@ export interface Translations {
     };
   };
 
+  setup: {
+    createAdminTitle: string;
+    createAdminSubtitle: string;
+    completeAdminTitle: string;
+    completeAdminSubtitle: string;
+    currentPassword: string;
+    password: string;
+    passwordPlaceholder: string;
+    confirmPassword: string;
+    confirmPasswordPlaceholder: string;
+    passwordMismatch: string;
+    passwordTooShort: string;
+    createAdmin: string;
+    completeSetup: string;
+    emailPlaceholder: string;
+    newPassword: string;
+    confirmNewPassword: string;
+    creatingAdmin: string;
+    settingUp: string;
+  };
+
   // Login / Auth
   login: {
     signInTitle: string;
@@ -1948,7 +1971,12 @@ export interface Translations {
     serviceUnavailableDescription: string;
     retry: string;
     authFailed: string;
+    callbackSigningIn: string;
+    callbackRedirecting: string;
+    callbackFailedRedirect: string;
+    callbackUnavailableRedirect: string;
     errors: {
+      gateway_unavailable: string;
       sso_failed: string;
       sso_cancelled: string;
       sso_account_exists: string;

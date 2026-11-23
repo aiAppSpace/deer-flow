@@ -3,9 +3,8 @@
   【架构位置】     L2 —— 通用渲染层组件
   【主要导出】     默认组件
   【依赖关系】     ./MermaidZoomPan.vue · @/lib/utils
-  【边界与注意】   ① 只画**已经渲染好**的 SVG。上游的 placeholder / spinner / 错误框
-                   三态不在这里，因为本仓在那三种情况下渲染的是代码块回退——
-                   理由与判据写在 MermaidDiagram.vue 文件头 ②。
+  【边界与注意】   ① 只画已渲染成功的 SVG。placeholder / spinner / error 由
+                   MermaidRenderState 共享负责，普通图与全屏使用相同状态机。
 
                    ② 图容器是 `role="img"` + `aria-label`。两个都要：只给 aria-label
                    而不给 role，读屏器仍然会往里走并逐个念 SVG 里的文本节点，
@@ -14,8 +13,7 @@
                    ③ `class` 同时落在**根节点与 ZoomPan 上**，上游如此。全屏那一路
                    靠它把 `size-full` 一直传到最里层，少传一处图就不铺满。
 
-                   ④ `v-html` 的输入是 mermaid 自己生成的 SVG，见 MermaidDiagram.vue
-                   文件头 ③。不要把这个口子扩大。
+                   ④ `v-html` 只消费 Mermaid 渲染器生成的 SVG；不接收用户直接提供的 HTML。
 -->
 
 <script setup lang="ts">

@@ -1,42 +1,69 @@
 <script setup lang="ts">
-/*
-  【文件职责】     Scheduled-task 列表与选择态。
-  【架构位置】     L3 presentational component
-  【主要导出】     默认 ScheduledTaskList
-  【依赖关系】     scheduled-tasks/types · app i18n
-  【边界与注意】   不持有列表副本，不发网络请求。
-
-                   一行的可访问名是「标题 + 类型 · 状态」，**不含时区**：React 的
-                   第二行是 `${scheduleType} · ${status}`，时区只出现在详情里。
-                   加载态与空列表这里都不渲染任何东西，与 React 一致——空列表时
-                   右侧详情面板会说「未选中任务」，那是唯一的提示。
-*/
+import { computed } from "vue";
+import { CalendarClock, LoaderCircle } from "lucide-vue-next";
 import type { ScheduledTask } from "@/core/scheduled-tasks/types";
-
-defineProps<{
+import {
+  taskListStatusLine,
+  TONE_CLASS,
+} from "@/core/scheduled-tasks/list-presentation";
+import { describeTaskSchedule } from "@/core/scheduled-tasks/cron";
+const props = defineProps<{
   tasks: ScheduledTask[];
   selectedId: string | null;
 }>();
-const emit = defineEmits<{ select: [taskId: string] }>();
+const emit = defineEmits<{ select: [id: string] }>();
 const { $i18n } = useNuxtApp();
+const rows = computed(() =>
+  props.tasks.map((task) => ({
+    task,
+    line: taskListStatusLine(task, $i18n.t.value, $i18n.locale.value),
+    schedule: describeTaskSchedule(task, $i18n.locale.value, {
+      time: $i18n.t.value.scheduledTasks.time,
+    }),
+  })),
+);
 </script>
-
 <template>
-  <div class="flex min-w-0 flex-col gap-3" data-testid="scheduled-task-list">
-    <button
-      v-for="task in tasks"
-      :key="task.id"
-      type="button"
-      :data-testid="`scheduled-task-item-${task.id}`"
-      class="min-w-0 rounded-lg border p-4 text-left"
-      :class="selectedId === task.id ? 'border-foreground' : 'border-border'"
-      @click="emit('select', task.id)"
-    >
-      <div class="font-medium">{{ task.title }}</div>
-      <div class="text-muted-foreground text-sm">
-        {{ $i18n.t.value.scheduledTasks.scheduleType[task.schedule_type] }} ·
-        {{ $i18n.t.value.scheduledTasks.status[task.status] }}
-      </div>
-    </button>
-  </div>
+  <ul
+    class="flex flex-col gap-2"
+    data-testid="scheduled-task-list"
+    :aria-label="$i18n.t.value.sidebar.scheduledTasks"
+  >
+    <li v-for="{ task, line, schedule } in rows" :key="task.id">
+      <button
+        type="button"
+        :aria-current="task.id === selectedId ? 'true' : undefined"
+        :data-testid="`scheduled-task-item-${task.id}`"
+        :data-task-id="task.id"
+        class="bg-card hover:bg-accent/40 flex w-full gap-3 rounded-lg border p-3 text-left transition-colors"
+        :class="
+          task.id === selectedId
+            ? 'border-foreground ring-foreground ring-1'
+            : 'border-border'
+        "
+        @click="emit('select', task.id)"
+      >
+        <span
+          class="bg-muted text-muted-foreground mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md"
+          ><CalendarClock class="size-4" aria-hidden="true"
+        /></span>
+        <span class="flex min-w-0 flex-col gap-0.5"
+          ><span class="truncate text-sm font-semibold">{{ task.title }}</span
+          ><span class="text-muted-foreground truncate text-xs">{{
+            schedule.text
+          }}</span
+          ><span
+            class="flex items-center gap-1 text-xs"
+            :class="TONE_CLASS[line.tone]"
+            ><component
+              :is="line.icon"
+              class="size-3.5 shrink-0"
+              :class="line.icon === LoaderCircle && 'animate-spin'"
+              aria-hidden="true"
+            /><span class="truncate">{{ line.text }}</span></span
+          ></span
+        >
+      </button>
+    </li>
+  </ul>
 </template>

@@ -48,11 +48,22 @@ describe("L2 CodeEditor", () => {
     await import("@codemirror/lang-json");
   });
 
-  it("renders the value as readable text before CodeMirror has loaded", () => {
+  it("renders a readonly Textarea with the current value before CodeMirror has loaded", () => {
     const wrapper = mount(CodeEditor, { props: { modelValue: "first frame" } });
     // 兜底层不是装饰：第一帧空白和「内容加载失败」在屏幕上完全一样。
-    expect(wrapper.get("pre").text()).toBe("first frame");
-    expect(wrapper.get("pre").attributes("aria-busy")).toBe("true");
+    const fallback = wrapper.get("textarea");
+    expect((fallback.element as HTMLTextAreaElement).value).toBe("first frame");
+    expect((fallback.element as HTMLTextAreaElement).readOnly).toBe(true);
+    expect(fallback.attributes("aria-label")).toBeUndefined();
+    expect(fallback.classes()).toEqual(
+      expect.arrayContaining([
+        "font-mono",
+        "resize-none",
+        "border-none",
+        "p-4!",
+      ]),
+    );
+    expect(wrapper.find("pre").exists()).toBe(false);
     wrapper.unmount();
   });
 

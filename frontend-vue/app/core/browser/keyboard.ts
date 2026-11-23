@@ -20,20 +20,6 @@ export const FORWARDED_BROWSER_NAMED_KEYS = [
   "Delete",
 ] as const;
 
-const HOST_SHORTCUT_KEYS = new Set([
-  "l",
-  "r",
-  "t",
-  "n",
-  "w",
-  "q",
-  "m",
-  "h",
-  ",",
-  " ",
-  "`",
-]);
-
 export interface BrowserKeyContext {
   eventType: "keydown" | "keyup";
   live: boolean;
@@ -53,31 +39,17 @@ export function decideBrowserKeyInput(
     context.eventType !== "keydown" ||
     !context.live ||
     context.editableTarget ||
-    context.composing ||
-    context.altKey
-  ) {
+    context.composing
+  )
     return null;
-  }
-  const modified = context.ctrlKey || context.metaKey;
-  if (modified) {
-    if (context.key.length !== 1) return null;
-    if (HOST_SHORTCUT_KEYS.has(context.key.toLowerCase())) return null;
-    const modifiers = [
-      context.metaKey ? "Meta" : "Control",
-      context.shiftKey ? "Shift" : null,
-    ].filter(Boolean);
+  if ((context.ctrlKey || context.metaKey) && context.key.length === 1)
     return {
       type: "key",
-      key: `${modifiers.join("+")}+${context.key.toUpperCase()}`,
+      key: `${context.metaKey ? "Meta" : "Control"}+${context.key.toUpperCase()}`,
     };
-  }
-  if (context.key.length === 1) {
+  if (context.key.length === 1 && !context.metaKey && !context.ctrlKey)
     return { type: "text", text: context.key };
-  }
-  if (
-    (FORWARDED_BROWSER_NAMED_KEYS as readonly string[]).includes(context.key)
-  ) {
+  if ((FORWARDED_BROWSER_NAMED_KEYS as readonly string[]).includes(context.key))
     return { type: "key", key: context.key };
-  }
   return null;
 }

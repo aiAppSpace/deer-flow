@@ -84,19 +84,19 @@ export interface LocalSettings {
   > & {
     model_name?: string | undefined;
     mode: "flash" | "thinking" | "pro" | "ultra" | undefined;
-    reasoning_effort?: "minimal" | "low" | "medium" | "high";
+    reasoning_effort?: string;
   };
-  /*
-    项目区的展示方式。**用分组对象而不是 React 那个扁平的 `projectsDisplayMode`**：
-    本仓的 LocalSettings 每一项都是分组对象（notification / tokenUsage / context），
-    为一个标量破例会让后续的项目相关设置无处可放。
-  */
+  // Internal state remains grouped; persistence uses the shared projectsDisplayMode field.
   projects: {
     displayMode: "flat" | "grouped";
   };
 }
 
-function mergeLocalSettings(settings?: Partial<LocalSettings>): LocalSettings {
+type PersistedLocalSettings = Partial<LocalSettings> & {
+  projectsDisplayMode?: LocalSettings["projects"]["displayMode"];
+};
+
+function mergeLocalSettings(settings?: PersistedLocalSettings): LocalSettings {
   return {
     ...DEFAULT_LOCAL_SETTINGS,
     context: {
@@ -112,8 +112,10 @@ function mergeLocalSettings(settings?: Partial<LocalSettings>): LocalSettings {
       ...settings?.notification,
     },
     projects: {
-      ...DEFAULT_LOCAL_SETTINGS.projects,
-      ...settings?.projects,
+      displayMode:
+        settings?.projectsDisplayMode ??
+        settings?.projects?.displayMode ??
+        DEFAULT_LOCAL_SETTINGS.projects.displayMode,
     },
   };
 }
@@ -169,7 +171,7 @@ export function getLocalSettings(): LocalSettings {
   const json = safeLocalStorage.getItem(LOCAL_SETTINGS_KEY);
   try {
     if (json) {
-      const settings = JSON.parse(json) as Partial<LocalSettings>;
+      const settings = JSON.parse(json) as PersistedLocalSettings;
       return mergeLocalSettings(settings);
     }
   } catch {
@@ -182,5 +184,12 @@ export function saveLocalSettings(settings: LocalSettings) {
   if (!isBrowser()) {
     return;
   }
-  safeLocalStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(settings));
+  const { projects, ...sharedSettings } = settings;
+  safeLocalStorage.setItem(
+    LOCAL_SETTINGS_KEY,
+    JSON.stringify({
+      ...sharedSettings,
+      projectsDisplayMode: projects.displayMode,
+    }),
+  );
 }

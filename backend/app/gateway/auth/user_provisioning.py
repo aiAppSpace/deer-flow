@@ -64,12 +64,14 @@ async def get_or_provision_oidc_user(
                 detail="Your email domain is not allowed. Please use an approved email address.",
             )
 
-    # 4. Block if a local account already owns this email. We never auto-link an
-    # SSO identity onto a pre-existing local account, since that would let an SSO
-    # login take over a password account that happens to share the email.
-    local_user = await local_provider.get_user_by_email(email)
+    # 4. Another callback may commit between the identity and email reads.
+    # Reuse only an already-linked, identical provider/subject pair. Email
+    # equality alone must never link a local account or another SSO identity.
+    email_owner = await local_provider.get_user_by_email(email)
 
-    if local_user:
+    if email_owner:
+        if email_owner.oauth_provider == provider_id and email_owner.oauth_id == identity.subject:
+            return {"user": email_owner, "created": False}
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=("An account with this email already exists. Contact your administrator to link it to your SSO account."),

@@ -7,6 +7,46 @@ import SettingsDialog from "@/components/workspace/settings/SettingsDialog.vue";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
 import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 
+// SettingsDialog owns the modal, focus and route lifecycle. Its lazy panels have
+// independent consumer tests; module mocks intercept their actual import boundary
+// instead of relying on component-name stubs around defineAsyncComponent.
+vi.mock("@/components/workspace/settings/AccountSettings.vue", () => ({
+  __esModule: true,
+  default: {
+    template: '<button data-testid="account-control">Account control</button>',
+  },
+}));
+vi.mock("@/components/workspace/settings/AppearanceSettings.vue", () => ({
+  __esModule: true,
+  default: {
+    template: '<div data-testid="appearance-panel">Appearance panel</div>',
+  },
+}));
+vi.mock("@/components/workspace/settings/NotificationSettings.vue", () => ({
+  __esModule: true,
+  default: { template: "<div>Notification panel</div>" },
+}));
+vi.mock("@/components/workspace/channels/ChannelConnections.vue", () => ({
+  __esModule: true,
+  default: { template: "<div>Channels panel</div>" },
+}));
+vi.mock("@/components/workspace/settings/MemorySettings.vue", () => ({
+  __esModule: true,
+  default: { template: '<div data-testid="memory-panel">Memory panel</div>' },
+}));
+vi.mock("@/components/workspace/settings/SubagentSettings.vue", () => ({
+  __esModule: true,
+  default: { template: "<div>Subagents panel</div>" },
+}));
+vi.mock("@/components/workspace/settings/ModelSettings.vue", () => ({
+  __esModule: true,
+  default: { template: "<div>Models panel</div>" },
+}));
+vi.mock("@/components/workspace/settings/AboutSettings.vue", () => ({
+  __esModule: true,
+  default: { template: "<div>About panel</div>" },
+}));
+
 const route = reactive({
   path: "/workspace/chats/t-1",
   fullPath: "/workspace/chats/t-1",
@@ -21,20 +61,6 @@ function mountDialog() {
     attachTo: document.body,
     global: {
       mocks: nuxtI18nMocks(),
-      stubs: {
-        AccountSettings: {
-          template:
-            '<button data-testid="account-control">Account control</button>',
-        },
-        AppearanceSettings: { template: "<div>Appearance panel</div>" },
-        NotificationSettings: true,
-        IntegrationsSettings: true,
-        ChannelConnections: true,
-        ToolSettings: true,
-        SkillSettings: true,
-        MemorySettings: true,
-        AboutSettings: true,
-      },
     },
   });
   return mounted;
@@ -63,6 +89,11 @@ describe("SettingsDialog", () => {
     const wrapper = mountDialog();
     useSettingsDialog().show("account");
     await flushPromises();
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="account-control"]'),
+      ).not.toBeNull();
+    });
 
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
     expect(dialog.getAttribute("aria-labelledby")).toBeTruthy();
@@ -96,6 +127,11 @@ describe("SettingsDialog", () => {
     route.query = { settings: "memory", tab: "files" };
     const wrapper = mountDialog();
     await flushPromises();
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="memory-panel"]'),
+      ).not.toBeNull();
+    });
 
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
@@ -114,6 +150,11 @@ describe("SettingsDialog", () => {
     route.query = { settings: "appearance", keep: "1" };
     const wrapper = mountDialog();
     await flushPromises();
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="appearance-panel"]'),
+      ).not.toBeNull();
+    });
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 
     route.query = { keep: "1" };

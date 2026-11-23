@@ -74,14 +74,16 @@
                    而不是一条会把人引到不存在目录去的指路。
 */
 
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { gitFileInventory } from "../../scripts/lib/git-file-inventory.mjs";
+
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const moduleFiles = await gitFileInventory(ROOT);
 
 /**
  * 仓库根 Makefile 的 target。frontend-vue 的文档在讲「起整套服务」时会引用它们，
@@ -132,23 +134,39 @@ function makeTargets(makefile: string): Set<string> {
   这条门禁自己就掉进过这个洞：它第一次跑绿，只是因为它自身还没进版本库。
   `48fd6cff` 给 standalone-check 修的是同一个洞。
 */
+let textFiles: string[] | undefined;
 function trackedTextFiles(): string[] {
-  const listed = [
-    execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }),
-    execFileSync("git", ["ls-files", "--others", "--exclude-standard"], {
-      cwd: ROOT,
-      encoding: "utf8",
-    }),
-  ].join("\n");
-  return listed
-    .split("\n")
-    .filter((rel) => rel !== "")
+  return (textFiles ??= moduleFiles
+    .filter((rel) => existsSync(join(ROOT, rel)))
     .filter((rel) => !SKIPPED_PREFIXES.some((prefix) => rel.startsWith(prefix)))
     .filter(
       (rel) =>
         TEXT_EXTENSIONS.has(extname(rel)) ||
         rel.split("/").pop() === "Makefile",
-    );
+    ));
+}
+
+// All checks inspect one Git snapshot. Read and normalize each included file
+// lazily once, rather than repeating the same I/O and line work per assertion.
+const sources = new Map<string, string>();
+function readSource(rel: string): string {
+  let source = sources.get(rel);
+  if (source === undefined) {
+    source = readFileSync(join(ROOT, rel), "utf8");
+    sources.set(rel, source);
+  }
+  return source;
+}
+
+const currentSources = new Map<string, { source: string; lines: string[] }>();
+function currentSource(rel: string): { source: string; lines: string[] } {
+  let current = currentSources.get(rel);
+  if (current === undefined) {
+    const source = stripHistoricalRegions(readSource(rel));
+    current = { source, lines: source.split("\n") };
+    currentSources.set(rel, current);
+  }
+  return current;
 }
 
 const HISTORY_BEGIN = "<!-- historical-commands:begin -->";
@@ -182,13 +200,15 @@ function codeSpans(source: string): string {
 
 const MAKE_CALL = /\bmake\s+([a-zA-Z0-9][a-zA-Z0-9_-]*)/g;
 
-function referencedTargets(source: string) {
+function referencedTargets({
+  source,
+  lines,
+}: ReturnType<typeof currentSource>) {
   // 每一处都报，不按名字去重：同一个死名字散在五个小节里时，
   // 只报第一处会让人以为改一行就完事了。
   const found: { name: string; line: number }[] = [];
-  const stripped = stripHistoricalRegions(source);
-  const code = codeSpans(stripped);
-  for (const [index, line] of stripped.split("\n").entries()) {
+  const code = codeSpans(source);
+  for (const [index, line] of lines.entries()) {
     for (const match of line.matchAll(MAKE_CALL)) {
       const name = match[1] ?? "";
       const looksLikeTarget = name.includes("-");
@@ -371,21 +391,12 @@ const siblingApp = join(ROOT, "../frontend/src");
 /** checkout 完整（有仓库根 Makefile，且兄弟应用在场）才量得了这一档。 */
 const checkoutComplete = rootTargets !== null && existsSync(siblingApp);
 
-function checkoutBasenames(): Set<string> {
-  const repoRoot = join(ROOT, "..");
-  const listed = [
-    execFileSync("git", ["ls-files"], { cwd: repoRoot, encoding: "utf8" }),
-    execFileSync("git", ["ls-files", "--others", "--exclude-standard"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    }),
-  ].join("\n");
-  const names = new Set<string>();
-  for (const rel of listed.split("\n")) {
-    if (rel === "") continue;
-    names.add(rel.split("/").pop() as string);
-  }
-  return names;
+let checkoutNames: Promise<Set<string>> | undefined;
+function checkoutBasenames(): Promise<Set<string>> {
+  checkoutNames ??= gitFileInventory(join(ROOT, "..")).then(
+    (files: string[]) => new Set(files.map((rel) => rel.split("/").pop()!)),
+  );
+  return checkoutNames;
 }
 
 describe("每条被写进文档的 make 命令都存在", () => {
@@ -405,8 +416,7 @@ describe("每条被写进文档的 make 命令都存在", () => {
   it("没有指向已删除或改名 target 的命令", () => {
     const violations: string[] = [];
     for (const rel of trackedTextFiles()) {
-      const source = readFileSync(join(ROOT, rel), "utf8");
-      for (const { name, line } of referencedTargets(source)) {
+      for (const { name, line } of referencedTargets(currentSource(rel))) {
         if (!known.has(name)) violations.push(`${rel}:${line}: make ${name}`);
       }
     }
@@ -417,7 +427,7 @@ describe("每条被写进文档的 make 命令都存在", () => {
     const unbalanced: string[] = [];
     for (const rel of trackedTextFiles()) {
       if (extname(rel) !== ".md") continue;
-      const source = readFileSync(join(ROOT, rel), "utf8");
+      const source = readSource(rel);
       const begins = source.split(HISTORY_BEGIN).length - 1;
       const ends = source.split(HISTORY_END).length - 1;
       if (begins !== ends)
@@ -478,7 +488,7 @@ describe("套件表和 Makefile 不许分叉", () => {
     这正是套件改名之后文档整整落后一个版本的起点。
   */
   it.each(["README.md", "README_zh.md"])("%s 列出了每一个套件", (rel) => {
-    const source = readFileSync(join(ROOT, rel), "utf8");
+    const source = readSource(rel);
     const undocumented = suites.filter(
       (name) => !new RegExp(`make ${name}(?![a-z0-9-])`).test(source),
     );
@@ -505,11 +515,9 @@ describe("套件表和 Makefile 不许分叉", () => {
   it("两份 README 记着同一套 make 目标", () => {
     const targetsOf = (rel: string) =>
       new Set(
-        [
-          ...readFileSync(join(ROOT, rel), "utf8").matchAll(
-            /make ([a-z][a-z0-9-]*)/g,
-          ),
-        ].map((match) => match[1]!),
+        [...readSource(rel).matchAll(/make ([a-z][a-z0-9-]*)/g)].map(
+          (match) => match[1]!,
+        ),
       );
     const en = targetsOf("README.md");
     const zh = targetsOf("README_zh.md");
@@ -528,7 +536,7 @@ describe("套件表和 Makefile 不许分叉", () => {
       const members = (rule?.[1] ?? "").trim().split(/\s+/).filter(Boolean);
       expect(members.length).toBeGreaterThan(1);
       for (const rel of ["README.md", "README_zh.md"]) {
-        const source = readFileSync(join(ROOT, rel), "utf8");
+        const source = readSource(rel);
         const missing = members.filter(
           (name) => !source.includes(`\`${name}\``),
         );
@@ -567,8 +575,7 @@ describe("仓库根上 fork 维护的文档", () => {
     for (const rel of FORK_ROOT_DOCS) {
       const path = join(ROOT, rel);
       if (!existsSync(path)) continue;
-      const source = readFileSync(path, "utf8");
-      for (const { name, line } of referencedTargets(source)) {
+      for (const { name, line } of referencedTargets(currentSource(rel))) {
         if (!everywhere.has(name)) dead.push(`${rel}:${line} make ${name}`);
       }
     }
@@ -581,7 +588,7 @@ describe("文档指名的文件都存在", () => {
     const violations: string[] = [];
     for (const rel of markdownFiles()) {
       const dir = join(ROOT, rel, "..");
-      const source = readFileSync(join(ROOT, rel), "utf8");
+      const source = readSource(rel);
       for (const [index, line] of source.split("\n").entries()) {
         for (const match of line.matchAll(MD_LINK)) {
           const raw = match[1] ?? match[2] ?? "";
@@ -606,10 +613,8 @@ describe("文档指名的文件都存在", () => {
   it("反引号里的仓库内路径可以解析", () => {
     const violations: string[] = [];
     for (const rel of markdownFiles()) {
-      const source = stripHistoricalRegions(
-        readFileSync(join(ROOT, rel), "utf8"),
-      );
-      for (const [index, line] of source.split("\n").entries()) {
+      const { lines } = currentSource(rel);
+      for (const [index, line] of lines.entries()) {
         for (const match of line.matchAll(REPO_PATH)) {
           const target = (match[1] ?? "").replace(/^frontend-vue\//, "");
           if (target.includes("*")) continue;
@@ -627,43 +632,41 @@ describe("文档指名的文件都存在", () => {
     这一条扫的是全部文本文件，不只是 Markdown：死掉的文件名躺在源码文件头注释里
     和躺在文档里烂得一样彻底，而注释正是本仓写「为什么这么做」的地方。
   */
-  it.skipIf(!checkoutComplete)("反引号里的裸文件名在 checkout 里搜得到", () => {
-    const known = checkoutBasenames();
-    const violations: string[] = [];
-    let scanned = 0;
-    for (const rel of trackedTextFiles()) {
-      const source = stripHistoricalRegions(
-        readFileSync(join(ROOT, rel), "utf8"),
-      );
-      for (const [index, line] of source.split("\n").entries()) {
-        for (const match of line.matchAll(BARE_FILENAME)) {
-          const name = match[1] ?? "";
-          scanned += 1;
-          if (known.has(name)) continue;
-          if (name in NON_REPO_FILENAMES) continue;
-          violations.push(`${rel}:${index + 1}: ${name}`);
-        }
-      }
-    }
-    // 正则写坏时主断言会静默全绿——空集合永远 toEqual([])（同 131 号）。
-    expect(scanned).toBeGreaterThan(100);
-    expect(
-      violations,
-      "照着这个名字在整个 checkout 里搜，一个文件都搜不到",
-    ).toEqual([]);
-  });
-
   it.skipIf(!checkoutComplete)(
-    "仓库路径（带不带反引号都算）在 checkout 里搜得到",
-    () => {
-      const known = checkoutBasenames();
+    "反引号里的裸文件名在 checkout 里搜得到",
+    async () => {
+      const known = await checkoutBasenames();
       const violations: string[] = [];
       let scanned = 0;
       for (const rel of trackedTextFiles()) {
-        const source = withoutOwnHeader(
-          rel,
-          stripHistoricalRegions(readFileSync(join(ROOT, rel), "utf8")),
-        );
+        const { lines } = currentSource(rel);
+        for (const [index, line] of lines.entries()) {
+          for (const match of line.matchAll(BARE_FILENAME)) {
+            const name = match[1] ?? "";
+            scanned += 1;
+            if (known.has(name)) continue;
+            if (name in NON_REPO_FILENAMES) continue;
+            violations.push(`${rel}:${index + 1}: ${name}`);
+          }
+        }
+      }
+      // 正则写坏时主断言会静默全绿——空集合永远 toEqual([])（同 131 号）。
+      expect(scanned).toBeGreaterThan(100);
+      expect(
+        violations,
+        "照着这个名字在整个 checkout 里搜，一个文件都搜不到",
+      ).toEqual([]);
+    },
+  );
+
+  it.skipIf(!checkoutComplete)(
+    "仓库路径（带不带反引号都算）在 checkout 里搜得到",
+    async () => {
+      const known = await checkoutBasenames();
+      const violations: string[] = [];
+      let scanned = 0;
+      for (const rel of trackedTextFiles()) {
+        const source = withoutOwnHeader(rel, currentSource(rel).source);
         const quotedToo = extname(rel) !== ".md";
         for (const [index, line] of source.split("\n").entries()) {
           const bare = line.replaceAll(/`[^`]*`/g, " ");
@@ -695,13 +698,11 @@ describe("文档指名的文件都存在", () => {
 
   it.skipIf(!checkoutComplete)(
     "豁免名单自己不会腐烂：每一条都还缺席、也还有人在引",
-    () => {
-      const known = checkoutBasenames();
+    async () => {
+      const known = await checkoutBasenames();
       const cited = new Set<string>();
       for (const rel of trackedTextFiles()) {
-        const source = stripHistoricalRegions(
-          readFileSync(join(ROOT, rel), "utf8"),
-        );
+        const { source } = currentSource(rel);
         for (const match of source.matchAll(BARE_FILENAME)) {
           cited.add(match[1] ?? "");
         }

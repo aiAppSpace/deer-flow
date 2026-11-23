@@ -5,6 +5,10 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import {
+  enterDialogContent,
+  useDialogContentRef,
+} from "@/components/ui/dialog-focus-boundary";
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />;
@@ -49,14 +53,47 @@ function SheetContent({
   children,
   side = "right",
   onFocusCapture,
+  onBlurCapture,
+  onKeyDown,
+  ref,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
 }) {
+  const contentRef = useDialogContentRef(ref);
+  const revision = React.useRef(0);
+  const pending = React.useRef<{ view: Window; id: number } | undefined>(
+    undefined,
+  );
+  const retireReveal = React.useCallback(() => {
+    revision.current++;
+    if (pending.current) {
+      pending.current.view.cancelAnimationFrame(pending.current.id);
+      pending.current = undefined;
+    }
+  }, []);
+  React.useEffect(() => retireReveal, [retireReveal]);
+
+  function focusOwner(event: React.FocusEvent<HTMLDivElement>) {
+    const host = event.currentTarget;
+    const view = host.ownerDocument.defaultView;
+    const target = event.target;
+    if (
+      !view ||
+      !(target instanceof view.HTMLElement) ||
+      !host.contains(target) ||
+      target.closest(
+        '[data-slot="dialog-content"],[data-slot="sheet-content"]',
+      ) !== host
+    )
+      return;
+    return { host, view, target };
+  }
   return (
     <SheetPortal>
       <SheetOverlay />
       <SheetPrimitive.Content
+        ref={contentRef}
         data-slot="sheet-content"
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
@@ -72,12 +109,38 @@ function SheetContent({
         )}
         onFocusCapture={(event) => {
           onFocusCapture?.(event);
-          const target = event.target;
-          window.requestAnimationFrame(() => {
-            if (target.isConnected) {
+          const owner = focusOwner(event);
+          if (
+            !owner ||
+            owner.target.ownerDocument.activeElement !== owner.target
+          )
+            return;
+          retireReveal();
+          if (event.defaultPrevented) return;
+          const { host, view, target } = owner;
+          const current = revision.current;
+          const id = view.requestAnimationFrame(() => {
+            if (
+              current === revision.current &&
+              host.isConnected &&
+              host.dataset.state !== "closed" &&
+              host.contains(target) &&
+              target.isConnected &&
+              target.ownerDocument.activeElement === target
+            ) {
+              pending.current = undefined;
               target.scrollIntoView({ block: "nearest" });
             }
           });
+          pending.current = { view, id };
+        }}
+        onBlurCapture={(event) => {
+          onBlurCapture?.(event);
+          if (focusOwner(event)) retireReveal();
+        }}
+        onKeyDown={(event) => {
+          onKeyDown?.(event);
+          enterDialogContent(event);
         }}
         {...props}
       >

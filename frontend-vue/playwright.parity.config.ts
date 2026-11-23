@@ -1,22 +1,8 @@
 /*
-  【文件职责】     把 React 与 Vue 同时架在**同一个** replay Gateway 上，供跨应用对照使用。
-  【架构位置】     E2E 套件配置
-  【主要导出】     Playwright config
-  【依赖关系】     tests/support/playwright-factory.ts · tests/e2e-parity/support/react-preview.ts ·
-                   backend/scripts/run_replay_gateway.py · tests/e2e-parity/**
-  【边界与注意】   唯一一个需要**兄弟应用**才能跑的套件，所以它既不在 e2e-mock 也不在
-                   e2e-backend 里——理由与 external / visual 并列写在
-                   tests/guards/e2e-suite-contract.test.ts 的 standalone 集合旁。
-                   frontend/ 缺席时不启动 React，用例整组跳过，本模块的独立性不受影响。
-
-                   三个服务器共用一个 Gateway 端口是**判据本身**：两个应用必须看到同一份
-                   后端状态，否则后面任何一层比出来的差异都可能只是「两边数据不同」。
-                   topology.spec.ts 第一条用例钉的就是这件事。
-
-                   不用 backend 的 mock、也不手写夹具服务：run_replay_gateway.py 是**真**
-                   Gateway，模型换成签入的录制回放，已经是 e2e-real / e2e-protocol 等
-                   八个套件的确定性后端。手写夹具会随后端演进过期，真 Gateway 不会。
-*/
+ * Product parity runs both production frontends against one replay Gateway.
+ * Formal Make targets require React at config load; standalone verification
+ * uses its own suites. Each frontend exercises its production same-origin proxy.
+ */
 
 import { PARITY_USE_OPTIONS } from "./tests/e2e-parity/support/context-options";
 import {
@@ -34,12 +20,14 @@ const port = process.env.E2E_PARITY_PORT ?? "3115";
 const reactPort = process.env.E2E_PARITY_REACT_PORT ?? "3116";
 const gatewayPort = process.env.E2E_PARITY_GATEWAY_PORT ?? "8021";
 
-function requestedBrowserChannel(): "chrome" | undefined {
+function requestedBrowserChannel(): "chromium" | "chrome" {
   const channel = process.env.E2E_PARITY_BROWSER_CHANNEL;
-  if (channel === undefined || channel === "") return undefined;
-  if (channel === "chrome") return channel;
+  // Use the full browser's native document/frame focus traversal. The separate
+  // headless shell loops back into a terminal iframe after leaving the page.
+  if (channel === undefined || channel === "") return "chromium";
+  if (channel === "chrome" || channel === "chromium") return channel;
   throw new Error(
-    `Unsupported E2E_PARITY_BROWSER_CHANNEL=${channel}; only the installed stable Chrome channel is accepted`,
+    `Unsupported E2E_PARITY_BROWSER_CHANNEL=${channel}; expected bundled full Chromium or installed stable Chrome`,
   );
 }
 
@@ -72,6 +60,6 @@ export default defineSuite({
   // 取样条件与 diff.spec.ts 为每个场景新开的 context 共用一份，见该文件头。
   use: {
     ...PARITY_USE_OPTIONS,
-    ...(browserChannel ? { channel: browserChannel } : {}),
+    channel: browserChannel,
   },
 });

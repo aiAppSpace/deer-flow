@@ -1,14 +1,14 @@
 <!--
-  【文件职责】     以真实 splitpanes 组件验证 H1/H2/H6。
+  【文件职责】     以真实原生分栏组件验证 H1/H2/H6。
   【架构位置】     测试夹具
   【主要导出】     /__m0/splitpanes 测试页
-  【依赖关系】     消费 splitpanes；仅在 M0 测试开关开启时可用
+  【依赖关系】     消费 ResizablePanels；仅在 M0 测试开关开启时可用
   【边界与注意】   spike，不实现业务面板。
 -->
 
 <script setup lang="ts">
 import { ref } from "vue";
-import { Pane, Splitpanes } from "splitpanes";
+import { ResizablePanels } from "@/components/ui/resizable";
 import { isEnabledRuntimeFlag } from "@/core/auth/decision";
 
 const config = useRuntimeConfig();
@@ -16,19 +16,22 @@ if (!isEnabledRuntimeFlag(config.public.m0TestPages)) {
   throw createError({ statusCode: 404 });
 }
 
-const leftSize = ref(55);
-const rightSizes = ref([15, 15, 15]);
+const panels = [
+  { id: "main", minSize: 20 },
+  { id: "right-1" },
+  { id: "right-2" },
+  { id: "right-3" },
+];
+const sizes = ref([55, 15, 15, 15]);
 const resizeCount = ref(0);
 const resizedCount = ref(0);
 
 function collapseRightPanels() {
-  leftSize.value = 100;
-  rightSizes.value = [0, 0, 0];
+  sizes.value = [100, 0, 0, 0];
 }
 
 function restoreRightPanels() {
-  leftSize.value = 55;
-  rightSizes.value = [15, 15, 15];
+  sizes.value = [55, 15, 15, 15];
 }
 </script>
 
@@ -52,25 +55,27 @@ function restoreRightPanels() {
       <output data-resize-count>{{ resizeCount }}</output>
       <output data-resized-count>{{ resizedCount }}</output>
     </div>
-    <Splitpanes
+    <ResizablePanels
       data-pane-group
-      class="default-theme h-[420px]"
+      class="h-[420px]"
+      :panels="panels"
+      :sizes="sizes"
+      owner-key="m0-resizable"
       @resize="resizeCount += 1"
       @resized="resizedCount += 1"
     >
-      <Pane :size="leftSize" min-size="20"
-        ><div data-pane="main" class="h-full p-4">Main</div></Pane
+      <template #main
+        ><div data-pane="main" class="h-full p-4">Main</div></template
       >
-      <Pane
-        v-for="(size, index) in rightSizes"
-        :key="index"
-        :size="size"
-        min-size="0"
+      <template
+        v-for="(panel, index) in panels.slice(1)"
+        :key="panel.id"
+        #[panel.id]
       >
-        <div :data-pane="`right-${index + 1}`" class="h-full p-4">
+        <div :data-pane="panel.id" class="h-full p-4">
           Right {{ index + 1 }}
         </div>
-      </Pane>
-    </Splitpanes>
+      </template>
+    </ResizablePanels>
   </main>
 </template>

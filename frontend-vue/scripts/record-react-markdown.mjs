@@ -155,14 +155,23 @@ function streamdownVersion() {
   return typeof parsed.version === "string" ? parsed.version : "unknown";
 }
 
+function katexVersion() {
+  const manifest = join(FRONTEND, "node_modules/katex/package.json");
+  const parsed = JSON.parse(readFileSync(manifest, "utf8"));
+  if (typeof parsed.version !== "string")
+    throw new Error("KaTeX version is missing");
+  return parsed.version;
+}
+
 function main() {
   const check = process.argv.includes("--check");
   const records = record();
   const version = streamdownVersion();
+  const mathVersion = katexVersion();
   const serialized = `${JSON.stringify(
     {
-      $comment: `由 \`node scripts/record-react-markdown.mjs\` 从 frontend/ 的 React + streamdown@${version} 录制。勿手改。`,
-      recordedFrom: `frontend/ · streamdown ${version} · react-dom/server`,
+      $comment: `由 \`node scripts/record-react-markdown.mjs\` 从 frontend/ 的 React + streamdown@${version} + katex@${mathVersion} 录制。勿手改。`,
+      recordedFrom: `frontend/ · streamdown ${version} · katex ${mathVersion} · react-dom/server`,
       entries: records,
     },
     null,

@@ -83,9 +83,7 @@ it("keeps saved credentials and the binding instruction visible until connected"
   expect(await screen.findByText("/connect demo")).toBeTruthy();
   expect(screen.getByText("Token saved securely")).toBeTruthy();
   expect(
-    screen
-      .getByRole("button", { name: "Close", exact: true })
-      .hasAttribute("aria-pressed"),
+    screen.getByRole("button", { name: "Close" }).hasAttribute("aria-pressed"),
   ).toBe(false);
   expect(onDone).not.toHaveBeenCalled();
   expect(connectChannelProvider).toHaveBeenCalledTimes(1);

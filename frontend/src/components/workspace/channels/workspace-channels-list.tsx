@@ -54,6 +54,7 @@ function getProviderUnavailableReason(
 }
 
 let runtimeConfigProvider: ChannelProvider | null = null;
+let runtimeConfigGeneration = 0;
 let runtimeConfigInitialStep: "setup" | "binding" = "setup";
 const runtimeConfigListeners = new Set<() => void>();
 
@@ -62,7 +63,11 @@ function subscribeRuntimeConfig(listener: () => void) {
   return () => runtimeConfigListeners.delete(listener);
 }
 
-function setRuntimeConfigProvider(provider: ChannelProvider | null, initialStep: "setup" | "binding" = "setup") {
+function setRuntimeConfigProvider(
+  provider: ChannelProvider | null,
+  initialStep: "setup" | "binding" = "setup",
+) {
+  runtimeConfigGeneration++;
   runtimeConfigInitialStep = initialStep;
   runtimeConfigProvider = provider;
   runtimeConfigListeners.forEach((listener) => listener());
@@ -88,6 +93,7 @@ export function WorkspaceChannelRuntimeConfigHost() {
     nextProvider: ChannelProvider,
     preparedWindow?: Window | null,
   ) => {
+    const generation = runtimeConfigGeneration;
     const connectWindow =
       preparedWindow !== undefined
         ? preparedWindow
@@ -97,6 +103,10 @@ export function WorkspaceChannelRuntimeConfigHost() {
     void connectMutation
       .mutateAsync(nextProvider.provider)
       .then((result) => {
+        if (generation !== runtimeConfigGeneration) {
+          closeConnectWindow(connectWindow);
+          return;
+        }
         if (result.url) {
           openConnectUrl(result.url, connectWindow);
           return;
@@ -106,6 +116,7 @@ export function WorkspaceChannelRuntimeConfigHost() {
       })
       .catch((error) => {
         closeConnectWindow(connectWindow);
+        if (generation !== runtimeConfigGeneration) return;
         toast.error(
           error instanceof Error ? error.message : t.channels.unavailable,
         );
@@ -127,11 +138,16 @@ export function WorkspaceChannelRuntimeConfigHost() {
         }
       }}
       onSubmit={(provider, values) => {
+        const generation = runtimeConfigGeneration;
         const connectWindow =
           provider.auth_mode === "deep_link" ? prepareConnectWindow() : null;
         return configureMutation
           .mutateAsync({ provider: provider.provider, values })
           .then((updated) => {
+            if (generation !== runtimeConfigGeneration) {
+              closeConnectWindow(connectWindow);
+              return;
+            }
             if (updated.provider === "wechat") return updated;
             setRuntimeConfigProvider(null);
             if (providerCanConnect(updated)) {
@@ -143,6 +159,7 @@ export function WorkspaceChannelRuntimeConfigHost() {
           })
           .catch((error) => {
             closeConnectWindow(connectWindow);
+            if (generation !== runtimeConfigGeneration) return;
             toast.error(
               error instanceof Error ? error.message : t.channels.unavailable,
             );
@@ -165,7 +182,10 @@ export function WorkspaceChannelsList() {
   ) => {
     if (provider.provider === "wechat") {
       closeConnectWindow(preparedWindow ?? null);
-      setRuntimeConfigProvider(provider, provider.configured ? "binding" : "setup");
+      setRuntimeConfigProvider(
+        provider,
+        provider.configured ? "binding" : "setup",
+      );
       return;
     }
     const connectWindow =

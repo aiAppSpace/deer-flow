@@ -108,14 +108,29 @@ export async function exportMemory(): Promise<UserMemory> {
   return readMemoryResponse(response, "Failed to export memory");
 }
 
-export async function importMemory(memory: UserMemory): Promise<UserMemory> {
-  const response = await fetch(`${getBackendBaseURL()}/api/memory/import`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+/** Only observes the original memory object at the native fetch-call boundary. */
+export type MemoryImportDispatchObserver = (
+  memory: UserMemory,
+  preAborted: boolean,
+) => void;
+
+export async function importMemory(
+  memory: UserMemory,
+  observeDispatch?: MemoryImportDispatchObserver,
+): Promise<UserMemory> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/memory/import`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(memory),
     },
-    body: JSON.stringify(memory),
-  });
+    observeDispatch
+      ? (preAborted) => observeDispatch(memory, preAborted)
+      : undefined,
+  );
   return readMemoryResponse(response, "Failed to import memory");
 }
 

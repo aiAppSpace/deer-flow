@@ -12,6 +12,10 @@ import { getBackendBaseURL } from "@/core/config";
 
 import type { MCPConfig, MCPServerConfig } from "./types";
 
+export type MCPScope = "deployment" | "user";
+const configPath = (scope: MCPScope = "deployment") =>
+  scope === "user" ? "/api/mcp/personal/config" : "/api/mcp/config";
+
 export class MCPConfigRequestError extends Error {
   readonly status: number;
   constructor(
@@ -34,18 +38,27 @@ async function readErrorDetail(
   fallback: string,
 ): Promise<never> {
   const error = await readGatewayResponseError(response, fallback);
+  const detail =
+    typeof error.body === "object" && error.body !== null
+      ? Reflect.get(error.body, "detail")
+      : undefined;
   throw new MCPConfigRequestError(
     response.status,
-    error.message,
+    typeof detail === "string" ? detail : fallback,
     error.body,
     error.responseText,
   );
 }
 
-export async function loadMCPConfig(options: { signal?: AbortSignal } = {}) {
-  const response = await fetch(`${getBackendBaseURL()}/api/mcp/config`, {
-    signal: options.signal,
-  });
+export async function loadMCPConfig(
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
+) {
+  const response = await fetch(
+    `${getBackendBaseURL()}${configPath(options.scope)}`,
+    {
+      signal: options.signal,
+    },
+  );
   if (!response.ok) {
     await readErrorDetail(response, "Failed to load MCP configuration");
   }
@@ -54,16 +67,19 @@ export async function loadMCPConfig(options: { signal?: AbortSignal } = {}) {
 
 export async function updateMCPConfig(
   config: MCPConfig,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
 ) {
-  const response = await fetch(`${getBackendBaseURL()}/api/mcp/config`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${getBackendBaseURL()}${configPath(options.scope)}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(config),
+      signal: options.signal,
     },
-    body: JSON.stringify(config),
-    signal: options.signal,
-  });
+  );
   if (!response.ok) {
     await readErrorDetail(response, "Failed to update MCP configuration");
   }
@@ -73,19 +89,22 @@ export async function updateMCPConfig(
 export async function updateMCPServerState(
   serverName: string,
   enabled: boolean,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
 ) {
-  const response = await fetch(`${getBackendBaseURL()}/api/mcp/config`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${getBackendBaseURL()}${configPath(options.scope)}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        server_name: serverName,
+        enabled,
+      }),
+      signal: options.signal,
     },
-    body: JSON.stringify({
-      server_name: serverName,
-      enabled,
-    }),
-    signal: options.signal,
-  });
+  );
   if (!response.ok) {
     await readErrorDetail(response, "Failed to update MCP server");
   }
@@ -101,7 +120,7 @@ async function mutateMCPServerConfig(
   method: "POST" | "PUT" | "DELETE",
   body: unknown | undefined,
   fallback: string,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
 ): Promise<MCPConfig> {
   const request: RequestInit = { method, signal: options.signal };
   if (body !== undefined) {
@@ -118,10 +137,10 @@ async function mutateMCPServerConfig(
 /** 一次可以加多个：粘贴的那段 JSON 里本来就可能有好几个 server。 */
 export function createMCPServers(
   servers: Record<string, MCPServerConfig>,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
 ) {
   return mutateMCPServerConfig(
-    "/api/mcp/config/servers",
+    `${configPath(options.scope)}/servers`,
     "POST",
     { mcp_servers: servers },
     "Failed to add MCP servers",
@@ -138,10 +157,10 @@ export function createMCPServers(
 export function updateMCPServer(
   serverName: string,
   server: MCPServerConfig,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
 ) {
   return mutateMCPServerConfig(
-    "/api/mcp/config/server",
+    `${configPath(options.scope)}/server`,
     "PUT",
     { server_name: serverName, server },
     "Failed to update MCP server",
@@ -151,10 +170,10 @@ export function updateMCPServer(
 
 export function deleteMCPServer(
   serverName: string,
-  options: { signal?: AbortSignal } = {},
+  options: { signal?: AbortSignal; scope?: MCPScope } = {},
 ) {
   return mutateMCPServerConfig(
-    `/api/mcp/config/servers/${encodeURIComponent(serverName)}`,
+    `${configPath(options.scope)}/servers/${encodeURIComponent(serverName)}`,
     "DELETE",
     undefined,
     "Failed to delete MCP server",

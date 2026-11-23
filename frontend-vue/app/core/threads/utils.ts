@@ -1,12 +1,13 @@
 /*
   【文件职责】     见下方导出与 JSDoc。
   【架构位置】     L3
-  【主要导出】     THREAD_PINNED_METADATA_KEY / ChannelThreadSource / pathOfThread / textOfMessage / titleOfThread / documentTitleOfThread / isThreadPinned 等 13 个
+  【主要导出】     THREAD_PINNED_METADATA_KEY / ChannelThreadSource / pathOfThread / textOfMessage / titleOfThread / documentTitleOfThread / isThreadPinned 等 14 个
   【依赖关系】     见下方 import。
   【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
 */
 
 import type { Message } from "@/core/types/message";
+import type { Translations } from "@/core/i18n/locales/types";
 
 import type { AgentThread, AgentThreadContext } from "./types";
 
@@ -168,18 +169,30 @@ const CHANNEL_PROVIDER_LABELS: Record<string, string> = {
   dingtalk: "DingTalk",
   discord: "Discord",
   feishu: "Feishu",
+  github: "GitHub",
+  qq: "QQ",
   slack: "Slack",
   telegram: "Telegram",
   wechat: "WeChat",
   wecom: "WeCom",
 };
 
-function labelOfChannelProvider(provider: string) {
-  return CHANNEL_PROVIDER_LABELS[provider] ?? provider;
+export function labelOfChannelProvider(
+  provider: string,
+  t?: Pick<Translations, "threads">,
+): string {
+  const localized: Record<string, string> | undefined =
+    t?.threads.origin.providers;
+  if (localized && Object.hasOwn(localized, provider))
+    return localized[provider]!;
+  return Object.hasOwn(CHANNEL_PROVIDER_LABELS, provider)
+    ? CHANNEL_PROVIDER_LABELS[provider]!
+    : provider;
 }
 
 export function channelSourceOfThread(
   thread: Pick<AgentThread, "metadata">,
+  t?: Pick<Translations, "threads">,
 ): ChannelThreadSource | null {
   const source = thread.metadata?.channel_source;
   if (!source || typeof source !== "object" || Array.isArray(source)) {
@@ -199,6 +212,6 @@ export function channelSourceOfThread(
   return {
     type: "im_channel",
     provider: normalizedProvider,
-    label: labelOfChannelProvider(normalizedProvider),
+    label: labelOfChannelProvider(normalizedProvider, t),
   };
 }

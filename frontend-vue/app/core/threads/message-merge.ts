@@ -12,34 +12,13 @@
                    getSummarizationMiddlewareMessages
   【依赖关系】     ./message-identity · ./message-seq · ../messages/{utils,run-duration} ·
                    ../types/message
-  【边界与注意】   这是 05 C1–C4 的实现主体，函数体逐字搬自上游——**有意不重新设计**。
-                   05 C 组自己写着「建议原样复制…不要重新设计」，而本文件是全仓
-                   唯一一处「原样」有明确含义的地方：`mergeMessages` 的锚点编织
-                   （C2「不能在第一个锚点处切片」）和 `resolveTransientHistoryBridge`
-                   的未加载页抑制（C4）都是被具体 issue 逼出来的形状，读代码看不出
-                   哪一步在防什么，只有上游 2,381 行的 `message-merge.test.ts` 能
-                   证明它们还成立。改这里之前先让那份测试红。
-
-                   **2026-09-10：补上了 seq 骨架。** 此前本文件是从上游**加骨架之前**
-                   的版本移植的（上游那一版的局部规则叫 canonicalMinSeq），于是排序
-                   全靠身份锚点编织：一条 seq 已知、但在已加载窗口里找不到桥接身份的
-                   消息，只能落到队尾而不是它在 feed 里的位置。位置这件事现在交给
-                   `./message-seq` 的可信 seq——`mergeMessages` 用它建骨架、
-                   `resolveTransientHistoryBridge` 用 `insertByTrustedSeq` 先插位再编织，
-                   两处都是「骨架压过锚点猜测」。判据在 tests/unit/threads/message-seq.test.ts。
-
-                   跟着骨架一起改掉的一处**本仓旧行为**：第一个共有锚点之前的受保护
-                   前缀，此前是**压住不显示**的（宁可不显示，也不要视觉上抹平一段没加载
-                   的历史空档）；上游改成无条件编织在锚点之前——位置的歧义交给骨架管，
-                   而「用户真发过的消息在刷新之前一直看不见」是更坏的一头。
-
-                   与上游唯一的实质差异：`EMPTY_MESSAGES` / `EMPTY_MESSAGE_IDENTITIES`
-                   这两个稳定空数组在上游是为了不让 React 的 `useMemo` 依赖每帧失效；
-                   Vue 侧 `computed` 是按需重算的，但这两个常量仍然保留——
-                   它们同时是**默认参数的身份**，`resolveTransientHistoryBridge`
-                   的 `previouslyRenderedOrder` 默认值靠引用相等做短路。
+  【边界与注意】   历史与实时消息以可信 seq 骨架和稳定身份锚点编织；未加载历史页的
+                   瞬态桥不能退回旧顺序。React 与 Vue 保持同一可观察合同，改动须覆盖
+                   两端 message-merge / message-seq 测试，而非依赖函数体永远相同。
+                   EMPTY_MESSAGES / EMPTY_MESSAGE_IDENTITIES 保持稳定引用，作为默认参数
+                   身份参与短路；框架差异不改变该合同。
 */
-
+import { SKILL_USAGES_KEY } from "../skills/usage";
 import { getMessageRunId } from "../messages/run-duration";
 import {
   MESSAGE_SEQ_KEY,
@@ -88,6 +67,7 @@ export function mergeMessages(
   const anySeqByIdentity = new Map<string, number>();
   const savedTurnDurations = new Map<string, number>();
   const savedRunIds = new Map<string, string>();
+  const savedSkillUsages = new Map<string, unknown[]>();
   const collectTrustedSeq = (message: Message) => {
     const identity = messageIdentity(message);
     if (!identity) return;
@@ -111,6 +91,15 @@ export function mergeMessages(
     const identity = messageIdentity(message);
     const runId = getMessageRunId(message);
     if (identity && runId) savedRunIds.set(identity, runId);
+    if (
+      identity &&
+      Array.isArray(message.additional_kwargs?.[SKILL_USAGES_KEY])
+    ) {
+      savedSkillUsages.set(
+        identity,
+        message.additional_kwargs[SKILL_USAGES_KEY],
+      );
+    }
     if (identity && message.additional_kwargs?.turn_duration !== undefined) {
       savedTurnDurations.set(
         identity,
@@ -269,7 +258,11 @@ export function mergeMessages(
     const shouldRestoreTurnDuration =
       savedTurnDurations.has(identity) &&
       message.additional_kwargs?.turn_duration === undefined;
+    const shouldRestoreSkillUsages =
+      savedSkillUsages.has(identity) &&
+      message.additional_kwargs?.[SKILL_USAGES_KEY] === undefined;
     if (
+      !shouldRestoreSkillUsages &&
       !shouldRestoreSeq &&
       !shouldRestoreRunId &&
       !shouldRestoreTurnDuration
@@ -281,6 +274,9 @@ export function mergeMessages(
       ...(shouldRestoreRunId ? { run_id: savedRunIds.get(identity) } : {}),
       additional_kwargs: {
         ...message.additional_kwargs,
+        ...(shouldRestoreSkillUsages
+          ? { [SKILL_USAGES_KEY]: savedSkillUsages.get(identity) }
+          : {}),
         ...(shouldRestoreSeq ? { [MESSAGE_SEQ_KEY]: trustedSeq } : {}),
         ...(shouldRestoreTurnDuration
           ? { turn_duration: savedTurnDurations.get(identity) }
@@ -567,10 +563,25 @@ export function mergeTransientHistoryBridge(
       existing &&
       (!isHiddenFromUIMessage(captured) || isHiddenFromUIMessage(existing))
     ) {
-      // Refresh the buffered snapshot without moving its first-known
-      // chronological position. Repeated compression can recapture protected
-      // prefix messages before a newer tail.
-      merged[existingIndex] = captured;
+      // A refreshed copy can omit seq or carry a later checkpoint seq. Keep
+      // the earliest trusted position while accepting its fresh content.
+      const existingSeq = trustedMessageSeq(existing);
+      const capturedSeq = trustedMessageSeq(captured);
+      const keptSeq =
+        existingSeq !== undefined &&
+        (capturedSeq === undefined || existingSeq < capturedSeq)
+          ? existingSeq
+          : capturedSeq;
+      merged[existingIndex] =
+        keptSeq !== undefined && capturedSeq !== keptSeq
+          ? ({
+              ...captured,
+              additional_kwargs: {
+                ...captured.additional_kwargs,
+                [MESSAGE_SEQ_KEY]: keptSeq,
+              },
+            } as Message)
+          : captured;
     }
   }
   return merged;

@@ -5,10 +5,12 @@ import { mockLangGraphAPI } from "./utils/mock-api";
 const CHAT = "00000000-0000-0000-0000-000000000901";
 const TITLE = "Report to keep";
 
-async function openDeleteDialog(page: Page, captureEntry = false) {
-  const link = page.locator(
-    `a[data-sidebar="menu-button"][href="/workspace/chats/${CHAT}"]`,
-  );
+async function openDeleteDialog(
+  page: Page,
+  captureEntry = false,
+  path = `/workspace/chats/${CHAT}`,
+) {
+  const link = page.locator(`a[data-sidebar="menu-button"][href="${path}"]`);
   await link.hover();
   await link.locator("xpath=..").getByRole("button", { name: "More" }).click();
   if (captureEntry) {
@@ -189,3 +191,98 @@ for (const active of [true, false]) {
     );
   });
 }
+
+for (const agentName of [null, "delete-agent"]) {
+  test(`successful current deletion opens an empty focused composer for ${agentName ?? "main chat"}`, async ({
+    page,
+  }) => {
+    mockLangGraphAPI(page, {
+      threads: [
+        {
+          thread_id: CHAT,
+          title: TITLE,
+          metadata: agentName ? { agent_name: agentName } : {},
+        },
+      ],
+      agents: agentName
+        ? [
+            {
+              name: agentName,
+              description: "Deletion focus",
+            },
+          ]
+        : [],
+    });
+    const prefix = agentName
+      ? `/workspace/agents/${agentName}/chats`
+      : "/workspace/chats";
+    await page.goto(`${prefix}/${CHAT}`);
+    const composer = page.getByRole("textbox", {
+      name: "How can I assist you today?",
+      exact: true,
+    });
+    await composer.fill("Draft for deleted conversation");
+    const dialog = await openDeleteDialog(page, false, `${prefix}/${CHAT}`);
+    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`${prefix}/new$`));
+    await expect(composer).toBeEnabled();
+    await expect(composer).toBeFocused();
+    await expect(composer).toHaveValue("");
+    await page.keyboard.type("Fresh draft");
+    await expect(composer).toHaveValue("Fresh draft");
+  });
+}
+
+test("deleting a background conversation preserves the active draft and route", async ({
+  page,
+}) => {
+  const other = "00000000-0000-0000-0000-000000000902";
+  mockLangGraphAPI(page, {
+    threads: [
+      { thread_id: CHAT, title: TITLE },
+      { thread_id: other, title: "Current conversation" },
+    ],
+  });
+  await page.goto(`/workspace/chats/${other}`);
+  const composer = page.getByRole("textbox", {
+    name: "How can I assist you today?",
+    exact: true,
+  });
+  await composer.fill("Keep this draft");
+  const dialog = await openDeleteDialog(page);
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`${other}$`));
+  await expect(composer).toHaveValue("Keep this draft");
+  await expect(composer).not.toBeFocused();
+});
+
+test("deleting a conversation adopted from new retires its draft and focuses a fresh composer", async ({
+  page,
+}) => {
+  mockLangGraphAPI(page);
+  await page.goto("/workspace/chats/new");
+  const composer = page.getByRole("textbox", {
+    name: "How can I assist you today?",
+    exact: true,
+  });
+  await composer.fill("Create a conversation");
+  await page.getByRole("button", { name: "Submit", exact: true }).click();
+  await expect(page).toHaveURL(/\/workspace\/chats\/[0-9a-f-]{36}$/);
+  await expect(
+    page.getByRole("button", { name: "Stop", exact: true }),
+  ).toHaveCount(0);
+  const adoptedPath = new URL(page.url()).pathname;
+  await composer.fill("Draft for the adopted conversation");
+  const dialog = await openDeleteDialog(page, false, adoptedPath);
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
+  await expect(
+    page.locator(`a[data-sidebar="menu-button"][href="${adoptedPath}"]`),
+  ).toHaveCount(0);
+  await expect(composer).toBeEnabled();
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue("");
+});

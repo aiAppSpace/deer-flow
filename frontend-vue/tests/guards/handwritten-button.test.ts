@@ -2,7 +2,7 @@
   【文件职责】     钉住「哪些文件还在手写 <button>」这份集合，**双向**。
   【架构位置】     守卫
   【主要导出】     无；vitest 用例
-  【依赖关系】     app/components/**、app/pages/**
+  【依赖关系】     scripts/lib/strip-comments.mjs · app/components/**、app/pages/**
   【边界与注意】   这份清单是 wave 72 的产物。判据不是「手写 button 是缺陷」——
                    而是 **「上游同一颗控件走的是哪条路径」**：
 
@@ -29,6 +29,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "../../scripts/lib/strip-comments.mjs";
+
 const appDir = fileURLToPath(new URL("../../app", import.meta.url));
 
 /**
@@ -37,35 +39,31 @@ const appDir = fileURLToPath(new URL("../../app", import.meta.url));
  * 按路径字典序，插入位置唯一（同 architecture.test.ts 的 l2Files）。
  */
 const ALLOWED: Record<string, [number, string]> = {
-  "components/chat/AgentChat.vue": [
-    2,
-    "发送失败重试 / 建 agent 出错重试：上游没有错误态，沿用 recent-chat-list.tsx:468 " +
-      "的 `underline` 写法。保存 agent 那颗 wave 78 已经搬进页头的 ⋯ 菜单 " +
-      "（同上游 agents/new/page.tsx:309 的 DropdownMenuItem + SaveIcon），不再手写",
-  ],
   "components/chat/ChatComposer.vue": [
-    2,
-    "input-box.tsx:2149（斜杠建议项）与 :2227（技能 chip 的移除键），两处上游也手写",
+    4,
+    "input-box.tsx:3061 的 builtin 命令候选、:3124 的 conversation capability 重试、" +
+      ":3151 的无 source document 项目附件移除、:3176 的取消润色均为原生 button；" +
+      "Vue 对应相同 class、type、aria-label 与 handler，引用 chip 自身交独立 primitive",
   ],
-  "components/chat/CitationSourcesPanel.vue": [
+  "components/chat/CitationSourceCopyButton.vue": [
     1,
-    "citation-sources-panel.tsx:122，上游也手写",
+    "citation-sources-panel.tsx 的 CitationSourceCopyButton，上游同一行反馈 owner 也用原生 button",
   ],
-  "components/chat/MessageList.vue": [
+  "components/chat/ComposerModelSelector.vue": [
     1,
-    "历史加载失败的重试，上游没有错误态。artifactTargets 那排文件名键 wave 78 " +
-      "已删：带写文件调用的消息两边都归 assistant:processing 组画成 " +
-      "chain-of-thought 的一步，上游的 assistant:subagent 分支也不画文件名键",
+    "model-picker-content.tsx:181 的模型行也是原生 button",
+  ],
+  "components/chat/KnowledgeSourceDialog.vue": [
+    1,
+    "workspace/citations/knowledge-source.tsx:58 的来源链接也是原生 button",
+  ],
+  "components/chat/MentionPicker.vue": [
+    4,
+    "workspace/mentions/mention-picker.tsx:319/352/398/415 的关闭、候选项、重试、加载更多也是原生 button",
   ],
   "components/chat/ProcessingToolStep.vue": [
     1,
     "message-group.tsx:676，逐字相同",
-  ],
-  "components/chat/SlashSkillChip.vue": [
-    1,
-    "slash-skill-chip.tsx:26 上游也是裸 <button>，不走 shadcn Button：" +
-      "它要的是 CHIP_BASE_CLASS 那一整套（h-6 / font-mono / border-primary/20），" +
-      "套 Button 的话得把 variant 的颜色、高度、内边距逐条覆盖回去",
   ],
   "components/chat/SubtaskCard.vue": [
     1,
@@ -89,8 +87,12 @@ const ALLOWED: Record<string, [number, string]> = {
   ],
   "components/markdown/MarkdownSafeLink.vue": [1, "streamdown 外链按钮"],
   "components/markdown/MarkdownTable.vue": [
-    3,
-    "streamdown 表格的复制 / 下载 / 全屏",
+    2,
+    "React公开table-renderer的全屏/退出按钮；复制与下载由独立菜单组件持有",
+  ],
+  "components/markdown/MarkdownTableMenu.vue": [
+    2,
+    "Streamdown公开TableCopyDropdown/TableDownloadDropdown均为普通button菜单；此处一个触发器和一个v-for格式项模板，保留原生Tab",
   ],
   "components/markdown/MermaidDownloadMenu.vue": [
     4,
@@ -106,17 +108,17 @@ const ALLOWED: Record<string, [number, string]> = {
     "streamdown ZoomPan 的放大 / 缩小 / 重置",
   ],
   "components/workspace/GatewayStatusBanner.vue": [
-    2,
-    "gateway-offline-banner.tsx:119（退出）；重试那颗是本仓补的出路，同一种写法",
+    1,
+    "gateway-offline-banner.tsx 的唯一退出按钮；恢复通过后台 session query 自动探测",
   ],
   "components/workspace/ThreadActionsMenu.vue": [
     1,
     "ui/sidebar.tsx 的 SidebarMenuAction，上游也手写",
   ],
   "components/workspace/ThreadSidebar.vue": [
-    3,
+    2,
     "ui/sidebar.tsx 的 SidebarMenuButton（footer 那颗，坑 62 的两层 as-child）" +
-      " / SidebarRail；删除失败的重试链接同 recent-chat-list.tsx:468。" +
+      " / SidebarRail；删除确认与重试由稳定 ThreadDeleteDialog 持有。" +
       "**窄屏遮罩那颗 wave 148 没了**：抽屉换成 ui/sheet 之后遮罩由 DialogOverlay 承担。" +
       "**禁用的 Agents 入口那颗第十二轮没了**：它改走 `SidebarMenuButton`——" +
       "手写那版的 `aria-disabled:*` 两条本来就是从那颗 cva 抄来的",
@@ -133,13 +135,25 @@ const ALLOWED: Record<string, [number, string]> = {
       "上游同一颗也是手写的（artifact-table-preview.tsx 的 `max-w-full " +
       "cursor-pointer truncate text-left underline underline-offset-4`）",
   ],
-  "components/workspace/browser-view/BrowserPanel.vue": [
-    2,
-    "浏览器面板的两条错误重试，上游没有错误态",
+  "components/workspace/capabilities/CapabilityCard.vue": [
+    1,
+    "workspace/capabilities/capability-card.tsx:74 的能力卡入口也是原生 button",
+  ],
+  "components/workspace/capabilities/PluginIconPicker.vue": [
+    1,
+    "workspace/capabilities/plugin-icon-picker.tsx:74 的预览入口也是原生 button",
+  ],
+  "components/workspace/capabilities/PluginRow.vue": [
+    1,
+    "workspace/capabilities/plugin-directory.tsx:41 的目录行也是原生 button",
   ],
   "components/workspace/changes/WorkspaceChangesBadge.vue": [
     3,
     "两条错误重试（上游没有）+ workspace-change-badge.tsx:60 那颗，逐字相同",
+  ],
+  "components/workspace/scheduled-tasks/ScheduledTaskDetail.vue": [
+    3,
+    "workspace/scheduled-tasks/task-detail.tsx:552/587/749 的帮助、历史展开、复制标识也是原生 button",
   ],
   "components/workspace/scheduled-tasks/ScheduledTaskList.vue": [
     1,
@@ -172,11 +186,17 @@ function walk(dir: string, out: string[] = []): string[] {
 
 /** 注释剥成等长空白：行号不漂，`<button` 只剩真的开标签。 */
 function strip(source: string): string {
-  const blank = (m: string) => m.replaceAll(/[^\n]/g, " ");
-  return source
-    .replaceAll(/<!--[\s\S]*?-->/g, blank)
-    .replaceAll(/\/\*[\s\S]*?\*\//g, blank);
+  return stripComments(source, ["html", "block", "line"]);
 }
+
+it("preserves live tokens after quoted comment delimiters and ignores real comments", () => {
+  const source =
+    '<script>const glob = "/workspace/**";</script>\n<template><button</template>\n/* <button */';
+  const stripped = strip(source);
+  expect(stripped.split("<button").length - 1).toBe(1);
+  expect(stripped.indexOf("<button")).toBe(source.indexOf("<button"));
+  expect(stripped.length).toBe(source.length);
+});
 
 const counts = new Map<string, number>();
 for (const file of [

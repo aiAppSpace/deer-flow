@@ -1,9 +1,10 @@
 "use client";
 
-import { Component, type ComponentProps, type ReactNode } from "react";
+import { Component, useMemo, type ComponentProps, type ReactNode } from "react";
 import { Streamdown } from "streamdown";
 
 import { stripLeakedSystemTags } from "@/core/streamdown/preprocess";
+import { TableRenderer } from "@/core/streamdown/table-renderer";
 import { installClipboardFallback } from "@/core/clipboard";
 import { useI18n } from "@/core/i18n/hooks";
 
@@ -58,9 +59,14 @@ class StreamdownFallbackBoundary extends Component<
 export function ClipboardSafeStreamdown({
   children,
   translations,
+  components,
   ...props
 }: ClipboardSafeStreamdownProps) {
   const { t } = useI18n();
+  const effectiveComponents = useMemo(
+    () => ({ table: TableRenderer, ...components }),
+    [components],
+  );
   // Strip leaked system-internal tags (<memory>, <system-reminder>, etc.)
   // that would cause React to log "unrecognized tag" console errors when
   // the markdown renderer passes them through as raw HTML.
@@ -87,7 +93,11 @@ export function ClipboardSafeStreamdown({
         rule for those is that both apps announce the same English string
         (see `primitives.*` in the Vue app's I18N_INVENTORY).
       */}
-      <Streamdown translations={{ ...t.markdown, ...translations }} {...props}>
+      <Streamdown
+        translations={{ ...t.markdown, ...translations }}
+        components={effectiveComponents}
+        {...props}
+      >
         {sanitizedChildren}
       </Streamdown>
     </StreamdownFallbackBoundary>

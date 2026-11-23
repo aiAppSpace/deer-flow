@@ -1,7 +1,7 @@
 /*
-  【文件职责】     替代 `@langchain/langgraph-sdk` 的消息/线程 wire 类型，供 core 内 16 个文件引用。
+  【文件职责】     替代 `@langchain/langgraph-sdk` 的消息/线程 wire 类型，供产品消息、会话和工具模块引用。
                    （Message / AIMessage / Thread / ThreadsClient / BaseStream / ToolCall …）
-  【架构位置】     L3 类型（DeerFlow 协议形状）；08 的 L1 名字在此同源定义，M2 抽 L1 时原样搬走
+  【架构位置】     L3 类型（DeerFlow 协议形状）；独立会话协议位于 packages/agent-core/src/session/protocol.ts
   【主要导出】     AgentMessageContent / AgentContentPart / Message / AIMessage / Thread / ToolCall
   【依赖关系】     零运行时依赖，纯 type-only；被 core/messages、core/threads、core/tasks、
                    core/tools、core/sidecar、core/artifacts 引用
@@ -229,27 +229,4 @@ export interface ThreadsClient<TStateType = Record<string, unknown>> {
 export interface BaseStream<TState = Record<string, unknown>> {
   messages: Message[];
   values?: TState;
-}
-
-// ---------------------------------------------------------------------------
-// Vercel AI SDK（`ai` 包）借来的类型
-// ---------------------------------------------------------------------------
-
-/**
- * 与 `ai` 包的 `FileUIPart` 结构等价。02 §321 的裁决是**内联定义、不装这个包**：
- * core 里只有 `uploads/prompt-input-files.ts` 一处 type-only 引用，
- * 为一个类型挂一个 SDK 不划算，而且它会把 React 相关的传递依赖带进来。
- *
- * `providerMetadata` 上游是 `ProviderMetadata`（`ai` 内部的嵌套 record）。
- * core 只透传不解释，用 `Record<string, unknown>` 表达即可——
- * 收窄它反而会在透传时逼出强转。
- */
-export interface FileUIPart {
-  type: "file";
-  /** IANA media type。 */
-  mediaType: string;
-  filename?: string;
-  /** 托管 URL 或 data URL。 */
-  url: string;
-  providerMetadata?: Record<string, unknown>;
 }

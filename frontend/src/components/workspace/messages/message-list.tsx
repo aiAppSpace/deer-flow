@@ -336,6 +336,7 @@ export function MessageList({
   sidecarSurface = false,
   initialScroll = "smooth",
   resizeScroll = "smooth",
+  tailRequest,
   scheduledTaskEvents,
 }: {
   archiveDownloadsEnabled?: boolean;
@@ -372,6 +373,7 @@ export function MessageList({
   sidecarSurface?: boolean;
   initialScroll?: ConversationProps["initial"];
   resizeScroll?: ConversationProps["resize"];
+  tailRequest?: number;
   /** Lifecycle events of schedules created in this chat, one line each. */
   scheduledTaskEvents?: readonly ScheduledTaskEvent[];
 }) {
@@ -1215,18 +1217,31 @@ export function MessageList({
         ))}
       </div>
     ) : null;
+  // Empty welcome timelines can have zero capacity. Their decorative gutters
+  // must not create a native keyboard stop with no visible message content.
+  const hasTimelineContent =
+    groupedMessages.length > 0 ||
+    thread.isLoading ||
+    Boolean(hasMoreHistory) ||
+    Boolean(isHistoryLoading) ||
+    (placedTaskEvents?.tail.length ?? 0) > 0;
   return (
     <KnowledgeSourcesProvider messages={thread.messages}>
       <Conversation
         className={cn(
-          "flex size-full flex-col justify-center max-[361px]:justify-start",
+          "flex size-full flex-col justify-center wrap-anywhere max-[361px]:justify-start",
           className,
         )}
         data-testid={testId}
         initial={initialScroll}
         resize={resizeScroll}
       >
-        <ConversationContent className="mx-auto w-full max-w-(--container-width-md) gap-8 pt-8">
+        <ConversationContent
+          className={cn(
+            "mx-auto w-full max-w-(--container-width-md) gap-8",
+            hasTimelineContent ? "pt-8" : "py-0",
+          )}
+        >
           <LoadMoreHistoryIndicator
             isLoading={isHistoryLoading}
             hasMore={hasMoreHistory}
@@ -1234,6 +1249,7 @@ export function MessageList({
           />
           <VirtualMessageList
             ref={virtualMessageListRef}
+            tailRequest={tailRequest}
             groups={groupedMessages}
             isLoading={thread.isLoading}
             onActiveGroupChange={
@@ -1640,7 +1656,9 @@ export function MessageList({
               <RunActivity startTime={turnStartTime} />
             </div>
           )}
-          <div style={{ height: `${paddingBottom}px` }} />
+          {hasTimelineContent && (
+            <div style={{ height: `${paddingBottom}px` }} />
+          )}
         </ConversationContent>
       </Conversation>
       {conversationOutlineEnabled && (

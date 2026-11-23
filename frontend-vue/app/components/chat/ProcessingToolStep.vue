@@ -3,12 +3,16 @@
   【文件职责】     渲染 processing 视图模型中的单个 DeerFlow 工具步骤。
   【架构位置】     L3 UI adapter
   【主要导出】     默认 ProcessingToolStep 组件
-  【依赖关系】     core/messages/processing · artifacts · markdown CodeBlock
+  【依赖关系】     core/messages/processing · artifacts · AI-elements CodeBlock
   【边界与注意】   只消费已关联好的 result/browserView；不得回扫原始消息寻找工具结果。
 */
 import { computed } from "vue";
 import {
   BookOpenText,
+  CalendarClock,
+  CalendarX2,
+  File,
+  Files,
   FolderOpen,
   Globe,
   ListTodo,
@@ -20,7 +24,8 @@ import {
   Wrench,
 } from "lucide-vue-next";
 
-import CodeBlock from "@/components/markdown/CodeBlock.vue";
+import CodeBlock from "@/components/ui/code-block/CodeBlock.vue";
+import ToolCallDetails from "./ToolCallDetails.vue";
 import { Badge } from "@/components/ui/badge";
 import {
   buildWriteFileArtifactURL,
@@ -31,11 +36,16 @@ import type {
   ProcessingToolCallStep,
 } from "@/core/messages/processing";
 import { extractTitleFromMarkdown } from "@/core/utils/markdown";
+import { scheduleToolLabel } from "@/core/scheduled-tasks/tool-label";
+import { formatTokenCount } from "@/core/messages/usage";
+import type { TokenDebugStep } from "@/core/messages/usage-model";
 
 const props = defineProps<{
   step: ProcessingToolCallStep;
   threadId?: string | null;
   isMock?: boolean;
+  showDetails?: boolean;
+  tokenDebugStep?: TokenDebugStep;
 }>();
 const emit = defineEmits<{
   artifact: [path: string];
@@ -46,6 +56,27 @@ const { $i18n } = useNuxtApp();
 const name = computed(() => props.step.name);
 const args = computed(() => props.step.args);
 const result = computed(() => props.step.result);
+const specializedToolNames = new Set([
+  "web_search",
+  "image_search",
+  "web_fetch",
+  "ls",
+  "read_file",
+  "write_file",
+  "str_replace",
+  "begin_artifact_write",
+  "append_artifact_chunk",
+  "finalize_artifact_write",
+  "bash",
+  "ask_clarification",
+  "write_todos",
+]);
+const hasDebugDetails = computed(
+  () =>
+    props.showDetails &&
+    !name.value.startsWith("browser_") &&
+    !specializedToolNames.has(name.value),
+);
 
 function textArg(key: string): string | undefined {
   const value = args.value[key];
@@ -76,6 +107,8 @@ const icon = computed(() => {
   if (name.value === "bash") return SquareTerminal;
   if (name.value === "ask_clarification") return MessageCircleQuestionMark;
   if (name.value === "write_todos") return ListTodo;
+  if (name.value === "schedule_task") return CalendarClock;
+  if (name.value === "stop_scheduled_task") return CalendarX2;
   return Wrench;
 });
 
@@ -105,6 +138,13 @@ function browserLabel() {
 }
 
 const label = computed(() => {
+  const scheduleLabel = scheduleToolLabel(
+    name.value,
+    args.value,
+    result.value,
+    $i18n.t.value,
+  );
+  if (scheduleLabel !== null) return scheduleLabel;
   const description = textArg("description");
   if (name.value.startsWith("browser_")) return browserLabel();
   if (name.value === "web_search") {
@@ -234,35 +274,49 @@ const browserPreviewURL = computed(() => {
   -->
   <div
     class="text-muted-foreground fade-in-0 slide-in-from-top-2 flex gap-2 text-sm"
-    :class="artifactTarget ? 'cursor-pointer' : undefined"
+    :class="[
+      artifactTarget ? 'cursor-pointer' : undefined,
+      name === 'stop_scheduled_task'
+        ? 'text-sky-700 dark:text-sky-400'
+        : undefined,
+    ]"
     :data-tool-name="name"
+    :data-testid="
+      name === 'stop_scheduled_task' ? 'scheduled-stop-step' : undefined
+    "
     @click="artifactTarget && emit('artifact', artifactTarget)"
   >
     <div class="relative mt-0.5 shrink-0">
-      <component :is="icon" :size="16" />
+      <component :is="icon" class="size-4" />
       <div class="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
     </div>
     <div class="min-w-0 flex-1 space-y-2 overflow-hidden wrap-anywhere">
       <div
         class="max-w-full min-w-0 [overflow-wrap:anywhere] whitespace-normal"
       >
-        {{ label }}
+        <div
+          v-if="tokenDebugStep"
+          class="flex flex-wrap items-center justify-between gap-3"
+        >
+          <div class="min-w-0 flex-1 basis-48">{{ tokenDebugStep.label }}</div>
+          <div
+            class="text-muted-foreground max-w-full shrink-0 font-mono text-[11px] wrap-anywhere"
+          >
+            {{
+              tokenDebugStep.usage
+                ? `${formatTokenCount(tokenDebugStep.usage.totalTokens)} ${$i18n.t.value.tokenUsage.label}`
+                : $i18n.t.value.tokenUsage.unavailableShort
+            }}
+          </div>
+        </div>
+        <template v-else>{{ label }}</template>
       </div>
 
       <div
         v-if="name === 'web_search' && webSearchResults.length"
         class="flex flex-wrap items-center gap-2 overflow-x-hidden"
       >
-        <!--
-          **第四颗同族的芯片**（2026-09-12 第十一轮补的）。
-
-          第十轮修掉三颗时漏了它——不是判据不同，是**没有任何锚点落在这一颗上**，
-          `borderRadius` 那一档因此报不出来。全仓扫「变体色对出现在非 `ui/` 文件里」
-          才把它翻出来。**这就是「读数只覆盖取样点」那句话的一个具体样本。**
-
-          上游同一处是 `<ChainOfThoughtSearchResult><a …>{title}</a></ChainOfThoughtSearchResult>`
-          （`message-group.tsx:726`），层次与 `web_fetch` 那一支一样：Badge 里套链接。
-        -->
+        <!-- Search results keep the shared secondary Badge around each link. -->
         <Badge
           v-for="item in webSearchResults"
           :key="item.url"
@@ -298,26 +352,7 @@ const browserPreviewURL = computed(() => {
         </a>
       </div>
 
-      <!--
-        **这一族都走 `ui/badge`，不是手写的 span。**
-
-        上游这一族全部是 `ChainOfThoughtSearchResult`
-        （`ai-elements/chain-of-thought.tsx:183`），而它就是
-        `<Badge variant="secondary" className="gap-1 px-2 py-0.5 text-xs font-normal">`。
-        本仓原来手抄了它的**外观**（`bg-secondary text-secondary-foreground inline-flex
-        rounded-md px-2 py-0.5 text-xs font-normal`），抄丢的东西在 2026-09-12 第十轮
-        被新加的 `borderRadius` 档当场量出来：**上游是 `rounded-full`
-        （Tailwind v4 的 `calc(infinity*1px)`，computed 3.35544e+07px），
-        本仓是 `rounded-md`（8px）**——一个纯形状差异，位置、尺寸、颜色、字号、
-        字重、命中各档**一条都不响**，所以它在此之前没有任何机器看得见。
-
-        手抄那一版同时丢掉的还有：`border`、`w-fit`、`whitespace-nowrap`、`shrink-0`、
-        `gap-1`、`items-center justify-center`、`overflow-hidden`、
-        `focus-visible:*` 与 `aria-invalid:*` 那两组状态、`transition-[color,box-shadow]`。
-
-        `web_fetch` 这一支上游是**Badge 里套一个 `<a>`**（chain-of-thought 那颗
-        badge 本身不是控件，链接才是），不是把链接本身当 badge 用——照抄这一层。
-      -->
+      <!-- Shared Badge owns shape and interaction states; the nested link owns navigation. -->
       <Badge
         v-else-if="name === 'web_fetch' && webFetchTarget"
         variant="secondary"
@@ -353,7 +388,7 @@ const browserPreviewURL = computed(() => {
         v-else-if="name === 'bash' && textArg('command')"
         :code="textArg('command')!"
         language="bash"
-        class="mx-0 border-none px-0"
+        class="mx-0 cursor-pointer border-none px-0"
       />
 
       <button
@@ -378,6 +413,30 @@ const browserPreviewURL = computed(() => {
           {{ step.browserView.url }}
         </div>
       </button>
+      <div
+        v-if="icon === Wrench && step.artifacts?.length"
+        class="artifact-badges mt-1 flex flex-wrap gap-1"
+      >
+        <span
+          v-for="artifact in step.artifacts"
+          :key="artifact.handle"
+          :title="artifact.real_ref"
+          class="border-border bg-muted text-muted-foreground inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs"
+        >
+          <component
+            :is="artifact.artifact_type === 'file' ? File : Files"
+            class="size-3"
+          />
+          {{ artifact.display_name }}<code>{{ artifact.handle }}</code>
+        </span>
+      </div>
+      <ToolCallDetails
+        v-if="hasDebugDetails"
+        :name="name"
+        :call-id="step.id"
+        :args="args"
+        :result-message="step.resultMessage"
+      />
     </div>
   </div>
 </template>

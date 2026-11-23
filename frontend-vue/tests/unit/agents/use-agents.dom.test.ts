@@ -14,17 +14,20 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useAgents } from "@/composables/useAgents";
 import { agentKeys } from "@/core/agents/query-keys";
 import type { Agent } from "@/core/agents/types";
+import { resetWorkspaceQueries } from "@/core/auth/workspace-queries";
 
 const api = vi.hoisted(() => ({
   list: vi.fn(),
   update: vi.fn(),
   remove: vi.fn(),
+  importPackage: vi.fn(),
 }));
 
 vi.mock("@/core/agents/api", () => ({
   listAgents: api.list,
   updateAgent: api.update,
   deleteAgent: api.remove,
+  importAgentPackage: api.importPackage,
 }));
 
 const original: Agent = {
@@ -60,6 +63,61 @@ function harness(initialEnabled = false) {
 afterEach(() => vi.clearAllMocks());
 
 describe("useAgents", () => {
+  it("does not repopulate the next account cache with a late import", async () => {
+    api.list.mockResolvedValue([original]);
+    let release!: (value: Agent) => void;
+    api.importPackage.mockReturnValueOnce(
+      new Promise<Agent>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const { owner, queryClient, wrapper } = harness(true);
+    await flushPromises();
+    const pending = owner.importPackage.mutateAsync({ agentPackage: {} });
+    await flushPromises();
+    await resetWorkspaceQueries(queryClient);
+    queryClient.setQueryData(agentKeys.list(), [
+      { ...original, name: "next-account" },
+    ]);
+    release({ ...original, name: "old-account-import" });
+    await pending;
+    expect(
+      queryClient.getQueryData(agentKeys.detail("old-account-import")),
+    ).toBeUndefined();
+    expect(queryClient.getQueryData(agentKeys.list())).toEqual([
+      { ...original, name: "next-account" },
+    ]);
+    wrapper.unmount();
+  });
+  it("only invalidates the catalog after a successful create-only import and preserves existing rows on conflict", async () => {
+    api.list.mockResolvedValue([original]);
+    const { owner, queryClient, wrapper } = harness(true);
+    await flushPromises();
+    const conflict = Object.assign(new Error("Already exists"), {
+      status: 409,
+    });
+    api.importPackage.mockRejectedValueOnce(conflict);
+    await expect(
+      owner.importPackage.mutateAsync({ agentPackage: {}, name: "reviewer" }),
+    ).rejects.toBe(conflict);
+    expect(queryClient.getQueryData(agentKeys.list())).toEqual([original]);
+    expect(api.list).toHaveBeenCalledTimes(1);
+    const imported = { ...original, name: "new-reviewer" };
+    api.importPackage.mockResolvedValueOnce(imported);
+    api.list.mockResolvedValueOnce([original, imported]);
+    await owner.importPackage.mutateAsync({
+      agentPackage: { version: 1 },
+      name: imported.name,
+    });
+    expect(queryClient.getQueryData(agentKeys.detail(imported.name))).toEqual(
+      imported,
+    );
+    expect(queryClient.getQueryData(agentKeys.list())).toEqual([
+      original,
+      imported,
+    ]);
+    wrapper.unmount();
+  });
   it("does not request before the feature is ready and performs one list when enabled", async () => {
     api.list.mockResolvedValue([original]);
     const { enabled, wrapper } = harness();

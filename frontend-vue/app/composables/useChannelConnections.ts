@@ -16,6 +16,8 @@ import {
   type MaybeRefOrGetter,
 } from "vue";
 
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
+
 import {
   configureChannelProvider,
   connectChannelProvider,
@@ -74,6 +76,8 @@ export function useChannelConnections(options: {
   pollIntervalMs?: number;
 }) {
   const queryClient = useQueryClient();
+  let ownsWorkspace = captureWorkspaceQueryOwner(queryClient);
+  let disposed = false;
   const currentScope = computed(() => toValue(options.scopeKey));
   const queryEnabled = computed(() =>
     Boolean(toValue(options.enabled) && currentScope.value),
@@ -100,9 +104,8 @@ export function useChannelConnections(options: {
 
     侧栏一行一个 provider、一个按钮，React 的 WorkspaceChannelsList 从头到尾只读
     provider.connection_status，**不发**这个请求；设置页要列出每个账号，才需要行本身。
-    此前本仓两边都拉，理由写在 core/channels/state.ts 里的「provider 状态可能是陈的」，
-    而那条理由是错的——见那个文件现在的头注释。于是每打开一个 workspace 页面，都为
-    一份侧栏根本不看的数据多打一次后端。
+    两个接口独立取样，不能假定快照同步。侧栏只消费 provider 汇总，因此不为
+    无消费者的账号列表额外请求；设置页消费账号行，使用同 scope 的 connections key。
 
     再叠一层：一个启用的 provider 都没有时，connections 没有任何东西可以解释，
     这次请求纯属浪费。
@@ -147,7 +150,10 @@ export function useChannelConnections(options: {
 
   function isCurrent(scope: string, capturedGeneration: number) {
     return (
-      scope === currentScope.value && capturedGeneration === generation.value
+      !disposed &&
+      ownsWorkspace() &&
+      scope === currentScope.value &&
+      capturedGeneration === generation.value
     );
   }
 
@@ -156,6 +162,7 @@ export function useChannelConnections(options: {
     capturedGeneration: number,
     signal: AbortSignal,
   ) {
+    if (signal.aborted || !isCurrent(scope, capturedGeneration)) return;
     const [providerData, connectionData] = await Promise.all([
       listChannelProviders({ signal }),
       listChannelConnections({ signal }),
@@ -163,6 +170,14 @@ export function useChannelConnections(options: {
     if (signal.aborted || !isCurrent(scope, capturedGeneration)) return;
     queryClient.setQueryData(channelKeys.providers(scope), providerData);
     queryClient.setQueryData(channelKeys.connections(scope), connectionData);
+  }
+
+  function refreshInBackground(scope: string, capturedGeneration: number) {
+    if (!isCurrent(scope, capturedGeneration)) return;
+    const controller = trackController();
+    void refreshScope(scope, capturedGeneration, controller.signal)
+      .catch(() => undefined)
+      .finally(() => releaseController(controller));
   }
 
   function setFlow(flow: ChannelConnectFlow) {
@@ -185,10 +200,7 @@ export function useChannelConnections(options: {
   }
 
   function hasProviderPending(provider: ChannelProviderId) {
-    return (
-      providerPending.value.has(provider) ||
-      connectFlows.value[provider]?.status === "waiting"
-    );
+    return providerPending.value.has(provider);
   }
 
   const connectMutation = useMutation({
@@ -220,7 +232,10 @@ export function useChannelConnections(options: {
       ignoreConnectedIds,
       expiresInSeconds: response.expires_in,
       intervalMs: options.pollIntervalMs ?? CONNECT_POLL_INTERVAL_MS,
-      fetchConnections: (signal) => listChannelConnections({ signal }),
+      fetchConnections: (signal) =>
+        isCurrent(scope, capturedGeneration)
+          ? listChannelConnections({ signal })
+          : Promise.reject(new DOMException("Stale account", "AbortError")),
       onObserved: (rows) => {
         if (isCurrent(scope, capturedGeneration)) {
           queryClient.setQueryData(channelKeys.connections(scope), rows);
@@ -231,9 +246,9 @@ export function useChannelConnections(options: {
         setFlow({ provider: response.provider, status: "connected", response });
         pollers.delete(response.provider);
         const controller = trackController();
-        void refreshScope(scope, capturedGeneration, controller.signal).finally(
-          () => releaseController(controller),
-        );
+        void refreshScope(scope, capturedGeneration, controller.signal)
+          .catch(() => undefined)
+          .finally(() => releaseController(controller));
       },
       onExpired: () => {
         if (!isCurrent(scope, capturedGeneration)) return;
@@ -249,10 +264,6 @@ export function useChannelConnections(options: {
   ): Promise<ChannelConnectResponse> {
     const existing = connectPromises.get(provider);
     if (existing) return existing;
-    const waiting = connectFlows.value[provider];
-    if (waiting?.status === "waiting") {
-      return Promise.resolve(waiting.response);
-    }
     const scope = currentScope.value;
     const capturedGeneration = generation.value;
     const ignoreConnectedIds = new Set(
@@ -276,7 +287,7 @@ export function useChannelConnections(options: {
           return response;
         }
         setFlow({ provider, status: "waiting", response });
-        await refreshScope(scope, capturedGeneration, controller.signal);
+        refreshInBackground(scope, capturedGeneration);
         if (
           isCurrent(scope, capturedGeneration) &&
           !controller.signal.aborted
@@ -287,8 +298,10 @@ export function useChannelConnections(options: {
       })
       .finally(() => {
         releaseController(controller);
-        replaceSetValue(providerPending, provider, false);
-        connectPromises.delete(provider);
+        if (isCurrent(scope, capturedGeneration))
+          replaceSetValue(providerPending, provider, false);
+        if (connectPromises.get(provider) === promise)
+          connectPromises.delete(provider);
       });
     connectPromises.set(provider, promise);
     return promise;
@@ -311,11 +324,12 @@ export function useChannelConnections(options: {
         values,
         signal: controller.signal,
       });
-      await refreshScope(scope, capturedGeneration, controller.signal);
+      refreshInBackground(scope, capturedGeneration);
       return next;
     } finally {
       releaseController(controller);
-      replaceSetValue(providerPending, provider, false);
+      if (isCurrent(scope, capturedGeneration))
+        replaceSetValue(providerPending, provider, false);
     }
   }
 
@@ -330,10 +344,11 @@ export function useChannelConnections(options: {
         connectionId,
         signal: controller.signal,
       });
-      await refreshScope(scope, capturedGeneration, controller.signal);
+      refreshInBackground(scope, capturedGeneration);
     } finally {
       releaseController(controller);
-      replaceSetValue(connectionPending, connectionId, false);
+      if (isCurrent(scope, capturedGeneration))
+        replaceSetValue(connectionPending, connectionId, false);
     }
   }
 
@@ -349,11 +364,12 @@ export function useChannelConnections(options: {
         provider,
         signal: controller.signal,
       });
-      await refreshScope(scope, capturedGeneration, controller.signal);
+      refreshInBackground(scope, capturedGeneration);
       return next;
     } finally {
       releaseController(controller);
-      replaceSetValue(providerPending, provider, false);
+      if (isCurrent(scope, capturedGeneration))
+        replaceSetValue(providerPending, provider, false);
     }
   }
 
@@ -369,8 +385,18 @@ export function useChannelConnections(options: {
     connectFlows.value = {};
   }
 
-  watch(currentScope, abortOwnedWork, { flush: "sync" });
-  onScopeDispose(abortOwnedWork);
+  watch(
+    currentScope,
+    () => {
+      abortOwnedWork();
+      ownsWorkspace = captureWorkspaceQueryOwner(queryClient);
+    },
+    { flush: "sync" },
+  );
+  onScopeDispose(() => {
+    disposed = true;
+    abortOwnedWork();
+  });
 
   return {
     enabled: computed(() => providersQuery.data.value?.enabled ?? false),

@@ -17,7 +17,7 @@
                    兄弟应用缺席时整组跳过，与本套件其余 spec 一致。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { waitForFiniteAnimations } from "./support/settle";
 import { reactAppPresent } from "./support/react-preview";

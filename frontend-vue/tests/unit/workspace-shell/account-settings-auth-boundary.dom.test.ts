@@ -7,6 +7,7 @@ import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { nuxtI18nMocks, nuxtI18nStub } from "../../support/nuxt-i18n";
 import { buildComposerDraftKey } from "@/core/threads/composer-draft";
 import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
+import { AUTH_SESSION_QUERY_KEY } from "@/core/auth/session-query";
 
 vi.mock("@/core/api/fetcher", () => ({ fetch: vi.fn() }));
 
@@ -34,7 +35,7 @@ describe("AccountSettings authenticated client boundary", () => {
     });
     /* 随便两个上一位用户的查询；这一条钉的是 `clear()` 一个都不留。 */
     queryClient.setQueryData([...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"], {
-      pages: [[{ thread_id: "admin-thread" }]],
+      pages: [{ threads: [{ thread_id: "admin-thread" }], nextOffset: null }],
       pageParams: [0],
     });
     queryClient.setQueryData(["memory", "facts"], ["admin-memory"]);
@@ -47,18 +48,20 @@ describe("AccountSettings authenticated client boundary", () => {
     );
     sessionStorage.setItem("unrelated", "keep");
 
-    vi.mocked(fetchWithAuth)
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            id: "admin-user",
-            email: "admin@example.com",
-            system_role: "admin",
-          }),
-          { status: 200 },
-        ),
-      )
-      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const user = {
+      id: "admin-user",
+      email: "admin@example.com",
+      system_role: "admin",
+    };
+    queryClient.setQueryData(AUTH_SESSION_QUERY_KEY, {
+      tag: "authenticated",
+      user,
+    });
+    const sessionFetch = vi.fn(async () => Response.json(user));
+    vi.stubGlobal("fetch", sessionFetch);
+    vi.mocked(fetchWithAuth).mockResolvedValueOnce(
+      new Response(null, { status: 200 }),
+    );
 
     const wrapper = mount(AccountSettings, {
       global: {
@@ -67,6 +70,8 @@ describe("AccountSettings authenticated client boundary", () => {
       },
     });
     await flushPromises();
+    expect(wrapper.text()).toContain("admin@example.com");
+    expect(fetchWithAuth).not.toHaveBeenCalled();
     // 退出按钮已经换成 shadcn 的 Button（destructive 档），不再是手搓的 bg-red-600。
     await wrapper
       .get('[data-slot="button"][data-variant="destructive"]')
@@ -83,7 +88,7 @@ describe("AccountSettings authenticated client boundary", () => {
       ),
     ).toBeNull();
     expect(sessionStorage.getItem("unrelated")).toBe("keep");
-    expect(navigateTo).toHaveBeenCalledWith("/login");
+    expect(navigateTo).toHaveBeenCalledWith("/");
 
     wrapper.unmount();
   });

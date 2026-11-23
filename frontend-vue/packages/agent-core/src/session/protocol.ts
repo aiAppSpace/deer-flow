@@ -36,7 +36,7 @@ export interface OpenedStream<THandle> {
  * `outcome` 是本文件相对 08 的一处**有意加宽**，理由见 `InspectedRun`。
  */
 export type CancelResult =
-  | { kind: "drain"; response: Response }
+  | { kind: "drain"; response: Response; outcome?: RunOutcome; reason?: string }
   | { kind: "accepted" }
   | { kind: "terminal"; outcome?: RunOutcome; reason?: string };
 

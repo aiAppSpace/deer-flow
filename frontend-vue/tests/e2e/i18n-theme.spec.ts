@@ -130,7 +130,7 @@ test("locale switch updates an open dialog, product surfaces, future errors and 
   await page.getByTestId("thread-share").click();
   await expect(
     page
-      .getByRole("alert")
+      .getByTestId("workspace-toaster")
       .filter({ hasText: zhCN.clipboard.failedToCopyToClipboard }),
   ).toBeVisible();
 

@@ -127,7 +127,15 @@ test.describe.serial("real Gateway Agent lifecycle", () => {
     expect(await check.json()).toEqual({ available: true, name: AGENT_NAME });
 
     const runBodies: Array<Record<string, unknown>> = [];
+    const suggestionRequests: string[] = [];
     page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (
+        path === "/api/suggestions/config" ||
+        /^\/api\/threads\/[^/]+\/suggestions$/.test(path)
+      ) {
+        suggestionRequests.push(`${request.method()} ${path}`);
+      }
       if (
         request.method() === "POST" &&
         /\/api\/langgraph\/threads\/[^/]+\/runs\/stream$/.test(
@@ -191,6 +199,8 @@ test.describe.serial("real Gateway Agent lifecycle", () => {
       ),
     );
     expect(runBodies).toHaveLength(2);
+    // React's creation page has no follow-up UI or suggestion request owner.
+    expect(suggestionRequests).toEqual([]);
     expect(hiddenRuns).toHaveLength(1);
     await expect(
       page.getByText(/Please save this custom agent now based on everything/),
@@ -234,17 +244,23 @@ test.describe.serial("real Gateway Agent lifecycle", () => {
     const missing = await context.request.get(`${APP}/api/agents/not-found`);
     expect(missing.status()).toBe(404);
 
-    await page.getByRole("link", { name: "Back to Gallery" }).click();
+    await page
+      .getByTestId("agent-created")
+      .getByRole("button", { name: "Back to Gallery", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/workspace\/agents$/);
     const card = page.getByTestId(`agent-card-${AGENT_NAME}`);
-    await expect(card.getByTestId("agent-tool-groups-all")).toHaveText(
-      "All configured tool groups",
-    );
+    await expect(card).toBeVisible();
+    // React maps only explicit groups to badges. The API null contract remains
+    // asserted above; unrestricted groups do not create a synthetic UI badge.
+    await expect(card.getByTestId("agent-tool-group")).toHaveCount(0);
+    await expect(card.getByText("All configured tool groups")).toHaveCount(0);
     await expect(card.getByTestId("agent-skill")).toHaveText([
       "review",
       "review",
     ]);
     await card
-      .getByRole("button", { name: `Model settings: ${AGENT_NAME}` })
+      .getByRole("button", { name: `Agent settings: ${AGENT_NAME}` })
       .click();
     // 三个下拉从原生 <select> 换成了 ui/select：触发器是 combobox，选项 portal 到
     // body。按 data-value 选，而不是按可见文案——文案是会被翻译的。
@@ -263,6 +279,7 @@ test.describe.serial("real Gateway Agent lifecycle", () => {
     expect(updatedHttp.status(), await updatedHttp.text()).toBe(200);
     expect(updatedHttp.request().postDataJSON()).toEqual({
       model: "reasoning-model",
+      display_name: null,
       model_settings: { temperature: 0, max_tokens: 200000 },
       thinking_enabled: false,
       reasoning_effort: "high",

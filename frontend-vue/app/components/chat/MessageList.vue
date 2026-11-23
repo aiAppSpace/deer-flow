@@ -4,7 +4,7 @@
   【架构位置】     L3 UI adapter
   【主要导出】     默认 MessageList 组件
   【依赖关系】     core/messages · markdown L2 · artifacts/changes/sidecar 扩展消费者
-  【边界与注意】   B 组行为稳定，但直接依赖宿主 Message 与业务卡片，不能伪装成独立 L2 包。
+  【边界与注意】   依赖宿主 Message 与业务卡片；动作/选区归属 composable，虚拟化归属 VirtualMessageList。
 */
 import {
   computed,
@@ -12,30 +12,42 @@ import {
   h,
   markRaw,
   nextTick,
-  onMounted,
   onUnmounted,
   provide,
   ref,
   watch,
-  type ComponentPublicInstance,
 } from "vue";
 import {
-  CheckCircle2,
+  Check,
   ChevronUp,
-  Clock3,
+  Loader,
   Loader2,
   MessageCircle,
   MessageSquarePlus,
-  Wrench,
+  X,
 } from "lucide-vue-next";
 
+import ScheduledRunPrompt from "@/components/workspace/messages/ScheduledRunPrompt.vue";
+import ScheduledTaskCard from "@/components/workspace/messages/ScheduledTaskCard.vue";
+import ScheduledTaskEventLine from "@/components/workspace/messages/ScheduledTaskEventLine.vue";
+import {
+  placeTaskEvents,
+  type ScheduledTaskEvent,
+} from "@/core/scheduled-tasks/events";
+import SkillUsageMenu from "@/components/workspace/skill-usage/SkillUsageMenu.vue";
+import { getSkillUsageByGroupIndex } from "@/core/skills/usage";
 import AssistantTurnActions from "@/components/chat/AssistantTurnActions.vue";
 import HumanTurnActions from "@/components/chat/HumanTurnActions.vue";
 import HumanInputCard from "@/components/chat/HumanInputCard.vue";
 import CitationSourcesPanel from "@/components/chat/CitationSourcesPanel.vue";
+import KnowledgeScopeSummary from "@/components/chat/KnowledgeScopeSummary.vue";
+import KnowledgeSourcesPanel from "@/components/chat/KnowledgeSourcesPanel.vue";
+import { provideKnowledgeSources } from "./knowledge-sources-context";
 import MessageAttachments from "@/components/chat/MessageAttachments.vue";
 import HumanMessageText from "@/components/chat/HumanMessageText.vue";
+import ConversationReferenceChip from "@/components/chat/ConversationReferenceChip.vue";
 import MessageListSkeleton from "@/components/chat/MessageListSkeleton.vue";
+import VirtualMessageList from "@/components/chat/VirtualMessageList.vue";
 import ConversationOutline from "@/components/chat/ConversationOutline.vue";
 import MessageMarkdown from "@/components/chat/MessageMarkdown.vue";
 import MessageTokenUsage from "@/components/chat/MessageTokenUsage.vue";
@@ -43,30 +55,40 @@ import MarkdownLink from "@/components/chat/MarkdownLink.vue";
 import ProcessingMessageGroup from "@/components/chat/ProcessingMessageGroup.vue";
 import ReasoningDisclosure from "@/components/chat/ReasoningDisclosure.vue";
 import RunActivity from "@/components/chat/RunActivity.vue";
+import RunDurationLabel from "@/components/chat/RunDurationLabel.vue";
 import SubtaskCard from "@/components/chat/SubtaskCard.vue";
+import { resolveSubtaskDescription } from "@/core/tasks/presentation";
 import { MARKDOWN_LINK_CONTEXT } from "@/components/chat/markdown-link-context";
 import ArtifactFileCards from "@/components/workspace/artifacts/ArtifactFileCards.vue";
 import WorkspaceChangesBadge from "@/components/workspace/changes/WorkspaceChangesBadge.vue";
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
 import { Button } from "@/components/ui/button";
-import { richContentComponents } from "@/components/markdown/components";
+import { Textarea } from "@/components/ui/textarea";
+import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { isSyntheticValuesMessageId } from "@/core/agent-deerflow/reducer";
 import { resolveMessageImageURL } from "@/core/artifacts/utils";
 import { extractCitationSources } from "@/core/citations/sources";
 import {
   deriveHumanInputThreadState,
   extractHumanInputRequest,
-  shouldClearPendingHumanInputOnThreadError,
   type HumanInputRequest,
   type HumanInputResponse,
 } from "@/core/messages/human-input";
+import { getWorkspaceChangeAnchorGroupIndices } from "@/core/messages/workspace-change-anchor";
 import { getArtifactArchiveCandidatesByGroupIndex } from "@/core/messages/artifact-archive";
 import {
   buildConversationChapters,
   CONVERSATION_OUTLINE_MIN_TURNS,
 } from "@/core/messages/conversation-outline";
-import { deriveAssistantTurnUsageState } from "@/core/messages/derived-state";
-import type { BrowserViewMeta } from "@/core/messages/processing";
+import { getAssistantTurnUsageMessages } from "@/core/messages/derived-state";
+import {
+  buildTokenDebugSteps,
+  type TokenDebugStep,
+} from "@/core/messages/usage-model";
+import {
+  deriveProcessingMessageView,
+  type BrowserViewMeta,
+} from "@/core/messages/processing";
 import {
   extractContentFromMessage,
   extractPresentFilesFromMessage,
@@ -77,11 +99,12 @@ import {
   getMessageCopyData,
   getMessageGroups,
   isHiddenFromUIMessage,
+  isAssistantMessageGroupStreaming,
   stripUploadedFilesTag,
   type MessageGroup,
 } from "@/core/messages/utils";
 import {
-  formatRunDuration,
+  getMessageRunId,
   getRunDurationDisplaysByGroupIndex,
 } from "@/core/messages/run-duration";
 import {
@@ -90,16 +113,21 @@ import {
   type SubtaskResultUpdate,
 } from "@/core/tasks/subtask-result";
 import type { Subtask } from "@/core/tasks/types";
+import type { ArtifactEntry } from "@/core/threads/types";
 import type { Message } from "@/core/types/message";
 import { readReferenceMessageContexts } from "@/core/sidecar";
-import { writeTextToClipboard } from "@/core/clipboard";
+import { readConversationReferences } from "@/core/conversation-references";
+import { pathOfThread } from "@/core/threads/utils";
+import { useMessageTurnActions } from "@/composables/useMessageTurnActions";
+import { useMessageHumanInput } from "@/composables/useMessageHumanInput";
+import {
+  useMessageSelection,
+  type SelectionPayload,
+} from "@/composables/useMessageSelection";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 
 /*
-  **多根模板必须自己接 attrs**（wave 124）：下面把划词工具条挪出了 `role="log"`
-  那个根，于是这个组件有两个根节点，Vue 不再自动把 `class` 挂上去
-  （`AgentChat.vue` 传的是 `:class="… pt-10"`）。用 `v-bind="$attrs"` 显式挂回
-  日志区那个根——工具条是 `position: fixed`，不该接任何布局 class。
+  多根模板显式把 attrs 交给日志根；fixed 选区工具条不继承日志布局 class。
 */
 defineOptions({ inheritAttrs: false });
 
@@ -114,71 +142,43 @@ const props = withDefaults(
     testId?: string;
     active?: boolean;
     tailRequest?: number;
+    /** Fixed tail height after the shared gap-8 and pb-4 spacing. */
+    paddingBottom?: number;
+    initialScroll?: "smooth" | "instant";
     resizeScroll?: "smooth" | "instant";
+    /** Stable submission owner survives exact prepared-thread URL adoption. */
+    scrollOwnerKey?: string;
     interactive?: boolean;
-    /*
-      有活跃目标时，人类消息上的「编辑并重跑」入口要收起来——重跑会把目标的
-      续跑循环打断，上游因此把 `!hasGoal` 直接写进 `canEdit`
-      （`chats/chat-page.tsx:481`，与 `!hasOpenHumanInputCard` 并列）。
-      本仓此前没有这一条，于是喂了目标之后本仓多出一颗上游没有的键——
-      第二十六轮给 `thread-todos` 补 goal 夹具时当场量出来的
-      （`ariaOnlyVue: button "Edit and rerun"`，两个语言维各一条）。
-    */
+    /* An active goal or open human-input card prevents editing and rerunning a human turn. */
     hasGoal?: boolean;
     /*
-      **上游那三串判据里，本仓此前一条都没有。**
-
-      上游把可用性算在页面那一层，逐字是（`chats/chat-page.tsx:466-497`）：
-
-      - `canRegenerate` = `!isNewThread && !isMock && !STATIC && !isUploading && !thread.isLoading`
-      - `canEdit`       = 以上 + `!branchThread.isPending && !hasGoal && !hasOpenHumanInputCard`
-      - `canBranch`     = `canRegenerate` + `!branchThread.isPending`
-
-      本仓对应的只有一个 `interactive`，而调用点是 `:interactive="!isDemo"`
-      （`AgentChat.vue`）——也就是说三串里只兑现了 `!isMock` 那一条。
-      `!thread.isLoading` 这一条本仓是靠结构兑现的（`latestAssistantGroupId` 与
-      `branchable` 在 streaming 时就空了，上游 `message-list.tsx:707/717` 同样如此），
-      剩下两条是真缺口，所以这里补两个 prop 而不是一个「忙」：
-
-      - `uploading` 进三颗键（上游三串都有 `!isUploading`）；
-      - `branchPending` **只进分支与编辑**——上游 `canRegenerate` 里没有它。
-        这个区别不是抠字眼：分支请求在飞的时候重跑仍然是合法操作。
-
-      `STATIC_WEBSITE_ONLY` 那一条不补：静态整站模式本来就在对齐范围之外。
-    */
+  与 React chats/chat-page.tsx 的可用性合同一致：uploading 禁止三类操作；
+      branchPending 仅禁止分支与编辑，重跑仍可用。线程加载由各动作目标的派生状态限制。
+*/
     uploading?: boolean;
     branchPending?: boolean;
-    /*
-      **agent 会话上没有分支入口。**
-
-      上游是**不传** `onBranchTurn` 来关掉它的：agent 会话页
-      （`[agent_name]/chats/[thread_id]/page.tsx:356/364`）只传 `canRegenerate`
-      与 `canEdit`，而 `message-list.tsx:890` 的渲染条件里有 `onBranchTurn &&`，
-      于是那颗键在 agent 会话上根本不画。本仓一个组件服务两条路由，
-      所以这里补一个显式的 prop 而不是靠「没接 handler」。
-
-      **判词是查后端定的，不是照抄上游**：分支接口
-      （`backend/app/gateway/routers/threads.py:1052-1058`）建新线程时写的是
-      `metadata=branch_metadata`——它继承 project、继承标题序号，
-      **唯独不继承 `agent_name`**（agent 归属就存在线程行的这个元数据里，
-      见 `core/threads/utils.ts:47`）。也就是说在 agent 会话上分支出来的线程，
-      服务端并不认为它属于这个 agent；本仓此前画着这颗键，点下去就会造出
-      一条归属不一致的线程。
-
-      **这不是「上游缺了本仓有」，是本仓提供了一个后端还没配套的操作。**
-      要翻案得先修后端（让分支继承 agent 归属），那笔账记在挂账清单第二十九轮条目。
-    */
+    /* Agent chats hide branching; the shared list uses an explicit presentation prop. */
     canBranch?: boolean;
     artifactPaths?: readonly string[];
+    toolArtifacts?: readonly ArtifactEntry[];
     isMock?: boolean;
     /** `.skill` 的 Install 只对管理员出现；判据在 ArtifactFileCards 的文件头。 */
     isAdmin?: boolean;
     subtasks?: Record<string, Subtask>;
     activeRunId?: string | null;
+    streamingMessageIds?: ReadonlySet<string>;
     hasMoreHistory?: boolean;
+    scheduledEvents?: readonly ScheduledTaskEvent[];
     historyLoadingMore?: boolean;
     historyError?: unknown;
     threadError?: unknown;
+    /** Session/agent identity supplements the thread id when retiring an editor. */
+    editOwnerKey?: string;
+    editAndRegenerateMessage?: (
+      messageId: string,
+      replacementText: string,
+      messageIds: string[],
+    ) => boolean | undefined | Promise<boolean | undefined>;
     submitHumanInput?: (
       request: HumanInputRequest,
       response: HumanInputResponse,
@@ -188,17 +188,35 @@ const props = withDefaults(
     enableConversationOutline?: boolean;
   }>(),
   {
+    rawMessages: undefined,
+    threadId: undefined,
+    selectionMode: undefined,
+    testId: undefined,
+    tailRequest: undefined,
+    paddingBottom: 24,
+    artifactPaths: undefined,
+    toolArtifacts: undefined,
+    subtasks: undefined,
+    activeRunId: undefined,
+    streamingMessageIds: undefined,
+    scheduledEvents: undefined,
+    historyError: undefined,
+    threadError: undefined,
+    editOwnerKey: undefined,
+    editAndRegenerateMessage: undefined,
+    submitHumanInput: undefined,
+    tokenUsageInlineMode: undefined,
     active: true,
+    initialScroll: "smooth",
     resizeScroll: "smooth",
+    scrollOwnerKey: undefined,
     /*
-      **必须显式给默认值。** Vue 的布尔 prop 不传时是 `false` 不是 `undefined`
-      （wave 15 那条坑，仓里已经栽过一次），而这颗键的常态是「有」——
-      不给默认值的话，所有没传 `can-branch` 的调用点（sidecar、showcase…）
-      会一起把分支入口弄丢，而单测里 `mountList({})` 也会跟着变。
-    */
+  Vue Boolean prop 缺省为 false；显式 true 保留普通会话、sidecar 与 showcase 的分支入口。
+*/
     canBranch: true,
   },
 );
+provideKnowledgeSources(() => props.rawMessages ?? props.messages);
 const emit = defineEmits<{
   branch: [messageId: string, messageIds: string[]];
   regenerate: [messageId: string, messageIds: string[]];
@@ -212,37 +230,28 @@ const emit = defineEmits<{
 }>();
 const { $i18n } = useNuxtApp();
 /*
-  两处播报走 workspace toaster，与上游同一条（`message-list.tsx:590` 的
-  `toast.error` 与 `:693` 的 `toast.info`）。此前两处都是**静默**：提交失败只把
-  pending 清掉、卡片自己重新可用，用户看不到任何解释。
-
-  owner 由 workspace / showcase 两个 layout provide，所以 inject 一定拿得到；
-  单测里要一起 provide（同一棵树里的 ArtifactFileCards 早就是这么用的）。
+  提交失败与跨消息选区的通知交给 workspace/showcase layout 提供的 toast owner。
 */
 const toast = useWorkspaceToast();
-type SelectionPayload = {
-  message: Message;
-  selectedText: string;
-  displayIndex: number;
-};
-/*
-  划词工具条的状态：引用内容 + 它锚在屏幕上的哪里。
-
-  上游 message-list.tsx 的 SelectionToolbarState 是同一个形状（context + x/y/
-  placement）。位置必须进状态而不是留在 CSS 里：工具条锚的是**选区**，
-  而选区的位置只有 mouseup 那一刻的 Range 知道。
-*/
-type SelectionToolbarState = SelectionPayload & {
-  /** 选区中线的视口 x；渲染后用工具条实测宽度居中并夹在视口内。 */
-  x: number;
-  /** 选区上沿（placement top）或下沿（placement bottom）加上边距后的视口 y。 */
-  y: number;
-  placement: "top" | "bottom";
-};
-const pendingHumanInputs = ref(new Set<string>());
-const copiedMessage = ref<string | null>(null);
-const actionError = ref("");
-let previousHumanInputThreadError: unknown = props.threadError;
+const {
+  editState,
+  editSubmitDisabled,
+  setEditTextarea,
+  beginEdit,
+  cancelEdit,
+  updateAndRerun,
+  onEditKeydown,
+  copiedMessage,
+  actionError,
+  copyMessage,
+} = useMessageTurnActions({
+  owner: () => [props.threadId, props.editOwnerKey],
+  submit: () => props.editAndRegenerateMessage,
+  groupIds,
+  onBeginEdit: (message, ids) => emit("edit", message.id!, text(message), ids),
+  notifyError: (message) => toast.error(message),
+  copyFailed: () => $i18n.t.value.messages.copyFailed,
+});
 provide(MARKDOWN_LINK_CONTEXT, {
   threadId: computed(() => props.threadId),
   isMock: computed(() => props.isMock),
@@ -292,7 +301,6 @@ const MarkdownMessageImage = defineComponent({
   },
 });
 const messageMarkdownComponents = markRaw({
-  ...richContentComponents,
   a: MarkdownLink,
   img: MarkdownMessageImage,
 });
@@ -302,9 +310,75 @@ const groups = computed(() =>
     isCurrentTurnLoading: props.streaming,
   }),
 );
-const turnUsageMessagesByGroupIndex = computed(
-  () => deriveAssistantTurnUsageState(groups.value).byGroupIndex,
+const EMPTY_STREAMING_MESSAGE_IDS: ReadonlySet<string> = new Set();
+const streamingAssistantGroups = computed(() =>
+  groups.value.map(
+    (group) =>
+      props.streaming &&
+      isAssistantMessageGroupStreaming(
+        group.messages,
+        props.streamingMessageIds ?? EMPTY_STREAMING_MESSAGE_IDS,
+      ),
+  ),
 );
+const assistantCopyData = computed(() =>
+  groups.value.map((group, index) =>
+    group.type === "assistant"
+      ? getAssistantTurnCopyData(group.messages, {
+          isStreaming: streamingAssistantGroups.value[index],
+        })
+      : null,
+  ),
+);
+const placedTaskEvents = computed(() =>
+  placeTaskEvents(groups.value, props.scheduledEvents ?? [], {
+    hasMoreHistory: props.hasMoreHistory,
+  }),
+);
+// A welcome layout can give an empty timeline zero height. Decorative gutters
+// must not turn it into a native, keyboard-focusable empty scroll container.
+const hasTimelineContent = computed(
+  () =>
+    groups.value.length > 0 ||
+    props.loading ||
+    props.streaming ||
+    props.hasMoreHistory ||
+    props.historyLoadingMore ||
+    placedTaskEvents.value.tail.length > 0,
+);
+const skillUsageByGroupIndex = computed(() =>
+  getSkillUsageByGroupIndex(groups.value),
+);
+const turnUsageMessagesByGroupIndex = computed(() =>
+  getAssistantTurnUsageMessages(groups.value),
+);
+// Attribution is message-owned. Compute once over the full wire order, then
+// project each group; per-turn accumulation remains a separate contract.
+const tokenDebugSteps = computed(() =>
+  props.tokenUsageInlineMode === "step_debug"
+    ? buildTokenDebugSteps(props.messages, $i18n.t.value)
+    : [],
+);
+function tokenDebugStepsForMessages(
+  messages: readonly Message[],
+): TokenDebugStep[] {
+  const ids = new Set(
+    messages
+      .filter(
+        (message) => message.type === "ai" && typeof message.id === "string",
+      )
+      .map((message) => message.id),
+  );
+  return tokenDebugSteps.value.filter((step) => ids.has(step.messageId));
+}
+function inlineTokenDebugSteps(group: MessageGroup): TokenDebugStep[] {
+  if (group.type === "assistant:processing") return [];
+  return tokenDebugStepsForMessages(
+    group.type === "assistant:subagent"
+      ? group.messages.filter((message) => !reasoning(message))
+      : group.messages,
+  );
+}
 /*
   归档下载键挂在**这次运行最后一组** present-files 上，判据在
   core/messages/artifact-archive.ts。不是「组里最后一条消息的 run_id」
@@ -350,18 +424,18 @@ const activeChapterId = computed(() => {
   `querySelector` 什么都找不到，点了没反应。
 */
 async function scrollToGroup(groupIndex: number) {
-  const total = groups.value.length;
-  if (total > 80) {
-    const maxStart = Math.max(0, total - VIRTUAL_WINDOW_SIZE);
-    // 目标放在窗口靠前的位置，它下面那几组也一起渲染出来。
-    windowStart.value = Math.min(Math.max(0, groupIndex - 2), maxStart);
-    followingTail.value = false;
-    await nextTick();
-  }
-  const target = scroller.value?.querySelector<HTMLElement>(
-    `[data-index="${groupIndex}"]`,
-  );
-  target?.scrollIntoView({ block: "start", behavior: "auto" });
+  stopFollowingTail();
+  await virtualList.value?.scrollToGroup(groupIndex);
+}
+function activeGroupChanged(groupIndex: number) {
+  const chapter = [...chapters.value]
+    .reverse()
+    .find((chapter) => chapter.groupIndex <= groupIndex);
+  if (chapter)
+    activeChapter.value = {
+      threadId: props.threadId ?? null,
+      chapterId: chapter.id,
+    };
 }
 
 async function selectChapter(chapterId: string) {
@@ -376,19 +450,8 @@ const branchable = computed(() =>
   getBranchableAssistantGroupIds(groups.value, props.streaming),
 );
 /*
-  **编辑并重新运行要的是服务端 id，不是存储键。**
-
-  `values` 快照里没有 id 的消息由 reducer 编一个位置键（`values-<index>`），
-  而那个键在 `AgentMessage.id` 上与真 id 长得一模一样。2026-09-12 实测：
-  用户刚发出的那条 human 消息在 mock 回显的 `values` 里就没有 id
-  （两个应用发出去的 POST 体逐字相同，都不带 id），于是本仓给它编了 `values-0`，
-  `getLatestEditableTurn` 认为这一轮可编辑，画出了「编辑并重新运行」——
-  **点下去会把 `values-0` 交给 `POST /runs/edit-regenerate/prepare`，服务端解析不了。**
-
-  判据放在调用点而不是 `getLatestEditableTurn` 里：那支工具与上游逐字同源，
-  而**上游没有这个分支**（它的 `stream_mode` 里没有 `values`，实测
-  上游 `["messages-tuple","updates","custom"]` / 本仓多一个 `"values"`）。
-  把一条只有本仓才需要的判据塞进共享工具，下一次对照就会把两边判成分叉。
+  编辑 API 需要真实服务端消息 id。values 快照 reducer 生成的位置键仅供存储；
+  在此适配边界拒绝它，保持共享 getLatestEditableTurn 的协议无关语义。
 */
 const editable = computed(() => {
   const turn = getLatestEditableTurn(groups.value, props.streaming);
@@ -396,14 +459,7 @@ const editable = computed(() => {
   return isSyntheticValuesMessageId(turn.humanMessage.id) ? null : turn;
 });
 /*
-  「最新的 assistant 回合」是**按类型往回找**的，不是「最后一个组」。上游
-  message-list.tsx:597 的 latestAssistantGroupId 从尾部倒着扫，只认
-  `type === "assistant"`，并在 thread.isLoading 时直接返回 null。
-
-  本仓此前写的是位置判据 `entry.index === groups.length - 1`。只要 assistant 组
-  后面再挂上任何**别的**组，重跑入口就整个消失——待答的 clarification 组正是这种
-  情况：同一条线程上 React 仍然给出 Regenerate，Vue 没有（对照台账上
-  `- button "Regenerate"` 只此一处）。processing / subagent 组也是同一个形状。
+  重跑目标按类型从尾部寻找最新 assistant 回合；后续 clarification/processing 组不改变目标。
 */
 const latestAssistantGroupId = computed(() => {
   if (props.streaming) return null;
@@ -415,25 +471,8 @@ const latestAssistantGroupId = computed(() => {
   return null;
 });
 /*
-  **客户端兜底计时**，与上游 message-list.tsx:339 同一条。
-
-  后端把 `turn_duration` 写在 AI 消息的 `additional_kwargs` 里，但那要等这一轮落库、
-  再被历史查询取回来才有值；**刚跑完的这一轮拿不到**。上游因此在 streaming 的下降沿
-  自己量一次墙钟先顶上，等后端那个值到了再让位。本仓此前只认后端给的值，于是
-  「首次提交后」那一屏上游有 `Completed in <1s`、本仓一个字都没有
-  （对照台账 wave 175 记的那一行；当时判成「取到的时长有没有值」，**判错了，是缺功能**）。
-
-  **键只用 group.id，不像上游那样拼上 threadId——这是有意的分叉，实测逼出来的。**
-  上游 `${threadId}:${group.id}` 在它那侧成立，因为 React 一开始就生成好 threadId、
-  从头到尾不变；本仓这个组件的 `threadId` 是**交接过来的**：实测下降沿那一刻它还是空串
-  （`PROBE_FALLING_EDGE … "threadId":""`），渲染时才变成真 id，于是写进去的是
-  `":msg-ai-1"`、读出来找的是 `"<id>:msg-ai-1"`，**永远对不上**。
-  第一版就是这么写的，单测全绿、真应用一个字都不显示——**又一次假绿**，
-  和 wave 158/175 同一族（id 交接）。
-
-  拼 threadId 的用意是「换了会话别复用上一个会话量出来的秒数」。这一点改由
-  下面那个 watch 保证：**从一个真 id 换到另一个真 id 时清空**；空串→真 id 是交接本身，
-  不清。这比上游那条键更稳，因为它不依赖「写和读的那一刻 threadId 相同」。
+  后端 turn_duration 尚未随历史返回时，使用 streaming 下降沿测得的本次耗时。
+  键仅使用 group.id：空 thread id → 真 id 是同一会话的交接；真正切换旧会话时清空缓存。
 */
 const clientDurationsByGroupId = ref(new Map<string, number>());
 watch(
@@ -459,16 +498,57 @@ const durations = computed(() => {
     return [{ runId: `client:${group.id}`, durationSeconds }];
   });
 });
+function renderedReasoningMessages(group: MessageGroup): Message[] {
+  if (group.type === "assistant")
+    return group.messages.filter((message) => reasoning(message));
+  if (group.type === "assistant:subagent") {
+    return group.messages.filter(
+      (message) =>
+        deriveProcessingMessageView([message]).trailingReasoning?.messageId ===
+        message.id,
+    );
+  }
+  if (group.type === "assistant:processing") {
+    const target = deriveProcessingMessageView(
+      group.messages,
+    ).trailingReasoning;
+    return target
+      ? group.messages.filter((message) => message.id === target.messageId)
+      : [];
+  }
+  return [];
+}
+const reasoningDurations = computed(() =>
+  groups.value.map((group, index) => {
+    const result = new Map<
+      Message,
+      { runId: string; durationSeconds: number }
+    >();
+    if (props.streaming && index === groups.value.length - 1) return result;
+    const targets = renderedReasoningMessages(group);
+    for (const display of durations.value[index] ?? []) {
+      const target = targets.find(
+        (message) =>
+          getMessageRunId(message) === display.runId ||
+          display.runId === `client:${group.id}`,
+      );
+      if (target) result.set(target, display);
+    }
+    return result;
+  }),
+);
+function separateDurations(index: number) {
+  const inline = new Set(
+    [...(reasoningDurations.value[index]?.values() ?? [])].map(
+      (display) => display.runId,
+    ),
+  );
+  return (durations.value[index] ?? []).filter(
+    (display) => !inline.has(display.runId),
+  );
+}
 /*
-  可见性判据必须显式传 `isHiddenFromUIMessage`，不能用 deriveHumanInputThreadState
-  的默认值（那个只看 `hide_from_ui`）。上游 message-list.tsx:521 传的就是它。
-
-  差别落在 HIL 状态机的 legacy 兜底上：那条兜底把「请求之后出现的任意**可见**
-  human 消息」当成对最新未答请求的回答。默认判据看不见两类消息——名字在
-  HIDDEN_CONTROL_MESSAGE_NAMES 里的（summary / loop_warning / todo_reminder /
-  todo_completion_reminder），以及正文只有 `<slash_skill_activation>` 的那种。
-  于是本仓此前只要用户在待答卡片之后触发一次斜杠技能，卡片就被静默判成已答，
-  真正的问题再也回答不了。
+  HIL legacy 回答判定只认产品可见 human 消息；控制消息和斜杠技能激活不能替用户回答。
 */
 const humanInputState = computed(() =>
   deriveHumanInputThreadState(
@@ -477,18 +557,20 @@ const humanInputState = computed(() =>
   ),
 );
 /*
-  待答卡片打开时，人类消息上的「编辑并重跑」入口要收起来——重跑会把这条待答
-  请求连同它所在的回合一起作废，而卡片还在屏幕上等人回答。上游把这条判据写在
-  chat-page.tsx 的 `canEdit`（`!hasOpenHumanInputCard`，:345）里，再经 message-list
-  的 `canEdit` 传到每条人类消息上；本仓的 `hasOpenHumanInputRequest` 一直躺在
-  core 里没有任何调用点，入口因此在待答态下仍然可点。
-
-  直接读上面那份 humanInputState，不再 derive 第二遍：判据与可见性判据都已经
-  和上游一致，`latestOpenRequestId !== null` 就是 hasOpenHumanInputRequest 的定义。
+  存在待答 HIL 请求时禁止编辑并重跑，避免退休仍等待回答的请求；复用同一 humanInputState。
 */
 const hasOpenHumanInput = computed(
   () => humanInputState.value.latestOpenRequestId !== null,
 );
+const { pendingHumanInputs, handleHumanInputSubmit } = useMessageHumanInput({
+  owner: () => [props.threadId, props.editOwnerKey],
+  state: () => humanInputState.value,
+  streaming: () => props.streaming,
+  threadError: () => props.threadError,
+  submit: () => props.submitHumanInput,
+  dispatch: (request, response) => emit("humanInput", request, response),
+  notifyError: (message) => toast.error(message),
+});
 const hasActiveAssistantText = computed(() => {
   let lastHumanIndex = -1;
   for (let index = groups.value.length - 1; index >= 0; index -= 1) {
@@ -506,51 +588,44 @@ const hasActiveAssistantText = computed(() => {
 });
 const turnStartTime = ref<number | null>(props.streaming ? Date.now() : null);
 const scroller = ref<HTMLElement | null>(null);
+const contentElement = ref<HTMLElement | null>(null);
 const historySentinel = ref<HTMLElement | null>(null);
-const windowStart = ref<number | null>(null);
+const virtualList = ref<InstanceType<typeof VirtualMessageList> | null>(null);
 const followingTail = ref(true);
-const selection = ref<SelectionToolbarState | null>(null);
-const selectionToolbarElement = ref<HTMLElement | null>(null);
-let userScrollIntent = false;
-let contentResizeObserver: ResizeObserver | undefined;
-let selectionToolbarResizeObserver: ResizeObserver | undefined;
-let historyObserver: IntersectionObserver | undefined;
-let historyAnchor: { scrollHeight: number; scrollTop: number } | null = null;
-const historyInteractionArmed = ref(false);
-let followAnimationFrame: number | undefined;
-let retainFollowUntil = 0;
-const VIRTUAL_WINDOW_SIZE = 50;
-const ESTIMATED_GROUP_HEIGHT_PX = 80;
-const RETAIN_FOLLOW_DURATION_MS = 350;
-const SELECTION_TOOLBAR_MARGIN = 8;
-/*
-  工具条渲染出来的大概高度（p-1 内边距 + h-8 的按钮）。只用来判断选区上方放不放得下，
-  所以不需要精确值——放不下就翻到选区下方。两个常量与上游
-  message-list.tsx:146/150 逐字相同。
-*/
-const SELECTION_TOOLBAR_ESTIMATED_HEIGHT = 48;
-
-const renderedGroups = computed(() => {
-  if (groups.value.length <= 80)
-    return groups.value.map((group, index) => ({ group, index }));
-  const maxStart = Math.max(0, groups.value.length - VIRTUAL_WINDOW_SIZE);
-  const start = Math.min(windowStart.value ?? maxStart, maxStart);
-  return groups.value
-    .slice(start, start + VIRTUAL_WINDOW_SIZE)
-    .map((group, offset) => ({ group, index: start + offset }));
-});
-const virtualTopHeight = computed(() =>
-  groups.value.length > 80
-    ? (renderedGroups.value[0]?.index ?? 0) * ESTIMATED_GROUP_HEIGHT_PX
-    : 0,
+const isListActive = computed(() => props.active !== false);
+const scrollOwner = computed(() =>
+  JSON.stringify([props.scrollOwnerKey ?? props.threadId, props.editOwnerKey]),
 );
-const virtualBottomHeight = computed(() => {
-  if (groups.value.length <= 80) return 0;
-  const renderedEnd = (renderedGroups.value.at(-1)?.index ?? -1) + 1;
-  return (
-    Math.max(0, groups.value.length - renderedEnd) * ESTIMATED_GROUP_HEIGHT_PX
-  );
+watch(
+  scrollOwner,
+  () => {
+    virtualList.value?.stopFollowingTail();
+    followingTail.value = true;
+    userScrollIntent = false;
+  },
+  { flush: "sync" },
+);
+const {
+  selection,
+  selectionToolbarMargin,
+  selectionToolbarElement,
+  onSelection,
+  dispatchSelection,
+} = useMessageSelection({
+  owner: () => [props.threadId, props.editOwnerKey],
+  enabled: () => Boolean(props.selectionMode) && !props.streaming,
+  groups: () => groups.value,
+  crossedMessages: () =>
+    toast.info($i18n.t.value.sidecar.selectionCrossesMessages),
+  dispatch: (action, payload) => {
+    if (action === "ask") emit("selectionAsk", payload);
+    else emit("selectionAdd", payload);
+  },
 });
+let userScrollIntent = false;
+let historyObserver: IntersectionObserver | undefined;
+let historyRequestPending: object | null = null;
+const historyInteractionArmed = ref(false);
 
 function text(message: Message) {
   return extractContentFromMessage(message);
@@ -578,7 +653,11 @@ function subtaskPendingStatus(toolCallId: string | undefined) {
   );
 }
 function subtaskDescription(args: Record<string, unknown> | undefined) {
-  return typeof args?.description === "string" ? args.description : "Subtask";
+  return resolveSubtaskDescription(
+    args?.description,
+    args?.prompt,
+    $i18n.t.value.subtasks.subtask,
+  );
 }
 function subtaskPrompt(args: Record<string, unknown> | undefined) {
   return typeof args?.prompt === "string" ? args.prompt : "";
@@ -607,32 +686,6 @@ function subtaskCallCount(message: Message) {
   }
   return count;
 }
-async function handleHumanInputSubmit(
-  request: HumanInputRequest,
-  response: HumanInputResponse,
-) {
-  pendingHumanInputs.value = new Set([
-    ...pendingHumanInputs.value,
-    request.request_id,
-  ]);
-  try {
-    if (props.submitHumanInput) {
-      const accepted = await props.submitHumanInput(request, response);
-      if (accepted === false) {
-        const next = new Set(pendingHumanInputs.value);
-        next.delete(request.request_id);
-        pendingHumanInputs.value = next;
-      }
-      return;
-    }
-    emit("humanInput", request, response);
-  } catch (error) {
-    const next = new Set(pendingHumanInputs.value);
-    next.delete(request.request_id);
-    pendingHumanInputs.value = next;
-    toast.error(error instanceof Error ? error.message : String(error));
-  }
-}
 function groupIds(index: number) {
   const ids: string[] = [];
   for (let cursor = 0; cursor <= index; cursor += 1) {
@@ -647,81 +700,12 @@ function lastAI(index: number) {
     .reverse()
     .find((message) => message.type === "ai");
 }
-async function copyMessage(key: string, value: string | null) {
-  if (!value) return;
-  actionError.value = "";
-  if (!(await writeTextToClipboard(value))) {
-    actionError.value = $i18n.t.value.messages.copyFailed;
-    return;
-  }
-  copiedMessage.value = key;
-  setTimeout(() => {
-    if (copiedMessage.value === key) copiedMessage.value = null;
-  }, 2_000);
-}
-function scrollToTail(mode: "smooth" | "instant" = "instant") {
-  if (!scroller.value || props.active === false || !followingTail.value) return;
-  if (mode === "instant") {
-    if (followAnimationFrame !== undefined) {
-      cancelAnimationFrame(followAnimationFrame);
-      followAnimationFrame = undefined;
-    }
-    scroller.value.scrollTop = scroller.value.scrollHeight;
-    return;
-  }
-  retainFollowUntil = performance.now() + RETAIN_FOLLOW_DURATION_MS;
-  if (followAnimationFrame !== undefined) return;
-  const animate = () => {
-    followAnimationFrame = undefined;
-    const element = scroller.value;
-    if (!element || props.active === false || !followingTail.value) return;
-    const gap = element.scrollHeight - element.clientHeight - element.scrollTop;
-    if (gap > 1) {
-      const before = element.scrollTop;
-      element.scrollTop += Math.max(1, gap * 0.35);
-      // A browser can reject a fractional step at a layout boundary. Jumping
-      // only in that no-progress case prevents an otherwise endless rAF loop.
-      if (element.scrollTop === before)
-        element.scrollTop = element.scrollHeight;
-    } else if (gap > 0) {
-      element.scrollTop = element.scrollHeight;
-    }
-    if (
-      performance.now() < retainFollowUntil ||
-      element.scrollHeight - element.clientHeight - element.scrollTop > 1
-    ) {
-      followAnimationFrame = requestAnimationFrame(animate);
-    }
-  };
-  followAnimationFrame = requestAnimationFrame(animate);
-}
 function stopFollowingTail() {
   followingTail.value = false;
-  if (followAnimationFrame !== undefined) {
-    cancelAnimationFrame(followAnimationFrame);
-    followAnimationFrame = undefined;
-  }
-}
-function setContentElement(element: Element | ComponentPublicInstance | null) {
-  contentResizeObserver?.disconnect();
-  contentResizeObserver = undefined;
-  if (!(element instanceof HTMLElement)) return;
-  if ("ResizeObserver" in globalThis) {
-    contentResizeObserver = new ResizeObserver(() => {
-      if (!followingTail.value || props.active === false) return;
-      scrollToTail(props.resizeScroll ?? "smooth");
-    });
-    contentResizeObserver.observe(element);
-  }
-  void nextTick(() => {
-    if (followingTail.value && props.active !== false) {
-      scrollToTail(props.resizeScroll ?? "smooth");
-    }
-  });
+  virtualList.value?.stopFollowingTail();
 }
 function onScroll() {
   if (!scroller.value) return;
-  const maxStart = Math.max(0, groups.value.length - VIRTUAL_WINDOW_SIZE);
   const scrollRange = scroller.value.scrollHeight - scroller.value.clientHeight;
   const atTail =
     scrollRange <= 0 ||
@@ -730,9 +714,14 @@ function onScroll() {
   if (atTail) {
     followingTail.value = true;
     userScrollIntent = false;
-    windowStart.value = maxStart;
     return;
   }
+  if (userScrollIntent) {
+    stopFollowingTail();
+    userScrollIntent = false;
+  }
+  // Capture pagination only after consuming this scroll's reading intent;
+  // otherwise a second stop would discard the newly captured physical anchor.
   if (
     historyInteractionArmed.value &&
     scroller.value.scrollTop <= 80 &&
@@ -740,21 +729,17 @@ function onScroll() {
   ) {
     requestHistoryLoad();
   }
-  if (userScrollIntent) {
-    stopFollowingTail();
-    userScrollIntent = false;
-  }
-  if (groups.value.length <= 80) return;
-  if (followingTail.value) {
-    windowStart.value = maxStart;
-    return;
-  }
-  const ratio = scrollRange <= 0 ? 0 : scroller.value.scrollTop / scrollRange;
-  windowStart.value = Math.round(maxStart * ratio);
 }
 function onScrollIntent() {
   userScrollIntent = true;
   historyInteractionArmed.value = true;
+}
+function onPointerDown(event: PointerEvent) {
+  // Mouse text selection is paused by the physical scroll owner. Only direct
+  // scrollbar manipulation marks generic scroll intent; touch retains its
+  // existing native-scroll path.
+  if (event.pointerType !== "mouse" || event.target === scroller.value)
+    onScrollIntent();
 }
 function onWheel(event: WheelEvent) {
   if (
@@ -776,175 +761,24 @@ function onScrollKey(event: KeyboardEvent) {
     onScrollIntent();
   }
 }
-function historyErrorMessage() {
-  const error = props.historyError;
-  return error instanceof Error
-    ? error.message
-    : typeof error === "string"
-      ? error
-      : $i18n.t.value.messages.loadEarlierFailed;
-}
 function requestHistoryLoad() {
   if (
     !props.hasMoreHistory ||
     props.historyLoadingMore ||
     !scroller.value ||
-    historyAnchor
+    historyRequestPending
   ) {
     return;
   }
-  historyAnchor = {
-    scrollHeight: scroller.value.scrollHeight,
-    scrollTop: scroller.value.scrollTop,
-  };
+  historyRequestPending = {};
   stopFollowingTail();
+  virtualList.value?.captureHistoryAnchor();
   emit("loadMoreHistory");
-}
-/*
-  划词工具条的入口。对齐 message-list.tsx:649 的 handleAssistantTextSelection。
-
-  **只有 `assistant` 组、且组里那条是 ai 消息，才起工具条。** 上游是靠**在哪儿绑**
-  表达这条判据的：`group.type !== "assistant" || msg.type !== "ai"` 时那层
-  onMouseUp 根本不挂（message-list.tsx:1058）。本仓把处理器挂在组容器上，所以同一条
-  判据写在函数开头——两种写法的可观察行为相同，而组容器正好就是上游要
-  `closest("[data-assistant-turn]")` 才拿得到的那个元素。实测这一条：在人类消息上
-  划词，上游一个工具条都不出，本仓出（对照 probe 的 human 变体 onlyVue 2 行）。
-  `assistant` 组恒定只有一条消息（core/messages/utils.ts:198，与上游同构），
-  所以直接取 messages[0]，不用再猜是哪一条。
-
-  **按包含关系判定归属，不按正文子串。** 此前这里拿 `text(candidate).includes()`
-  找消息，机制上比上游窄一档：`text()` 给的是 markdown **源码**，而选区里是**渲染
-  之后**的文字。一段跨越行内标记的选区（`this is **bold** text` 上选
-  "is bold te"）在源码里根本不是子串，于是本仓静默不弹工具条，而上游只看
-  anchor/focus 两个节点在不在这一轮里，照弹不误。
-*/
-function onSelection(event: MouseEvent, index: number) {
-  if (!props.selectionMode || props.streaming) return;
-  const group = groups.value[index];
-  if (group?.type !== "assistant") return;
-  const message = group.messages[0];
-  if (!message || message.type !== "ai") return;
-
-  const domSelection = globalThis.getSelection?.();
-  const selectedText = domSelection?.toString().trim() ?? "";
-  if (
-    !domSelection ||
-    domSelection.isCollapsed ||
-    !selectedText ||
-    domSelection.rangeCount === 0
-  ) {
-    selection.value = null;
-    return;
-  }
-  const { anchorNode, focusNode } = domSelection;
-  if (!anchorNode || !focusNode) return;
-  const turn = event.currentTarget as HTMLElement | null;
-  if (!turn?.contains(anchorNode)) return;
-  if (!turn.contains(focusNode)) {
-    // 选区漏到了别的轮次里，引用会有歧义：说一句，而不是静默失败（上游 :693 同款）。
-    toast.info($i18n.t.value.sidecar.selectionCrossesMessages);
-    selection.value = null;
-    return;
-  }
-
-  /*
-    工具条还没进 DOM 时先选一个优先方向；渲染后再实测换行后的宽高，把完整盒子
-    夹进视口。这样窄屏/高倍文字下也不会因为固定高度估算而丢按钮（上游 #3551）。
-  */
-  const rect = domSelection.getRangeAt(0).getBoundingClientRect();
-  const fitsAbove =
-    rect.top - SELECTION_TOOLBAR_MARGIN - SELECTION_TOOLBAR_ESTIMATED_HEIGHT >=
-    0;
-  selection.value = {
-    message,
-    selectedText,
-    displayIndex: index + 1,
-    x: rect.left + rect.width / 2,
-    y: fitsAbove
-      ? rect.top - SELECTION_TOOLBAR_MARGIN
-      : rect.bottom + SELECTION_TOOLBAR_MARGIN,
-    placement: fitsAbove ? "top" : "bottom",
-  };
-}
-function onKey(event: KeyboardEvent) {
-  if (event.key === "Escape") selection.value = null;
-}
-/*
-  滚动就收起。工具条是 fixed 且按 mouseup 那一刻的视口坐标锚定的，页面一滚它就与
-  被引用的那段文字脱节。上游同样在 window 上用**捕获**阶段听（message-list.tsx:643），
-  捕获是必需的：真正在滚的是会话流那个容器，scroll 事件不冒泡到 window。
-*/
-function onSelectionScroll() {
-  if (selection.value) selection.value = null;
-}
-function positionSelectionToolbar() {
-  const toolbar = selectionToolbarElement.value;
-  const current = selection.value;
-  if (!toolbar || !current) return;
-
-  const width = toolbar.offsetWidth;
-  const height = toolbar.offsetHeight;
-  const maxLeft = Math.max(
-    SELECTION_TOOLBAR_MARGIN,
-    globalThis.innerWidth - width - SELECTION_TOOLBAR_MARGIN,
-  );
-  const maxTop = Math.max(
-    SELECTION_TOOLBAR_MARGIN,
-    globalThis.innerHeight - height - SELECTION_TOOLBAR_MARGIN,
-  );
-  const preferredLeft = current.x - width / 2;
-  const preferredTop =
-    current.placement === "top" ? current.y - height : current.y;
-
-  toolbar.style.left = `${Math.min(Math.max(preferredLeft, SELECTION_TOOLBAR_MARGIN), maxLeft)}px`;
-  toolbar.style.top = `${Math.min(Math.max(preferredTop, SELECTION_TOOLBAR_MARGIN), maxTop)}px`;
-}
-watch(selection, async (current) => {
-  selectionToolbarResizeObserver?.disconnect();
-  selectionToolbarResizeObserver = undefined;
-  if (!current) return;
-
-  await nextTick();
-  positionSelectionToolbar();
-  const toolbar = selectionToolbarElement.value;
-  if (toolbar && "ResizeObserver" in globalThis) {
-    selectionToolbarResizeObserver = new ResizeObserver(
-      positionSelectionToolbar,
-    );
-    selectionToolbarResizeObserver.observe(toolbar);
-  }
-});
-function dispatchSelection(action: "ask" | "add") {
-  const current = selection.value;
-  if (!current) return;
-  const payload: SelectionPayload = {
-    message: current.message,
-    selectedText: current.selectedText,
-    displayIndex: current.displayIndex,
-  };
-  if (action === "ask") emit("selectionAsk", payload);
-  else emit("selectionAdd", payload);
-  selection.value = null;
-  globalThis.getSelection?.()?.removeAllRanges();
 }
 function messageReferences(message: Message) {
   return readReferenceMessageContexts(message.additional_kwargs).map(
     (context, index) => ({ id: index + 1, context }),
   );
-}
-const ARTIFACT_TOOL_NAMES = new Set([
-  "write_file",
-  "str_replace",
-  "finalize_artifact_write",
-  "present_files",
-]);
-function toolLabel(name: string) {
-  if (name === "write_file") return $i18n.t.value.toolCalls.writeFile;
-  return name
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }
 /*
   present_files 组的两个取数口，与上游 message-list.tsx 的 assistant:present-files
@@ -971,70 +805,17 @@ function runIdOfGroup(index: number) {
   }
   return undefined;
 }
+const workspaceChangeAnchors = computed(() =>
+  getWorkspaceChangeAnchorGroupIndices(groups.value),
+);
 function workspaceChangesRun(index: number) {
-  if (groups.value[index]?.type !== "assistant") return undefined;
-  const runId = runIdOfGroup(index);
-  if (!runId) return undefined;
-  for (let cursor = index + 1; cursor < groups.value.length; cursor += 1) {
-    if (
-      groups.value[cursor]?.type === "assistant" &&
-      runIdOfGroup(cursor) === runId
-    )
-      return undefined;
-  }
-  return runId;
-}
-function durationLabel(seconds: number) {
-  const copy = $i18n.t.value.runDuration;
-  const duration = formatRunDuration(seconds, {
-    lessThanSecond: copy.lessThanSecond,
-    hours: copy.hours,
-    minutes: copy.minutes,
-    seconds: copy.seconds,
-    separator: copy.separator,
-  });
-  return duration ? copy.completedIn(duration) : "";
+  if (!workspaceChangeAnchors.value.has(index)) return undefined;
+  const assistant = groups.value[index]?.messages.find(
+    (message) => message.type === "ai" && getMessageRunId(message),
+  );
+  return assistant ? getMessageRunId(assistant) : undefined;
 }
 
-watch(
-  () => groups.value.length,
-  async (nextLength, previousLength = 0) => {
-    void previousLength;
-    const wasFollowingTail = followingTail.value;
-
-    if (nextLength <= 80) {
-      windowStart.value = null;
-    } else if (wasFollowingTail) {
-      windowStart.value = Math.max(0, nextLength - VIRTUAL_WINDOW_SIZE);
-    }
-
-    if (!wasFollowingTail || props.active === false) return;
-    await nextTick();
-    // A persisted-page refresh can land between the optimistic message and the
-    // stream response. DOM scroll events from that intermediate layout may
-    // recalculate windowStart before this post-render continuation runs. Pin
-    // the virtual window to the current tail again before scrolling so the
-    // optimistic turn remains mounted throughout the reconciliation.
-    if (groups.value.length > 80) {
-      windowStart.value = Math.max(
-        0,
-        groups.value.length - VIRTUAL_WINDOW_SIZE,
-      );
-      await nextTick();
-    }
-    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
-  },
-  { immediate: true },
-);
-watch(
-  () => props.streaming,
-  async (streaming) => {
-    if (streaming || !followingTail.value || props.active === false) return;
-    await nextTick();
-    scrollToTail(props.resizeScroll ?? "smooth");
-  },
-  { flush: "post" },
-);
 watch(
   () => props.streaming,
   (streaming, previous) => {
@@ -1067,9 +848,11 @@ watch(
   () => props.active,
   async (active) => {
     if (!active) return;
+    const owner = scrollOwner.value;
     followingTail.value = true;
     await nextTick();
-    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
+    if (owner !== scrollOwner.value || !isListActive.value) return;
+    await virtualList.value?.scrollToTail("instant");
   },
   { flush: "post" },
 );
@@ -1082,81 +865,26 @@ watch(
       props.active === false
     )
       return;
+    const owner = scrollOwner.value;
     followingTail.value = true;
-    if (groups.value.length > 80) {
-      windowStart.value = Math.max(
-        0,
-        groups.value.length - VIRTUAL_WINDOW_SIZE,
-      );
-    }
     await nextTick();
-    if (groups.value.length > 80) {
-      windowStart.value = Math.max(
-        0,
-        groups.value.length - VIRTUAL_WINDOW_SIZE,
-      );
-      await nextTick();
-    }
-    if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight;
-  },
-);
-watch(humanInputState, (state) => {
-  if (pendingHumanInputs.value.size === 0) return;
-  pendingHumanInputs.value = new Set(
-    [...pendingHumanInputs.value].filter(
-      (requestId) => !state.answeredResponses.has(requestId),
-    ),
-  );
-});
-watch(
-  () => props.threadError,
-  (currentError) => {
-    const clear = shouldClearPendingHumanInputOnThreadError({
-      currentError,
-      previousError: previousHumanInputThreadError,
-      pendingRequestCount: pendingHumanInputs.value.size,
-    });
-    previousHumanInputThreadError = currentError;
-    if (clear) pendingHumanInputs.value = new Set();
-  },
-);
-watch(
-  () => props.streaming,
-  (streaming, previousStreaming) => {
-    if (previousStreaming && !streaming) {
-      pendingHumanInputs.value = new Set();
-    }
-  },
-);
-watch(
-  () => props.threadId,
-  () => {
-    pendingHumanInputs.value = new Set();
-    previousHumanInputThreadError = props.threadError;
-    actionError.value = "";
+    if (owner !== scrollOwner.value || !isListActive.value) return;
+    await virtualList.value?.scrollToTail("instant");
   },
 );
 watch(
   () => props.historyLoadingMore,
   async (loading, previous) => {
-    if (loading || !previous || !historyAnchor) return;
-    await nextTick();
-    if (scroller.value) {
-      const addedHeight =
-        scroller.value.scrollHeight - historyAnchor.scrollHeight;
-      scroller.value.scrollTop =
-        historyAnchor.scrollTop + Math.max(0, addedHeight);
-    }
-    historyAnchor = null;
+    if (loading || !previous || !historyRequestPending) return;
+    const request = historyRequestPending;
+    await virtualList.value?.completeHistoryLoad();
+    if (historyRequestPending === request) historyRequestPending = null;
   },
 );
-watch(
-  () => props.threadId,
-  () => {
-    historyInteractionArmed.value = false;
-    historyAnchor = null;
-  },
-);
+watch([() => props.threadId, () => props.editOwnerKey], () => {
+  historyInteractionArmed.value = false;
+  historyRequestPending = null;
+});
 watch(historySentinel, (element, previous) => {
   if (previous) historyObserver?.unobserve(previous);
   if (!element || !("IntersectionObserver" in globalThis)) return;
@@ -1173,21 +901,8 @@ watch(historySentinel, (element, previous) => {
   );
   historyObserver.observe(element);
 });
-onMounted(() => {
-  globalThis.addEventListener("keydown", onKey);
-  globalThis.addEventListener("scroll", onSelectionScroll, true);
-  globalThis.addEventListener("resize", positionSelectionToolbar);
-});
 onUnmounted(() => {
-  globalThis.removeEventListener("keydown", onKey);
-  globalThis.removeEventListener("scroll", onSelectionScroll, true);
-  globalThis.removeEventListener("resize", positionSelectionToolbar);
-  contentResizeObserver?.disconnect();
-  selectionToolbarResizeObserver?.disconnect();
   historyObserver?.disconnect();
-  if (followAnimationFrame !== undefined) {
-    cancelAnimationFrame(followAnimationFrame);
-  }
 });
 </script>
 
@@ -1196,68 +911,32 @@ onUnmounted(() => {
     v-bind="$attrs"
     :data-testid="testId"
     role="log"
-    class="min-h-0 flex-1 transition-[padding] max-[361px]:h-auto! max-[361px]:flex-none max-[361px]:overflow-visible!"
+    class="min-h-0 flex-1 wrap-anywhere transition-[padding]"
   >
     <div
       ref="scroller"
-      class="h-full overflow-y-auto [scrollbar-gutter:stable_both-edges] max-[361px]:h-auto! max-[361px]:overflow-visible!"
+      class="h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]"
       @scroll="onScroll"
       @wheel="onWheel"
       @touchstart="onScrollIntent"
-      @pointerdown="onScrollIntent"
+      @pointerdown="onPointerDown"
       @keydown="onScrollKey"
+      @focusin="stopFollowingTail"
     >
       <!--
-        历史加载中的占位。wave 169 之前这里是一行居中的灰字，上游是一整块骨架屏
-        （`message-list.tsx:926`）——**各缺一半**：本仓的文字对读屏器友好，但视觉上
-        会让内容到达时整屏跳一下；上游的骨架保住了布局，却对读屏器完全无声。
-        两边同改成「骨架 + `role="status"` 播报」，文案沿用本仓这一条词典键。
-      -->
+  加载骨架保留布局，status 播报由骨架组件提供。
+-->
       <MessageListSkeleton v-if="loading" />
       <!--
-        「加载更早」整块照 `message-list.tsx:159` 的 `LoadMoreHistoryIndicator` 重排，
-        三处可观察差异都由此而来：
-
-        ① **加载态是同一颗按钮，不是换成一段文字。** 上游把 loading 折进按钮里
-           （置灰 + `Loader2Icon animate-spin` + `common.loading`）；本仓原来把按钮
-           整个卸载、换成一个 `<span role="status">`。点完的那一刻焦点所在的元素
-           消失，键盘用户被丢回 body——和 composer 里「发送/停止是同一颗键」
-           同一条理由。
-
-        ② **哨兵挂在外层 div 上，不在按钮上**（上游 `<div ref={sentinelRef}>`）。
-           挂在按钮上时，加载中按钮被卸载，IntersectionObserver 也跟着掉，
-           连续滚动加载要等按钮重新挂上才恢复。
-
-        ③ **按钮不是下划线文字，是一颗 ghost 圆角键，而且带 `ChevronUp` 图标**
-           （上游 `variant="ghost" size="sm"
-           className="text-muted-foreground hover:text-foreground rounded-full px-3"`）。
-           文案也回到上游 common 下的 loadMore / loading——本仓原来在 messages 下
-           自造了 loadEarlier / loadingEarlier 两条词条（本轮已删），
-           渲染出来是「Load earlier messages」而上游是「Load more」。
-           这里不写带点的键名：注释里的 `a.b` 会被 i18n 扫描器当成一处消费，
-           把死词条从 unused 集里抹掉（坑 126）。
-
-        出错那一支是本仓独有的（上游这一处没有错误态，失败后按钮原样留着、
-        用户看不出发生过什么）。**保留**：删掉是产品回归，
-        与 GatewayStatusBanner 上那颗重试同一条取舍。
-      -->
+  分页期间保留同一按钮、焦点及已加载行；哨兵属于稳定外层 div。
+        分页失败由历史 owner 通知，保留重试入口。
+-->
       <div
-        v-if="hasMoreHistory || historyLoadingMore || historyError"
+        v-if="hasMoreHistory || historyLoadingMore"
         ref="historySentinel"
         class="mx-auto flex w-full max-w-[var(--container-width-md)] justify-center pt-3"
       >
-        <span v-if="historyError" role="alert" class="text-destructive text-xs">
-          {{ historyErrorMessage() }}
-          <button
-            type="button"
-            class="ml-2 underline"
-            @click="requestHistoryLoad"
-          >
-            {{ $i18n.t.value.messages.tryAgain }}
-          </button>
-        </span>
         <Button
-          v-else
           data-testid="load-earlier-messages"
           type="button"
           variant="ghost"
@@ -1277,9 +956,17 @@ onUnmounted(() => {
         </Button>
       </div>
       <div
-        :ref="setContentElement"
+        ref="contentElement"
         data-testid="message-list-content"
-        class="mx-auto w-full max-w-[var(--container-width-md)] px-4 pt-8 pb-[72px]"
+        class="mx-auto w-full max-w-[var(--container-width-md)] px-4"
+        :class="hasTimelineContent ? 'pt-8' : undefined"
+        :style="
+          hasTimelineContent
+            ? {
+                paddingBottom: `calc(var(--spacing) * 12 + ${paddingBottom}px)`,
+              }
+            : undefined
+        "
       >
         <!--
           消息流是 div 不是 ul：React 的 ConversationContent
@@ -1287,227 +974,326 @@ onUnmounted(() => {
           于是它在可访问性树里什么都不留下。这里若用 ul/li，空会话会凭空多出一个
           list、有消息时每条又多一个 listitem——读屏器会把一段对话读成一份清单。
         -->
-        <div
-          data-testid="message-list"
-          :style="{
-            paddingTop: `${virtualTopHeight}px`,
-            paddingBottom: `${virtualBottomHeight}px`,
-          }"
-          class="flex w-full flex-col gap-8"
+        <VirtualMessageList
+          ref="virtualList"
+          :groups="groups"
+          :streaming="streaming"
+          :scroll-element="scroller"
+          :following-tail="followingTail"
+          :active="active"
+          :owner-key="scrollOwner"
+          :content-element="contentElement"
+          :initial-scroll="initialScroll"
+          :resize-scroll="resizeScroll"
+          @active-group-change="activeGroupChanged"
+          @reading-intent="stopFollowingTail"
         >
-          <!--
-            人类消息也要 relative。少了它，那排「复制 / 编辑并重跑」的绝对定位工具条
-            就不再挂在这条气泡下面，而是挂在最近的定位祖先——整个 `section#chat`——上，
-            于是它跑到聊天区右下角，并且比聊天区多出 28px。后果不只是位置错：那 28px
-            让本该 overflow:hidden 的面板变得可滚动，一次焦点变化就能把整个聊天区
-            往上推 28px。React 的 AIElementMessage 两种角色都是 `relative w-full`
-            （frontend/src/components/workspace/messages/message-list-item.tsx）。
-
-          **这一层不加 `gap-2`。** 上游把「一个回合」拆成两层：外层
-          `w-full group/assistant-turn` 装 actions 与运行耗时（没有 gap），内层
-          `group flex flex-col gap-2 is-assistant` 才是消息内容。本仓压成了一层，
-          于是给它加 gap 会连 actions / 耗时一起推开 8px——`make e2e` 的
-          「shows a completed run duration once after multi-step history」当场量到
-          `actionsToDuration` 从 8 变 16。gap 要加在**消息内容**那一层，见下面
-          ai 分支外面那个 `flex flex-col gap-2`。
-          -->
-          <div
-            v-for="entry in renderedGroups"
-            :key="entry.group.id ?? entry.index"
-            :data-index="entry.index"
-            :data-assistant-turn="
-              entry.group.type === 'assistant' ? '' : undefined
-            "
-            :data-role="entry.group.type === 'human' ? 'human' : 'ai'"
-            :class="
-              entry.group.type === 'human'
-                ? 'is-user group bg-secondary relative ml-auto w-fit max-w-full rounded-lg px-4 py-3 whitespace-pre-wrap'
-                : 'group relative w-full'
-            "
-            @mouseup="onSelection($event, entry.index)"
-          >
-            <ProcessingMessageGroup
-              v-if="entry.group.type === 'assistant:processing'"
-              :messages="entry.group.messages"
-              :streaming="streaming && entry.index === groups.length - 1"
-              :thread-id="threadId"
-              :is-mock="isMock"
-              :markdown-components="messageMarkdownComponents"
-              @artifact="emit('artifact', $event)"
-              @browser="emit('browser', $event)"
-            />
-            <!--
-              present_files 自己是一组，不走下面那圈按消息的通用渲染：上游
-              message-list.tsx 的 assistant:present-files 分支只画「组内第一条消息的
-              正文（有才画）」+ 文件卡片清单，reasoning、工具调用折叠块、artifactTargets
-              的文件名按钮**一个都没有**。本仓此前根本没有这条分支，于是同一组消息
-              落进通用的 ai 分支，画出来是 Reasoning + 两个折叠块 + 一颗文件名按钮，
-              而上游画的是一张带下载链接的文件卡片——四行对四行，全是这一处。
-
-              正文的 `mb-4` 是上游写在这个调用点上的，不是渲染器自带的
-              （assistant 气泡那一处传的是 `my-3`）。
-            -->
-            <div
-              v-else-if="entry.group.type === 'assistant:present-files'"
-              class="w-full"
-            >
-              <MessageMarkdown
-                v-if="presentFilesLead(entry.group)"
-                class="mb-4"
-                :content="presentFilesLead(entry.group)"
-                :components="messageMarkdownComponents"
-                :streaming="streaming && entry.index === groups.length - 1"
-              />
-              <ArtifactFileCards
-                :thread-id="threadId ?? ''"
-                :files="presentFiles(entry.group)"
-                :is-mock="isMock"
-                :is-admin="isAdmin"
-                :run-id="archiveCandidates[entry.index]?.runId"
-                :archive-downloads-enabled="!streaming"
-                @select="emit('artifact', $event)"
-              />
-            </div>
-            <template
-              v-for="message in entry.group.messages"
-              v-else
-              :key="message.id"
-            >
-              <HumanInputCard
-                v-if="extractHumanInputRequest(message)"
-                :request="extractHumanInputRequest(message)!"
-                :answered="
-                  humanInputState.answeredResponses.get(
-                    extractHumanInputRequest(message)!.request_id,
-                  )
+          <template #default="entry">
+            <div class="flex w-full flex-col gap-2">
+              <div
+                v-for="duration in separateDurations(entry.index)"
+                :key="duration.runId"
+                class="text-muted-foreground border-border/60 mb-3 border-b pb-3 text-sm"
+              >
+                <RunDurationLabel
+                  :duration-seconds="duration.durationSeconds"
+                />
+              </div>
+              <div
+                :data-assistant-turn="
+                  entry.group.type === 'assistant' ? '' : undefined
                 "
-                :active="
-                  interactive !== false &&
-                  !streaming &&
-                  humanInputState.latestOpenRequestId ===
-                    extractHumanInputRequest(message)!.request_id
+                :data-role="entry.group.type === 'human' ? 'human' : 'ai'"
+                :class="
+                  entry.group.type === 'human' && !entry.group.scheduledOrigin
+                    ? 'is-user group group/conversation-message relative ml-auto flex w-full flex-col justify-end gap-2'
+                    : 'group group/assistant-turn relative w-full'
                 "
-                :pending="
-                  pendingHumanInputs.has(
-                    extractHumanInputRequest(message)!.request_id,
-                  )
-                "
-                :read-only="interactive === false"
-                @submit="
-                  handleHumanInputSubmit(
-                    extractHumanInputRequest(message)!,
-                    $event,
-                  )
-                "
-              />
-              <template v-if="message.type === 'human'">
-                <MessageAttachments
-                  :message="message"
+                @mouseup="onSelection($event, entry.index)"
+              >
+                <ScheduledRunPrompt
+                  v-if="
+                    entry.group.type === 'human' && entry.group.scheduledOrigin
+                  "
+                  :origin="entry.group.scheduledOrigin"
+                />
+                <ScheduledTaskCard
+                  v-else-if="entry.group.type === 'assistant:scheduled-task'"
+                  :result="entry.group.scheduleResult"
+                />
+                <ProcessingMessageGroup
+                  v-else-if="entry.group.type === 'assistant:processing'"
+                  :show-tool-details="tokenUsageInlineMode === 'step_debug'"
+                  :messages="entry.group.messages"
+                  :tool-artifacts="toolArtifacts"
+                  :token-debug-steps="
+                    tokenDebugStepsForMessages(entry.group.messages)
+                  "
+                  :duration-seconds="
+                    reasoningDurations[entry.index]?.values().next().value
+                      ?.durationSeconds
+                  "
+                  :streaming="streaming && entry.index === groups.length - 1"
                   :thread-id="threadId"
                   :is-mock="isMock"
+                  :markdown-components="messageMarkdownComponents"
+                  @artifact="emit('artifact', $event)"
+                  @browser="emit('browser', $event)"
                 />
                 <!--
-                  人类消息的正文整段委给 HumanMessageText，形状对着上游
-                  message-list-item.tsx:338 的同名组件：纯文本走
-                  `<div class="wrap-break-word whitespace-pre-wrap">`，
-                  而 `/skill 剩下的话` 走胶囊 + 剩下的话那一支。
-                  **2026-09-18 第四十四轮之前本仓只有前一支**，判词见那两个文件的头。
-
-                  `div` 而不是 `p` 这条仍然成立、只是搬进了那一层：输入框里打的是
-                  纯文本，不是一段文章——报成 paragraph，读屏器的「按段落浏览」
-                  会把每一条提问都当成正文段落，而上游不会。
-                -->
-                <HumanMessageText
-                  :content="stripUploadedFilesTag(text(message))"
-                />
-                <ReferenceAttachment
-                  :references="messageReferences(message)"
-                  test-id="message-reference-attachment"
-                  class="mt-2"
-                />
-                <!--
-                  **`Boolean(message.id)` 这一项不能省**，它是上游
-                  message-list.tsx:1025 `group.type === "human" && Boolean(msg.id) && …`
-                  里那一项。少了它，两边都是 `undefined` 的时候
-                  `editable?.humanMessage.id === message.id` 会**相等**：
-                  新建会话刚发出第一条时，那条人类消息还没有后端给的 id，
-                  `editable` 也是 null，于是 `undefined === undefined` 成立，
-                  本仓就给一条**根本没法寻址、点了也重跑不了**的消息画出编辑键。
-                  wave 180 实测：两个应用的 groups 一模一样（human 的 id 都是 null），
-                  上游不画、本仓画——差的就是这一项。
-                -->
-                <HumanTurnActions
-                  :copied="
-                    copiedMessage === (message.id ?? `human:${entry.index}`)
-                  "
-                  :copy-label="$i18n.t.value.clipboard.copyToClipboard"
-                  :edit-label="$i18n.t.value.messages.actions.editAndRerun"
-                  :show-edit="
-                    interactive !== false &&
-                    !props.uploading &&
-                    !props.branchPending &&
-                    !props.hasGoal &&
-                    !hasOpenHumanInput &&
-                    Boolean(message.id) &&
-                    editable?.humanMessage.id === message.id
-                  "
-                  @copy="
-                    copyMessage(
-                      message.id ?? `human:${entry.index}`,
-                      getMessageCopyData(message),
-                    )
-                  "
-                  @edit="
-                    emit(
-                      'edit',
-                      message.id ?? '',
-                      text(message),
-                      groupIds(entry.index),
-                    )
-                  "
-                />
-              </template>
-              <template v-else-if="message.type === 'ai'">
-                <!--
-                  上游的 `MessageContent` 是 `flex … flex-col gap-2`，本仓此前是
-                  block。差的不只是 8px 间隙：block 里相邻兄弟的 margin 会**折叠**，
-                  于是正文那层的 `my-3` 被上面 reasoning 块的下外边距吃掉——同一处
-                  `my-3` 在没有 reasoning 的消息上生效、在有 reasoning 的消息上失效
-                  （对照台账里 branch-thread 归零而 streaming-reasoning-order 纹丝不动，
-                  就是这个）。flex 容器不折叠 margin。
-                -->
-                <div class="flex flex-col gap-2">
-                  <!--
-                    子任务组头。上游 `message-list.tsx` 的 assistant:subagent 分支
-                    在**所有卡片之前**先渲染一行
-                    `<div className="text-muted-foreground pt-2 text-sm font-normal">`，
-                    内容是 `t.subtasks.executing(tasks.size)`；count===1 时那个函数
-                    既不插数字也不加复数，念出来正好是 "Executing subtask"。
-                    本仓此前整行没有，`subtasks.executing` 一直躺在未引用的词条里
-                    （对照台账上 `- text: Executing subtask` 只此一处）。
-
-                    放在 ReasoningDisclosure 之前而不是工具调用循环之前：上游把组头
-                    push 进 results 之后才开始遍历消息，推理块和卡片都排在它后面。
-                    这一行是 block、外面是 flex 容器，`pt-2` 不与容器的 gap 折叠，
-                    两边都是 8px 内边距 + 20px 行高 = 28px。
-                  -->
-                  <div
-                    v-if="subtaskCallCount(message) > 0"
-                    class="text-muted-foreground pt-2 text-sm font-normal"
-                  >
-                    {{
-                      $i18n.t.value.subtasks.executing(
-                        subtaskCallCount(message),
-                      )
-                    }}
-                  </div>
-                  <ReasoningDisclosure
-                    v-if="reasoning(message)"
-                    :content="reasoning(message) ?? ''"
+  present-files 组仅渲染可选正文与文件卡片；正文间距与 React message-list.tsx 调用点一致。
+-->
+                <div
+                  v-else-if="entry.group.type === 'assistant:present-files'"
+                  class="w-full"
+                >
+                  <MessageMarkdown
+                    v-if="presentFilesLead(entry.group)"
+                    class="mb-4"
+                    :content="presentFilesLead(entry.group)"
+                    :components="messageMarkdownComponents"
                     :streaming="streaming && entry.index === groups.length - 1"
-                    :markdown-components="messageMarkdownComponents"
                   />
-                  <!--
+                  <ArtifactFileCards
+                    :thread-id="threadId ?? ''"
+                    :files="presentFiles(entry.group)"
+                    :is-mock="isMock"
+                    :is-admin="isAdmin"
+                    :run-id="archiveCandidates[entry.index]?.runId"
+                    :archive-downloads-enabled="!streaming"
+                    @select="emit('artifact', $event)"
+                  />
+                </div>
+                <template
+                  v-for="message in entry.group.messages"
+                  v-else
+                  :key="message.id"
+                >
+                  <HumanInputCard
+                    v-if="extractHumanInputRequest(message)"
+                    :request="extractHumanInputRequest(message)!"
+                    :answered="
+                      humanInputState.answeredResponses.get(
+                        extractHumanInputRequest(message)!.request_id,
+                      )
+                    "
+                    :active="
+                      interactive !== false &&
+                      !streaming &&
+                      humanInputState.latestOpenRequestId ===
+                        extractHumanInputRequest(message)!.request_id
+                    "
+                    :pending="
+                      pendingHumanInputs.has(
+                        extractHumanInputRequest(message)!.request_id,
+                      )
+                    "
+                    :read-only="interactive === false"
+                    @submit="
+                      handleHumanInputSubmit(
+                        extractHumanInputRequest(message)!,
+                        $event,
+                      )
+                    "
+                  />
+                  <div
+                    v-if="message.type === 'human'"
+                    class="ml-auto flex w-fit max-w-full min-w-0 flex-col gap-2"
+                  >
+                    <ReferenceAttachment
+                      :references="messageReferences(message)"
+                      test-id="message-reference-attachment"
+                      class="self-end shadow-none"
+                    />
+                    <div
+                      v-if="
+                        readConversationReferences(message.additional_kwargs)
+                          .length
+                      "
+                      :aria-label="
+                        $i18n.t.value.inputBox.referencedConversations
+                      "
+                      class="flex max-w-full flex-wrap justify-end gap-1"
+                      data-testid="message-conversation-references"
+                      role="group"
+                    >
+                      <ConversationReferenceChip
+                        v-for="reference in readConversationReferences(
+                          message.additional_kwargs,
+                        )"
+                        :key="reference.threadId"
+                        :href="
+                          pathOfThread(reference.threadId, {
+                            agent_name: reference.agentName,
+                          })
+                        "
+                        :title="reference.title || $i18n.t.value.pages.untitled"
+                      />
+                    </div>
+                    <MessageAttachments
+                      :message="message"
+                      :thread-id="threadId"
+                      :is-mock="isMock"
+                    />
+                    <!-- HumanMessageText owns plain text and historical slash-skill display. -->
+                    <div
+                      v-if="editState && editState.messageId === message.id"
+                      class="bg-background border-border flex w-full min-w-0 flex-col gap-2 rounded-lg border p-2 shadow-sm"
+                    >
+                      <Textarea
+                        :ref="setEditTextarea"
+                        v-model="editState.text"
+                        autofocus
+                        :aria-disabled="editState.pending || undefined"
+                        class="min-h-24 resize-y"
+                        :readonly="editState.pending"
+                        @keydown="onEditKeydown"
+                      />
+                      <div class="text-muted-foreground text-xs">
+                        {{ $i18n.t.value.common.editRerunWarning }}
+                      </div>
+                      <div class="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                          :disabled="editState.pending"
+                          @click="cancelEdit"
+                        >
+                          <X class="size-3" />
+                          {{ $i18n.t.value.common.cancel }}
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          :disabled="editSubmitDisabled"
+                          @click="updateAndRerun"
+                        >
+                          <Check class="size-3" />
+                          {{ $i18n.t.value.common.updateAndRerun }}
+                        </Button>
+                      </div>
+                    </div>
+                    <div
+                      v-else-if="stripUploadedFilesTag(text(message))"
+                      class="is-user:dark group-[.is-user]:bg-secondary group-[.is-user]:text-foreground group-[.is-assistant]:text-foreground flex w-full max-w-full min-w-0 flex-col gap-2 overflow-visible group-[.is-user]:ml-auto group-[.is-user]:overflow-hidden group-[.is-user]:rounded-lg group-[.is-user]:px-4 group-[.is-user]:py-3"
+                    >
+                      <HumanMessageText
+                        :content="stripUploadedFilesTag(text(message))"
+                      />
+                    </div>
+                    <KnowledgeScopeSummary
+                      :additional-kwargs="message.additional_kwargs"
+                    />
+                    <!--
+  编辑按钮必须有真实消息 id；否则 undefined 与 undefined 相等会错误暴露不可寻址的动作。
+-->
+                    <HumanTurnActions
+                      :copied="
+                        copiedMessage === (message.id ?? `human:${entry.index}`)
+                      "
+                      :copy-label="$i18n.t.value.clipboard.copyToClipboard"
+                      :copied-label="$i18n.t.value.clipboard.copiedToClipboard"
+                      :edit-label="$i18n.t.value.messages.actions.editAndRerun"
+                      :show-edit="
+                        interactive !== false &&
+                        !props.uploading &&
+                        !props.branchPending &&
+                        !props.hasGoal &&
+                        !hasOpenHumanInput &&
+                        !editState?.pending &&
+                        editState?.messageId !== message.id &&
+                        Boolean(message.id) &&
+                        editable?.humanMessage.id === message.id
+                      "
+                      @copy="
+                        copyMessage(
+                          message.id ?? `human:${entry.index}`,
+                          getMessageCopyData(message),
+                        )
+                      "
+                      @edit="beginEdit(message, entry.index)"
+                    />
+                  </div>
+                  <div
+                    v-else-if="message.additional_kwargs?.element === 'task'"
+                    class="flex flex-col gap-2"
+                  >
+                    <Collapsible :default-open="false">
+                      <CollapsibleTrigger as-child class="group">
+                        <div
+                          class="text-muted-foreground flex w-full cursor-default items-center gap-2 text-sm select-none"
+                        >
+                          <Loader class="size-4" />
+                          <span>{{ text(message) }}</span>
+                        </div>
+                      </CollapsibleTrigger>
+                    </Collapsible>
+                  </div>
+                  <template
+                    v-else-if="
+                      message.type === 'ai' ||
+                      (message.type === 'tool' &&
+                        (entry.group.type === 'human' ||
+                          entry.group.type === 'assistant'))
+                    "
+                  >
+                    <!--
+  正文使用 flex column，保证 reasoning 与 markdown 的 margin 不发生折叠。
+-->
+                    <div class="flex flex-col gap-2">
+                      <!--
+  子任务组头先于 reasoning 与卡片，使用本地化的任务数量；pt-2 不与 flex gap 折叠。
+-->
+                      <div
+                        v-if="subtaskCallCount(message) > 0"
+                        class="text-muted-foreground pt-2 text-sm font-normal"
+                      >
+                        {{
+                          $i18n.t.value.subtasks.executing(
+                            subtaskCallCount(message),
+                          )
+                        }}
+                      </div>
+                      <ProcessingMessageGroup
+                        v-if="
+                          entry.group.type === 'assistant:subagent' &&
+                          reasoning(message)
+                        "
+                        :messages="[message]"
+                        :tool-artifacts="toolArtifacts"
+                        :token-debug-steps="
+                          tokenDebugStepsForMessages([message])
+                        "
+                        :show-tool-details="
+                          tokenUsageInlineMode === 'step_debug'
+                        "
+                        :duration-seconds="
+                          reasoningDurations[entry.index]?.get(message)
+                            ?.durationSeconds
+                        "
+                        :streaming="
+                          streaming && entry.index === groups.length - 1
+                        "
+                        :thread-id="threadId"
+                        :is-mock="isMock"
+                        :markdown-components="messageMarkdownComponents"
+                        @artifact="emit('artifact', $event)"
+                        @browser="emit('browser', $event)"
+                      />
+                      <ReasoningDisclosure
+                        v-else-if="reasoning(message)"
+                        :content="reasoning(message) ?? ''"
+                        :duration-seconds="
+                          reasoningDurations[entry.index]?.get(message)
+                            ?.durationSeconds
+                        "
+                        :streaming="
+                          streaming && entry.index === groups.length - 1
+                        "
+                        :markdown-components="messageMarkdownComponents"
+                      />
+                      <!--
                   `my-3` 是**调用点**给的，不是渲染器自带的：上游
                   `message-list-item.tsx` 写的是
                   `<MarkdownContent className="my-3">`，而 reasoning、工具步骤那几个
@@ -1515,204 +1301,188 @@ onUnmounted(() => {
                   12px——对照台账上 branch-thread / workspace-changes /
                   thread-history-mermaid 三条一模一样的 `y Δ-12` 就是这一处。
                 -->
+                      <MessageMarkdown
+                        v-if="
+                          text(message) &&
+                          !(
+                            entry.group.type === 'assistant:subagent' &&
+                            reasoning(message)
+                          )
+                        "
+                        class="my-3"
+                        :content="text(message)"
+                        :components="messageMarkdownComponents"
+                        :streaming="
+                          streaming && entry.index === groups.length - 1
+                        "
+                      />
+                      <CitationSourcesPanel :sources="citations(message)" />
+                      <KnowledgeSourcesPanel :content="text(message)" />
+                      <WorkspaceChangesBadge
+                        v-if="
+                          message.type === 'ai' &&
+                          threadId &&
+                          workspaceChangesRun(entry.index)
+                        "
+                        :thread-id="threadId"
+                        :run-id="workspaceChangesRun(entry.index)"
+                        :disabled="
+                          streaming && entry.index === groups.length - 1
+                        "
+                      />
+                      <!--
+  产物工具调用由 ProcessingMessageGroup 渲染；普通 assistant/subagent 分支不重复新增路径按钮。
+-->
+                      <!--
+  SubtaskCard 直接参与 gap-2 布局，不附加会叠加间距的包装层。
+-->
+                      <template
+                        v-for="(call, callIndex) in message.type === 'ai'
+                          ? (message.tool_calls ?? [])
+                          : []"
+                        :key="subtaskId(call.id, entry.index, callIndex)"
+                      >
+                        <SubtaskCard
+                          v-if="call.name === 'task'"
+                          :task-id="subtaskId(call.id, entry.index, callIndex)"
+                          :thread-id="threadId"
+                          :run-id="runIdOfGroup(entry.index) ?? activeRunId"
+                          :description="subtaskDescription(call.args)"
+                          :prompt="subtaskPrompt(call.args)"
+                          :live-task="
+                            subtasks?.[
+                              subtaskId(call.id, entry.index, callIndex)
+                            ]
+                          "
+                          :terminal="subtaskTerminal(call.id)"
+                          :pending-status="subtaskPendingStatus(call.id)"
+                          :is-loading="streaming"
+                          :markdown-components="messageMarkdownComponents"
+                        />
+                      </template>
+                    </div>
+                  </template>
+                  <!--
+  子任务 tool 结果仅供任务 owner 更新卡片状态、结果及用量，不在列表重复渲染。
+-->
+                  <!--
+  结构化 human_input 交给 HumanInputCard；其余 clarification 正文按 markdown 渲染，
+                此调用点不增加普通 assistant 气泡的外边距。
+-->
                   <MessageMarkdown
-                    v-if="text(message)"
-                    class="my-3"
+                    v-else-if="
+                      message.type === 'tool' &&
+                      entry.group.type === 'assistant:clarification' &&
+                      !extractHumanInputRequest(message) &&
+                      text(message)
+                    "
                     :content="text(message)"
                     :components="messageMarkdownComponents"
                     :streaming="streaming && entry.index === groups.length - 1"
                   />
-                  <CitationSourcesPanel :sources="citations(message)" />
-                  <!--
-                    **这里不画 artifact 的文件名按钮。** 曾经有一排
-                    `write_file` / `str_replace` / `finalize_artifact_write` /
-                    `present_files` 的文字按钮挂在这一层，上游一处都没有：
-                    带这些工具调用的 ai 消息在两个应用里都归 `assistant:processing`
-                    组，画成 chain-of-thought 的一步（NotebookPen + 可点的路径
-                    chip，本仓是 ProcessingToolStep.vue，上游是
-                    message-group.tsx:853 的同一支）。剩下走得到这条通用分支的
-                    只有 `assistant:subagent` 组（同一条消息既有 task 又有写文件
-                    调用时），而上游那一支只画「执行 N 个子任务」+ reasoning +
-                    SubtaskCard（message-list.tsx:1195），文件名按钮同样没有。
-                    `assistant` 组按构造就不带 tool_calls
-                    （becomesAssistantBubble 要求 `!hasToolCalls`），
-                    `assistant:clarification` 组里是 tool 消息不是 ai 消息，
-                    两条都取不到东西——整段是「本仓多出来的」，按双向规则删掉。
-                  -->
-                  <!--
-                    卡片是 gap-2 容器的**直接**子节点，不再套 `my-2 text-sm`。
-                    上游 assistant:subagent 分支把 SubtaskCard 直接 push 进
-                    `<div className="relative z-1 flex flex-col gap-2">`，中间没有层；
-                    flex 容器不折叠 margin，多出来的 `my-2` 会在 gap 的 8px 之外再加
-                    8px，把整张卡片往下推 8px。非 task 的工具调用仍走原来的 details，
-                    那是本仓自己的渲染路径（上游的工具步骤在 processing 组里），
-                    不在这一轮的范围内。
-                  -->
-                  <template
-                    v-for="(call, callIndex) in message.tool_calls ?? []"
-                    :key="subtaskId(call.id, entry.index, callIndex)"
-                  >
-                    <SubtaskCard
-                      v-if="call.name === 'task'"
-                      :task-id="subtaskId(call.id, entry.index, callIndex)"
-                      :thread-id="threadId"
-                      :run-id="runIdOfGroup(entry.index) ?? activeRunId"
-                      :description="subtaskDescription(call.args)"
-                      :prompt="subtaskPrompt(call.args)"
-                      :live-task="
-                        subtasks?.[subtaskId(call.id, entry.index, callIndex)]
-                      "
-                      :terminal="subtaskTerminal(call.id)"
-                      :pending-status="subtaskPendingStatus(call.id)"
-                      :is-loading="streaming"
-                      :markdown-components="messageMarkdownComponents"
-                    />
-                    <div v-else class="my-2 text-sm">
-                      <details class="group/tool">
-                        <summary
-                          class="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-2 py-1.5 transition-colors"
-                        >
-                          <Wrench :size="15" />
-                          <span>{{ toolLabel(call.name) }}</span>
-                        </summary>
-                        <pre
-                          v-if="
-                            call.args &&
-                            Object.keys(call.args).length &&
-                            !ARTIFACT_TOOL_NAMES.has(call.name)
-                          "
-                          class="bg-muted text-muted-foreground mt-1 ml-6 max-h-64 overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap"
-                          >{{ JSON.stringify(call.args, null, 2) }}</pre>
-                      </details>
-                    </div>
-                  </template>
-                </div>
-              </template>
-              <!--
-                子任务组里的 tool 结果**不单独渲染**。上游 assistant:subagent 分支只
-                遍历 `type === "ai"` 的消息（组头 + 推理块 + 卡片），tool 结果只被读
-                去更新子任务的状态、结果、模型与 token，不再画一遍。本仓此前走的是
-                通用的 tool 分支，于是同一份任务结果出现两次：一次在卡片里，一次是
-                下面这个 `<details>`（可访问性树上多一行 `- group: task result`）。
-              -->
-              <!--
-                clarification 组有**两支**，此前只做了一支。带 `artifact.human_input`
-                的走上面的 HumanInputCard；不带的那一支，上游把这条 tool 消息的正文
-                当 markdown 画出来（message-list.tsx:1147 的 `if (hasContent(message))`），
-                本仓此前什么都不画——下面那个 details 把整个 clarification 组排除掉了，
-                于是一段本该念出来的追问在会话里凭空消失。
+                </template>
 
-                **不传 `my-3`**：上游这一处的 MarkdownContent 没有 className，
-                与 assistant 气泡那一处不是同一个调用点。
-              -->
-              <MessageMarkdown
-                v-else-if="
-                  message.type === 'tool' &&
-                  entry.group.type === 'assistant:clarification' &&
-                  !extractHumanInputRequest(message) &&
-                  text(message)
-                "
-                :content="text(message)"
-                :components="messageMarkdownComponents"
-                :streaming="streaming && entry.index === groups.length - 1"
-              />
-              <details
-                v-else-if="
-                  message.type === 'tool' &&
-                  entry.group.type !== 'assistant:subagent' &&
-                  entry.group.type !== 'assistant:clarification'
-                "
-                class="my-2 text-sm"
-              >
-                <summary
-                  class="text-muted-foreground hover:text-foreground flex cursor-pointer list-none items-center gap-2 py-1.5"
-                >
-                  <CheckCircle2 :size="15" />
-                  {{
-                    $i18n.t.value.messages.toolResult(
-                      message.name ?? $i18n.t.value.messages.tool,
+                <MessageTokenUsage
+                  v-if="
+                    tokenUsageInlineMode === 'step_debug' ||
+                    turnUsageMessagesByGroupIndex[entry.index]
+                  "
+                  :messages="
+                    tokenUsageInlineMode === 'per_turn'
+                      ? (turnUsageMessagesByGroupIndex[entry.index] ?? [])
+                      : entry.group.messages
+                  "
+                  :token-debug-steps="inlineTokenDebugSteps(entry.group)"
+                  :mode="tokenUsageInlineMode ?? 'off'"
+                  :loading="streaming"
+                />
+
+                <AssistantTurnActions
+                  v-if="entry.group.type === 'assistant'"
+                  :copied="
+                    copiedMessage ===
+                    `assistant:${entry.group.id ?? entry.index}`
+                  "
+                  :copy-label="$i18n.t.value.clipboard.copyToClipboard"
+                  :copied-label="$i18n.t.value.clipboard.copiedToClipboard"
+                  :show-copy="Boolean(assistantCopyData[entry.index])"
+                  :branch-label="$i18n.t.value.messages.actions.branch"
+                  :regenerate-label="$i18n.t.value.messages.actions.regenerate"
+                  :show-branch="
+                    props.canBranch &&
+                    !streamingAssistantGroups[entry.index] &&
+                    branchable.has(entry.group.id ?? '')
+                  "
+                  :show-regenerate="
+                    latestAssistantGroupId !== null &&
+                    entry.group.id === latestAssistantGroupId &&
+                    Boolean(lastAI(entry.index)?.id)
+                  "
+                  :branch-disabled="
+                    interactive === false ||
+                    Boolean(uploading) ||
+                    Boolean(branchPending) ||
+                    Boolean(editState?.pending)
+                  "
+                  :regenerate-disabled="
+                    interactive === false ||
+                    Boolean(uploading) ||
+                    Boolean(editState?.pending)
+                  "
+                  @copy="
+                    copyMessage(
+                      `assistant:${entry.group.id ?? entry.index}`,
+                      assistantCopyData[entry.index] ?? null,
                     )
-                  }}
-                </summary>
-                <pre
-                  class="bg-muted text-muted-foreground mt-1 ml-6 max-h-64 overflow-auto rounded-lg p-3 text-xs whitespace-pre-wrap"
-                  >{{ text(message) }}</pre>
-              </details>
-            </template>
-
-            <WorkspaceChangesBadge
-              v-if="threadId && workspaceChangesRun(entry.index)"
-              :thread-id="threadId"
-              :run-id="workspaceChangesRun(entry.index)"
-              :disabled="streaming"
-            />
-
-            <MessageTokenUsage
-              v-if="turnUsageMessagesByGroupIndex[entry.index]"
-              :messages="turnUsageMessagesByGroupIndex[entry.index] ?? []"
-              :mode="tokenUsageInlineMode ?? 'off'"
-              :loading="streaming"
-            />
-
-            <AssistantTurnActions
-              v-if="entry.group.type === 'assistant'"
-              :copied="
-                copiedMessage === `assistant:${entry.group.id ?? entry.index}`
-              "
-              :copy-label="$i18n.t.value.clipboard.copyToClipboard"
-              :branch-label="$i18n.t.value.messages.actions.branch"
-              :regenerate-label="$i18n.t.value.messages.actions.regenerate"
-              :show-branch="
-                props.canBranch && branchable.has(entry.group.id ?? '')
-              "
-              :show-regenerate="
-                latestAssistantGroupId !== null &&
-                entry.group.id === latestAssistantGroupId &&
-                Boolean(lastAI(entry.index)?.id)
-              "
-              :branch-disabled="
-                interactive === false ||
-                Boolean(uploading) ||
-                Boolean(branchPending)
-              "
-              :regenerate-disabled="interactive === false || Boolean(uploading)"
-              @copy="
-                copyMessage(
-                  `assistant:${entry.group.id ?? entry.index}`,
-                  getAssistantTurnCopyData(entry.group.messages, {
-                    isStreaming: streaming && entry.index === groups.length - 1,
-                  }),
-                )
-              "
-              @branch="
-                emit('branch', entry.group.id ?? '', groupIds(entry.index))
-              "
-              @regenerate="
-                emit(
-                  'regenerate',
-                  lastAI(entry.index)?.id ?? '',
-                  entry.group.messages.flatMap((message) =>
-                    message.id ? [message.id] : [],
-                  ),
-                )
-              "
-            />
-            <div
-              v-for="duration in durations[entry.index] ?? []"
-              :key="duration.runId"
-              data-testid="run-duration"
-              :title="$i18n.t.value.runDuration.description"
-              class="text-muted-foreground mt-2 flex items-center gap-2 text-sm"
-            >
-              <Clock3 :size="16" />
-              <span>{{ durationLabel(duration.durationSeconds) }}</span>
+                  "
+                  @branch="
+                    emit('branch', entry.group.id ?? '', groupIds(entry.index))
+                  "
+                  @regenerate="
+                    emit(
+                      'regenerate',
+                      lastAI(entry.index)?.id ?? '',
+                      entry.group.messages.flatMap((message) =>
+                        message.id ? [message.id] : [],
+                      ),
+                    )
+                  "
+                >
+                  <template #details>
+                    <SkillUsageMenu
+                      v-if="!streamingAssistantGroups[entry.index]"
+                      :skills="skillUsageByGroupIndex.get(entry.index) ?? []"
+                    />
+                  </template>
+                </AssistantTurnActions>
+              </div>
             </div>
-          </div>
+            <div
+              v-if="placedTaskEvents.afterGroup.get(entry.index)?.length"
+              class="mt-8 flex w-full flex-col gap-3"
+            >
+              <ScheduledTaskEventLine
+                v-for="event in placedTaskEvents.afterGroup.get(entry.index)"
+                :key="event.id"
+                :event="event"
+              />
+            </div>
+          </template>
+        </VirtualMessageList>
+        <div
+          v-if="placedTaskEvents.tail.length"
+          class="flex w-full flex-col gap-3"
+        >
+          <ScheduledTaskEventLine
+            v-for="event in placedTaskEvents.tail"
+            :key="event.id"
+            :event="event"
+          />
         </div>
         <div
           v-if="streaming && !hasActiveAssistantText"
           role="status"
-          :class="['w-full', renderedGroups.length ? 'mt-8' : '']"
+          :class="['w-full', groups.length ? 'mt-8' : '']"
         >
           <RunActivity :start-time="turnStartTime" />
         </div>
@@ -1727,23 +1497,11 @@ onUnmounted(() => {
     </div>
   </div>
   <!--
-    划词工具条**挂在日志区外面**，与上游一致（`message-list.tsx` 里它是
-    `</Conversation>` 之后的兄弟节点）。**wave 124 之前它在里面**，后果不是排版
-    ——`role="log"` 是一个 live region，插进去的内容会被读屏器当作日志播报出来，
-    而这是一条随选区出现/消失的浮动工具条。实测：可访问性树里那三颗按钮
-    **上游深度 2、本仓深度 3**（wave 123 量出的 6 行就是它）。
-
-    锚在**选区**上（上游 message-list.tsx:1328），不是屏幕角落：
-      此前这里是 `right-8 bottom-28`，实测同一段选区上游画在 (367,197)、本仓画在
-      (955,642)——引用的是哪一段完全看不出来。
-
-      三颗按钮都要 `@mousedown.prevent`：默认的 mousedown 会先把选区折叠掉，
-      工具条上的高亮随之消失，看起来像点错了。上游三颗也都写了。
-    -->
+  选区工具条位于日志 live region 之外，锚定浏览器选区；mousedown.prevent 保留原选区。
+-->
   <!--
-    会话目录挂在**日志区外面**（与上游 message-list.tsx 同处）：它是绝对定位在
-    这一屏右侧的浮层，放进滚动容器里会跟着内容一起滚走。
-  -->
+  会话目录作为日志区兄弟定位，避免跟随消息内容滚走。
+-->
   <ConversationOutline
     v-if="outlineEnabled"
     :chapters="chapters"
@@ -1756,8 +1514,8 @@ onUnmounted(() => {
     data-sidecar-selection-toolbar
     class="bg-popover text-popover-foreground border-border fixed z-50 flex max-h-[calc(100dvh-1rem)] max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-1 overflow-y-auto rounded-full border p-1 shadow-lg"
     :style="{
-      left: `${SELECTION_TOOLBAR_MARGIN}px`,
-      top: `${SELECTION_TOOLBAR_MARGIN}px`,
+      left: `${selectionToolbarMargin}px`,
+      top: `${selectionToolbarMargin}px`,
     }"
   >
     <Button

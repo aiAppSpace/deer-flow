@@ -339,7 +339,7 @@ describe("协议边界", () => {
 });
 
 describe("停止（05 L13/L16）", () => {
-  it("stop 之后真的发出了 cancel 请求，并按 durable status 收敛", async () => {
+  it("stop 发出 cancel 后，读取 durable 终态及同一运行的尾帧才收敛", async () => {
     const upstream = await startUpstream((request, response) => {
       if (request.method === "POST" && request.url?.endsWith("/runs/stream")) {
         sseHead(response, CONTENT_LOCATION);
@@ -348,6 +348,14 @@ describe("停止（05 L13/L16）", () => {
       }
       if (request.url?.includes("/cancel")) {
         response.writeHead(202).end();
+        return;
+      }
+      if (request.method === "GET" && request.url?.endsWith("/stream")) {
+        sseHead(response);
+        response.write(
+          'event: values\ndata: {"final":"cancelled tail"}\nid: 2\n\n',
+        );
+        response.end("event: end\ndata: null\n\n");
         return;
       }
       response
@@ -382,6 +390,12 @@ describe("停止（05 L13/L16）", () => {
       ),
     ).toBe(true);
     expect(statuses(outputs)).toContain("stopping");
+    expect(upstream.calls).toContainEqual({
+      method: "GET",
+      url: "/api/langgraph/threads/t-1/runs/r-1/stream",
+      lastEventId: "1",
+    });
+    expect(dataOf(outputs)).toContain('{"final":"cancelled tail"}');
     expect(outputs.at(-1)).toMatchObject({
       kind: "state",
       state: { status: "cancelled", reason: "interrupted" },

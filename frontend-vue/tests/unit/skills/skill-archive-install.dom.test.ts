@@ -1,7 +1,8 @@
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 /*
   【文件职责】     守住本地 `.skill` 安装：三道拦截各说各的话，成功后切页签。
   【架构位置】     测试
-  【依赖关系】     SkillSettings.vue · core/skills/api
+  【依赖关系】     SkillGallery.vue · core/skills/api
   【边界与注意】   前两道（扩展名、大小）在前端拦，第三道（安全扫描）只有后端知道。
                    三种说的是不同的话，任何一种说错，用户都不知道自己该改什么。
                    尤其安全扫描那条：后端给的是「哪条规则、哪个文件的哪一行、怎么改」，
@@ -24,8 +25,18 @@ vi.mock("@/composables/useSkillSettings", async () => {
   return {
     useSkillSettings: () => ({
       skills: makeRef([
-        { name: "public-one", category: "public", enabled: true },
-        { name: "custom-one", category: "custom", enabled: true },
+        {
+          name: "public-one",
+          description: "Public skill",
+          category: "public",
+          enabled: true,
+        },
+        {
+          name: "custom-one",
+          description: "Custom skill",
+          category: "custom",
+          enabled: true,
+        },
       ]),
       canManage: computed(() => true),
       pending: makeRef(false),
@@ -53,7 +64,15 @@ vi.mock("@/composables/useSettingsDialog", () => ({
   useSettingsDialog: () => ({ close: vi.fn() }),
 }));
 
-import SkillSettings from "@/components/workspace/settings/SkillSettings.vue";
+vi.mock("@/composables/useCapabilities", async () => {
+  const { computed } = await import("vue");
+  return {
+    useCapabilityUser: () =>
+      computed(() => ({ id: "admin", system_role: "admin" })),
+  };
+});
+
+import SkillGallery from "@/components/workspace/capabilities/SkillGallery.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import {
   MAX_SKILL_ARCHIVE_UPLOAD_BYTES,
@@ -74,7 +93,7 @@ beforeEach(() => {
   vi.stubGlobal("useNuxtApp", () => ({
     $i18n: { t: ref(enUS), locale: ref("en-US") },
   }));
-  vi.stubGlobal("navigateTo", vi.fn());
+  vi.stubGlobal("useRouter", () => ({ push: vi.fn() }));
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -82,9 +101,12 @@ afterEach(() => {
 });
 
 function mountSkills() {
-  return mount(SkillSettings, {
+  return mount(SkillGallery, {
     attachTo: document.body,
-    global: { provide: { [workspaceToastKey as symbol]: toastStore } },
+    global: {
+      plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
+      provide: { [workspaceToastKey as symbol]: toastStore },
+    },
   });
 }
 

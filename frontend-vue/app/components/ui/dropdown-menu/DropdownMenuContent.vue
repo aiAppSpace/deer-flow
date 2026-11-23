@@ -3,37 +3,9 @@
   【架构位置】     L2
   【主要导出】     DropdownMenuContent 组件
   【依赖关系】     Reka DropdownMenuContent/Portal · cn
-  【边界与注意】   统一 z-index 与弹层配色；调用方只覆盖宽度这类布局值。
-
-                   三条来自上游 `ui/dropdown-menu.tsx:38` 的合同，本仓原来一条都没有：
-                   ① **`max-h-(--reka-dropdown-menu-content-available-height)`
-                   + `overflow-y-auto`**——不写这两条，比视口高的菜单**滚不动**，
-                   底下几项永远够不着（实测本仓 max-height 恒为 `none`，
-                   上游同一屏是 507px / 735px）。Reka 与 Radix 一样把
-                   `--reka-popper-available-height` 转写成这个带命名空间的变量
-                   （reka-ui/dist/DropdownMenu/DropdownMenuContent.js 的 style）。
-                   ② `origin-(--reka-dropdown-menu-content-transform-origin)`
-                   + zoom/slide 那四条：上游的菜单是从触发器那一侧展开的，
-                   本仓只有淡入。
-                   `z-80` 是本仓自己的一层统一（上游 `z-50`），有意保留。
-
-                   ③ **横向那一半是第五十六轮补的，上游同一处同改**：
-                   available-width 上限 + capped 8rem 最小宽度。
-                   只有 ① 那条竖的时候，菜单**横着**照样能比屏幕宽：
-                   实测 200% 文本 / 375px 视口下这颗会话 ⋯ 菜单是 **384px**，
-                   摆在 x=-46，左边整整切掉 46px。
-
-                   ⚠ **`min-w` 那一半不能省。** `min-w-32` = 8rem 在 200% 下是
-                   **256px**，它是个 rem 下限，会把 `max-w` 顶回去——
-                   只加 `max-w` 时量到的是 256（而不是可用的 210）。
-                   改完两应用逐字相同：基线 `[59,314 192x243]`（一格没动）、
-                   200% `[0,209 210x603]`（归位）。
-
-                   ⚠ **同一个 clamp 不要加到 `DropdownMenuSubContent` 上**
-                   （第五十六轮试过并撤回）：子菜单那一侧两个 primitive 算出来的
-                   available-width 不一样（本仓 375 / 上游 174），
-                   加上去会把上游基线的子菜单夹到 129px、条目换行，
-                   **为修 200% 弄坏基线**。判词与读数在 open-accounts 第五十六轮。
+  【边界与注意】   内容高度限制为 Reka 的可用高度并保留纵向滚动；动画原点跟随触发器。
+                   横向同时限制最大和最小宽度，避免 rem 下限抵消可用宽度上限。
+                   子菜单使用自身的视口约束，不套用此处 popper available-width。
 -->
 
 <script setup lang="ts">
@@ -43,10 +15,12 @@ import {
   DropdownMenuPortal,
   type DropdownMenuContentEmits,
   type DropdownMenuContentProps,
+  injectDropdownMenuRootContext,
   useForwardProps,
 } from "reka-ui";
 
 import { cn } from "@/lib/utils";
+import { retainMenuTab } from "./use-menu-tab-stop";
 
 /*
   内容 portal 到 body，组件根是 Portal 而不是内容元素。不关掉 attribute 继承，
@@ -68,60 +42,27 @@ const props = withDefaults(
     */
     sticky: "always",
     collisionPadding: 8,
+    // Keep both axes inside the viewport when reflow moves the anchor outside it.
+    prioritizePosition: true,
     class: undefined,
   },
 );
-const emits = defineEmits<DropdownMenuContentEmits>();
+const emits = defineEmits<
+  DropdownMenuContentEmits & { openAutoFocus: [event: Event] }
+>();
 
 const forwarded = useForwardProps(props);
+const menuRoot = injectDropdownMenuRootContext();
 const delegated = computed(() => {
   const { class: _class, ...rest } = forwarded.value;
   void _class;
-  return rest;
+  // TooltipRoot also owns a generic PopperRoot. A composed tooltip/trigger can
+  // register there, so use this menu's existing native trigger as its anchor.
+  return {
+    ...rest,
+    reference: rest.reference ?? menuRoot.triggerElement.value,
+  };
 });
-
-/*
-  Reka 的 shift middleware 在触发器整体落到 collision boundary 外时，仍可能把
-  fixed wrapper 留在触发器的屏外坐标。不要改写它拥有的 transform（下一次定位会
-  覆盖），而是在键盘进入/操作菜单时用独立的 CSS translate 补最后一段越界距离。
-  这保留正常锚点坐标，只修 viewport 两轴真实越界的部分。
-*/
-function keepKeyboardMenuInsideViewport(event: Event) {
-  const content = event.currentTarget;
-  if (!(content instanceof HTMLElement)) return;
-  requestAnimationFrame(() => {
-    const wrapper = content.parentElement;
-    if (
-      !wrapper?.hasAttribute("data-reka-popper-content-wrapper") ||
-      !content.isConnected
-    )
-      return;
-    wrapper.style.translate = "";
-    const rect = content.getBoundingClientRect();
-    const padding =
-      typeof props.collisionPadding === "number"
-        ? props.collisionPadding
-        : Math.max(
-            props.collisionPadding?.top ?? 0,
-            props.collisionPadding?.right ?? 0,
-            props.collisionPadding?.bottom ?? 0,
-            props.collisionPadding?.left ?? 0,
-          );
-    const dx =
-      rect.left < padding
-        ? padding - rect.left
-        : rect.right > innerWidth - padding
-          ? innerWidth - padding - rect.right
-          : 0;
-    const dy =
-      rect.top < padding
-        ? padding - rect.top
-        : rect.bottom > innerHeight - padding
-          ? innerHeight - padding - rect.bottom
-          : 0;
-    if (dx || dy) wrapper.style.translate = `${dx}px ${dy}px`;
-  });
-}
 </script>
 
 <template>
@@ -140,8 +81,8 @@ function keepKeyboardMenuInsideViewport(event: Event) {
       @focus-outside="emits('focusOutside', $event)"
       @interact-outside="emits('interactOutside', $event)"
       @close-auto-focus="emits('closeAutoFocus', $event)"
-      @focusin="keepKeyboardMenuInsideViewport"
-      @keydown.capture="keepKeyboardMenuInsideViewport"
+      @open-auto-focus="emits('openAutoFocus', $event)"
+      @keydown="retainMenuTab"
     >
       <slot />
     </DropdownMenuContent>

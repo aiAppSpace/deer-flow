@@ -1,54 +1,15 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
-/*
-  【文件职责】     渲染 workspace 唯一的可访问 toast viewport。
-  【架构位置】     L3 workspace shell
-  【主要导出】     默认 WorkspaceToaster 组件
-  【依赖关系】     workspace-shell/toast · i18n
-  【边界与注意】   只渲染注入 owner，不创建第二份 toast store。
+// The shell renders its injected toast owner; native focus returns to the entry control.
 
-                   结构照 React 用的 sonner：外层是一个**常驻**的 section（role=region），
-                   带 aria-live="polite"，里面的 ol 只在真有 toast 时才存在。
-                   两层各有分工——常驻的那层让读屏器提前把 live region 挂上，新 toast
-                   插进来才会被播报；空 ol 若长期挂在树里，读屏器每次遍历都会念出一个
-                   永远是空的「通知列表」。
-
-                   可访问名里的 `alt+T` 不是装饰：sonner 真的绑了这个热键，把焦点送进
-                   toast 列表。名字承诺了热键，热键就必须存在，否则这句提示是假的。
-                   Escape 在焦点位于列表内时把焦点交还——与 sonner 收起展开态同一个位置。
-
-                   **每条 toast 没有关闭键。** 上游两处调用点
-                   （`workspace-content.tsx:44`、`showcase/[thread_id]/layout.tsx:29`）
-                   都是 `<Toaster position="top-center" />`，**没有传 `closeButton`**，
-                   而 sonner 的默认值是关的——上游每条 toast 根本没有那颗键。
-                   本仓此前自己加了一颗，还是拿 `×` 当图标画的
-                   （workspace 下的 dismissNotification 也是本仓独有的词条，一并删了；
-                   这里不写带点的键名，那会被 i18n 扫描器当成一处消费，坑 126）。
-                   wave 71 记下这笔账、wave 73 结清：按「React 没有的 Vue 不许有」删掉。
-                   代价是一条 toast 只能等它自己消失——**4 秒（sonner 的
-                   `TOAST_LIFETIME`）**，与上游同一个数。
-
-                   **尺寸逐条抄 sonner 的 CSS**（`sonner/dist/index.mjs` 里
-                   `[data-sonner-toast][data-styled=true]` 那一条，wave 74 两边同屏实测）：
-                   `padding:16px`（本仓原来 `px-4 py-3`）、`font-size:13px`（原来 14px）、
-                   `gap:6px`（原来 12px）、`align-items:center`（原来 `items-start`，
-                   还给图标加了 `mt-0.5`）、`box-shadow:0 4px 12px rgba(0,0,0,.1)`
-                   （原来 Tailwind 的 `shadow-lg`）、`width:356px`（原来 420，**宽 64px**）、
-                   `border-radius:var(--radius)`（两边 `--radius` 都是 0.625rem，
-                   `rounded-lg` 已经对上）。外层：`VIEWPORT_OFFSET = 24px`
-                   （原来 `top-3` = 12px）、`GAP = 14px`（原来 `gap-2` = 8px）。
-
-                   图标那两条外边距也是 sonner 的：
-                   `--toast-icon-margin-start:-3px` / `--toast-icon-margin-end:4px`
-                   （`[dir=ltr]` 那一组变量）。少了它们，图标整体右移 3px、
-                   与正文只隔 6px 而不是 10px——wave 74 实测 React 的图标左边缘在
-                   x=475、本仓在 479。
-
-                   **错误态不染红边框。** 本仓原来给 error 加 `border-destructive/40`，
-                   sonner 不按类型改边框色（那是 `richColors` 才有的行为，上游没开）——
-                   类型由图标表达，与 role/aria-live 一致。
-*/
-import { onMounted, onUnmounted, ref } from "vue";
+import {
+  onBeforeUnmount,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+  watchEffect,
+} from "vue";
 import { CircleCheck, Info, OctagonX, TriangleAlert } from "lucide-vue-next";
 
 import {
@@ -58,15 +19,67 @@ import {
 
 const toast = useWorkspaceToast();
 const list = ref<HTMLOListElement | null>(null);
+const expanded = ref(false);
+const interacting = ref(false);
+const hidden = ref(false);
+watchEffect(() =>
+  toast.setPaused(expanded.value || interacting.value || hidden.value),
+);
+let focusWithin = false;
+let shortcutVisit = false;
+let lastFocusedElement: HTMLElement | null = null;
+function clearFocusOwner() {
+  focusWithin = false;
+  shortcutVisit = false;
+  lastFocusedElement = null;
+}
+function restoreFocus() {
+  const previous = lastFocusedElement;
+  clearFocusOwner();
+  if (previous?.isConnected) {
+    previous.focus();
+    previous.scrollIntoView({ block: "nearest" });
+  }
+}
+function onFocusIn(event: FocusEvent) {
+  if (focusWithin) return;
+  focusWithin = true;
+  lastFocusedElement =
+    event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null;
+}
+function onFocusOut(event: FocusEvent) {
+  if (
+    focusWithin &&
+    !(
+      event.relatedTarget instanceof Node &&
+      list.value?.contains(event.relatedTarget)
+    )
+  )
+    clearFocusOwner();
+}
+watch(list, (value, previous) => {
+  if (!value && previous) {
+    expanded.value = false;
+    interacting.value = false;
+  }
+});
+watch(toast.toasts, (items) => {
+  // Restore before Vue removes a focused viewport and the browser blurs it.
+  if (items.length === 0) restoreFocus();
+  if (items.length <= 1) expanded.value = false;
+});
+function onVisibilityChange() {
+  hidden.value = document.hidden;
+}
 
 /*
   逐颗照抄上游 `ui/sonner.tsx:19` 传给 `<Toaster>` 的那份 `icons`：
   success→CircleCheckIcon、info→InfoIcon、warning→TriangleAlertIcon、
   error→OctagonXIcon，全是 `className="size-4"`（sonner 的 `[data-icon]` 槽位
-  本身就是 16×16）。**loading 那一颗够不着**——本仓的 toast store 没有 loading
+  本身就是 16×16）。plain toast(message) 没有图标。**loading 那一颗够不着**——本仓的 toast store 没有 loading
   这一档（上游那颗只在 `toast.promise` 里用，DeerFlow 一处都没有调）。
 */
-const KIND_ICON: Record<WorkspaceToastKind, typeof Info> = {
+const KIND_ICON: Partial<Record<WorkspaceToastKind, typeof Info>> = {
   success: CircleCheck,
   info: Info,
   warning: TriangleAlert,
@@ -74,23 +87,97 @@ const KIND_ICON: Record<WorkspaceToastKind, typeof Info> = {
 };
 
 /** sonner 的默认热键：altKey + KeyT，可访问名里的 `alt+T` 就是它。 */
-function onKeydown(event: KeyboardEvent) {
-  if (event.altKey && event.code === "KeyT") {
-    list.value?.focus();
-    return;
-  }
+// A shortcut visit returns to its entry; ordinary Tab keeps native navigation.
+function leavesNotificationOnTab(event: KeyboardEvent, root: HTMLElement) {
+  const view = root.ownerDocument.defaultView;
+  const target = event.target;
   if (
-    event.code === "Escape" &&
-    list.value &&
-    (document.activeElement === list.value ||
-      list.value.contains(document.activeElement))
-  ) {
-    (document.activeElement as HTMLElement | null)?.blur();
-  }
+    !view ||
+    event.defaultPrevented ||
+    event.key !== "Tab" ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    !(target instanceof view.HTMLElement) ||
+    !root.contains(target) ||
+    root.ownerDocument.activeElement !== target
+  )
+    return false;
+  const stops = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      "button,a[href],input,select,textarea,[tabindex]",
+    ),
+  )
+    .filter((node) => {
+      if (
+        node.tabIndex < 0 ||
+        (node as HTMLButtonElement).disabled ||
+        node.hidden
+      )
+        return false;
+      for (
+        let current: HTMLElement | null = node;
+        current;
+        current = current.parentElement
+      ) {
+        const style = view.getComputedStyle(current);
+        if (
+          current.hidden ||
+          current.inert ||
+          style.display === "none" ||
+          style.visibility === "hidden"
+        )
+          return false;
+        if (current === root) return true;
+      }
+      return false;
+    })
+    .sort(
+      (left, right) =>
+        (left.tabIndex || Infinity) - (right.tabIndex || Infinity),
+    );
+  return target === root
+    ? event.shiftKey || stops.length === 0
+    : target === (event.shiftKey ? stops[0] : stops.at(-1));
 }
 
-onMounted(() => document.addEventListener("keydown", onKeydown));
-onUnmounted(() => document.removeEventListener("keydown", onKeydown));
+function onKeydown(event: KeyboardEvent) {
+  if (
+    shortcutVisit &&
+    list.value &&
+    lastFocusedElement?.isConnected &&
+    leavesNotificationOnTab(event, list.value)
+  ) {
+    event.preventDefault();
+    restoreFocus();
+    return;
+  }
+  if (!event.defaultPrevented && event.altKey && event.code === "KeyT") {
+    expanded.value = true;
+    if (list.value && !focusWithin) {
+      shortcutVisit = true;
+      list.value.focus();
+      if (!focusWithin) shortcutVisit = false;
+    } else {
+      list.value?.focus();
+    }
+    return;
+  }
+  if (event.code === "Escape" && list.value?.contains(document.activeElement))
+    expanded.value = false;
+}
+
+onMounted(() => {
+  onVisibilityChange();
+  document.addEventListener("keydown", onKeydown);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+});
+onBeforeUnmount(restoreFocus);
+onUnmounted(() => {
+  document.removeEventListener("keydown", onKeydown);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  toast.setPaused(false);
+});
 </script>
 
 <template>
@@ -106,37 +193,42 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
       ref="list"
       data-testid="workspace-toaster"
       tabindex="-1"
-      class="pointer-events-none fixed inset-x-0 top-6 z-[120] mx-auto flex w-[min(92vw,356px)] flex-col gap-[14px]"
+      class="workspace-toaster pointer-events-none fixed inset-x-0 top-6 z-[120] mx-auto flex w-[356px] flex-col gap-[14px] max-[600px]:top-4 max-[600px]:w-[calc(100%-32px)]"
+      @focusin="onFocusIn"
+      @focusout="onFocusOut"
+      @mouseenter="expanded = true"
+      @mousemove="expanded = true"
+      @mouseleave="!interacting && (expanded = false)"
+      @dragend="expanded = false"
+      @pointerdown="interacting = true"
+      @pointerup="interacting = false"
     >
       <li
         v-for="item in toast.toasts.value"
         :key="item.id"
-        :role="item.kind === 'error' ? 'alert' : 'status'"
-        :aria-live="item.kind === 'error' ? 'assertive' : 'polite'"
-        class="bg-popover text-popover-foreground border-border pointer-events-auto flex items-center gap-1.5 rounded-lg border p-4 text-[13px] shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
+        tabindex="0"
+        class="bg-popover text-popover-foreground border-border pointer-events-auto flex items-center gap-1.5 rounded-lg border p-4 text-[13px] wrap-anywhere shadow-[0_4px_12px_rgba(0,0,0,0.1)] outline-0 focus-visible:shadow-[0_4px_12px_rgba(0,0,0,0.1),0_0_0_2px_rgba(0,0,0,0.2)]"
       >
         <!--
-          图标是 `aria-hidden` 的装饰：kind 已经由 role（alert/status）与
-          aria-live 表达，读屏器再念一遍图标名是重复播报。上游 sonner 的
-          `[data-icon]` 同样不进可访问性树。
+          The permanent live region announces notice text; type icons stay decorative.
         -->
         <component
           :is="KIND_ICON[item.kind]"
+          v-if="KIND_ICON[item.kind]"
           class="mr-1 -ml-[3px] size-4 shrink-0"
           aria-hidden="true"
         />
-        <span class="min-w-0 flex-1">
-          {{ item.message }}
+        <div class="flex min-w-0 flex-col gap-0.5">
+          <div class="leading-normal font-medium">{{ item.message }}</div>
           <!--
-            描述是补充说明，**不进 role=alert 的第一时间播报重点**——
-            它和主文案在同一个 live region 里，读屏会依次念出来。
+            Description belongs to the same permanent live region as the message.
           -->
           <span
             v-if="item.description"
-            class="text-muted-foreground mt-0.5 block text-xs"
+            class="leading-[1.4] font-normal text-[#3f3f3f] dark:text-[hsl(0_0%_91%)]"
             >{{ item.description }}</span
           >
-        </span>
+        </div>
         <!--
           动作键点完**要把这条提示关掉**：留着的话下一次同类操作会出现两条
           一模一样的提示，分不清哪条对应哪次。
@@ -157,3 +249,24 @@ onUnmounted(() => document.removeEventListener("keydown", onKeydown));
     </ol>
   </section>
 </template>
+
+<style scoped>
+/* Match the installed Sonner viewport font stack without changing page typography. */
+.workspace-toaster {
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    "Noto Sans",
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji";
+}
+</style>

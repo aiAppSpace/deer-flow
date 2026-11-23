@@ -19,7 +19,7 @@ export function SkillUsagePanel({ skill }: { skill: SkillUsage }) {
   );
 
   return (
-    <div>
+    <div className="@container/skill-details wrap-anywhere">
       <div className="border-b px-6 py-5">
         <p
           className="text-muted-foreground mb-5 font-mono text-xs leading-relaxed break-all"
@@ -27,22 +27,24 @@ export function SkillUsagePanel({ skill }: { skill: SkillUsage }) {
         >
           {skill.path}
         </p>
-        <div className="mb-4 flex items-center gap-3">
+        <div className="mb-4 flex items-center gap-3 @max-xs/skill-details:flex-wrap">
           <span className="bg-muted rounded-lg p-2">
             <BoxIcon className="size-5" strokeWidth={2.25} />
           </span>
-          <h3 className="min-w-0 flex-1 text-lg font-semibold break-words">
+          <h3 className="min-w-0 flex-1 text-lg font-semibold break-words @max-xs/skill-details:basis-full">
             {skill.name}
           </h3>
           <span className="bg-muted text-muted-foreground shrink-0 rounded-md px-2 py-1 text-xs">
             {skillSourceLabel(skill.category, t)}
           </span>
         </div>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-3 text-sm">
+        <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-3 text-sm @max-xs/skill-details:grid-cols-[minmax(0,1fr)]">
           <dt className="text-muted-foreground">{t.skillUsage.name}</dt>
-          <dd className="min-w-0 break-words">{skill.name}</dd>
+          <dd className="min-w-0 break-words @max-xs/skill-details:wrap-anywhere">
+            {skill.name}
+          </dd>
           <dt className="text-muted-foreground">{t.skillUsage.description}</dt>
-          <dd className="min-w-0 leading-relaxed break-words">
+          <dd className="min-w-0 leading-relaxed break-words @max-xs/skill-details:wrap-anywhere">
             {skill.description || "—"}
           </dd>
         </dl>

@@ -215,11 +215,12 @@ test.describe("thread list accessibility shape", () => {
     page,
   }) => {
     mockTwoThreads(page);
-    await page.route(`**/api/langgraph/threads/${MOCK_THREAD_ID}`, (route) =>
-      route.request().method() === "PATCH"
-        ? route.fulfill({ status: 503, json: { detail: "pin rejected" } })
-        : route.fallback(),
-    );
+    const attempts: unknown[] = [];
+    await page.route(`**/api/threads/${MOCK_THREAD_ID}`, (route) => {
+      if (route.request().method() !== "PATCH") return route.fallback();
+      attempts.push(route.request().postDataJSON());
+      return route.fulfill({ status: 503, json: { detail: "pin rejected" } });
+    });
     await page.goto("/workspace/chats/new");
 
     const row = page
@@ -231,7 +232,15 @@ test.describe("thread list accessibility shape", () => {
     await row.getByRole("button", { name: "More" }).click();
     await page.getByRole("menuitem", { name: "Pin chat" }).click();
 
-    await expect(page.getByRole("alert").first()).toBeVisible();
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
+      "pin rejected",
+    );
+    expect(attempts).toEqual([{ metadata: { deerflow_pinned: true } }]);
+    await expect(row).toBeVisible();
+    await row.getByRole("button", { name: "More" }).click();
+    await expect(
+      page.getByRole("menuitem", { name: "Pin chat", exact: true }),
+    ).toBeVisible();
   });
 
   /*
@@ -265,13 +274,22 @@ test.describe("thread list accessibility shape", () => {
     await row.getByRole("button", { name: "More" }).click();
     await page.getByRole("menuitem", { name: "Delete" }).click();
 
-    const alert = page.getByTestId("delete-chat-error");
+    const dialog = page.getByRole("dialog", {
+      name: "Delete chat",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    const confirm = dialog.getByRole("button", { name: "Delete", exact: true });
+    await confirm.click();
+    const alert = page
+      .getByTestId("workspace-toaster")
+      .filter({ hasText: "delete rejected" });
     await expect(alert).toBeVisible();
-    await expect(alert).toHaveRole("alert");
-    // 行还在——失败没有假装成功。
+    // Failure keeps both the row and its confirmation target available for retry.
     await expect(row).toBeVisible();
-
-    await alert.getByRole("button", { name: "Try again" }).click();
+    await expect(dialog).toBeVisible();
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
     await expect.poll(() => attempts).toBe(2);
   });
 
@@ -300,7 +318,9 @@ test.describe("thread list accessibility shape", () => {
     await page.getByTestId("thread-export-markdown").click();
 
     await expect(
-      page.getByRole("alert").filter({ hasText: "No messages yet" }),
+      page
+        .getByTestId("workspace-toaster")
+        .filter({ hasText: "No messages yet" }),
     ).toBeVisible();
   });
 

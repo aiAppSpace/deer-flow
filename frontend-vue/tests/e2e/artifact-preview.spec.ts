@@ -266,10 +266,14 @@ test.describe("Artifact preview stability", () => {
 
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.json")).toBeVisible();
-    await expect(artifactsPanel.getByText('"status": "draft"')).toBeVisible();
-    await expect(
-      artifactsPanel.getByText('"中文字段": "测试内容"'),
-    ).toBeVisible();
+    const source = artifactsPanel.getByTestId("artifact-source");
+    await expect(source.locator("textarea")).toHaveCount(0);
+    await expect(source.getByRole("textbox")).toContainText(
+      '"status": "draft"',
+    );
+    await expect(source.getByRole("textbox")).toContainText(
+      '"中文字段": "测试内容"',
+    );
   });
 
   test("loads a large code artifact only after explicit confirmation", async ({
@@ -425,7 +429,7 @@ test.describe("Artifact preview stability", () => {
     ).toBeVisible();
   });
 
-  test("renders sandboxed iframe for a browser-previewable non-code file (urlOfArtifact path)", async ({
+  test("renders a PDF iframe with its native viewer and original artifact URL", async ({
     page,
   }) => {
     mockLangGraphAPI(page, {
@@ -460,9 +464,13 @@ test.describe("Artifact preview stability", () => {
     const artifactsPanel = page.locator("#artifacts");
     await expect(artifactsPanel.getByText("report.pdf")).toBeVisible();
 
-    const urlOfArtifactIframe = artifactsPanel.locator("iframe:not([title])");
+    const urlOfArtifactIframe = artifactsPanel.locator("iframe");
     await expect(urlOfArtifactIframe).toBeVisible();
-    await expect(urlOfArtifactIframe).toHaveAttribute("sandbox", "");
+    await expect(urlOfArtifactIframe).not.toHaveAttribute("sandbox", /.*/);
+    await expect(urlOfArtifactIframe).toHaveAttribute(
+      "src",
+      new RegExp(PDF_ARTIFACT_PATH),
+    );
   });
 
   test("renders video artifacts with a native media element instead of a sandboxed iframe", async ({

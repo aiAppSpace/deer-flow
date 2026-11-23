@@ -43,6 +43,7 @@ export interface UserMemory extends Record<string, unknown> {
     workContext: MemorySection;
     personalContext: MemorySection;
     topOfMind: MemorySection;
+    cognitiveStyle: MemorySection;
   } & Record<string, unknown>;
   history: {
     recentMonths: MemorySection;

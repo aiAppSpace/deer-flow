@@ -55,8 +55,8 @@ export function buildSubtaskCardViewModel(options: {
   return {
     id: options.id,
     status,
-    description: liveTask?.description || options.description || "Subtask",
-    prompt: liveTask?.prompt || options.prompt,
+    description: options.description,
+    prompt: options.prompt,
     modelLabel: resolveSubtaskModelLabel(modelName, options.models ?? []),
     tokenLabel: formatSubtaskTokenUsage(usage),
     steps,

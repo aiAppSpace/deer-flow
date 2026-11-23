@@ -31,7 +31,7 @@ import { onMounted, ref } from "vue";
 import { ArrowUp } from "lucide-vue-next";
 import ComposerSurface from "@/components/chat/ComposerSurface.vue";
 import { Button } from "@/components/ui/button";
-import { isImeComposing } from "@/core/input/ime";
+import { isCompositionConfirmEnter, isImeComposing } from "@/core/input/ime";
 
 const props = defineProps<{ disabled?: boolean }>();
 const emit = defineEmits<{ send: [text: string] }>();
@@ -40,6 +40,11 @@ const { $i18n } = useNuxtApp();
 const input = ref("");
 const textarea = ref<HTMLTextAreaElement | null>(null);
 const compositionActive = ref(false);
+let compositionEndedAt = -Infinity;
+function endComposition() {
+  compositionActive.value = false;
+  compositionEndedAt = Date.now();
+}
 
 function submit() {
   const text = input.value.trim();
@@ -49,6 +54,10 @@ function submit() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (isCompositionConfirmEnter(event, compositionEndedAt)) {
+    event.preventDefault();
+    return;
+  }
   if (isImeComposing(event, compositionActive.value)) return;
   if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
@@ -80,7 +89,7 @@ onMounted(() => textarea.value?.focus());
           :aria-disabled="disabled || undefined"
           @keydown="onKeydown"
           @compositionstart="compositionActive = true"
-          @compositionend="compositionActive = false"
+          @compositionend="endComposition"
         />
       </div>
       <div role="group" data-slot="input-group-footer" class="justify-end">

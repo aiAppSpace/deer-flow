@@ -2,7 +2,7 @@
 
 import { BotIcon, PlusIcon, UploadIcon } from "lucide-react";
 import Link from "next/link";
-import { type ChangeEvent, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,16 @@ export function AgentGallery() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [packageDocument, setPackageDocument] = useState<unknown>(null);
   const [importName, setImportName] = useState("");
+  const importGeneration = useRef(0);
+  useEffect(
+    () => () => {
+      importGeneration.current++;
+    },
+    [],
+  );
 
   const closeImportDialog = () => {
+    importGeneration.current++;
     setPackageDocument(null);
     setImportName("");
   };
@@ -37,8 +45,10 @@ export function AgentGallery() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    const generation = ++importGeneration.current;
     try {
       const parsed: unknown = JSON.parse(await file.text());
+      if (generation !== importGeneration.current) return;
       const sourceName =
         typeof parsed === "object" &&
         parsed !== null &&
@@ -52,24 +62,27 @@ export function AgentGallery() {
       setPackageDocument(parsed);
       setImportName(sourceName);
     } catch {
+      if (generation !== importGeneration.current) return;
       toast.error(t.agents.importInvalidFile);
     }
   };
 
   const handleImport = async () => {
-    if (packageDocument === null) return;
+    if (packageDocument === null || importAgent.isPending) return;
+    const generation = importGeneration.current;
     try {
       await importAgent.mutateAsync({
         agentPackage: packageDocument,
         name: importName.trim() || undefined,
       });
+      if (generation !== importGeneration.current) return;
       toast.success(t.agents.importSuccess);
       closeImportDialog();
     } catch (err) {
+      if (generation !== importGeneration.current) return;
       toast.error(err instanceof Error ? err.message : String(err));
     }
   };
-
 
   return (
     <div className="flex size-full flex-col">
@@ -81,7 +94,7 @@ export function AgentGallery() {
             {t.agents.description}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center gap-2">
           <input
             ref={fileInputRef}
             className="hidden"

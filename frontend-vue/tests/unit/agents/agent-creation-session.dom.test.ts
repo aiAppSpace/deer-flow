@@ -52,20 +52,39 @@ function createHarness(
   } = {},
 ) {
   const agentName = ref("reviewer");
+  const ownerId = ref("alice");
   const submitSave = vi.fn(overrides.submitSave ?? (async () => true));
   const loadAgent = vi.fn(overrides.loadAgent ?? (async () => createdAgent));
   const onCreated = vi.fn();
+  const onSaveRequested = vi.fn();
+  const onSaveError = vi.fn();
+  const onVerificationUnavailable = vi.fn();
   const scope = effectScope();
   const session = scope.run(() =>
     useAgentCreationSession({
       agentName,
+      ownerId,
       submitSave,
       loadAgent,
       retryDelaysMs: [0, 10, 20],
       onCreated,
+      onSaveRequested,
+      onSaveError,
+      onVerificationUnavailable,
     }),
   )!;
-  return { agentName, loadAgent, onCreated, scope, session, submitSave };
+  return {
+    agentName,
+    ownerId,
+    loadAgent,
+    onCreated,
+    onSaveRequested,
+    onSaveError,
+    onVerificationUnavailable,
+    scope,
+    session,
+    submitSave,
+  };
 }
 
 afterEach(() => {
@@ -73,6 +92,79 @@ afterEach(() => {
 });
 
 describe("useAgentCreationSession", () => {
+  it("notifies an accepted save once, then a bounded unavailable verification without re-submitting", async () => {
+    vi.useFakeTimers();
+    const state = createHarness({
+      loadAgent: async () => {
+        throw new Error("Gateway unavailable");
+      },
+    });
+    await state.session.save();
+    expect(state.onSaveRequested).toHaveBeenCalledTimes(1);
+    expect(await state.session.save()).toBe(false);
+    const finished = state.session.onRunFinished(successMessages);
+    await vi.runAllTimersAsync();
+    await finished;
+    expect(state.loadAgent).toHaveBeenCalledTimes(3);
+    expect(state.onVerificationUnavailable).toHaveBeenCalledTimes(1);
+    expect(state.onSaveError).not.toHaveBeenCalled();
+    expect(state.submitSave).toHaveBeenCalledTimes(1);
+    state.scope.stop();
+  });
+
+  it("reports a rejected save using the original error and never announces acceptance", async () => {
+    const state = createHarness({
+      submitSave: async () => {
+        throw new Error("Storage permission denied");
+      },
+    });
+    expect(await state.session.save()).toBe(false);
+    expect(state.onSaveError).toHaveBeenCalledWith("Storage permission denied");
+    expect(state.onSaveRequested).not.toHaveBeenCalled();
+    expect(state.onVerificationUnavailable).not.toHaveBeenCalled();
+    state.scope.stop();
+  });
+
+  it.each(["account", "unmount"])(
+    "does not notify a late accepted save after %s changes",
+    async (change) => {
+      let finish!: (value: boolean) => void;
+      const state = createHarness({
+        submitSave: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      });
+      const pending = state.session.save();
+      if (change === "account") state.ownerId.value = "bob";
+      else state.scope.stop();
+      finish(true);
+      expect(await pending).toBe(false);
+      expect(state.onSaveRequested).not.toHaveBeenCalled();
+      expect(state.onSaveError).not.toHaveBeenCalled();
+      state.scope.stop();
+    },
+  );
+
+  it("does not notify a failed visibility read after its account changes", async () => {
+    let reject!: (error: Error) => void;
+    const state = createHarness({
+      loadAgent: () =>
+        new Promise((_resolve, fail) => {
+          reject = fail;
+        }),
+    });
+    await state.session.save();
+    const pending = state.session.onRunFinished(successMessages);
+    await Promise.resolve();
+    state.ownerId.value = "bob";
+    reject(new Error("Late old account failure"));
+    await pending;
+    expect(state.onVerificationUnavailable).not.toHaveBeenCalled();
+    expect(state.onSaveError).not.toHaveBeenCalled();
+    expect(state.session.status.value).toBe("idle");
+    state.scope.stop();
+  });
   it("moves saving -> verifying -> created when the Agent is immediately visible", async () => {
     const { session, submitSave, loadAgent, onCreated } = createHarness();
 
@@ -107,7 +199,7 @@ describe("useAgentCreationSession", () => {
     expect(session.status.value).toBe("created");
   });
 
-  it("ends in retryable error after finite 404 exhaustion without submitting a second run", async () => {
+  it("keeps a completed save disabled after finite visibility exhaustion without submitting a second run", async () => {
     vi.useFakeTimers();
     const { session, loadAgent, submitSave } = createHarness({
       loadAgent: async () => {
@@ -121,18 +213,14 @@ describe("useAgentCreationSession", () => {
     await finished;
 
     expect(loadAgent).toHaveBeenCalledTimes(3);
-    expect(session.status.value).toBe("error");
-    expect(session.error.value).toContain("Persistence is still unavailable");
-
-    const retry = session.retry();
-    await vi.runAllTimersAsync();
-    await retry;
+    expect(session.status.value).toBe("completed");
+    expect(await session.save()).toBe(false);
     expect(submitSave).toHaveBeenCalledTimes(1);
-    expect(loadAgent).toHaveBeenCalledTimes(6);
+    expect(loadAgent).toHaveBeenCalledTimes(3);
   });
 
-  it("surfaces setup_agent and run errors, then permits one explicit save retry", async () => {
-    const { session, submitSave } = createHarness();
+  it("uses the persisted Agent as creation evidence even when setup_agent reports an error", async () => {
+    const { session, loadAgent, submitSave } = createHarness();
     await session.save();
     await session.onRunFinished([
       successMessages[0]!,
@@ -143,14 +231,26 @@ describe("useAgentCreationSession", () => {
         status: "error",
       },
     ] as Message[]);
-    expect(session.status.value).toBe("error");
-    expect(session.error.value).toBe("Storage permission denied");
+    expect(loadAgent).toHaveBeenCalledTimes(1);
+    expect(session.status.value).toBe("created");
+    expect(session.agent.value).toEqual(createdAgent);
+    expect(submitSave).toHaveBeenCalledTimes(1);
+  });
 
-    await session.retry();
-    expect(submitSave).toHaveBeenCalledTimes(2);
+  it("returns to the save menu after a missing setup result or a failed run", async () => {
+    const { session, submitSave, onSaveError } = createHarness();
+    await session.save();
+    await session.onRunFinished([
+      { type: "ai", content: "Agent created!" },
+    ] as Message[]);
+    expect(session.status.value).toBe("idle");
+    await session.save();
     session.onRunError(new Error("Gateway run failed"));
-    expect(session.status.value).toBe("error");
+    expect(session.status.value).toBe("idle");
     expect(session.error.value).toBe("Gateway run failed");
+    expect(onSaveError).toHaveBeenCalledWith("Gateway run failed");
+    await session.save();
+    expect(submitSave).toHaveBeenCalledTimes(3);
   });
 
   it("deduplicates double save and aborts run/verification on scope dispose", async () => {

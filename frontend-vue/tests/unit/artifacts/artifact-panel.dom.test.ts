@@ -18,6 +18,8 @@ import {
   vi,
 } from "vitest";
 import { EditorView } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 
 import ArtifactPanel from "@/components/workspace/artifacts/ArtifactPanel.vue";
 import { useArtifactDraft } from "@/composables/useArtifactDraft";
@@ -30,6 +32,7 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const queryClients: QueryClient[] = [];
 
 /*
   「加载完整文件」是一颗**只有可见文字**的按钮，没有 aria-label——React 的截断提示条
@@ -83,17 +86,10 @@ const SHA = "a".repeat(64);
   flushPromises 就够。
 */
 /*
-  预热 CodeMirror 的模块图。组件里的 `await import()` 第一次要把 5 个包过一遍
-  transform，那一轮不是靠 flushPromises 让路就能推进的——不预热的话，第一个
-  用到编辑器的用例会因为「还没加载完」而不是「行为不对」失败。
-
-  ⚠️ **必须逐个预热 `editor.ts` 内部 `Promise.all` 里的那 5 个包，import
-  `editor` 模块本身不够。** import 一个模块只会执行它的顶层代码，而这 5 个
-  import 写在 `createCodeEditor()` 函数体里，只有真正建编辑器时才触发。
-  漏掉它们的版本在本机 5 次 `make verify` 里红了 2 次——`.txt` 用例不需要任何
-  语法包，所以当时预热的 `lang-markdown` 对它一点用都没有，而 50 轮
-  flushPromises 是否够用取决于机器负载。一条时红时绿的门禁比没有门禁更糟：
-  它教人重跑到绿为止。
+  预热真实编辑器懒加载边界与本组用例使用的 Markdown 语法。
+  editor.ts 的核心 CodeMirror 命名依赖随该模块一起加载，语言工厂仍按需动态加载。
+  保留显式核心模块预热；组件挂载后仍按实际 EditorView 就绪状态等待，
+  不把一次 flushPromises 当作动态加载完成的保证。
 */
 async function warmCodeEditorModules() {
   await Promise.all([
@@ -112,10 +108,13 @@ async function warmCodeEditorModules() {
   `flushPromises()` 不推进定时器也不等下一帧，机器一忙就会在 CodeMirror 真正挂上之前
   数完 50 次，然后抛一个和真实原因毫不相干的错误。
 */
-async function editorView(wrapper: VueWrapper): Promise<EditorView> {
+async function editorView(
+  wrapper: VueWrapper,
+  selector = "[data-testid='artifact-editor']",
+): Promise<EditorView> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const host = wrapper.find("[data-testid='artifact-editor']");
+    const host = wrapper.find(selector);
     const view = host.exists()
       ? EditorView.findFromDOM(host.element as HTMLElement)
       : null;
@@ -159,6 +158,7 @@ function mountPanel(
   options: { isAdmin?: boolean; streaming?: boolean; isMock?: boolean } = {},
 ) {
   const selected = ref(path);
+  const streaming = ref(options.streaming ?? false);
   let draftOwner!: ReturnType<typeof useArtifactDraft>;
   const Host = defineComponent({
     setup() {
@@ -170,7 +170,7 @@ function mountPanel(
           artifacts: [selected.value],
           openedPresentedArtifacts: [],
           messages: [],
-          streaming: options.streaming ?? false,
+          streaming: streaming.value,
           isMock: options.isMock ?? false,
           isAdmin: options.isAdmin ?? false,
           draftOwner,
@@ -182,11 +182,25 @@ function mountPanel(
   });
   const wrapper = mount(Host, {
     global: {
+      plugins: [
+        [
+          VueQueryPlugin,
+          {
+            queryClient: (() => {
+              const client = new QueryClient({
+                defaultOptions: { queries: { retry: false } },
+              });
+              queryClients.push(client);
+              return client;
+            })(),
+          },
+        ],
+      ],
       provide: { [workspaceToastKey as symbol]: toastStore },
       stubs: { StreamMarkdown: { template: "<div data-testid='markdown' />" } },
     },
   });
-  return { wrapper, selected, draftOwner };
+  return { wrapper, selected, streaming, draftOwner };
 }
 
 describe("ArtifactPanel", () => {
@@ -204,7 +218,10 @@ describe("ArtifactPanel", () => {
     });
     vi.stubGlobal("open", vi.fn());
   });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    queryClients.splice(0).forEach((client) => client.clear());
+    vi.restoreAllMocks();
+  });
 
   it.each([
     "report.docx",
@@ -464,16 +481,61 @@ describe("ArtifactPanel", () => {
     await wrapper.get("button[aria-label='Save']").trigger("click");
     await flushPromises();
 
-    expect(mocks.save).toHaveBeenCalledWith({
-      threadId: "thread-1",
-      filepath: "/mnt/user-data/outputs/report.txt",
-      content: "saved",
-      expectedSha256: SHA,
+    expect(mocks.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-1",
+        filepath: "/mnt/user-data/outputs/report.txt",
+        content: "saved",
+        expectedSha256: SHA,
+      }),
+    );
+    expect(await editorText(wrapper)).toBe("saved");
+    expect(
+      wrapper.get("button[aria-label='Save']").attributes("disabled"),
+    ).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it("locks editing and discard during save and acknowledges only the submitted snapshot", async () => {
+    const path = "/mnt/user-data/outputs/report.txt";
+    let resolveSave!: (value: { sha256: string }) => void;
+    mocks.load.mockResolvedValue(loaded("server"));
+    mocks.save.mockReturnValue(
+      new Promise((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    const { wrapper, draftOwner } = mountPanel(path);
+    await flushPromises();
+    await wrapper.get("button[aria-label='Edit']").trigger("click");
+    await typeInEditor(wrapper, "submitted");
+    await wrapper.get("button[aria-label='Save']").trigger("click");
+    expect((await editorView(wrapper)).state.facet(EditorState.readOnly)).toBe(
+      true,
+    );
+    expect(
+      wrapper
+        .get("button[aria-label='Discard changes']")
+        .attributes("disabled"),
+    ).toBeDefined();
+    expect(
+      wrapper
+        .get(`button[aria-label="${enUS.artifactEditing.exit}"]`)
+        .attributes("disabled"),
+    ).toBeDefined();
+
+    // Even another consumer of the draft owner cannot change what this response saved.
+    draftOwner.update(path, "later draft");
+    resolveSave({ sha256: "b".repeat(64) });
+    await flushPromises();
+    expect(draftOwner.records[path]).toMatchObject({
+      baselineContent: "submitted",
+      draftContent: "later draft",
     });
-    expect(wrapper.find("[data-testid='artifact-editor']").exists()).toBe(
+    expect(await editorText(wrapper)).toBe("later draft");
+    expect((await editorView(wrapper)).state.facet(EditorState.readOnly)).toBe(
       false,
     );
-    expect(wrapper.text()).toContain("saved");
     wrapper.unmount();
   });
 
@@ -500,7 +562,11 @@ describe("ArtifactPanel", () => {
   );
 
   it("preserves a 412 draft, disables another save, and discards to the remote baseline", async () => {
-    mocks.load.mockResolvedValue(loaded("server"));
+    mocks.load
+      .mockResolvedValueOnce(loaded("server"))
+      .mockResolvedValue(
+        loaded("remote after conflict", { sha256: "b".repeat(64) }),
+      );
     mocks.save.mockRejectedValue(
       new ArtifactRequestError(412, "revision changed"),
     );
@@ -512,6 +578,8 @@ describe("ArtifactPanel", () => {
     await flushPromises();
 
     expect(wrapper.get("[role='alert']").text()).toContain("revision changed");
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+    expect(await editorText(wrapper)).toBe("my draft");
     /*
       冲突之后保存键**改名**：上游 artifact-file-detail.tsx:493 把 tooltip 切成
       `artifactEditing.conflict`，而 ArtifactAction 把 tooltip 原样写进 sr-only——
@@ -544,7 +612,8 @@ describe("ArtifactPanel", () => {
     expect(wrapper.find("[data-testid='artifact-editor']").exists()).toBe(
       false,
     );
-    expect(wrapper.text()).toContain("server");
+    const source = await editorView(wrapper, "[data-testid='artifact-source']");
+    expect(source.state.doc.toString()).toBe("remote after conflict");
     wrapper.unmount();
   });
 
@@ -562,14 +631,12 @@ describe("ArtifactPanel", () => {
       streaming: true,
     });
     await flushPromises();
-    await active.wrapper.get("button[aria-label='Edit']").trigger("click");
-    await typeInEditor(active.wrapper, "blocked");
-    // 跑起来的时候名字换成「有 run 正在进行」，理由同上。
     expect(
-      active.wrapper
-        .get(`button[aria-label="${enUS.artifactEditing.runInProgress}"]`)
-        .attributes("disabled"),
+      active.wrapper.get("button[aria-label='Edit']").attributes("disabled"),
     ).toBeDefined();
+    expect(
+      active.wrapper.find("[data-testid='artifact-editor']").exists(),
+    ).toBe(false);
     expect(mocks.save).not.toHaveBeenCalled();
     active.wrapper.unmount();
 
@@ -582,12 +649,80 @@ describe("ArtifactPanel", () => {
     await stale.wrapper.get("button[aria-label='Edit']").trigger("click");
     await typeInEditor(stale.wrapper, "old draft");
     await stale.wrapper.get("button[aria-label='Save']").trigger("click");
+    const signal = mocks.save.mock.calls.at(-1)?.[0].signal as AbortSignal;
     stale.selected.value = "/mnt/user-data/outputs/new.txt";
     await flushPromises();
+    expect(signal.aborted).toBe(true);
     resolveSave({ sha256: "c".repeat(64) });
     await flushPromises();
     expect(stale.wrapper.text()).toContain("new server");
     expect(stale.wrapper.text()).not.toContain("old draft");
     stale.wrapper.unmount();
+  });
+
+  it("cancels a save on disposal and never acknowledges its late result", async () => {
+    const path = "/mnt/user-data/outputs/report.txt";
+    let settle!: (value: { sha256: string }) => void;
+    mocks.load.mockResolvedValue(loaded("server"));
+    mocks.save.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve;
+      }),
+    );
+    const { wrapper, draftOwner } = mountPanel(path);
+    await flushPromises();
+    await wrapper.get("button[aria-label='Edit']").trigger("click");
+    await typeInEditor(wrapper, "submitted");
+    await wrapper.get("button[aria-label='Save']").trigger("click");
+    const signal = mocks.save.mock.calls.at(-1)?.[0].signal as AbortSignal;
+    wrapper.unmount();
+    expect(signal.aborted).toBe(true);
+    settle({ sha256: "b".repeat(64) });
+    await flushPromises();
+    expect(draftOwner.records[path]).toMatchObject({
+      baselineContent: "server",
+      draftContent: "submitted",
+    });
+  });
+
+  it("locks an existing editor during a run and refreshes the complete file when the run finishes", async () => {
+    mocks.load
+      .mockResolvedValueOnce(
+        loaded("preview", { truncated: true, sha256: undefined }),
+      )
+      .mockResolvedValueOnce(loaded("complete"))
+      .mockResolvedValueOnce(
+        loaded("agent update", { sha256: "b".repeat(64) }),
+      );
+    const { wrapper, streaming, draftOwner } = mountPanel(
+      "/mnt/user-data/outputs/report.txt",
+    );
+    await flushPromises();
+    await loadFullButton(wrapper).trigger("click");
+    await flushPromises();
+    await wrapper.get("button[aria-label='Edit']").trigger("click");
+    await typeInEditor(wrapper, "my draft");
+    streaming.value = true;
+    await flushPromises();
+    expect((await editorView(wrapper)).state.facet(EditorState.readOnly)).toBe(
+      true,
+    );
+    expect(mocks.load).toHaveBeenCalledTimes(2);
+    streaming.value = false;
+    await flushPromises();
+    expect(mocks.load).toHaveBeenLastCalledWith(
+      expect.objectContaining({ full: true }),
+    );
+    expect(
+      draftOwner.records["/mnt/user-data/outputs/report.txt"],
+    ).toMatchObject({
+      remoteContent: "agent update",
+      draftContent: "my draft",
+      conflict: true,
+    });
+    expect((await editorView(wrapper)).state.facet(EditorState.readOnly)).toBe(
+      false,
+    );
+    wrapper.unmount();
   });
 });

@@ -62,7 +62,11 @@ export function buildConversationChapters(
       id: group.id ?? message?.id ?? `human-turn:${groupIndex}`,
       groupIndex,
       title: normalizeChapterTitle(
-        message ? extractTextFromMessage(message) : "",
+        group.scheduledOrigin
+          ? group.scheduledOrigin.task_title
+          : message
+            ? extractTextFromMessage(message)
+            : "",
         fallbackTitle,
       ),
     });

@@ -29,6 +29,8 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+const clients: QueryClient[] = [];
 
 const mocks = vi.hoisted(() => ({
   loadSkills: vi.fn(),
@@ -37,6 +39,23 @@ const mocks = vi.hoisted(() => ({
   uploadFiles: vi.fn(),
   polishInputDraft: vi.fn(),
   fetchWithAuth: vi.fn(),
+}));
+
+vi.mock("@/core/features/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/core/features/api")>()),
+  fetchConversationReferencesCapability: vi.fn(async () => ({
+    enabled: false,
+    maxReferences: 0,
+  })),
+}));
+
+// These tests own composer presentation/commands, while session behavior has its own suite.
+vi.mock("@/composables/useAuthSession", () => ({
+  useAuthSession: () => ({
+    session: ref({ tag: "unauthenticated" }),
+    isFetching: ref(false),
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/core/skills/api", () => ({ loadSkills: mocks.loadSkills }));
@@ -54,7 +73,11 @@ function mountComposer(
   context: Record<string, unknown>,
   extra: Record<string, unknown> = {},
 ) {
-  return mount(ChatComposer, {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(queryClient);
+  const wrapper = mount(ChatComposer, {
     props: {
       threadKey: "mode-thread",
       targetThreadId: "mode-thread",
@@ -75,9 +98,7 @@ function mountComposer(
         [
           VueQueryPlugin,
           {
-            queryClient: new QueryClient({
-              defaultOptions: { queries: { retry: false } },
-            }),
+            queryClient,
           },
         ],
       ],
@@ -86,6 +107,8 @@ function mountComposer(
     // 菜单 portal 到 body 上；不 attach 的话触发器在游离的 div 里，点了不展开。
     attachTo: document.body,
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 beforeEach(() => {
@@ -107,14 +130,24 @@ beforeEach(() => {
     ],
     token_usage: { enabled: true },
   });
-  mocks.getUploadLimits.mockReset().mockResolvedValue(undefined);
+  mocks.getUploadLimits.mockReset().mockResolvedValue({
+    max_files: 10,
+    max_file_size: 100 * 1024 * 1024,
+    max_total_size: 100 * 1024 * 1024,
+  });
   mocks.uploadFiles.mockReset();
   mocks.polishInputDraft.mockReset();
   mocks.fetchWithAuth.mockReset();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  wrappers.splice(0).forEach((wrapper) => {
+    if (wrapper.exists()) wrapper.unmount();
+  });
+  clients.splice(0).forEach((client) => client.clear());
+  await flushPromises();
   vi.unstubAllGlobals();
+  document.body.innerHTML = "";
 });
 
 const MODES = ["flash", "thinking", "pro", "ultra"] as const;
@@ -162,15 +195,8 @@ describe("composer mode icons", () => {
   });
 
   /*
-    **模式菜单里那一层在这个文件里测不了**：happy-dom 下 ChatComposer 的
-    `DropdownMenuTrigger` 没有以 as-child 合并到触发器上，而是留了一个字面
-    `<dropdownmenutrigger>` 元素，点击（click 与 pointerdown 都试过）打不开菜单。
-    不是产品缺陷——对照套件的 `ui-polish-mobile` 场景在真浏览器里正是点开这个菜单
-    再断言 `menuitemradio` 的，一直是绿的。
-
-    菜单项那一层的图标与金色改在 SidecarPanel 上用真 DOM 守（两处是同一份写法，
-    见 sidecar-panel.dom.test.ts 的 "paints the mode menu"）。这里补一条源码断言，
-    保证复合输入框这一份没有被单独改回去。
+    菜单的打开、选择与关闭由 composer-workflow.dom.test.ts 经过真实 DropdownMenu
+    primitive 覆盖；这里专门守住触发器各档的图标和 ultra 着色。
   */
   /*
     提交键的三态（wave 43）。上游 `PromptInputSubmit`（prompt-input.tsx:1093）：

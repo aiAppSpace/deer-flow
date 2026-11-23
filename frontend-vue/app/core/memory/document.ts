@@ -8,7 +8,7 @@
                    `buildMemorySectionGroups` / `summariesToMarkdown` /
                    `confidenceToLevelKey`）同判据。
 
-                   **摘要区是一份 markdown 文档，不是一叠卡片。** 上游把六个小节按
+                   **摘要区是一份 markdown 文档，不是一叠卡片。** 上游把七个小节按
                    「用户上下文 / 历史背景」两组拼成 `## / ### / > 引用 / ---` 的
                    markdown，再交给 SafeStreamdown 渲染；本仓原来是六张手写 `<article>`。
                    两者在可访问性树上完全不同（标题层级、blockquote、code、分隔线），
@@ -46,6 +46,7 @@ export type MemoryDocumentLabels = {
   work: string;
   personal: string;
   topOfMind: string;
+  cognitiveStyle: string;
   historyBackground: string;
   recentMonths: string;
   earlierContext: string;
@@ -86,6 +87,7 @@ export function buildMemorySectionGroups(
         view(labels.work, memory.user.workContext),
         view(labels.personal, memory.user.personalContext),
         view(labels.topOfMind, memory.user.topOfMind),
+        view(labels.cognitiveStyle, memory.user.cognitiveStyle),
       ],
     },
     {
@@ -104,6 +106,7 @@ export function isMemorySummaryEmpty(memory: UserMemory) {
     memory.user.workContext,
     memory.user.personalContext,
     memory.user.topOfMind,
+    memory.user.cognitiveStyle,
     memory.history.recentMonths,
     memory.history.earlierContext,
     memory.history.longTermBackground,

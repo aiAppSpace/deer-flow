@@ -103,7 +103,9 @@ describe("interactive affordances", () => {
       expect(source, `${file} imports Toaster from sonner directly`).toContain(
         'from "@/components/ui/sonner"',
       );
-      expect(source).not.toMatch(/import\s*\{[^}]*Toaster[^}]*\}\s*from\s*"sonner"/);
+      expect(source).not.toMatch(
+        /import\s*\{[^}]*Toaster[^}]*\}\s*from\s*"sonner"/,
+      );
     }
   });
 

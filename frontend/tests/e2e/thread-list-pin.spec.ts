@@ -4,6 +4,25 @@ import { mockLangGraphAPI, THREAD_PINNED_METADATA_KEY } from "./utils/mock-api";
 
 const NEWEST_THREAD_ID = "00000000-0000-0000-0000-000000000901";
 const OLDER_THREAD_ID = "00000000-0000-0000-0000-000000000902";
+const unmatchedAPIRequests = new WeakMap<Page, string[]>();
+
+test.beforeEach(async ({ page }) => {
+  const unmatched: string[] = [];
+  unmatchedAPIRequests.set(page, unmatched);
+  // Register first: each test's API mocks take precedence. A missing mock must
+  // fail this fixture instead of reaching a real backend behind the frontend.
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    unmatched.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    await route.abort("blockedbyclient");
+  });
+});
+
+test.afterEach(({ page }) => {
+  expect(unmatchedAPIRequests.get(page), "every API request is mocked").toEqual(
+    [],
+  );
+});
 
 async function recentChatTitles(page: Page) {
   return page
@@ -95,8 +114,10 @@ test("server-side search keeps old pinned chats in the first page", async ({
   Deleting a conversation is destructive, and it used to fail silently:
   `useDeleteThread` had no `onError`, so a rejected delete left the row in place
   and said nothing — indistinguishable from the click not registering.
+  Both frontends keep the confirmation dialog open after failure, announce the
+  error through their toast owner, and let the user confirm a retry in that dialog.
   The Vue app pins the same contract in
-  `frontend-vue/tests/e2e/thread-list-a11y-shape.spec.ts`.
+  `frontend-vue/tests/e2e/thread-delete-confirm.spec.ts`.
 */
 test("a rejected delete says so and offers a retry, instead of doing nothing", async ({
   page,
@@ -118,6 +139,7 @@ test("a rejected delete says so and offers a retry, instead of doing nothing", a
         return route.fallback();
       }
       attempts += 1;
+      if (attempts > 1) return route.fallback();
       // 403, not 503: the SDK's AsyncCaller retries 5xx with backoff, so a 503
       // only surfaces as an error many seconds later. A permission denial is
       // both realistic and immediate.
@@ -140,14 +162,28 @@ test("a rejected delete says so and offers a retry, instead of doing nothing", a
   await item.getByRole("button", { name: "More" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
 
+  const dialog = page.getByRole("dialog", { name: "Delete chat", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Newest chat");
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+  await expect(cancel).toBeFocused();
+  expect(attempts).toBe(0);
+
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect.poll(() => attempts).toBe(1);
-
-  const alert = page.getByTestId("delete-chat-error");
-  await expect(alert).toBeVisible();
-  await expect(alert).toHaveRole("alert");
-  // The row is still there — the failure did not masquerade as a success.
+  await expect(
+    page.locator("[data-sonner-toast]").filter({ hasText: "delete rejected" }),
+  ).toBeVisible();
+  // Failure retains both the original row and the stable confirmation owner.
   await expect(item).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await expect(cancel).toBeFocused();
+  await expect(
+    dialog.getByRole("button", { name: "Delete", exact: true }),
+  ).toBeEnabled();
 
-  await alert.getByRole("button", { name: "Try again" }).click();
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect.poll(() => attempts).toBe(2);
+  await expect(dialog).toBeHidden();
+  await expect(item).toHaveCount(0);
 });

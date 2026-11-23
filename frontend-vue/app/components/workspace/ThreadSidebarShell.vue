@@ -63,43 +63,12 @@ const emit = defineEmits<{ "update:open": [boolean] }>();
     @update:open="emit('update:open', $event)"
   >
     <!--
-      **宽度要夹进视口**，上游 `SIDEBAR_WIDTH_MOBILE` 同一处同改（第五十五轮）。
-
-      `w-72` = 18rem 是**文字尺度**，而这个抽屉只在手机宽度上出现：200% 文本下
-      它是 576px，比 375px 的视口还宽。实测那一档整个抽屉挂在屏幕外——
-      它自己的 ⋯ 触发器在 x=511、它打开的菜单在 x=123..507，
-      而那个菜单的 Export 子菜单被推到 x=-212，屏幕上只剩「…arkdown」「…SON」。
-      里面每一层都继承这份溢出，**所以要修的是这一处，不是逐个 popper 去修**。
-
-      `min()` 让 18rem 在放得下的地方原样保留（默认字号下视口 ≥336px 一格不动），
-      只有真的放不下才夹。3rem 的余量特意写成 rem：点遮罩关闭的那块热区
-      跟着文字一起长；200% 在 375 视口上算出来是 279px，
-      差不多正好是 SheetContent 默认的 `w-3/4`。
+      移动抽屉宽度受视口限制，并保留随文字缩放的遮罩关闭区域。
+      18rem 在空间充足时保持原宽，避免大字号下抽屉和其菜单越过屏幕。
     -->
     <!--
-      **`data-sidebar="sidebar"` 挂在面板上，不是挂在里面那层**（第五十九轮）。
-
-      上游 `sidebar.tsx:221` 把 `data-sidebar` / `data-slot` / `data-mobile`
-      三个都写在 `SheetContent` 自己身上，里面那层 `flex h-full w-full flex-col`
-      **一个 data-* 都没有**。本仓此前反过来：面板上什么都没有，三个属性全挂在内层。
-
-      两边**画出来是一样的**（各自的面板都有 `bg-sidebar`），但 `data-sidebar`
-      是**契约属性**——门禁和场景目录都按它选元素，两边指向不同的盒子就是真不一致。
-      第五十九轮把 `channels` 接进窄屏取样时当场掉出来一行：
-
-          channels#mobile-drawer/mobile/light/en-US
-          geometry: selector:[data-sidebar='sidebar'] background
-                    React=rgba(246,243,236,255) Vue=rgba(0,0,0,0)
-
-      本仓量到透明，是因为尺子选中的是**内层**那个没有底色的 div（287x812），
-      而上游选中的是**面板**（288x812，带底色）。**不是底色缺陷，是谁叫 sidebar。**
-
-      ⚠ `id="workspace-sidebar"` **留在内层不要动**：它是本仓独有的（上游没有这个 id），
-      `tests/e2e-infra/auth-disabled.spec.ts`、`tests/e2e/i18n-theme.spec.ts`、
-      `tests/e2e/sidebar-ime-a11y.spec.ts` 都按它选。
-      ⚠ 内层的 `data-slot="sidebar-inner"` 按上游去掉了；
-      `tests/unit/workspace-shell/sidebar-skeleton.test.ts` 扫的是四份文件的源文本，
-      宽屏那一支仍然写着它，所以那道门照样绿。
+      data-sidebar/data-slot/data-mobile 标记属于 Sheet 面板本身。
+      workspace-sidebar 仍标记内层导航容器，供当前产品测试定位。
     -->
     <SheetContent
       side="left"
@@ -113,23 +82,35 @@ const emit = defineEmits<{ "update:open": [boolean] }>();
         <SheetTitle>{{ props.title }}</SheetTitle>
         <SheetDescription>{{ props.description }}</SheetDescription>
       </SheetHeader>
-      <div id="workspace-sidebar" class="flex h-full w-full flex-col">
+      <div
+        id="workspace-sidebar"
+        class="flex h-full w-full flex-col overflow-y-auto"
+      >
         <slot />
       </div>
     </SheetContent>
   </Sheet>
   <!--
-    宽屏那一支的类串与 wave 148 之前**逐字相同**（去掉的只有 `mobileOpen` 那两个
-    三元分支）：这一轮改的是窄屏的模态语义，不该顺手动到桌面版面。
+    定位、宽度和边框归外壳，原生滚动归不带定位/transform 的内层。
+    rail 虽是 slot 后代，绝对定位仍以外壳为 containing block，与 React 一致；
+    其贴边点击区域不会成为内层的横向滚动内容，也不需要裁切隐藏。
+    低容量时内层仍可整壳滚动，导航主体至少容纳一个现有 h-8 菜单行。
+    与 React 的 hidden md:block 外壳一致，CSS 在断点变化时立即隐藏桌面分支；
+    matchMedia change 回调更新 narrow 之前，也不能让屏外导航仍参与焦点和可访问树。
   -->
   <div
     v-else
-    id="workspace-sidebar"
-    data-slot="sidebar-inner"
-    data-sidebar="sidebar"
-    class="border-sidebar-border bg-sidebar text-sidebar-foreground fixed inset-y-0 left-0 z-50 flex h-screen shrink-0 -translate-x-full flex-col border-r transition-[width,transform] duration-200 md:static md:translate-x-0"
+    data-slot="sidebar-container"
+    class="border-sidebar-border text-sidebar-foreground fixed inset-y-0 left-0 z-50 hidden h-screen shrink-0 -translate-x-full border-r transition-[width,transform] duration-200 md:relative md:flex md:translate-x-0"
     :class="props.collapsed ? 'w-12' : 'w-64'"
   >
-    <slot />
+    <div
+      id="workspace-sidebar"
+      data-slot="sidebar-inner"
+      data-sidebar="sidebar"
+      class="bg-sidebar flex h-full w-full flex-col overflow-y-auto"
+    >
+      <slot />
+    </div>
   </div>
 </template>

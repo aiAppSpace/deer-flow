@@ -41,6 +41,7 @@ export function useWorkspaceChanges(options: {
         includeDiff: options.includeDiff,
         signal,
       }),
+    staleTime: 5 * 60 * 1000,
     retry: false,
     refetchOnWindowFocus: false,
   });

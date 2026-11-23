@@ -1,3 +1,4 @@
+import { createHash, webcrypto } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -6,6 +7,80 @@ import {
 } from "@/core/artifacts/loader";
 
 describe("loadArtifactContent", () => {
+  for (const full of [false, true]) {
+    it.each([
+      [206, { "Content-Range": "bytes 0-3/20" }],
+      [206, { "Content-Range": "bytes 16-19/20" }],
+      [206, {}],
+      [200, { "Content-Length": "20" }],
+    ] as const)(
+      `full=${full}: incomplete status %s headers %j never grants an editable revision`,
+      async (status, headers) => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(
+          new Response("part", {
+            status,
+            headers: { ...headers, ETag: `"${"a".repeat(64)}"` },
+          }),
+        );
+        const result = await loadArtifactContent({
+          filepath: "/mnt/user-data/outputs/file.txt",
+          threadId: "t",
+          full,
+        });
+        expect(result.truncated).toBe(true);
+        expect(result.sha256).toBeUndefined();
+        expect(result.content).toBe("part");
+      },
+    );
+  }
+  it("cancels an oversized streaming 200 prefix even without a content length", async () => {
+    const cancel = vi.fn();
+    const stream = new ReadableStream<Uint8Array>(
+      {
+        start(controller) {
+          controller.enqueue(
+            new Uint8Array(ARTIFACT_PREVIEW_MAX_BYTES + 1).fill(65),
+          );
+        },
+        pull(controller) {
+          controller.close();
+        },
+        cancel,
+      },
+      { highWaterMark: 0 },
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(stream, { headers: { ETag: `"${"a".repeat(64)}"` } }),
+    );
+    const loaded = await loadArtifactContent({
+      filepath: "/mnt/user-data/outputs/file.txt",
+      threadId: "t",
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(loaded.previewBytes).toBe(ARTIFACT_PREVIEW_MAX_BYTES);
+    expect(loaded.content.length).toBe(ARTIFACT_PREVIEW_MAX_BYTES);
+    expect(loaded.truncated).toBe(true);
+    expect(loaded.sha256).toBeUndefined();
+  });
+
+  it("never treats an oversized 200 response as a complete editable revision", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("A".repeat(ARTIFACT_PREVIEW_MAX_BYTES + 1), {
+        headers: {
+          "Content-Length": String(ARTIFACT_PREVIEW_MAX_BYTES + 1),
+          ETag: `"${"a".repeat(64)}"`,
+        },
+      }),
+    );
+    const loaded = await loadArtifactContent({
+      filepath: "/mnt/user-data/outputs/page.html",
+      threadId: "t",
+    });
+    expect(loaded.truncated).toBe(true);
+    expect(loaded.previewBytes).toBe(ARTIFACT_PREVIEW_MAX_BYTES);
+    expect(loaded.content.length).toBe(ARTIFACT_PREVIEW_MAX_BYTES);
+    expect(loaded.sha256).toBeUndefined();
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -144,5 +219,117 @@ describe("loadArtifactContent", () => {
       sha256:
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     });
+  });
+});
+
+describe("Gateway byte revisions across browser crypto availability", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+  for (const mode of ["webcrypto", "no-subtle", "no-crypto"] as const) {
+    it.each([
+      "",
+      "abc",
+      "中文 😀\r\n",
+      "\ufeff# BOM artifact\n",
+      "a".repeat(129),
+    ])(`${mode} hashes original response bytes for %j`, async (content) => {
+      vi.stubGlobal(
+        "crypto",
+        mode === "webcrypto"
+          ? webcrypto
+          : mode === "no-subtle"
+            ? {}
+            : undefined,
+      );
+      const bytes = new TextEncoder().encode(content);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response(bytes)),
+      );
+      const loaded = await loadArtifactContent({
+        filepath: "/mnt/user-data/outputs/revision.txt",
+        threadId: "t",
+        full: true,
+      });
+      expect(loaded.sha256).toBe(
+        createHash("sha256").update(bytes).digest("hex"),
+      );
+      expect(loaded.truncated).toBe(false);
+    });
+  }
+  it("does not expose a full-file revision for a truncated range with an ETag", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("partial", {
+            status: 206,
+            headers: {
+              ETag: `"${"a".repeat(64)}"`,
+              "Content-Range": "bytes 0-6/1000",
+            },
+          }),
+      ),
+    );
+    const loaded = await loadArtifactContent({
+      filepath: "/mnt/user-data/outputs/revision.txt",
+      threadId: "t",
+    });
+    expect(loaded.truncated).toBe(true);
+    expect(loaded.sha256).toBeUndefined();
+  });
+  it("normalizes a weak uppercase Gateway SHA-256 ETag", async () => {
+    vi.stubGlobal("crypto", undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("content", {
+            headers: { ETag: `W/"${"A".repeat(64)}"` },
+          }),
+      ),
+    );
+    const loaded = await loadArtifactContent({
+      filepath: "/mnt/user-data/outputs/revision.txt",
+      threadId: "t",
+    });
+    expect(loaded.sha256).toBe("a".repeat(64));
+  });
+  it("keeps empty ranged files editable without WebCrypto", async () => {
+    vi.stubGlobal("crypto", undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(null, {
+            status: 416,
+            headers: { "Content-Range": "bytes */0" },
+          }),
+      ),
+    );
+    const loaded = await loadArtifactContent({
+      filepath: "/mnt/user-data/outputs/empty.txt",
+      threadId: "t",
+    });
+    expect(loaded.sha256).toBe(createHash("sha256").update("").digest("hex"));
+  });
+  it("uses the same visible HTTP failure message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { detail: "Private transport diagnostics" },
+          { status: 403 },
+        ),
+      ),
+    );
+    await expect(
+      loadArtifactContent({
+        filepath: "/mnt/user-data/outputs/revision.txt",
+        threadId: "t",
+      }),
+    ).rejects.toThrow("Failed to load artifact: 403");
   });
 });

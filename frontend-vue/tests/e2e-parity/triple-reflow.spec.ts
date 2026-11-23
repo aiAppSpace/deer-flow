@@ -4,14 +4,15 @@
   文本放大和「窄宽 × 文本」已有各自常驻门禁；这把尺子只负责三者交集，
   不能拿任意单轴或双轴的绿灯替代。
 
-  两个应用共用 Wave 66 的同一套可达性量具。61 个终态、对话框生命周期、
+  两个应用共用 Wave 66 的同一套可达性量具。登记表全部终态、对话框生命周期、
   页面横滚、交互控件滚动恢复和裁切内容的合法滚动路径都必须逐一验证。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { surveyReflow } from "./support/reflow-survey";
+import { stateCoverageFailures } from "./support/state-coverage";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
 import {
   DEFAULT_DIMENSION,
@@ -37,9 +38,8 @@ const ONLY = new Set(
 const SCENARIOS = ONLY.size
   ? PARITY_SCENARIOS.filter((scenario) => ONLY.has(scenario.id))
   : PARITY_SCENARIOS;
-const EXPECTED_STATES = SCENARIOS.reduce(
-  (count, scenario) => count + scenarioStates(scenario).length,
-  0,
+const EXPECTED_STATES = SCENARIOS.flatMap((scenario) =>
+  scenarioStates(scenario).map((state) => `${scenario.id}#${state.id}`),
 );
 /*
   Mutation-only input. At 12px the width×height pair's deliberate 16px sample
@@ -84,7 +84,7 @@ test("三轴量具只在 360px × 360px × 200% 三者交集命中裁切", async
 });
 
 for (const [name, base] of APPS) {
-  test(`${name}: 61 个终态在 360px × 360px × 200% 下仍完整可达`, async ({
+  test(`${name}: 登记表全部终态在 360px × 360px × 200% 下仍完整可达`, async ({
     browser,
   }) => {
     test.setTimeout(2_700_000);
@@ -96,6 +96,7 @@ for (const [name, base] of APPS) {
     const widths = new Set<number>();
     const heights = new Set<number>();
     const rootSizes = new Set<number>();
+    const scannedStates: string[] = [];
     let scanned = 0;
     let initialOutside = 0;
     let routesSeen = 0;
@@ -165,6 +166,7 @@ for (const [name, base] of APPS) {
           for (const row of survey.unreachableClips)
             clipped.push(`${key}: ${row}`);
           scanned += 1;
+          scannedStates.push(`${scenario.id}#${state.id}`);
         } catch (error) {
           failed.push(`${key}: ${String(error).split("\n")[0]?.slice(0, 120)}`);
         } finally {
@@ -185,14 +187,19 @@ for (const [name, base] of APPS) {
     console.info(`[triple-lost] ${name} ${JSON.stringify(lost)}`);
     console.info(`[triple-clipped] ${name} ${JSON.stringify(clipped)}`);
     expect(failed, "这些终态没有走到位，三轴探针空转").toEqual([]);
-    expect(scanned).toBe(EXPECTED_STATES);
-    if (!ONLY.size) expect(scanned).toBe(61);
+    expect(scanned).toBe(EXPECTED_STATES.length);
+    expect(stateCoverageFailures(EXPECTED_STATES, scannedStates)).toEqual({
+      missing: [],
+      unexpected: [],
+      duplicateExpected: [],
+      duplicateScans: [],
+    });
     expect([...widths], "360px 宽度没有稳定落地").toEqual([WIDTH]);
     expect([...heights], "360px 高度没有稳定落地").toEqual([HEIGHT]);
     expect([...rootSizes], "200% 根字号没有稳定落地").toEqual([ROOT_PX]);
     /*
       这些是全量量具的反空转样本；`TRIPLE_REFLOW_ONLY` 只用于定位单个场景，
-      不能要求每个任意子集都恰好包含所有分支。默认 61 终态仍逐条强制命中。
+      不能要求每个任意子集都恰好包含所有分支。默认全部登记终态仍逐条强制命中。
     */
     if (!ONLY.size) {
       expect(initialOutside, "没有命中任何需要滚动恢复的控件").toBeGreaterThan(

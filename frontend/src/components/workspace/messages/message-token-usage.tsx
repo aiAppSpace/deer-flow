@@ -108,19 +108,19 @@ export function MessageTokenUsageDebugList({
         {steps.map((step) => (
           <div
             key={step.id}
-            className="bg-muted/30 border-border/50 flex items-start justify-between gap-3 rounded-md border px-3 py-2"
+            className="bg-muted/30 border-border/50 flex flex-wrap items-start justify-between gap-3 rounded-md border px-3 py-2"
           >
-            <div className="min-w-0 flex-1 space-y-1">
+            <div className="min-w-0 flex-1 basis-48 space-y-1 wrap-anywhere">
               <div className="text-foreground flex items-center gap-2 text-xs font-medium">
-                <CoinsIcon className="text-muted-foreground size-3" />
-                <span className="truncate">{step.label}</span>
+                <CoinsIcon className="text-muted-foreground size-3 shrink-0" />
+                <span className="min-w-0 wrap-anywhere">{step.label}</span>
               </div>
               {step.secondaryLabels.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {step.secondaryLabels.map((label, index) => (
                     <Badge
                       key={`${step.id}-${index}-${label}`}
-                      className="px-1.5 py-0 text-[10px] font-normal"
+                      className="max-w-full px-1.5 py-0 text-[10px] font-normal wrap-anywhere whitespace-normal"
                       variant="secondary"
                     >
                       {label}
@@ -147,7 +147,10 @@ export function MessageTokenUsageDebugList({
                 )}
               </div>
             </div>
-            <Badge className="shrink-0 font-mono" variant="outline">
+            <Badge
+              className="max-w-full shrink-0 font-mono wrap-anywhere whitespace-normal"
+              variant="outline"
+            >
               {step.usage
                 ? `${formatTokenCount(step.usage.totalTokens)} ${t.tokenUsage.label}`
                 : t.tokenUsage.unavailableShort}

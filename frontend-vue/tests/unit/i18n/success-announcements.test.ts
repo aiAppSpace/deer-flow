@@ -85,12 +85,12 @@ const SITES: { file: string; upstream: string; call: string }[] = [
     call: "toast.success($i18n.t.value.sidecar.deleteSuccess)",
   },
   {
-    file: "app/components/chat/CitationSourcesPanel.vue",
+    file: "app/components/chat/CitationSourceCopyButton.vue",
     upstream: "citation-sources-panel.tsx:105",
     call: "toast.success($i18n.t.value.clipboard.copiedToClipboard)",
   },
   {
-    file: "app/components/chat/CitationSourcesPanel.vue",
+    file: "app/components/chat/CitationSourceCopyButton.vue",
     upstream: "citation-sources-panel.tsx:100",
     call: "toast.error($i18n.t.value.clipboard.failedToCopyToClipboard)",
   },

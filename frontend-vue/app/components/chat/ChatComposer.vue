@@ -7,17 +7,22 @@
   【边界与注意】   props/events 是当前宿主接线面；通用 composer 行为由 E 组合同约束。
 */
 import {
+  getCommandPopupPlacement,
+  getMentionPopupPlacement,
+  mentionPopupAncestors,
+} from "@/core/mentions/popup-placement";
+import {
   computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
-  shallowRef,
+  useId,
   watch,
 } from "vue";
-import { useQueryClient } from "@tanstack/vue-query";
 import {
   ArrowUp,
+  AtSign,
   GraduationCap,
   Lightbulb,
   Loader2,
@@ -33,6 +38,19 @@ import {
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,79 +59,81 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import ComposerAttachmentChip from "@/components/chat/ComposerAttachmentChip.vue";
-import SlashSkillChip from "@/components/chat/SlashSkillChip.vue";
 import ComposerModelSelector from "@/components/chat/ComposerModelSelector.vue";
 import ModeHoverGuide from "@/components/chat/ModeHoverGuide.vue";
 import ComposerSurface from "@/components/chat/ComposerSurface.vue";
 import WelcomeSuggestionList from "@/components/chat/WelcomeSuggestionList.vue";
+import MentionPicker from "@/components/chat/MentionPicker.vue";
 import ReferenceAttachment from "@/components/workspace/sidecar/ReferenceAttachment.vue";
 import type { SidecarReference } from "@/composables/useSidecar";
 import { useComposerDraft } from "@/composables/useComposerDraft";
+import { useComposerSubmission } from "@/composables/useComposerSubmission";
+import { useComposerReferences } from "@/composables/useComposerReferences";
+import { useComposerPolish } from "@/composables/useComposerPolish";
+import { useComposerVoice } from "@/composables/useComposerVoice";
 import { useModels } from "@/composables/useModels";
 import { useSkillsCatalog } from "@/composables/useSkillsCatalog";
+import { findSuggestionTemplatePlaceholder } from "@/core/suggestions/placeholders";
 
-import {
-  clearComposerDraft,
-  getSessionComposerDraftStorage,
-} from "@/core/threads/composer-draft";
-import { canPolishInput } from "@/core/input-polish/can-polish";
-import { polishInputDraft } from "@/core/input-polish/api";
 import {
   getLeadingSlashQuery,
   getMatchingSlashSuggestions,
   type SlashSuggestion,
 } from "@/core/skills/slash-suggestions";
-import { findSuggestionTemplatePlaceholder } from "@/core/suggestions/placeholders";
-import { fetch as fetchWithAuth } from "@/core/api/fetcher";
-import { isImeComposing } from "@/core/input/ime";
-import { getBackendBaseURL } from "@/core/config";
+import { isCompositionConfirmEnter, isImeComposing } from "@/core/input/ime";
+import type { ThreadConsumptionObservation } from "@/core/diagnostics/parity-observation";
 import { useUploadLimits } from "@/composables/useUploads";
 import {
   formatUploadSize,
   splitUnsupportedUploadFiles,
   validateUploadLimits,
 } from "@/core/uploads/file-validation";
-import {
-  createSubmissionFileCache,
-  prepareSubmissionFiles,
-} from "@/core/uploads/submission-files";
 import type { FileInMessage } from "@/core/messages/utils";
 import type { Model } from "@/core/models/types";
+import {
+  supportsThinking,
+  isThinkingRequired,
+  getReasoningEffortOptions,
+  resolveReasoningEffort,
+  reasoningEffortForMode,
+  type InputMode,
+} from "@/core/models/reasoning";
 import {
   normalizeComposerContext,
   resolveComposerModel,
 } from "@/core/models/capabilities";
 import type { ThreadRunContextInput } from "@/core/threads/submit";
+import type { LocalSettings } from "@/core/settings/local";
+import type {
+  ComposerSubmitOptions,
+  ComposerUploadSnapshot,
+  ComposerHostSnapshot,
+} from "@/core/threads/composer-submit";
+import type { ConversationReference } from "@/core/conversation-references";
 import {
-  getGoalObjectiveCounter,
-  MAX_GOAL_OBJECTIVE_CHARS,
-  parseGoalCommand,
-  readGoalResponseError,
-} from "@/core/threads/goal";
-import { invalidateThreadCaches } from "@/core/threads/cache-invalidation";
-import { isCompactCommand } from "@/core/threads/compact-command";
+  focusReferenceAt,
+  readReferenceEditor,
+  referenceCaret,
+  referenceToken,
+  renderReferenceEditor,
+  selectReferenceForDeletion,
+} from "@/core/mentions/inline-references";
+import { parseSlashSkillReference } from "@/core/skills/slash";
+import { getGoalObjectiveCounter } from "@/core/threads/goal";
 import { isCompleteBuiltinCommand } from "@/core/threads/builtin-command";
-import { compactThreadContext } from "@/core/threads/api";
 import type { GoalState } from "@/core/threads/types";
-import { createAsyncGeneration } from "@/core/async/generation";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
-import {
-  appendSpeechTranscript,
-  getSpeechRecognitionConstructor,
-  getSpeechRecognitionLanguage,
-  mapSpeechRecognitionError,
-  readSpeechRecognitionTranscript,
-  shouldRestartSpeechRecognition,
-  type BrowserSpeechRecognition,
-  type SpeechRecognitionErrorKind,
-} from "@/core/voice-input/speech-recognition";
 
 const props = withDefaults(
   defineProps<{
     threadKey: string;
     targetThreadId: string;
+    consumptionObservation?: ThreadConsumptionObservation | null;
     userId?: string | null;
     agentName?: string | null;
+    projectId?: string | null;
+    agentSkillNames?: string[] | null;
+    agentSkillsLoading?: boolean;
     defaultModelName?: string | null;
     modelSelectionReady?: boolean;
     streaming: boolean;
@@ -139,10 +159,11 @@ const props = withDefaults(
     uploading: boolean;
     promptHistory: string[];
     ensureThread?: () => Promise<string>;
+    captureSubmission?: () => ComposerHostSnapshot;
     submitMessage?: (
       text: string,
       files: FileInMessage[],
-      options: { onAccepted: () => void },
+      options: ComposerSubmitOptions,
     ) => Promise<boolean | undefined>;
     isWelcome?: boolean;
     /*
@@ -166,6 +187,8 @@ const props = withDefaults(
     references?: SidecarReference[];
     context?: ThreadRunContextInput;
     disabled?: boolean;
+    canCreateRuns?: boolean;
+    canStopStreaming?: boolean;
     /*
       只加在输入框外框上的 class。欢迎态的 -translate-y 属于**输入框本身**，不属于
       整个 composer——React 把它拼进 PromptInput 的 className（见 chat-page.tsx 传给
@@ -174,35 +197,41 @@ const props = withDefaults(
     */
     surfaceClass?: string;
   }>(),
-  { showWelcomeSuggestions: true, surfaceClass: "" },
+  {
+    canCreateRuns: true,
+    canStopStreaming: true,
+    userId: undefined,
+    consumptionObservation: undefined,
+    agentName: undefined,
+    projectId: undefined,
+    agentSkillNames: undefined,
+    defaultModelName: undefined,
+    ensureThread: undefined,
+    captureSubmission: undefined,
+    submitMessage: undefined,
+    references: undefined,
+    context: undefined,
+    showWelcomeSuggestions: true,
+    surfaceClass: "",
+  },
 );
 const { $i18n } = useNuxtApp();
-const queryClient = useQueryClient();
 const emit = defineEmits<{
-  send: [text: string, files: FileInMessage[]];
+  send: [text: string, files: FileInMessage[], options: ComposerSubmitOptions];
   stop: [];
-  uploadingChange: [value: boolean];
+  uploadingChange: [value: boolean, snapshot?: ComposerUploadSnapshot];
   clearReferences: [];
   contextChange: [value: ThreadRunContextInput];
+  resolveContext: [value: Partial<LocalSettings["context"]>];
+  referenceFileAttached: [];
   goalChange: [value: GoalState | null];
-  /*
-    「输入框里正开着一层会跟 follow-up chip 抢地方的东西」。
-
-    上游把 follow-up chip 画在 InputBox **里面**，所以它的 `showFollowups`
-    （input-box.tsx:1981）能直接读到 `showSkillSuggestions` 与 `selectedSlashSkill`
-    这两个自己的内部状态。本仓把 chip 画在 AgentChat 里（布局上它在整叠 composer
-    之上），从外面看不见这两样，于是必须由 composer 主动往外说一声。
-
-    **不照抄上游的 `onFollowupsVisibilityChange`**：那个 prop 在上游全仓没有任何
-    消费点（grep 过 frontend/src，只有 input-box.tsx 自己在调），照抄等于把一个死接口
-    搬过来。这里传的是外面**真正缺的那两个事实**，判断仍然留在 AgentChat 手里。
-  */
+  // AgentChat owns follow-ups and needs the composer's active suggestion/reference state.
   followupsSuppressedChange: [value: boolean];
 }>();
 
 const input = ref("");
-const selectedSkill = ref<string | null>(null);
 const selectedFiles = ref<File[]>([]);
+const conversationReferences = ref<ConversationReference[]>([]);
 /*
   限额走 Vue Query，不再在 onMounted 里裸调一次 getUploadLimits。
 
@@ -211,37 +240,31 @@ const selectedFiles = ref<File[]>([]);
   会被问两遍——输入框一次、sidecar 会话一次，两次问的是同一个 id、拿到的是同一份答案。
   换成同一个 owner 之后它们共享一次请求，也共享 60s 的 staleTime。
 */
-const limitsQuery = useUploadLimits(() =>
-  props.disabled ? "" : props.targetThreadId,
+const limitsQuery = useUploadLimits(
+  () => (props.disabled ? "" : props.targetThreadId),
+  { observation: () => props.consumptionObservation },
 );
 const limits = computed(() => limitsQuery.data.value);
 const suggestionIndex = ref(0);
-const polishOriginal = ref<string | null>(null);
-/*
-  改写**之后**的文本。撤销态的判据是「输入框里现在还是那一版改写」，不是
-  「这一轮润色发生过」——见 polishUndoAvailable 的注释。
-*/
-const polishRewritten = ref<string | null>(null);
-const polishing = ref(false);
-const compactPending = ref(false);
-const submissionPending = ref(false);
-let compactController: AbortController | null = null;
-let compactGeneration = 0;
-/*
-  shallowRef 不是风格选择。`ref()` 会对普通对象调 reactive()，而"是不是普通对象"
-  的判据是 `Object.prototype.toString.call(x)`：浏览器与 Node 的 AbortController
-  带 Symbol.toStringTag，念出来是 `[object AbortController]`，reactive() 直接放行，
-  于是 `polishController.value === controller` 成立；**happy-dom 的 AbortController
-  没有这个 tag**，念出来是 `[object Object]`，于是它被包成 Proxy，那句身份比较
-  在单测里恒为 false——finally 里的 `polishing.value = false` 一次都没跑过，
-  组件测试里润色永远停在"润色中"。产物没问题，是测试环境看不见完成态。
-  shallowRef 让两个环境同一行为，也本来就够用：控制器没有需要追踪的响应式字段。
-*/
-const polishController = shallowRef<AbortController | null>(null);
-let goalController: AbortController | null = null;
-const goalGeneration = createAsyncGeneration();
-const polishGeneration = createAsyncGeneration();
-let submissionGeneration = 0;
+const composerScope = computed(
+  () =>
+    `${props.userId ?? "anonymous"}\u0000${props.threadKey}\u0000${props.targetThreadId}\u0000${props.agentName ?? "lead-agent"}`,
+);
+const inputPolish = useComposerPolish({
+  text: input,
+  scope: composerScope,
+  threadId: () => props.targetThreadId,
+  disabled: () => props.disabled === true || referenceState.busy.value,
+  streaming: () => props.streaming,
+  slashQuery: () => getLeadingSlashQuery(input.value),
+});
+const {
+  polishing,
+  undoAvailable: polishUndoAvailable,
+  disabled: polishDisabled,
+  polish,
+  cancel: cancelPolish,
+} = inputPolish;
 /*
   播报走 workspace toaster，与上游 input-box.tsx 的 sonner 一一对应
   （kind 逐条对着上游那一处：error / info / success；上游的 warning 映到 info，
@@ -267,17 +290,17 @@ const skillCatalog = useSkillsCatalog({
   就都是空的——可访问性树上是两颗**没有名字**的按钮。
 */
 const modelCatalog = useModels();
-const skills = skillCatalog.skills;
-const models = modelCatalog.models;
-const voiceListening = ref(false);
-const voiceRecognition = ref<BrowserSpeechRecognition | null>(null);
-let voiceBaseText = "";
-let voiceLastError: SpeechRecognitionErrorKind | null = null;
-let voiceStopRequested = false;
-let voiceRestartTimer: ReturnType<typeof setTimeout> | null = null;
-const voiceSupported = computed(
-  () => import.meta.client && getSpeechRecognitionConstructor(globalThis),
+const skills = computed(() =>
+  props.agentSkillsLoading
+    ? []
+    : skillCatalog.skills.value.filter(
+        (skill) =>
+          (props.agentSkillNames == null ||
+            props.agentSkillNames.includes(skill.name)) &&
+          parseSlashSkillReference(`/${skill.name}`)?.name === skill.name,
+      ),
 );
+const models = modelCatalog.models;
 const disclaimer = computed(() => $i18n.t.value.inputBox.disclaimer);
 const selectedModel = computed(() => {
   if (props.modelSelectionReady === false) return undefined;
@@ -350,8 +373,11 @@ const modes = computed(() => [
   },
 ]);
 const availableModes = computed(() =>
-  selectedModel.value?.supports_thinking === true
-    ? modes.value
+  supportsThinking(selectedModel.value)
+    ? modes.value.filter(
+        (mode) =>
+          !isThinkingRequired(selectedModel.value) || mode.id !== "flash",
+      )
     : modes.value.filter((mode) => mode.id === "flash"),
 );
 /*
@@ -366,63 +392,17 @@ const activeMode = computed(
     modes.value[0]!,
 );
 const textarea = ref<HTMLTextAreaElement | null>(null);
-const chipInput = ref<HTMLElement | null>(null);
+const referenceEditor = ref<HTMLElement | null>(null);
+const inlineEditorActive = ref(false);
 const composerRoot = ref<HTMLElement | null>(null);
 const skillSuggestionsMaxHeight = ref("18rem");
 const skillSuggestionsInline = ref(false);
-let skillSuggestionsResizeObserver: ResizeObserver | null = null;
 function syncSkillSuggestionsMaxHeight() {
   const root = composerRoot.value;
   if (!root) return;
-  const rootFontSize = Number.parseFloat(
-    globalThis.getComputedStyle(document.documentElement).fontSize,
-  );
-  const remCap = Number.isFinite(rootFontSize) ? rootFontSize * 18 : 288;
-  // The popup sits 8px above the composer; retain another 8px at the top of
-  // the viewport instead of letting the first options escape above it.
-  const available = Math.max(
-    0,
-    Math.floor(root.getBoundingClientRect().top - 16),
-  );
-  /*
-    `bottom-full` only works while at least one option fits above the composer.
-    In the triple-reflow case the composer itself can be taller than the low
-    viewport, leaving a 16px popup viewport: its buttons exist but no option can
-    enter it. Put the catalog back in normal flow in that case so the chat's
-    existing scroll owner can traverse catalog and composer as one document.
-  */
-  const minimumOverlayHeight = Math.min(160, rootFontSize * 3.5);
-  skillSuggestionsInline.value = available < minimumOverlayHeight;
-  const inlineAvailable = Math.max(0, globalThis.innerHeight - 32);
-  skillSuggestionsMaxHeight.value = `${Math.min(
-    remCap,
-    skillSuggestionsInline.value ? inlineAvailable : available,
-  )}px`;
-}
-/*
-  空态占位靠 `data-empty` 驱动（上游 input-box.tsx:2281 是
-  `data-empty={textInput.value.length === 0}`）。判据取 `input`，不取
-  `chipInput.innerText`——后者是 DOM 状态，contenteditable 的输入在 `@input`
-  之后才同步回来，读它会慢一拍。
-*/
-const chipEmpty = computed(() => input.value.length === 0);
-/*
-  点容器的空白处把光标放到可编辑区末尾（上游 input-box.tsx:2266 的 onClick，
-  同样只在 `event.target === event.currentTarget` 时才动手——点在 chip 或文字上时
-  浏览器自己会把光标放对地方，抢过来反而会把用户点的位置吃掉）。
-*/
-function focusChipEnd(event: MouseEvent) {
-  if (event.target !== event.currentTarget) return;
-  const element = chipInput.value;
-  if (!element) return;
-  element.focus();
-  const selection = globalThis.getSelection?.();
-  if (!selection) return;
-  const range = document.createRange();
-  range.selectNodeContents(element);
-  range.collapse(false);
-  selection.removeAllRanges();
-  selection.addRange(range);
+  const placement = getCommandPopupPlacement(root);
+  skillSuggestionsInline.value = placement.inline;
+  skillSuggestionsMaxHeight.value = `${placement.maxHeight}px`;
 }
 const fileInput = ref<HTMLInputElement | null>(null);
 let historyIndex = -1;
@@ -439,19 +419,154 @@ const draft = useComposerDraft({
   ready: skillCatalog.ready,
   enabledSkillNames,
   text: input,
-  skillName: selectedSkill,
+  conversationReferences,
 });
 const draftKey = draft.key;
-const filesByDraftKey = new Map<string, File[]>();
-const attachmentKeys = new WeakMap<File, number>();
-let nextAttachmentKey = 0;
-const uploadedByThread = createSubmissionFileCache();
+const submission = useComposerSubmission({
+  props,
+  // `new` adopts this same run target on its first onStart. Draft storage keys
+  // change then; submission ownership changes only for another target/identity.
+  scope: () =>
+    `${props.userId ?? "anonymous"}\u0000${props.targetThreadId}\u0000${props.agentName ?? "lead-agent"}`,
+  locked: () => composerLocked.value,
+  model: () => selectedModel.value,
+  text: input,
+  files: selectedFiles,
+  conversationReferences,
+  draft,
+  references: () => referenceState,
+  send: (text, files, options) => emit("send", text, files, options),
+  uploadingChange: (value, snapshot) => {
+    if (snapshot) emit("uploadingChange", value, snapshot);
+    else emit("uploadingChange", value);
+  },
+  goalChange: (goal) => emit("goalChange", goal),
+  onAccepted: () => {
+    historyIndex = -1;
+  },
+});
+const { compactPending, submissionPending, attachmentKey } = submission;
+
+const referenceState = useComposerReferences({
+  text: input,
+  references: conversationReferences,
+  threadId: () => props.targetThreadId,
+  projectId: () => props.projectId,
+  scopeKey: draftKey,
+  ready: skillCatalog.ready,
+  disabled: () =>
+    props.disabled === true || polishing.value || compactPending.value,
+  limits,
+  localFiles: selectedFiles,
+  ensureThread: () =>
+    props.ensureThread
+      ? props.ensureThread()
+      : Promise.resolve(props.targetThreadId),
+  focusAt: focusComposerAt,
+  openUpload: openFileDialog,
+  onFileAttached: (threadId) => {
+    draft.adoptThread(threadId);
+    emit("referenceFileAttached");
+  },
+});
+const mentionListId = `composer-mentions-${useId()}`;
+const commandListId = `composer-commands-${useId()}`;
+const mentionPicker = ref<InstanceType<typeof MentionPicker> | null>(null);
+const activeMentionOption = ref<string | undefined>();
+const mentionPlacement = ref({ above: true, inline: false, maxHeight: 288 });
+const mentionPopup = ref<HTMLElement | null>(null);
+function focusComposerAt(offset: number) {
+  void nextTick(() => {
+    if (referenceEditor.value) {
+      renderReferenceEditor(referenceEditor.value, input.value);
+      focusReferenceAt(referenceEditor.value, offset);
+    } else if (textarea.value) {
+      textarea.value.focus();
+      textarea.value.setSelectionRange(offset, offset);
+    }
+  });
+}
+function updateMentionCaret() {
+  const element = referenceEditor.value;
+  const value = element ? readReferenceEditor(element) : input.value;
+  const caret = element
+    ? referenceCaret(element)
+    : textarea.value &&
+        textarea.value.selectionStart === textarea.value.selectionEnd
+      ? textarea.value.selectionStart
+      : null;
+  referenceState.updateQuery(value, caret);
+}
+function onReferenceCaretKeyup(event: KeyboardEvent) {
+  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+    updateMentionCaret();
+}
+function onTextareaSelect() {
+  if (!referenceState.buttonOpen.value && !referenceState.busy.value)
+    updateMentionCaret();
+}
+function onMentionOutsidePointer(event: PointerEvent) {
+  if (
+    event.target instanceof Node &&
+    !composerRoot.value?.contains(event.target)
+  )
+    referenceState.close();
+}
+function openMentions() {
+  referenceState.open(
+    referenceEditor.value
+      ? referenceCaret(referenceEditor.value)
+      : textarea.value?.selectionStart,
+  );
+}
+function placeMentions() {
+  if (!composerRoot.value || !mentionPopup.value) return;
+  mentionPlacement.value = getMentionPopupPlacement(
+    composerRoot.value,
+    mentionPopup.value,
+  );
+}
+watch(
+  [input, () => referenceState.inline.value.length],
+  async () => {
+    if (referenceState.inline.value.length) inlineEditorActive.value = true;
+    await nextTick();
+    if (referenceEditor.value && !compositionActive.value)
+      renderReferenceEditor(referenceEditor.value, input.value);
+  },
+  { flush: "post" },
+);
+watch(referenceState.show, async (show, _previous, onCleanup) => {
+  if (!show) return;
+  let stopped = false;
+  let observer: ResizeObserver | undefined;
+  onCleanup(() => {
+    stopped = true;
+    observer?.disconnect();
+    window.removeEventListener("resize", placeMentions);
+    window.removeEventListener("scroll", placeMentions, true);
+    window.visualViewport?.removeEventListener("resize", placeMentions);
+    window.visualViewport?.removeEventListener("scroll", placeMentions);
+    document.removeEventListener("pointerdown", onMentionOutsidePointer);
+  });
+  await nextTick();
+  if (stopped || !composerRoot.value) return;
+  placeMentions();
+  if (typeof ResizeObserver !== "undefined") {
+    observer = new ResizeObserver(placeMentions);
+    observer.observe(composerRoot.value);
+    if (mentionPopup.value?.firstElementChild)
+      observer.observe(mentionPopup.value.firstElementChild);
+    for (const ancestor of mentionPopupAncestors(composerRoot.value))
+      observer.observe(ancestor);
+  }
+  window.addEventListener("resize", placeMentions);
+  window.addEventListener("scroll", placeMentions, true);
+  window.visualViewport?.addEventListener("resize", placeMentions);
+  window.visualViewport?.addEventListener("scroll", placeMentions);
+  document.addEventListener("pointerdown", onMentionOutsidePointer);
+});
 const pendingFollowup = ref<string | null>(null);
-let activeSubmissionDraft: {
-  key: string;
-  text: string;
-  skillName: string | null;
-} | null = null;
 const builtinSlashCommands = computed<SlashSuggestion[]>(() => [
   {
     name: "goal",
@@ -466,9 +581,10 @@ const builtinSlashCommands = computed<SlashSuggestion[]>(() => [
 ]);
 const slashQuery = computed(() => getLeadingSlashQuery(input.value));
 const suggestions = computed<SlashSuggestion[]>(() => {
-  if (slashQuery.value === null) return [];
+  if (slashQuery.value === null || referenceState.inline.value.length)
+    return [];
   const matches = getMatchingSlashSuggestions(
-    skills.value,
+    [],
     slashQuery.value,
     builtinSlashCommands.value,
   );
@@ -478,9 +594,7 @@ const suggestions = computed<SlashSuggestion[]>(() => {
     helper——helper 需要这份清单去预留它们的名字（叫这个名字的技能同样够不着，
     理由镜像：它提交出去运行的是命令而不是那个技能）。
   */
-  return selectedSkill.value
-    ? matches.filter(({ kind }) => kind === "skill")
-    : matches;
+  return matches;
 });
 /*
   焦点态与「关掉过」是显示条件的一部分，不是可有可无的装饰（上游
@@ -499,12 +613,27 @@ const textareaFocused = ref(false);
   不再由 disabled 属性顺带吞掉事件，必须每一处自己说。
 */
 const composerLocked = computed(
-  () => props.disabled === true || polishing.value || compactPending.value,
+  () =>
+    props.disabled === true ||
+    polishing.value ||
+    compactPending.value ||
+    referenceState.busy.value,
 );
+const voice = useComposerVoice({
+  text: input,
+  scope: composerScope,
+  locked: composerLocked,
+});
+const {
+  listening: voiceListening,
+  supported: voiceSupported,
+  toggle: toggleVoiceInput,
+} = voice;
 const dismissedSuggestionValue = ref<string | null>(null);
 const showSuggestions = computed(
   () =>
     !composerLocked.value &&
+    !referenceState.show.value &&
     textareaFocused.value &&
     slashQuery.value !== null &&
     suggestions.value.length > 0 &&
@@ -525,13 +654,6 @@ const showSuggestions = computed(
   换回润色前那一版，且没有二次撤销。按上游的判据，用户一动键盘撤销就收回去
   （改回一模一样的文本时又出现，因为它是无状态比较，不是一次性开关）。
 */
-const polishUndoAvailable = computed(
-  () =>
-    !polishing.value &&
-    polishOriginal.value !== null &&
-    polishRewritten.value !== null &&
-    input.value === polishRewritten.value,
-);
 /*
   `/goal <objective>` 写到接近上限时，工具条右侧出现一个 length/max 计数器
   （上游 input-box.tsx:2649）。可访问名走词典，数字本身是可见文本。
@@ -540,58 +662,19 @@ const goalObjectiveCounter = computed(() =>
   getGoalObjectiveCounter(input.value),
 );
 
-const polishDisabled = computed(
-  () =>
-    props.disabled === true ||
-    polishing.value ||
-    (!polishUndoAvailable.value &&
-      (props.streaming === true ||
-        slashQuery.value !== null ||
-        !canPolishInput(input.value))),
-);
-
-function attachmentKey(file: File) {
-  const current = attachmentKeys.get(file);
-  if (current !== undefined) return current;
-  const key = nextAttachmentKey++;
-  attachmentKeys.set(file, key);
-  return key;
-}
-
-watch(draftKey, (next, previous) => {
-  filesByDraftKey.set(previous, [...selectedFiles.value]);
-  selectedFiles.value = [...(filesByDraftKey.get(next) ?? [])];
-});
 watch(
-  [() => props.targetThreadId, () => props.threadKey, () => props.agentName],
+  [
+    () => props.targetThreadId,
+    () => props.threadKey,
+    () => props.agentName,
+    () => props.userId,
+  ],
   () => {
-    compactGeneration += 1;
-    compactController?.abort();
-    compactController = null;
-    compactPending.value = false;
-    goalController?.abort();
-    goalController = null;
-    goalGeneration.invalidate();
-    polishController.value?.abort();
-    polishController.value = null;
-    polishGeneration.invalidate();
-    polishing.value = false;
-    submissionGeneration += 1;
-    submissionPending.value = false;
-    if (activeSubmissionDraft) {
-      draft.cancelSubmission(activeSubmissionDraft);
-      activeSubmissionDraft = null;
-    }
-    emit("uploadingChange", false);
+    inlineEditorActive.value = false;
+    cancelPolish();
     pendingFollowup.value = null;
   },
 );
-watch(selectedSkill, async () => {
-  await nextTick();
-  if (chipInput.value && chipInput.value.innerText !== input.value) {
-    chipInput.value.innerText = input.value;
-  }
-});
 /*
   重置活动项的依赖跟上游一致（input-box.tsx:1538 的 [slashSkillQuery,
   skillSuggestions.length]），不是整个数组。数组身份每次重算都变，而 hover 会改
@@ -600,10 +683,43 @@ watch(selectedSkill, async () => {
 watch([slashQuery, () => suggestions.value.length], () => {
   suggestionIndex.value = 0;
 });
-watch(showSuggestions, async (visible) => {
+watch(showSuggestions, async (visible, _previous, onCleanup) => {
   if (!visible) return;
+  let stopped = false;
+  let observer: ResizeObserver | undefined;
+  onCleanup(() => {
+    stopped = true;
+    observer?.disconnect();
+    window.removeEventListener("resize", syncSkillSuggestionsMaxHeight);
+    window.removeEventListener("scroll", syncSkillSuggestionsMaxHeight, true);
+    window.visualViewport?.removeEventListener(
+      "resize",
+      syncSkillSuggestionsMaxHeight,
+    );
+    window.visualViewport?.removeEventListener(
+      "scroll",
+      syncSkillSuggestionsMaxHeight,
+    );
+  });
   await nextTick();
+  if (stopped || !composerRoot.value) return;
   syncSkillSuggestionsMaxHeight();
+  if (typeof ResizeObserver !== "undefined") {
+    observer = new ResizeObserver(syncSkillSuggestionsMaxHeight);
+    observer.observe(composerRoot.value);
+    for (const ancestor of mentionPopupAncestors(composerRoot.value))
+      observer.observe(ancestor);
+  }
+  window.addEventListener("resize", syncSkillSuggestionsMaxHeight);
+  window.addEventListener("scroll", syncSkillSuggestionsMaxHeight, true);
+  window.visualViewport?.addEventListener(
+    "resize",
+    syncSkillSuggestionsMaxHeight,
+  );
+  window.visualViewport?.addEventListener(
+    "scroll",
+    syncSkillSuggestionsMaxHeight,
+  );
 });
 
 watch(
@@ -625,19 +741,33 @@ watch(
       normalized.mode !== props.context?.mode ||
       normalized.reasoning_effort !== props.context?.reasoning_effort
     ) {
-      emit("contextChange", normalized);
+      emit("resolveContext", {
+        model_name: normalized.model_name,
+        mode: normalized.mode,
+        reasoning_effort: normalized.reasoning_effort,
+      });
     }
   },
   { immediate: true },
 );
 
+function emitExplicitContext(
+  next: ThreadRunContextInput,
+  keys: ("model_name" | "mode" | "reasoning_effort")[],
+) {
+  const changes: ThreadRunContextInput = {};
+  for (const key of keys)
+    if (next[key] !== props.context?.[key])
+      Object.assign(changes, { [key]: next[key] });
+  if (Object.keys(changes).length) emit("contextChange", changes);
+}
 function selectModel(model: Model) {
-  emit(
-    "contextChange",
+  emitExplicitContext(
     normalizeComposerContext(
       { ...props.context, model_name: model.name },
       model,
     ),
+    ["model_name", "mode", "reasoning_effort"],
   );
 }
 /* 推理强度是 mode 之外的**第二个**选择器，不是 mode 的显示名。
@@ -646,45 +776,42 @@ function selectModel(model: Model) {
    与 React 一致：只有模型声明 supports_reasoning_effort 且当前不是 flash 时出现——
    flash 的语义就是不推理，给它一个强度选择器没有意义。 */
 const supportsReasoningEffort = computed(
-  () => selectedModel.value?.supports_reasoning_effort === true,
+  () => getReasoningEffortOptions(selectedModel.value).length > 0,
 );
 const reasoningMenuOpen = ref(false);
-
-const reasoningEfforts = computed(() => [
-  {
-    id: "minimal" as const,
-    label: $i18n.t.value.inputBox.reasoningEffortMinimal,
-    description: $i18n.t.value.inputBox.reasoningEffortMinimalDescription,
-  },
-  {
-    id: "low" as const,
-    label: $i18n.t.value.inputBox.reasoningEffortLow,
-    description: $i18n.t.value.inputBox.reasoningEffortLowDescription,
-  },
-  {
-    id: "medium" as const,
-    label: $i18n.t.value.inputBox.reasoningEffortMedium,
-    description: $i18n.t.value.inputBox.reasoningEffortMediumDescription,
-  },
-  {
-    id: "high" as const,
-    label: $i18n.t.value.inputBox.reasoningEffortHigh,
-    description: $i18n.t.value.inputBox.reasoningEffortHighDescription,
-  },
-]);
-/* 未设置时落在 medium：与 React 的 `medium || !reasoning_effort` 同一条分支，
-   否则触发器会在用户还没选过时显示空值。 */
-const selectedReasoningEffort = computed(() => {
-  const effort = props.context?.reasoning_effort;
-  return effort === "minimal" || effort === "low" || effort === "high"
-    ? effort
-    : "medium";
+const effortLabels = computed(() => {
+  const t = $i18n.t.value.inputBox;
+  return {
+    minimal: [t.reasoningEffortMinimal, t.reasoningEffortMinimalDescription],
+    low: [t.reasoningEffortLow, t.reasoningEffortLowDescription],
+    medium: [t.reasoningEffortMedium, t.reasoningEffortMediumDescription],
+    high: [t.reasoningEffortHigh, t.reasoningEffortHighDescription],
+    xhigh: [t.reasoningEffortXhigh, t.reasoningEffortXhighDescription],
+    max: [t.reasoningEffortMax, t.reasoningEffortMaxDescription],
+  } as Record<string, [string, string]>;
 });
+const reasoningEfforts = computed(() =>
+  getReasoningEffortOptions(selectedModel.value).map((id) => ({
+    id,
+    label: effortLabels.value[id]?.[0] ?? id,
+    description: effortLabels.value[id]?.[1] ?? null,
+  })),
+);
+const selectedReasoningEffort = computed(() =>
+  resolveReasoningEffort(
+    selectedModel.value,
+    props.context?.reasoning_effort ??
+      reasoningEffortForMode(
+        (props.context?.mode ?? "pro") as InputMode,
+        selectedModel.value,
+      ),
+  ),
+);
 const activeReasoningEffort = computed(
   () =>
     reasoningEfforts.value.find(
-      (candidate) => candidate.id === selectedReasoningEffort.value,
-    ) ?? reasoningEfforts.value[2]!,
+      (item) => item.id === selectedReasoningEffort.value,
+    ) ?? { id: "", label: "", description: null },
 );
 
 function selectReasoningEffort(id: string) {
@@ -692,12 +819,12 @@ function selectReasoningEffort(id: string) {
     (candidate) => candidate.id === id,
   );
   if (!effort) return;
-  emit(
-    "contextChange",
+  emitExplicitContext(
     normalizeComposerContext(
       { ...props.context, reasoning_effort: effort.id },
       selectedModel.value,
     ),
+    ["reasoning_effort"],
   );
 }
 
@@ -708,143 +835,39 @@ function selectModeById(id: string) {
     {
       ...props.context,
       mode: mode.id,
-      reasoning_effort: mode.effort,
+      reasoning_effort: reasoningEffortForMode(
+        mode.id as InputMode,
+        selectedModel.value,
+      ),
     },
     selectedModel.value,
   );
-  emit("contextChange", next);
+  emitExplicitContext(next, ["mode", "reasoning_effort"]);
 }
 onMounted(() => {
   // 见 autoFocus prop 的注释：这里是上游 autoFocus 的等价实现。
   if (props.autoFocus) textarea.value?.focus();
-  if (typeof ResizeObserver !== "undefined") {
-    skillSuggestionsResizeObserver = new ResizeObserver(
-      syncSkillSuggestionsMaxHeight,
-    );
-    if (composerRoot.value)
-      skillSuggestionsResizeObserver.observe(composerRoot.value);
-    skillSuggestionsResizeObserver.observe(document.documentElement);
-  }
-  window.addEventListener("resize", syncSkillSuggestionsMaxHeight);
-  window.visualViewport?.addEventListener(
-    "resize",
-    syncSkillSuggestionsMaxHeight,
-  );
 });
 // 见 followupsSuppressedChange 的注释。上游那两条判据在 input-box.tsx:1984-1985。
 watch(
-  () => showSuggestions.value || selectedSkill.value !== null,
+  () => showSuggestions.value || referenceState.show.value,
   (value) => emit("followupsSuppressedChange", value),
   { immediate: true },
 );
 onBeforeUnmount(() => {
   // 上游 input-box.tsx:1997 的清理 effect：卸载时把这个事实收回去。
   emit("followupsSuppressedChange", false);
-  compactGeneration += 1;
-  compactController?.abort();
-  goalController?.abort();
-  goalGeneration.invalidate();
-  polishController.value?.abort();
-  polishGeneration.invalidate();
-  submissionGeneration += 1;
-  voiceStopRequested = true;
-  if (voiceRestartTimer) clearTimeout(voiceRestartTimer);
-  voiceRecognition.value?.abort();
-  skillSuggestionsResizeObserver?.disconnect();
-  window.removeEventListener("resize", syncSkillSuggestionsMaxHeight);
-  window.visualViewport?.removeEventListener(
-    "resize",
-    syncSkillSuggestionsMaxHeight,
-  );
+  cancelPolish();
 });
 
-function voiceErrorMessage(kind: SpeechRecognitionErrorKind) {
-  const messages = $i18n.t.value.inputBox;
-  switch (kind) {
-    case "permission_denied":
-      return messages.voiceInputPermissionDenied;
-    case "microphone_unavailable":
-      return messages.voiceInputMicrophoneUnavailable;
-    case "unsupported_language":
-      return messages.voiceInputUnsupportedLanguage;
-    case "network":
-      return messages.voiceInputNetworkError;
-    case "no_speech":
-      return messages.voiceInputNoSpeech;
-    default:
-      return messages.voiceInputFailed;
-  }
-}
-
-function startVoiceRecognition() {
-  const Constructor = getSpeechRecognitionConstructor(globalThis);
-  if (!Constructor) {
-    toast.error($i18n.t.value.inputBox.voiceInputUnsupported);
-    return;
-  }
-  const recognition = new Constructor();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
-  recognition.lang = getSpeechRecognitionLanguage($i18n.locale.value);
-  voiceRecognition.value = recognition;
-  voiceBaseText = input.value;
-  voiceLastError = null;
-  voiceStopRequested = false;
-  recognition.onresult = (event) => {
-    input.value = appendSpeechTranscript(
-      voiceBaseText,
-      readSpeechRecognitionTranscript(event.results).text,
-    );
-  };
-  recognition.onerror = (event) => {
-    voiceLastError = mapSpeechRecognitionError(event.error);
-    if (voiceLastError !== "cancelled" && voiceLastError !== "no_speech") {
-      toast.error(voiceErrorMessage(voiceLastError));
-    }
-  };
-  recognition.onend = () => {
-    voiceListening.value = false;
-    voiceRecognition.value = null;
-    if (!voiceStopRequested && shouldRestartSpeechRecognition(voiceLastError)) {
-      voiceRestartTimer = setTimeout(startVoiceRecognition, 150);
-    }
-  };
-  try {
-    recognition.start();
-    voiceListening.value = true;
-  } catch {
-    voiceRecognition.value = null;
-    toast.error($i18n.t.value.inputBox.voiceInputFailed);
-  }
-}
-
-function toggleVoiceInput() {
-  if (voiceListening.value) {
-    voiceStopRequested = true;
-    voiceRecognition.value?.stop();
-    voiceListening.value = false;
-    return;
-  }
-  startVoiceRecognition();
-}
-
-/*
-  接受一条建议。两支的落点不同，这是上游 applySkillSuggestion（input-box.tsx:1541）
-  的判据：技能变成一枚 chip、正文清空、光标回到 chip 里的正文区；内建命令则原样
-  写回输入框成 `/name `——**带着那个尾随空格**，它同时是「命令已经打完」的信号
-  （查询串含空白，目录自然关掉）和参数的起点。
-
-  内建那一支还要把这一行记进 dismissed：`/goal ` 这行文本本来就不是一次查询，
-  这一笔是防止后续退格回到 `/goal` 时目录又弹出来盖住刚打的命令。
-*/
+/* Skills enter the inline reference editor; built-in commands retain their
+   trailing separator so the command catalog closes before entering arguments. */
 function applySuggestion(item: SlashSuggestion | undefined) {
   if (!item) return false;
   if (item.kind === "skill") {
-    selectedSkill.value = item.name;
-    input.value = "";
+    input.value = `${referenceToken("skill", item.name, item.name)} `;
     dismissedSuggestionValue.value = null;
-    void nextTick(() => chipInput.value?.focus());
+    focusComposerAt(input.value.length);
   } else {
     const next = `/${item.name} `;
     input.value = next;
@@ -860,309 +883,20 @@ function applySuggestion(item: SlashSuggestion | undefined) {
 }
 
 async function submit() {
-  if (composerLocked.value) return;
-  /*
-    流式输出期间提交要**说一句话**再退出，不是静悄悄什么都不做：上游
-    handleSubmit 开头就是 `if (status === "streaming") { toast.info(
-    t.inputBox.pleaseWaitStreaming); return reject }`（input-box.tsx:1165）。
-    走到这里的只有回车那条路——按钮在流式态被 onSubmitButtonClick 拦成"停止"。
-  */
-  if (props.streaming) {
-    toast.info($i18n.t.value.inputBox.pleaseWaitStreaming);
-    return;
-  }
-  const plain = input.value.trim();
-  const text = selectedSkill.value
-    ? `/${selectedSkill.value}${plain ? ` ${plain}` : ""}`
-    : plain;
-  const compactCommand =
-    selectedFiles.value.length === 0 && isCompactCommand(text);
-  if (!text && selectedFiles.value.length === 0) return;
-  const placeholder = findSuggestionTemplatePlaceholder(text);
-  if (placeholder) {
-    /*
-      只选中占位符是不够的：没有一句话解释为什么没发出去。上游先
-      `toast.warning(t.inputBox.suggestionPlaceholderRequired)` 再选中
-      （input-box.tsx:1071）。
-    */
-    toast.warning($i18n.t.value.inputBox.suggestionPlaceholderRequired);
-    await nextTick();
-    const element = textarea.value;
-    element?.focus();
-    element?.setSelectionRange(placeholder.start, placeholder.end);
-    return;
-  }
-
-  if (compactCommand) {
-    if (compactPending.value) return;
-    if (props.isWelcome) {
-      clearComposerDraft(getSessionComposerDraftStorage(), draftKey.value);
-      input.value = "";
-      selectedSkill.value = null;
-      toast.info($i18n.t.value.inputBox.compactSkipped);
-      return;
-    }
-    compactPending.value = true;
-    const generation = ++compactGeneration;
-    const controller = new AbortController();
-    compactController?.abort();
-    compactController = controller;
-    const targetThreadId = props.targetThreadId;
-    try {
-      const result = await compactThreadContext(targetThreadId, {
-        signal: controller.signal,
-        agentName:
-          typeof props.context?.agent_name === "string"
-            ? props.context.agent_name
-            : props.agentName,
-        modelName:
-          typeof props.context?.model_name === "string"
-            ? props.context.model_name
-            : null,
-      });
-      if (
-        controller.signal.aborted ||
-        generation !== compactGeneration ||
-        targetThreadId !== props.targetThreadId
-      ) {
-        return;
-      }
-      clearComposerDraft(getSessionComposerDraftStorage(), draftKey.value);
-      input.value = "";
-      selectedSkill.value = null;
-      historyIndex = -1;
-      invalidateThreadCaches(queryClient, targetThreadId);
-      // 上游分成两条 kind：compacted 走 success（:1033），其余走 info（:1035）。
-      if (result.compacted) {
-        toast.success($i18n.t.value.inputBox.compactSuccess);
-      } else {
-        toast.info(
-          result.reason
-            ? $i18n.t.value.inputBox.compactNotPerformed(result.reason)
-            : $i18n.t.value.inputBox.compactSkipped,
-        );
-      }
-    } catch (error) {
-      if (
-        !controller.signal.aborted &&
-        generation === compactGeneration &&
-        targetThreadId === props.targetThreadId
-      ) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : $i18n.t.value.inputBox.compactFailed,
-        );
-      }
-    } finally {
-      if (compactController === controller) compactController = null;
-      if (generation === compactGeneration) compactPending.value = false;
-    }
-    return;
-  }
-
-  const goalCommand =
-    selectedFiles.value.length === 0 ? parseGoalCommand(text) : null;
-  if (goalCommand) {
-    if (
-      goalCommand.kind === "set" &&
-      goalCommand.objective.length > MAX_GOAL_OBJECTIVE_CHARS
-    ) {
-      toast.error(
-        $i18n.t.value.inputBox.goalTooLong.replace(
-          "{max}",
-          String(MAX_GOAL_OBJECTIVE_CHARS),
-        ),
-      );
-      return;
-    }
-    const scope = `${props.threadKey}\u0000${props.targetThreadId}\u0000${props.agentName ?? "lead-agent"}`;
-    const token = goalGeneration.begin(scope);
-    const controller = new AbortController();
-    goalController?.abort();
-    goalController = controller;
-    const draftSnapshot = {
-      key: draftKey.value,
-      text: input.value,
-      skillName: selectedSkill.value,
-    };
-    try {
-      const threadId = props.ensureThread
-        ? await props.ensureThread()
-        : props.targetThreadId;
-      if (
-        controller.signal.aborted ||
-        !goalGeneration.isCurrent(token, scope) ||
-        draftKey.value !== draftSnapshot.key
-      ) {
-        return;
-      }
-      const endpoint = `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/goal`;
-      const response = await fetchWithAuth(endpoint, {
-        method:
-          goalCommand.kind === "status"
-            ? "GET"
-            : goalCommand.kind === "clear"
-              ? "DELETE"
-              : "PUT",
-        ...(goalCommand.kind === "set"
-          ? {
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ objective: goalCommand.objective }),
-            }
-          : {}),
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(await readGoalResponseError(response));
-      const body = (await response.json()) as { goal?: GoalState | null };
-      if (
-        controller.signal.aborted ||
-        !goalGeneration.isCurrent(token, scope) ||
-        draftKey.value !== draftSnapshot.key
-      ) {
-        return;
-      }
-      const nextGoal = body.goal ?? null;
-      emit("goalChange", nextGoal);
-      // 上游 status 走 info（:911），clear/set 走 success（:938 / :967）。
-      if (goalCommand.kind === "status") {
-        toast.info(
-          nextGoal
-            ? $i18n.t.value.inputBox.goalActive.replace(
-                "{goal}",
-                nextGoal.objective,
-              )
-            : $i18n.t.value.inputBox.goalNone,
-        );
-      } else {
-        toast.success(
-          goalCommand.kind === "clear"
-            ? $i18n.t.value.inputBox.goalCleared
-            : $i18n.t.value.inputBox.goalSet,
-        );
-      }
-      if (goalCommand.kind === "set") {
-        const onAccepted = () => {
-          draft.clearIfUnchanged(draftSnapshot);
-        };
-        if (props.submitMessage) {
-          await props.submitMessage(goalCommand.objective, [], { onAccepted });
-        } else {
-          emit("send", goalCommand.objective, []);
-          onAccepted();
-        }
-      } else {
-        draft.clearIfUnchanged(draftSnapshot);
-      }
-      return;
-    } catch (cause) {
-      if (
-        !controller.signal.aborted &&
-        goalGeneration.isCurrent(token, scope)
-      ) {
-        toast.error(
-          cause instanceof Error
-            ? cause.message
-            : $i18n.t.value.inputBox.goalFailed,
-        );
-      }
-      return;
-    } finally {
-      if (goalController === controller) goalController = null;
-    }
-  }
-
-  if (submissionPending.value) return;
-  submissionPending.value = true;
-  const generation = ++submissionGeneration;
-  const scopeKey = draftKey.value;
-  const targetAtStart = props.targetThreadId;
-  const draftSnapshot = {
-    key: scopeKey,
-    text: input.value,
-    skillName: selectedSkill.value,
-  };
-  activeSubmissionDraft = draftSnapshot;
-  draft.beginSubmission(draftSnapshot);
-  const pending = [...selectedFiles.value];
-  try {
-    const uploadThreadId = props.ensureThread
-      ? await props.ensureThread()
-      : props.targetThreadId;
-    if (
-      generation !== submissionGeneration ||
-      scopeKey !== draftKey.value ||
-      targetAtStart !== props.targetThreadId
-    ) {
-      return;
-    }
-    const hasMissingUploads = pending.some(
-      (file) => !uploadedByThread.get(uploadThreadId)?.has(file),
-    );
-    if (hasMissingUploads) {
-      emit("uploadingChange", true);
-    }
-    const uploaded = await prepareSubmissionFiles({
-      threadId: uploadThreadId,
-      files: pending,
-      cache: uploadedByThread,
-    });
-    if (
-      generation !== submissionGeneration ||
-      scopeKey !== draftKey.value ||
-      targetAtStart !== props.targetThreadId
-    ) {
-      return;
-    }
-    const onAccepted = () => {
-      if (generation !== submissionGeneration || scopeKey !== draftKey.value) {
-        return;
-      }
-      draft.clearIfUnchanged(draftSnapshot);
-      if (activeSubmissionDraft === draftSnapshot) {
-        activeSubmissionDraft = null;
-      }
-      selectedFiles.value = selectedFiles.value.filter(
-        (file) => !pending.includes(file),
-      );
-      filesByDraftKey.set(scopeKey, [...selectedFiles.value]);
-      historyIndex = -1;
-    };
-    if (props.submitMessage) {
-      const dispatched = await props.submitMessage(text, uploaded, {
-        onAccepted,
-      });
-      if (dispatched === false) {
-        draft.cancelSubmission(draftSnapshot);
-        if (activeSubmissionDraft === draftSnapshot) {
-          activeSubmissionDraft = null;
-        }
-      }
-    } else {
-      emit("send", text, uploaded);
-      onAccepted();
-    }
-  } catch (error) {
-    draft.cancelSubmission(draftSnapshot);
-    if (activeSubmissionDraft === draftSnapshot) {
-      activeSubmissionDraft = null;
-    }
-    if (generation === submissionGeneration && scopeKey === draftKey.value) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : $i18n.t.value.common.requestFailed,
-      );
-    }
-  } finally {
-    if (generation === submissionGeneration) {
-      emit("uploadingChange", false);
-      submissionPending.value = false;
-    }
-  }
+  const placeholder = await submission.submit();
+  if (!placeholder) return;
+  await nextTick();
+  const element = textarea.value;
+  element?.focus();
+  element?.setSelectionRange(placeholder.start, placeholder.end);
 }
 
 const compositionActive = ref(false);
+let compositionEndedAt = -Infinity;
+function endComposition() {
+  compositionActive.value = false;
+  compositionEndedAt = Date.now();
+}
 
 /*
   斜杠目录的键盘导航，对应上游的 handleSkillSuggestionKeyDown（input-box.tsx:1569）。
@@ -1193,11 +927,7 @@ function onSuggestionKeydown(event: KeyboardEvent) {
   }
   if (event.key === "Enter" || event.key === "Tab") {
     if (event.shiftKey) return;
-    if (
-      event.key === "Enter" &&
-      !selectedSkill.value &&
-      isCompleteBuiltinCommand(input.value)
-    ) {
+    if (event.key === "Enter" && isCompleteBuiltinCommand(input.value)) {
       return;
     }
     event.preventDefault();
@@ -1217,7 +947,18 @@ function onKeydown(event: KeyboardEvent) {
     这里挡的是历史翻页与斜杠面板，那里挡的是任何别的调用点）。
   */
   if (composerLocked.value) return;
+  if (isCompositionConfirmEnter(event, compositionEndedAt)) {
+    event.preventDefault();
+    return;
+  }
   if (isImeComposing(event, compositionActive.value)) return;
+  if (referenceState.show.value) mentionPicker.value?.onKeyDown(event);
+  if (event.defaultPrevented) return;
+  if (
+    referenceEditor.value &&
+    (event.key === "Backspace" || event.key === "Delete")
+  )
+    selectReferenceForDeletion(referenceEditor.value, event.key);
   onSuggestionKeydown(event);
   if (event.defaultPrevented) return;
   if (event.key === "Enter" && event.shiftKey) return;
@@ -1250,8 +991,28 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
-function onChipInput(event: Event) {
-  input.value = (event.target as HTMLElement).innerText;
+function onReferenceInput(event: Event) {
+  const element = event.target as HTMLElement;
+  input.value = readReferenceEditor(element);
+  referenceState.updateQuery(input.value, referenceCaret(element));
+  stopVoiceForEdit();
+}
+function stopVoiceForEdit() {
+  if (!voiceListening.value) return;
+  voice.stop();
+}
+function onTextareaInput() {
+  updateMentionCaret();
+  stopVoiceForEdit();
+}
+function onReferencePaste(event: ClipboardEvent) {
+  if (composerLocked.value) return;
+  event.preventDefault();
+  document.execCommand(
+    "insertText",
+    false,
+    event.clipboardData?.getData("text/plain") ?? "",
+  );
 }
 function openFileDialog() {
   fileInput.value?.click();
@@ -1291,101 +1052,8 @@ function chooseFiles(event: Event) {
   (event.target as HTMLInputElement).value = "";
 }
 
-async function polish() {
-  if (polishUndoAvailable.value && polishOriginal.value !== null) {
-    input.value = polishOriginal.value;
-    polishOriginal.value = null;
-    polishRewritten.value = null;
-    return;
-  }
-  if (!input.value.trim()) return;
-  const original = input.value;
-  polishOriginal.value = original;
-  polishing.value = true;
-  const scope = `${props.threadKey}\u0000${props.targetThreadId}\u0000${props.agentName ?? "lead-agent"}`;
-  const token = polishGeneration.begin(scope);
-  const controller = new AbortController();
-  polishController.value?.abort();
-  polishController.value = controller;
-  try {
-    const result = await polishInputDraft(
-      {
-        text: original,
-        locale: $i18n.locale.value,
-        thread_id: props.targetThreadId,
-      },
-      { signal: controller.signal },
-    );
-    if (
-      !controller.signal.aborted &&
-      polishGeneration.isCurrent(token, scope) &&
-      input.value === original
-    ) {
-      /*
-        API 说"没改动"（或者改出来是空的）时**不落草稿**，而且要把撤销态收回去。
-        上游 input-box.tsx:1656 是
-        `const rewrittenText = result.rewritten_text.trim();
-         if (!rewrittenText || !result.changed) { toast.info(
-           t.inputBox.inputPolishNoChanges); return; }`
-        ——它的撤销态是**成功之后**才 setInputPolishUndo 的，所以 no-op 天然不会
-        留下撤销按钮。本仓的 polishOriginal 是发请求**之前**就写好的（撤销要能在
-        请求还没回来时就取消），所以这里得显式清掉，否则用户为一次什么都没发生的
-        润色拿到一个"撤销"按钮。
-      */
-      const rewritten = result.rewritten_text.trim();
-      if (!rewritten || !result.changed) {
-        toast.info($i18n.t.value.inputBox.inputPolishNoChanges);
-        polishOriginal.value = null;
-        polishRewritten.value = null;
-      } else {
-        input.value = rewritten;
-        polishRewritten.value = rewritten;
-      }
-    }
-  } catch (error) {
-    if (
-      !controller.signal.aborted &&
-      polishGeneration.isCurrent(token, scope)
-    ) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : $i18n.t.value.inputBox.inputPolishFailed,
-      );
-      polishOriginal.value = null;
-      polishRewritten.value = null;
-    }
-  } finally {
-    if (polishController.value === controller) {
-      polishing.value = false;
-      polishController.value = null;
-    }
-  }
-}
-function cancelPolish() {
-  polishController.value?.abort();
-  polishGeneration.invalidate();
-  polishController.value = null;
-  polishing.value = false;
-  polishOriginal.value = null;
-  polishRewritten.value = null;
-}
-/*
-  取消已选中的斜杠技能，对着上游 input-box.tsx:2058 的 clearSelectedSlashSkill：
-  清掉之后**把焦点交回输入区**，否则那颗胶囊按钮一消失焦点就掉回 body，
-  键盘用户得从头 Tab 一遍。上游用 requestAnimationFrame 等 React 提交完这一帧，
-  本仓等 nextTick——`selectedSkill` 一变，`v-if` 会把可编辑区从 chip 档的 span
-  换回真 `<textarea>`，`textarea` 这个 ref 要等那次 patch 之后才指得到元素。
-*/
-function clearSelectedSkill() {
-  selectedSkill.value = null;
-  void nextTick(() => {
-    textarea.value?.focus();
-  });
-}
 function replaceDraft(value: string) {
   input.value = value;
-  selectedSkill.value = null;
   /*
     光标落到末尾，和上游 setPromptHistoryValue 一样（input-box.tsx:1609：
     focus() 之后 setSelectionRange(len, len)）。只 focus 的话浏览器把光标放在
@@ -1400,7 +1068,6 @@ function replaceDraft(value: string) {
 }
 function selectWelcomeSuggestion(value: string) {
   input.value = value;
-  selectedSkill.value = null;
   const placeholder = findSuggestionTemplatePlaceholder(value);
   void nextTick(() => {
     requestAnimationFrame(() => {
@@ -1413,11 +1080,7 @@ function selectWelcomeSuggestion(value: string) {
   });
 }
 function offerFollowup(value: string) {
-  if (
-    !input.value.trim() &&
-    !selectedSkill.value &&
-    selectedFiles.value.length === 0
-  ) {
+  if (!input.value.trim() && selectedFiles.value.length === 0) {
     replaceDraft(value);
     void nextTick(() => submit());
     return;
@@ -1459,29 +1122,32 @@ function onSubmitButtonClick(event: MouseEvent) {
   stopRun();
 }
 function stopRun() {
-  compactGeneration += 1;
-  compactController?.abort();
-  compactController = null;
-  compactPending.value = false;
-  goalController?.abort();
-  goalController = null;
-  goalGeneration.invalidate();
-  polishController.value?.abort();
-  polishController.value = null;
-  polishGeneration.invalidate();
-  polishing.value = false;
-  polishOriginal.value = null;
-  polishRewritten.value = null;
-  submissionGeneration += 1;
-  submissionPending.value = false;
-  if (activeSubmissionDraft) {
-    draft.cancelSubmission(activeSubmissionDraft);
-    activeSubmissionDraft = null;
-  }
-  emit("uploadingChange", false);
+  if (!props.canStopStreaming) return;
+  // The stream owner sends the server cancel. Aborting the submission here
+  // would detach that owner before it receives this explicit stop request.
+  cancelPolish();
   emit("stop");
 }
-defineExpose({ replaceDraft, offerFollowup });
+function focus() {
+  const editor = referenceEditor.value ?? textarea.value;
+  if (!composerLocked.value && editor?.isConnected)
+    editor.focus({ preventScroll: true });
+}
+function resetDraft() {
+  submission.cancel();
+  cancelPolish();
+  draft.clearIfUnchanged({
+    key: draftKey.value,
+    text: input.value,
+    skillName: null,
+    conversationReferences: [...conversationReferences.value],
+  });
+  selectedFiles.value = [];
+  referenceState.close();
+  inlineEditorActive.value = false;
+  pendingFollowup.value = null;
+}
+defineExpose({ replaceDraft, offerFollowup, focus, resetDraft });
 </script>
 
 <template>
@@ -1529,6 +1195,45 @@ defineExpose({ replaceDraft, offerFollowup });
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <div
+      v-if="referenceState.show.value"
+      ref="mentionPopup"
+      class="right-0 left-0 z-50 overflow-y-auto px-1"
+      :class="
+        mentionPlacement.inline
+          ? 'relative mb-2'
+          : mentionPlacement.above
+            ? 'absolute bottom-full mb-2'
+            : 'absolute top-full mt-2'
+      "
+      :style="{ maxHeight: `${mentionPlacement.maxHeight}px` }"
+    >
+      <MentionPicker
+        ref="mentionPicker"
+        :list-id="mentionListId"
+        :query="referenceState.query.value?.query ?? ''"
+        :search-input="referenceState.buttonOpen.value"
+        :skills="skills"
+        :skills-loading="skillCatalog.loading.value"
+        :skills-error="skillCatalog.error.value"
+        :selected-skills="referenceState.selectedSkills.value"
+        :selected-extensions="referenceState.selectedExtensions.value"
+        :references="conversationReferences"
+        :capability="referenceState.capabilityState.value"
+        :thread-id="targetThreadId"
+        :project-id="projectId"
+        :busy="referenceState.busy.value"
+        :error="referenceState.error.value"
+        @select="referenceState.select"
+        @close="
+          referenceState.close();
+          focusComposerAt(input.length);
+        "
+        @active-option-change="activeMentionOption = $event"
+        @retry-skills="skillCatalog.refetch()"
+        @retry-capability="referenceState.capability.refetch()"
+      />
+    </div>
     <!--
       斜杠目录挂在**整叠 composer 的定位父**上，不在输入框边框里面——上游
       input-box.tsx:2139 就是这个位置（`{showSkillSuggestions && ...}` 排在
@@ -1538,8 +1243,9 @@ defineExpose({ replaceDraft, offerFollowup });
       台账测不到，得照着上游的 DOM 位置摆。
     -->
     <div
-      v-if="showSuggestions"
-      class="z-40 mb-2 px-1"
+      v-if="suggestions.length > 0"
+      v-show="showSuggestions"
+      class="z-50 mb-2 px-1"
       :class="
         skillSuggestionsInline
           ? 'relative'
@@ -1547,6 +1253,7 @@ defineExpose({ replaceDraft, offerFollowup });
       "
     >
       <div
+        :id="commandListId"
         role="listbox"
         :aria-label="$i18n.t.value.primitives.skillSuggestions"
         class="bg-popover/95 text-popover-foreground border-border overflow-y-auto rounded-xl border p-1 shadow-lg backdrop-blur-sm"
@@ -1559,7 +1266,9 @@ defineExpose({ replaceDraft, offerFollowup });
         -->
         <button
           v-for="(suggestion, index) in suggestions"
+          :id="`${commandListId}-${suggestion.kind}-${suggestion.name}`"
           :key="`${suggestion.kind}:${suggestion.name}`"
+          tabindex="-1"
           role="option"
           type="button"
           :aria-selected="index === suggestionIndex"
@@ -1572,14 +1281,12 @@ defineExpose({ replaceDraft, offerFollowup });
         >
           <Target
             v-if="suggestion.kind === 'builtin'"
-            :size="16"
-            class="text-muted-foreground shrink-0"
+            class="text-muted-foreground size-4 shrink-0"
             aria-hidden="true"
           />
           <Sparkles
             v-else
-            :size="16"
-            class="text-muted-foreground shrink-0"
+            class="text-muted-foreground size-4 shrink-0"
             aria-hidden="true"
           />
           <span class="min-w-0 flex-1">
@@ -1631,13 +1338,42 @@ defineExpose({ replaceDraft, offerFollowup });
         </template>
         <!-- header / footer 都是 React 的 InputGroupAddon，role="group"。 -->
         <div
-          v-if="selectedFiles.length || polishing || (references?.length ?? 0)"
+          v-if="
+            selectedFiles.length ||
+            referenceState.attachments.value.length ||
+            polishing ||
+            (references?.length ?? 0) ||
+            (referenceState.capability.error.value &&
+              referenceState.inline.value.some(
+                (ref) => ref.kind === 'conversation',
+              ))
+          "
           role="group"
           data-slot="input-group-header"
           :data-testid="
             selectedFiles.length ? 'composer-attachments' : undefined
           "
         >
+          <div
+            v-if="
+              referenceState.capability.error.value &&
+              referenceState.inline.value.some(
+                (ref) => ref.kind === 'conversation',
+              )
+            "
+            role="alert"
+            class="w-full text-xs"
+          >
+            {{ $i18n.t.value.inputBox.mentionFailed }}
+            <button
+              type="button"
+              class="underline"
+              data-testid="retry-conversation-capability"
+              @click="referenceState.capability.refetch()"
+            >
+              {{ $i18n.t.value.inputBox.mentionRetry }}
+            </button>
+          </div>
           <ComposerAttachmentChip
             v-for="file in selectedFiles"
             :key="attachmentKey(file)"
@@ -1646,6 +1382,25 @@ defineExpose({ replaceDraft, offerFollowup });
               selectedFiles = selectedFiles.filter((item) => item !== file)
             "
           />
+          <div
+            v-for="attachment in referenceState.attachments.value.filter(
+              (file) => !file.source_document_id,
+            )"
+            :key="attachment.virtual_path"
+            class="bg-muted text-muted-foreground flex h-7 items-center gap-1.5 rounded-full border py-0 pr-1 pl-2.5 text-xs font-medium"
+            data-testid="project-attachment-chip"
+          >
+            <Paperclip class="size-3" />
+            <span class="max-w-40 truncate">{{ attachment.filename }}</span>
+            <button
+              :aria-label="$i18n.t.value.inputBox.removeProjectAttachment"
+              class="hover:bg-primary/20 focus-visible:ring-primary/40 -mr-0.5 ml-0.5 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              type="button"
+              @click="referenceState.removeAttachment(attachment)"
+            >
+              <X class="size-3" />
+            </button>
+          </div>
           <!--
             润色中的胶囊，逐条对着上游 input-box.tsx:2235。三处此前对不上：
 
@@ -1664,7 +1419,7 @@ defineExpose({ replaceDraft, offerFollowup });
             aria-live="polite"
             class="text-primary bg-primary/10 border-primary/20 relative z-30 flex h-7 items-center gap-1.5 rounded-full border py-0 pr-1 pl-2.5 text-xs font-medium"
           >
-            <Loader2 :size="12" class="animate-spin" />
+            <Loader2 class="size-3 animate-spin" />
             {{ $i18n.t.value.inputBox.inputPolishing }}
             <button
               data-testid="cancel-polish-input-button"
@@ -1673,7 +1428,7 @@ defineExpose({ replaceDraft, offerFollowup });
               :aria-label="$i18n.t.value.inputBox.inputPolishCancel"
               @click="cancelPolish"
             >
-              <X :size="12" />
+              <X class="size-3" />
             </button>
           </div>
           <!--
@@ -1693,77 +1448,48 @@ defineExpose({ replaceDraft, offerFollowup });
           />
         </div>
         <div data-slot="input-group-body">
-          <!--
-            chip 与可编辑区是**同一行文字里的两个 inline 元素**，不是两列
-            （上游 input-box.tsx:2264 是一个 `whitespace-pre-wrap break-all` 的
-            可滚容器，chip 靠 `mr-2 align-top` 浮在文字里）。本仓原来是
-            `flex items-start gap-2` 的两列，差的不只是排版：
-
-            ① 正文不再绕着 chip 排，而是被挤进右边一栏；
-            ② 没有 `max-h-48 overflow-y-auto`，长草稿会把输入框撑到没有上限；
-            ③ chip 没有 `max-w-[min(11rem,45%)]`，一个长技能名会把可编辑区挤没；
-            ④ 点空白处不会把光标放到末尾（上游在容器上挂了 onClick）。
-          -->
           <div
-            v-if="selectedSkill"
-            class="max-h-48 min-h-6 w-full min-w-0 cursor-text overflow-y-auto text-base leading-6 break-all whitespace-pre-wrap md:text-sm"
-            @click="focusChipEnd"
+            v-if="referenceState.inline.value.length || inlineEditorActive"
+            class="max-h-48 min-h-6 w-full min-w-0 cursor-text overflow-y-auto text-base leading-7 break-words whitespace-pre-wrap md:text-sm"
+            @click.self="focusComposerAt(input.length)"
           >
-            <!--
-              上游 input-box.tsx:2356 用的是 `SlashSkillChip`（可移除档），
-              本仓此前是一个纯 `<span class="bg-secondary …">`：**没有移除入口**，
-              颜色也不是 `primary` 那一档。判词与读数见 SlashSkillChip.vue 文件头。
-              `mr-2 max-w-[min(11rem,45%)] align-top` 是上游在调用点传的那三个类。
-            -->
-            <SlashSkillChip
-              :name="selectedSkill"
-              class="mr-2 max-w-[min(11rem,45%)] align-top"
-              removable
-              @remove="clearSelectedSkill"
-            />
-            <!--
-              斜杠技能选中之后那块可编辑区，逐件对着上游 input-box.tsx:2277：
-
-              1. **`<span>` 而不是 `<div>`**（上游是 span；role 都写着 textbox，
-                 所以这一条本身不改可访问性，但它是同一处的形状）。
-              2. **`aria-multiline="true"`**：告诉读屏器回车是换行不是提交。
-                 本仓此前没有，读屏器会把它当单行输入播报。
-              3. **`aria-placeholder` + 空态占位**：上游用
-                 `data-empty` / `data-placeholder` 加一条
-                 `data-[empty=true]:before:content-[attr(data-placeholder)]`
-                 把提示画出来；本仓此前**空的时候一个字都不画**，
-                 可访问名也只有 aria-label 一处。
-              4. **`tabindex`**：锁住时是 -1，与上游 `tabIndex={composerLocked ? -1 : 0}` 同。
-
-              **原来这里写着「布局那几个类（`min-h-10 flex-1`）是本仓自己的……
-              改它要先量一次这一屏的几何」——那句话从 wave 37（`7eea78f0`）起就过期了**：
-              那一轮把技能 chip 那一行改成上游的行内可滚行，这两个类当时就从元素上
-              去掉了，只有注释留在原地，一挂八轮（wave 45 复核）。现在这个 span 的
-              class 里没有任何布局类，尺寸由外层容器给，与上游同形。
-
-              顺带钉一件事：**取样锚点 `selector: "textarea"` 在本仓也命中真元素**——
-              有 chip 时画上面这个 span，没有 chip 时走下面的 `v-else` 真 `<textarea>`，
-              而取样发生在无 chip 的稳定态。锚点取自场景的 settle `visible` 项，
-              两边任一边找不到都会当场失败，不会静默少比一处。
-            -->
             <span
-              ref="chipInput"
+              ref="referenceEditor"
               role="textbox"
               data-slot="input-group-control"
               aria-multiline="true"
               :aria-label="$i18n.t.value.inputBox.placeholder"
               :aria-placeholder="$i18n.t.value.inputBox.placeholder"
-              :data-empty="chipEmpty"
+              :data-empty="input.length === 0"
               :data-placeholder="$i18n.t.value.inputBox.placeholder"
-              :contenteditable="disabled ? 'false' : 'true'"
-              :tabindex="disabled ? -1 : 0"
-              class="before:text-muted-foreground text-sm outline-none before:pointer-events-none focus-visible:ring-0 focus-visible:outline-none data-[empty=true]:before:content-[attr(data-placeholder)]"
-              @input="onChipInput"
+              :contenteditable="!composerLocked"
+              :tabindex="composerLocked ? -1 : 0"
+              :aria-disabled="composerLocked || undefined"
+              :aria-controls="
+                referenceState.show.value
+                  ? mentionListId
+                  : showSuggestions
+                    ? commandListId
+                    : undefined
+              "
+              :aria-activedescendant="
+                referenceState.show.value
+                  ? activeMentionOption
+                  : showSuggestions && suggestions[suggestionIndex]
+                    ? `${commandListId}-${suggestions[suggestionIndex]!.kind}-${suggestions[suggestionIndex]!.name}`
+                    : undefined
+              "
+              class="before:text-muted-foreground block min-h-6 outline-none before:pointer-events-none data-[empty=true]:before:content-[attr(data-placeholder)]"
+              :class="composerLocked ? 'cursor-not-allowed opacity-50' : ''"
+              @input="onReferenceInput"
               @keydown="onKeydown"
+              @keyup="onReferenceCaretKeyup"
+              @click="updateMentionCaret"
+              @paste="onReferencePaste"
               @focus="textareaFocused = true"
               @blur="textareaFocused = false"
               @compositionstart="compositionActive = true"
-              @compositionend="compositionActive = false"
+              @compositionend="endComposition"
             />
           </div>
           <textarea
@@ -1775,14 +1501,31 @@ defineExpose({ replaceDraft, offerFollowup });
             :aria-label="$i18n.t.value.inputBox.placeholder"
             :placeholder="$i18n.t.value.inputBox.placeholder"
             rows="1"
-            class="field-sizing-content max-h-48 min-h-6! w-full min-w-0 resize-none bg-transparent p-0! text-base leading-6! outline-none focus-visible:ring-0 focus-visible:outline-none md:text-sm"
+            class="placeholder:text-muted-foreground/60 flex field-sizing-content max-h-48 min-h-6! w-full min-w-0 resize-none bg-transparent p-0! text-base leading-6! outline-none focus-visible:ring-0 focus-visible:outline-none md:text-sm"
             :readonly="composerLocked"
             :aria-disabled="composerLocked || undefined"
+            :aria-controls="
+              referenceState.show.value
+                ? mentionListId
+                : showSuggestions
+                  ? commandListId
+                  : undefined
+            "
+            :aria-activedescendant="
+              referenceState.show.value
+                ? activeMentionOption
+                : showSuggestions && suggestions[suggestionIndex]
+                  ? `${commandListId}-${suggestions[suggestionIndex]!.kind}-${suggestions[suggestionIndex]!.name}`
+                  : undefined
+            "
+            @input="onTextareaInput"
+            @select="onTextareaSelect"
+            @selectionchange="onTextareaSelect"
             @keydown="onKeydown"
             @focus="textareaFocused = true"
             @blur="textareaFocused = false"
             @compositionstart="compositionActive = true"
-            @compositionend="compositionActive = false"
+            @compositionend="endComposition"
           />
         </div>
         <!--
@@ -1802,23 +1545,30 @@ defineExpose({ replaceDraft, offerFollowup });
           `flex-wrap sm:flex-nowrap` 也照抄：窄屏放不下时上游是换行，
           本仓原来只会把这一排压扁。
         -->
-        <!--
-          `gap-2!`：上游 input-box.tsx:2418 这个调用点传的是
-          `flex flex-wrap gap-2 sm:flex-nowrap`——**`gap-2` 本仓一直漏着**
-          （第五十四轮在 sidecar 上量到同一条，两处一起补）。
-          上游 `InputGroupAddon` 的 cva 基类就是 `gap-2`，`PromptInputFooter` 用
-          `cn("justify-between gap-1", …)` 压回 `gap-1`，调用点再传 `gap-2` 压回去；
-          本仓 ComposerSurface 的 scoped CSS 只实现到 `gap: 0.25rem` 那一层。
-          不换行时两个组一个 `flex-1` 一个右对齐，这 4px 被free space 吸收、看不出来；
-          **`sm` 以下换行时它就是行间距**。
-          带 `!` 是因为要压过 scoped CSS 的 `(0,2,0)`。
-        -->
+        <!-- gap-2! preserves footer row spacing over ComposerSurface scoped styles. -->
         <div
           role="group"
           data-slot="input-group-footer"
           class="flex-wrap justify-between gap-2! sm:flex-nowrap"
         >
           <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  data-testid="mention-button"
+                  :aria-label="$i18n.t.value.inputBox.mentionPicker"
+                  :disabled="composerLocked"
+                  @click="openMentions"
+                  ><AtSign class="size-4"
+                /></Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{{
+                $i18n.t.value.inputBox.mentionPicker
+              }}</TooltipContent>
+            </Tooltip>
             <div class="relative">
               <Tooltip>
                 <TooltipTrigger>
@@ -1842,8 +1592,8 @@ defineExpose({ replaceDraft, offerFollowup });
                     class="px-2!"
                     data-testid="add-attachments-button"
                     :aria-label="$i18n.t.value.inputBox.addAttachments"
-                    :disabled="disabled || polishing"
-                    @click="openFileDialog"
+                    :disabled="composerLocked"
+                    @click="openMentions"
                   >
                     <Paperclip class="size-3" aria-hidden="true" />
                   </Button>
@@ -1897,9 +1647,7 @@ defineExpose({ replaceDraft, offerFollowup });
                       : $i18n.t.value.inputBox.voiceInputStartLabel
                   "
                   :aria-pressed="voiceListening"
-                  :disabled="
-                    disabled || !voiceSupported || polishing || streaming
-                  "
+                  :disabled="composerLocked || !voiceSupported"
                   @click="toggleVoiceInput"
                 >
                   <Square v-if="voiceListening" class="size-3 fill-current" />
@@ -1978,7 +1726,7 @@ defineExpose({ replaceDraft, offerFollowup });
                     size="sm"
                     data-testid="composer-mode-trigger"
                     class="max-w-28 gap-1! px-2! sm:max-w-none"
-                    :disabled="disabled || polishing"
+                    :disabled="composerLocked"
                   >
                     <!--
                     图标与文字各占一层，与上游同构（input-box.tsx:2393 的两个 div）。
@@ -2078,6 +1826,7 @@ defineExpose({ replaceDraft, offerFollowup });
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            <slot name="knowledgeScopeControl" :disabled="composerLocked" />
             <DropdownMenu
               v-if="supportsReasoningEffort && explicitMode !== 'flash'"
               v-model:open="reasoningMenuOpen"
@@ -2098,7 +1847,7 @@ defineExpose({ replaceDraft, offerFollowup });
                   size="sm"
                   data-testid="composer-reasoning-effort-trigger"
                   class="gap-1! px-2!"
-                  :disabled="disabled"
+                  :disabled="composerLocked"
                 >
                   <div class="text-xs font-normal">
                     {{ $i18n.t.value.inputBox.reasoningEffort }}:
@@ -2183,7 +1932,7 @@ defineExpose({ replaceDraft, offerFollowup });
             <ComposerModelSelector
               :models="models"
               :selected-model="selectedModel"
-              :disabled="disabled || polishing"
+              :disabled="composerLocked"
               @select="selectModel"
             />
             <!--
@@ -2221,10 +1970,26 @@ defineExpose({ replaceDraft, offerFollowup });
               class="rounded-full shadow-none"
               :aria-label="
                 streaming
-                  ? $i18n.t.value.primitives.stop
-                  : $i18n.t.value.primitives.submit
+                  ? !canStopStreaming
+                    ? $i18n.t.value.inputBox.stopStreamingUnavailable
+                    : $i18n.t.value.primitives.stop
+                  : !canCreateRuns
+                    ? $i18n.t.value.inputBox.startTurnUnavailable
+                    : $i18n.t.value.primitives.submit
               "
-              :disabled="disabled || polishing"
+              :title="
+                streaming && !canStopStreaming
+                  ? $i18n.t.value.inputBox.stopStreamingUnavailable
+                  : !streaming && !canCreateRuns
+                    ? $i18n.t.value.inputBox.startTurnUnavailable
+                    : undefined
+              "
+              :disabled="
+                composerLocked ||
+                (streaming
+                  ? !canStopStreaming
+                  : !canCreateRuns || referenceState.unavailable.value)
+              "
               @click="onSubmitButtonClick"
             >
               <Square v-if="streaming" class="size-4 fill-current" />
@@ -2241,12 +2006,8 @@ defineExpose({ replaceDraft, offerFollowup });
       欢迎态的整叠是**贴着底边**排的，少这 8px，上面的输入框就整体下移 8px。
     -->
     <div
-      v-if="
-        isWelcome &&
-        showWelcomeSuggestions !== false &&
-        !selectedSkill &&
-        !showSuggestions
-      "
+      v-if="isWelcome && showWelcomeSuggestions !== false"
+      v-show="!showSuggestions && !referenceState.show.value"
       class="flex items-center justify-center pt-2"
     >
       <WelcomeSuggestionList
@@ -2258,18 +2019,9 @@ defineExpose({ replaceDraft, offerFollowup });
       v-if="!isWelcome"
       data-testid="composer-bottom-background"
       aria-hidden="true"
-      class="bg-background absolute right-0 -bottom-[17px] left-0 z-0 h-4"
+      class="bg-background absolute right-0 -bottom-4 left-0 z-0 h-4"
     />
-    <!--
-      `/67` 是上游的值（input-box.tsx:2848 `text-muted-foreground/67`），**不是笔误**。
-      2026-09-18 第四十四轮第一次量 dark 下的对比度时掉出来的：本仓写的是 `/70`，
-      于是这句话在 dark 上两边的实际颜色不同——本仓 `#7a7a79`（对比度 3.84）、
-      上游 `#767675`（3.63），底色同为 `#1f1f1d`。**56 个对照终态里 46 个看得见它**，
-      而台账一行都没报：`geometry` 档只采锚点的颜色，这个 `<p>` 不是任何场景的锚点。
-      两边都低于 WCAG 1.4.3 的 4.5——那是上游的配色取舍，本轮只对齐、不重新配色，
-      判词与其余同类读数见 vue-parity-open-accounts 第四十四轮。
-      **翻案判据**：上游改了那个 alpha，这里跟着改。
-    -->
+    <!-- Keep the same muted alpha as the React composer hint. -->
     <p
       data-testid="composer-disclaimer"
       class="text-muted-foreground/67 px-4 text-center text-xs leading-4"

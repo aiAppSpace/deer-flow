@@ -20,20 +20,8 @@ const props = withDefaults(
     testId?: string;
     class?: string;
     /**
-     * 上游的两个 composer **body 那一层不同构**，所以这里必须分档：
-     *
-     * - `main`：上游 `input-box.tsx:2346` 是一个真盒子
-     *   `min-h-16 w-full min-w-0 px-3 py-3`，下面那段 CSS 逐字对着它；
-     * - `sidecar`：上游 `sidecar-panel.tsx:626` 用的是 `PromptInputBody`，
-     *   而它是 **`display: contents`**（`ai-elements/prompt-input.tsx:879`）
-     *   ——**根本不产生盒子**，内边距与 `min-h-16` 都在 textarea 自己身上
-     *   （`InputGroupTextarea` 的 `py-3` + `Textarea` 基类的 `px-3`）。
-     *
-     * 2026-09-19 第四十六轮 tablet 轴一开就撞出来：本仓两个 composer 共用
-     * `main` 那一套，于是 sidecar 的正文行比上游**高 14px**。
-     * 桌面下看不出来，是因为本仓那颗 `min-h-6!` 的 textarea 算出 36px、
-     * 与这层多出来的 30px **恰好抵消**；768 上抵消不掉。
-     * 逐层读数写在 `vue-parity-open-accounts` 第四十六轮。
+     * Main body owns its padding and minimum height. Sidecar uses display:
+     * contents, so its textarea owns those dimensions without an extra box.
      */
     variant?: "main" | "sidecar";
   }>(),
@@ -46,7 +34,7 @@ const props = withDefaults(
 
 const classes = computed(() =>
   cn(
-    "composer-surface group/input-group border-input/50 dark:bg-background/80 has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 relative z-10 flex w-full min-w-0 flex-col rounded-2xl border bg-white/80 shadow-xs backdrop-blur-sm transition-[color,box-shadow] outline-none has-[[data-slot=input-group-control]:focus-visible]:ring-[3px]",
+    "composer-surface group/input-group border-input/50 dark:bg-background/80 has-[[data-slot=input-group-control]:focus-visible]:border-input has-[[data-slot=input-group-control]:focus-visible]:ring-ring/50 relative z-10 flex w-full min-w-0 flex-col rounded-2xl border bg-white/80 shadow-xs transition-[color,box-shadow] outline-none has-[[data-slot=input-group-control]:focus-visible]:ring-[3px]",
     props.class,
   ),
 );
@@ -92,9 +80,14 @@ const classes = computed(() =>
 </template>
 
 <style scoped>
+@reference "../../assets/css/main.css";
 .composer-surface :deep([data-slot="input-group-control"]:focus-visible) {
   outline: none;
-  box-shadow: none;
+}
+
+/* The textarea keeps the same zero-width ring and shadow utilities as InputGroupTextarea. */
+.composer-surface :deep(textarea[data-slot="input-group-control"]) {
+  @apply focus-visible:ring-ring/50 shadow-none focus-visible:ring-0;
 }
 
 .composer-surface :deep([data-slot="input-group-header"]) {

@@ -161,21 +161,28 @@ test.describe("Chat workspace", () => {
     );
   });
 
-  test("restores a selected slash skill draft after reload", async ({
+  test("restores an inline skill reference draft after reload", async ({
     page,
   }) => {
     await page.goto("/workspace/chats/new");
 
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
-    await textarea.fill("/dat");
+    await textarea.fill("@dat");
+    await expect(
+      page.getByRole("option", { name: /data-analysis/i }),
+    ).toBeVisible();
     await textarea.press("Enter");
 
-    await expect(page.getByText("/data-analysis")).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "data-analysis" }),
+    ).toBeVisible();
     const skillInput = page.getByRole("textbox", {
       name: /how can i assist you/i,
     });
-    await skillInput.fill("Analyze the latest results");
+    await skillInput.pressSequentially("Analyze the latest results");
     await expect
       .poll(() =>
         page.evaluate(() => Object.values(window.sessionStorage).join("\n")),
@@ -184,12 +191,16 @@ test.describe("Chat workspace", () => {
 
     await page.reload();
 
-    await expect(page.getByText("/data-analysis")).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "data-analysis" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("textbox", {
         name: /how can i assist you/i,
       }),
-    ).toHaveText("Analyze the latest results");
+    ).toHaveText("✦data-analysis Analyze the latest results");
   });
 
   test("continues without draft persistence when sessionStorage is blocked", async ({
@@ -463,7 +474,7 @@ test.describe("Chat workspace", () => {
     releasePolish();
   });
 
-  test("suggests matching skills after a leading slash", async ({ page }) => {
+  test("suggests matching skills after an @ mention", async ({ page }) => {
     let submittedText: string | undefined;
     await page.route("**/runs/stream", (route) => {
       const body = route.request().postDataJSON() as {
@@ -492,7 +503,7 @@ test.describe("Chat workspace", () => {
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
 
-    await textarea.fill("/dat");
+    await textarea.fill("@dat");
     await expect(
       page.getByRole("option", { name: /data-analysis/i }),
     ).toBeVisible();
@@ -502,21 +513,25 @@ test.describe("Chat workspace", () => {
 
     await textarea.press("Enter");
 
-    await expect(page.getByText("/data-analysis")).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "data-analysis" }),
+    ).toBeVisible();
     const skillInput = page.getByRole("textbox", {
       name: /how can i assist you/i,
     });
     await expect(skillInput).toBeVisible();
 
-    await skillInput.fill("summarize this dataset");
+    await skillInput.pressSequentially("summarize this dataset");
     await skillInput.press("Enter");
 
     await expect
       .poll(() => submittedText)
-      .toBe("/data-analysis summarize this dataset");
+      .toBe("@data-analysis summarize this dataset");
   });
 
-  test("reopens the skill list with a slash after a skill is selected", async ({
+  test("adds a second inline skill reference without removing the first", async ({
     page,
   }) => {
     let submittedText: string | undefined;
@@ -535,19 +550,23 @@ test.describe("Chat workspace", () => {
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
 
-    await textarea.fill("/dat");
+    await textarea.fill("@dat");
     await expect(
       page.getByRole("option", { name: /data-analysis/i }),
     ).toBeVisible();
     await textarea.press("Enter");
-    await expect(page.getByText("/data-analysis")).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "data-analysis" }),
+    ).toBeVisible();
 
     const skillInput = page.getByRole("textbox", {
       name: /how can i assist you/i,
     });
     await expect(skillInput).toBeVisible();
 
-    await skillInput.pressSequentially("/");
+    await skillInput.pressSequentially("@");
 
     const dataAnalysis = page.getByRole("option", { name: /data-analysis/i });
     const frontendDesign = page.getByRole("option", {
@@ -555,24 +574,34 @@ test.describe("Chat workspace", () => {
     });
     await expect(dataAnalysis).toBeVisible();
     await expect(frontendDesign).toBeVisible();
-    // Builtin commands own the whole composer line, so they stay out of the
-    // list while a skill is selected even though an empty query matches them.
+    // Builtin commands own the whole composer line; @ offers references only.
     await expect(page.getByRole("option", { name: /goal/i })).toBeHidden();
 
     await skillInput.pressSequentially("fro");
-    await expect(frontendDesign).toHaveAttribute("aria-selected", "true");
+    await expect(skillInput).toHaveAttribute(
+      "aria-activedescendant",
+      (await frontendDesign.getAttribute("id")) as string,
+    );
 
     await skillInput.press("Enter");
 
-    await expect(page.getByText("/frontend-design")).toBeVisible();
-    await expect(page.getByText("/data-analysis")).toBeHidden();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "frontend-design" }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "data-analysis" }),
+    ).toBeVisible();
 
     await skillInput.pressSequentially("polish the composer");
     await skillInput.press("Enter");
 
     await expect
       .poll(() => submittedText)
-      .toBe("/frontend-design polish the composer");
+      .toBe("@data-analysis @frontend-design polish the composer");
   });
 
   test("does not offer a skill whose name a slash command owns", async ({
@@ -625,24 +654,26 @@ test.describe("Chat workspace", () => {
     await textarea.fill("/stat");
     await expect(page.getByRole("option", { name: /status/i })).toBeHidden();
 
-    await textarea.fill("/dat");
+    await textarea.fill("@dat");
     await expect(
       page.getByRole("option", { name: /data-analysis/i }),
     ).toBeVisible();
     await textarea.press("Enter");
-    await expect(page.getByText("/data-analysis")).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "data-analysis" }),
+    ).toBeVisible();
 
     const skillInput = page.getByRole("textbox", {
       name: /how can i assist you/i,
     });
     await skillInput.pressSequentially("/comp");
 
-    // Reserved in chip mode too. Selecting it would set a `/compact` chip that
-    // `parseCompactCommand` intercepts on submit, so context compaction would
-    // run instead of the skill.
+    // A line containing a reference cannot execute a builtin command.
     await expect(page.getByRole("option", { name: /compact/i })).toBeHidden();
 
-    await skillInput.fill("/stat");
+    await skillInput.pressSequentially(" @stat");
     await expect(page.getByRole("option", { name: /status/i })).toBeHidden();
   });
 
@@ -721,7 +752,7 @@ test.describe("Chat workspace", () => {
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
 
-    await textarea.fill("/");
+    await textarea.fill("@");
 
     const dataAnalysis = page.getByRole("option", {
       name: /data-analysis/i,
@@ -731,24 +762,37 @@ test.describe("Chat workspace", () => {
     });
     await expect(dataAnalysis).toBeVisible();
     await expect(frontendDesign).toBeVisible();
-    await expect(dataAnalysis).toHaveAttribute("aria-selected", "true");
+    await expect(textarea).toHaveAttribute(
+      "aria-activedescendant",
+      (await dataAnalysis.getAttribute("id")) as string,
+    );
 
     await textarea.press("ArrowDown");
 
-    await expect(textarea).toHaveValue("/");
+    await expect(textarea).toHaveValue("@");
     await expect(dataAnalysis).toHaveAttribute("aria-selected", "false");
-    await expect(frontendDesign).toHaveAttribute("aria-selected", "true");
+    await expect(textarea).toHaveAttribute(
+      "aria-activedescendant",
+      (await frontendDesign.getAttribute("id")) as string,
+    );
 
     await textarea.press("ArrowUp");
 
-    await expect(textarea).toHaveValue("/");
-    await expect(dataAnalysis).toHaveAttribute("aria-selected", "true");
+    await expect(textarea).toHaveValue("@");
+    await expect(textarea).toHaveAttribute(
+      "aria-activedescendant",
+      (await dataAnalysis.getAttribute("id")) as string,
+    );
     await expect(frontendDesign).toHaveAttribute("aria-selected", "false");
 
     await textarea.press("ArrowDown");
     await textarea.press("Enter");
 
-    await expect(page.getByText("/frontend-design")).toBeVisible();
+    await expect(
+      page
+        .getByTestId("inline-skill-reference")
+        .filter({ hasText: "frontend-design" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("textbox", { name: /how can i assist you/i }),
     ).toBeVisible();
@@ -762,14 +806,14 @@ test.describe("Chat workspace", () => {
     const textarea = page.getByPlaceholder(/how can i assist you/i);
     await expect(textarea).toBeVisible({ timeout: 15_000 });
 
-    await textarea.fill("/dat");
+    await textarea.fill("@dat");
     await expect(
       page.getByRole("option", { name: /data-analysis/i }),
     ).toBeVisible();
 
     await textarea.press("Shift+Enter");
 
-    await expect(textarea).toHaveValue("/dat\n");
+    await expect(textarea).toHaveValue("@dat\n");
     await expect(
       page.getByRole("option", { name: /data-analysis/i }),
     ).toBeHidden();
@@ -1080,7 +1124,6 @@ test.describe("Chat workspace", () => {
     await expect(
       page
         .getByTestId("workspace-toaster")
-        .getByRole("alert")
         .filter({ hasText: "too-large.txt" }),
     ).toBeVisible();
     await expect(page.locator("form").getByText("too-large.txt")).toBeHidden();
@@ -1141,10 +1184,7 @@ test.describe("Chat workspace", () => {
     await expect(promptForm.getByText("second.txt")).toBeVisible();
     await expect(promptForm.getByText("over-total.txt")).toBeHidden();
     await expect(
-      page
-        .getByTestId("workspace-toaster")
-        .getByRole("alert")
-        .filter({ hasText: "5 B" }),
+      page.getByTestId("workspace-toaster").filter({ hasText: "5 B" }),
     ).toBeVisible();
   });
 

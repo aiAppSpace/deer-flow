@@ -432,7 +432,12 @@ Requires Docker Desktop / Docker Engine and **Docker Compose v2.24+**
 (`docker compose version`). Older Compose clients cannot parse the optional
 `env_file` syntax in `docker/docker-compose.yaml` and `docker/docker-compose-dev.yaml`.
 
-**Development** (hot-reload, source mounts):
+For Debian image builds, `APT_MIRROR=mirrors.example.org` preserves the original
+source scheme; a complete base URI such as `APT_MIRROR=https://mirrors.ustc.edu.cn`
+explicitly selects HTTPS. Gateway, provisioner and both Lark CLI builders support
+this parameter and reject unsupported or credential-bearing values before writing
+apt sources. HTTPS certificate verification stays enabled.
+
 **Development** (React, Vue, and Gateway hot-reload through Compose Watch):
 
 ```bash
@@ -526,7 +531,7 @@ updates both nested usage and top-level token counters, even if initial usage wa
 The original request, model, and status metadata stay intact; flushed events are
 not rewritten. See the [run event contract](contracts/run_event_stream_contract.json).
 
-The unified nginx endpoint is same-origin by default and does not emit browser CORS headers. If you run a split-origin or port-forwarded browser client, set `GATEWAY_CORS_ORIGINS` to comma-separated exact origins such as `http://localhost:3000`; the Gateway then applies the CORS allowlist and matching CSRF origin checks.
+The unified nginx endpoint is same-origin by default and does not emit browser CORS headers. If you run a split-origin or port-forwarded browser client, set `GATEWAY_CORS_ORIGINS` to comma-separated exact origins such as `http://localhost:3200`; the Gateway then applies the CORS allowlist and matching CSRF origin checks.
 
 When fine-grained authorization is enabled, Live Browser connections require `threads:write` as well as ownership of the thread, even when only viewing frames: the same connection can control the browser. Permission checks run when connecting. Restart Gateway after upgrading to disconnect sessions admitted by older code.
 
@@ -623,7 +628,7 @@ such a checkout, use `bash ./scripts/<name>.sh ...`.
 
 5. **Access**: http://localhost:2026
 
-6. **(Optional) Load sample memory data for local review**: open `Settings > Memory`, click **Import memory**, and select `backend/docs/memory-settings-sample.json`. The browser imports into the signed-in user's memory.
+6. **(Optional) Load sample memory data for local review**: open `Settings > Memory`, click **Import memory**, and select `backend/docs/memory-settings-sample.json`. The browser imports into the signed-in user's memory. Closing the import confirmation returns keyboard focus to its opener inside Settings; failed imports remain open for retry.
 
    To replace memory for every registered user in a disposable review environment:
 
@@ -634,7 +639,8 @@ such a checkout, use `bash ./scripts/<name>.sh ...`.
 
    Bulk mode supports SQLite/PostgreSQL user registries, creates timestamped backups under `.deer-flow/memory-sample-backups/`, and rejects the non-persistent `database.backend: memory` mode. See [backend/docs/MEMORY_SETTINGS_REVIEW.md](backend/docs/MEMORY_SETTINGS_REVIEW.md) for the complete review flow.
 
-Local services always use their internal ports (`8001`, `3000`, and `2026`).
+Local services use `8001` (Gateway), `3200` (React), `3100` (Vue modes), and `2026` (Nginx in React mode).
+React uses `3200` locally so another application can keep port `3000`; container frontends continue to use their private port `3000`.
 The root `.env` variable `PORT` configures only the published Docker ingress;
 it does not change the Next.js port used by `make dev`.
 The complete Vue/Nuxt frontend lives in `frontend-vue/`. It implements the same Gateway-backed
@@ -644,21 +650,46 @@ asset budgets and the production container. The private `@deerflow/agent-core` p
 small reusable Markdown/Button boundary are maintained inside that workspace; the package is
 not published to npm.
 
+Vue client navigation announces a changed page name once after its page/head commit,
+while initial loading and later data-title updates remain silent. The announcement
+retains modal background hiding through its shadow-root live region.
+Read-only Showcase and busy composers keep capability discovery active while their
+editing, attachment and sending controls stay locked.
+Short chat histories follow their initial content into view; long measured histories
+and restored side chats retain direct tail positioning. Reading interruption and
+accepted-run URL adoption preserve the current conversation scroll owner.
+Side panels retain their contents through the actual closing animation; opening
+and reopening keep their text width stable while the desktop panel expands.
+When the first accepted run gives its existing draft a persisted URL, the same page
+continues without another announcement; later visits and ordinary navigation still announce.
+Returning with browser Back restores the persisted conversation and its messages;
+the retained Next route parameters must not create another draft.
+
 The existing `make dev` command still starts the React-default stack. Use an explicit Vue mode
 when developing or comparing the Nuxt application:
 
 ```bash
 make dev-vue   # Gateway :8001 + Vue :3100
-make dev-dual  # Gateway :8001 + React :3000 + Vue :3100
+make dev-dual  # Gateway :8001 + React :3200 + Vue :3100
 make stop      # stops either mode, including the Vue process
 ```
 
+`dev-vue` and `dev-dual` use the frontend ports directly and do not require a host Nginx
+installation. The default `make dev` and `make check` still require it.
 `dev-dual` exposes both framework development ports directly. Production Compose builds both
 frontends behind one Nginx: unknown/default hosts stay on React and only
 `DEER_FLOW_VUE_HOSTNAME` selects Vue. Public DNS/TLS, outer-proxy trust and real IdP callback
 registration remain target-environment configuration. See
 [`docs/dual-frontend-production.md`](docs/dual-frontend-production.md) for startup,
 OIDC callback registration, validation and rollback.
+Knowledge scope appears between the composer's mode and reasoning-effort controls.
+Project instruction saves expose a distinct Saved status, and document and trash
+lists show their loaded and total counts consistently in both frontends.
+
+In both frontends, Markdown tables provide copy and download actions in inline and
+fullscreen views. Fullscreen uses the complete viewport; each table and citation source
+keeps its own copy feedback. Enlarged side-chat empty content remains scrollable.
+
 See [`frontend-vue/README.md`](frontend-vue/README.md) for commands,
 [`frontend-vue/ARCHITECTURE.md`](frontend-vue/ARCHITECTURE.md) for current implementation
 boundaries and [`frontend-vue/BEHAVIOR_CONTRACTS.md`](frontend-vue/BEHAVIOR_CONTRACTS.md)
@@ -690,7 +721,7 @@ unrelated Gateway requests responsive while the agent stack loads. A failed
 factory import prevents the run from being admitted.
 
 For a read-only demo without the Gateway, run `make build-static` from `frontend/`,
-then `HOSTNAME=127.0.0.1 PORT=3000 node --env-file=.env .next/standalone/server.js`
+then `HOSTNAME=127.0.0.1 PORT=3200 node --env-file=.env .next/standalone/server.js`
 from the same directory. The build includes public demo assets and resolves
 supported demo API reads locally; writes are unavailable. To display the homepage
 GitHub star count, set `GITHUB_OAUTH_TOKEN` in `frontend/.env` before starting Node.
@@ -833,6 +864,15 @@ For HTTP/SSE background-task calls, `session_init_timeout` separately bounds con
 Ordinary `task` subagents retain the parent run's captured thread incarnation for MCP calls, including legacy threads, so delegation preserves the same lifecycle scope.
 MCP tool names are prefixed with `<server_name>_` by default to prevent collisions across servers. If a server already namespaces its own tools, set `tool_name_prefix: false` on that server in `extensions_config.json` to keep the original names. Disable the prefix only when the resulting names remain unique across all enabled servers.
 Signed-in users' notification toggle, default model, conversation mode, and reasoning effort are saved to their account and restored on other browsers or after clearing browser storage. Browser notification permission still needs to be granted on each device. Changes retry after network failures; unsent changes survive a reload in the same tab. Concurrent edits to different fields are preserved; for the same field, the last server write wins. Existing unscoped browser preferences are not uploaded automatically because they have no account owner; reselect those settings once after upgrading. Static demos and auth-disabled development keep browser-local settings. Thread-specific model overrides and other display preferences remain local.
+
+Switching accounts starts a fresh workspace data cache; late requests from the
+previous account cannot populate it. Refreshing the same account retains its cache.
+
+Authenticated workspace refreshes retain the current account, query cache and
+unsent form state during transport or malformed-response failures. An authoritative
+401 or explicit logout still ends that identity; a successful account change
+activates a separate workspace owner. Vue conversation pages retain their raw
+server cursor and explicit exhaustion through local row updates and removals.
 
 In a new chat, the submitted question stays above its streamed reasoning and
 tool steps while the server creates the conversation and confirms the message.
@@ -1590,6 +1630,8 @@ model inputs and external traces. Client-supplied internal runtime controls
 and credentials are also stripped from run context before execution or
 checkpoint persistence. Idempotent retries accept both canonical snapshots and
 legacy raw run inputs, preserving retry compatibility across upgrades.
+Opening or reopening Knowledge focuses its first scope option; native Tab
+wraps through the selected radio option without changing the selection.
 Custom agents can save a **Default knowledge** selection from **Agents → Agent
 settings**, including optional file filters or retrieval off. Selecting all
 knowledge bases clears the binding. The same `knowledge_scope` field is available
@@ -1831,7 +1873,7 @@ information.
 
 Interrupted first-turn runs still persist a fallback conversation title, so stopping a streaming response does not leave the thread as "Untitled" after refresh.
 
-Streaming Markdown responses animate only newly arrived words; text that is already visible is not faded out and replayed when the next chunk extends the same block.
+Streaming Markdown responses animate only newly arrived words; text that is already visible is not faded out and replayed when the next chunk extends the same block. Replacing text with another value of the same length updates the rendered content, including table cells, without closing an open table view.
 
 In the Web UI, completed assistant turns can be branched into a new main conversation. Automatically inherited branch titles use the next free language-neutral numeric suffix (`Title (2)`, then `Title (3)` for another sibling or a branch of the numbered conversation) so generated sibling titles remain distinct without persisting a locale-specific label; matching explicit or renamed sibling titles also reserve their displayed suffix even though they carry no generated sequence metadata. An explicit API title is preserved. Renaming a branch clears its generated sequence, so its next automatic branch starts from the renamed title at `(2)`. Recent chats also groups loaded branches directly beneath a loaded parent with subtle tree connectors. Missing parents, malformed or cyclic lineage, and branches in a different pinned state stay visible at the top level instead of being hidden or moved across the pinned boundary. The new thread starts from that turn's checkpoint and keeps the preceding replay checkpoint, so the branched response can be regenerated immediately. The latest response can also be regenerated after an interruption, even when its streamed partial text never reached a checkpoint. Regenerating the latest response preserves the thread's current title, including a title you renamed manually after the original response. Legacy or imported histories without checkpoint parent links use a bounded chronological fallback; if no earlier replay checkpoint exists, branching still succeeds with the legacy single-checkpoint shape, while regeneration remains unavailable for that inherited response. Existing single-checkpoint branches are left unchanged rather than attempting an unsafe checkpoint copy. Because workspace files are not checkpointed, the branch only receives a best-effort copy of the current workspace when you branch from the latest turn; branching from an older turn keeps just the restored message history so the branch never inherits files that were created in a later part of the conversation.
 

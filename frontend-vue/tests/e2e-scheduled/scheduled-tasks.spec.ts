@@ -37,6 +37,16 @@ async function csrfHeaders(request: APIRequestContext) {
   return { "X-CSRF-Token": csrf ?? "" };
 }
 
+test.beforeAll(async ({ request }) => {
+  const response = await request.get(`${APP}/api/features`);
+  expect(response.status(), await response.text()).toBe(200);
+  expect((await response.json()).scheduled_tasks).toMatchObject({
+    available: true,
+    running: true,
+    tool_enabled: false,
+  });
+});
+
 test("real Gateway owns create/read/update/context/pause/resume/validation/delete", async ({
   context,
 }) => {
@@ -139,7 +149,10 @@ test("real Gateway owns create/read/update/context/pause/resume/validation/delet
   });
   expect(invalidCron.status()).toBe(422);
   expect(await invalidCron.json()).toMatchObject({
-    detail: expect.stringMatching(/5 fields/i),
+    detail: {
+      code: "invalid_schedule",
+      message: expect.stringMatching(/5 fields/i),
+    },
   });
   const invalidTimezone = await context.request.post(
     `${APP}/api/scheduled-tasks`,
@@ -157,7 +170,10 @@ test("real Gateway owns create/read/update/context/pause/resume/validation/delet
   );
   expect(invalidTimezone.status()).toBe(422);
   expect(await invalidTimezone.json()).toMatchObject({
-    detail: expect.stringMatching(/timezone/i),
+    detail: {
+      code: "invalid_timezone",
+      message: expect.stringMatching(/timezone/i),
+    },
   });
   const missingReuse = await context.request.post(
     `${APP}/api/scheduled-tasks`,
@@ -175,7 +191,10 @@ test("real Gateway owns create/read/update/context/pause/resume/validation/delet
   );
   expect(missingReuse.status()).toBe(422);
   expect(await missingReuse.json()).toMatchObject({
-    detail: "reuse_thread requires thread_id",
+    detail: {
+      code: "reuse_thread_requires_thread",
+      message: "reuse_thread requires thread_id",
+    },
   });
   const inaccessibleReuse = await context.request.post(
     `${APP}/api/scheduled-tasks`,
@@ -194,7 +213,7 @@ test("real Gateway owns create/read/update/context/pause/resume/validation/delet
   );
   expect(inaccessibleReuse.status()).toBe(404);
   expect(await inaccessibleReuse.json()).toMatchObject({
-    detail: "Thread not found",
+    detail: { code: "thread_not_found", message: "Thread not found" },
   });
   const tooSoon = new Date(Date.now() + 20_000).toISOString();
   const invalidOnce = await context.request.post(`${APP}/api/scheduled-tasks`, {
@@ -210,7 +229,10 @@ test("real Gateway owns create/read/update/context/pause/resume/validation/delet
   });
   expect(invalidOnce.status()).toBe(422);
   expect(await invalidOnce.json()).toMatchObject({
-    detail: expect.stringMatching(/at least 60 seconds/i),
+    detail: {
+      code: "once_too_soon",
+      message: expect.stringMatching(/at least 60 seconds/i),
+    },
   });
 
   const runAt = new Date(Date.now() + 120_000).toISOString();
@@ -261,8 +283,14 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
   await register(context.request, "browser");
   await page.goto("/workspace/scheduled-tasks");
 
-  await page.getByTestId("scheduled-task-title").fill("Real browser task");
-  await page.getByTestId("scheduled-task-prompt").fill(replayFixture.prompt);
+  await page.getByTestId("scheduled-task-new").click();
+  const form = page.getByRole("dialog");
+  await form
+    .getByRole("textbox", { name: "Title", exact: true })
+    .fill("Real browser task");
+  await form
+    .getByRole("textbox", { name: "Instructions", exact: true })
+    .fill(replayFixture.prompt);
   // Reka 的 Select 是自定义 listbox：开触发器再点选项，没有 selectOption。
   await page.getByTestId("schedule-preset").click();
   await page.getByRole("option", { name: "Custom cron", exact: true }).click();
@@ -272,10 +300,22 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === "/api/scheduled-tasks",
   );
-  await page.getByTestId("scheduled-task-submit").click();
+  await form.getByRole("button", { name: "Create", exact: true }).click();
   expect((await invalidResponse).status()).toBe(422);
   // Gateway 的 detail 走 toast，不是页面上的内联提示——与 React 的 mutation hook 一致。
-  await expect(page.getByTestId("workspace-toaster")).toContainText("5 fields");
+  await expect(page.getByTestId("workspace-toaster")).toContainText(
+    "This schedule isn't valid.",
+  );
+  await expect(form).toBeVisible();
+  await expect(
+    form.getByRole("textbox", { name: "Title", exact: true }),
+  ).toHaveValue("Real browser task");
+  await expect(
+    form.getByRole("textbox", { name: "Instructions", exact: true }),
+  ).toHaveValue(replayFixture.prompt);
+  await expect(page.getByTestId("scheduled-task-custom-cron")).toHaveValue(
+    "bad cron",
+  );
 
   /*
     这里原本还提交过一次 `Mars/Base` 去看真 Gateway 的时区 422。时区控件现在是一个
@@ -289,7 +329,7 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === "/api/scheduled-tasks",
   );
-  await page.getByTestId("scheduled-task-submit").click();
+  await form.getByRole("button", { name: "Create", exact: true }).click();
   const createdResponse = await createResponse;
   expect(createdResponse.status(), await createdResponse.text()).toBe(200);
   const created = (await createdResponse.json()) as { id: string };
@@ -300,12 +340,12 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
   const detail = page.getByTestId("scheduled-task-detail");
   await detail.getByRole("button", { name: "Edit" }).click();
   await page
-    .getByTestId("scheduled-task-edit-form")
-    .getByTestId("scheduled-task-title")
+    .getByRole("dialog")
+    .getByRole("textbox", { name: "Title", exact: true })
     .fill("Real browser task edited");
   await page
-    .getByTestId("scheduled-task-edit-form")
-    .getByTestId("scheduled-task-submit")
+    .getByRole("dialog")
+    .getByRole("button", { name: "Save changes", exact: true })
     .click();
   await expect(detail).toContainText("Real browser task edited");
 
@@ -321,13 +361,24 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
   );
   await page.getByTestId("scheduled-task-trigger").click();
   expect((await triggerResponse).status()).toBe(200);
-  const run = page
-    .locator('[data-testid^="scheduled-task-run-task-run-"]')
-    .first();
-  await expect(run).toContainText("manual", { timeout: 30_000 });
+  const run = page.getByTestId("scheduled-run-row").first();
+  await expect(run).toContainText("Trial run", { timeout: 30_000 });
   await expect(run).not.toContainText("Run ID");
-  await expect(run).toContainText("Failed", { timeout: 60_000 });
-  await expect(run).toContainText("Artifact delivery incomplete");
+  // React and Vue present terminal state through the icon when the agent's
+  // summary occupies the readable line. Require the actual failed visual state;
+  // the persisted status and full delivery error are checked below as well.
+  await expect(run.locator(":scope > svg")).toHaveClass(/text-destructive/, {
+    timeout: 60_000,
+  });
+  const details = run.locator("details");
+  const summary = details.locator("summary");
+  await expect(summary).toHaveText("Details");
+  await summary.click();
+  await expect(details).toHaveAttribute("open", "");
+  await expect(run.getByTestId("scheduled-run-raw-error")).toBeVisible();
+  await expect(run.getByTestId("scheduled-run-raw-error")).toContainText(
+    "Artifact delivery incomplete",
+  );
 
   const realRuns = await context.request.get(
     `${APP}/api/scheduled-tasks/${created.id}/runs?limit=1&offset=0`,
@@ -357,6 +408,9 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
   expect(runPage[0]?.finished_at).toBeTruthy();
   expect(runPage[0]?.created_at).toBeTruthy();
 
+  await detail
+    .getByRole("button", { name: "More actions", exact: true })
+    .click();
   await page.getByTestId("scheduled-task-delete").click();
   const deleteResponse = page.waitForResponse(
     (response) =>
@@ -368,4 +422,74 @@ test("Nuxt UI shows real Gateway validation and a real manual-run lifecycle", as
   await expect(
     page.getByTestId(`scheduled-task-item-${created.id}`),
   ).toHaveCount(0);
+});
+
+test("real Gateway distinguishes omitted edits, explicit clears and default-agent reset", async ({
+  context,
+}) => {
+  await register(context.request, "patch-contract");
+  const headers = await csrfHeaders(context.request);
+  const endAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+  const createdResponse = await context.request.post(
+    `${APP}/api/scheduled-tasks`,
+    {
+      headers,
+      data: {
+        title: "Patch contract",
+        prompt: "Check the release checklist",
+        context_mode: "fresh_thread_per_run",
+        assistant_id: "lead_agent",
+        schedule_type: "cron",
+        schedule_spec: { cron: "0 9 * * *" },
+        timezone: "UTC",
+        goal_objective: "Complete the checklist",
+        stop_condition: "Every item is complete",
+        max_runs: 3,
+        end_at: endAt,
+      },
+    },
+  );
+  expect(createdResponse.status(), await createdResponse.text()).toBe(200);
+  const created = (await createdResponse.json()) as { id: string };
+  try {
+    const unchanged = await context.request.patch(
+      `${APP}/api/scheduled-tasks/${created.id}`,
+      { headers, data: { title: "Renamed contract" } },
+    );
+    expect(unchanged.status(), await unchanged.text()).toBe(200);
+    expect(await unchanged.json()).toMatchObject({
+      title: "Renamed contract",
+      assistant_id: "lead_agent",
+      goal_objective: "Complete the checklist",
+      stop_condition: "Every item is complete",
+      max_runs: 3,
+    });
+    const cleared = await context.request.patch(
+      `${APP}/api/scheduled-tasks/${created.id}`,
+      {
+        headers,
+        data: {
+          assistant_id: null,
+          goal_objective: null,
+          stop_condition: null,
+          max_runs: null,
+          end_at: null,
+        },
+      },
+    );
+    expect(cleared.status(), await cleared.text()).toBe(200);
+    expect(await cleared.json()).toMatchObject({
+      assistant_id: "lead_agent",
+      goal_objective: null,
+      stop_condition: null,
+      max_runs: null,
+      end_at: null,
+    });
+  } finally {
+    const deleted = await context.request.delete(
+      `${APP}/api/scheduled-tasks/${created.id}`,
+      { headers },
+    );
+    expect(deleted.status(), await deleted.text()).toBe(200);
+  }
 });

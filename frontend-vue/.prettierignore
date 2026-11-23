@@ -11,3 +11,6 @@ app/core/api/types.gen.ts
 
 # 生成物：由 scripts/gen-contract-constants.mjs 从 <repo>/contracts/*.json 写出。
 app/core/contracts/backend.gen.ts
+
+# Local diagnostic output and retained failure evidence are generated artifacts.
+.cache/

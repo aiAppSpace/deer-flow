@@ -5,16 +5,8 @@
   【依赖关系】     core/messages/usage · usage-model · ui/badge · i18n
   【边界与注意】   off 时不留 inline DOM；流式中不展示未完成的 debug attribution。
 
-                   step-debug 那一支此前只画了「标题 + 总量」两行，而
-                   `buildTokenDebugSteps` 早就算好了 `secondaryLabels` 与
-                   `sharedAttribution`——**数据算出来了，视图把它扔了**。上游
-                   `message-token-usage.tsx:105` 一共画五样：Coins 图标 + 截断的标题、
-                   secondary Badge 组、共享归因说明、input/output 明细，右侧再挂一颗
-                   outline Badge 放总量。缺的这几样只在 token 调试模式下才看得见，
-                   对照台账取不到（没有场景开这个偏好），所以是读源码挖出来的。
-
-                   两支的分隔线都是 `border-border/60`、上边距都是 `mt-1`；本仓此前
-                   写的是 `border-border` 与 `mt-2`。
+                   调试步骤由消息列表全局计算后按所属组传入；独立消费者可按 messages
+                   计算。标题与 secondary labels 完整换行，保留共享归属和 input/output。
 -->
 
 <script setup lang="ts">
@@ -24,12 +16,16 @@ import { Coins } from "lucide-vue-next";
 import { Badge } from "@/components/ui/badge";
 import type { Message } from "@/core/types/message";
 import { accumulateUsage, formatTokenCount } from "@/core/messages/usage";
-import { buildTokenDebugSteps } from "@/core/messages/usage-model";
+import {
+  buildTokenDebugSteps,
+  type TokenDebugStep,
+} from "@/core/messages/usage-model";
 
 const props = defineProps<{
   messages: Message[];
   mode: "off" | "per_turn" | "step_debug";
   loading?: boolean;
+  tokenDebugSteps?: TokenDebugStep[];
 }>();
 const { $i18n } = useNuxtApp();
 const usage = computed(() =>
@@ -37,7 +33,8 @@ const usage = computed(() =>
 );
 const debugSteps = computed(() =>
   props.mode === "step_debug"
-    ? buildTokenDebugSteps(props.messages, $i18n.t.value)
+    ? (props.tokenDebugSteps ??
+      buildTokenDebugSteps(props.messages, $i18n.t.value))
     : [],
 );
 </script>
@@ -74,14 +71,14 @@ const debugSteps = computed(() =>
       <div
         v-for="step in debugSteps"
         :key="step.id"
-        class="bg-muted/30 border-border/50 flex items-start justify-between gap-3 rounded-md border px-3 py-2"
+        class="bg-muted/30 border-border/50 flex flex-wrap items-start justify-between gap-3 rounded-md border px-3 py-2"
       >
-        <div class="min-w-0 flex-1 space-y-1">
+        <div class="min-w-0 flex-1 basis-48 space-y-1 wrap-anywhere">
           <div
             class="text-foreground flex items-center gap-2 text-xs font-medium"
           >
-            <Coins class="text-muted-foreground size-3" />
-            <span class="truncate">{{ step.label }}</span>
+            <Coins class="text-muted-foreground size-3 shrink-0" />
+            <span class="min-w-0 wrap-anywhere">{{ step.label }}</span>
           </div>
           <div
             v-if="step.secondaryLabels.length > 0"
@@ -91,7 +88,7 @@ const debugSteps = computed(() =>
               v-for="(label, index) in step.secondaryLabels"
               :key="`${step.id}-${index}-${label}`"
               variant="secondary"
-              class="px-1.5 py-0 text-[10px] font-normal"
+              class="max-w-full px-1.5 py-0 text-[10px] font-normal wrap-anywhere whitespace-normal"
             >
               {{ label }}
             </Badge>
@@ -114,7 +111,10 @@ const debugSteps = computed(() =>
             }}</template>
           </div>
         </div>
-        <Badge variant="outline" class="shrink-0 font-mono">
+        <Badge
+          variant="outline"
+          class="max-w-full shrink-0 font-mono wrap-anywhere whitespace-normal"
+        >
           {{
             step.usage
               ? `${formatTokenCount(step.usage.totalTokens)} ${$i18n.t.value.tokenUsage.label}`

@@ -2,8 +2,10 @@ import type { Message } from "@langchain/langgraph-sdk";
 import { afterEach, beforeEach, expect, rs, test } from "@rstest/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
+import { createElement, StrictMode, type ReactNode } from "react";
+import { toast } from "sonner";
 
+import type { ObservationPacket } from "@/core/diagnostics/parity-observation";
 import { I18nContext } from "@/core/i18n/context";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { isHiddenFromUIMessage } from "@/core/messages/utils";
@@ -22,7 +24,7 @@ const streamMockState = rs.hoisted(() => ({
     | undefined,
   onCustomEvent: undefined as ((event: unknown) => void) | undefined,
   stop: rs.fn(async () => undefined),
-  submit: rs.fn(async () => undefined),
+  submit: rs.fn(async (): Promise<void> => undefined),
 }));
 
 rs.mock("@langchain/langgraph-sdk/react", () => ({
@@ -1221,3 +1223,1153 @@ test("keeps history stable when the stream errors after the human was confirmed"
     "new-step",
   ]);
 });
+
+type PendingPrepare = {
+  url: string;
+  signal?: AbortSignal | null;
+  resolve(response: Response): void;
+  reject(cause: Error): void;
+};
+type ReplayLifetimeProps = {
+  threadId: string | undefined;
+  displayThreadId?: string;
+  assistantId?: string;
+  agentName?: string;
+  isMock?: boolean;
+  context?: typeof DEFAULT_LOCAL_SETTINGS.context;
+};
+async function renderReplayLifetime(options?: {
+  bootstrap?: boolean;
+  strict?: boolean;
+}) {
+  const prepares: PendingPrepare[] = [];
+  const uploads: PendingPrepare[] = [];
+  rs.stubGlobal("fetch", (input: unknown, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith("/uploads"))
+      return new Promise<Response>((resolve, reject) =>
+        uploads.push({ url, signal: init?.signal, resolve, reject }),
+      );
+    if (url.endsWith("/prepare"))
+      return new Promise<Response>((resolve, reject) =>
+        prepares.push({ url, signal: init?.signal, resolve, reject }),
+      );
+    if (url.includes("/messages/page"))
+      return Promise.resolve(historyPageResponse([]));
+    if (/\/api\/langgraph\/threads\/[^/?]+\/runs(?:\?|$)/.test(url))
+      return Promise.resolve(
+        new Response("[]", { headers: { "Content-Type": "application/json" } }),
+      );
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+  const { useThreadStream } = await import("@/core/threads/hooks");
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const Wrapper = createWrapper(queryClient);
+  const initialProps: ReplayLifetimeProps = {
+    threadId: options?.bootstrap ? undefined : "thread-a",
+    displayThreadId: options?.bootstrap ? "thread-a" : undefined,
+  };
+  const hook = renderHook(
+    ({
+      threadId,
+      displayThreadId,
+      assistantId,
+      agentName,
+      isMock = false,
+      context = DEFAULT_LOCAL_SETTINGS.context,
+    }: ReplayLifetimeProps) =>
+      useThreadStream({
+        context: { ...context, agent_name: agentName },
+        isMock,
+        assistantId,
+        threadId,
+        displayThreadId,
+      }),
+    {
+      initialProps,
+      wrapper: options?.strict
+        ? ({ children }: { children: ReactNode }) =>
+            createElement(
+              StrictMode,
+              null,
+              createElement(Wrapper, null, children),
+            )
+        : Wrapper,
+    },
+  );
+  await flushFrames();
+  return { ...hook, queryClient, prepares, uploads };
+}
+function preparedReplayResponse(thread = "a", edit = true) {
+  return new Response(
+    JSON.stringify({
+      input: {
+        messages: [
+          humanMessage(
+            edit ? `replacement-${thread}` : `human-${thread}`,
+            edit ? `Edited ${thread}` : `Original ${thread}`,
+          ),
+        ],
+      },
+      checkpoint: {
+        checkpoint_ns: "",
+        checkpoint_id: `cp-${thread}`,
+        checkpoint_map: null,
+      },
+      metadata: {},
+      target_run_id: `run-${thread}`,
+      ...(edit
+        ? { replacement_human_message_id: `replacement-${thread}` }
+        : {}),
+      source_message_ids: [`human-${thread}`, `answer-${thread}`],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+for (const kind of ["edit", "regenerate"] as const)
+  test(`does not submit a late ${kind} preparation after switching thread`, async () => {
+    const f = await renderReplayLifetime();
+    try {
+      let pending!: Promise<boolean>;
+      await act(async () => {
+        pending =
+          kind === "edit"
+            ? f.result.current.editAndRegenerateMessage(
+                "thread-a",
+                "human-a",
+                "Edited a",
+              )
+            : f.result.current.regenerateMessage("thread-a", "answer-a");
+      });
+      expect(f.prepares).toHaveLength(1);
+      expect(streamMockState.submit).not.toHaveBeenCalled();
+      f.rerender({ threadId: "thread-b" });
+      await flushFrames();
+      let accepted: boolean | undefined;
+      await act(async () => {
+        f.prepares[0]!.resolve(preparedReplayResponse("a", kind === "edit"));
+        accepted = await pending;
+      });
+      expect(accepted).toBe(false);
+      expect(f.prepares[0]!.signal?.aborted).toBe(true);
+      expect(streamMockState.submit).not.toHaveBeenCalled();
+      expect(visibleMessageIds(f.result.current.thread.messages)).not.toContain(
+        "replacement-a",
+      );
+    } finally {
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+test("returning to the same thread does not revive an earlier prepare", async () => {
+  const f = await renderReplayLifetime();
+  try {
+    let pending!: Promise<boolean>;
+    await act(async () => {
+      pending = f.result.current.editAndRegenerateMessage(
+        "thread-a",
+        "human-a",
+        "Edited a",
+      );
+    });
+    expect(f.prepares).toHaveLength(1);
+    f.rerender({ threadId: "thread-b" });
+    await flushFrames();
+    f.rerender({ threadId: "thread-a" });
+    await flushFrames();
+    let accepted: boolean | undefined;
+    await act(async () => {
+      f.prepares[0]!.resolve(preparedReplayResponse());
+      accepted = await pending;
+    });
+    expect(accepted).toBe(false);
+    expect(f.prepares[0]!.signal?.aborted).toBe(true);
+    expect(streamMockState.submit).not.toHaveBeenCalled();
+  } finally {
+    f.unmount();
+    f.queryClient.clear();
+  }
+});
+for (const outcome of ["success", "error"] as const)
+  test(`retires a ${outcome} preparation after real owner unmount`, async () => {
+    const f = await renderReplayLifetime();
+    const errorToast = rs.spyOn(toast, "error").mockReturnValue("test-toast");
+    try {
+      let pending!: Promise<boolean>;
+      await act(async () => {
+        pending = f.result.current.regenerateMessage("thread-a", "answer-a");
+      });
+      expect(f.prepares).toHaveLength(1);
+      f.unmount();
+      let accepted: boolean | undefined;
+      await act(async () => {
+        if (outcome === "success")
+          f.prepares[0]!.resolve(preparedReplayResponse("a", false));
+        else f.prepares[0]!.reject(new Error("Late prepare failed"));
+        accepted = await pending;
+      });
+      expect(accepted).toBe(false);
+      expect(errorToast).not.toHaveBeenCalled();
+      expect(streamMockState.submit).not.toHaveBeenCalled();
+      expect(f.prepares[0]!.signal?.aborted).toBe(true);
+    } finally {
+      f.unmount();
+      f.queryClient.clear();
+      errorToast.mockRestore();
+    }
+  });
+test("an old prepare failure cannot release a new thread's submission guard", async () => {
+  const f = await renderReplayLifetime();
+  const errorToast = rs.spyOn(toast, "error").mockReturnValue("test-toast");
+  try {
+    let older!: Promise<boolean>;
+    let current!: Promise<boolean>;
+    await act(async () => {
+      older = f.result.current.regenerateMessage("thread-a", "answer-a");
+    });
+    expect(f.prepares).toHaveLength(1);
+    f.rerender({ threadId: "thread-b" });
+    await flushFrames();
+    await act(async () => {
+      current = f.result.current.regenerateMessage("thread-b", "answer-b");
+    });
+    expect(f.prepares).toHaveLength(2);
+    await act(async () => {
+      f.prepares[0]!.reject(new Error("Old owner failed"));
+      expect(await older).toBe(false);
+    });
+    let duplicate!: Promise<boolean>;
+    await act(async () => {
+      duplicate = f.result.current.regenerateMessage("thread-b", "answer-b");
+    });
+    // Count is checked before awaiting: an incorrectly admitted duplicate would
+    // have another unresolved transport promise, not a false return value.
+    expect(f.prepares).toHaveLength(2);
+    expect(await duplicate).toBe(false);
+    expect(errorToast).not.toHaveBeenCalled();
+    await act(async () => {
+      f.prepares[1]!.resolve(preparedReplayResponse("b", false));
+      expect(await current).toBe(true);
+    });
+    expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+    expect(streamMockState.submit.mock.calls[0]).toEqual([
+      expect.objectContaining({
+        messages: [expect.objectContaining({ id: "human-b" })],
+      }),
+      expect.objectContaining({ threadId: "thread-b" }),
+    ]);
+  } finally {
+    // Every synthetic prepare owns a completion even on the expected RED path.
+    for (const [index, request] of f.prepares.entries())
+      request.resolve(preparedReplayResponse(String(index)));
+    await flushFrames();
+    f.unmount();
+    f.queryClient.clear();
+    errorToast.mockRestore();
+  }
+});
+
+test("an old replay failure cannot clear a new ordinary send's optimistic turn or guard", async () => {
+  const f = await renderReplayLifetime();
+  const errorToast = rs.spyOn(toast, "error").mockReturnValue("test-toast");
+  let finishSend: () => void = () => undefined;
+  let current: Promise<unknown> | undefined;
+  try {
+    let older!: Promise<boolean>;
+    await act(async () => {
+      older = f.result.current.regenerateMessage("thread-a", "answer-a");
+    });
+    expect(f.prepares).toHaveLength(1);
+    f.rerender({ threadId: "thread-b" });
+    await flushFrames();
+    streamMockState.submit.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSend = resolve;
+        }),
+    );
+    await act(async () => {
+      current = f.result.current.sendMessage("thread-b", {
+        text: "Current ordinary send",
+        files: [],
+      });
+    });
+    expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+    const selectedTurn = visibleMessageIds(f.result.current.thread.messages);
+    expect(selectedTurn).toHaveLength(1);
+    expect(selectedTurn[0]).toMatch(/^local-human-/);
+    await act(async () => {
+      f.prepares[0]!.reject(new Error("Old replay failed"));
+      expect(await older).toBe(false);
+    });
+    expect(visibleMessageIds(f.result.current.thread.messages)).toEqual(
+      selectedTurn,
+    );
+    await act(async () => {
+      await f.result.current.sendMessage("thread-b", {
+        text: "Blocked duplicate",
+        files: [],
+      });
+    });
+    expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+    expect(errorToast).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => {
+      finishSend();
+      await current;
+    });
+    f.unmount();
+    f.queryClient.clear();
+    errorToast.mockRestore();
+  }
+});
+for (const outcome of ["success", "error"] as const)
+  test(`an old ordinary send ${outcome} cannot release a new replay guard`, async () => {
+    const f = await renderReplayLifetime();
+    let finishSend: () => void = () => undefined;
+    let failSend: (cause: Error) => void = () => undefined;
+    let older: Promise<unknown> | undefined;
+    let current: Promise<boolean> | undefined;
+    const failure = new Error("Old ordinary send failed");
+    const invalidate = rs.spyOn(f.queryClient, "invalidateQueries");
+    try {
+      streamMockState.submit.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            finishSend = resolve;
+            failSend = reject;
+          }),
+      );
+      await act(async () => {
+        older = f.result.current
+          .sendMessage("thread-a", { text: "Older ordinary send", files: [] })
+          .catch((cause: unknown) => cause);
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+      f.rerender({ threadId: "thread-b" });
+      await flushFrames();
+      await act(async () => {
+        current = f.result.current.regenerateMessage("thread-b", "answer-b");
+      });
+      expect(f.prepares).toHaveLength(1);
+      invalidate.mockClear();
+      await act(async () => {
+        if (outcome === "success") finishSend();
+        else failSend(failure);
+        expect(await older).toBe(outcome === "success" ? undefined : failure);
+      });
+      if (outcome === "success") {
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: ["threads", "search"],
+        });
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: ["threads", "searchInfinite"],
+        });
+      }
+      let duplicate!: Promise<boolean>;
+      await act(async () => {
+        duplicate = f.result.current.regenerateMessage("thread-b", "answer-b");
+      });
+      expect(f.prepares).toHaveLength(1);
+      expect(await duplicate).toBe(false);
+      await act(async () => {
+        f.prepares[0]!.resolve(preparedReplayResponse("b", false));
+        expect(await current).toBe(true);
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      finishSend();
+      for (const request of f.prepares)
+        request.resolve(preparedReplayResponse("b", false));
+      await act(async () => {
+        await older;
+        await current;
+      });
+      invalidate.mockRestore();
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+
+for (const strict of [false, true])
+  test(`bootstrap confirmation keeps its in-flight ordinary send (StrictMode=${strict})`, async () => {
+    const f = await renderReplayLifetime({ bootstrap: true, strict });
+    let complete: () => void = () => undefined;
+    let pending: Promise<unknown> | undefined;
+    try {
+      streamMockState.submit.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            complete = resolve;
+          }),
+      );
+      await act(async () => {
+        pending = f.result.current.sendMessage("thread-a", {
+          text: "Bootstrap",
+          files: [],
+        });
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+      const ids = visibleMessageIds(f.result.current.thread.messages);
+      expect(ids).toHaveLength(1);
+      f.rerender({ threadId: "thread-a", displayThreadId: "thread-a" });
+      await flushFrames();
+      expect(visibleMessageIds(f.result.current.thread.messages)).toEqual(ids);
+      await act(async () => {
+        await f.result.current.sendMessage("thread-a", {
+          text: "Blocked duplicate",
+          files: [],
+        });
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        complete();
+        await pending;
+      });
+      await act(async () => {
+        await f.result.current.sendMessage("thread-a", {
+          text: "Next independent send",
+          files: [],
+        });
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(async () => {
+        complete();
+        await pending;
+      });
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+
+for (const changed of [
+  { label: "displayed thread", props: { displayThreadId: "thread-b" } },
+  { label: "assistant", props: { assistantId: "researcher" } },
+  { label: "agent", props: { agentName: "researcher" } },
+  { label: "mock mode", props: { isMock: true } },
+])
+  test(`changing ${changed.label} retires preparation even when SDK thread ID stays the same`, async () => {
+    const f = await renderReplayLifetime();
+    let pending: Promise<boolean> | undefined;
+    try {
+      await act(async () => {
+        pending = f.result.current.regenerateMessage("thread-a", "answer-a");
+      });
+      expect(f.prepares).toHaveLength(1);
+      f.rerender({ threadId: "thread-a", ...changed.props });
+      await flushFrames();
+      await act(async () => {
+        f.prepares[0]!.resolve(preparedReplayResponse("a", false));
+        expect(await pending).toBe(false);
+      });
+      expect(f.prepares[0]!.signal?.aborted).toBe(true);
+      expect(streamMockState.submit).not.toHaveBeenCalled();
+    } finally {
+      for (const request of f.prepares)
+        request.resolve(preparedReplayResponse());
+      await act(async () => {
+        await pending;
+      });
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+
+for (const strict of [false, true])
+  test(`same-owner context changes retain live replay preparation (StrictMode=${strict})`, async () => {
+    const f = await renderReplayLifetime({ strict });
+    let pending: Promise<boolean> | undefined;
+    try {
+      await act(async () => {
+        pending = f.result.current.regenerateMessage("thread-a", "answer-a");
+      });
+      f.rerender({
+        threadId: "thread-a",
+        context: {
+          ...DEFAULT_LOCAL_SETTINGS.context,
+          model_name: "another-model",
+        },
+      });
+      await flushFrames();
+      expect(f.prepares).toHaveLength(1);
+      expect(f.prepares[0]!.signal?.aborted).toBe(false);
+      await act(async () => {
+        f.prepares[0]!.resolve(preparedReplayResponse("a", false));
+        expect(await pending).toBe(true);
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const request of f.prepares)
+        request.resolve(preparedReplayResponse());
+      await act(async () => {
+        await pending;
+      });
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+
+test("a stale replay callback cannot claim a new committed view", async () => {
+  const f = await renderReplayLifetime();
+  const previous = f.result.current.regenerateMessage;
+  try {
+    f.rerender({ threadId: "thread-b" });
+    await flushFrames();
+    await act(async () => {
+      expect(await previous("thread-a", "answer-a")).toBe(false);
+      expect(await previous("thread-b", "answer-b")).toBe(false);
+    });
+    expect(f.prepares).toHaveLength(0);
+    expect(streamMockState.submit).not.toHaveBeenCalled();
+  } finally {
+    f.unmount();
+    f.queryClient.clear();
+  }
+});
+
+for (const outcome of ["success", "error"] as const)
+  test(`a retired replay submit Promise ${outcome} cannot clear a newer ordinary turn`, async () => {
+    const f = await renderReplayLifetime();
+    const errorToast = rs.spyOn(toast, "error").mockReturnValue("test-toast");
+    const invalidate = rs.spyOn(f.queryClient, "invalidateQueries");
+    let finishOld: () => void = () => undefined;
+    let rejectOld: (error: Error) => void = () => undefined;
+    let finishNew: () => void = () => undefined;
+    let older: Promise<boolean> | undefined;
+    let current: Promise<void> | undefined;
+    try {
+      streamMockState.submit.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            finishOld = resolve;
+            rejectOld = reject;
+          }),
+      );
+      await act(async () => {
+        older = f.result.current.regenerateMessage("thread-a", "answer-a");
+      });
+      await act(async () => {
+        f.prepares[0]!.resolve(preparedReplayResponse("a", false));
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+      f.rerender({ threadId: "thread-b" });
+      await flushFrames();
+      streamMockState.submit.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishNew = resolve;
+          }),
+      );
+      await act(async () => {
+        current = f.result.current.sendMessage("thread-b", {
+          text: "New ordinary turn",
+          files: [],
+        });
+      });
+      const currentIds = visibleMessageIds(f.result.current.thread.messages);
+      expect(currentIds).toHaveLength(1);
+      expect(currentIds[0]).toMatch(/^local-human-/);
+      invalidate.mockClear();
+      await act(async () => {
+        if (outcome === "success") finishOld();
+        else rejectOld(new Error("Old replay submit failed"));
+        expect(await older).toBe(false);
+      });
+      if (outcome === "success")
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: ["threads", "search"],
+        });
+      expect(visibleMessageIds(f.result.current.thread.messages)).toEqual(
+        currentIds,
+      );
+      expect(errorToast).not.toHaveBeenCalled();
+      expect(streamMockState.stop).not.toHaveBeenCalled();
+      await act(async () => {
+        await f.result.current.sendMessage("thread-b", {
+          text: "Blocked duplicate",
+          files: [],
+        });
+      });
+      expect(streamMockState.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      finishOld();
+      finishNew();
+      for (const request of f.prepares)
+        request.resolve(preparedReplayResponse());
+      await act(async () => {
+        await older;
+        await current;
+      });
+      invalidate.mockRestore();
+      errorToast.mockRestore();
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+
+function uploadedReplayFileResponse() {
+  return new Response(
+    JSON.stringify({
+      success: true,
+      files: [
+        {
+          filename: "note.txt",
+          size: 4,
+          path: "/uploads/note.txt",
+          virtual_path: "/mnt/user-data/uploads/note.txt",
+          artifact_url: "/api/threads/thread-b/artifacts/note.txt",
+        },
+      ],
+      message: "ok",
+      skipped_files: [],
+    }),
+    { headers: { "Content-Type": "application/json" } },
+  );
+}
+for (const outcome of ["success", "error"] as const)
+  test(`retiring an upload clears its busy state without letting its late ${outcome} clear the next upload`, async () => {
+    const f = await renderReplayLifetime();
+    const errorToast = rs.spyOn(toast, "error").mockReturnValue("test-toast");
+    const onOldSent = rs.fn();
+    const onNewSent = rs.fn();
+    const failure = new Error("Old upload failed");
+    let older: Promise<unknown> | undefined;
+    let current: Promise<void> | undefined;
+    const filePart = {
+      type: "file" as const,
+      mediaType: "text/plain",
+      filename: "note.txt",
+      url: "blob:note",
+      file: new File(["note"], "note.txt", { type: "text/plain" }),
+    };
+    try {
+      await act(async () => {
+        older = f.result.current
+          .sendMessage(
+            "thread-a",
+            { text: "Old attachment", files: [filePart] },
+            undefined,
+            { onSent: onOldSent },
+          )
+          .catch((cause: unknown) => cause);
+      });
+      expect(f.uploads).toHaveLength(1);
+      expect(f.result.current.isUploading).toBe(true);
+      f.rerender({ threadId: "thread-b" });
+      await flushFrames();
+      const busyAfterDeparture = f.result.current.isUploading;
+      await act(async () => {
+        current = f.result.current.sendMessage(
+          "thread-b",
+          { text: "New attachment", files: [filePart] },
+          undefined,
+          { onSent: onNewSent },
+        );
+      });
+      expect(f.uploads).toHaveLength(2);
+      const newIds = visibleMessageIds(f.result.current.thread.messages);
+      expect(f.result.current.isUploading).toBe(true);
+      await act(async () => {
+        if (outcome === "success")
+          f.uploads[0]!.resolve(uploadedReplayFileResponse());
+        else f.uploads[0]!.reject(failure);
+        expect(await older).toBe(outcome === "success" ? undefined : failure);
+      });
+      expect(busyAfterDeparture).toBe(false);
+      expect(f.result.current.isUploading).toBe(true);
+      expect(visibleMessageIds(f.result.current.thread.messages)).toEqual(
+        newIds,
+      );
+      expect(onOldSent).not.toHaveBeenCalled();
+      expect(streamMockState.submit).not.toHaveBeenCalled();
+      expect(errorToast).not.toHaveBeenCalled();
+      await act(async () => {
+        f.uploads[1]!.resolve(uploadedReplayFileResponse());
+        expect(await current).toBeUndefined();
+      });
+      expect(f.result.current.isUploading).toBe(false);
+      expect(onNewSent).toHaveBeenCalledTimes(1);
+      expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      for (const request of f.uploads)
+        request.resolve(uploadedReplayFileResponse());
+      await act(async () => {
+        await older;
+        await current;
+      });
+      errorToast.mockRestore();
+      f.unmount();
+      f.queryClient.clear();
+    }
+  });
+
+function observedPreparedReplay(kind: "edit" | "regenerate") {
+  const raw = kind === "edit" ? "replacement-observed" : "human-observed";
+  return {
+    target_run_id: "source-run-observed",
+    ...(kind === "edit"
+      ? {
+          replacement_human_message_id: raw,
+          source_message_ids: ["human-observed", "answer-observed"],
+        }
+      : {}),
+    input: {
+      messages: [
+        {
+          type: "human",
+          id: raw,
+          content: "private replay text",
+          additional_kwargs: { retained: "private extra field" },
+        },
+      ],
+      title: "private title",
+    },
+    checkpoint: { checkpoint_id: "checkpoint-observed", checkpoint_ns: "" },
+    metadata: {
+      replay_kind: kind,
+      regenerate_from_run_id: "source-run-observed",
+      regenerate_from_message_id: "answer-observed",
+      regenerate_checkpoint_id: "checkpoint-observed",
+      ...(kind === "edit"
+        ? {
+            edit_message_id: raw,
+            edit_from_message_id: "human-observed",
+            edit_version_group_id: "human-observed",
+          }
+        : {}),
+      unknown: "private metadata",
+    },
+  };
+}
+
+for (const enabled of [false, true])
+  for (const kind of ["edit", "regenerate"] as const)
+    test(`actual ${kind} replay preserves its prepared provenance across cloning (observation=${enabled})`, async () => {
+      const f = await renderReplayLifetime();
+      const packets: ObservationPacket[] = [];
+      const capability = "__deerflow_parity_capture_v1__";
+      const eventName = "deerflow:parity-identity:v1";
+      const receive = (event: Event) =>
+        packets.push((event as CustomEvent<ObservationPacket>).detail);
+      const control = {
+        version: 1,
+        token: "react-replay-capture",
+        action: "replay:0",
+      };
+      if (enabled)
+        Object.defineProperty(window, capability, {
+          configurable: true,
+          value: control,
+        });
+      window.addEventListener(eventName, receive);
+      const uuid = rs.spyOn(globalThis.crypto, "randomUUID");
+      const prepared = observedPreparedReplay(kind);
+      const response = new Response(JSON.stringify(prepared), {
+        headers: { "Content-Type": "application/json" },
+      });
+      const parse = rs.spyOn(response, "json");
+      let pending: Promise<boolean> | undefined;
+      try {
+        await act(async () => {
+          pending =
+            kind === "edit"
+              ? f.result.current.editAndRegenerateMessage(
+                  "thread-a",
+                  "human-observed",
+                  "private revised text",
+                  { added: "private added field" },
+                )
+              : f.result.current.regenerateMessage(
+                  "thread-a",
+                  "answer-observed",
+                );
+        });
+        expect(f.prepares).toHaveLength(1);
+        control.action = "later:1";
+        await act(async () => {
+          f.prepares[0]!.resolve(response);
+          expect(await pending).toBe(true);
+        });
+        expect(parse).toHaveBeenCalledTimes(1);
+        expect(uuid).not.toHaveBeenCalled();
+        expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+        expect(streamMockState.submit.mock.calls[0]).toEqual([
+          {
+            ...prepared.input,
+            messages: [
+              {
+                ...prepared.input.messages[0],
+                additional_kwargs: {
+                  retained: "private extra field",
+                  ...(kind === "edit" ? { added: "private added field" } : {}),
+                },
+              },
+            ],
+          },
+          expect.objectContaining({
+            threadId: "thread-a",
+            checkpoint: prepared.checkpoint,
+            metadata: prepared.metadata,
+          }),
+        ]);
+
+        if (enabled) {
+          expect(
+            packets.filter((packet) => packet.event === "replay.begin"),
+          ).toHaveLength(1);
+          expect(
+            packets.find((packet) => packet.event === "replay.begin"),
+          ).toMatchObject({
+            action: "replay:0",
+            values: {
+              kind,
+              thread: "thread-a",
+              source: kind === "edit" ? "human-observed" : "answer-observed",
+            },
+          });
+          expect(
+            packets.filter((packet) => packet.event === "replay.adopt"),
+          ).toHaveLength(1);
+          for (const phase of ["response", "attempt"]) {
+            expect(
+              packets.find(
+                (packet) =>
+                  packet.event === "replay.message" &&
+                  packet.values.phase === phase,
+              ),
+            ).toMatchObject({
+              action: "replay:0",
+              values: {
+                phase,
+                index: 0,
+                type: "human",
+                raw: prepared.input.messages[0]!.id,
+              },
+            });
+            expect(
+              packets.find(
+                (packet) =>
+                  packet.event === "replay.snapshot" &&
+                  packet.values.phase === phase,
+              ),
+            ).toMatchObject({
+              values: { phase, complete: true, messageCount: 1 },
+            });
+          }
+          expect(packets.some((packet) => packet.event === "invalid")).toBe(
+            false,
+          );
+          expect(new Set(packets.map((packet) => packet.instance)).size).toBe(
+            1,
+          );
+          expect(JSON.stringify(packets)).not.toContain("private");
+        } else expect(packets).toEqual([]);
+
+        expect(
+          packets.some((packet) => packet.event === "idempotency.allocate"),
+        ).toBe(false);
+      } finally {
+        for (const request of f.prepares)
+          request.resolve(new Response(JSON.stringify(prepared)));
+        await act(async () => {
+          await pending;
+        });
+        uuid.mockRestore();
+        parse.mockRestore();
+        f.unmount();
+        f.queryClient.clear();
+        window.removeEventListener(eventName, receive);
+        Reflect.deleteProperty(window, capability);
+      }
+    });
+
+function captureActualReplay() {
+  const packets: ObservationPacket[] = [];
+  const capability = "__deerflow_parity_capture_v1__";
+  const eventName = "deerflow:parity-identity:v1";
+  const control = { version: 1, token: "boundary-capture", action: "replay:0" };
+  const receive = (event: Event) =>
+    packets.push((event as CustomEvent<ObservationPacket>).detail);
+  Object.defineProperty(window, capability, {
+    configurable: true,
+    value: control,
+  });
+  window.addEventListener(eventName, receive);
+  return {
+    packets,
+    control,
+    dispose() {
+      window.removeEventListener(eventName, receive);
+      Reflect.deleteProperty(window, capability);
+    },
+  };
+}
+
+for (const kind of ["edit", "regenerate"] as const)
+  for (const mode of [
+    "thread-switch",
+    "unmount",
+    "http-error",
+    "json-error",
+    "submit-throw",
+    "capture-replaced",
+  ] as const)
+    test(`actual ${kind} provenance preserves its original owner through ${mode}`, async () => {
+      const f = await renderReplayLifetime();
+      const capture = captureActualReplay();
+      let pending: Promise<boolean> | undefined;
+      let unmounted = false;
+      const retired = mode === "thread-switch" || mode === "unmount";
+      const prepared = observedPreparedReplay(kind);
+      if (mode === "submit-throw")
+        streamMockState.submit.mockRejectedValueOnce(
+          new Error("private submission failure"),
+        );
+      try {
+        await act(async () => {
+          pending =
+            kind === "edit"
+              ? f.result.current.editAndRegenerateMessage(
+                  "thread-a",
+                  "human-observed",
+                  "private revised text",
+                )
+              : f.result.current.regenerateMessage(
+                  "thread-a",
+                  "answer-observed",
+                );
+        });
+        expect(f.prepares).toHaveLength(1);
+        expect(capture.packets.map((packet) => packet.event)).toEqual([
+          "replay.begin",
+        ]);
+        capture.control.action = "later:1";
+        if (mode === "thread-switch") {
+          f.rerender({ threadId: "thread-b" });
+          await flushFrames();
+        } else if (mode === "unmount") {
+          f.unmount();
+          unmounted = true;
+        } else if (mode === "capture-replaced")
+          capture.control.token = "replacement-capture";
+        if (retired) expect(f.prepares[0]!.signal?.aborted).toBe(true);
+        const response =
+          mode === "http-error"
+            ? new Response(JSON.stringify({ detail: "private denied" }), {
+                status: 409,
+                headers: { "Content-Type": "application/json" },
+              })
+            : new Response(
+                mode === "json-error"
+                  ? "{ private invalid json"
+                  : JSON.stringify(prepared),
+                { headers: { "Content-Type": "application/json" } },
+              );
+        let accepted: boolean | undefined;
+        await act(async () => {
+          f.prepares[0]!.resolve(response);
+          accepted = await pending;
+        });
+
+        expect(accepted).toBe(mode === "capture-replaced");
+        expect(streamMockState.submit.mock.calls.length).toBe(
+          mode === "submit-throw" || mode === "capture-replaced" ? 1 : 0,
+        );
+        expect(capture.packets[0]).toMatchObject({
+          event: "replay.begin",
+          action: "replay:0",
+          values: { kind, thread: "thread-a" },
+        });
+        expect(
+          capture.packets.every(
+            (packet) =>
+              packet.capture === "boundary-capture" &&
+              (packet.event === "run.bind"
+                ? packet.action === "later:1" &&
+                  packet.values.sourceAction === "replay:0"
+                : packet.action === "replay:0"),
+          ),
+        ).toBe(true);
+        expect(JSON.stringify(capture.packets)).not.toContain("private");
+        expect(
+          capture.packets.some((packet) => packet.event === "invalid"),
+        ).toBe(false);
+        if (mode === "capture-replaced") {
+          expect(capture.packets.map((packet) => packet.event)).toEqual([
+            "replay.begin",
+          ]);
+        } else {
+          const expectedPhases =
+            mode === "http-error" || mode === "json-error"
+              ? []
+              : mode === "submit-throw"
+                ? ["response", "attempt"]
+                : ["response"];
+          expect(
+            capture.packets
+              .filter((packet) => packet.event === "replay.snapshot")
+              .map((packet) => packet.values.phase),
+          ).toEqual(expectedPhases);
+          expect(
+            capture.packets
+              .filter((packet) => packet.event === "replay.snapshot")
+              .every((packet) => packet.values.complete === true),
+          ).toBe(true);
+          expect(
+            capture.packets.filter((packet) => packet.event === "replay.adopt"),
+          ).toHaveLength(mode === "submit-throw" ? 1 : 0);
+          expect(
+            capture.packets.filter(
+              (packet) => packet.event === "replay.submission",
+            ),
+          ).toHaveLength(mode === "submit-throw" ? 1 : 0);
+          expect(
+            capture.packets.filter(
+              (packet) => packet.event === "replay.retire",
+            ),
+          ).toHaveLength(retired ? 1 : 0);
+          expect(
+            capture.packets.filter(
+              (packet) => packet.event === "replay.failure",
+            ),
+          ).toHaveLength(retired ? 0 : 1);
+          if (!retired)
+            expect(
+              capture.packets.find(
+                (packet) => packet.event === "replay.failure",
+              ),
+            ).toMatchObject({ values: { status: "exception" } });
+          expect(capture.packets.at(-1)).toMatchObject({
+            event: "replay.finish",
+            values: { current: !retired },
+          });
+        }
+      } finally {
+        for (const request of f.prepares)
+          request.resolve(new Response(JSON.stringify(prepared)));
+        await act(async () => {
+          await pending;
+        });
+        if (!unmounted) f.unmount();
+        f.queryClient.clear();
+        capture.dispose();
+      }
+    });
+for (const enabled of [false, true])
+  for (const sourceShape of ["absent", "empty", "getter"] as const)
+    test(`regenerate retains caller source selection without observation interference (shape=${sourceShape}, enabled=${enabled})`, async () => {
+      const emptySources = sourceShape !== "absent";
+      const f = await renderReplayLifetime();
+      const oldIds = ["answer-observed", "source-step", "unrelated-answer"];
+      let release: () => void = () => undefined;
+      const barrier = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let pending: Promise<boolean> | undefined;
+      let capture: ReturnType<typeof captureActualReplay> | undefined;
+      const prepared = {
+        ...observedPreparedReplay("regenerate"),
+        ...(emptySources ? { source_message_ids: [] } : {}),
+      };
+      const response = new Response(JSON.stringify(prepared));
+      const parse = rs.spyOn(response, "json");
+      const readSources = rs.fn(() => [] as string[]);
+      if (sourceShape === "getter") {
+        Object.defineProperty(prepared, "source_message_ids", {
+          get: readSources,
+        });
+        // Synthetic robustness only: normal JSON cases above use real parsing.
+        parse.mockResolvedValue(prepared);
+      }
+      const uuid = rs.spyOn(globalThis.crypto, "randomUUID");
+      streamMockState.submit.mockImplementationOnce(() => barrier);
+      try {
+        streamMockState.messages = oldIds.map((id) => aiMessage(id, id));
+        f.rerender({ threadId: "thread-a" });
+        await flushFrames();
+        expect(visibleMessageIds(f.result.current.thread.messages)).toEqual(
+          oldIds,
+        );
+        capture = captureActualReplay();
+        if (!enabled)
+          Reflect.deleteProperty(window, "__deerflow_parity_capture_v1__");
+        await act(async () => {
+          pending = f.result.current.regenerateMessage(
+            "thread-a",
+            "answer-observed",
+            ["answer-observed", "source-step"],
+          );
+        });
+        expect(f.prepares).toHaveLength(1);
+        expect(f.prepares[0]!.url).toContain(
+          "/api/threads/thread-a/runs/regenerate/prepare",
+        );
+        await act(async () => {
+          f.prepares[0]!.resolve(response);
+        });
+        await flushFrames();
+        expect(streamMockState.submit).toHaveBeenCalledTimes(1);
+        expect(streamMockState.submit.mock.calls[0]).toEqual([
+          prepared.input,
+          expect.objectContaining({
+            threadId: "thread-a",
+            checkpoint: prepared.checkpoint,
+            metadata: prepared.metadata,
+          }),
+        ]);
+        expect(parse).toHaveBeenCalledTimes(1);
+        expect(readSources).toHaveBeenCalledTimes(0);
+        expect(uuid).not.toHaveBeenCalled();
+        const visible = visibleMessageIds(f.result.current.thread.messages);
+        expect(visible.filter((id) => oldIds.includes(id))).toEqual([
+          "unrelated-answer",
+        ]);
+        expect(visible).not.toContain("human-observed");
+        if (enabled) {
+          expect(
+            capture.packets
+              .filter((packet) => packet.event === "replay.snapshot")
+              .map((packet) => packet.values),
+          ).toEqual(
+            ["response", "attempt"].map((phase) => ({
+              phase,
+              sourcesType:
+                sourceShape === "getter"
+                  ? "unreadable"
+                  : emptySources
+                    ? "array"
+                    : "absent",
+              sourceCount: sourceShape === "getter" ? null : 0,
+              messageCount: sourceShape === "getter" ? null : 1,
+              complete: sourceShape !== "getter",
+            })),
+          );
+          expect(
+            capture.packets.filter((packet) => packet.event === "replay.adopt"),
+          ).toHaveLength(1);
+          expect(
+            capture.packets.some((packet) => packet.event === "invalid"),
+          ).toBe(sourceShape === "getter");
+        } else expect(capture.packets).toEqual([]);
+        await act(async () => {
+          release();
+          expect(await pending).toBe(true);
+        });
+      } finally {
+        for (const request of f.prepares) request.resolve(response);
+        await act(async () => {
+          release();
+          await pending;
+        });
+        streamMockState.submit.mockReset();
+        streamMockState.submit.mockResolvedValue(undefined);
+        capture?.dispose();
+        parse.mockRestore();
+        uuid.mockRestore();
+        f.unmount();
+        f.queryClient.clear();
+      }
+    });

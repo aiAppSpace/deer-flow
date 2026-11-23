@@ -23,6 +23,10 @@
                    把迭代器暴露出去，调用方就得自己处理「这一段结束了但 run 没结束」。
 */
 
+import {
+  captureRunInvocation,
+  type RunInvocation,
+} from "@/core/diagnostics/run-observation";
 import type {
   AgentSnapshot,
   AgentExternalStore,
@@ -80,6 +84,7 @@ export interface ThreadRunnerOptions extends ThreadRunnerHooks {
   /** 08 硬规则 6：gap 之后先 reload durable state。 */
   loadDurableState: (
     handle: DeerFlowRunHandle,
+    signal: AbortSignal,
   ) => Promise<Record<string, unknown> | undefined>;
   createId?: () => string;
   now?: () => number;
@@ -96,6 +101,8 @@ export interface ThreadRunner {
   getSnapshot(): AgentSnapshot<DeerFlowThreadState>;
   /** 归一化消息转回 wire 形状——C 组的归并函数全部在 wire 层工作。 */
   getWireMessages(): Message[];
+  /** Assistant IDs actually received on this run's message stream, never inferred from row order. */
+  getStreamingMessageIds(): ReadonlySet<string>;
   getSessionState(): RunSessionState<DeerFlowRunHandle>;
   isStreaming(): boolean;
   /**
@@ -126,8 +133,12 @@ export interface ThreadRunner {
   refreshDurableState(values: Record<string, unknown>): boolean;
   subscribe(listener: () => void): () => void;
   submit(input: DeerFlowRunInput): Promise<void>;
+  /** Observe an existing run; never creates or automatically cancels it. */
+  join(handle: DeerFlowRunHandle): Promise<void>;
   stop(): void;
   abort(): void;
+  /** Permanently release this owner's subscriptions and local connections. */
+  dispose(): void;
   /** 切换 thread：丢掉快照与会话，不发任何请求。 */
   reset(): void;
   flushNotifications(): void;
@@ -177,10 +188,30 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
     onSettled,
   } = options;
 
+  let streamingMessageIds: ReadonlySet<string> = new Set();
+  const reduceEvent = createDeerFlowEventReducer({ onUnknownEvent });
   const store: AgentExternalStore<DeerFlowThreadState, SseEvent> =
     createAgentExternalStore<DeerFlowThreadState, SseEvent>({
       initialState: EMPTY_DEERFLOW_THREAD_STATE,
-      reducer: createDeerFlowEventReducer({ onUnknownEvent }),
+      reducer(event, snapshot, context) {
+        const actions = reduceEvent(event, snapshot, context);
+        if (parseWireEventName(event.event).mode === "messages") {
+          for (const action of actions) {
+            if (
+              (action.type === "upsert-message" ||
+                action.type === "merge-message") &&
+              action.message.role === "assistant" &&
+              !streamingMessageIds.has(action.message.id)
+            ) {
+              streamingMessageIds = new Set([
+                ...streamingMessageIds,
+                action.message.id,
+              ]);
+            }
+          }
+        }
+        return actions;
+      },
       createId,
       now,
       ...(scheduleNotify ? { scheduleNotify } : {}),
@@ -190,6 +221,9 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
   let active: ReturnType<typeof createGapAwareRun> | undefined;
   let announcedHandle: string | undefined;
   let generation = 0;
+  let activeObservation: RunInvocation | null = null;
+  let disposed = false;
+  const subscriptions = new Set<() => void>();
 
   const unsubscribeSnapshot = store.subscribe(() => onSnapshot?.());
 
@@ -203,12 +237,22 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
     }
   }
 
-  async function consume(input: DeerFlowRunInput): Promise<void> {
+  async function consume(
+    input: DeerFlowRunInput,
+    initialHandle?: DeerFlowRunHandle,
+  ): Promise<void> {
+    if (disposed) throw new Error("Thread runner has been disposed.");
+    active?.abort();
+    activeObservation?.retire();
+    const observation = captureRunInvocation(() => input, "adapter");
+    activeObservation = observation;
+    streamingMessageIds = new Set();
     const runGeneration = ++generation;
     const run = createGapAwareRun({
       protocol,
       loadDurableState,
       maxRejoins,
+      ...(initialHandle ? { initialHandle } : {}),
       session: {
         classifyEvent: classifyDeerFlowEvent,
         maxBufferBytes,
@@ -224,12 +268,16 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
         if (runGeneration !== generation) break;
         if (output.kind === "state") {
           sessionState = output.state;
+          if (!STREAMING_STATUSES.has(output.state.status)) {
+            streamingMessageIds = new Set();
+          }
           onSessionState?.(output.state);
           const handle =
             "handle" in output.state ? output.state.handle : undefined;
           if (handle && handle.runId !== announcedHandle) {
             announcedHandle = handle.runId;
             onStart?.(handle);
+            observation?.delivered(handle, handle.threadId, handle.runId);
           }
           if (output.state.status === "failed") {
             onError?.(output.state.error);
@@ -256,6 +304,7 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
           ? cause
           : new AgentStreamError("unknown", String(cause), { cause });
       sessionState = { status: "failed", error };
+      streamingMessageIds = new Set();
       onSessionState?.(sessionState);
       onError?.(error);
       onSettled?.(sessionState);
@@ -271,6 +320,18 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
     return true;
   }
 
+  function abortLocalRun() {
+    generation += 1;
+    activeObservation?.retire();
+    activeObservation = null;
+    active?.abort();
+    active = undefined;
+    announcedHandle = undefined;
+    streamingMessageIds = new Set();
+    sessionState = { status: "idle" };
+    if (!disposed) onSessionState?.(sessionState);
+  }
+
   return {
     getSnapshot: () => store.getSnapshot(),
     getWireMessages() {
@@ -283,6 +344,7 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
       ).map(toRenderableMessage);
     },
     getSessionState: () => sessionState,
+    getStreamingMessageIds: () => streamingMessageIds,
     isStreaming: () => STREAMING_STATUSES.has(sessionState.status),
     seedDurableState(values) {
       if (sessionState.status !== "idle") return false;
@@ -292,22 +354,33 @@ export function createThreadRunner(options: ThreadRunnerOptions): ThreadRunner {
       if (STREAMING_STATUSES.has(sessionState.status)) return false;
       return applyDurableValues(values);
     },
-    subscribe: (listener) => store.subscribe(listener),
+    subscribe(listener) {
+      if (disposed) return () => {};
+      const unsubscribe = store.subscribe(listener);
+      const release = () => {
+        unsubscribe();
+        subscriptions.delete(release);
+      };
+      subscriptions.add(release);
+      return release;
+    },
     submit: consume,
+    join: (handle) =>
+      consume({ threadId: handle.threadId, payload: {} }, handle),
     stop() {
       active?.stop();
     },
-    abort() {
-      generation += 1;
-      active?.abort();
+    abort: abortLocalRun,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      abortLocalRun();
       unsubscribeSnapshot();
+      for (const release of [...subscriptions]) release();
     },
     reset() {
-      generation += 1;
-      active?.abort();
-      active = undefined;
-      announcedHandle = undefined;
-      sessionState = { status: "idle" };
+      if (disposed) return;
+      abortLocalRun();
       store.reset(EMPTY_DEERFLOW_THREAD_STATE);
     },
     flushNotifications: () => store.flushNotifications(),

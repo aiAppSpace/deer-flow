@@ -7,9 +7,14 @@
 */
 
 import type { Model } from "./types";
+import {
+  getResolvedMode,
+  resolveReasoningEffort,
+  type ReasoningEffortValue,
+} from "./reasoning";
 
 export type ComposerMode = "flash" | "thinking" | "pro" | "ultra";
-export type ComposerReasoningEffort = "minimal" | "low" | "medium" | "high";
+export type ComposerReasoningEffort = ReasoningEffortValue;
 
 const VALID_MODES = new Set<ComposerMode>([
   "flash",
@@ -28,13 +33,6 @@ export function resolveComposerModel(
     models.find((model) => model.name === agentDefaultModelName) ??
     models[0]
   );
-}
-
-function resolveMode(value: unknown, supportsThinking: boolean): ComposerMode {
-  if (!supportsThinking) return "flash";
-  return typeof value === "string" && VALID_MODES.has(value as ComposerMode)
-    ? (value as ComposerMode)
-    : "pro";
 }
 
 /**
@@ -56,24 +54,26 @@ export function normalizeComposerContext<T extends Record<string, unknown>>(
     return { ...context };
   }
 
-  const mode = resolveMode(context.mode, model.supports_thinking === true);
+  const mode = getResolvedMode(
+    VALID_MODES.has(context.mode as ComposerMode)
+      ? (context.mode as ComposerMode)
+      : undefined,
+    model,
+  );
   const normalized: Record<string, unknown> = {
     ...context,
     model_name: model.name,
     mode,
   };
 
-  const explicitEffort = context.reasoning_effort;
-  if (
-    explicitEffort === "minimal" ||
-    explicitEffort === "low" ||
-    explicitEffort === "medium" ||
-    explicitEffort === "high"
-  ) {
-    normalized.reasoning_effort = explicitEffort;
-  } else {
-    delete normalized.reasoning_effort;
-  }
+  const effort = resolveReasoningEffort(
+    model,
+    typeof context.reasoning_effort === "string"
+      ? context.reasoning_effort
+      : undefined,
+  );
+  if (effort === undefined) delete normalized.reasoning_effort;
+  else normalized.reasoning_effort = effort;
 
   return normalized as ReturnType<typeof normalizeComposerContext<T>>;
 }

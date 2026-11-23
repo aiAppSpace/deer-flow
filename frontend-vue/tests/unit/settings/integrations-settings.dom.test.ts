@@ -1,29 +1,42 @@
 /*
-  【文件职责】     钉住 Lark 集成面板里几处**取样看不见**的分支：已验证授权的措辞、
-                   sandbox runtime 的就绪徽标、非管理员的安装门禁，以及新流程作废
-                   在飞状态回读。
+  【文件职责】     验证实际 Lark 面板的权限、状态刷新与异步完成归属。
   【架构位置】     Vue DOM test
   【主要导出】     无；Vitest cases
-  【依赖关系】     IntegrationsSettings · mocked lark api · mocked auth session/toast
-  【边界与注意】   对照台账 (`e2e-parity`) 只取一个默认状态的样本：未安装、未授权、
-                   非管理员这三条分支它一条都走不到，几何与可访问性树因此全都相等。
-                   这四条恰恰是那时候错着也不会红的地方，所以在这里各钉一条。
-
-                   四条都做过负向验证（把修改逐条改回去，对应用例立刻红）——记录在
-                   本轮提交说明里。
+  【依赖关系】     LarkPluginSettings · useLarkIntegrationFlow · Vue Query
+  【边界与注意】   使用实际面板与 QueryClient/QueryObserver；只在 API、账户、
+                   toast、clipboard 等外部边界受控。安装后的缓存刷新、复制结果在
+                   卸载、切账户或流程结束后不能继续通知、回读或写入新 owner。
+                   DOM 回归与完整双端浏览器验收各自保留，不互相替代。
 */
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
+import {
+  QueryClient,
+  QueryObserver,
+  VueQueryPlugin,
+} from "@tanstack/vue-query";
 import { ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import IntegrationsSettings from "@/components/workspace/settings/IntegrationsSettings.vue";
+import { invalidateWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
+
+import LarkPluginSettings from "@/components/workspace/capabilities/LarkPluginSettings.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
+import { zhCN } from "@/core/i18n/locales/zh-CN";
 import type { LarkIntegrationStatus } from "@/core/integrations/lark/types";
+import {
+  completeLarkAuthorization,
+  installLarkIntegration,
+  startLarkAuthorization,
+} from "@/core/integrations/lark/api";
 
 const loadStatus = vi.hoisted(() => vi.fn());
 const sessionRef = vi.hoisted(() => ({ value: null as unknown }));
+const notices = vi.hoisted(() => ({
+  success: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+}));
 
 vi.mock("@/core/integrations/lark/api", async () => {
   const actual = await vi.importActual<
@@ -59,9 +72,7 @@ vi.mock("@/core/auth/auth-disabled-user", async () => {
 vi.mock("@/core/workspace-shell/toast", () => ({
   useWorkspaceToast: () => ({
     toasts: ref([]),
-    success: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
+    ...notices,
     dismiss: vi.fn(),
     clear: vi.fn(),
   }),
@@ -97,23 +108,26 @@ function status(
       verified: true,
     },
     sandbox_runtime_mode: "init-container",
+    sandbox_runtime_probed: true,
     sandbox_runtime_ready: true,
     sandbox_runtime_detail: null,
     ...overrides,
   };
 }
 
-function mountPanel() {
-  return mount(IntegrationsSettings, {
+function mountPanel(
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  }),
+) {
+  return mount(LarkPluginSettings, {
     attachTo: document.body,
     global: {
       plugins: [
         [
           VueQueryPlugin,
           {
-            queryClient: new QueryClient({
-              defaultOptions: { queries: { retry: false } },
-            }),
+            queryClient,
           },
         ],
       ],
@@ -131,17 +145,126 @@ const member = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   loadStatus.mockReset().mockResolvedValue(status());
   sessionRef.value = admin;
   vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: { value: enUS } } }));
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
 
-describe("IntegrationsSettings", () => {
+describe("LarkPluginSettings", () => {
+  it.each([enUS, zhCN])(
+    "renders the translated integration section and its functional card",
+    async (copy) => {
+      vi.stubGlobal("useNuxtApp", () => ({
+        $i18n: { t: { value: copy } },
+      }));
+      const wrapper = mountPanel();
+      await flushPromises();
+      expect(wrapper.get("header").text()).toContain(
+        copy.settings.integrations.title,
+      );
+      expect(wrapper.get("header").text()).toContain(
+        copy.settings.integrations.description,
+      );
+      expect(wrapper.get("main").get('[data-slot="card"]').text()).toContain(
+        copy.settings.integrations.lark.title,
+      );
+      expect(loadStatus).toHaveBeenCalledTimes(1);
+      wrapper.unmount();
+    },
+  );
+
+  it("aborts authorization on unmount and ignores a late transport result", async () => {
+    let signal: AbortSignal | undefined;
+    let release!: (
+      value: Awaited<ReturnType<typeof startLarkAuthorization>>,
+    ) => void;
+    vi.mocked(startLarkAuthorization).mockImplementationOnce(
+      (_request, requestSignal) => {
+        signal = requestSignal;
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      },
+    );
+    vi.stubGlobal("open", () => null);
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper
+      .findAll("button")
+      .find(
+        (button) =>
+          button.text() === enUS.settings.integrations.lark.connectedAction,
+      )!
+      .trigger("click");
+    await flushPromises();
+    expect(signal?.aborted).toBe(false);
+    wrapper.unmount();
+    expect(signal?.aborted).toBe(true);
+    release({
+      verification_url: "https://example.com/authorization",
+      device_code: "device",
+      generation: "g1",
+      expires_in: 30,
+      user_code: null,
+      hint: null,
+    });
+    await flushPromises();
+    expect(completeLarkAuthorization).not.toHaveBeenCalled();
+    expect(notices.info).not.toHaveBeenCalled();
+    expect(notices.error).not.toHaveBeenCalled();
+  });
+
+  it("retains the fallback link when popup is blocked and stops automatic polling at expiry", async () => {
+    vi.useFakeTimers();
+    const now = vi.spyOn(Date, "now").mockReturnValue(0);
+    vi.stubGlobal("open", () => null);
+    vi.mocked(startLarkAuthorization).mockResolvedValueOnce({
+      verification_url: "https://example.com/authorization",
+      device_code: "device",
+      generation: "g1",
+      expires_in: 30,
+      user_code: null,
+      hint: null,
+    });
+    vi.mocked(completeLarkAuthorization).mockResolvedValue({
+      success: false,
+      message: "Still pending",
+      status: status(),
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper
+      .findAll("button")
+      .find(
+        (button) =>
+          button.text() === enUS.settings.integrations.lark.connectedAction,
+      )!
+      .trigger("click");
+    await flushPromises();
+    expect(
+      wrapper.find('a[href="https://example.com/authorization"]').exists(),
+    ).toBe(true);
+    expect(completeLarkAuthorization).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(31_000);
+    await vi.advanceTimersByTimeAsync(1500);
+    await flushPromises();
+    expect(completeLarkAuthorization).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(completeLarkAuthorization).toHaveBeenCalledTimes(2);
+    expect(notices.info).toHaveBeenCalledWith(
+      enUS.settings.integrations.lark.authorizationStillPending,
+    );
+    wrapper.unmount();
+    vi.clearAllTimers();
+  });
   it("names a live-verified connection by its user, not by the configured-for wording", async () => {
     const wrapper = mountPanel();
     await flushPromises();
@@ -291,4 +414,270 @@ describe("IntegrationsSettings", () => {
     expect(wrapper.text()).not.toContain(enUS.settings.integrations.loadFailed);
     wrapper.unmount();
   });
+});
+
+describe("Lark mutation status ownership", () => {
+  const key = ["integrations", "lark", "status", "u1"];
+  async function reinstall(wrapper: ReturnType<typeof mountPanel>) {
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === enUS.settings.integrations.reinstall)!
+      .trigger("click");
+    await flushPromises();
+  }
+  it.each([false, true])(
+    "runtime probe flag %s controls whether mutation fields are authoritative",
+    async (probed) => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      loadStatus
+        .mockResolvedValueOnce(status())
+        .mockImplementation(() => new Promise(() => {}));
+      const mutation = status({
+        auth: { ...status().auth, user: "New auth", verified: false },
+        sandbox_runtime_mode: "broker",
+        sandbox_runtime_probed: probed,
+        sandbox_runtime_ready: false,
+        sandbox_runtime_detail: null,
+      });
+      vi.mocked(installLarkIntegration).mockResolvedValueOnce({
+        success: true,
+        message: "Installed",
+        installed_skills: [],
+        status: mutation,
+      });
+      const wrapper = mountPanel(queryClient);
+      await flushPromises();
+      await reinstall(wrapper);
+      expect(queryClient.getQueryData(key)).toMatchObject({
+        auth: { user: "New auth", verified: false },
+        sandbox_runtime_mode: probed ? "broker" : "init-container",
+        sandbox_runtime_probed: true,
+        sandbox_runtime_ready: !probed,
+        sandbox_runtime_detail: null,
+      });
+      expect(wrapper.findAll('[data-slot="badge"]').at(-1)!.text()).toBe(
+        probed
+          ? enUS.settings.integrations.pending
+          : enUS.settings.integrations.ready,
+      );
+      expect(loadStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
+      wrapper.unmount();
+      queryClient.clear();
+    },
+  );
+  it.each([false, true])(
+    "awaits cancellation and fences a retired owner (retire=%s)",
+    async (retire) => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const wrapper = mountPanel(queryClient);
+      await flushPromises();
+      const cancel = queryClient.cancelQueries.bind(queryClient);
+      let release!: () => void;
+      vi.spyOn(queryClient, "cancelQueries").mockImplementationOnce(
+        async (filters) => {
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await cancel(filters);
+        },
+      );
+      const mutation = status({
+        auth: { ...status().auth, user: "Mutation winner" },
+      });
+      vi.mocked(installLarkIntegration).mockResolvedValueOnce({
+        success: true,
+        message: "Installed",
+        installed_skills: [],
+        status: mutation,
+      });
+      await reinstall(wrapper);
+      expect(
+        queryClient.getQueryData<LarkIntegrationStatus>(key)?.auth.user,
+      ).toBe("Alice");
+      expect(release).toBeTypeOf("function");
+      if (retire) wrapper.unmount();
+      loadStatus.mockImplementation(() => new Promise(() => {}));
+      release();
+      await flushPromises();
+      expect(
+        queryClient.getQueryData<LarkIntegrationStatus>(key)?.auth.user,
+      ).toBe(retire ? "Alice" : "Mutation winner");
+      if (retire) expect(notices.success).not.toHaveBeenCalled();
+      else wrapper.unmount();
+      queryClient.clear();
+    },
+  );
+});
+
+describe("real Lark install follow-up owner", () => {
+  it.each(["keep", "unmount", "account"] as const)(
+    "catalog refresh completion respects %s",
+    async (retirement) => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      let release!: () => void;
+      let refreshStarted = false;
+      client.setQueryData(["skills"], []);
+      const observer = new QueryObserver(client, {
+        queryKey: ["skills"],
+        staleTime: Infinity,
+        queryFn: () => {
+          refreshStarted = true;
+          return new Promise<never[]>((resolve) => {
+            release = () => resolve([]);
+          });
+        },
+      });
+      const unsubscribe = observer.subscribe(() => {});
+      const wrapper = mountPanel(client);
+      let mounted = true;
+      try {
+        await flushPromises();
+        expect(loadStatus).toHaveBeenCalledTimes(1);
+        vi.mocked(installLarkIntegration).mockResolvedValueOnce({
+          success: true,
+          message: "Installed",
+          installed_skills: [],
+          status: status(),
+        });
+        await wrapper
+          .findAll("button")
+          .find(
+            (button) => button.text() === enUS.settings.integrations.reinstall,
+          )!
+          .trigger("click");
+        await flushPromises();
+        expect(refreshStarted).toBe(true);
+        expect(notices.success).not.toHaveBeenCalled();
+        if (retirement === "unmount") {
+          wrapper.unmount();
+          mounted = false;
+        }
+        if (retirement === "account") invalidateWorkspaceQueryOwner(client);
+        release();
+        await flushPromises();
+        expect(notices.success).toHaveBeenCalledTimes(
+          retirement === "keep" ? 1 : 0,
+        );
+        expect(loadStatus).toHaveBeenCalledTimes(retirement === "keep" ? 2 : 1);
+      } finally {
+        release?.();
+        if (mounted) wrapper.unmount();
+        unsubscribe();
+        client.clear();
+      }
+    },
+  );
+});
+
+describe("Lark authorization link copy ownership", () => {
+  for (const copied of [true, false]) {
+    it.each(["keep", "unmount", "account", "completed"] as const)(
+      `clipboard result ${copied} respects %s`,
+      async (retirement) => {
+        const client = new QueryClient({
+          defaultOptions: { queries: { retry: false } },
+        });
+        vi.stubGlobal("open", () => null);
+        vi.mocked(startLarkAuthorization).mockResolvedValueOnce({
+          verification_url: "https://example.com/authorization",
+          device_code: "device",
+          generation: "copy-owner",
+          expires_in: 30,
+          user_code: null,
+          hint: null,
+        });
+        let finishAuth!: () => void;
+        vi.mocked(completeLarkAuthorization).mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finishAuth = () =>
+                resolve({
+                  success: true,
+                  message: "Authorized",
+                  status: status(),
+                });
+            }),
+        );
+        let finishCopy!: () => void;
+        const write = vi
+          .spyOn(navigator.clipboard, "writeText")
+          .mockImplementationOnce(
+            () =>
+              new Promise<void>((resolve, reject) => {
+                finishCopy = () =>
+                  copied ? resolve() : reject(new Error("Clipboard denied"));
+              }),
+          );
+        const wrapper = mountPanel(client);
+        let mounted = true;
+        try {
+          await flushPromises();
+          await wrapper
+            .findAll("button")
+            .find(
+              (button) =>
+                button.text() ===
+                enUS.settings.integrations.lark.connectedAction,
+            )!
+            .trigger("click");
+          await flushPromises();
+          await wrapper
+            .findAll("button")
+            .find(
+              (button) =>
+                button.text() === enUS.settings.integrations.lark.copyAuthLink,
+            )!
+            .trigger("click");
+          await flushPromises();
+          expect(write).toHaveBeenCalledWith(
+            "https://example.com/authorization",
+          );
+          if (retirement === "unmount") {
+            wrapper.unmount();
+            mounted = false;
+          }
+          if (retirement === "account") invalidateWorkspaceQueryOwner(client);
+          if (retirement === "completed") {
+            finishAuth();
+            await flushPromises();
+            expect(
+              wrapper
+                .find('a[href="https://example.com/authorization"]')
+                .exists(),
+            ).toBe(false);
+          }
+          notices.success.mockClear();
+          notices.error.mockClear();
+          finishCopy();
+          await flushPromises();
+          expect(notices.success).toHaveBeenCalledTimes(
+            retirement === "keep" && copied ? 1 : 0,
+          );
+          expect(notices.error).toHaveBeenCalledTimes(
+            retirement === "keep" && !copied ? 1 : 0,
+          );
+          if (retirement === "keep")
+            expect(
+              copied ? notices.success : notices.error,
+            ).toHaveBeenCalledWith(
+              copied
+                ? enUS.clipboard.copiedToClipboard
+                : enUS.clipboard.failedToCopyToClipboard,
+            );
+        } finally {
+          if (mounted) wrapper.unmount();
+          finishCopy?.();
+          finishAuth?.();
+          await flushPromises();
+          client.clear();
+        }
+      },
+    );
+  }
 });

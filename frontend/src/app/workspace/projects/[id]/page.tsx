@@ -91,7 +91,7 @@ export default function ProjectPage() {
     <WorkspaceContainer>
       <WorkspaceHeader />
       <WorkspaceBody>
-        <ScrollArea className="size-full min-w-0 [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0!">
+        <ScrollArea className="[container-type:size] size-full min-w-0 [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0! [@media(max-height:360px)]:[&_[data-slot=tabs-content]]:max-h-[calc(100cqh-var(--spacing)*14)] [@media(max-height:360px)]:[&_[data-slot=tabs-content]]:overflow-y-auto">
           <div className="mx-auto flex w-full max-w-(--container-width-md) min-w-0 flex-col gap-8 p-6 pt-8">
             {projectQuery.isError ? (
               <ProjectNotFoundState />
@@ -105,9 +105,12 @@ export default function ProjectPage() {
                 <Tabs
                   value={tab}
                   onValueChange={setTab}
-                  className="flex flex-col gap-6"
+                  className="@container/project-tabs flex flex-col gap-6"
                 >
-                  <TabsList aria-label={project.name}>
+                  <TabsList
+                    aria-label={project.name}
+                    className="@max-md/project-tabs:max-w-full @max-md/project-tabs:flex-wrap @max-md/project-tabs:group-data-[orientation=horizontal]/tabs:h-auto"
+                  >
                     <TabsTrigger value="chats">
                       {t.projects.threads}
                     </TabsTrigger>
@@ -311,6 +314,7 @@ function ProjectSettingsSection({ project }: { project: Project }) {
       <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="outline"
+          className="h-auto min-h-9 max-w-full whitespace-normal"
           disabled={archiveProject.isPending || restoreProject.isPending}
           onClick={handleArchiveToggle}
         >
@@ -319,6 +323,7 @@ function ProjectSettingsSection({ project }: { project: Project }) {
         </Button>
         <Button
           variant="destructive"
+          className="h-auto min-h-9 max-w-full whitespace-normal"
           onClick={() => setIsDeleteDialogOpen(true)}
         >
           <Trash2 />
@@ -406,21 +411,23 @@ function ProjectInstructionsSection({ project }: { project: Project }) {
 
   return (
     <section className="flex flex-col gap-2">
-      <label
-        htmlFor="project-instructions-input"
-        className="text-muted-foreground text-xs"
-      >
-        {t.projects.instructions}
-      </label>
-      <Textarea
-        id="project-instructions-input"
-        className="min-h-40"
-        value={instructions}
-        onChange={(e) => setInstructions(e.target.value)}
-        placeholder={t.projects.instructionsPlaceholder}
-        aria-invalid={overCap}
-      />
-      <div className="flex items-center justify-between gap-2">
+      <div className="contents [@media(max-height:360px)]:grid [@media(max-height:360px)]:h-[calc(100cqh-var(--spacing)*14)] [@media(max-height:360px)]:grid-rows-[auto_minmax(0,1fr)] [@media(max-height:360px)]:gap-2">
+        <label
+          htmlFor="project-instructions-input"
+          className="text-muted-foreground text-xs"
+        >
+          {t.projects.instructions}
+        </label>
+        <Textarea
+          id="project-instructions-input"
+          className="min-h-40 [@media(max-height:360px)]:h-full [@media(max-height:360px)]:max-h-full [@media(max-height:360px)]:min-h-0"
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          placeholder={t.projects.instructionsPlaceholder}
+          aria-invalid={overCap}
+        />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p
           className={cn(
             "text-xs",
@@ -429,7 +436,7 @@ function ProjectInstructionsSection({ project }: { project: Project }) {
         >
           {t.projects.instructionsByteCount(byteCount, maxBytes)}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           {showSaved && (
             <span role="status" className="text-muted-foreground text-xs">
               {t.projects.instructionsSaved}

@@ -4,37 +4,13 @@
   【架构位置】     L3 product UI
   【主要导出】     默认 WorkspaceChannelsList 组件
   【依赖关系】     useChannelConnections · channels provider-state · ui/button · ui/sidebar · workspace toast
-  【边界与注意】   对照 frontend/src/components/workspace/channels/workspace-channels-list.tsx。
-
-                   它和设置页的 ChannelConnections 是**两个**组件，不是一个组件的两种皮肤，
-                   因为两边的产品形态本来就不同：侧栏一个 provider 一行一个按钮、只表达
-                   「连没连上」；设置页要列出同一个 provider 下的每个账号、要能逐个断开、
-                   管理员还要能删 provider 配置。此前本仓用一个 variant 参数把两者压在一起，
-                   代价是侧栏被迫背上多账号的那套模型：按钮写着「Add account」、容器是
-                   article、还要多拉一次 /connections——全是设置页才需要的东西。
-
-                   **外壳走 ui/sidebar 的四个 primitive，不手抄它们的类串**（wave 203）。
-                   手抄那版少了 `data-slot`、`SidebarGroupLabel` 的键盘焦点环与
-                   `[&>svg]:size-4`，还留着一条死类 `group/menu-item`（没有任何
-                   `group-hover/menu-item` 引用它）。上游同一处用的就是
-                   SidebarGroup / SidebarGroupLabel / SidebarMenu / SidebarMenuItem。
-                   门禁：tests/guards/primitive-marker-classes.test.ts。
-
-                   **wave 203 只换了「已加载」那一支，loading 那一支原样留着**
-                   ——2026-09-12 第十二轮全仓扫 `animate-pulse` 时才发现：
-                   三块占位方块手抄的是 `ui/skeleton` 的 `bg-accent animate-pulse rounded-md`，
-                   外面两层又各自手抄了一遍 SidebarGroup 与 SidebarGroupLabel
-                   （同样漏掉那 10 个 token）。上游那一支是
-                   `<SidebarGroup><SidebarGroupLabel>` + 三颗 `<Skeleton className="h-8 w-full" />`。
-                   与第十轮修三颗芯片、第十一轮在同一份文件里找到第四颗**同形**：
-                   修的是「有锚点的那一支」，没锚点的那一支跟着漏掉。
-
-                   连接态读 provider.connection_status，不读 connections。理由见
-                   core/channels/state.ts 的头注释：这两个字段同源，而 connection_status
-                   多带了 auth 关闭部署下「配好即已连接、没有 binding row」这个事实。
+  【边界与注意】   侧栏按 provider 展示连接状态；设置页另行管理账号与管理员配置。
+                   加载与已加载分支都复用 ui/sidebar 和 Skeleton，不手写通用 primitive 样式。
+                   连接状态读取 provider.connection_status，以覆盖无 binding row 的已配置部署。
 */
 
 import { Check, LoaderCircle } from "lucide-vue-next";
+import ChannelScheduledUpdates from "./ChannelScheduledUpdates.vue";
 import { computed } from "vue";
 
 import ChannelProviderIcon from "./ChannelProviderIcon.vue";
@@ -46,6 +22,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useWorkspaceAsyncOwner } from "@/composables/useWorkspaceAsyncOwner";
 import { useAuthSession } from "@/composables/useAuthSession";
 import { useChannelConnections } from "@/composables/useChannelConnections";
 import { useWorkspaceChannelRuntimeConfig } from "@/composables/useWorkspaceChannelRuntimeConfig";
@@ -60,6 +37,7 @@ import {
   type ChannelConnectWindow,
 } from "@/core/channels/open-connect-url";
 import {
+  channelProviderName,
   providerCanConnect,
   providerCanEditRuntimeConfig,
   providerNeedsRuntimeConfig,
@@ -70,6 +48,7 @@ import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 const { $i18n } = useNuxtApp();
 const text = computed(() => $i18n.t.value.channels);
 const toast = useWorkspaceToast();
+const captureOwner = useWorkspaceAsyncOwner();
 
 const authDisabled = isAuthDisabledMode();
 const auth = useAuthSession({ enabled: computed(() => !authDisabled) });
@@ -114,6 +93,12 @@ async function startConnect(
   provider: ChannelProvider,
   preparedWindow?: ChannelConnectWindow,
 ) {
+  if (provider.provider === "wechat") {
+    closeConnectWindow(preparedWindow ?? null);
+    runtimeConfig.open(provider, provider.configured ? "binding" : "setup");
+    return;
+  }
+  const isCurrent = captureOwner();
   const connectWindow =
     preparedWindow !== undefined
       ? preparedWindow
@@ -122,6 +107,10 @@ async function startConnect(
         : null;
   try {
     const result = await channels.connect(provider.provider);
+    if (!isCurrent()) {
+      closeConnectWindow(connectWindow);
+      return;
+    }
     if (result.url) {
       openConnectUrl(result.url, connectWindow);
       return;
@@ -130,6 +119,7 @@ async function startConnect(
     toast.success(result.instruction);
   } catch (cause) {
     closeConnectWindow(connectWindow);
+    if (!isCurrent()) return;
     toast.error(
       cause instanceof Error && cause.message
         ? cause.message
@@ -183,7 +173,7 @@ function onProviderAction(provider: ChannelProvider) {
             class="shrink-0"
           />
           <span class="min-w-0 flex-1 truncate text-sm font-medium">
-            {{ provider.display_name }}
+            {{ channelProviderName(provider, $i18n.t.value) }}
           </span>
           <Button
             type="button"
@@ -209,6 +199,11 @@ function onProviderAction(provider: ChannelProvider) {
             </span>
           </Button>
         </div>
+        <ChannelScheduledUpdates
+          v-if="isConnected(provider)"
+          :provider="provider"
+          class="pb-0.5 pl-7 text-[11px] leading-snug [&_svg]:hidden"
+        />
       </SidebarMenuItem>
     </SidebarMenu>
   </SidebarGroup>

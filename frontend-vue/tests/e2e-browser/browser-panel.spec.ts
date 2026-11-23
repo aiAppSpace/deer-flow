@@ -9,6 +9,7 @@
 import { expect, test } from "@playwright/test";
 
 test("real Gateway converges REST navigation and binary live state in the Vue panel", async ({
+  browser,
   context,
   page,
 }) => {
@@ -47,7 +48,11 @@ test("real Gateway converges REST navigation and binary live state in the Vue pa
   expect(initial.url).toBe("http://localhost:3101/");
 
   await page.goto(`/workspace/chats/${threadId}`);
+  const firstSocketPromise = page.waitForEvent("websocket", (socket) =>
+    socket.url().includes(`/api/threads/${threadId}/browser/stream`),
+  );
   await page.getByRole("button", { name: "Open browser panel" }).click();
+  const firstSocket = await firstSocketPromise;
 
   const panel = page.getByTestId("browser-panel");
   await expect(panel).toBeVisible();
@@ -70,13 +75,151 @@ test("real Gateway converges REST navigation and binary live state in the Vue pa
     timeout: 30_000,
   });
 
+  const firstClosed = firstSocket.waitForEvent("close");
   await panel.getByTitle("Stop live control").click();
+  await firstClosed;
   // 上游两态：文案恒为 Live，静态态靠 variant / title 区分。
   await expect(panel.getByTestId("browser-mode")).toHaveAttribute(
     "data-variant",
     "ghost",
   );
   await expect(panel.getByTitle("Take live control")).toBeVisible();
+  // Stopping control preserves a live Blob frame until a newer screenshot replaces it.
+  const frozenFrame = await panel.getByRole("img").getAttribute("src");
+  expect(frozenFrame).toMatch(/^blob:/);
+  const frozen = await panel.getByRole("img").evaluate(async (image) => {
+    const response = await fetch((image as HTMLImageElement).src);
+    return {
+      ok: response.ok,
+      type: response.headers.get("content-type"),
+      bytes: Array.from(new Uint8Array(await response.arrayBuffer())),
+    };
+  });
+  expect(frozen.ok).toBe(true);
+  expect(frozen.type).toBe("image/jpeg");
+  expect(frozen.bytes.length).toBeGreaterThan(3);
+  expect(frozen.bytes.slice(0, 2)).toEqual([0xff, 0xd8]);
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toHaveCount(0);
+  const reopenedSocketPromise = page.waitForEvent("websocket", (socket) =>
+    socket.url().includes(`/api/threads/${threadId}/browser/stream`),
+  );
+  await page.getByRole("button", { name: "Open browser panel" }).click();
+  const reopenedSocket = await reopenedSocketPromise;
+  await expect(panel.getByTestId("browser-mode")).toHaveText("Live", {
+    timeout: 30_000,
+  });
+  await expect(panel.getByRole("img")).toHaveAttribute("src", /^blob:/, {
+    timeout: 30_000,
+  });
+  const reopenedClosed = reopenedSocket.waitForEvent("close");
+  await panel.getByTitle("Stop live control").click();
+  await reopenedClosed;
+
+  // Omitting frame_format negotiates the supported legacy JSON/base64 transport.
+  const legacy = await page.evaluate(
+    ({ id, gatewayPort }) =>
+      new Promise<{ jpeg: boolean; closeCode?: number }>((resolve) => {
+        const socket = new WebSocket(
+          `ws://localhost:${gatewayPort}/api/threads/${id}/browser/stream`,
+        );
+        const timer = setTimeout(() => {
+          socket.close();
+          resolve({ jpeg: false });
+        }, 30_000);
+        socket.onmessage = (event) => {
+          if (typeof event.data !== "string") return;
+          const message = JSON.parse(event.data) as {
+            type?: string;
+            data?: string;
+          };
+          if (message.type !== "frame" || !message.data) return;
+          const bytes = atob(message.data);
+          clearTimeout(timer);
+          socket.close();
+          resolve({
+            jpeg:
+              bytes.length > 3 &&
+              bytes.charCodeAt(0) === 0xff &&
+              bytes.charCodeAt(1) === 0xd8,
+          });
+        };
+        socket.onclose = (event) => {
+          clearTimeout(timer);
+          resolve({ jpeg: false, closeCode: event.code });
+        };
+      }),
+    {
+      id: threadId,
+      gatewayPort: process.env.E2E_BROWSER_GATEWAY_PORT ?? "8011",
+    },
+  );
+  expect(legacy).toEqual({ jpeg: true });
+
+  // A different authenticated principal cannot attach to this retained browser.
+  // WebSocket upgrades reject before accept, which Chromium reports as 1006.
+  const baseURL = new URL(page.url()).origin;
+  for (const authenticated of [false, true]) {
+    const outsider = await browser.newContext({ baseURL });
+    try {
+      if (authenticated) {
+        const registered = await outsider.request.post(
+          "/api/v1/auth/register",
+          {
+            data: {
+              email: `e2e-m6-outsider-${Date.now()}@example.com`,
+              password: "very-strong-password-123",
+            },
+          },
+        );
+        expect(registered.status(), await registered.text()).toBe(201);
+      }
+      const outsiderPage = await outsider.newPage();
+      await outsiderPage.goto("/");
+      const denied = await outsiderPage.evaluate(
+        ({ id, gatewayPort }) =>
+          new Promise<{
+            opened: boolean;
+            frames: number;
+            timedOut: boolean;
+            code: number;
+          }>((resolve) => {
+            let opened = false;
+            let frames = 0;
+            const socket = new WebSocket(
+              `ws://localhost:${gatewayPort}/api/threads/${id}/browser/stream?frame_format=binary`,
+            );
+            const timeout = setTimeout(() => {
+              socket.close();
+              resolve({ opened, frames, timedOut: true, code: 0 });
+            }, 10_000);
+            socket.onopen = () => {
+              opened = true;
+            };
+            socket.onmessage = () => {
+              frames++;
+            };
+            socket.onclose = (event) => {
+              clearTimeout(timeout);
+              resolve({ opened, frames, timedOut: false, code: event.code });
+            };
+          }),
+        {
+          id: threadId,
+          gatewayPort: process.env.E2E_BROWSER_GATEWAY_PORT ?? "8011",
+        },
+      );
+      expect(denied).toMatchObject({
+        opened: false,
+        frames: 0,
+        timedOut: false,
+      });
+      expect([1006, authenticated ? 4404 : 4401]).toContain(denied.code);
+    } finally {
+      await outsider.close();
+    }
+  }
+
   const restResponse = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/threads/${threadId}/browser/navigate`) &&

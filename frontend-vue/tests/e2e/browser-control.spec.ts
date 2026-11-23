@@ -159,7 +159,7 @@ test.describe("Vue browser control", () => {
       .toEqual([{ type: "navigate", url: "https://next.example/path" }]);
   });
 
-  test("maps pointer/wheel and forwards keydown plus IME exactly once", async ({
+  test("maps pointer/wheel and forwards keydown once while preserving local IME", async ({
     page,
   }) => {
     const browser = await prepareBrowser(page);
@@ -187,6 +187,13 @@ test.describe("Vue browser control", () => {
         new CompositionEvent("compositionstart", { bubbles: true }),
       );
       element.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          bubbles: true,
+          key: "Enter",
+          isComposing: true,
+        }),
+      );
+      element.dispatchEvent(
         new CompositionEvent("compositionend", { bubbles: true, data: "你" }),
       );
     });
@@ -200,15 +207,27 @@ test.describe("Vue browser control", () => {
     expect(clicks).toHaveLength(1);
     expect(clicks[0]?.nx).toBeCloseTo(0.5, 1);
     expect(clicks[0]?.ny).toBeCloseTo(0.5, 1);
-    expect(browser.clientMessages.some((item) => item.type === "move")).toBe(
-      true,
-    );
+    // Current React forwards click/wheel/key input; pointer motion is local.
+    expect(
+      browser.clientMessages.filter((item) => item.type === "move"),
+    ).toHaveLength(0);
     expect(
       browser.clientMessages.filter(
         (item) => item.type === "text" && item.text === "a",
       ),
     ).toHaveLength(1);
-    expect(browser.clientMessages.at(-1)).toEqual({ type: "text", text: "你" });
+    await page.keyboard.press("ArrowRight");
+    await expect
+      .poll(() => browser.clientMessages.at(-1))
+      .toEqual({ type: "key", key: "ArrowRight" });
+    expect(
+      browser.clientMessages.filter((item) => item.type === "text"),
+    ).toEqual([{ type: "text", text: "a" }]);
+    expect(
+      browser.clientMessages.filter(
+        (item) => item.type === "key" && item.key === "Enter",
+      ),
+    ).toHaveLength(0);
   });
 
   test("uses authoritative REST results in Static mode and keeps failed navigation retryable", async ({
@@ -256,10 +275,10 @@ test.describe("Vue browser control", () => {
       .getByPlaceholder("Enter a URL and press Enter")
       .fill("https://fallback.example");
     await panel.getByPlaceholder("Enter a URL and press Enter").press("Enter");
-    await expect(panel.getByRole("alert")).toContainText(
-      "Browser navigation failed",
-    );
-    await panel.getByLabel("Retry navigation").click();
+    await expect(
+      page.getByText("Browser navigation failed", { exact: true }),
+    ).toBeVisible();
+    await panel.getByPlaceholder("Enter a URL and press Enter").press("Enter");
     await expect(panel.getByRole("img", { name: "REST title" })).toBeVisible();
     await expect(
       panel.getByPlaceholder("Enter a URL and press Enter"),

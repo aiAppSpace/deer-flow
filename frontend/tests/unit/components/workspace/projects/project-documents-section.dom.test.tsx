@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, rs } from "@rstest/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   cleanup,
   fireEvent,
@@ -52,6 +53,8 @@ const mocks = rs.hoisted(() => {
     threadsLoading: false,
     fetchNextThreadsPage: rs.fn(),
     infiniteThreadsParams: undefined as unknown,
+    realThreads: false,
+    fetchThreads: rs.fn<typeof fetch>(),
     MockContentMissingError,
   };
 });
@@ -140,18 +143,29 @@ rs.mock("@/core/projects", () => {
   };
 });
 
-rs.mock("@/core/threads/hooks", () => ({
-  useInfiniteThreads: (params: unknown) => {
-    mocks.infiniteThreadsParams = params;
-    return {
-      data: { pages: mocks.threadsPages },
-      isLoading: mocks.threadsLoading,
-      hasNextPage: mocks.threadsHasNextPage,
-      isFetchingNextPage: false,
-      fetchNextPage: mocks.fetchNextThreadsPage,
-    };
-  },
-}));
+rs.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetchThreads }));
+rs.mock("@/core/api", () => ({ getAPIClient: () => ({}) }));
+rs.mock("@/core/config", () => ({ getBackendBaseURL: () => "" }));
+
+rs.mock("@/core/threads/hooks", () => {
+  const actual = rs.requireActual<typeof ThreadHooks>("@/core/threads/hooks");
+  return {
+    useInfiniteThreads: (
+      ...args: Parameters<typeof actual.useInfiniteThreads>
+    ) => {
+      if (mocks.realThreads) return actual.useInfiniteThreads(...args);
+      const [params] = args;
+      mocks.infiniteThreadsParams = params;
+      return {
+        data: { pages: mocks.threadsPages },
+        isLoading: mocks.threadsLoading,
+        hasNextPage: mocks.threadsHasNextPage,
+        isFetchingNextPage: false,
+        fetchNextPage: mocks.fetchNextThreadsPage,
+      };
+    },
+  };
+});
 
 rs.mock("@/env", () => ({
   env: { NEXT_PUBLIC_STATIC_WEBSITE_ONLY: "false" },
@@ -194,6 +208,7 @@ import type {
   ProjectThread,
   ProjectThreadFileGroup,
 } from "@/core/projects/types";
+import type * as ThreadHooks from "@/core/threads/hooks";
 import type { AgentThread } from "@/core/threads/types";
 
 function Wrapper({ children }: PropsWithChildren) {
@@ -252,6 +267,8 @@ function makeAgentThread(overrides: Record<string, unknown> = {}): AgentThread {
 }
 
 beforeEach(() => {
+  mocks.realThreads = false;
+  mocks.fetchThreads.mockReset();
   mocks.documents = [];
   mocks.documentsTotal = 0;
   mocks.documentsHasNextPage = false;
@@ -272,6 +289,48 @@ afterEach(() => {
 });
 
 describe("ProjectDocumentsSection", () => {
+  it("loads attach candidates only while open and refreshes after a closed invalidation", async () => {
+    mocks.realThreads = true;
+    mocks.documents = [makeDocument()];
+    mocks.fetchThreads.mockImplementation(async () =>
+      Response.json([makeAgentThread()]),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <ProjectDocumentsSection project={makeProject()} threads={[]} />
+      </QueryClientProvider>,
+      { wrapper: Wrapper },
+    );
+    try {
+      expect(mocks.fetchThreads).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: /Attach to chat/ }));
+      await screen.findByRole("button", { name: "Chat" });
+      expect(mocks.fetchThreads).toHaveBeenCalledTimes(1);
+      expect(mocks.fetchThreads).toHaveBeenLastCalledWith(
+        "/api/threads/search",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ archived: false, limit: 50, offset: 0 }),
+        }),
+      );
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Cancel",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await client.invalidateQueries();
+      expect(mocks.fetchThreads).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("button", { name: /Attach to chat/ }));
+      await waitFor(() => expect(mocks.fetchThreads).toHaveBeenCalledTimes(2));
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  });
   it("renders shelf rows with the provenance badge for thread-sourced documents", () => {
     mocks.documents = [
       makeDocument({
@@ -712,6 +771,58 @@ describe("ProjectDocumentsSection", () => {
         { wrapper: Wrapper },
       );
       expect(screen.getByText("Untitled")).toBeDefined();
+    },
+  );
+});
+
+describe("conversation file promotion focus owner", () => {
+  it.each(["cancel", "close", "save"] as const)(
+    "returns to the exact file entry after %s",
+    async (action) => {
+      mocks.threadFileGroups = [
+        {
+          thread_id: "thread-9",
+          display_name: "Report chat",
+          updated_at: "2026-09-09T00:00:00Z",
+          truncated: false,
+          files: ["one.txt", "two.txt"].map((name) => ({
+            kind: "output",
+            name,
+            size_bytes: 12,
+            modified_at: "2026-09-09T00:00:00Z",
+            artifact_url: `/api/threads/thread-9/artifacts/mnt/user-data/outputs/${name}`,
+          })),
+        },
+      ];
+      mocks.promoteMutate.mockImplementation((_input, callbacks) =>
+        callbacks.onSuccess({ document: makeDocument({ name: "two.txt" }) }),
+      );
+      render(
+        <ProjectDocumentsSection project={makeProject()} threads={THREADS} />,
+        { wrapper: Wrapper },
+      );
+      const entries = screen.getAllByRole("button", {
+        name: "Save to project",
+      });
+      entries[1]!.focus();
+      fireEvent.click(entries[1]!);
+      const dialog = screen.getByRole("dialog", { name: "Save to project" });
+      expect(within(dialog).getByLabelText("Shelf name")).toHaveProperty(
+        "value",
+        "two.txt",
+      );
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name:
+            action === "cancel"
+              ? "Cancel"
+              : action === "close"
+                ? "Close"
+                : "Save to project",
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      await waitFor(() => expect(document.activeElement).toBe(entries[1]));
     },
   );
 });

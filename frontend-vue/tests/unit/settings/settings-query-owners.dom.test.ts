@@ -2,7 +2,7 @@
   【文件职责】     固定Memory/Skills/MCP 的唯一 Vue Query owner、权限与精确 mutation。
   【架构位置】     Vue composable DOM test
   【主要导出】     无；Vitest cases
-  【依赖关系】     useMemory · useSkillSettings · useMCPConfig · Vue Query
+  【依赖关系】     useMemory · useSkillSettings · useScopedMCPConfig · Vue Query
   【边界与注意】   不做 optimistic 成功；成功响应与 authoritative re-read 才更新同一 key。
 */
 
@@ -11,14 +11,13 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, ref } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { useMCPConfig } from "@/composables/useMCPConfig";
+import { useScopedMCPConfig } from "@/composables/useScopedMCPConfig";
 import { useMemory } from "@/composables/useMemory";
 import { useSkillSettings } from "@/composables/useSkillSettings";
 import {
   SKILLS_QUERY_KEY,
   useSkillsCatalog,
 } from "@/composables/useSkillsCatalog";
-import { MCP_CONFIG_QUERY_KEY } from "@/core/mcp/query-keys";
 import { MEMORY_QUERY_KEY } from "@/core/memory/query-keys";
 import type { UserMemory } from "@/core/memory/types";
 
@@ -34,6 +33,11 @@ const skillsApi = vi.hoisted(() => ({
   loadSkills: vi.fn(),
   enableSkill: vi.fn(),
 }));
+const mcpUser = ref({ id: "settings-owner", system_role: "admin" });
+vi.mock("@/composables/useCapabilities", () => ({
+  useCapabilityUser: () => mcpUser,
+}));
+
 const mcpApi = vi.hoisted(() => ({
   loadMCPConfig: vi.fn(),
   updateMCPServerState: vi.fn(),
@@ -58,6 +62,7 @@ const memory: UserMemory = {
     workContext: { summary: "", updatedAt: "" },
     personalContext: { summary: "", updatedAt: "" },
     topOfMind: { summary: "", updatedAt: "" },
+    cognitiveStyle: { summary: "", updatedAt: "" },
   },
   history: {
     recentMonths: { summary: "", updatedAt: "" },
@@ -96,6 +101,36 @@ function host(setupOwner: () => unknown) {
 afterEach(() => vi.clearAllMocks());
 
 describe("memory query owner", () => {
+  it("does not publish a late mutation response after disposal even when transport ignores abort", async () => {
+    memoryApi.loadMemory.mockResolvedValue(memory);
+    let finish!: (value: UserMemory) => void;
+    memoryApi.clearMemory.mockReturnValue(
+      new Promise<UserMemory>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const mounted = host(useMemory);
+    await flushPromises();
+    const owner = mounted.owner as ReturnType<typeof useMemory>;
+    const settled = owner.clear.mutateAsync().catch((error: unknown) => error);
+    await vi.waitFor(() =>
+      expect(memoryApi.clearMemory).toHaveBeenCalledOnce(),
+    );
+    const signal = memoryApi.clearMemory.mock.calls[0]![0]
+      .signal as AbortSignal;
+    mounted.wrapper.unmount();
+    mounted.queryClient.clear();
+    mounted.queryClient.setQueryData(MEMORY_QUERY_KEY, {
+      ...memory,
+      revision: 2,
+    });
+    expect(signal.aborted).toBe(true);
+    finish({ ...memory, revision: 1 });
+    expect(await settled).toMatchObject({ name: "AbortError" });
+    expect(mounted.queryClient.getQueryData(MEMORY_QUERY_KEY)).toMatchObject({
+      revision: 2,
+    });
+  });
   it("uses one key, sends explicit zero, preserves response metadata, and aborts on dispose", async () => {
     const querySignal = ref<AbortSignal | null>(null);
     memoryApi.loadMemory.mockImplementation(
@@ -206,18 +241,23 @@ describe("skills settings owner", () => {
 
 describe("MCP settings owner", () => {
   it("does not GET or PATCH for a known non-admin", async () => {
-    const mounted = host(() => useMCPConfig({ enabled: ref(false) }));
+    mcpUser.value = { id: "settings-member", system_role: "user" };
+    const mounted = host(() => useScopedMCPConfig("deployment"));
     await flushPromises();
     expect(mcpApi.loadMCPConfig).not.toHaveBeenCalled();
-    const owner = mounted.owner as ReturnType<typeof useMCPConfig>;
-    await expect(owner.toggle("server-a", false)).rejects.toMatchObject({
-      name: "SettingsPermissionError",
-    });
+    const owner = mounted.owner as ReturnType<typeof useScopedMCPConfig>;
+    await expect(
+      owner.mutation.mutateAsync({
+        operation: "toggle",
+        serverName: "server-a",
+        enabled: false,
+      }),
+    ).rejects.toThrow("Admin");
     expect(mcpApi.updateMCPServerState).not.toHaveBeenCalled();
     mounted.wrapper.unmount();
   });
 
-  it("sends one admin PATCH, locks duplicates, and re-reads the real config", async () => {
+  it("sends one scoped admin PATCH and re-reads the real config", async () => {
     const before = {
       mcp_servers: {
         "server-a": { enabled: true, description: "Server A" },
@@ -230,22 +270,39 @@ describe("MCP settings owner", () => {
     };
     mcpApi.loadMCPConfig.mockResolvedValueOnce(before).mockResolvedValue(after);
     mcpApi.updateMCPServerState.mockResolvedValue(after);
-    const mounted = host(() => useMCPConfig({ enabled: ref(true) }));
+    mcpUser.value = { id: "settings-owner", system_role: "admin" };
+    const mounted = host(() => useScopedMCPConfig("deployment"));
     await flushPromises();
-    const owner = mounted.owner as ReturnType<typeof useMCPConfig>;
-    const first = owner.toggle("server-a", false);
-    const duplicate = owner.toggle("server-a", false);
+    const owner = mounted.owner as ReturnType<typeof useScopedMCPConfig>;
+    const first = owner.mutation.mutateAsync({
+      operation: "toggle",
+      serverName: "server-a",
+      enabled: false,
+    });
     await first;
-    await duplicate;
     expect(mcpApi.updateMCPServerState).toHaveBeenCalledTimes(1);
     expect(mcpApi.updateMCPServerState).toHaveBeenCalledWith(
       "server-a",
       false,
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect.objectContaining({
+        scope: "deployment",
+        signal: expect.any(AbortSignal),
+      }),
     );
-    expect(mounted.queryClient.getQueryData(MCP_CONFIG_QUERY_KEY)).toEqual(
-      after,
+    expect(mcpApi.loadMCPConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: "deployment",
+        signal: expect.any(AbortSignal),
+      }),
     );
+    expect(mcpApi.loadMCPConfig).toHaveBeenCalledTimes(2);
+    expect(
+      mounted.queryClient.getQueryData([
+        "mcpConfig",
+        "deployment",
+        "settings-owner",
+      ]),
+    ).toEqual(after);
     mounted.wrapper.unmount();
   });
 });

@@ -28,7 +28,7 @@ export function PluginPage({
     : t.extensions.pageUnavailable;
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      <div className="text-muted-foreground flex h-14 shrink-0 items-center gap-3 border-b px-4 text-xs md:px-8">
+      <div className="text-muted-foreground flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b px-4 text-xs md:px-8">
         <SidebarTrigger className="md:hidden" />
         <span>{t.breadcrumb.workspace}</span>
         <span>/</span>

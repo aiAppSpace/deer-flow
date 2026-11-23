@@ -3,27 +3,32 @@
   【文件职责】     通过 Vue Query 列出、编辑和删除 DeerFlow custom agents。
   【架构位置】     L3 application page
   【主要导出】     默认 agents page
-  【依赖关系】     useAgents · useModels · workspace features · Agent components
-  【边界与注意】   feature ready+enabled 才查询；Vue Query 是唯一 server-state owner。
-
-                   flag 关掉时**整页被替换**，页面外壳（标题、页面说明、新建入口）
-                   一起消失——上游把这一支放在 `app/workspace/agents/layout.tsx` 里，
-                   于是它天然替换掉整个页面。原先本仓是「外壳照旧 + 内容区塞一段
-                   带边框的提示」，两边在可访问性树上因此差了 7 行、几何上差了
-                   5 项（居中空态 vs 页面内一段提示）。
+  【依赖关系】     useAgents · useModels · Agent components
+  【边界与注意】   agents.vue 父路由独占能力门禁，允许后才挂载目录；
+                   Vue Query 是唯一 server-state owner。能力撤销会卸载整个目录，
+                   包括导入和设置对话框，不在目录再建一个 feature observer。
 */
-import { Plus } from "lucide-vue-next";
+import { Bot, Plus, Upload } from "lucide-vue-next";
 import { computed, ref } from "vue";
 
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import AgentCard from "@/components/workspace/agents/AgentCard.vue";
 import AgentSettingsDialog from "@/components/workspace/agents/AgentSettingsDialog.vue";
-import AgentsFeatureDisabled from "@/components/workspace/agents/AgentsFeatureDisabled.vue";
 import { useAgents } from "@/composables/useAgents";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 import { useModels } from "@/composables/useModels";
-import { useAgentsApiEnabled } from "@/composables/useWorkspaceFeatures";
 import type { Agent, UpdateAgentRequest } from "@/core/agents/types";
+import { packageSuggestedName } from "@/core/agents/package-download";
+import { useWorkspaceAsyncOwner } from "@/composables/useWorkspaceAsyncOwner";
 
 definePageMeta({ layout: "workspace" });
 const { $i18n } = useNuxtApp();
@@ -35,20 +40,14 @@ const { $i18n } = useNuxtApp();
   它是「这一页现在有问题」的状态。
 */
 const toast = useWorkspaceToast();
-const features = useAgentsApiEnabled();
-const featureEnabled = computed(
-  () => features.loaded.value && features.agentsApiEnabled.value,
-);
-const featureDisabled = computed(
-  () => features.loaded.value && !features.agentsApiEnabled.value,
-);
-const agentCatalog = useAgents({ enabled: featureEnabled });
+const captureOwner = useWorkspaceAsyncOwner();
+const agentCatalog = useAgents({ enabled: true });
 const editing = ref<Agent | null>(null);
 /*
   **模型清单等到对话框真的打开才取**（wave 136）。
 
   上游把 `useModels()` 放在 `agent-settings-dialog.tsx:58` 里，也就是只有编辑对话框
-  挂载时才发这个请求；本仓原来写的是 `enabled: featureEnabled`，**进画廊页就取**。
+  挂载时才发这个请求；父路由允许目录挂载不代表用户已经打开编辑。
   wave 135 第一次给这一屏做对照时台账当场报出
   `requestsOnlyVue: GET /api/models`——只是来浏览画廊的人不需要模型清单。
 
@@ -61,9 +60,58 @@ const editing = ref<Agent | null>(null);
   再打开时直接命中缓存、不会重发。
 */
 const modelCatalog = useModels({
-  enabled: computed(() => featureEnabled.value && editing.value !== null),
+  enabled: computed(() => editing.value !== null),
 });
 const actionError = ref("");
+const fileInput = ref<HTMLInputElement | null>(null);
+const packageDocument = ref<unknown>(null);
+const importName = ref("");
+let importGeneration = 0;
+function closeImport() {
+  importGeneration++;
+  packageDocument.value = null;
+  importName.value = "";
+}
+async function importFile(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  target.value = "";
+  if (!file) return;
+  const generation = ++importGeneration;
+  const ownsWorkspace = captureOwner();
+  const isCurrent = () => ownsWorkspace() && generation === importGeneration;
+  try {
+    const parsed: unknown = JSON.parse(await file.text());
+    if (!isCurrent()) return;
+    packageDocument.value = parsed;
+    importName.value = packageSuggestedName(parsed);
+  } catch {
+    if (!isCurrent()) return;
+    toast.error($i18n.t.value.agents.importInvalidFile);
+  }
+}
+async function importPackage() {
+  if (
+    packageDocument.value === null ||
+    agentCatalog.importPackage.isPending.value
+  )
+    return;
+  const generation = importGeneration;
+  const ownsWorkspace = captureOwner();
+  const isCurrent = () => ownsWorkspace() && generation === importGeneration;
+  try {
+    await agentCatalog.importPackage.mutateAsync({
+      agentPackage: packageDocument.value,
+      name: importName.value.trim() || undefined,
+    });
+    if (!isCurrent()) return;
+    toast.success($i18n.t.value.agents.importSuccess);
+    closeImport();
+  } catch (error) {
+    if (!isCurrent()) return;
+    toast.error(error instanceof Error ? error.message : String(error));
+  }
+}
 
 function message(error: unknown, fallback: string) {
   return error instanceof Error && error.message.trim()
@@ -97,35 +145,37 @@ function beginEdit(agent: Agent) {
 async function saveEdit(request: UpdateAgentRequest) {
   if (!editing.value || pending.value) return;
   actionError.value = "";
+  const isCurrent = captureOwner();
   try {
     await agentCatalog.update.mutateAsync({ agent: editing.value, request });
+    if (!isCurrent()) return;
     toast.success($i18n.t.value.agents.settingsSaved);
     editing.value = null;
   } catch (cause) {
+    if (!isCurrent()) return;
     actionError.value = message(cause, $i18n.t.value.agents.settingsSaveFailed);
   }
 }
 
 async function remove(agent: Agent) {
-  if (
-    pending.value ||
-    !globalThis.confirm($i18n.t.value.agents.deleteConfirm)
-  ) {
+  if (pending.value) {
     return;
   }
   actionError.value = "";
+  const isCurrent = captureOwner();
   try {
     await agentCatalog.remove.mutateAsync(agent);
+    if (!isCurrent()) return;
     toast.success($i18n.t.value.agents.deleteSuccess);
   } catch (cause) {
+    if (!isCurrent()) return;
     actionError.value = message(cause, $i18n.t.value.agents.deleteFailed);
   }
 }
 </script>
 
 <template>
-  <AgentsFeatureDisabled v-if="featureDisabled" />
-  <div v-else class="size-full">
+  <div class="size-full">
     <section class="flex size-full flex-col">
       <header
         class="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-6"
@@ -134,7 +184,7 @@ async function remove(agent: Agent) {
           <h1 class="text-xl font-semibold">
             {{ $i18n.t.value.agents.title }}
           </h1>
-          <p class="text-muted-foreground text-sm">
+          <p class="text-muted-foreground mt-0.5 text-sm">
             {{ $i18n.t.value.agents.description }}
           </p>
         </div>
@@ -144,7 +194,6 @@ async function remove(agent: Agent) {
           （`agent-gallery.tsx:31`）：default 尺寸 h-9、`text-sm`、**带一个加号图标**。
           手写的 `px-3 py-2` 那一版没有图标、字号也大一档，wave 135 第一次让这一屏
           进取样面时几何档当场报出 `width Δ-22.6 / height Δ4 / fontSize 16px vs 14px`。
-          （同一份代码库里 `SkillSettings.vue` 那颗「创建技能」早就记着同一条教训。）
 
           **元素是 `<a>` 而不是 `<button>`**：这是一个「点了就跳到某个 URL」的控件，
           业界主流写法是链接——可以中键新标签页打开、可以复制链接、读屏器念成链接。
@@ -160,14 +209,24 @@ async function remove(agent: Agent) {
           会被 `prettier --write` 格式化回来。**可访问名不受影响**（两边都是 `New Agent`），
           所以场景那边改用 `role: "heading"` 的锚点，这里保持惯用写法。
         -->
-        <NuxtLink
-          v-if="featureEnabled"
-          to="/workspace/agents/new"
-          :class="buttonVariants()"
-        >
-          <Plus class="mr-1.5 size-4" />
-          {{ $i18n.t.value.agents.newAgent }}
-        </NuxtLink>
+        <div class="flex max-w-full flex-wrap items-center gap-2">
+          <input
+            ref="fileInput"
+            class="hidden"
+            type="file"
+            accept="application/json,.json"
+            @change="importFile"
+          />
+          <Button variant="outline" @click="fileInput?.click()"
+            ><Upload class="mr-1.5 size-4" />{{
+              $i18n.t.value.agents.importAgent
+            }}</Button
+          >
+          <NuxtLink to="/workspace/agents/new" :class="buttonVariants()">
+            <Plus class="mr-1.5 size-4" />
+            {{ $i18n.t.value.agents.newAgent }}
+          </NuxtLink>
+        </div>
       </header>
       <div class="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
         <!--
@@ -183,7 +242,7 @@ async function remove(agent: Agent) {
           上游补了 `role="status"` 与同名的 `agents.loading`。
         -->
         <p
-          v-if="!features.loaded.value || agentCatalog.loading.value"
+          v-if="agentCatalog.loading.value"
           role="status"
           class="text-muted-foreground flex h-40 items-center justify-center text-sm"
         >
@@ -197,7 +256,34 @@ async function remove(agent: Agent) {
           {{ listError || actionError }}
         </p>
         <div
-          v-if="featureEnabled && !agentCatalog.loading.value && !listError"
+          v-if="
+            !agentCatalog.loading.value &&
+            !listError &&
+            !agentCatalog.agents.value.length
+          "
+          class="flex h-64 flex-col items-center justify-center gap-3 text-center"
+        >
+          <div
+            class="bg-muted flex size-14 items-center justify-center rounded-full"
+          >
+            <Bot class="text-muted-foreground size-7" />
+          </div>
+          <div>
+            <p class="font-medium">{{ $i18n.t.value.agents.emptyTitle }}</p>
+            <p class="text-muted-foreground mt-1 text-sm">
+              {{ $i18n.t.value.agents.emptyDescription }}
+            </p>
+          </div>
+          <NuxtLink
+            to="/workspace/agents/new"
+            :class="buttonVariants({ variant: 'outline', class: 'mt-2' })"
+            ><Plus class="mr-1.5 size-4" />{{
+              $i18n.t.value.agents.newAgent
+            }}</NuxtLink
+          >
+        </div>
+        <div
+          v-if="!agentCatalog.loading.value && !listError"
           class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
           <AgentCard
@@ -208,18 +294,51 @@ async function remove(agent: Agent) {
             @settings="beginEdit"
             @delete="remove"
           />
-          <div
-            v-if="agentCatalog.agents.value.length === 0"
-            class="text-muted-foreground col-span-full rounded-xl border p-8 text-center"
-          >
-            <strong class="text-foreground block">{{
-              $i18n.t.value.agents.emptyTitle
-            }}</strong>
-            {{ $i18n.t.value.agents.emptyDescription }}
-          </div>
         </div>
       </div>
     </section>
+
+    <Dialog
+      :open="packageDocument !== null"
+      @update:open="!$event && closeImport()"
+      ><DialogContent :close-label="$i18n.t.value.primitives.close"
+        ><DialogHeader
+          ><DialogTitle>{{ $i18n.t.value.agents.importTitle }}</DialogTitle
+          ><DialogDescription>{{
+            $i18n.t.value.agents.importDescription
+          }}</DialogDescription></DialogHeader
+        >
+        <div class="grid gap-2">
+          <label for="agent-import-name" class="text-sm font-medium">{{
+            $i18n.t.value.agents.importName
+          }}</label
+          ><Input
+            id="agent-import-name"
+            v-model="importName"
+            :placeholder="$i18n.t.value.agents.nameStepPlaceholder"
+          />
+        </div>
+        <DialogFooter
+          ><Button
+            variant="outline"
+            :disabled="agentCatalog.importPackage.isPending.value"
+            @click="closeImport"
+            >{{ $i18n.t.value.common.cancel }}</Button
+          ><Button
+            :disabled="
+              agentCatalog.importPackage.isPending.value ||
+              !importName.trim().length
+            "
+            @click="importPackage"
+            >{{
+              agentCatalog.importPackage.isPending.value
+                ? $i18n.t.value.common.loading
+                : $i18n.t.value.agents.importAgent
+            }}</Button
+          ></DialogFooter
+        ></DialogContent
+      ></Dialog
+    >
 
     <AgentSettingsDialog
       v-if="editing"

@@ -1,10 +1,8 @@
 /*
-  【文件职责】     以纯函数决定路由是否需要登录跳转。
-  【架构位置】     L3
-  【主要导出】     decideAuthNavigation · buildLoginLocation · isEnabledRuntimeFlag
-  【依赖关系】     ./next-path（回跳校验）；被全局 middleware 与 node 单测调用
-  【边界与注意】   M0 只验证 auth-disabled；真实 session 接线属于后续里程碑。
-*/
+ * L3 route decisions. Protected workspace and private artifact targets require
+ * a session unless authentication is explicitly disabled. Return paths share
+ * next-path validation with login and callback consumers.
+ */
 
 import { validateAuthNextPath } from "./next-path";
 

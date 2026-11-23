@@ -16,6 +16,46 @@ function uploaded(filename: string, size: number) {
 }
 
 describe("reusable attachment submission", () => {
+  it("never caches a late upload response after its owner has aborted", async () => {
+    const file = new File(["one"], "one.txt");
+    const cache = createSubmissionFileCache();
+    const controller = new AbortController();
+    let complete!: (
+      value: Awaited<
+        ReturnType<
+          NonNullable<Parameters<typeof prepareSubmissionFiles>[0]["upload"]>
+        >
+      >,
+    ) => void;
+    const upload = vi.fn(
+      () =>
+        new Promise<Parameters<typeof complete>[0]>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const pending = prepareSubmissionFiles({
+      threadId: "thread-1",
+      files: [file],
+      cache,
+      upload,
+      signal: controller.signal,
+    });
+    const rejected = expect(pending).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    controller.abort();
+    complete({
+      success: true,
+      files: [uploaded("one.txt", file.size)],
+      message: "ok",
+      skipped_files: [],
+    });
+    await rejected;
+    expect(cache.get("thread-1")?.has(file)).toBe(false);
+    expect(upload).toHaveBeenCalledWith("thread-1", [file], {
+      signal: controller.signal,
+    });
+  });
   it("uploads to the final sidecar thread and returns message descriptors", async () => {
     const file = new File(["hello"], "notes.txt");
     const upload = vi.fn(async () => ({

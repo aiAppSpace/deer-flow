@@ -1,6 +1,6 @@
 <!--
   【文件职责】     独立视窗里的产物阅读器：头部信息、截断提示、内容区。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认 ArtifactViewer 组件
   【依赖关系】     composables/useStandaloneArtifactContent · ArtifactPreview · ui/button
   【边界与注意】   - 打不开也要**给得出出路**：加载失败时不是一句「失败」了事，

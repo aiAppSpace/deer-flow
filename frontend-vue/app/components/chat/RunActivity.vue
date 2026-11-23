@@ -59,7 +59,7 @@ onBeforeUnmount(() => {
     data-testid="run-activity"
     class="text-muted-foreground flex items-center gap-2 text-sm"
   >
-    <Clock3 :size="16" />
+    <Clock3 class="size-4" />
     <Shimmer :text="$i18n.t.value.runDuration.working" :duration="1" />
     <span v-if="formatted" aria-hidden="true">({{ formatted }})</span>
   </div>

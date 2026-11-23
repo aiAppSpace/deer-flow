@@ -1,9 +1,5 @@
 import { describe, expect, vi, test } from "vitest";
-import {
-  QueryClient,
-  QueryObserver,
-  type InfiniteData,
-} from "@tanstack/vue-query";
+import { QueryClient, QueryObserver } from "@tanstack/vue-query";
 
 import {
   STOP_THREAD_FINALIZATION_REFETCH_DELAY_MS,
@@ -19,6 +15,7 @@ import {
   getInfiniteThreadsNextPageParam,
   mapInfiniteThreadsCache,
   upsertThreadInInfiniteCache,
+  type InfiniteThreadsData,
 } from "@/core/threads/infinite";
 import type { AgentThread } from "@/core/threads/types";
 
@@ -48,49 +45,36 @@ function makePage(start: number, size: number): AgentThread[] {
   return Array.from({ length: size }, (_, i) => makeThread(`t-${start + i}`));
 }
 
-function makeInfiniteData(pages: AgentThread[][]): InfiniteData<AgentThread[]> {
+function makeInfiniteData(pages: AgentThread[][]): InfiniteThreadsData {
   return {
-    pages,
+    pages: pages.map((threads, index) => ({
+      threads,
+      nextOffset:
+        threads.length === INFINITE_THREADS_PAGE_SIZE
+          ? (index + 1) * INFINITE_THREADS_PAGE_SIZE
+          : null,
+    })),
     pageParams: pages.map((_, i) => i * INFINITE_THREADS_PAGE_SIZE),
   };
 }
 
 describe("getInfiniteThreadsNextPageParam", () => {
-  test("returns next offset when the last page is full", () => {
-    const page1 = makePage(0, INFINITE_THREADS_PAGE_SIZE);
-    expect(getInfiniteThreadsNextPageParam(page1, [page1])).toBe(
-      INFINITE_THREADS_PAGE_SIZE,
-    );
-  });
-
-  test("returns next offset across multiple full pages", () => {
-    const page1 = makePage(0, INFINITE_THREADS_PAGE_SIZE);
-    const page2 = makePage(
-      INFINITE_THREADS_PAGE_SIZE,
-      INFINITE_THREADS_PAGE_SIZE,
-    );
-    expect(getInfiniteThreadsNextPageParam(page2, [page1, page2])).toBe(
-      INFINITE_THREADS_PAGE_SIZE * 2,
-    );
-  });
-
-  test("returns undefined when the last page is short (end of list)", () => {
-    const page1 = makePage(0, INFINITE_THREADS_PAGE_SIZE);
-    const page2 = makePage(INFINITE_THREADS_PAGE_SIZE, 10);
+  test("uses the server cursor independently of local row counts", () => {
     expect(
-      getInfiniteThreadsNextPageParam(page2, [page1, page2]),
+      getInfiniteThreadsNextPageParam({
+        threads: makePage(0, 49),
+        nextOffset: 51,
+      }),
+    ).toBe(51);
+    expect(
+      getInfiniteThreadsNextPageParam({
+        threads: makePage(0, 51),
+        nextOffset: null,
+      }),
     ).toBeUndefined();
-  });
-
-  test("returns undefined when the last page is empty", () => {
-    const page1 = makePage(0, INFINITE_THREADS_PAGE_SIZE);
-    expect(getInfiniteThreadsNextPageParam([], [page1, []])).toBeUndefined();
-  });
-
-  test("respects a custom page size", () => {
-    const page1 = makePage(0, 5);
-    expect(getInfiniteThreadsNextPageParam(page1, [page1], 5)).toBe(5);
-    expect(getInfiniteThreadsNextPageParam(page1, [page1], 10)).toBeUndefined();
+    expect(
+      getInfiniteThreadsNextPageParam({ threads: [], nextOffset: 100 }),
+    ).toBe(100);
   });
 });
 
@@ -111,7 +95,7 @@ describe("fetchInfiniteThreadsPage", () => {
       2,
     );
 
-    expect(page.map((thread) => thread.thread_id)).toEqual([
+    expect(page.threads.map((thread) => thread.thread_id)).toEqual([
       "primary-1",
       "primary-2",
     ]);
@@ -127,7 +111,7 @@ describe("fetchInfiniteThreadsPage", () => {
       limit: 1,
       offset: 2,
     });
-    expect(getInfiniteThreadsNextPageParam(page, [page], 2)).toBe(3);
+    expect(getInfiniteThreadsNextPageParam(page)).toBe(3);
   });
 
   test("keeps sidecar rows when the caller explicitly searches for sidecars", async () => {
@@ -149,8 +133,10 @@ describe("fetchInfiniteThreadsPage", () => {
       2,
     );
 
-    expect(page.map((thread) => thread.thread_id)).toEqual(["sidecar-1"]);
-    expect(getInfiniteThreadsNextPageParam(page, [page], 2)).toBeUndefined();
+    expect(page.threads.map((thread) => thread.thread_id)).toEqual([
+      "sidecar-1",
+    ]);
+    expect(getInfiniteThreadsNextPageParam(page)).toBeUndefined();
   });
 });
 
@@ -170,10 +156,10 @@ describe("mapInfiniteThreadsCache", () => {
         : t,
     );
 
-    expect(updated?.pages[0]?.[0]?.values?.title).toBe("Title a");
-    expect(updated?.pages[1]?.[0]?.thread_id).toBe("c");
-    expect(updated?.pages[1]?.[0]?.values?.title).toBe("renamed");
-    expect(updated?.pages[1]?.[1]?.values?.title).toBe("Title d");
+    expect(updated?.pages[0]?.threads[0]?.values?.title).toBe("Title a");
+    expect(updated?.pages[1]?.threads[0]?.thread_id).toBe("c");
+    expect(updated?.pages[1]?.threads[0]?.values?.title).toBe("renamed");
+    expect(updated?.pages[1]?.threads[1]?.values?.title).toBe("Title d");
   });
 
   test("preserves pageParams", () => {
@@ -198,8 +184,8 @@ describe("filterInfiniteThreadsCache", () => {
       (t) => t.thread_id !== "b",
     );
 
-    expect(filtered?.pages[0]?.map((t) => t.thread_id)).toEqual(["a"]);
-    expect(filtered?.pages[1]?.map((t) => t.thread_id)).toEqual(["c"]);
+    expect(filtered?.pages[0]?.threads.map((t) => t.thread_id)).toEqual(["a"]);
+    expect(filtered?.pages[1]?.threads.map((t) => t.thread_id)).toEqual(["c"]);
   });
 
   test("keeps an emptied page as an empty array (does not drop the page)", () => {
@@ -213,46 +199,23 @@ describe("filterInfiniteThreadsCache", () => {
     );
 
     expect(filtered?.pages).toHaveLength(2);
-    expect(filtered?.pages[0]).toEqual([]);
-    expect(filtered?.pages[1]?.[0]?.thread_id).toBe("b");
+    expect(filtered?.pages[0]?.threads).toEqual([]);
+    expect(filtered?.pages[1]?.threads[0]?.thread_id).toBe("b");
   });
 
-  test("does not regress next offset when an earlier page has been shrunk by a delete", () => {
-    // Simulate two full pages already loaded.
-    const page1 = Array.from({ length: 50 }, (_, i) => ({
-      thread_id: `a${i}`,
-    }));
-    const page2 = Array.from({ length: 50 }, (_, i) => ({
-      thread_id: `b${i}`,
-    }));
-
-    // Offset right after fetching page 2 (this is the value TanStack Query
-    // freezes into pageParams).
-    const offsetAfterPage2 = getInfiniteThreadsNextPageParam(
-      page2 as unknown as AgentThread[],
-      [page1, page2] as unknown as AgentThread[][],
-    );
-    expect(offsetAfterPage2).toBe(100);
-
-    // Now a delete mutation runs filterInfiniteThreadsCache and shrinks
-    // page 1 from 50 to 49 entries. TanStack does NOT re-invoke
-    // getNextPageParam on cache mutations; the previously-computed offset
-    // (100) remains the param for the next fetchNextPage() call, so the
-    // helper is consistent with how the library uses its return value.
-    const shrunkPage1 = page1.slice(0, 49);
-    const recomputed = getInfiniteThreadsNextPageParam(
-      page2 as unknown as AgentThread[],
-      [shrunkPage1, page2] as unknown as AgentThread[][],
-    );
-    // We document the recomputed value for completeness, but in practice
-    // useDeleteThread invalidates the query in onSettled, so pages are
-    // refetched from offset 0 rather than relying on this number.
-    expect(recomputed).toBe(99);
+  test("does not regress the raw cursor when an earlier page shrinks", () => {
+    const data = makeInfiniteData([makePage(0, 50), makePage(50, 50)]);
+    const filtered = filterInfiniteThreadsCache(
+      data,
+      (thread) => thread.thread_id !== "t-0",
+    )!;
+    expect(filtered.pages[0]?.threads).toHaveLength(49);
+    expect(getInfiniteThreadsNextPageParam(filtered.pages[1]!)).toBe(100);
   });
 });
 
 describe("upsertThreadInInfiniteCache", () => {
-  function seedClient(initial?: InfiniteData<AgentThread[]>): QueryClient {
+  function seedClient(initial?: InfiniteThreadsData): QueryClient {
     const client = new QueryClient();
     if (initial) {
       client.setQueryData([...INFINITE_THREADS_QUERY_KEY_PREFIX, {}], initial);
@@ -260,9 +223,7 @@ describe("upsertThreadInInfiniteCache", () => {
     return client;
   }
 
-  function readCache(
-    client: QueryClient,
-  ): InfiniteData<AgentThread[]> | undefined {
+  function readCache(client: QueryClient): InfiniteThreadsData | undefined {
     return client.getQueryData([...INFINITE_THREADS_QUERY_KEY_PREFIX, {}]);
   }
 
@@ -274,18 +235,24 @@ describe("upsertThreadInInfiniteCache", () => {
 
   test("prepends a brand-new thread to the first page", () => {
     const client = seedClient({
-      pages: [[makeThread("a"), makeThread("b")]],
+      pages: [
+        { threads: [makeThread("a"), makeThread("b")], nextOffset: null },
+      ],
       pageParams: [0],
     });
     upsertThreadInInfiniteCache(client, makeThread("new"));
     const cache = readCache(client);
-    expect(cache?.pages[0]?.map((t) => t.thread_id)).toEqual(["new", "a", "b"]);
+    expect(cache?.pages[0]?.threads.map((t) => t.thread_id)).toEqual([
+      "new",
+      "a",
+      "b",
+    ]);
   });
 
   test("merges into the existing entry instead of duplicating it", () => {
     const existing = makeThread("a", "Old title");
     const client = seedClient({
-      pages: [[existing, makeThread("b")]],
+      pages: [{ threads: [existing, makeThread("b")], nextOffset: null }],
       pageParams: [0],
     });
     // Simulate an onCreated upsert that races with a thread already in cache:
@@ -296,45 +263,36 @@ describe("upsertThreadInInfiniteCache", () => {
       status: "busy",
     });
     const cache = readCache(client);
-    const ids = cache?.pages[0]?.map((t) => t.thread_id);
+    const ids = cache?.pages[0]?.threads.map((t) => t.thread_id);
     expect(ids).toEqual(["a", "b"]);
-    expect(cache?.pages[0]?.[0]?.values.title).toBe("Old title");
+    expect(cache?.pages[0]?.threads[0]?.values.title).toBe("Old title");
   });
 
-  /*
-    **插进去之后还要问一次服务端。**
-
-    带 `archived` 过滤的那几份缓存，成员关系是服务端说了算：一条刚建出来的 thread
-    身上没有归档元数据（上游同一处的注释）。上游在这里**只失效、不插**；本仓两样
-    都做，理由写在 `upsertThreadInInfiniteCache` 上——不插的话 `useThreads.upsert()`
-    永远判它是「新行」，这一轮 run 里会一路级联地失效下去
-    （单场景实测：只失效那版 React 4 次 / 本仓 6 次；插 + 失效之后 4 : 4）。
-  */
-  test("插完还会失效带 archived 过滤的那几份，交给服务端确认成员关系", () => {
+  test("leaves both archive-filtered memberships to the server while updating unfiltered lists", () => {
     const client = new QueryClient();
-    const filteredKey = [
+    const keys = [false, true].map((archived) => [
       ...INFINITE_THREADS_QUERY_KEY_PREFIX,
-      { archived: false },
-    ];
-    client.setQueryData(filteredKey, {
-      pages: [[makeThread("a")]],
-      pageParams: [0],
-    });
-    const invalidate = vi.spyOn(client, "invalidateQueries");
-
+      { archived },
+    ]);
+    for (const key of keys)
+      client.setQueryData(
+        key,
+        makeInfiniteData([[makeThread(String(key[2]))]]),
+      );
+    const before = keys.map((key) => client.getQueryData(key));
+    const unfiltered = [...INFINITE_THREADS_QUERY_KEY_PREFIX, {}];
+    client.setQueryData(unfiltered, makeInfiniteData([[makeThread("a")]]));
     upsertThreadInInfiniteCache(client, makeThread("new"));
-
-    // 本地立刻可见——不插的话 upsert() 会把它一直当成新行。
+    keys.forEach((key, index) => {
+      expect(client.getQueryData(key)).toBe(before[index]);
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    });
     expect(
       client
-        .getQueryData<InfiniteData<AgentThread[]>>(filteredKey)
-        ?.pages[0]?.map((t) => t.thread_id),
+        .getQueryData<InfiniteThreadsData>(unfiltered)
+        ?.pages[0]?.threads.map((row) => row.thread_id),
     ).toEqual(["new", "a"]);
-    // 同时问一次服务端，且**只问带过滤的那几份**。
-    const filteredCalls = invalidate.mock.calls.filter(
-      ([filters]) => filters?.predicate,
-    );
-    expect(filteredCalls).toHaveLength(1);
+    client.clear();
   });
 });
 
@@ -609,7 +567,12 @@ describe("removeDeletedThreadCaches", () => {
   test("removes only deleted main/sidecar ids from the infinite and scoped caches", () => {
     const client = new QueryClient();
     client.setQueryData([...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"], {
-      pages: [[makeThread("main"), makeThread("side"), makeThread("keep")]],
+      pages: [
+        {
+          threads: [makeThread("main"), makeThread("side"), makeThread("keep")],
+          nextOffset: null,
+        },
+      ],
       pageParams: [0],
     });
     client.setQueryData(["thread", "main"], { status: "idle" });
@@ -619,11 +582,11 @@ describe("removeDeletedThreadCaches", () => {
 
     expect(
       client
-        .getQueryData<InfiniteData<AgentThread[]>>([
+        .getQueryData<InfiniteThreadsData>([
           ...INFINITE_THREADS_QUERY_KEY_PREFIX,
           "all",
         ])
-        ?.pages.flat()
+        ?.pages.flatMap((page) => page.threads)
         .map((thread) => thread.thread_id),
     ).toEqual(["keep"]);
     expect(client.getQueryData(["thread", "main"])).toBeUndefined();

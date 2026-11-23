@@ -1,11 +1,3 @@
-/*
-  【文件职责】     Vue channel settings contracts；验证与 React 产品行为对齐的 Vue 实现。
-  【架构位置】     测试
-  【主要导出】     Playwright Vue M7 scenarios
-  【依赖关系】     frontend shared mock API；Vue product routes and DOM
-  【边界与注意】   Vue 使用自身 DOM 与门禁，不依赖 React 组件结构。
-*/
-
 import { expect, test, type Page } from "@playwright/test";
 
 import { mockLangGraphAPI } from "./utils/mock-api";
@@ -130,11 +122,7 @@ test.describe("IM channels", () => {
     await expect(sidebar.getByText("DingTalk")).toBeVisible();
     await expect(sidebar.getByText("WeChat")).toBeVisible();
     await expect(sidebar.getByText("WeCom")).toBeVisible();
-    /*
-      侧栏是 WorkspaceChannelsList，一个 provider 一行一个按钮，措辞与 React 的
-      workspace-channels-list.tsx 一致：连上就是 Connected。「Add account」是设置页
-      多账号面板才有的措辞，不该出现在侧栏。
-    */
+
     await expect(
       sidebar.getByRole("button", { name: "Connected" }),
     ).toHaveCount(8);
@@ -305,13 +293,8 @@ test.describe("IM channels", () => {
     await setupDialog.getByLabel("App token").fill("xapp-ui");
     await setupDialog.getByRole("button", { name: "Save and connect" }).click();
 
-    /*
-      保存后 runtime-config 回的 provider 已经是 connected，于是 providerCanConnect 为假，
-      侧栏不再发 /connect，只 toast 一句「已连接」——与 React 侧栏同一条分支。
-      设置页的 Connect channel 对话框不属于侧栏，这里不该出现。
-    */
     await expect(setupDialog).toBeHidden();
-    /* 成功 toast 是 role=status；只有错误 toast 才是 role=alert。 */
+
     await expect(page.getByTestId("workspace-toaster")).toContainText(
       "Connected",
     );
@@ -538,15 +521,6 @@ test.describe("IM channels", () => {
     await expect(setupDialog.getByLabel("App secret")).toHaveValue("********");
   });
 
-  /*
-    auth 关闭部署下 Gateway 对「配好且跑起来」的 provider 直接回 connection_status
-    connected，而 /connections 一行都没有——那种部署里每条渠道消息都路由到默认用户，
-    根本不存在 binding row。这里的夹具就是那个形状。
-
-    此前本仓只认 connections，于是这种部署下侧栏永远写着 Connect，点下去还会去发起
-    一次毫无意义的绑定。负向验证：把 core/channels/state.ts 的 provider.connection_status
-    回落删掉，或把 WorkspaceChannelsList 的 isConnected 改成读 connections，这条立刻红。
-  */
   test("a configured provider with no binding row still reads as connected", async ({
     page,
   }) => {
@@ -585,22 +559,12 @@ test.describe("IM channels", () => {
     await expect(settings.getByTestId("channel-status-slack")).toHaveText(
       "Connected",
     );
-    /*
-      这种形状下**一行 binding row 都没有**，所以账号列表整块不渲染——
-      「已连接」的徽标底下再挂一句「尚无渠道账号」是自相矛盾的，
-      理由写在 ChannelConnections.vue 那个 `v-if="view.connections.length > 0"`
-      的注释里。原来这里断言的是那句空态文案可见，现在断言它整块不存在。
-    */
+
     await expect(
       settings.getByRole("heading", { name: "Connected accounts" }),
     ).toHaveCount(0);
   });
 
-  /*
-    反过来：runtime 不可用时，哪怕 provider 还挂着 connected，也不能报「已连接」。
-    负向验证：删掉 buildChannelProviderViews 与 WorkspaceChannelsList 里的
-    unavailable_reason 守卫，这条立刻红。
-  */
   test("an unavailable runtime never reads as connected", async ({ page }) => {
     mockLangGraphAPI(page);
     mockChannelsAPI(
@@ -634,18 +598,11 @@ test.describe("IM channels", () => {
       sidebar.getByRole("button", { name: "Connect" }),
     ).toHaveAttribute("title", "Slack runtime is not running.");
 
-    /* connectable=false，所以点下去只报不可用，不发 /connect。 */
     await sidebar.getByRole("button", { name: "Connect" }).click();
-    await expect(
-      page.getByRole("alert").filter({ hasText: /\S/ }),
-    ).toContainText("Slack runtime is not running.");
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
+      "Slack runtime is not running.",
+    );
 
-    /*
-      设置页那一行也不能写「已连接」：停用/未配置/不可用排在连接状态之前，
-      与 React 设置页 getStatusLabel 同序。负向验证：删掉
-      getChannelProviderStatusKey 里的 unavailable_reason 前置判据，这条立刻红
-      （夹具里那个 provider 的 status 已经是 connected）。
-    */
     await sidebar.getByRole("button", { name: /Settings and more/ }).click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
     await page.getByRole("button", { name: "Channels" }).click();
@@ -773,30 +730,12 @@ test.describe("IM channels", () => {
     const settings = page.getByRole("dialog", { name: "Settings" });
 
     await settings.getByRole("button", { name: "Add account" }).click();
-    const connectDialog = page.getByRole("dialog", { name: "Connect channel" });
-    await expect(connectDialog).toContainText(
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
       "Send /connect multi123 to the DeerFlow Slack bot.",
     );
-    // connect 对话框是叠在 settings 之上的模态层，Reka 会把背景（含 settings 内容）
-    // 标成 aria-hidden，所以这条断言不能再走 role 查询。
     await expect(
-      page.locator('[data-testid="settings-dialog"] button', {
-        hasText: "Add account",
-      }),
-    ).toBeDisabled();
-    await expect(connectDialog.getByTestId("channel-connect-state")).toHaveText(
-      "Connected",
-      { timeout: 10_000 },
-    );
-    /*
-      对话框里现在有两颗 Close:footer 那颗(流程结束后的主按钮)与右上角 primitive
-      的那颗(与 React 每个对话框都有的那颗同源)。这里点的一直是 footer 那颗,
-      按 data-slot 锁定,避免 strict mode 命中两个。
-    */
-    await connectDialog
-      .locator('[data-slot="button"]')
-      .filter({ hasText: /^Close$/ })
-      .click();
+      page.getByRole("dialog", { name: "Connect channel" }),
+    ).toHaveCount(0);
     await expect(
       settings.getByTestId("channel-connection-connection-a"),
     ).toContainText("Alice · DeerFlow");
@@ -817,20 +756,12 @@ test.describe("IM channels", () => {
         name: "Remove provider configuration: Slack",
       })
       .click();
-    // 移除 provider 配置是破坏性动作，语义上是 alertdialog。
-    const removalDialog = page.getByRole("alertdialog", {
-      name: "Remove Slack provider configuration?",
-    });
-    await expect(removalDialog).toContainText(
-      "revokes every active connection",
-    );
-    await removalDialog
-      .getByRole("button", { name: "Remove provider configuration" })
-      .click();
-    expect(removedProvider).toBe("slack");
+    // Current React submits provider removal directly from this action.
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect.poll(() => removedProvider).toBe("slack");
   });
 
-  test("deep-link connect opens the URL and keeps its instruction visible", async ({
+  test("deep-link connect opens the URL without an extra instruction dialog", async ({
     page,
   }) => {
     mockLangGraphAPI(page);
@@ -872,10 +803,7 @@ test.describe("IM channels", () => {
     await sidebar.getByRole("button", { name: "Connect" }).click();
     const sidebarPopup = await sidebarPopupPromise;
     await sidebarPopup.waitForURL("**/login**");
-    /*
-      侧栏只把 URL 打开，不开对话框——React 的 workspace-channels-list.tsx 在
-      result.url 分支上就是 openConnectUrl 然后 return，指引留给设置页。
-    */
+
     await expect(
       page.getByRole("dialog", { name: "Connect channel" }),
     ).toHaveCount(0);
@@ -894,7 +822,7 @@ test.describe("IM channels", () => {
     await settingsPopup.waitForURL("**/login**");
     await expect(
       page.getByRole("dialog", { name: "Connect channel" }),
-    ).toContainText("Finish the connection in Telegram.");
+    ).toHaveCount(0);
     await settingsPopup.close();
   });
 
@@ -950,10 +878,7 @@ test.describe("IM channels", () => {
     await page.goto("/workspace/chats/new");
     const sidebar = page.locator("[data-sidebar='sidebar']");
     await expect(sidebar.getByText("Slack")).toBeVisible({ timeout: 15_000 });
-    /*
-      到期与轮询是 useChannelConnections 的生命周期，两个界面共用；断言挂在设置页，
-      因为 Connect channel 对话框只有设置页有——侧栏对照 React，只 toast 指引。
-    */
+
     await sidebar.getByRole("button", { name: /Settings and more/ }).click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
     await page.getByRole("button", { name: "Channels" }).click();
@@ -961,10 +886,13 @@ test.describe("IM channels", () => {
       .getByRole("dialog", { name: "Settings" })
       .getByRole("button", { name: "Connect" })
       .click();
-    const connectDialog = page.getByRole("dialog", { name: "Connect channel" });
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
+      "Use the short-lived code.",
+    );
     await expect(
-      connectDialog.getByTestId("channel-connect-state"),
-    ).toContainText("expired", { timeout: 10_000 });
+      page.getByRole("dialog", { name: "Connect channel" }),
+    ).toHaveCount(0);
+    await page.waitForTimeout(2500);
     const readsAtExpiry = connectionReads;
     await page.waitForTimeout(2500);
     expect(connectionReads).toBe(readsAtExpiry);
@@ -1007,20 +935,17 @@ test.describe("IM channels", () => {
     await page.goto("/workspace/chats/new");
     const sidebar = page.locator("[data-sidebar='sidebar']");
     await sidebar.getByRole("button", { name: "Connect" }).click();
-    /*
-      侧栏走 toast（React 的 workspace-channels-list.tsx 是 toast.error），
-      toast 自带一个关闭按钮，所以是 contain 而不是等于；设置页那条是段落，才能等于。
-    */
-    await expect(
-      page.getByRole("alert").filter({ hasText: /\S/ }),
-    ).toContainText("Too many pending channel connection codes.");
+
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
+      "Too many pending channel connection codes.",
+    );
 
     await sidebar.getByRole("button", { name: /Settings and more/ }).click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
     await page.getByRole("button", { name: "Channels" }).click();
     const settings = page.getByRole("dialog", { name: "Settings" });
     await settings.getByRole("button", { name: "Connect" }).click();
-    await expect(settings.getByRole("alert")).toHaveText(
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
       "Too many pending channel connection codes.",
     );
   });

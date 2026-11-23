@@ -2,7 +2,7 @@
   【文件职责】     钉住「哪些文件在手写 primitive 的**变体色对**」这份集合，**双向**。
   【架构位置】     守卫
   【主要导出】     无；vitest 用例
-  【依赖关系】     app/components/ui/{badge,button}/variants.ts · app/components/** · app/pages/**
+  【依赖关系】     scripts/lib/strip-comments.mjs · app/components/ui/{badge,button}/variants.ts · app/components/** · app/pages/**
   【边界与注意】   这是 `handwritten-button` / `handwritten-input` 的第三个同胞，
                    判据同源：**不是「手写颜色是缺陷」，而是「上游同一处走的是哪条路径」**。
 
@@ -39,6 +39,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "../../scripts/lib/strip-comments.mjs";
+
 const appDir = fileURLToPath(new URL("../../app", import.meta.url));
 
 /**
@@ -64,6 +66,10 @@ const ALLOWED: Record<string, [number, string]> = {
   "components/workspace/ThreadBackgroundTasks.vue": [
     1,
     "计数小圆点，上游 `workspace/thread-background-tasks.tsx:69` 逐字相同地手写",
+  ],
+  "components/workspace/ThreadScheduledTasksButton.vue": [
+    1,
+    "workspace/thread-scheduled-tasks-button.tsx:90 的计数圆点逐字相同地手写",
   ],
   "components/workspace/ThreadSubagentBatches.vue": [
     1,
@@ -106,13 +112,23 @@ function walk(dir: string, out: string[] = []): string[] {
 
 /** 注释剥成等长空白：行号不漂，剩下的都是真的 class 串。 */
 function strip(source: string): string {
-  const blank = (m: string) => m.replaceAll(/[^\n]/g, " ");
-  return source
-    .replaceAll(/<!--[\s\S]*?-->/g, blank)
-    .replaceAll(/\/\*[\s\S]*?\*\//g, blank);
+  return stripComments(source, ["html", "block", "line"]);
 }
 
 const pairs = variantColorPairs();
+it("preserves live tokens after quoted comment delimiters and ignores real comments", () => {
+  const source =
+    '<script>const glob = "/workspace/**";</script>\n<template>bg-primary text-primary-foreground</template>\n/* bg-primary text-primary-foreground */';
+  const stripped = strip(source);
+  expect(stripped.split("bg-primary text-primary-foreground").length - 1).toBe(
+    1,
+  );
+  expect(stripped.indexOf("bg-primary text-primary-foreground")).toBe(
+    source.indexOf("bg-primary text-primary-foreground"),
+  );
+  expect(stripped.length).toBe(source.length);
+});
+
 const counts = new Map<string, number>();
 for (const file of [
   ...walk(join(appDir, "components")),

@@ -18,42 +18,14 @@ import {
   FileText,
   Image as ImageIcon,
 } from "lucide-vue-next";
-const CODE_EXTENSIONS = new Set([
-  "js",
-  "jsx",
-  "ts",
-  "tsx",
-  "mjs",
-  "cjs",
-  "css",
-  "scss",
-  "less",
-  "vue",
-  "svelte",
-  "py",
-  "java",
-  "kt",
-  "go",
-  "rs",
-  "rb",
-  "php",
-  "sh",
-  "bash",
-  "json",
-  "yaml",
-  "yml",
-  "toml",
-  "xml",
-  "sql",
-  "c",
-  "h",
-  "cpp",
-  "cs",
-]);
+import { classifyArtifact } from "./policy";
+
 const IMAGE_EXTENSIONS = new Set([
   "jpg",
   "jpeg",
   "png",
+  "apng",
+  "avif",
   "gif",
   "bmp",
   "tiff",
@@ -75,6 +47,7 @@ const MEDIA_EXTENSIONS = new Set([
   "mp4",
   "mov",
   "m4v",
+  "webm",
 ]);
 
 /** 与 React 的 getFileIcon 同一张映射表（frontend/src/core/utils/files.tsx）。 */
@@ -85,7 +58,7 @@ export function artifactFileIcon(filepath: string) {
   if (extension === "txt" || extension === "md") return BookOpenText;
   if (IMAGE_EXTENSIONS.has(extension)) return ImageIcon;
   if (MEDIA_EXTENSIONS.has(extension)) return FilePlay;
-  return CODE_EXTENSIONS.has(extension) ? FileCode : FileText;
+  return classifyArtifact(filepath).kind === "text" ? FileCode : FileText;
 }
 
 export function artifactFileName(filepath: string) {

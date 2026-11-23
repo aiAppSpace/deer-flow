@@ -16,6 +16,7 @@ import {
   createProject,
   deleteProject,
   getProject,
+  getProjectsConfig,
   listProjectThreads,
   listProjects,
   patchProject,
@@ -53,6 +54,17 @@ function call(index = 0) {
 
 describe("project API 合同", () => {
   beforeEach(() => mockedFetch.mockReset());
+
+  it("loads configured project limits through the shared authenticated fetch boundary", async () => {
+    mockedFetch.mockResolvedValueOnce(
+      response({ instructions_max_bytes: 9, trash_retention_days: 7 }),
+    );
+    await expect(getProjectsConfig()).resolves.toEqual({
+      instructions_max_bytes: 9,
+      trash_retention_days: 7,
+    });
+    expect(call().url).toContain("/api/projects/config");
+  });
 
   it("列表解开 `projects` 包装，并把 status 作为查询参数", async () => {
     const signal = new AbortController().signal;

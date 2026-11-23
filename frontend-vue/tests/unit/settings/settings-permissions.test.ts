@@ -47,6 +47,27 @@ describe("deriveSettingsPermissions", () => {
     });
   });
 
+  it("uses a refreshed real user's role even when routing initially bypassed auth", () => {
+    expect(
+      deriveSettingsPermissions(
+        {
+          tag: "authenticated",
+          user: {
+            id: "member",
+            email: "member@test.local",
+            system_role: "user",
+            needs_setup: false,
+          },
+        },
+        { authDisabled: true },
+      ),
+    ).toMatchObject({
+      role: "user",
+      canManageMcp: false,
+      canManageSkills: false,
+    });
+  });
+
   it("allows an authenticated admin and keeps unavailable distinct", () => {
     expect(
       deriveSettingsPermissions(

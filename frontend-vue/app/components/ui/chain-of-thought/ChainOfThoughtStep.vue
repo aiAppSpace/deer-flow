@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 
 const props = withDefaults(
   defineProps<{ status?: "complete" | "active" | "pending"; class?: string }>(),
-  { status: "complete" },
+  { status: "complete", class: undefined },
 );
 const slots = useSlots();
 

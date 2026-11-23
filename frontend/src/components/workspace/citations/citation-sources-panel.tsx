@@ -80,11 +80,14 @@ function CitationSourceCopyButton({ source }: { source: CitationSource }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeRef = useRef(false);
   const copyLabel = t.citations.copyReference(source.title);
   const copiedLabel = t.citations.copiedReference(source.title);
 
   useEffect(() => {
+    activeRef.current = true;
     return () => {
+      activeRef.current = false;
       if (resetTimerRef.current) {
         clearTimeout(resetTimerRef.current);
       }
@@ -96,6 +99,7 @@ function CitationSourceCopyButton({ source }: { source: CitationSource }) {
       const didCopy = await writeTextToClipboard(
         formatCitationMarkdownReference(source),
       );
+      if (!activeRef.current) return;
       if (!didCopy) {
         toast.error(t.clipboard.failedToCopyToClipboard);
         return;
@@ -111,6 +115,7 @@ function CitationSourceCopyButton({ source }: { source: CitationSource }) {
         resetTimerRef.current = null;
       }, 2000);
     })().catch(() => {
+      if (!activeRef.current) return;
       toast.error(t.clipboard.failedToCopyToClipboard);
     });
   }, [

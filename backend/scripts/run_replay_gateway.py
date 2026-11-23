@@ -23,6 +23,35 @@ _BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_BACKEND))
 sys.path.insert(0, str(_BACKEND / "tests"))  # replay_provider + build_config_yaml live here
 
+_OS_ENVIRONMENT = frozenset({"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR", "TMP", "TEMP", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "PLAYWRIGHT_BROWSERS_PATH", "PLAYWRIGHT_NODEJS_PATH"})
+_TEST_CONTROLS = frozenset({"DEER_FLOW_AUTH_DISABLED", "DEERFLOW_SETTINGS_TEST_MEMORY_BACKEND", "DEERFLOW_SETTINGS_TEST_HOME_MARKER"})
+
+
+def isolate_environment(home: Path, config_path: Path) -> None:
+    """Drop operator configuration before any production configuration import.
+
+    Explicit suite switches survive; runtime paths, dotenv, JWT and Python
+    imports are owned by this runner, irrespective of the invoking shell.
+    """
+    inherited_imports = {str(Path(entry).resolve()) for entry in os.environ.get("PYTHONPATH", "").split(os.pathsep) if entry}
+    trusted_imports = {str(_BACKEND), str(_BACKEND / "tests")}
+    # Python already expanded the parent's PYTHONPATH before main(). Changing
+    # the environment alone would still allow operator modules to shadow deps.
+    sys.path[:] = [entry for entry in sys.path if str(Path(entry).resolve()) not in inherited_imports or str(Path(entry).resolve()) in trusted_imports]
+    environment = {key: value for key, value in os.environ.items() if key in _OS_ENVIRONMENT or key in _TEST_CONTROLS or key.startswith("DEERFLOW_ENABLE_")}
+    dotenv = home / ".env"
+    dotenv.write_text("", encoding="utf-8")
+    environment.update(
+        DEER_FLOW_HOME=str(home),
+        DEER_FLOW_PROJECT_ROOT=str(home),
+        DEER_FLOW_CONFIG_PATH=str(config_path),
+        DEER_FLOW_ENV_FILE=str(dotenv),
+        AUTH_JWT_SECRET="ci-replay-secret-at-least-32-bytes",
+        PYTHONPATH=os.pathsep.join((str(_BACKEND), str(_BACKEND / "tests"))),
+    )
+    os.environ.clear()
+    os.environ.update(environment)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -31,10 +60,12 @@ def main() -> int:
     parser.add_argument("--cors", default="http://localhost:3000")
     args = parser.parse_args()
 
-    from _replay_fixture import REPLAY_MODEL_BLOCK, build_config_yaml, prepare_hermetic_extras
-
     home = Path(tempfile.mkdtemp(prefix="replay-gw-"))
     cfg = home / "config.yaml"
+    isolate_environment(home, cfg)
+
+    from _replay_fixture import REPLAY_MODEL_BLOCK, build_config_yaml, prepare_hermetic_extras
+
     config_yaml = build_config_yaml(model_block=REPLAY_MODEL_BLOCK, home=home)
     channel_fixture_enabled = os.environ.get("DEERFLOW_ENABLE_CHANNEL_TEST_SEED") == "1"
     agent_fixture_enabled = os.environ.get("DEERFLOW_ENABLE_AGENT_TEST_MODEL") == "1"
@@ -72,10 +103,6 @@ channels:
         config_yaml = configure_settings_memory_backend(config_yaml, settings_memory_backend)
     cfg.write_text(config_yaml, encoding="utf-8")
 
-    # Override (not setdefault): the replay gateway must be hermetic, so an outer
-    # DEER_FLOW_HOME can't leak in and shift prompt-affecting paths/skills.
-    os.environ["DEER_FLOW_HOME"] = str(home)
-    os.environ["DEER_FLOW_CONFIG_PATH"] = str(cfg)
     extensions_path = prepare_hermetic_extras(home)
     if settings_fixture_enabled:
         from settings_e2e_fixture import prepare_settings_e2e_fixture, publish_settings_test_home
@@ -85,10 +112,7 @@ channels:
             publish_settings_test_home(home, Path(settings_home_marker))
     os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
     os.environ["DEERFLOW_REPLAY_FIXTURE"] = args.fixture
-    os.environ.setdefault("AUTH_JWT_SECRET", "ci-replay-secret-at-least-32-bytes")
     os.environ["GATEWAY_CORS_ORIGINS"] = args.cors
-    # Child / dynamic imports (resolve_class) search PYTHONPATH too.
-    os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (str(_BACKEND), str(_BACKEND / "tests"), os.environ.get("PYTHONPATH", "")) if p)
 
     import uvicorn
 

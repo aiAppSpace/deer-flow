@@ -261,9 +261,10 @@ test.describe("Integrations settings", () => {
     await expect(calendarDomain).toHaveAttribute("aria-pressed", "false");
     await calendarDomain.click();
     await expect(calendarDomain).toHaveAttribute("aria-pressed", "true");
-    await expect(
-      dialog.getByRole("button", { name: "Drive" }),
-    ).toHaveAttribute("aria-pressed", "false");
+    await expect(dialog.getByRole("button", { name: "Drive" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     await dialog
       .getByLabel("Exact OAuth scope")
       .fill("calendar:calendar.event:read");
@@ -387,10 +388,9 @@ test.describe("Integrations settings", () => {
     ).toBeVisible();
     // Brand is single-select and, like the domain chips, shows it only through a
     // variant swap; aria-pressed is what makes that audible.
-    await expect(dialog.getByRole("button", { name: "Feishu" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(
+      dialog.getByRole("button", { name: "Feishu" }),
+    ).toHaveAttribute("aria-pressed", "true");
     await expect(
       dialog.getByRole("button", { name: "Lark", exact: true }),
     ).toHaveAttribute("aria-pressed", "false");
@@ -524,9 +524,8 @@ test.describe("Integrations settings", () => {
             const panel = dialogEl?.querySelector<HTMLElement>(
               '[data-slot="scroll-area"]',
             );
-            const card = dialogEl?.querySelector<HTMLElement>(
-              '[data-slot="card"]',
-            );
+            const card =
+              dialogEl?.querySelector<HTMLElement>('[data-slot="card"]');
             if (!panel?.parentElement || !card) return { missing: true };
             const over = (value: number) => Math.max(0, Math.round(value));
             return {

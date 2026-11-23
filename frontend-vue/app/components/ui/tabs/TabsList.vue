@@ -27,7 +27,7 @@ const props = withDefaults(
       variant?: TabsListVariants["variant"];
     }
   >(),
-  { variant: "default" },
+  { variant: "default", class: undefined },
 );
 const forwarded = useForwardProps(props);
 const delegated = computed(() => {

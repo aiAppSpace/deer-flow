@@ -19,6 +19,17 @@ import {
 import type { Message } from "@/core/types/message";
 
 describe("buildRunContext", () => {
+  it("never turns stored settings or extra context into per-send conversation grants", () => {
+    const settings = {
+      mode: "pro",
+      conversation_references: ["stored-source"],
+    };
+    const extra = { conversation_references: ["another-source"] };
+    expect(buildRunContext(settings, extra)).not.toHaveProperty(
+      "conversation_references",
+    );
+    expect(settings.conversation_references).toEqual(["stored-source"]);
+  });
   it.each([
     ["ultra", { thinking: true, plan: true, subagent: true, effort: "high" }],
     ["pro", { thinking: true, plan: true, subagent: false, effort: "medium" }],
@@ -49,6 +60,13 @@ describe("buildRunContext", () => {
   */
   it("不带 thread_id：服务端按 URL 路径覆盖，传了也是空转", () => {
     expect(buildRunContext({ mode: "flash" })).not.toHaveProperty("thread_id");
+    const stored = { mode: "flash", thread_id: "stale-thread" };
+    expect(
+      buildRunContext(stored, {
+        thread_id: "wrong-thread",
+        agent_name: "writer",
+      }),
+    ).not.toHaveProperty("thread_id");
   });
 
   it("显式给的 reasoning_effort 覆盖 mode 推导", () => {
@@ -70,6 +88,29 @@ describe("buildRunContext", () => {
 });
 
 describe("buildThreadSubmitMessages", () => {
+  it("uses one stable human ID and keeps staged project files beside local uploads", () => {
+    const staged = {
+      filename: "project.pdf",
+      path: "/mnt/project.pdf",
+      size: 8,
+    };
+    const local = { filename: "local.txt", path: "/mnt/local.txt", size: 3 };
+    const additionalKwargs = { files: [staged], skill_references: ["skill-a"] };
+    const built = buildThreadSubmitMessages({
+      text: "read both",
+      humanMessageId: "human-stable",
+      additionalKwargs,
+      filesForSubmit: [local],
+    });
+    expect(built[0]).toMatchObject({
+      id: "human-stable",
+      additional_kwargs: {
+        files: [staged, local],
+        skill_references: ["skill-a"],
+      },
+    });
+    expect(additionalKwargs.files).toEqual([staged]);
+  });
   it("只有附件时也带上 files，没有附件时不写这个键", () => {
     const withFiles = buildThreadSubmitMessages({
       text: "hi",

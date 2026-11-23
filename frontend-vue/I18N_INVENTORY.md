@@ -1,27 +1,30 @@
 # Vue 产品文案清单与门禁
 
 盘点范围由 `scripts/i18n-source-guard.mjs --inventory` 实时生成，
-不是手工维护的组件 allowlist。当前 checkout 共有 277 个 Vue SFC：
+不是手工维护的组件 allowlist。当前 checkout 共有 352 个 Vue SFC：
 
 - `app/app.vue`、`app/components/**/*.vue`、`app/layouts/**/*.vue`、
-  `app/pages/**/*.vue` 中 275 个产品 SFC 全部进入 AST source guard；
-- 仅精确排除 `app/pages/__m0/splitpanes.vue` 与
+  `app/pages/**/*.vue`、`app/core/settings/**/*.vue` 中 349 个产品 SFC 全部进入 AST source guard；
+- 仅精确排除 `app/pages/__m0/splitpanes.vue`（保留原测试 URL，当前使用本仓 ResizablePanels）与
   `app/pages/__m0/visual.vue` 两个 M0 浏览器测试 fixture；
+- `tests/unit/ui/fixtures/stable-overlay.fixture.vue` 是单测编译的稳定插槽调用方，
+  不属于 Nuxt 产品源码；`tests/` 下的 SFC 单独列为测试夹具，独立集合测试仍逐项核对
+  精确夹具清单，未知产品目录继续判为未扫描；
 - `node scripts/i18n-source-guard.mjs --inventory` 输出逐文件清单（文件总数由
-  `tests/unit/i18n/source-guard.test.ts` 精确钉住，改一个 SFC 就要同步），
+  `tests/unit/i18n/source-guard.test.ts` 以独立文件集合核对完整覆盖，新增 SFC 自动纳入），
   `make i18n-source-check` 执行阻断检查。
 
 ## 分类结果
 
 | 类别               | 处理规则                                                                                                       | 当前结果                                 |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| 用户可见产品文案   | 模板文本与 UI 脚本值必须来自唯一 `$i18n` owner                                                                 | 275 个产品 SFC 无核心英文硬编码          |
+| 用户可见产品文案   | 模板文本与 UI 脚本值必须来自唯一 `$i18n` owner                                                                 | 349 个产品 SFC 无核心英文硬编码          |
 | 可访问性与状态文案 | `aria-label`、`aria-description`、`alt`、`title`、`placeholder`、empty/loading/error/toast/dialog 一并检查     | 已迁入 typed dictionaries                |
 | 参数化文案         | 完整句子由 typed formatter 持有，参数保持 opaque                                                               | 文件名、URL、Gateway detail 等参数不翻译 |
 | 动态内容           | backend 响应、用户内容、代码、文件名和 URL 继续直接渲染                                                        | 不进入英文 literal 告警                  |
 | 品牌与技术术语     | 产品需要显示的值仍通过词典管理；source guard 只精确词法豁免品牌、单键快捷键及 `API`/`HTML`/`OIDC` 等纯技术缩写 | 无按组件或目录放行                       |
 | 协议与内部标识     | HTTP method、MIME、事件名、路由、test id 等不进入 UI sink                                                      | 不翻译、不误报                           |
-| 测试专用页面       | 只允许上面两个精确 `__m0` fixture                                                                              | 2 个排除项可由 inventory 审计            |
+| 测试专用页面       | 两个精确 `__m0` 页面和一个 `tests/` 编译夹具                                                                   | 3 个排除项可由 inventory 审计            |
 | Primitive 可访问名 | `primitives.*` 若干条在两份 locale 里**同为英文**，因为 React 的 vendored primitive 就没把它们接进词典         | 见下方说明，不是漏翻                     |
 
 `primitives.toggleSidebar` / `submit` / `stop` / `skillSuggestions` / `notifications` /
@@ -50,8 +53,8 @@ i18n 之后一次性翻掉的位置。
 
 ## Key 与 unused baseline
 
-`en-US` 和 `zh-CN` 当前各有 1144 个完全一致的 leaf key。
-`baseline/i18n-keys.json` 同时固定精确 key 集合和 15 个已审阅 unused key；
+`en-US` 和 `zh-CN` 当前各有 1825 个完全一致的 leaf key。
+`baseline/i18n-keys.json` 同时固定精确 key 集合和 64 个已审阅 unused key；
 新增、删除、新增 unused 或旧 key 意外恢复使用都会使
 `i18n-check`、`i18n-diff` 或 `i18n-unused` 失败。只有审阅精确 diff 与真实消费者后，
 才允许运行 `make i18n-refresh`。

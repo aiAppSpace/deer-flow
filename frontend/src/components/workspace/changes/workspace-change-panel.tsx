@@ -80,7 +80,7 @@ export function WorkspaceChangePanel({
       into the content. Changed on both frontends together.
     */
     <SheetContent
-      className="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-[900px]"
+      className="[container-type:size] w-[min(92vw,900px)] gap-0 overflow-y-auto p-0 [container-name:workspace-changes] sm:max-w-[900px]"
       onOpenAutoFocus={(event) => {
         event.preventDefault();
         const panel = event.currentTarget;
@@ -104,7 +104,7 @@ export function WorkspaceChangePanel({
         </SheetDescription>
       </SheetHeader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 [@container_workspace-changes_(height<28rem)]:flex-none">
         {isLoading && (
           <p className="text-muted-foreground text-sm">
             {t.workspaceChanges.loading}

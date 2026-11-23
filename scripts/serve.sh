@@ -45,7 +45,7 @@ _pick_python() {
     local candidate
     for candidate in python3 python py; do
         # Probe through `env` as well: the frontend is launched as
-        # `env PORT=3000 "$DEERFLOW_PNPM_PYTHON" ...` (FRONTEND_CMD below), and on
+        # `env PORT=3200 "$DEERFLOW_PNPM_PYTHON" ...` (FRONTEND_CMD below), and on
         # Windows/Git Bash the Microsoft Store python aliases under WindowsApps
         # are skipped by Bash's own PATH lookup yet still resolved (and fail to
         # exec) inside /usr/bin/env. A bare "$candidate" probe passes while the
@@ -91,7 +91,7 @@ done
 # ── Stop helper ──────────────────────────────────────────────────────────────
 
 # Every deer-flow worktree (the main checkout + each linked worktree) hardcodes
-# the same dev ports (8001/3000/3100/2026), so a service started from ANY of them
+# the same dev ports (8001/3200/3100/2026), so a service started from ANY of them
 # must be reclaimable from here — otherwise `make stop`/`make dev` in this
 # worktree can neither kill nor take over a port held by a sibling worktree.
 # DEERFLOW_ROOTS is that set of roots; processes living outside all of them
@@ -136,7 +136,7 @@ _is_deerflow_pid() {
 # (or starting, which stops first) isn't silently killing someone else's run.
 _report_reclaimed_ports() {
     local port pid files root owner
-    for port in 8001 3000 3100 2026; do
+    for port in 8001 3200 3100 2026; do
         for pid in $(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null); do
             _is_deerflow_pid "$pid" || continue
             files=$(lsof -b -w -p "$pid" 2>/dev/null)
@@ -282,7 +282,7 @@ stop_all() {
     # not match by name still gets reclaimed — otherwise `make dev` fails its
     # nginx port preflight.
     _kill_repo_port 8001
-    _kill_repo_port 3000
+    _kill_repo_port 3200
     _kill_repo_port 3100
     _kill_repo_port 2026
     bash ./scripts/cleanup-containers.sh deer-flow-sandbox 2>/dev/null || true
@@ -335,8 +335,8 @@ export DEERFLOW_PNPM_PYTHON DEERFLOW_PNPM_RUNNER
 
 # Frontend commands. The default deliberately remains React.
 if $DEV_MODE; then
-    # 上游 #5053 给 React 这条加了显式 PORT=3000（Windows 上 next dev 不认 .env 里的 PORT）。
-    REACT_FRONTEND_CMD='env PORT=3000 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
+    # Pin the host port explicitly; root PORT belongs to Docker ingress, not Next.js.
+    REACT_FRONTEND_CMD='env PORT=3200 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
     VUE_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt dev --port 3100'
     if $SKIP_FRONTEND_BUILD; then
         echo "  Note: --skip-frontend-build is ignored in dev mode (neither next dev nor nuxt dev builds)."
@@ -344,10 +344,10 @@ if $DEV_MODE; then
 elif $SKIP_FRONTEND_BUILD; then
     # 复用已有构建。React 侧的 .next/BUILD_ID 前置检查在上面；
     # Vue 侧同理跳过 `nuxt build`，直接 preview 现成的 .output。
-    REACT_FRONTEND_CMD="env PORT=3000 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start"
+    REACT_FRONTEND_CMD="env PORT=3200 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start"
     VUE_FRONTEND_CMD='PORT=3100 HOST=127.0.0.1 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt preview'
 else
-    REACT_FRONTEND_CMD="env PORT=3000 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
+    REACT_FRONTEND_CMD="env PORT=3200 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
     VUE_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt build && PORT=3100 HOST=127.0.0.1 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt preview'
 fi
 
@@ -457,7 +457,7 @@ echo ""
 echo "  Services:"
 echo "    Gateway     → localhost:8001  (REST API + agent runtime)"
 if [ "$FRONTEND_MODE" = "react" ] || [ "$FRONTEND_MODE" = "dual" ]; then
-    echo "    React       → localhost:3000  (Next.js)"
+    echo "    React       → localhost:3200  (Next.js)"
 fi
 if [ "$FRONTEND_MODE" = "vue" ] || [ "$FRONTEND_MODE" = "dual" ]; then
     echo "    Vue         → localhost:3100  (Nuxt)"
@@ -527,7 +527,7 @@ run_service "Gateway" \
 if [ "$FRONTEND_MODE" = "react" ] || [ "$FRONTEND_MODE" = "dual" ]; then
     run_service "React Frontend" \
         "cd frontend && $REACT_FRONTEND_CMD > ../logs/frontend.log 2>&1" \
-        3000 300
+        3200 300
 fi
 
 if [ "$FRONTEND_MODE" = "vue" ] || [ "$FRONTEND_MODE" = "dual" ]; then
@@ -554,7 +554,7 @@ echo ""
 if [ "$FRONTEND_MODE" = "vue" ]; then
     echo "  🌐 http://localhost:3100"
 elif [ "$FRONTEND_MODE" = "dual" ]; then
-    echo "  🌐 React http://localhost:3000 · Vue http://localhost:3100"
+    echo "  🌐 React http://localhost:3200 · Vue http://localhost:3100"
 else
     echo "  🌐 http://localhost:2026"
 fi

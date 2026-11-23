@@ -1,10 +1,15 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, ref } from "vue";
 
 import { useThreads } from "@/composables/useThreads";
-import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
+import {
+  INFINITE_THREADS_QUERY_KEY_PREFIX,
+  mapInfiniteThreadsCache,
+  filterInfiniteThreadsCache,
+  upsertThreadInInfiniteCache,
+} from "@/core/threads/infinite";
 import type { AgentThread } from "@/core/threads/types";
 
 const apiClient = vi.hoisted(() => ({
@@ -46,6 +51,305 @@ function thread(id: string, sidecar = false): AgentThread {
 }
 
 describe("useThreads server-state owner", () => {
+  it("keeps all-conversation references separate from the sidebar and pages by raw server offsets", async () => {
+    const scope = ref<boolean | "all">("all");
+    const fullPage = [
+      thread("hidden-sidecar", true),
+      ...Array.from({ length: 49 }, (_, i) => thread(`visible-${i}`)),
+    ];
+    apiClient.threads.search
+      .mockReset()
+      .mockResolvedValueOnce(fullPage)
+      .mockResolvedValueOnce([thread("archived-last")])
+      .mockResolvedValueOnce([thread("archived-tail")]);
+    searchThreadsByArchive
+      .mockReset()
+      .mockImplementation(async ({ archived }: { archived: boolean }) => [
+        thread(archived ? "archive-tab" : "sidebar-only"),
+      ]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let references!: ReturnType<typeof useThreads>;
+    let sidebar!: ReturnType<typeof useThreads>;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          references = useThreads({ archived: scope });
+          sidebar = useThreads();
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    );
+    try {
+      await flushPromises();
+      expect(references.threads).toHaveLength(50);
+      expect(references.threads.map((row) => row.thread_id)).toContain(
+        "archived-last",
+      );
+      expect(references.threads.map((row) => row.thread_id)).not.toContain(
+        "hidden-sidecar",
+      );
+      expect(sidebar.threads.map((row) => row.thread_id)).toEqual([
+        "sidebar-only",
+      ]);
+      expect(
+        apiClient.threads.search.mock.calls.map(([query]) => ({
+          offset: query.offset,
+          limit: query.limit,
+        })),
+      ).toEqual([
+        { offset: 0, limit: 50 },
+        { offset: 50, limit: 1 },
+      ]);
+      expect(references.hasMore).toBe(true);
+      await references.loadMore();
+      await flushPromises();
+      expect(apiClient.threads.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 51, limit: 50 }),
+      );
+      expect(references.threads).toHaveLength(51);
+      expect(references.hasMore).toBe(false);
+      scope.value = true;
+      await flushPromises();
+      expect(references.threads.map((row) => row.thread_id)).toEqual([
+        "archive-tab",
+      ]);
+      expect(sidebar.threads.map((row) => row.thread_id)).toEqual([
+        "sidebar-only",
+      ]);
+      expect(searchThreadsByArchive).toHaveBeenCalledWith(
+        expect.objectContaining({ archived: true }),
+      );
+    } finally {
+      wrapper.unmount();
+      client.clear();
+    }
+  });
+  it.each([
+    ["all", "map"],
+    ["all", "filter"],
+    ["all", "upsert"],
+    [false, "map"],
+    [false, "filter"],
+    [true, "map"],
+    [true, "filter"],
+  ] as const)(
+    "retains raw cursor and exhaustion after %s scope %s cache mutation",
+    async (scope, operation) => {
+      const raw = [
+        thread("hidden", true),
+        ...Array.from({ length: 52 }, (_, index) => thread(`row-${index}`)),
+      ];
+      const search = vi.fn(
+        async ({ offset, limit }: { offset: number; limit: number }) =>
+          raw.slice(offset, offset + limit),
+      );
+      apiClient.threads.search.mockReset().mockImplementation(search);
+      searchThreadsByArchive.mockReset().mockImplementation(search);
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      let owner!: ReturnType<typeof useThreads>;
+      const wrapper = mount(
+        defineComponent({
+          setup() {
+            owner = useThreads({ archived: scope });
+            return () => h("div");
+          },
+        }),
+        { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+      );
+      const mutate = () => {
+        if (operation === "upsert") {
+          upsertThreadInInfiniteCache(client, {
+            ...thread("row-0"),
+            metadata: { edited: true },
+          });
+        } else {
+          client.setQueriesData(
+            { queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX },
+            (data: Parameters<typeof mapInfiniteThreadsCache>[0]) =>
+              operation === "map"
+                ? mapInfiniteThreadsCache(data, (row) => ({
+                    ...row,
+                    metadata: { ...row.metadata, edited: true },
+                  }))
+                : filterInfiniteThreadsCache(
+                    data,
+                    (row) => row.thread_id !== "row-0",
+                  ),
+          );
+        }
+      };
+      try {
+        await flushPromises();
+        expect(owner.threads).toHaveLength(50);
+        expect(
+          search.mock.calls.map(([request]) => [request.offset, request.limit]),
+        ).toEqual([
+          [0, 50],
+          [50, 1],
+        ]);
+        mutate();
+        await flushPromises();
+        if (operation === "filter") expect(owner.threads).toHaveLength(49);
+        else
+          expect(
+            owner.threads.find((row) => row.thread_id === "row-0")?.metadata
+              .edited,
+          ).toBe(true);
+        expect(owner.hasMore).toBe(true);
+        await owner.loadMore();
+        await flushPromises();
+        expect(search).toHaveBeenLastCalledWith(
+          expect.objectContaining({ offset: 51, limit: 50 }),
+        );
+        expect(owner.threads.map((row) => row.thread_id)).toContain("row-51");
+        expect(owner.hasMore).toBe(false);
+        mutate();
+        client.setQueriesData(
+          { queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX },
+          (data: Parameters<typeof filterInfiniteThreadsCache>[0]) =>
+            filterInfiniteThreadsCache(
+              data,
+              (row) => row.thread_id !== "row-51",
+            ),
+        );
+        await flushPromises();
+        expect(owner.hasMore).toBe(false);
+        await owner.loadMore();
+        expect(search).toHaveBeenCalledTimes(3);
+      } finally {
+        wrapper.unmount();
+        client.clear();
+      }
+    },
+  );
+
+  it("keeps all, active and archived cursor owners independent after local removal", async () => {
+    const rows = (scope: string) => [
+      thread(`${scope}-sidecar`, true),
+      ...Array.from({ length: 52 }, (_, index) => thread(`${scope}-${index}`)),
+    ];
+    const allRows = rows("all");
+    const activeRows = rows("active");
+    const archivedRows = rows("archived");
+    apiClient.threads.search
+      .mockReset()
+      .mockImplementation(
+        async ({ offset, limit }: { offset: number; limit: number }) =>
+          allRows.slice(offset, offset + limit),
+      );
+    searchThreadsByArchive
+      .mockReset()
+      .mockImplementation(
+        async ({
+          archived,
+          offset,
+          limit,
+        }: {
+          archived: boolean;
+          offset: number;
+          limit: number;
+        }) =>
+          (archived ? archivedRows : activeRows).slice(offset, offset + limit),
+      );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const owners: ReturnType<typeof useThreads>[] = [];
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          owners.push(
+            useThreads({ archived: "all" }),
+            useThreads(),
+            useThreads({ archived: true }),
+          );
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    );
+    try {
+      await flushPromises();
+      const allKey = client
+        .getQueryCache()
+        .findAll({ queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX })
+        .find(
+          (query) =>
+            (query.queryKey[2] as { archived?: boolean }).archived ===
+            undefined,
+        )!.queryKey;
+      client.setQueryData(
+        allKey,
+        (data: Parameters<typeof filterInfiniteThreadsCache>[0]) =>
+          filterInfiniteThreadsCache(data, (row) => row.thread_id !== "all-0"),
+      );
+      await flushPromises();
+      expect(owners.map((owner) => owner.threads.length)).toEqual([49, 50, 50]);
+      await Promise.all(owners.map((owner) => owner.loadMore()));
+      await flushPromises();
+      expect(apiClient.threads.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 51 }),
+      );
+      expect(searchThreadsByArchive).toHaveBeenCalledWith(
+        expect.objectContaining({ archived: false, offset: 51 }),
+      );
+      expect(searchThreadsByArchive).toHaveBeenCalledWith(
+        expect.objectContaining({ archived: true, offset: 51 }),
+      );
+      expect(owners.map((owner) => owner.threads.length)).toEqual([51, 52, 52]);
+      expect(owners.map((owner) => owner.hasMore)).toEqual([
+        false,
+        false,
+        false,
+      ]);
+      for (const [index, scope] of ["all", "active", "archived"].entries())
+        expect(
+          owners[index]!.threads.every((row) =>
+            row.thread_id.startsWith(`${scope}-`),
+          ),
+        ).toBe(true);
+    } finally {
+      wrapper.unmount();
+      client.clear();
+    }
+  });
+
+  it("does not invent more server rows when local inserts fill an exhausted first page", async () => {
+    apiClient.threads.search.mockReset().mockResolvedValue([thread("last")]);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let owner!: ReturnType<typeof useThreads>;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          owner = useThreads({ archived: "all" });
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    );
+    try {
+      await flushPromises();
+      expect(owner.hasMore).toBe(false);
+      for (let index = 0; index < 50; index++)
+        upsertThreadInInfiniteCache(client, thread(`local-${index}`));
+      await flushPromises();
+      expect(owner.threads).toHaveLength(51);
+      expect(owner.hasMore).toBe(false);
+      await owner.loadMore();
+      expect(apiClient.threads.search).toHaveBeenCalledTimes(1);
+    } finally {
+      wrapper.unmount();
+      client.clear();
+    }
+  });
+
   /*
     短页 = 没有下一页。这一条钉的是 `getNextPageParam` 的**实参个数**：把函数直接
     交给 Vue Query，它会多传 `lastPageParam`，那个值会落进 `pageSize` 形参，于是
@@ -333,33 +637,9 @@ describe("useThreads server-state owner", () => {
     queryClient.clear();
   });
 
-  /*
-    **列表首取在飞时 upsert，不许多发一次 `POST /api/threads/search`。**
-
-    第四十八轮的账：`AgentChat.vue` 的 `threadMetadata.data` watcher 一到就
-    `threads.upsert(metadata)`，它和侧栏列表的首取是两条并行请求。谁先回来是赛跑，
-    而 `upsert()` 的 else 支判的是「这条线程不在我当前这份列表里」——首取还没回来时
-    列表是空的，于是**每一条既有线程都会走到 else 支**。
-
-    此前那一支在播完一页之后还会走 `upsertThreadInInfiniteCache`，而对空缓存来说
-    那个函数的插入是空操作，**唯一实际发生的是它末尾那次 `invalidateQueries`**：
-    播一页让查询变成「idle 且有数据」，失效于是不再与在飞的首取合并，
-    而是另发一次体逐字相同的请求（`{"archived":false,"limit":50,"offset":0}`）。
-
-    表现在对照台账上是 `requestsOnlyVue: POST /api/threads/search`：本机几乎总是列表
-    先回（0 行），CI 整套跑得慢（205 条 50.9 分钟 vs 本机约 34 分钟），偶尔换个相位
-    就露出来，历轮判词一直是「复量消失」。把搜索响应推迟 300/900/2000ms，
-    浏览器里 12/12 稳定发两次（延迟 0 时 4/4 一次），上游四档共 16/16 全是一次。
-
-    ⚠ **这条用例的前提是「首取必须停在半空」**：用 `mockResolvedValue` 的话首取当场
-    就回来、命中 `existing` 支，**它会在修好之前就绿**——守的正是那个在飞的窗口。
-
-    ⚠ **播进去的那一页要留着**，不是缺陷：`AgentChat` 有四处把
-    `threads.threads.find(...)` 当「当前线程的服务端快照」在读，而窄屏下侧栏是抽屉、
-    列表查询根本不跑，那份缓存只有这里会填。桌面上它会被首取的结果覆盖。
-    删掉它，`subtask-card/mobile` 与 `ui-polish-mobile` 当场红（第四十八轮实测）。
-  */
-  it("列表首取在飞时 upsert 只落缓存，不再发一次搜索", async () => {
+  // Detail snapshots cannot seed a filtered list. The current chat owns its
+  // detail query independently, including when no sidebar query is enabled.
+  it("列表首取在飞时详情更新不猜测成员关系，也不再发一次搜索", async () => {
     searchThreadsByArchive
       .mockReset()
       .mockReturnValue(new Promise<AgentThread[]>(() => {}));
@@ -392,10 +672,66 @@ describe("useThreads server-state owner", () => {
     ).toHaveBeenCalledTimes(1);
     expect(
       threads!.threads.map((item) => item.thread_id),
-      "落进缓存的那一条要留着——窄屏下 AgentChat 的标题/artifacts 只有它",
-    ).toEqual(["already-on-the-server"]);
+      "详情到达不代表已确认当前过滤列表的成员关系",
+    ).toEqual([]);
 
     wrapper.unmount();
     queryClient.clear();
   });
+});
+
+it("detail snapshots update existing rows but cannot add membership to either filtered view", async () => {
+  searchThreadsByArchive.mockReset().mockResolvedValue([]);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  let current!: ReturnType<typeof useThreads>;
+  let archived!: ReturnType<typeof useThreads>;
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        current = useThreads({ enabled: false });
+        archived = useThreads({ archived: true, enabled: false });
+        return () => h("div");
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+  );
+  try {
+    const keys = queryClient
+      .getQueryCache()
+      .getAll()
+      .map((query) => query.queryKey);
+    for (const key of keys)
+      queryClient.setQueryData(key, {
+        pages: [{ threads: [thread("known")], nextOffset: null }],
+        pageParams: [0],
+      });
+    await flushPromises();
+    current.upsert({
+      ...thread("known"),
+      values: { title: "New detail", messages: [] },
+    });
+    await flushPromises();
+    expect(current.threads[0]?.values.title).toBe("New detail");
+    expect(archived.threads[0]?.values.title).toBe("New detail");
+    current.upsert(thread("unknown"));
+    current.upsert(thread("unknown"));
+    await flushPromises();
+    expect(current.threads.map((row) => row.thread_id)).toEqual(["known"]);
+    expect(archived.threads.map((row) => row.thread_id)).toEqual(["known"]);
+    expect(searchThreadsByArchive).not.toHaveBeenCalled();
+    expect(
+      keys.map((key) => queryClient.getQueryState(key)?.isInvalidated),
+    ).toEqual([false, false]);
+    current.upsertCreated("new-run", "New run");
+    expect(current.threads.map((row) => row.thread_id)).toEqual(["known"]);
+    expect(archived.threads.map((row) => row.thread_id)).toEqual(["known"]);
+    expect(
+      keys.map((key) => queryClient.getQueryState(key)?.isInvalidated),
+    ).toEqual([true, true]);
+  } finally {
+    wrapper.unmount();
+    queryClient.clear();
+  }
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, FolderInput, FolderMinus, Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -126,10 +126,18 @@ export function NewProjectDialog({
   const { mutate: moveThreadToProject } = useMoveThreadToProject();
 
   const [createName, setCreateName] = useState("");
+  const creationGeneration = useRef(0);
+  useLayoutEffect(() => {
+    creationGeneration.current += 1;
+    return () => {
+      creationGeneration.current += 1;
+    };
+  }, [open, thread.thread_id]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen) {
+        creationGeneration.current += 1;
         setCreateName("");
       }
       onOpenChange(nextOpen);
@@ -139,13 +147,17 @@ export function NewProjectDialog({
 
   const handleCreateSubmit = useCallback(() => {
     const name = createName.trim();
-    if (!name || isCreating) {
+    if (!open || !name || isCreating) {
       return;
     }
+    const generation = creationGeneration.current;
+    const ownsCreation = () => generation === creationGeneration.current;
     createProject(
       { name },
       {
         onSuccess: (project) => {
+          // Keep the saved project, but retire the canceled dialog continuation.
+          if (!ownsCreation()) return;
           handleOpenChange(false);
           moveThreadToProject(
             { threadId: thread.thread_id, projectId: project.id },
@@ -161,6 +173,7 @@ export function NewProjectDialog({
           );
         },
         onError: (error) => {
+          if (!ownsCreation()) return;
           toast.error(
             error instanceof Error && error.message
               ? error.message
@@ -173,6 +186,7 @@ export function NewProjectDialog({
     createProject,
     createName,
     isCreating,
+    open,
     handleOpenChange,
     moveThreadToProject,
     t.projects.createFailed,

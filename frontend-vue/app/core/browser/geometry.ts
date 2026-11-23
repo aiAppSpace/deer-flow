@@ -71,3 +71,17 @@ export function normalizeBrowserWheel({
   };
   return { dx: normalize(deltaX), dy: normalize(deltaY) };
 }
+
+/** Normalize units before batching; deadzone/gain belong to the accumulated frame. */
+export function browserWheelPixels({
+  deltaX,
+  deltaY,
+  deltaMode,
+}: {
+  deltaX: number;
+  deltaY: number;
+  deltaMode: number;
+}): { dx: number; dy: number } {
+  const unit = deltaMode === 1 ? 16 : deltaMode === 2 ? 800 : 1;
+  return { dx: deltaX * unit, dy: deltaY * unit };
+}

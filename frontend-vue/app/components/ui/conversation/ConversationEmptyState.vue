@@ -61,15 +61,15 @@ const props = defineProps<{
   <div
     :class="
       cn(
-        'flex size-full flex-col items-center justify-center gap-3 p-8 text-center',
+        'flex size-full flex-col items-center justify-center-safe gap-3 overflow-y-auto p-8 text-center',
         props.class,
       )
     "
   >
-    <div v-if="$slots.icon" class="text-muted-foreground">
+    <div v-if="$slots.icon" class="text-muted-foreground shrink-0">
       <slot name="icon" />
     </div>
-    <div class="space-y-1">
+    <div class="shrink-0 space-y-1">
       <h3 class="text-sm font-medium">{{ props.title }}</h3>
       <p v-if="props.description" class="text-muted-foreground text-sm">
         {{ props.description }}

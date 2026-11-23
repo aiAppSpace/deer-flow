@@ -13,6 +13,16 @@ Gateway 接口，并已建立聊天工作区、产物、sidecar、浏览器控�
 Vue。本地 parity 证据不代表可以直接切换默认入口；公网 DNS、TLS、外层代理信任、
 真实 IdP callback 注册与目标环境验收仍需在生产切流前完成。
 
+在产物编辑器中按 Escape 关闭搜索框时，桌面产物侧栏保持打开，焦点回到编辑器。
+消息详情等具体面板仍由自身的关闭操作控制。
+
+直接打开已归档会话仍显示标题和恢复入口；页头元数据与导出内容由当前会话持有，
+不从过滤后的侧栏列表取值。Agent 页头和输入工具栏在桌面、窄屏和字体放大时
+保持与 React 相同的控件排列。
+
+CI 用 `make e2e-parity-ci GROUP=<id>` 执行每一个完整文件分组，所有组及认证/session
+聚合都必须通过；单组运行不等于完整验收。本地完整入口仍为 `make e2e-cross-app`。
+
 ## 文档入口
 
 - [ARCHITECTURE.md](ARCHITECTURE.md)：当前分层、运行数据流、状态所有权、代理与认证边界。
@@ -48,6 +58,9 @@ make dev-dual  # Gateway :8001 + React :3000 + Vue :3100
 make stop
 ```
 
+这两个 Vue/dual 模式按实际服务检查所需工具，不要求宿主机安装 Nginx。
+仓库根目录的默认 React 开发入口和通用依赖检查仍要求宿主机安装 Nginx。
+
 只运行 Vue 工作区：
 
 ```bash
@@ -63,29 +76,33 @@ make dev       # http://localhost:3100
 先运行与改动最相关的最小门禁，常规模块改动最终运行 `make verify`：
 
 ```bash
-make verify             # lint、格式、类型、单测、i18n、OpenAPI、契约常量、独立性、build
+make verify             # lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build
 make asset-budget       # 构建产物总量天花板（**不是**用户下载量）
 make e2e-mock           # 不需要后端进程的全部套件
 make e2e-backend        # 需要真实 Gateway 的全部套件
-make e2e-visual         # 产品截图；只在本机，基线是 `-darwin`
+make e2e-cross-app      # 强制执行产品、匿名认证和真实登录会话的双端验收
+make e2e-visual         # 产品截图；本机 Darwin、强制 CI 原生 Linux
 make e2e-list           # 收集全部套件并打印各自 test 数
 make consumer-check     # 修改 packages/agent-core 时运行
 make container-smoke    # 生产镜像、health、SIGTERM 与拒绝策略
 make coverage           # 单测行覆盖率——诊断用，刻意不作为门禁
 ```
 
-`make audit` **今天预期就是红的**，分诊记在 `Makefile` 里那个 target 旁边：四个 high
-里有三个够不着（`js-yaml` 进不到任何客户端 chunk；`nanoid` 那条要自定义生成器，本仓
-没传；`lodash-es` 是经 mermaid 的 parser 进来的，而该 advisory 说的是 `_.template`）。
-第四个——mermaid 的雷达图 DoS——**刻意不在这里修**：本应用把 `mermaid` 钉在 React 经
-`@streamdown/mermaid` 解析出的同一个版本上，因为 mermaid 的产出要在两个应用之间对照
-（`thread-history-mermaid` 是台账场景）。单边升会把台账劈开，两边一起升等于覆盖一个
-vendored 库的依赖树。那次升级属于上游。
+产品跨端验收使用 Playwright 的完整 Chromium 通道，保留原生 iframe 和通知焦点恢复。
+沿用既有 Chromium 安装入口；诊断时可通过 `E2E_PARITY_BROWSER_CHANNEL=chrome`
+选择已安装的稳定版 Chrome。完整场景、断言和时间预算仍由正常聚合执行。
+
+引用候选在静止指针下滚动时保持键盘高亮，真实移动鼠标或笔才切换悬停项；
+Dialog 的原生单选组在 Tab 绕回边界时保持当前选项。
+
+`make audit` 将每条公告与 `baseline/audit-triage.json` 精确匹配。新增公告、安装版本、
+依赖路径、评级变化或过期条目均失败。当前接受的具体条目只涵盖源码证明不可达且暂无兼容修复
+的开发/构建调用，不按包名整体豁免。React 与 Vue 使用相同的已修复 Mermaid、KaTeX 版本。
+当前发现及源码依据见[依赖审计](../docs/reports/2026-10-09-vue-dependency-audit.md)。
 
 `make coverage` **不在** `verify` 里，也没有阈值。两个理由：覆盖率下限买到的是凑数的
 测试；而且这个数字只看得见单测进程里执行过的代码——`app/layouts/`、`server/routes/`
 与 `app.vue` 由 E2E 套件覆盖，在这里读作 0%。拿它去找**哪个模块没人测**，不要当及格线。
-当前读数：语句 73%、行 75%，其中 `app/components/`（66%）是最大的缺口。
 
 一个套件 = 一种后端拓扑，名字说的是**测什么**。迭代时挑最窄的那个：
 
@@ -106,19 +123,30 @@ make e2e-browser        # 真实 Chromium 后端上的 browser 面板
 make e2e-external       # WebSocket 与 OIDC；需要 backend 的 browser extra
 make e2e-parity         # React 与 Vue 架在同一个 replay Gateway 上；需要 ../frontend
 make e2e-parity-auth    # 同样两个应用、但开着鉴权构建：登录页
+make e2e-parity-session # 真实 SQL 会话、账号偏好、CSRF 与动态 RBAC
 ```
+
+Dialog/Sheet 的焦点边界跟随实际内容挂载，首次打开和重开均生效。模型浮层的键盘
+焦点通过所属聊天视口显露；关闭保存产物对话框或越过 Alt+T 通知访问的 Tab 边界时，
+焦点回到真实入口并原生滚动到可见位置；普通通知遍历遵循原生 Tab 顺序。
+Skill 标题/动作、项目操作和移动端产物在窄屏、低高度与字体
+放大组合下保留完整几何，相关用例同时覆盖 React 与 Vue。
 
 `make e2e-mock` 聚合 `e2e`、`e2e-auth`、`e2e-infra`、`e2e-proxy-options` 与
 `e2e-stream`；`make e2e-backend` 聚合 `e2e-protocol`、`e2e-real`、`e2e-scheduled`、
 `e2e-channels`、`e2e-agents`、`e2e-settings`、`e2e-shell` 与 `e2e-browser`。
-`make e2e-parity` 同样两边都不进，但理由不同：它是唯一需要兄弟 React 应用的套件，
-而本工作区的 install、build、test 与 e2e 都必须在没有它的情况下跑通
-（`make standalone-check` 静态证明，`make standalone-sim` 真做一遍）。
-`../frontend` 缺席时它不启动 React，用例整组跳过。
+跨应用套件通过 `make e2e-cross-app` 串行聚合，依次执行 `e2e-parity`、
+`e2e-parity-auth` 与 `e2e-parity-session`，并接入强制 CI job。mock/backend 聚合仍
+独立运行；正式跨应用入口缺少 React 时直接失败，不把跳过算成验收通过。
+
+真实会话套件使用 Vue `3119`、React `3120` 和独立 Gateway `8023`，两个前端均开启认证。
+通过真实 SQL 用户注册、登录与管理员角色修改 API，验证账号偏好、Cookie、CSRF、
+expected-owner、跨账号切换以及发送/停止/删除入口和 Gateway 的动态权限拒绝。
+它独享新的数据目录，保留匿名认证套件首次安装时的 `needs_setup` 前置条件。
 
 不进聚合入口不等于不进 CI：`e2e-parity`、`e2e-parity-auth` 与 `icon-parity`
 从 2026-09-17 起在 `.github/workflows/frontend-vue-parity.yml` 里跑，
-那是唯一同时装两个应用 `node_modules` 的工作流。它带 `paths:` 过滤
+该工作流会同时安装两个应用的 `node_modules`，并带 `paths:` 过滤
 （`frontend-vue/**`、`frontend/**` 与回放 Gateway 的输入），因为这三条要起两个
 生产构建，成本是真的；**React 单侧的改动也在过滤里**——上游漂移把台账推动，
 正是这把尺子要量的东西。
@@ -127,11 +155,11 @@ make e2e-parity-auth    # 同样两个应用、但开着鉴权构建：登录页
 `tests/guards/tooling-contracts.test.ts` 钉着，而且它扫的是
 `.github/workflows/` **整个目录**而不是点名的那一份。
 
-`make e2e-visual` 刻意两边都不进：截图基线只有 `-darwin` 一份，在生成并签入
-`-linux` 基线之前，它是本机门禁。这两件事由
-`tests/guards/visual-baseline-platforms.test.ts` 双向绑定：只签基线不接 CI 会红，
-只接 CI 不签基线也会红。解除步骤、以及为什么不能在本机用 amd64 模拟生成基线，
-写在那个文件的头注释里。
+`make e2e-visual` 已接入 `frontend-vue-verify.yml` 的强制 `product-visual` job，
+在原生 Ubuntu ARM64 上使用固定 Playwright 镜像和 Node24.15.0；签入的 `-linux`
+基线与本地 Darwin 基线分开。`tests/guards/visual-baseline-platforms.test.ts` 双向绑定
+Linux 基线与 CI 接线，并检查各平台用例覆盖一致。基线生成是单独的显式操作，
+正常视觉验收不更新基线。
 
 定向检查：
 
@@ -142,23 +170,36 @@ make proxy-security     # Nitro body 限制、无 body/chunked DELETE、SSE 与 
 make i18n-source-check  # 全部产品 Vue SFC 的 AST 文案门禁
 make standalone-check   # 不允许任何指向 ../frontend 的跨应用引用（静态证明）
 make icon-parity        # 与 ../frontend 对图标/尺寸/变体；上游缺席时跳过
-make standalone-sim     # 真把 ../frontend 移走，跑一遍声称能扛的东西，再移回来
+make standalone-sim     # 无 React 的独立源码副本，完成安装、构建和测试
 make typecheck-core     # packages/agent-core 的独立 tsc
 make upstream-drift     # 报告 ../frontend 自 marker 以来改了什么
 ```
 
-**CI 实际跑哪些。** `frontend-vue-verify.yml` 跑 `verify`、`asset-budget`、`audit`、
-`container-smoke`、`e2e-mock`、`e2e-backend`。有三条**只在本地**跑，理由各不相同：
-`icon-parity` 是因为没有任何 workflow 会把两个应用的 `node_modules` 都装上；
-`standalone-sim` 是因为它要把兄弟应用改名移出 checkout；`e2e-parity` 与 `e2e-parity-auth`
-是因为它们都要把两个应用构建起来接回放 Gateway。**后两条是一个从来没有真正做过的成本决定**
-——它们是默认只在本地，不是设计成只在本地。只有 `e2e-visual` 的「只在本地」是有机器和成因
-绑在一起的（`tests/guards/visual-baseline-platforms.test.ts`）。
+**CI 实际跑哪些。** `frontend-vue-verify.yml` 跑 `verify`、`asset-budget`、
+`standalone-sim`、`audit`、`container-smoke`、`e2e-mock`、`e2e-backend`、
+`e2e-external`、强制 `e2e-cross-app` 及 `e2e-visual`。跨端 job 安装两端依赖，
+并通过 `PARITY_REQUIRE_REACT=1` 在配置加载时要求 React 存在，不能以整组跳过冒充正式通过。
+`frontend-vue-parity.yml` 另外运行 `icon-parity`、`e2e-parity` 与 `e2e-parity-auth`。
+
+产品视觉 job 使用原生 Ubuntu ARM64、固定 Playwright 镜像和签入的 `-linux` 截图；
+本机 Darwin 基线独立保留。`tests/guards/visual-baseline-platforms.test.ts` 将 Linux 基线
+与强制 CI job 耦合。基线生成是单独、显式的 workflow 操作，普通视觉验收不更新截图。
+
+`make standalone-sim` 在没有兄弟 React 的独立源码副本中安装冻结依赖、构建并运行声明的
+独立入口，不移动原 checkout、不复用原构建产物、不读取私有运行状态。跨端套件只收集，
+真实执行明确记为 UNRUN；正式跨端入口仍要求 React 存在。
+失败命令日志、单测报告和浏览器现场会先复制到原工作区的
+`.cache/standalone-failures/run-*`，再删除独立副本。
 
 两条体积门禁量的不是同一个东西，别混：`make asset-budget` 把**全部**构建产物加起来，
 管的是产物总量失控；用户真正下载的由 `make e2e` 里的
 `tests/e2e/route-payload.spec.ts` 守——在真实导航里量浏览器请求的脚本，并禁止
 shiki / mermaid / KaTeX 进入关键路径。两条命令都会打印当前实测值，**这里不抄**。
+
+预算按真实路由载荷和产物模块图审查。优先保留构建器默认优化与清晰的功能边界，
+不为某个分类桶强制拆包。依赖更新后的有限增长可以记录原因、实测值及合理余量后
+更新预算；渲染器按需加载、只加载当前语言和零初始投机下载的断言继续保留，
+两个验证平台上的完整路由套件仍须执行。
 两者可以反向变动：KaTeX 改成按需加载后首屏少了 269 KB，产物总量却涨了 1 KiB。
 调性能看后者。
 
@@ -206,12 +247,20 @@ Artifact 能力只由显式的路径/source 策略决定：已知 UTF-8 文本�
 
 ## 定时任务
 
+定时任务 ID 仅在浏览器剪贴板实际写入成功后提示复制成功；接口不可用或写入失败
+不报告成功。
+
 工作区定时任务页面支持 Gateway 实际拥有的 `once` 与 `cron` 类型、
 hourly/daily/weekly/monthly/custom cron、可编辑 IANA 时区、DST-aware 单次时间转换、
 新建 thread 或复用现有 thread 的 context，以及内置 recipes。编辑时保持 schedule type
 不可变；暂停、恢复、立即触发和二次确认删除分别使用 Gateway 的专用 endpoint。筛选覆盖两种
 类型和全部六种 task 状态；运行历史使用明确的 `limit/offset` 分页，并展示全部 run 状态、
 时间、thread/run ID 和错误。
+
+调度 host note、目标检查分类、消息来源、生命周期词汇和 UI 错误码由仓库根的后端契约
+生成。消费的契约变动后运行 `make gen-contract-constants`；
+`make gen-contract-constants-check` 检测过期产物，类型检查要求为新增代码补全本地化映射。
+未知未来错误保留原始 Details 和既有回退行为。
 
 `make e2e-scheduled` 会启动真实本地 FastAPI Gateway、SQLite、Nuxt preview 与
 Playwright Chromium，覆盖真实 once/cron 创建与校验、context/thread 权限、PATCH、
@@ -302,6 +351,9 @@ thread/checkpoint、run-event store、production owner check 和 workspace-chang
 
 ## 流式与历史行为
 
+选择技能后菜单关闭并打开详情面板；退出动画中的菜单不会因布局移动到静止鼠标下
+重新打开，用户再次操作触发器仍可正常打开。
+
 聊天 run 显式订阅 `values`、`messages-tuple`、`updates` 和 `custom`。task 生命周期与
 `llm_retry` custom 事件统一折叠为 thread-scoped UI 状态；子任务卡片展示状态、模型、累计
 token 和实时步骤，刷新后展开卡片可回填持久化步骤。长会话初次只请求最新一页历史，只有
@@ -311,3 +363,7 @@ token 和实时步骤，刷新后展开卡片可回填持久化步骤。长会�
 消息、reasoning 与 processing 文本统一经过一个产品 Markdown 适配器，真实天气 GFM 表格和
 流式半成品不会因调用点不同而退化。表格复制/下载/全屏与消息操作按 React 当前调用点对齐；
 React 未启用反馈入口时，Vue 也不显示点赞/踩。
+
+工作区在浏览器标签页重新可见时刷新已过期的 Agent、Memory、feature 与 capability 数据，
+行为与 React 一致。Skills 保留五分钟新鲜窗口；Session 可见性探测仍由现有的六十秒节流
+独占，models、thread history 等显式查询策略继续由各自的 owner 管理。

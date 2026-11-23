@@ -1,25 +1,19 @@
 /*
-  【文件职责】     钉住 browser 面板「还没有画面」那一支的空状态。
-  【架构位置】     L3 单元测试
+  【文件职责】     固定 BrowserPanel 无画面时的 live/static 空状态和导航反馈。
+  【架构位置】     Vue DOM 单元测试；浏览器联动由 e2e-parity 独立覆盖。
   【主要导出】     无；Vitest cases
-  【依赖关系】     app/components/workspace/browser-view/BrowserPanel.vue
-  【边界与注意】   这一支**对照台账测不到**：`browser-feature` 场景只断言触发器可见，
-                   从来没打开过面板；就算打开，面板一进来就去连实时浏览器，
-                   两个应用回落到静态的时机不一定同步，拿它当锚点会得到一份
-                   随机变红的门禁。所以这里用组件测试钉。
-
-                   原来这一支是一行居中文字（`grid place-items-center`），
-                   上游是 `ConversationEmptyState`：图标 + 标题 + 说明三件
-                   （browser-view-panel.tsx:440）。缺的是图标与整条说明。
-
-                   live / static 两态都要断言（坑 57）：只断言 live 那半边的话，
-                   把三目写成恒真也照样绿。
+  【依赖关系】     BrowserPanel · navigation mutation · browser stream mock
+  【边界与注意】   两种模式均检查图标、标题、说明；无截图导航通过 toast 反馈。
 */
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  createWorkspaceToastStore,
+  workspaceToastKey,
+} from "@/core/workspace-shell/toast";
 import BrowserPanel from "@/components/workspace/browser-view/BrowserPanel.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 
@@ -54,9 +48,11 @@ vi.mock("@/components/workspace/browser-view/useBrowserStream", async () => {
   };
 });
 
+const toast = createWorkspaceToastStore();
 function mountPanel() {
   return mount(BrowserPanel, {
     props: { threadId: "thread-1", active: true, frame: null },
+    global: { provide: { [workspaceToastKey as symbol]: toast } },
   });
 }
 
@@ -98,17 +94,8 @@ describe("BrowserPanel empty state", () => {
     expect(wrapper.text()).not.toContain(enUS.browser.connectingFrame);
   });
 
-  /*
-    **导航成功、但一张图都没截到**——这一支原来什么都不说：`localFrame` 置空、
-    面板变白，空状态照旧写着「暂无浏览器活动 / 在上方输入网址…」，
-    而用户刚刚就是输完网址按了回车。上游这一支有话说（`toast.warning`），
-    只是这个面板整体不走 toast（理由在 BrowserPanel.vue 的文件头），
-    所以同一句话放进空状态的说明位。
-
-    负向验证：把 `navigatedWithoutFrame.value = nextFrame === null` 去掉，
-    这条立刻红（说明位退回 noFrameDescription）。
-  */
-  it("导航成功却没有截图时，空状态说明换成那句话而不是「输入网址」", async () => {
+  // 导航成功但无截图时，与 React 一样发出 warning toast，保留原空状态说明。
+  it("reports a successful navigation without a screenshot through the shared warning toast", async () => {
     navigateResult.mockResolvedValue({
       url: "https://example.com/",
       title: "Example",
@@ -124,8 +111,14 @@ describe("BrowserPanel empty state", () => {
     await wrapper.get("form").trigger("submit");
     await flushPromises();
 
-    expect(wrapper.text()).toContain(enUS.browser.navigatedNoScreenshot);
-    expect(wrapper.text()).not.toContain(enUS.browser.noFrameDescription);
+    expect(
+      toast.toasts.value.some(
+        (item) =>
+          item.kind === "warning" &&
+          item.message === enUS.browser.navigatedNoScreenshot,
+      ),
+    ).toBe(true);
+    expect(wrapper.text()).toContain(enUS.browser.noFrameDescription);
     // 不是错误：那条 role="alert" 不许出现。
     expect(wrapper.find('[role="alert"]').exists()).toBe(false);
   });

@@ -49,7 +49,11 @@ export interface BrowserConnectionOptions {
   clearTimer?: (handle: TimerHandle) => void;
   onState?: (snapshot: BrowserConnectionSnapshot) => void;
   onFrame?: (frame: Blob | ArrayBuffer | string) => void;
-  onFallbackNavigate?: (intent: BrowserNavigateIntent) => void;
+  onNavigationRejected?: (
+    url: string | undefined,
+    message: string | undefined,
+  ) => void;
+  onReconnectExhausted?: () => void;
 }
 
 const INITIAL_SNAPSHOT: BrowserConnectionSnapshot = {
@@ -340,6 +344,10 @@ export class BrowserConnectionController {
     if (type === "nav_rejected") {
       const url = Reflect.get(payload, "url");
       const message = Reflect.get(payload, "message");
+      this.options.onNavigationRejected?.(
+        typeof url === "string" ? url : undefined,
+        typeof message === "string" ? message : undefined,
+      );
       this.publish({
         error:
           typeof message === "string" && message.trim()
@@ -390,14 +398,13 @@ export class BrowserConnectionController {
     if (!this.isCurrent(generation) || this.reconnectTimer !== null) return;
     const attempt = this.state.reconnectAttempt;
     if (attempt >= BROWSER_RECONNECT_MAX_ATTEMPTS) {
-      const pending = this.pendingNavigate;
       this.pendingNavigate = null;
       this.publish({
         status: "error",
         canRetry: true,
         error: browserCloseMessage(code, reason),
       });
-      if (pending) this.options.onFallbackNavigate?.(pending);
+      this.options.onReconnectExhausted?.();
       return;
     }
     const nextAttempt = attempt + 1;

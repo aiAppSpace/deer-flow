@@ -5,6 +5,7 @@ import { ref } from "vue";
 
 import ChatComposer from "@/components/chat/ChatComposer.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
+import { referenceToken } from "@/core/mentions/inline-references";
 import {
   buildComposerDraftKey,
   writeComposerDraft,
@@ -16,6 +17,7 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
 
 const mocks = vi.hoisted(() => ({
   loadSkills: vi.fn(),
@@ -29,6 +31,21 @@ const mocks = vi.hoisted(() => ({
 const NativeURL = URL;
 const createObjectURL = vi.fn((file: File) => `blob:${file.name}`);
 const revokeObjectURL = vi.fn();
+
+vi.mock("@/composables/useAuthSession", () => ({
+  useAuthSession: () => ({
+    session: ref({ tag: "anonymous" }),
+    isFetching: ref(false),
+  }),
+}));
+
+vi.mock("@/core/features/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/core/features/api")>()),
+  fetchConversationReferencesCapability: vi.fn(async () => ({
+    enabled: false,
+    maxReferences: 0,
+  })),
+}));
 
 vi.mock("@/core/skills/api", () => ({ loadSkills: mocks.loadSkills }));
 vi.mock("@/core/models/api", () => ({ loadModels: mocks.loadModels }));
@@ -81,6 +98,7 @@ function mountComposer(
       },
     },
   });
+  wrappers.push(wrapper);
   return { wrapper, submitMessage };
 }
 
@@ -119,7 +137,11 @@ describe("composer submission and stale lifecycle", () => {
       ],
       token_usage: { enabled: true },
     });
-    mocks.getUploadLimits.mockReset().mockResolvedValue(undefined);
+    mocks.getUploadLimits.mockReset().mockResolvedValue({
+      max_files: 10,
+      max_file_size: 100 * 1024 * 1024,
+      max_total_size: 100 * 1024 * 1024,
+    });
     mocks.uploadFiles.mockReset();
     mocks.polishInputDraft.mockReset();
     mocks.fetchWithAuth.mockReset();
@@ -135,9 +157,64 @@ describe("composer submission and stale lifecycle", () => {
   });
 
   afterEach(() => {
+    wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
     vi.unstubAllGlobals();
     // 确认框现在 portal 到 body：不清掉，下一条用例会读到上一条留下的浮层。
     document.body.innerHTML = "";
+  });
+
+  it("keeps the accepted run attached when its Stop control requests server cancellation", async () => {
+    let finishRun!: (accepted: boolean) => void;
+    const pendingRun = new Promise<boolean>((resolve) => {
+      finishRun = resolve;
+    });
+    let submittedSignal: AbortSignal | undefined;
+    const submitMessage = vi.fn(async (_text, _files, options) => {
+      submittedSignal = options.signal;
+      options.onAccepted();
+      return pendingRun;
+    });
+    const { wrapper } = mountComposer(submitMessage);
+    await flushPromises();
+    await wrapper.get("textarea").setValue("A running request");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(submitMessage).toHaveBeenCalledTimes(1);
+    expect(submittedSignal?.aborted).toBe(false);
+    await wrapper.setProps({ streaming: true });
+    try {
+      await wrapper.get('button[aria-label="Stop"]').trigger("click");
+      expect(wrapper.emitted("stop")).toHaveLength(1);
+      // The run owner must still be attached to send its cancel request.
+      // Aborting the submission first only disconnects the local observer.
+      expect(submittedSignal?.aborted).toBe(false);
+    } finally {
+      finishRun(true);
+      await flushPromises();
+    }
+  });
+
+  it("opens the real mode menu and emits the selected mode through the composer context", async () => {
+    const { wrapper } = mountComposer();
+    await flushPromises();
+    const trigger = wrapper.get("[data-testid='composer-mode-trigger']");
+    expect(document.querySelector("[role='menu']")).toBeNull();
+    (trigger.element as HTMLButtonElement).click();
+    await flushPromises();
+    const menu = document.querySelector("[role='menu']");
+    expect(menu).not.toBeNull();
+    expect(trigger.attributes("aria-expanded")).toBe("true");
+    const flash = menu!.querySelector(
+      "[role='menuitemradio'][data-state='unchecked']",
+    );
+    expect(flash?.textContent).toContain(enUS.inputBox.flashMode);
+    (flash as HTMLElement).click();
+    await flushPromises();
+    expect(wrapper.emitted("contextChange")?.at(-1)?.[0]).toMatchObject({
+      mode: "flash",
+    });
+    expect(trigger.attributes("aria-expanded")).toBe("false");
+    wrapper.unmount();
   });
 
   it("renders the complete React welcome suggestion row in source order", async () => {
@@ -217,6 +294,262 @@ describe("composer submission and stale lifecycle", () => {
     ]);
   });
 
+  it("publishes the exact human upload snapshot and retires it before a pending run settles", async () => {
+    let releaseUpload!: () => void;
+    let releaseRun!: () => void;
+    mocks.uploadFiles.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        releaseUpload = resolve;
+      });
+      return {
+        success: true,
+        message: "ok",
+        skipped_files: [],
+        files: [
+          {
+            filename: "notes.txt",
+            size: 5,
+            virtual_path: "/mnt/user-data/uploads/notes.txt",
+          },
+        ],
+      };
+    });
+    const submitMessage = vi.fn(async () => {
+      await new Promise<void>((resolve) => {
+        releaseRun = resolve;
+      });
+      return false;
+    });
+    const { wrapper } = mountComposer(submitMessage, {
+      modelSelectionReady: true,
+    });
+    await flushPromises();
+    await vi.waitFor(() =>
+      expect(
+        wrapper.get("[data-testid='composer-model-selector']").text(),
+      ).toBe("Reasoner"),
+    );
+    await wrapper.get("textarea").setValue("Review this file");
+    await selectFile(wrapper, new File(["hello"], "notes.txt"));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(wrapper.emitted("uploadingChange")).toEqual([
+      [
+        true,
+        {
+          text: "Review this file",
+          humanMessageId: expect.any(String),
+          files: [{ filename: "notes.txt", size: 0, status: "uploading" }],
+          additionalKwargs: {},
+        },
+      ],
+    ]);
+    const uploadId = (
+      wrapper.emitted("uploadingChange")![0]![1] as { humanMessageId: string }
+    ).humanMessageId;
+    // AgentChat locks the controls while upload is pending. Locking must not
+    // cancel that transaction or let a later context update rewrite its send.
+    await wrapper.setProps({
+      disabled: true,
+      uploading: true,
+      context: { model_name: "plain", mode: "flash" },
+    });
+    expect(wrapper.get("textarea").attributes("aria-disabled")).toBe("true");
+    expect(
+      wrapper
+        .get("[data-testid='composer-model-selector']")
+        .attributes("disabled"),
+    ).toBeDefined();
+    expect(
+      wrapper
+        .get("[data-testid='composer-mode-trigger']")
+        .attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get("form").trigger("submit");
+    expect(mocks.uploadFiles).toHaveBeenCalledTimes(1);
+    releaseUpload();
+    await flushPromises();
+    expect(wrapper.emitted("uploadingChange")!.at(-1)).toEqual([false]);
+    expect(submitMessage).toHaveBeenCalledWith(
+      "Review this file",
+      expect.any(Array),
+      expect.objectContaining({
+        humanMessageId: uploadId,
+        runSnapshot: {
+          context: { model_name: "reasoner", mode: "pro" },
+          model: expect.objectContaining({
+            name: "reasoner",
+            supports_thinking: true,
+            supports_reasoning_effort: true,
+          }),
+        },
+      }),
+    );
+    releaseRun();
+    await flushPromises();
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "Review this file",
+    );
+    expect(wrapper.text()).toContain("notes.txt");
+    wrapper.unmount();
+  });
+
+  it("aborts the upload owner on account/thread change and ignores its late completion after returning", async () => {
+    let complete!: (value: unknown) => void;
+    mocks.uploadFiles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const submitMessage = vi.fn();
+    const { wrapper } = mountComposer(submitMessage);
+    await flushPromises();
+    await wrapper.get("textarea").setValue("Original A draft");
+    await selectFile(wrapper, new File(["one"], "one.txt"));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const signal = mocks.uploadFiles.mock.calls[0]?.[2]?.signal as
+      AbortSignal | undefined;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    await wrapper.setProps({
+      userId: "user-2",
+      threadKey: "thread-2",
+      targetThreadId: "thread-2",
+    });
+    expect(signal!.aborted).toBe(true);
+    await wrapper.get("textarea").setValue("B draft survives");
+    await wrapper.setProps({
+      userId: "user-1",
+      threadKey: "thread-1",
+      targetThreadId: "thread-1",
+    });
+    await flushPromises();
+    await wrapper.get("textarea").setValue("New A draft survives");
+    complete({
+      success: true,
+      files: [
+        {
+          filename: "one.txt",
+          size: 3,
+          virtual_path: "/mnt/user-data/uploads/one.txt",
+        },
+      ],
+      message: "ok",
+      skipped_files: [],
+    });
+    await flushPromises();
+    expect(submitMessage).not.toHaveBeenCalled();
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "New A draft survives",
+    );
+    expect(wrapper.text()).toContain("one.txt");
+    expect(toastStore.toasts.value).toEqual([]);
+  });
+
+  it("captures page-owned send metadata before upload and captures fresh metadata for the next turn", async () => {
+    let complete!: (value: unknown) => void;
+    mocks.uploadFiles.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const host = {
+      additionalInputMessages: [
+        { type: "human" as const, content: "Original quote" },
+      ],
+      additionalKwargs: { knowledge_scope: { version: 1, mode: "all" } },
+      onAccepted: vi.fn(),
+    };
+    const captureSubmission = vi.fn(() => host);
+    const { wrapper, submitMessage } = mountComposer(undefined, {
+      captureSubmission,
+    });
+    await flushPromises();
+    await wrapper.get("textarea").setValue("Upload with original metadata");
+    await selectFile(wrapper, new File(["one"], "one.txt"));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(captureSubmission).toHaveBeenCalledTimes(1);
+    host.additionalInputMessages[0]!.content = "Next quote";
+    host.additionalKwargs.knowledge_scope.mode = "disabled";
+    complete({
+      success: true,
+      files: [{ filename: "one.txt", size: 3, virtual_path: "/mnt/one.txt" }],
+      message: "ok",
+      skipped_files: [],
+    });
+    await flushPromises();
+    expect(submitMessage.mock.calls[0]![2].hostSnapshot).toEqual({
+      additionalInputMessages: [{ type: "human", content: "Original quote" }],
+      additionalKwargs: { knowledge_scope: { version: 1, mode: "all" } },
+      onAccepted: host.onAccepted,
+    });
+    expect(captureSubmission).toHaveBeenCalledTimes(1);
+    await wrapper.get("textarea").setValue("Use fresh metadata");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(captureSubmission).toHaveBeenCalledTimes(2);
+    expect(submitMessage.mock.calls[1]![2].hostSnapshot).toEqual({
+      additionalInputMessages: [{ type: "human", content: "Next quote" }],
+      additionalKwargs: { knowledge_scope: { version: 1, mode: "disabled" } },
+      onAccepted: host.onAccepted,
+    });
+  });
+
+  it("aborts an in-flight upload on disposal and retains the pending draft", async () => {
+    mocks.uploadFiles.mockImplementation(() => new Promise(() => {}));
+    const { wrapper } = mountComposer();
+    await flushPromises();
+    await wrapper.get("textarea").setValue("Recover after disposal");
+    await selectFile(wrapper, new File(["one"], "one.txt"));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const signal = mocks.uploadFiles.mock.calls[0]?.[2]?.signal as
+      AbortSignal | undefined;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    wrapper.unmount();
+    expect(signal!.aborted).toBe(true);
+    expect(Object.values(sessionStorage).join("\n")).toContain(
+      "Recover after disposal",
+    );
+  });
+
+  it("reuses the goal submission identity on run rejection and preserves its draft until acceptance", async () => {
+    mocks.fetchWithAuth.mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ goal: { objective: "Ship safely" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    const submitMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Run rejected"))
+      .mockImplementationOnce(async (_text, _files, options) => {
+        options.onAccepted();
+        return true;
+      });
+    const { wrapper } = mountComposer(submitMessage);
+    await flushPromises();
+    await wrapper.get("textarea").setValue("/goal Ship safely");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "/goal Ship safely",
+    );
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(submitMessage).toHaveBeenCalledTimes(2);
+    expect(submitMessage.mock.calls[1]![2].humanMessageId).toBe(
+      submitMessage.mock.calls[0]![2].humanMessageId,
+    );
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "",
+    );
+  });
+
   it("renders an image attachment inside the composer surface with a thumbnail and removable state", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
@@ -232,7 +565,7 @@ describe("composer submission and stale lifecycle", () => {
     );
     expect(
       wrapper.get("[data-testid='composer-bottom-background']").classes(),
-    ).toEqual(expect.arrayContaining(["absolute", "-bottom-[17px]", "h-4"]));
+    ).toEqual(expect.arrayContaining(["absolute", "-bottom-4", "h-4"]));
     expect(
       wrapper.get("[data-testid='composer-disclaimer']").classes(),
     ).toEqual(
@@ -288,6 +621,10 @@ describe("composer submission and stale lifecycle", () => {
     await wrapper.get("form").trigger("submit");
     await flushPromises();
     expect(wrapper.text()).toContain("notes.txt");
+    expect(toastStore.toasts.value.at(-1)).toMatchObject({
+      kind: "error",
+      message: "Run rejected",
+    });
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
       "Review this file",
     );
@@ -296,6 +633,9 @@ describe("composer submission and stale lifecycle", () => {
     await flushPromises();
     expect(mocks.uploadFiles).toHaveBeenCalledTimes(1);
     expect(submitMessage).toHaveBeenCalledTimes(2);
+    expect(submitMessage.mock.calls[0]![2].humanMessageId).toBe(
+      submitMessage.mock.calls[1]![2].humanMessageId,
+    );
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
       "",
     );
@@ -478,10 +818,162 @@ describe("composer submission and stale lifecycle", () => {
       targetThreadId: "thread-1",
     });
     await flushPromises();
-    expect((textarea.element as HTMLTextAreaElement).value).toBe(
-      "Thread one draft",
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("");
+    expect(wrapper.text()).not.toContain("thread-one.txt");
+  });
+
+  it("keeps a returned A draft and attachments when the abandoned A acceptance arrives", async () => {
+    mocks.uploadFiles.mockResolvedValue({
+      success: true,
+      files: [{ filename: "one.txt", size: 3, virtual_path: "/mnt/one.txt" }],
+      message: "ok",
+      skipped_files: [],
+    });
+    let accept!: () => void;
+    let settle!: (value: boolean) => void;
+    const submitMessage = vi.fn(
+      (_text, _files, options) =>
+        new Promise<boolean>((resolve) => {
+          accept = options.onAccepted;
+          settle = resolve;
+        }),
     );
-    expect(wrapper.text()).toContain("thread-one.txt");
+    const { wrapper } = mountComposer(submitMessage);
+    await flushPromises();
+    await wrapper.get("textarea").setValue("Identical A draft");
+    await selectFile(wrapper, new File(["one"], "one.txt"));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const signal = submitMessage.mock.calls[0]![2].signal as AbortSignal;
+    await wrapper.setProps({
+      threadKey: "thread-2",
+      targetThreadId: "thread-2",
+    });
+    await wrapper.setProps({
+      threadKey: "thread-1",
+      targetThreadId: "thread-1",
+    });
+    await flushPromises();
+    expect(signal.aborted).toBe(true);
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "Identical A draft",
+    );
+    accept();
+    settle(true);
+    await flushPromises();
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "Identical A draft",
+    );
+    expect(wrapper.text()).toContain("one.txt");
+  });
+
+  it("aborts a goal request on identity change and ignores its late goal/run/notification", async () => {
+    let complete!: (response: Response) => void;
+    mocks.fetchWithAuth.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const { wrapper, submitMessage } = mountComposer();
+    await flushPromises();
+    await wrapper.get("textarea").setValue("/goal Old objective");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const signal = mocks.fetchWithAuth.mock.calls[0]![1].signal as AbortSignal;
+    await wrapper.setProps({ userId: "user-2" });
+    await wrapper.get("textarea").setValue("New owner draft");
+    expect(signal.aborted).toBe(true);
+    complete(
+      new Response(JSON.stringify({ goal: { objective: "Old objective" } }), {
+        status: 200,
+      }),
+    );
+    await flushPromises();
+    expect(submitMessage).not.toHaveBeenCalled();
+    expect(wrapper.emitted("goalChange")).toBeUndefined();
+    expect(toastStore.toasts.value).toEqual([]);
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "New owner draft",
+    );
+  });
+
+  it("renders goal status replacement tokens as the literal objective", async () => {
+    mocks.fetchWithAuth.mockResolvedValue(
+      new Response(JSON.stringify({ goal: { objective: "$& and $1" } }), {
+        status: 200,
+      }),
+    );
+    const { wrapper, submitMessage } = mountComposer();
+    await flushPromises();
+    await wrapper.get("textarea").setValue("/goal");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(submitMessage).not.toHaveBeenCalled();
+    expect(toastStore.toasts.value.at(-1)?.message).toBe(
+      enUS.inputBox.goalActive.replace("{goal}", () => "$& and $1"),
+    );
+  });
+
+  it.each([
+    { label: "agent", props: { agentName: "agent-2" } },
+    {
+      label: "new runtime UUID",
+      props: { targetThreadId: "new-runtime-uuid" },
+    },
+  ])(
+    "cancels a pending run when the $label changes despite a stable new draft route",
+    async ({ props }) => {
+      let accept!: () => void;
+      let settle!: (value: boolean) => void;
+      const submitMessage = vi.fn(
+        (_text, _files, options) =>
+          new Promise<boolean>((resolve) => {
+            accept = options.onAccepted;
+            settle = resolve;
+          }),
+      );
+      const { wrapper } = mountComposer(submitMessage, { threadKey: "new" });
+      await flushPromises();
+      await wrapper.get("textarea").setValue("Old identity draft");
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      const signal = submitMessage.mock.calls[0]![2].signal as AbortSignal;
+      await wrapper.setProps(props);
+      await flushPromises();
+      await wrapper.get("textarea").setValue("New identity draft");
+      expect(signal.aborted).toBe(true);
+      accept();
+      settle(true);
+      await flushPromises();
+      expect(
+        (wrapper.get("textarea").element as HTMLTextAreaElement).value,
+      ).toBe("New identity draft");
+    },
+  );
+
+  it("keeps the accepted new-chat run alive when its URL adopts the same target thread", async () => {
+    let settle!: (value: boolean) => void;
+    const submitMessage = vi.fn((_text, _files, options) => {
+      options.onAccepted();
+      return new Promise<boolean>((resolve) => {
+        settle = resolve;
+      });
+    });
+    const { wrapper } = mountComposer(submitMessage, { threadKey: "new" });
+    await flushPromises();
+    await wrapper.get("textarea").setValue("First turn");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    const signal = submitMessage.mock.calls[0]![2].signal as AbortSignal;
+    await wrapper.setProps({ threadKey: "thread-1" });
+    await flushPromises();
+    expect(signal.aborted).toBe(false);
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
+      "",
+    );
+    settle(true);
+    await flushPromises();
   });
 
   it("drops duplicate submits while the first request is in flight", async () => {
@@ -630,6 +1122,39 @@ describe("composer submission and stale lifecycle", () => {
     );
   });
 
+  it.each([false, true])(
+    "restores an enabled legacy saved skill into the single inline reference owner (already inline=%s)",
+    async (alreadyInline) => {
+      const key = buildComposerDraftKey({
+        userId: "user-1",
+        agentName: null,
+        threadId: "thread-1",
+      });
+      const token = referenceToken("skill", "enabled", "enabled");
+      writeComposerDraft(sessionStorage, key, {
+        text: alreadyInline ? `${token} Analyze it` : "Analyze it",
+        skillName: "enabled",
+      });
+      const { wrapper, submitMessage } = mountComposer();
+      await flushPromises();
+      expect(
+        wrapper.findAll("[data-testid=inline-skill-reference]"),
+      ).toHaveLength(1);
+      expect(wrapper.find('[aria-label="Remove /enabled"]').exists()).toBe(
+        false,
+      );
+      expect(wrapper.get('[role="textbox"][contenteditable]').text()).toContain(
+        "Analyze it",
+      );
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      expect(submitMessage).toHaveBeenCalledTimes(1);
+      expect(submitMessage.mock.calls[0]?.[2]).toMatchObject({
+        additionalKwargs: { skill_references: ["enabled"] },
+      });
+    },
+  );
+
   it("waits for the agent default before selecting a catalog fallback model", async () => {
     mocks.loadModels.mockResolvedValue({
       models: [
@@ -679,15 +1204,15 @@ describe("composer submission and stale lifecycle", () => {
       },
     });
     await flushPromises();
-    expect(wrapper.emitted("contextChange")).toBeUndefined();
+    expect(wrapper.emitted("resolveContext")).toBeUndefined();
 
     await wrapper.setProps({ defaultModelName: "agent-reasoner" });
     await flushPromises();
-    expect(wrapper.emitted("contextChange")).toBeUndefined();
+    expect(wrapper.emitted("resolveContext")).toBeUndefined();
 
     await wrapper.setProps({ modelSelectionReady: true });
     await flushPromises();
-    expect(wrapper.emitted("contextChange")?.at(-1)?.[0]).toMatchObject({
+    expect(wrapper.emitted("resolveContext")?.at(-1)?.[0]).toMatchObject({
       model_name: "agent-reasoner",
       mode: "pro",
     });
@@ -695,7 +1220,7 @@ describe("composer submission and stale lifecycle", () => {
 
   /*
     上游 input-box.tsx:2142 在这个下拉列表上写死了
-    `aria-label="Skill suggestions"`（未接入词典）。本仓这里原来完全没有
+    `aria-label="Command suggestions"`（未接入词典）。本仓这里原来完全没有
     aria-label。按 `deerflow-untranslated-primitive-names` 的既定规矩，
     Vue 用 `primitives.skillSuggestions` 照抄同一串英文。
 
@@ -710,11 +1235,11 @@ describe("composer submission and stale lifecycle", () => {
 
     const textarea = wrapper.get("textarea[name='message']");
     await textarea.trigger("focus");
-    await textarea.setValue("/en");
+    await textarea.setValue("/earlier");
     await flushPromises();
 
     const listbox = wrapper.get("[role='listbox']");
-    expect(listbox.attributes("aria-label")).toBe("Skill suggestions");
+    expect(listbox.attributes("aria-label")).toBe("Command suggestions");
   });
 
   /*
@@ -952,5 +1477,116 @@ describe("composer submission and stale lifecycle", () => {
     expect(
       wrapper.get("[data-testid='goal-length-counter']").classes(),
     ).toContain("text-destructive");
+  });
+
+  function observeHumanProducer() {
+    const capability = "__deerflow_parity_capture_v1__";
+    const eventName = "deerflow:parity-identity:v1";
+    const packets: {
+      producer: string;
+      event: string;
+      values: Record<string, unknown>;
+    }[] = [];
+    const receive = (event: Event) =>
+      packets.push((event as CustomEvent<(typeof packets)[number]>).detail);
+    Object.defineProperty(window, capability, {
+      configurable: true,
+      value: { version: 1, token: "composer-capture", action: "send:0" },
+    });
+    window.addEventListener(eventName, receive);
+    return {
+      packets,
+      stop() {
+        window.removeEventListener(eventName, receive);
+        Reflect.deleteProperty(window, capability);
+      },
+    };
+  }
+
+  it("observes the ordinary form's real human allocation, rejection retry and next accepted turn separately", async () => {
+    const observation = observeHumanProducer();
+    const submitMessage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Run rejected"))
+      .mockImplementation(async (_text, _files, options) => {
+        options.onAccepted();
+        return true;
+      });
+    const { wrapper } = mountComposer(submitMessage, {
+      modelSelectionReady: true,
+    });
+    try {
+      await flushPromises();
+      await vi.waitFor(() =>
+        expect(
+          wrapper.get("[data-testid='composer-model-selector']").text(),
+        ).toBe("Reasoner"),
+      );
+      await wrapper.get("textarea").setValue("Send a real composer draft");
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      expect(submitMessage).toHaveBeenCalledTimes(1);
+      const first = submitMessage.mock.calls[0]![2].humanMessageId;
+      expect(observation.packets).toEqual([
+        expect.objectContaining({
+          producer: "human:composer",
+          event: "human.allocate",
+          values: { raw: first, thread: "thread-1" },
+        }),
+      ]);
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      expect(submitMessage.mock.calls[1]![2].humanMessageId).toBe(first);
+      expect(observation.packets.at(-1)).toMatchObject({
+        event: "human.reuse",
+        values: { raw: first, thread: "thread-1" },
+      });
+      await wrapper.get("textarea").setValue("A distinct accepted turn");
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      const next = submitMessage.mock.calls[2]![2].humanMessageId;
+      expect(next).not.toBe(first);
+      expect(observation.packets.map((packet) => packet.event)).toEqual([
+        "human.allocate",
+        "human.reuse",
+        "human.allocate",
+      ]);
+      expect(observation.packets[2]?.values.raw).toBe(next);
+    } finally {
+      observation.stop();
+    }
+  });
+
+  it("records the actual pre-upload allocation even when the real composer never dispatches a run", async () => {
+    const observation = observeHumanProducer();
+    mocks.uploadFiles.mockRejectedValue(new Error("Upload rejected"));
+    const { wrapper, submitMessage } = mountComposer(undefined, {
+      modelSelectionReady: true,
+    });
+    try {
+      await flushPromises();
+      await vi.waitFor(() =>
+        expect(
+          wrapper.get("[data-testid='composer-model-selector']").text(),
+        ).toBe("Reasoner"),
+      );
+      await wrapper.get("textarea").setValue("Review this file");
+      await selectFile(wrapper, new File(["hello"], "notes.txt"));
+      await wrapper.get("form").trigger("submit");
+      await flushPromises();
+      expect(submitMessage).not.toHaveBeenCalled();
+      expect(observation.packets).toHaveLength(1);
+      const upload = wrapper.emitted("uploadingChange")?.[0]?.[1] as {
+        humanMessageId: string;
+      };
+      expect(observation.packets[0]).toMatchObject({
+        producer: "human:composer",
+        event: "human.allocate",
+        values: { raw: upload.humanMessageId, thread: "thread-1" },
+      });
+      expect(wrapper.text()).toContain("notes.txt");
+    } finally {
+      observation.stop();
+    }
   });
 });

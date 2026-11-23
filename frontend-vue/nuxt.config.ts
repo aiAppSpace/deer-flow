@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import { createThemeBootstrapScript } from "./app/core/theme/bootstrap";
 import { csrRoutes } from "./config/routes";
+import { clientChunkFileName } from "./config/client-chunk-file-name";
 
 const appPackageVersion = (
   JSON.parse(
@@ -19,57 +20,6 @@ const appPackageVersion = (
     version: string;
   }
 ).version;
-
-type ClientChunk = { moduleIds: string[]; name: string };
-
-function clientChunkFileName(chunk: ClientChunk) {
-  const ids = chunk.moduleIds.join("\n");
-  /*
-    CodeMirror 必须排在 markdown 之前。`@codemirror/lang-markdown` 依赖
-    `@lezer/markdown`，它的路径里带着字面量 `/markdown/`——按原来的顺序，
-    整个语法高亮 chunk 会被命名成 vendor-markdown，同时污染两边的预算。
-  */
-  if (/(?:codemirror|@codemirror)/.test(ids)) {
-    return "_nuxt/vendor-codemirror-[hash].js";
-  }
-  if (
-    /(?:StreamMarkdown|\/markdown\/|node_modules\/.+\/(?:hast|mdast|unified|unist-util|remark-|rehype-|marked|remend|katex))/.test(
-      ids,
-    )
-  ) {
-    return "_nuxt/vendor-markdown-[hash].js";
-  }
-  if (/\/app\/core\/i18n\//.test(ids)) {
-    return "_nuxt/vendor-i18n-[hash].js";
-  }
-  /*
-    **只认 reka-ui 与 splitpanes。** 这个函数按「chunk 里**任意一个**模块 id 命中」
-    贴标签，所以桶的种子选得越常见，标签就越不像话：原来这里还写着
-    `lucide-vue-next|class-variance-authority|clsx|tailwind-merge`，
-    而那四个几乎每个组件都 import——于是任何一个产品 chunk 只要碰过一个图标，
-    就被叫成 `vendor-ui`。
-
-    wave 66 实测（改之前）：`vendor-ui` 24 个 chunk 共 728,591 raw，
-    而**最大的两个（320 KB / 192 KB）连一个 reka / lucide / cva / clsx 标记都没有**，
-    全是产品代码。于是 `make asset-budget` 长期红着，而红的原因（728 KB > 380 KB）
-    和它注释里写的原因（「Reka 的 dialog/dropdown 加 Select、Tabs、Switch……」）
-    根本不是一回事——**一个测错了东西的门禁，比没有门禁更糟，因为它让人以为有东西在守。**
-
-    去掉那四个之后，它们的字节落回默认命名（按 chunk 自己的名字），
-    仍然计进整包天花板，只是不再冒充 UI 基础层。
-    `tests/guards/chunk-buckets.test.ts` 钉住「每个 vendor-* chunk 里真的有它
-    声称的那个包」。
-  */
-  if (/node_modules\/.+\/(?:reka-ui|splitpanes)/.test(ids)) {
-    return "_nuxt/vendor-ui-[hash].js";
-  }
-  if (
-    /node_modules\/.+\/(?:@vue|vue|vue-router|@tanstack\/vue-query)/.test(ids)
-  ) {
-    return "_nuxt/vendor-vue-[hash].js";
-  }
-  return `_nuxt/${chunk.name}-[hash].js`;
-}
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-08-03",
@@ -97,9 +47,38 @@ export default defineNuxtConfig({
       ],
     },
   },
-  css: ["~/assets/css/main.css", "splitpanes/dist/splitpanes.css"],
-  vite: { plugins: [tailwindcss()] },
+  css: ["~/assets/css/main.css"],
+  $production: {
+    postcss: {
+      plugins: {
+        // Preserve exact CSS arithmetic for the browser, as React does. cssnano's
+        // default calc reduction rounds Tailwind ratios before layout (2 / 1.5).
+        cssnano: { preset: ["default", { calc: false }] },
+      },
+    },
+  },
+  // Warm the next route on user intent rather than loading every visible
+  // workspace link (and its layout) when opening an unrelated public page.
+  experimental: {
+    defaults: {
+      nuxtLink: { prefetchOn: { interaction: true, visibility: false } },
+    },
+  },
+  vite: {
+    plugins: [tailwindcss()],
+    // Vite's root is Nuxt's app directory. Scan Vue/TS source entries before
+    // serving the first page so lazy panels do not discover shared dependencies
+    // mid-navigation and invalidate the browser's in-flight optimized imports.
+    optimizeDeps: { entries: ["**/*.{vue,ts}"] },
+  },
   hooks: {
+    "build:manifest"(manifest) {
+      // Keep required modulepreload/import edges. The generated all-route JS
+      // prefetch hints otherwise fetch closed panels and both locale chunks.
+      for (const chunk of Object.values(manifest)) {
+        if (chunk.file?.endsWith(".js")) chunk.prefetch = false;
+      }
+    },
     "vite:extendConfig"(config, { isClient }) {
       if (!isClient) return;
       if (!config.build) return;

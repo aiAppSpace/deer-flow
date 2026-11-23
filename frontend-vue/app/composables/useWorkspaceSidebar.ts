@@ -9,13 +9,10 @@
                    `deerflow:toggle-sidebar`，拿不到开合态，于是各自挑了一个固定图标。
                    状态不共享的时候，「画哪个图标」这个问题在那两处**无法回答**。
 
-                   ② **`open` 只描述桌面侧栏，窄屏抽屉是 `mobileOpen`——这是上游语义，
-                   照抄的是它的怪癖。** 上游 `useSidebar()` 的 `open` 来自 `_open`，
-                   `toggleSidebar()` 却是 `isMobile ? setOpenMobile : setOpen`
-                   （frontend/src/components/ui/sidebar.tsx:90）。于是窄屏下那颗
-                   触发器读的是**桌面**的 open：`defaultOpen` 兜底为 true，抽屉关着时
-                   图标画的却是 PanelLeftClose，点开也不变。这是上游的缺陷不是本仓的，
-                   两边同改才有意义，本轮按对照原则先保持一致并记账。
+                   ② `open` 只描述桌面侧栏，窄屏抽屉由 `mobileOpen` 单独持有。
+                   当前 React SidebarTrigger 按 `isMobile ? openMobile : open`
+                   选择图标状态。Vue 只在窄屏显示的消费者直接读取 mobileOpen，
+                   同时服务桌面与窄屏的消费者按 isNarrow 选择；切抽屉不改桌面收起态。
 
                    ③ 模块级 `const ref` 即单例，与 `useSettingsDialog` 同一形状。
                    **`isNarrow` 不在这一列**：它是视口的纯函数，谁算都一样，
@@ -38,7 +35,7 @@ export const SIDEBAR_NARROW_QUERY = "(max-width: 767px)";
 const collapsed = ref(false);
 const mobileOpen = ref(false);
 
-/** 上游 `useSidebar().open`。见文件头 ②：**不**包含窄屏抽屉。 */
+/** React useSidebar().open：桌面状态，不包含窄屏抽屉。 */
 const open = computed(() => !collapsed.value);
 /** 侧栏当前是否展示完整内容（窄屏抽屉打开时也算展开）。 */
 const sidebarExpanded = computed(() => !collapsed.value || mobileOpen.value);

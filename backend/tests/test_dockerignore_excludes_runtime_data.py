@@ -44,6 +44,11 @@ HOST_LOCAL_PATHS = [
     "backend/.deer-flow/.jwt_secret",
     "backend/.deer-flow/users/some-user/agents/my-agent/config.yaml",
     "backend/sandbox/some-thread/scratch.py",
+    ".cache/build-state.json",
+    "frontend/.cache/compiler-state.json",
+    "frontend-vue/.cache/standalone-failures/run-id/trace.zip",
+    "backend/.cache/runner-state.json",
+    "backend/extensions/sources/vendor/.cache/build-state.json",
 ]
 
 # Paths the build genuinely needs; the exclusions must not swallow them.
@@ -53,6 +58,9 @@ BUILD_INPUT_PATHS = [
     "backend/pyproject.toml",
     "backend/app/gateway/app.py",
     "backend/packages/harness/deerflow/config/extensions_config.py",
+    "frontend-vue/app/core/cache.ts",
+    "backend/extensions/sources/vendor/package.py",
+    "backend/extensions/sources/vendor/README.md",
 ]
 
 

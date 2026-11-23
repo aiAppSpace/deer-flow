@@ -140,7 +140,29 @@ describe("create（08 硬规则 1 · 05 A2/L10/L12）", () => {
       string,
       unknown
     >;
-    expect(body).toEqual(validPayload);
+    expect(body).toEqual({ on_disconnect: "continue", ...validPayload });
+  });
+
+  it("forwards an explicit immutable idempotency key and rejects unsupported resumable streams before HTTP", async () => {
+    const protocol = protocolWith(
+      fakeFetch(() => sseResponse(CONTENT_LOCATION)),
+    );
+    await protocol.create(
+      { threadId: "t-1", payload: validPayload, idempotencyKey: "same-input" },
+      signal(),
+    );
+    expect(recorded[0]?.headers["idempotency-key"]).toBe("same-input");
+    recorded = [];
+    await expect(
+      protocol.create(
+        {
+          threadId: "t-1",
+          payload: { ...validPayload, stream_resumable: true },
+        },
+        signal(),
+      ),
+    ).rejects.toMatchObject({ kind: "http" });
+    expect(recorded).toHaveLength(0);
   });
 
   it("非 2xx 归一化成 http 错误", async () => {
@@ -175,6 +197,50 @@ describe("resume（05 L11）", () => {
 
 describe("cancel（05 L16）", () => {
   const handle = { threadId: "t-1", runId: "r-1" };
+
+  it("a terminal cancel conflict drains the same run instead of discarding its tail", async () => {
+    const protocol = protocolWith(
+      fakeFetch([
+        () =>
+          new Response(
+            JSON.stringify({
+              detail: "Run r-1 is not cancellable (status: success)",
+            }),
+            { status: 409 },
+          ),
+        () => sseResponse(),
+      ]),
+    );
+    expect(await protocol.cancel(handle, "tail-1", signal())).toMatchObject({
+      kind: "drain",
+      outcome: "completed",
+      reason: "success",
+    });
+    expect(recorded[1]).toMatchObject({
+      method: "GET",
+      url: `${BASE}/threads/t-1/runs/r-1/stream`,
+      headers: { "last-event-id": "tail-1" },
+    });
+  });
+
+  it("a live run on another worker is a real cancel failure", async () => {
+    const protocol = protocolWith(
+      fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              detail:
+                "Run r-1 is not active on this worker and cannot be cancelled",
+            }),
+            { status: 409 },
+          ),
+      ),
+    );
+    await expect(
+      protocol.cancel(handle, undefined, signal()),
+    ).rejects.toMatchObject({ kind: "http" });
+    expect(recorded).toHaveLength(1);
+  });
 
   it("POST 到 cancel，且显式带 action=interrupt 与 wait=true", async () => {
     const protocol = protocolWith(

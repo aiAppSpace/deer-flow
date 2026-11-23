@@ -211,7 +211,9 @@ test.describe("数据流 gate", () => {
       stream_mode: ["messages-tuple", "updates", "custom"],
     });
 
-    const items = page.locator('[data-testid="message-list"] > [data-role]');
+    const items = page.locator(
+      '[data-testid="message-list"] > [data-message-group-index] [data-role]',
+    );
     await expect(items).toHaveCount(2, { timeout: 20_000 });
     // 正面特征：顺序本身。断言「两条都在」的话，顺序没恢复也会绿。
     await expect(items.nth(0)).toHaveAttribute("data-role", "human");
@@ -237,7 +239,9 @@ test.describe("数据流 gate", () => {
     await textarea.fill("Build a deck");
     await textarea.press("Enter");
     await expect(
-      page.locator('[data-testid="message-list"] > [data-role]'),
+      page.locator(
+        '[data-testid="message-list"] > [data-message-group-index] [data-role]',
+      ),
     ).toHaveCount(2, { timeout: 20_000 });
 
     const createSeq = sent.find(
@@ -389,7 +393,9 @@ test.describe("数据流 gate", () => {
     await mockGateway(page);
     await page.goto(`/workspace/chats/${THREAD_ID}`);
 
-    const items = page.locator('[data-testid="message-list"] > [data-role]');
+    const items = page.locator(
+      '[data-testid="message-list"] > [data-message-group-index] [data-role]',
+    );
     await expect(items).toHaveCount(2, { timeout: 20_000 });
     await expect(items.nth(0)).toContainText("Build a deck");
     await expect(items.nth(1)).toContainText("Reading the skill");

@@ -36,8 +36,9 @@
                    会变成一条与产品无关的红。它是纯历史标签，如实说明它没有门禁。
 */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -84,6 +85,95 @@ describe.skipIf(!present)("golden 夹具的出处", () => {
       fixture.recordedFrom ?? "",
     )?.[1];
     expect(inComment).toBe(stamped);
+  });
+
+  it("records the actual KaTeX renderer version, shared by both applications", () => {
+    const reactMath = JSON.parse(
+      readFileSync(
+        join(root, "../frontend/node_modules/katex/package.json"),
+        "utf8",
+      ),
+    ) as { version: string };
+    const vueMath = JSON.parse(
+      readFileSync(join(root, "node_modules/katex/package.json"), "utf8"),
+    ) as { version: string };
+    const stamped = /katex (\d+\.\d+\.\d+[^\s·]*)/.exec(
+      fixture.recordedFrom ?? "",
+    )?.[1];
+    expect(stamped).toBe(reactMath.version);
+    expect(vueMath.version).toBe(reactMath.version);
+    expect(fixture.$comment).toContain(`katex@${reactMath.version}`);
+  });
+
+  it("resolves Mermaid, DOMPurify, nested KaTeX and styles identically on both sides", () => {
+    const reactRequire = createRequire(join(root, "../frontend/package.json"));
+    const vueRequire = createRequire(join(root, "package.json"));
+    const reactMermaid = createRequire(
+      realpathSync(
+        join(root, "../frontend/node_modules/@streamdown/mermaid/package.json"),
+      ),
+    );
+    const packageVersion = (resolver: NodeJS.Require, name: string) => {
+      let dir = dirname(resolver.resolve(name));
+      while (dir !== dirname(dir)) {
+        const file = join(dir, "package.json");
+        if (existsSync(file)) {
+          const pkg = JSON.parse(readFileSync(file, "utf8")) as {
+            name: string;
+            version: string;
+          };
+          if (pkg.name === name) return pkg.version;
+        }
+        dir = dirname(dir);
+      }
+      throw new Error(`Cannot locate ${name} package manifest`);
+    };
+    expect(packageVersion(reactMermaid, "mermaid")).toBe(
+      packageVersion(vueRequire, "mermaid"),
+    );
+    const reactDiagram = createRequire(reactMermaid.resolve("mermaid"));
+    const vueDiagram = createRequire(vueRequire.resolve("mermaid"));
+    expect(packageVersion(reactDiagram, "dompurify")).toBe(
+      packageVersion(vueDiagram, "dompurify"),
+    );
+    expect(packageVersion(reactDiagram, "katex")).toBe(
+      packageVersion(vueRequire, "katex"),
+    );
+    expect(
+      packageVersion(
+        createRequire(reactRequire.resolve("rehype-katex")),
+        "katex",
+      ),
+    ).toBe(packageVersion(vueRequire, "katex"));
+    expect(
+      packageVersion(
+        createRequire(vueRequire.resolve("rehype-katex")),
+        "katex",
+      ),
+    ).toBe(packageVersion(vueRequire, "katex"));
+    expect(
+      readFileSync(reactRequire.resolve("katex/dist/katex.min.css"), "utf8"),
+    ).toBe(
+      readFileSync(vueRequire.resolve("katex/dist/katex.min.css"), "utf8"),
+    );
+  });
+});
+
+describe("Vue renderer/compiler runtime identity", () => {
+  it("shares the exact Vue runtime with the server renderer and compiler", () => {
+    const require = createRequire(join(root, "package.json"));
+    const vue = require("vue") as { version: string };
+    const compiler = require("vue/compiler-sfc") as { version: string };
+    const own = createRequire(require.resolve("vue/package.json"));
+    const renderer = own.resolve("@vue/server-renderer");
+    const rendererVersion = (
+      JSON.parse(
+        readFileSync(own.resolve("@vue/server-renderer/package.json"), "utf8"),
+      ) as { version: string }
+    ).version;
+    expect(compiler.version).toBe(vue.version);
+    expect(rendererVersion).toBe(vue.version);
+    expect(createRequire(renderer).resolve("vue")).toBe(require.resolve("vue"));
   });
 });
 

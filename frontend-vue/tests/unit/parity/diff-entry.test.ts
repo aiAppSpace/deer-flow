@@ -27,6 +27,8 @@ function capture(overrides: Partial<ParityCapture> = {}): ParityCapture {
     aria: "",
     ariaTree: [],
     requests: [],
+    requestFacts: [],
+    observationErrors: [],
     geometry: {},
     focus: "body",
     tabbables: [],
@@ -80,6 +82,9 @@ describe("台账判词", () => {
             fontWeight: "400",
             fontFamily: "ui-sans-serif",
             borderRadius: "0px",
+            boxShadow: "none",
+            backdropFilter: "none",
+            filter: "none",
             opacity: "1",
             hit: "hit",
             before: "none",
@@ -115,6 +120,9 @@ describe("台账判词", () => {
       fontWeight: "400",
       fontFamily: "ui-sans-serif",
       borderRadius: "0px",
+      boxShadow: "none",
+      backdropFilter: "none",
+      filter: "none",
       opacity: "1",
       hit: "hit",
       before: `content="" op=1 w=311 h=${h} bg=rgba(0,0,0,0) anim=none`,
@@ -148,6 +156,9 @@ describe("台账判词", () => {
       fontWeight: "400",
       fontFamily: "ui-sans-serif",
       borderRadius: "0px",
+      boxShadow: "none",
+      backdropFilter: "none",
+      filter: "none",
       opacity: "1",
       hit: "hit",
       before: `content="" op=1 w=311 h=156 bg=rgba(0,0,0,0) anim=${anim}`,
@@ -173,6 +184,9 @@ describe("台账判词", () => {
       fontWeight: "400",
       fontFamily: "ui-sans-serif",
       borderRadius: "0px",
+      boxShadow: "none",
+      backdropFilter: "none",
+      filter: "none",
       opacity: "1",
       hit: "hit",
       after: "none",
@@ -201,6 +215,9 @@ describe("台账判词", () => {
       fontWeight: "400",
       fontFamily: "ui-sans-serif",
       borderRadius: "0px",
+      boxShadow: "none",
+      backdropFilter: "none",
+      filter: "none",
       opacity: "1",
       hit: "hit",
       before: "none",
@@ -238,6 +255,9 @@ describe("borderRadius 这一档", () => {
     fontWeight: "400",
     fontFamily: "ui-sans-serif, system-ui, sans-serif",
     borderRadius: "16px",
+    boxShadow: "none",
+    backdropFilter: "none",
+    filter: "none",
     opacity: "1",
     hit: "self",
     before: "none",
@@ -309,4 +329,39 @@ describe("borderRadius 这一档", () => {
     );
     expect(entry.geometry).toEqual([]);
   });
+});
+
+describe("visual effect probes reject a one-property regression", () => {
+  const base = {
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 40,
+    color: "c",
+    background: "b",
+    fontSize: "12px",
+    fontWeight: "400",
+    fontFamily: "sans-serif",
+    borderRadius: "0px",
+    opacity: "1",
+    hit: "self",
+    before: "none",
+    after: "none",
+    boxShadow: "none",
+    backdropFilter: "none",
+    filter: "none",
+  };
+  it.each(["boxShadow", "backdropFilter", "filter"] as const)(
+    "detects a changed %s with every other lane unchanged",
+    (field) => {
+      const entry = buildDiffEntry(
+        capture({ geometry: { panel: base } }),
+        capture({ geometry: { panel: { ...base, [field]: "changed" } } }),
+      );
+      expect(entry.geometry).toEqual([`panel ${field} React=none Vue=changed`]);
+      expect(entry.ariaOnlyReact).toEqual([]);
+      expect(entry.ariaOnlyVue).toEqual([]);
+      expect(entry.requestBodies).toEqual([]);
+    },
+  );
 });

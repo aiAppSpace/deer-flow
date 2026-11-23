@@ -176,7 +176,8 @@ test.describe("artifact code editor", () => {
     await expect(panel.getByLabel("Save", { exact: true })).toBeEnabled();
 
     await editor.press(`${mod}+s`);
-    await expect(panel.getByLabel("Edit", { exact: true })).toBeVisible();
+    await expect(panel.getByLabel("Save", { exact: true })).toBeDisabled();
+    await expect(editor).toHaveText("value = 1");
 
     expect(puts).toHaveLength(1);
     expect(puts[0]?.url).toContain(

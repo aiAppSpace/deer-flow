@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, expect, test, rs } from "@rstest/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
 } from "@testing-library/react";
+import { toast } from "sonner";
 
 import { ModelSettingsPage } from "@/components/workspace/settings/model-settings-page";
 import { useAuth } from "@/core/auth/AuthProvider";
@@ -20,6 +22,7 @@ import {
   type ManagedModel,
 } from "@/core/models/management";
 
+rs.mock("sonner", () => ({ toast: { error: rs.fn(), success: rs.fn() } }));
 rs.mock("@/core/auth/AuthProvider", () => ({ useAuth: rs.fn() }));
 rs.mock("@/core/i18n/hooks", () => ({ useI18n: () => ({ t: enUS }) }));
 rs.mock("@/core/models/management", () => ({
@@ -131,4 +134,74 @@ test("connection test never saves and supports explicit key removal", async () =
     "",
   );
   expect(saveManagedModel).not.toHaveBeenCalled();
+});
+
+for (const operation of ["toggle", "editor"] as const) {
+  for (const departure of ["unmount", "account"] as const) {
+    test(`${operation} does not refresh a later owner after ${departure}`, async () => {
+      let finish!: (value: ManagedModel) => void;
+      rs.mocked(saveManagedModel).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const view = () => (
+        <QueryClientProvider client={client}>
+          <ModelSettingsPage />
+        </QueryClientProvider>
+      );
+      const mounted = render(view());
+      const invalidate = rs.spyOn(client, "invalidateQueries");
+      fireEvent.click(
+        await screen.findByRole("button", {
+          name:
+            operation === "toggle"
+              ? enUS.settings.models.disable
+              : enUS.settings.models.edit,
+        }),
+      );
+      if (operation === "editor")
+        fireEvent.click(
+          screen.getByRole("button", { name: enUS.settings.models.save }),
+        );
+      await waitFor(() => expect(saveManagedModel).toHaveBeenCalledTimes(1));
+      if (departure === "unmount") mounted.unmount();
+      else {
+        rs.mocked(useAuth).mockReturnValue({
+          user: { id: "next-admin", system_role: "admin" },
+        } as ReturnType<typeof useAuth>);
+        mounted.rerender(view());
+      }
+      invalidate.mockClear();
+      await act(async () => {
+        finish(existing);
+      });
+      expect(invalidate).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+  }
+}
+test("retired toggle rejection does not publish a global error", async () => {
+  let reject!: (error: Error) => void;
+  rs.mocked(saveManagedModel).mockImplementationOnce(
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+  );
+  mount();
+  fireEvent.click(
+    await screen.findByRole("button", { name: enUS.settings.models.disable }),
+  );
+  await waitFor(() => expect(saveManagedModel).toHaveBeenCalledTimes(1));
+  cleanup();
+  await act(async () => {
+    reject(new Error("Retired save"));
+  });
+  expect(toast.error).not.toHaveBeenCalled();
 });

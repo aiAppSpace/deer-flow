@@ -21,6 +21,7 @@ import {
 } from "@/composables/useProjects";
 import { projectKeys } from "@/core/projects";
 import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
+import { resetWorkspaceQueries } from "@/core/auth/workspace-queries";
 
 const threadsApi = vi.hoisted(() => ({ moveThreadToProject: vi.fn() }));
 vi.mock("@/core/threads/api", async (importOriginal) => ({
@@ -73,7 +74,7 @@ function mountWith<T>(setup: () => T) {
     }),
     { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
   );
-  return { wrapper, invalidated, api: exposed };
+  return { wrapper, invalidated, api: exposed, queryClient };
 }
 
 /** 失效清单里有没有以某个前缀开头的 key。 */
@@ -197,6 +198,32 @@ describe("项目内会话翻页", () => {
 });
 
 describe("移动会话到项目", () => {
+  it("旧账户的 mutation 等待取消旧读取时切账户，不能再写元数据缓存", async () => {
+    threadsApi.moveThreadToProject.mockResolvedValue({});
+    const {
+      api: mutation,
+      wrapper,
+      queryClient,
+    } = mountWith(useMoveThreadToProject);
+    let release!: () => void;
+    const cancelled = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const cancel = vi
+      .spyOn(queryClient, "cancelQueries")
+      .mockImplementationOnce(() => cancelled)
+      .mockResolvedValue(undefined);
+    const write = vi.spyOn(queryClient, "setQueriesData");
+    const settled = mutation
+      .mutateAsync({ threadId: "t-1", projectId: "old-project" })
+      .catch((error: unknown) => error);
+    await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce());
+    await resetWorkspaceQueries(queryClient);
+    release();
+    expect(await settled).toMatchObject({ name: "AbortError" });
+    expect(write).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
   it("先取消在途的元数据查询，再写缓存——顺序反了会被旧 GET 覆盖", async () => {
     threadsApi.moveThreadToProject.mockResolvedValue({});
     const order: string[] = [];

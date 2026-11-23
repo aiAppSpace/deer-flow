@@ -59,7 +59,7 @@
                    **写成规则而不是清单**：清单会烂掉，而「有没有浮层接管」不会。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";

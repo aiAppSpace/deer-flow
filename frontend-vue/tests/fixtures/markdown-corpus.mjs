@@ -100,6 +100,18 @@ export const CORPUS = [
     markdown: "Inline $a^2 + b^2 = c^2$ and display:\n\n$$\\frac{1}{2}$$",
   },
   {
+    id: "math-renderer-layout",
+    preset: PRESET_APP,
+    markdown:
+      "Integral $\\int_0^1 x^2 dx$ and $\\underbrace{a+b}_{c}$.\n\n$$\\int_0^1 x^2 dx$$\n\n$$\\underbrace{a+b}_{c}$$",
+  },
+  {
+    id: "math-renderer-matrix-and-errors",
+    preset: PRESET_APP,
+    markdown:
+      "Matrix $\\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}$ and $\\color{red}{x}$; untrusted $\\href{javascript:alert(1)}{link}$; invalid $\\unknowncommand{x}$.",
+  },
+  {
     id: "links-and-images",
     preset: PRESET_APP,
     markdown: [

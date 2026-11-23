@@ -19,7 +19,7 @@ export function deriveSettingsPermissions(
   session: SessionProbe | undefined,
   options: { authDisabled: boolean },
 ) {
-  if (options.authDisabled) {
+  if (options.authDisabled && session?.tag !== "authenticated") {
     return {
       state: "authenticated" as const,
       role: "admin" as const,

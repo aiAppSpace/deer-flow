@@ -49,7 +49,7 @@ import { chromium } from "@playwright/test";
 
 import { diffAriaLines, normalizeAriaSnapshot } from "./lib/aria-parity.mjs";
 
-const REACT_BASE = process.env.DOM_PARITY_REACT_BASE ?? "http://127.0.0.1:3000";
+const REACT_BASE = process.env.DOM_PARITY_REACT_BASE ?? "http://127.0.0.1:3200";
 const VUE_BASE = process.env.DOM_PARITY_VUE_BASE ?? "http://127.0.0.1:3100";
 
 /**

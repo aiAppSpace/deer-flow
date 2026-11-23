@@ -1,0 +1,42 @@
+{
+  "stage": 34,
+  "checkedFiles": 894,
+  "sha256": "f9b69382f64f5c78b7fc1b36bbdab14af33d00f8391215032d62e0b55ba44740",
+  "missing": [],
+  "changed": [],
+  "unexpectedSnapshotSources": [],
+  "selection": [
+    "backend/app",
+    "backend/packages/harness/deerflow",
+    "backend/packages/extension-api/deerflow_extension_api",
+    "Dockerfile, lock and three package metadata files"
+  ],
+  "excluded": [
+    ".cache",
+    ".pytest_cache",
+    ".venv",
+    "__pycache__",
+    "*.pyc",
+    "operator runtime configuration and secrets"
+  ],
+  "gatewayImage": "deerflow-ingress-gateway-browser:stage25",
+  "mountedExecutionFixtureSources": [
+    {
+      "path": "backend/tests/replay_provider.py",
+      "sha256": "7e15494ff3cdc1664e263aa1b2fac5082f3a2ea51f5a58574991deedcb89002a"
+    },
+    {
+      "path": "backend/tests/fixtures/replay/write_read_file.ultra.json",
+      "sha256": "9a7b512dd210b5a27e0a4dd48e4be7d32422fa6dfa0720aec9ab4175a362e927"
+    },
+    {
+      "path": "frontend-vue/tests/support/m0_replay_provider.py",
+      "sha256": "d74cc2db95f1d357c210bb895844b7823532be8931fcd2b6daa59bd7cbebe99d"
+    },
+    {
+      "path": "docker/nginx/nginx.conf",
+      "sha256": "12fb672f54522c71ec81e388e5652610bb603793e8690a846f4ac3c795c084aa"
+    }
+  ],
+  "gatewayRebuildNeededForFrontendOnlyRefresh": false
+}

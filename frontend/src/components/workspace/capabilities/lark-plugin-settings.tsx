@@ -9,7 +9,7 @@ import {
   RefreshCwIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -161,6 +161,13 @@ function LarkIntegrationCard() {
   const authAttemptIdRef = useRef(0);
   const authDeadlineRef = useRef(0);
   const flowGenerationRef = useRef(0);
+  const copyOwnerRevisionRef = useRef(0);
+  useLayoutEffect(
+    () => () => {
+      copyOwnerRevisionRef.current += 1;
+    },
+    [pendingFlow, user?.id],
+  );
   const connectBusy =
     startConfig.isPending ||
     completeConfig.isPending ||
@@ -596,7 +603,14 @@ function LarkIntegrationCard() {
 
   const handleCopyAuthLink = async () => {
     if (!pendingFlow) return;
+    const generation = flowGenerationRef.current;
+    const copyOwnerRevision = copyOwnerRevisionRef.current;
     const didCopy = await writeTextToClipboard(pendingFlow.verification_url);
+    if (
+      !isActiveFlow(generation) ||
+      copyOwnerRevision !== copyOwnerRevisionRef.current
+    )
+      return;
     if (didCopy) {
       toast.success(t.clipboard.copiedToClipboard);
     } else {

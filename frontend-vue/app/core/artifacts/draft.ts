@@ -76,14 +76,14 @@ export function editArtifactDraft(
 
 export function completeArtifactSave(
   current: ArtifactDraftRecord,
-  sha256: string,
+  saved: { content: string; sha256: string },
 ): ArtifactDraftRecord {
   return {
     ...current,
-    baselineContent: current.draftContent,
-    baselineSha256: sha256,
-    remoteContent: current.draftContent,
-    remoteSha256: sha256,
+    baselineContent: saved.content,
+    baselineSha256: saved.sha256,
+    remoteContent: saved.content,
+    remoteSha256: saved.sha256,
     conflict: false,
   };
 }

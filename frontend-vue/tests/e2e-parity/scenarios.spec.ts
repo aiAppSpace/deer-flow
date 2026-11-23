@@ -12,7 +12,7 @@
                    比让它在截图 diff 里表现成一整屏不同要好定位得多。
 */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { reactAppPresent } from "./support/react-preview";

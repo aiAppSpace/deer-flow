@@ -34,7 +34,7 @@
                    这里保留 `root=` 自检**并且断言掉它**。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
@@ -134,7 +134,13 @@ for (const [name, base] of APPS) {
   test(`${name}: 浮层都完整落在视口里（基线与 200% 文本）`, async ({
     browser,
   }) => {
-    test.setTimeout(900_000);
+    // Every registered terminal state must finish before the global deadline.
+    // Stage19 exhausted the old 15-minute cap; preserve all per-step assertions.
+    const registeredStates = PARITY_SCENARIOS.reduce(
+      (count, scenario) => count + scenarioStates(scenario).length,
+      0,
+    );
+    test.setTimeout(Math.max(900_000, registeredStates * 15_000));
     const outside: string[] = [];
     const unreachableScenarios: string[] = [];
     let scanned = 0;

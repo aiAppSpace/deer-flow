@@ -4,28 +4,10 @@
   【架构位置】     L3
   【主要导出】     默认 ThreadSidebar 组件
   【依赖关系】     threads store/API · workspace routes · ui/dialog · ui/dropdown-menu · ui/sidebar
-  【边界与注意】   业务导航壳，不属于通用 agent UI 契约。
-
-                   **组/菜单/菜单项/菜单键这四层走 `ui/sidebar` 的 primitive，
-                   不手抄它们的类串**（2026-09-12 第十二轮）。此前这一片是摊平的
-                   裸 `div`/`ul`/`li`/`a`，自己写上 `data-slot="sidebar-*"` 和一串
-                   手抄的类。逐 token 比下来，外壳那几层**逐字一致**，
-                   而四颗菜单键抄漏了一大截：
-                   `w-full` / `overflow-hidden` / `[&>span:last-child]:truncate`（长标题不截断）/
-                   `outline-hidden ring-sidebar-ring focus-visible:ring-2`（**没有键盘焦点环**）/
-                   `hover:text-sidebar-accent-foreground` / `active:*` /
-                   `transition-[width,height,padding]`，
-                   以及最要命的一条：`data-[active=true]:font-medium` 在「新建对话」
-                   那颗上被抄成了**无条件** `font-medium`，另外三颗干脆没有——
-                   于是「当前这一项加粗」这件事本仓是**反着**的。
-                   与 `ThreadSidebarItem.vue`（wave 199）同一个根因、同一份 cva。
-
-                   外壳那四层（header / content / footer / rail）仍然手写：
-                   `ui/sidebar` 里**没有**这四颗 primitive，本仓的侧栏容器是
-                   `ThreadSidebarShell.vue`。门禁：tests/guards/handwritten-primitive-slots.test.ts
-                   只管 `ui/` 里确实存在的那些 slot。
+  【边界与注意】   导航组和菜单项复用 ui/sidebar primitive，统一状态样式、焦点环与截断。
+                   侧栏容器由 ThreadSidebarShell 持有，不在业务组件手写 primitive 的身份属性。
 */
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   Bug,
   ChevronsUpDown,
@@ -43,6 +25,7 @@ import ProjectsSection from "@/components/workspace/projects/ProjectsSection.vue
 import ProjectMoveDialog from "@/components/workspace/projects/ProjectMoveDialog.vue";
 import RecentChatList from "@/components/workspace/RecentChatList.vue";
 import ThreadSidebarShell from "@/components/workspace/ThreadSidebarShell.vue";
+import PluginNavigation from "@/components/workspace/extensions/PluginNavigation.vue";
 import WorkspaceNavChatList from "@/components/workspace/WorkspaceNavChatList.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,14 +53,17 @@ import {
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
 import { useMoveThreadToProject } from "@/composables/useProjects";
 import { useThreads } from "@/composables/useThreads";
+import { useFrontendExtensions } from "@/composables/useFrontendExtensions";
+import { useThreadActivity } from "@/composables/useThreadActivity";
 import { useWorkspaceSidebar } from "@/composables/useWorkspaceSidebar";
-import { ThreadCascadeDeleteError } from "@/core/threads/delete";
-import { pathOfThread, titleOfThread } from "@/core/threads/utils";
+import ThreadDeleteDialog, {
+  type ThreadDeleteTarget,
+} from "@/components/workspace/ThreadDeleteDialog.vue";
+import { titleOfThread } from "@/core/threads/utils";
 import type { AgentThread } from "@/core/threads/types";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
 
 const route = useRoute();
-const router = useRouter();
 const { $i18n } = useNuxtApp();
 /*
   **这里只读缓存、不发请求**（`enabled: false`，与 `ProjectsSection.vue` 同一个写法）。
@@ -85,11 +71,14 @@ const { $i18n } = useNuxtApp();
   `useInfiniteThreads` 放在抽屉**里面**的组件里，本仓原来放在抽屉外面，于是窄屏
   关着抽屉也照发一次 `threads/search`。
 
-  重命名/置顶/删除这三套**处理器仍然留在这里**：`ProjectsSection` 的行与
-  `RecentChatList` 的行共用它们，失败也要落在同一个对话框、同一条 alert 上。
-  变更走 mutation，不受 `enabled` 影响。
+  重命名/置顶由这里处理，删除转交共享 ThreadDeleteDialog；ProjectsSection 与
+  RecentChatList 使用同一组入口，失败由 toast 反馈。变更走 mutation，不受 enabled 影响。
 */
 const threads = useThreads({ enabled: false });
+useThreadActivity();
+// The workspace owns one plugin snapshot even while the mobile drawer is closed.
+// Visible navigation/actions subscribe to the same account-scoped query.
+useFrontendExtensions();
 const settingsDialog = useSettingsDialog();
 const toast = useWorkspaceToast();
 /*
@@ -120,8 +109,15 @@ const settingsOpen = ref(false);
 const settingsTrigger = ref<HTMLButtonElement | null>(null);
 const renameThreadId = ref<string | null>(null);
 const renameTitle = ref("");
-const deleteError = ref<string | null>(null);
-const failedDeleteThread = ref<AgentThread | null>(null);
+let renameGeneration = 0;
+watch(
+  renameThreadId,
+  () => {
+    renameGeneration++;
+  },
+  { flush: "sync" },
+);
+const deleteTarget = ref<ThreadDeleteTarget | null>(null);
 const deletingThreadId = ref<string | null>(null);
 
 const displayThreadTitle = (thread: Parameters<typeof titleOfThread>[0]) =>
@@ -145,6 +141,10 @@ onMounted(() => {
   globalThis.addEventListener("deerflow:collapse-sidebar", collapseSidebar);
 });
 onUnmounted(() => {
+  renameGeneration++;
+  // Account changes remount the shell. Its temporary drawer must not outlive
+  // this host; the persisted desktop collapsed state belongs to its cookie.
+  closeMobileSidebar();
   globalThis.removeEventListener("deerflow:toggle-sidebar", toggleSidebar);
   globalThis.removeEventListener("deerflow:collapse-sidebar", collapseSidebar);
 });
@@ -175,61 +175,14 @@ function startNewChat() {
   globalThis.dispatchEvent(new CustomEvent("deerflow:new-chat"));
 }
 
-/*
-  「删掉的是不是我正看着的那条」有三种成立方式，照 React 的 handleDelete
-  （frontend/src/components/workspace/recent-chat-list.tsx）：路由参数就是它、
-  当前路径就是它的路径、**或者**停在 /chats/new 而它是列表里最新的一条。
-  第三种最容易漏：新会话页此时展示的就是最新那条的延续，删掉它却不重置，
-  用户会对着一个已经不存在的线程继续输入。
-
-  判定必须在 await 之前做完——删完之后列表已经变了，`threads[0]` 不再是刚才那条。
-  目标路径也不能写死 /workspace/chats/new：在 agent 会话里要回到那个 agent 的新会话页。
-*/
-function isCurrentThread(thread: AgentThread) {
-  const threadPath = pathOfThread(thread);
-  const newThreadPath = nextThreadPath();
-  return (
-    thread.thread_id === route.params.thread_id ||
-    threadPath === route.path ||
-    (route.path === newThreadPath &&
-      threads.threads[0]?.thread_id === thread.thread_id)
-  );
-}
-
-function nextThreadPath() {
-  const agentName = route.params.agent_name;
-  return pathOfThread("new", {
-    agent_name: typeof agentName === "string" ? agentName : undefined,
-  });
-}
-
-async function removeThread(thread: AgentThread) {
-  const threadId = thread.thread_id;
-  if (deletingThreadId.value) return;
-  const active = isCurrentThread(thread);
-  const nextPath = nextThreadPath();
-  deleteError.value = null;
-  failedDeleteThread.value = null;
-  deletingThreadId.value = threadId;
-  try {
-    await threads.remove(threadId);
-    if (active) {
-      // 先重置会话状态再换 URL，与 React 的 resetThreadChatAfterDelete + replace 同序。
-      globalThis.dispatchEvent(new CustomEvent("deerflow:new-chat"));
-      // replace 而不是 push：删完再按后退不该回到一个已经不存在的线程。
-      await router.replace(nextPath);
-    }
-  } catch (cause) {
-    failedDeleteThread.value = thread;
-    deleteError.value =
-      cause instanceof ThreadCascadeDeleteError
-        ? cause.message
-        : cause instanceof Error
-          ? cause.message
-          : $i18n.t.value.navigation.deleteConversationFailed;
-  } finally {
-    deletingThreadId.value = null;
-  }
+/** Keep the snapshot outside row lifetimes; let the menu close before opening. */
+async function requestDelete(thread: AgentThread) {
+  const target: ThreadDeleteTarget = {
+    thread,
+    recentThreadId: threads.threads[0]?.thread_id,
+  };
+  await nextTick();
+  deleteTarget.value = target;
 }
 
 function beginRename(threadId: string) {
@@ -291,10 +244,13 @@ function restoreFocusAfterRename(event: Event) {
 */
 async function submitRename() {
   if (!renameThreadId.value || !renameTitle.value.trim()) return;
+  const generation = renameGeneration;
   try {
     await threads.rename(renameThreadId.value, renameTitle.value.trim());
+    if (generation !== renameGeneration) return;
     renameThreadId.value = null;
   } catch (cause) {
+    if (generation !== renameGeneration) return;
     toast.error(
       cause instanceof Error && cause.message
         ? cause.message
@@ -457,9 +413,10 @@ function openSettingsDialog(section: "appearance" | "about") {
     <div
       data-slot="sidebar-content"
       data-sidebar="content"
-      class="flex min-h-0 flex-1 flex-col gap-2 overflow-auto"
+      class="flex min-h-8 flex-1 flex-col gap-2 overflow-auto"
     >
       <WorkspaceNavChatList />
+      <PluginNavigation />
 
       <WorkspaceChannelsList v-if="sidebarExpanded" />
 
@@ -482,7 +439,7 @@ function openSettingsDialog(section: "appearance" | "about") {
         :deleting-thread-id="deletingThreadId"
         @rename-thread="beginRename($event)"
         @toggle-pin-thread="togglePinned($event)"
-        @delete-thread="removeThread($event)"
+        @delete-thread="requestDelete($event)"
       />
 
       <RecentChatList
@@ -497,27 +454,10 @@ function openSettingsDialog(section: "appearance" | "about") {
         :deleting-thread-id="deletingThreadId"
         @rename-thread="beginRename($event)"
         @toggle-pin-thread="togglePinned($event)"
-        @delete-thread="removeThread($event)"
+        @delete-thread="requestDelete($event)"
         @new-project-for-thread="newProjectForThreadId = $event"
         @move-to-project="requestMoveToProject"
       />
-    </div>
-    <div
-      v-if="sidebarExpanded && deleteError"
-      role="alert"
-      data-testid="delete-chat-error"
-      class="border-destructive/30 bg-destructive/5 text-destructive mx-2 mb-2 rounded-md border p-2 text-xs"
-    >
-      <p>{{ deleteError }}</p>
-      <button
-        v-if="failedDeleteThread"
-        type="button"
-        class="mt-1 underline disabled:pointer-events-none disabled:opacity-50"
-        :disabled="Boolean(deletingThreadId)"
-        @click="removeThread(failedDeleteThread)"
-      >
-        {{ $i18n.t.value.navigation.tryAgain }}
-      </button>
     </div>
     <!--
       SidebarFooter：`flex flex-col gap-2 p-2` 的独立容器，不是给 ul 挂个 mt-auto。
@@ -589,15 +529,14 @@ function openSettingsDialog(section: "appearance" | "about") {
                   v-if="sidebarExpanded"
                   class="text-muted-foreground flex w-full items-center gap-2 text-left text-sm"
                 >
-                  <Settings :size="16" class="shrink-0" />
+                  <Settings class="size-4 shrink-0" />
                   <span>{{ $i18n.t.value.workspace.settingsAndMore }}</span>
                   <ChevronsUpDown
-                    :size="16"
-                    class="text-muted-foreground ml-auto"
+                    class="text-muted-foreground ml-auto size-4"
                   />
                 </div>
                 <div v-else class="flex size-full items-center justify-center">
-                  <Settings :size="16" class="text-muted-foreground" />
+                  <Settings class="text-muted-foreground size-4" />
                 </div>
               </button>
             </DropdownMenuTrigger>
@@ -706,6 +645,8 @@ function openSettingsDialog(section: "appearance" | "about") {
       @click="toggleSidebar"
     />
   </ThreadSidebarShell>
+  <ThreadDeleteDialog :target="deleteTarget" @close="deleteTarget = null" />
+
   <Dialog
     :open="renameThreadId !== null"
     @update:open="!$event && (renameThreadId = null)"

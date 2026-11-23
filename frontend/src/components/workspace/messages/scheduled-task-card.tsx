@@ -258,9 +258,9 @@ export function ScheduledTaskCard({
         data-testid="scheduled-task-card"
         data-task-id={task.id}
         data-state={status.key}
-        className="bg-card overflow-hidden rounded-lg border"
+        className="bg-card overflow-hidden rounded-lg border [overflow-wrap:anywhere]"
       >
-        <header className="flex items-start gap-3 px-4 py-3">
+        <header className="flex flex-wrap items-start gap-3 px-4 py-3">
           <span
             className="bg-muted grid size-9 shrink-0 place-items-center rounded-md"
             aria-hidden
@@ -276,7 +276,7 @@ export function ScheduledTaskCard({
             data-testid="scheduled-task-card-status"
             data-status={status.key}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+              "inline-flex max-w-full shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-normal",
               BADGE_TONE[status.tone],
             )}
           >
@@ -391,10 +391,11 @@ export function ScheduledTaskCard({
           </p>
         )}
 
-        <footer className="flex flex-wrap items-center gap-2 border-t px-4 py-3">
+        <footer className="flex flex-wrap items-center gap-2 border-t px-4 py-3 [&>*]:max-w-full">
           <WithReason reason={runNowReason}>
             <Button
               size="sm"
+              className="h-auto min-h-8 max-w-full whitespace-normal"
               disabled={actions.runNow.disabled || trigger.isPending}
               onClick={doTrigger}
             >
@@ -407,6 +408,7 @@ export function ScheduledTaskCard({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-auto min-h-8 max-w-full whitespace-normal"
                 disabled={actions.pause.disabled || pause.isPending}
                 onClick={doPause}
               >
@@ -420,6 +422,7 @@ export function ScheduledTaskCard({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-auto min-h-8 max-w-full whitespace-normal"
                 disabled={actions.resume.disabled || resume.isPending}
                 onClick={doResume}
               >
@@ -428,7 +431,12 @@ export function ScheduledTaskCard({
               </Button>
             </WithReason>
           )}
-          <Button variant="ghost" size="sm" className="ml-auto" asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-auto min-h-8 max-w-full whitespace-normal"
+            asChild
+          >
             <Link href={taskPagePath(task.id)}>
               {st.actions.openTask}
               <ArrowUpRight aria-hidden />

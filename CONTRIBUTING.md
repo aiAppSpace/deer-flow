@@ -225,7 +225,7 @@ If you need to start services individually:
    cd backend
    make dev
 
-   # Terminal 2: Start Frontend (port 3000)
+   # Terminal 2: Start Frontend (port 3200)
    cd frontend
    pnpm dev
    ```
@@ -246,7 +246,7 @@ The nginx configuration provides:
 - Unified entry point on port 2026
 - Rewrites `/api/langgraph/*` to Gateway's LangGraph-compatible API (8001)
 - Routes other `/api/*` endpoints to Gateway API (8001)
-- Routes non-API requests to Frontend (3000)
+- Routes non-API requests to the local Frontend (3200)
 - Same-origin API routing; split-origin or port-forwarded browser clients should use the Gateway `GATEWAY_CORS_ORIGINS` allowlist
 - SSE/streaming support for real-time agent responses
 - Optimized timeouts for long-running operations
@@ -286,7 +286,7 @@ deer-flow/
 Browser
   ↓
 Nginx (port 2026) ← Unified entry point
-  ├→ Frontend (port 3000) ← / (non-API requests)
+  ├→ Frontend (port 3200 locally; 3000 in Docker) ← / (non-API requests)
   └→ Gateway API (port 8001) ← /api/* and /api/langgraph/* (LangGraph-compatible agent interactions)
 ```
 

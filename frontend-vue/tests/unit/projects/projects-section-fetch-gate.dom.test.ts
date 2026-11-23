@@ -21,10 +21,14 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
-const api = vi.hoisted(() => ({ listProjects: vi.fn() }));
+const api = vi.hoisted(() => ({
+  listProjects: vi.fn(),
+  createProject: vi.fn(),
+}));
 vi.mock("@/core/projects/api", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listProjects: api.listProjects,
+  createProject: api.createProject,
 }));
 
 const settings = vi.hoisted(() => ({
@@ -53,6 +57,7 @@ import {
 } from "@/core/workspace-shell/toast";
 
 beforeEach(() => {
+  api.createProject.mockReset();
   api.listProjects.mockReset();
   api.listProjects.mockResolvedValue([]);
   settings.displayMode = "flat";
@@ -70,6 +75,7 @@ afterEach(() => {
 
 function mountSection() {
   return mount(ProjectsSection, {
+    attachTo: document.body,
     global: {
       plugins: [
         [
@@ -81,7 +87,9 @@ function mountSection() {
           },
         ],
       ],
-      stubs: { NuxtLink: { template: "<a><slot /></a>" } },
+      stubs: {
+        NuxtLink: { props: ["to"], template: "<a :href='to'><slot /></a>" },
+      },
       provide: {
         [workspaceToastKey as symbol]: createWorkspaceToastStore(),
       },
@@ -107,4 +115,71 @@ describe("项目列表的取数闸门", () => {
     ]);
     wrapper.unmount();
   });
+
+  it.each(["flat", "grouped"] as const)(
+    "%s 模式提供独立可聚焦的回收站入口，且没有嵌套 button",
+    async (mode) => {
+      settings.displayMode = mode;
+      const wrapper = mountSection();
+      await flushPromises();
+      const trash = wrapper.get('[data-testid="projects-trash-link"]');
+      expect(trash.element.tagName).toBe("A");
+      expect(trash.attributes("href")).toBe("/workspace/trash");
+      expect(trash.attributes("aria-label")).toBe(enUS.trash.title);
+      expect(trash.attributes("title")).toBe(enUS.trash.title);
+      expect(trash.element.closest("button")).toBeNull();
+      (trash.element as HTMLAnchorElement).focus();
+      expect(document.activeElement).toBe(trash.element);
+      wrapper.unmount();
+    },
+  );
+});
+
+it("does not close or erase a reopened project creation after the old request completes", async () => {
+  let resolve!: (project: unknown) => void;
+  api.createProject.mockImplementationOnce(
+    () =>
+      new Promise((yes) => {
+        resolve = yes;
+      }),
+  );
+  const wrapper = mountSection();
+  try {
+    await wrapper
+      .get('[data-testid="projects-new-project-button"]')
+      .trigger("click");
+    await flushPromises();
+    const input = () =>
+      document.querySelector<HTMLInputElement>(
+        'input[placeholder="Project name"]',
+      )!;
+    const setName = async (name: string) => {
+      input().value = name;
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+      await flushPromises();
+    };
+    const button = (name: string) =>
+      [...document.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === name,
+      )!;
+    await setName("Original project");
+    button("Create").click();
+    await flushPromises();
+    expect(api.createProject).toHaveBeenCalledOnce();
+    button("Cancel").click();
+    await flushPromises();
+    await wrapper
+      .get('[data-testid="projects-new-project-button"]')
+      .trigger("click");
+    await flushPromises();
+    await setName("New draft to keep");
+    resolve({ id: "created", name: "Original project" });
+    await flushPromises();
+    expect(
+      document.querySelector('[role="dialog"][data-state="open"]'),
+    ).not.toBeNull();
+    expect(input().value).toBe("New draft to keep");
+  } finally {
+    wrapper.unmount();
+  }
 });

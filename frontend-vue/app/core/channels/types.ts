@@ -15,6 +15,7 @@ export interface ChannelProvider {
   enabled: boolean;
   configured: boolean;
   connectable?: boolean;
+  proactive_notifications?: boolean;
   unavailable_reason?: string | null;
   auth_mode: string;
   connection_status: string;
@@ -50,4 +51,25 @@ export interface ChannelConnectResponse {
   code: string;
   instruction: string;
   expires_in: number;
+}
+
+export interface WechatQRLoginSession {
+  id: string;
+  status:
+    | "pending"
+    | "scanned"
+    | "verification_required"
+    | "confirmed"
+    | "expired"
+    | "failed";
+  error?:
+    | "network"
+    | "invalid_response"
+    | "verification_rejected"
+    | "verification_blocked"
+    | "already_bound"
+    | null;
+  qrcode_content: string;
+  expires_in: number;
+  provider: ChannelProvider | null;
 }

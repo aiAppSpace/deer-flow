@@ -50,8 +50,11 @@ export function useArtifactDraft(
     records[filepath] = editArtifactDraft(ensure(filepath), content);
   }
 
-  function completeSave(filepath: string, sha256: string) {
-    records[filepath] = completeArtifactSave(ensure(filepath), sha256);
+  function completeSave(
+    filepath: string,
+    saved: { content: string; sha256: string },
+  ) {
+    records[filepath] = completeArtifactSave(ensure(filepath), saved);
   }
 
   function failSave(filepath: string, status: number) {
@@ -92,7 +95,6 @@ export function useArtifactDraft(
   }
 
   function requestExitEdit(filepath: string) {
-    if (!requestLeave(filepath)) return false;
     if (editingPath.value === filepath) editingPath.value = null;
     return true;
   }

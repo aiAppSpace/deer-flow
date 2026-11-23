@@ -17,9 +17,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { isLocale, type Locale } from "@/core/i18n/locale";
-import { enUS } from "@/core/i18n/locales/en-US";
-import { zhCN } from "@/core/i18n/locales/zh-CN";
+import {
+  isLocale,
+  LOCALE_NAMES,
+  SUPPORTED_LOCALES,
+  type Locale,
+} from "@/core/i18n/locale";
 import { cn } from "@/lib/utils";
 
 const { $i18n, $theme } = useNuxtApp();
@@ -43,10 +46,10 @@ const themeOptions = computed(() => [
     icon: Moon,
   },
 ]);
-const languageOptions = [
-  { value: "en-US" as const, label: enUS.locale.localName },
-  { value: "zh-CN" as const, label: zhCN.locale.localName },
-];
+const languageOptions = SUPPORTED_LOCALES.map((value) => ({
+  value,
+  label: LOCALE_NAMES[value],
+}));
 
 /*
   预览图按**解析后**的主题画，不按偏好画：选「跟随系统」时要给用户看的是系统当前
@@ -78,7 +81,7 @@ function setLocale(value: unknown) {
         视觉上更是完全两回事——用户选主题时看不到那一套配色长什么样。
         预览图整块 `aria-hidden`：它是示意图，念出来只会是一串没有意义的方块。
       -->
-      <div class="grid gap-3 lg:grid-cols-3">
+      <div class="@container/appearance-controls grid gap-3 lg:grid-cols-3">
         <button
           v-for="option in themeOptions"
           :key="option.value"
@@ -86,7 +89,7 @@ function setLocale(value: unknown) {
           type="button"
           :class="
             cn(
-              'group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all',
+              'group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all @max-md/appearance-controls:min-w-0',
               $theme.preference.value === option.value
                 ? 'border-primary ring-primary/30 shadow-sm ring-2'
                 : 'hover:border-border hover:shadow-sm',
@@ -98,7 +101,9 @@ function setLocale(value: unknown) {
             <div class="bg-muted rounded-md p-2">
               <component :is="option.icon" class="size-4" aria-hidden="true" />
             </div>
-            <div class="space-y-1">
+            <div
+              class="space-y-1 @max-md/appearance-controls:min-w-0 @max-md/appearance-controls:wrap-anywhere"
+            >
               <div class="text-sm leading-none font-semibold">
                 {{ option.label }}
               </div>
@@ -119,7 +124,7 @@ function setLocale(value: unknown) {
             "
           >
             <div
-              class="border-border/50 flex items-center gap-2 border-b px-3 py-2"
+              class="border-border/50 flex items-center gap-2 border-b px-3 py-2 @max-md/appearance-controls:flex-wrap"
             >
               <div
                 :class="
@@ -134,14 +139,10 @@ function setLocale(value: unknown) {
               <div class="h-2 w-10 rounded-full bg-current/20" />
               <div class="h-2 w-6 rounded-full bg-current/15" />
             </div>
-            <!--
-              **`minmax(0,240px)`，不是裸的 `240px`**：固定轨道不会缩，于是这块
-              预览把整个「外观」面板的 min-content 顶到 348px，而 375px 屏上
-              那一格只有 293——实测 `panelOverflow` 375px 下 55、360px 下 70，
-              也就是**这块面板在所有手机上都挂在设置对话框外面**。
-              上限仍然是 240，约 420px 以上毫无变化。
-            -->
-            <div class="grid grid-cols-[1fr_minmax(0,240px)] gap-3 px-3 py-3">
+            <!-- 窄内容容器内允许预览轨道和装饰块收缩、换行；桌面保持原几何。 -->
+            <div
+              class="grid grid-cols-[1fr_minmax(0,240px)] gap-3 px-3 py-3 @max-md/appearance-controls:grid-cols-[minmax(0,1fr)_minmax(0,240px)] @max-md/appearance-controls:[&_*]:max-w-full @max-md/appearance-controls:[&_*]:min-w-0"
+            >
               <div class="space-y-2">
                 <div class="h-3 w-3/4 rounded-full bg-current/15" />
                 <div class="h-3 w-1/2 rounded-full bg-current/10" />
@@ -150,7 +151,9 @@ function setLocale(value: unknown) {
                 />
               </div>
               <div class="space-y-2">
-                <div class="flex items-center gap-2">
+                <div
+                  class="flex items-center gap-2 @max-md/appearance-controls:flex-wrap"
+                >
                   <div class="h-8 w-8 rounded-md bg-current/10" />
                   <div class="space-y-2">
                     <div class="h-2 w-14 rounded-full bg-current/15" />

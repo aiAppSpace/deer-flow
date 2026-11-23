@@ -1,0 +1,74 @@
+diff --git a/dist/index.js b/dist/index.js
+index 2d0d314a00082c458d2f551d715572cd1fa1b5c3..3a5c745e86aa2cab70e67acbc31f0f9c722d962a 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -139,7 +139,7 @@ var Tooltip = (props) => {
+     onChange: (open2) => {
+       if (open2) {
+         providerContext.onOpen();
+-        document.dispatchEvent(new CustomEvent(TOOLTIP_OPEN));
++        document.dispatchEvent(new CustomEvent(TOOLTIP_OPEN, { detail: { contentId } }));
+       } else {
+         providerContext.onClose();
+       }
+@@ -352,9 +352,12 @@ var TooltipContentImpl = React.forwardRef(
+     const popperScope = usePopperScope(__scopeTooltip);
+     const { onClose } = context;
+     React.useEffect(() => {
+-      document.addEventListener(TOOLTIP_OPEN, onClose);
+-      return () => document.removeEventListener(TOOLTIP_OPEN, onClose);
+-    }, [onClose]);
++      const handleOtherTooltipOpen = (event) => {
++        if (event.detail?.contentId !== context.contentId) onClose();
++      };
++      document.addEventListener(TOOLTIP_OPEN, handleOtherTooltipOpen);
++      return () => document.removeEventListener(TOOLTIP_OPEN, handleOtherTooltipOpen);
++    }, [onClose, context.contentId]);
+     React.useEffect(() => {
+       if (context.trigger) {
+         const handleScroll = (event) => {
+@@ -369,6 +372,7 @@ var TooltipContentImpl = React.forwardRef(
+       import_react_dismissable_layer.DismissableLayer,
+       {
+         asChild: true,
++        enabled: context.open,
+         disableOutsidePointerEvents: false,
+         onEscapeKeyDown,
+         onPointerDownOutside,
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 568389bf3ce8123fa6de6d298878b32d613e25cf..b95c365a5c6d53a82a7f0641ebec9028e0309788 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -92,7 +92,7 @@ var Tooltip = (props) => {
+     onChange: (open2) => {
+       if (open2) {
+         providerContext.onOpen();
+-        document.dispatchEvent(new CustomEvent(TOOLTIP_OPEN));
++        document.dispatchEvent(new CustomEvent(TOOLTIP_OPEN, { detail: { contentId } }));
+       } else {
+         providerContext.onClose();
+       }
+@@ -305,9 +305,12 @@ var TooltipContentImpl = React.forwardRef(
+     const popperScope = usePopperScope(__scopeTooltip);
+     const { onClose } = context;
+     React.useEffect(() => {
+-      document.addEventListener(TOOLTIP_OPEN, onClose);
+-      return () => document.removeEventListener(TOOLTIP_OPEN, onClose);
+-    }, [onClose]);
++      const handleOtherTooltipOpen = (event) => {
++        if (event.detail?.contentId !== context.contentId) onClose();
++      };
++      document.addEventListener(TOOLTIP_OPEN, handleOtherTooltipOpen);
++      return () => document.removeEventListener(TOOLTIP_OPEN, handleOtherTooltipOpen);
++    }, [onClose, context.contentId]);
+     React.useEffect(() => {
+       if (context.trigger) {
+         const handleScroll = (event) => {
+@@ -322,6 +325,7 @@ var TooltipContentImpl = React.forwardRef(
+       DismissableLayer,
+       {
+         asChild: true,
++        enabled: context.open,
+         disableOutsidePointerEvents: false,
+         onEscapeKeyDown,
+         onPointerDownOutside,

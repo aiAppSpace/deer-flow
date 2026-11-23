@@ -1,180 +1,267 @@
-/*
-  【文件职责】     Scheduled-task 列表、runs 与 mutations 的唯一 Vue Query owner。
-  【架构位置】     L3 Vue server-state adapter
-  【主要导出】     useScheduledTasks · useScheduledTaskRuns · useScheduledTaskMutations
-  【依赖关系】     @tanstack/vue-query · scheduled-tasks api/query-keys/types
-  【边界与注意】   queryFn 从自身 key 取 id，避免切 task 后 late response 交叉写入。
-
-                   **没有** detail query。选中的任务从列表那一份数据里取，与 React 的
-                   `filteredData.find(...) ?? filteredData[0]` 同一条路径。此前 Vue 在选中
-                   时额外 `GET /api/scheduled-tasks/{id}`，多出来的那次请求既没有新信息
-                   （list 与 detail 返回同一个对象），失败时又**无人呈现**——页面只把
-                   list 的 error 接到了提示上，detail 的 404 被静默吞掉。对照取样实测：
-                   Vue 侧那条请求返回 404，页面同时显示着任务详情和一条
-                   「Scheduled task not found」。
-
-                   这多出来的一次取数，实际上是在补 Vue 少做的另一件事：React 的列表与
-                   runs 都是 `refetchInterval: 15000`（后台标签页不轮询），所以调度器把
-                   next_run_at 推进、把状态改成 running 时页面会自己跟上；Vue 原来两条
-                   都不轮询，只在 selection 变化时抓一次详情。轮询补上之后，详情请求就是
-                   纯粹的多余。
-
-                   runs 分页。Gateway 的 `GET …/runs` 默认只返回 50 条，把这一页的长度
-                   当成运行总数，就会在一个跑过几百次的任务上显示「50 runs」并且没有任何
-                   办法看到其余的——页面在说历史已经完整，而它不是。React 原来就是这么
-                   做的，同一份分页已经同步到 frontend/src/core/scheduled-tasks/hooks.ts，
-                   两边同一个页大小、同一个 getNextPageParam。
-*/
+import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import {
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-  type InfiniteData,
-} from "@tanstack/vue-query";
-import { computed, toValue, type MaybeRefOrGetter } from "vue";
-
+  computed,
+  nextTick,
+  ref,
+  toValue,
+  watch,
+  type MaybeRefOrGetter,
+} from "vue";
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
+import { GatewayResponseError } from "@/core/api/errors";
+import {
+  hasActiveRun,
+  isActiveRun,
+  type ScheduledTask,
+  type ScheduledTaskRun,
+  type ScheduledTaskRenewal,
+} from "@/core/scheduled-tasks/types";
+import { ACTIVE_POLL_MS, IDLE_POLL_MS } from "@/core/scheduled-tasks/polling";
 import {
   createScheduledTask,
   deleteScheduledTask,
   fetchScheduledTaskRuns,
+  fetchScheduledTask,
   fetchScheduledTasks,
   fetchThreadScheduledTasks,
   pauseScheduledTask,
   resumeScheduledTask,
   triggerScheduledTask,
   updateScheduledTask,
-  type ScheduledTaskCreatePayload,
   type ScheduledTaskUpdatePayload,
 } from "@/core/scheduled-tasks/api";
 import { scheduledTaskKeys } from "@/core/scheduled-tasks/query-keys";
-import type {
-  ScheduledTask,
-  ScheduledTaskRun,
-} from "@/core/scheduled-tasks/types";
+export { ACTIVE_POLL_MS, IDLE_POLL_MS } from "@/core/scheduled-tasks/polling";
 
-/** 与 React 的 `refetchInterval: 15000` 同一个值。 */
-const POLL_INTERVAL_MS = 15_000;
-
-/** Gateway 自己对 `GET …/runs` 的默认页大小，与 React 的同名常量一致。 */
-const RUNS_PAGE_SIZE = 50;
-
-export function useScheduledTasks(threadId: MaybeRefOrGetter<string | null>) {
-  const queryKey = computed(() => {
-    const current = toValue(threadId);
-    return current
-      ? scheduledTaskKeys.thread(current)
-      : scheduledTaskKeys.list();
-  });
+export function useScheduledTasks(
+  threadId: MaybeRefOrGetter<string | null> = null,
+  options: { enabled?: MaybeRefOrGetter<boolean> } = {},
+) {
   const query = useQuery({
-    queryKey,
-    queryFn: ({ queryKey: key, signal }) => {
-      const keyType = String(key[1]);
-      return keyType === "thread"
+    queryKey: computed(() =>
+      toValue(threadId)
+        ? scheduledTaskKeys.thread(toValue(threadId)!)
+        : scheduledTaskKeys.list(),
+    ),
+    queryFn: ({ queryKey: key, signal }) =>
+      key[1] === "thread"
         ? fetchThreadScheduledTasks(String(key[2]), { signal })
-        : fetchScheduledTasks({ signal });
-    },
-    refetchInterval: POLL_INTERVAL_MS,
+        : fetchScheduledTasks({ signal }),
+    enabled: computed(() => toValue(options.enabled) !== false),
+    refetchInterval: (q) =>
+      (q.state.data ?? []).some(hasActiveRun) ? ACTIVE_POLL_MS : IDLE_POLL_MS,
     refetchIntervalInBackground: false,
   });
-  return {
-    ...query,
-    tasks: computed(() => query.data.value ?? []),
-  };
+  return { ...query, tasks: computed(() => query.data.value ?? []) };
 }
-
-export function useScheduledTaskRuns(taskId: MaybeRefOrGetter<string | null>) {
-  const query = useInfiniteQuery<
-    ScheduledTaskRun[],
-    Error,
-    InfiniteData<ScheduledTaskRun[], number>,
-    readonly unknown[],
-    number
-  >({
-    queryKey: computed(() => scheduledTaskKeys.runs(toValue(taskId) ?? "")),
-    enabled: computed(() => Boolean(toValue(taskId))),
-    initialPageParam: 0,
-    queryFn: ({ queryKey, pageParam, signal }) =>
+export function useThreadScheduledTasks(
+  threadId: MaybeRefOrGetter<string | null>,
+  options: { enabled?: MaybeRefOrGetter<boolean> } = {},
+) {
+  return useScheduledTasks(threadId, {
+    enabled: () => !!toValue(threadId) && toValue(options.enabled) !== false,
+  });
+}
+export function useScheduledTask(
+  taskId: MaybeRefOrGetter<string | null>,
+  options: {
+    enabled?: MaybeRefOrGetter<boolean>;
+    live?: MaybeRefOrGetter<boolean>;
+    initialData?: ScheduledTask;
+  } = {},
+) {
+  const enabled = computed(
+    () => !!toValue(taskId) && toValue(options.enabled) !== false,
+  );
+  const notFound = (error: unknown) =>
+    error instanceof GatewayResponseError && error.status === 404;
+  const query = useQuery({
+    queryKey: computed(() => scheduledTaskKeys.task(toValue(taskId) ?? "")),
+    queryFn: ({ queryKey, signal }) =>
+      fetchScheduledTask(String(queryKey[2]), { signal }),
+    enabled,
+    initialData: options.initialData,
+    staleTime: 0,
+    refetchOnMount: true,
+    retry: (count, error) => !notFound(error) && count < 2,
+    refetchInterval: (q) =>
+      notFound(q.state.error) || toValue(options.live) === false
+        ? false
+        : q.state.data && hasActiveRun(q.state.data)
+          ? ACTIVE_POLL_MS
+          : IDLE_POLL_MS,
+    refetchIntervalInBackground: false,
+  });
+  watch(
+    () => toValue(options.live),
+    (live, previous) => {
+      if (live && previous === false && enabled.value) void query.refetch();
+    },
+  );
+  return query;
+}
+export const RUN_HISTORY_PAGE_SIZE = 50;
+export { isActiveRun } from "@/core/scheduled-tasks/types";
+export function runHistoryRefetchInterval(
+  runs: readonly ScheduledTaskRun[] | undefined,
+  page: number,
+): number | false {
+  return page === 0
+    ? (runs ?? []).some(isActiveRun)
+      ? ACTIVE_POLL_MS
+      : IDLE_POLL_MS
+    : false;
+}
+export function useScheduledTaskRunHistory(
+  taskId: MaybeRefOrGetter<string | null>,
+) {
+  const client = useQueryClient();
+  const page = ref(0);
+  let moving = false;
+  let active = new Set<string>();
+  watch(
+    () => toValue(taskId),
+    () => {
+      page.value = 0;
+      active = new Set();
+    },
+    { flush: "sync" },
+  );
+  const query = useQuery({
+    queryKey: computed(() =>
+      scheduledTaskKeys.runPage(toValue(taskId) ?? "", page.value),
+    ),
+    queryFn: ({ queryKey, signal }) =>
       fetchScheduledTaskRuns(String(queryKey[2]), {
-        limit: RUNS_PAGE_SIZE,
-        offset: pageParam,
+        limit: RUN_HISTORY_PAGE_SIZE + 1,
+        offset: Number(queryKey[3]) * RUN_HISTORY_PAGE_SIZE,
         signal,
       }),
-    getNextPageParam: (lastPage, pages) =>
-      lastPage.length === RUNS_PAGE_SIZE
-        ? pages.reduce((count, page) => count + page.length, 0)
-        : undefined,
-    refetchInterval: POLL_INTERVAL_MS,
+    enabled: computed(() => !!toValue(taskId)),
+    refetchInterval: (q) => runHistoryRefetchInterval(q.state.data, page.value),
     refetchIntervalInBackground: false,
+    refetchOnMount: computed(() => page.value === 0),
+    refetchOnWindowFocus: computed(() => page.value === 0),
+    refetchOnReconnect: computed(() => page.value === 0),
   });
-
-  // 连点两下「加载更多」只发一次请求：fetchNextPage 在飞行中时不再排队。
-  let loadMorePromise: ReturnType<typeof query.fetchNextPage> | null = null;
-  function loadMore() {
-    if (
-      loadMorePromise ||
-      query.isFetchingNextPage.value ||
-      !query.hasNextPage.value
-    ) {
-      return loadMorePromise ?? Promise.resolve();
-    }
-    loadMorePromise = query.fetchNextPage().finally(() => {
-      loadMorePromise = null;
-    });
-    return loadMorePromise;
-  }
-
+  watch(query.data, (data) => {
+    if (page.value !== 0 || !data) return;
+    const finished = data.some(
+      (run) => active.has(run.id) && !isActiveRun(run),
+    );
+    active = new Set(data.filter(isActiveRun).map((run) => run.id));
+    if (finished)
+      void client.invalidateQueries({
+        queryKey: scheduledTaskKeys.root(),
+        predicate: (q) => q.queryKey[1] !== "runs",
+      });
+  });
+  // This observer shares page zero's cache and never refreshes it while history shows an older page.
+  const newest = useQuery({
+    queryKey: computed(() =>
+      scheduledTaskKeys.runPage(toValue(taskId) ?? "", 0),
+    ),
+    queryFn: ({ queryKey, signal }) =>
+      fetchScheduledTaskRuns(String(queryKey[2]), {
+        limit: RUN_HISTORY_PAGE_SIZE + 1,
+        offset: 0,
+        signal,
+      }),
+    enabled: computed(() => !!toValue(taskId)),
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
   return {
     ...query,
-    runs: computed(() =>
-      (query.data.value?.pages ?? []).flatMap((page) => page),
+    runs: computed(
+      () => query.data.value?.slice(0, RUN_HISTORY_PAGE_SIZE) ?? [],
     ),
-    loadMore,
+    latestRuns: computed(
+      () => newest.data.value?.slice(0, RUN_HISTORY_PAGE_SIZE) ?? [],
+    ),
+    page,
+    hasOlder: computed(
+      () => (query.data.value?.length ?? 0) > RUN_HISTORY_PAGE_SIZE,
+    ),
+    older: () => {
+      if (
+        moving ||
+        query.isFetching.value ||
+        (query.data.value?.length ?? 0) <= RUN_HISTORY_PAGE_SIZE
+      )
+        return;
+      moving = true;
+      page.value += 1;
+      void nextTick(() => {
+        moving = false;
+      });
+    },
+    newer: () => {
+      if (!query.isFetching.value) page.value = Math.max(0, page.value - 1);
+    },
+    latest: () => {
+      page.value = 0;
+      void client.invalidateQueries({
+        queryKey: scheduledTaskKeys.runPage(toValue(taskId) ?? "", 0),
+        exact: true,
+      });
+    },
   };
 }
-
-type TaskMutationVariables = { task: ScheduledTask };
-type UpdateMutationVariables = TaskMutationVariables & {
-  payload: ScheduledTaskUpdatePayload;
-};
-
 export function useScheduledTaskMutations() {
   const queryClient = useQueryClient();
-
-  /** 前缀失效，不是精确 key：见 query-keys.ts 文件头。 */
-  const sync = () =>
-    queryClient.invalidateQueries({ queryKey: scheduledTaskKeys.root() });
-
-  const create = useMutation({
-    mutationFn: (payload: ScheduledTaskCreatePayload) =>
-      createScheduledTask(payload),
-    onSuccess: sync,
-  });
-  const update = useMutation({
-    mutationFn: ({ task, payload }: UpdateMutationVariables) =>
-      updateScheduledTask(task.id, payload),
-    onSuccess: sync,
-  });
-  const pause = useMutation({
-    mutationFn: ({ task }: TaskMutationVariables) =>
-      pauseScheduledTask(task.id),
-    onSuccess: sync,
-  });
-  const resume = useMutation({
-    mutationFn: ({ task }: TaskMutationVariables) =>
-      resumeScheduledTask(task.id),
-    onSuccess: sync,
-  });
-  const trigger = useMutation({
-    mutationFn: ({ task }: TaskMutationVariables) =>
-      triggerScheduledTask(task.id),
-    onSuccess: sync,
-  });
-  const remove = useMutation({
-    mutationFn: ({ task }: TaskMutationVariables) =>
-      deleteScheduledTask(task.id),
-    onSuccess: sync,
-  });
-
+  function ownedMutation<TInput, TResult>(
+    perform: (input: TInput) => Promise<TResult>,
+  ) {
+    type Variables = { input: TInput; owns: () => boolean };
+    const mutation = useMutation({
+      mutationFn: ({ input }: Variables) => perform(input),
+      onSuccess: (_data, { owns }) => {
+        if (owns())
+          return queryClient.invalidateQueries({
+            queryKey: scheduledTaskKeys.root(),
+          });
+      },
+    });
+    const snapshot = (input: TInput): Variables => ({
+      input,
+      owns: captureWorkspaceQueryOwner(queryClient),
+    });
+    return {
+      ...mutation,
+      variables: computed(() => mutation.variables.value?.input),
+      mutate: (input: TInput) => mutation.mutate(snapshot(input)),
+      mutateAsync: (input: TInput) => mutation.mutateAsync(snapshot(input)),
+    };
+  }
+  const create = ownedMutation(createScheduledTask);
+  const update = ownedMutation(
+    ({
+      task,
+      payload,
+    }: {
+      task: ScheduledTask;
+      payload: ScheduledTaskUpdatePayload;
+    }) => updateScheduledTask(task.id, payload),
+  );
+  const pause = ownedMutation(({ task }: { task: ScheduledTask }) =>
+    pauseScheduledTask(task.id),
+  );
+  const resume = ownedMutation(
+    ({
+      task,
+      renewal,
+    }: {
+      task: ScheduledTask;
+      renewal?: ScheduledTaskRenewal;
+    }) => resumeScheduledTask(task.id, renewal),
+  );
+  const trigger = ownedMutation(({ task }: { task: ScheduledTask }) =>
+    triggerScheduledTask(task.id),
+  );
+  const remove = ownedMutation(({ task }: { task: ScheduledTask }) =>
+    deleteScheduledTask(task.id),
+  );
   return { create, update, pause, resume, trigger, remove };
 }

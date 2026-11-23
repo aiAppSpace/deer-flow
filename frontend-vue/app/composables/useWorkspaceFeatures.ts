@@ -1,29 +1,13 @@
 /*
-  【文件职责】     按 feature flag 各自加载 Gateway 的 /api/features，并提供 fail-closed 只读状态。
-  【架构位置】     L3 Vue adapter
-  【主要导出】     useAgentsApiEnabled · useBrowserControlEnabled · useMcpTasksEnabled ·
-                   useSubagentBatchesCapability
-  【依赖关系】     core/features API · core/agents/feature-cache · Vue lifecycle
-  【边界与注意】   **一个 flag 一份状态，不是一份共享状态。** React 用两个独立的
-                   React Query key（["features","agents_api"] 与
-                   ["features","browser_control"]，见 frontend/src/core/agents/hooks.ts
-                   与 frontend/src/core/features/hooks.ts），两者各自 staleTime: 0 +
-                   refetchOnMount，于是同时挂载两个消费者时 /api/features 真的会被请求两次。
-
-                   原来这里是一份全局单例加一个 `if (loading) return` 的合流，看起来更省，
-                   代价是两个 flag 的新鲜度被绑在一起：先挂载的那个决定了后挂载的那个拿到
-                   什么时候的答案。侧栏的 agents 入口和聊天页的 browser 面板本来就是两次
-                   独立的挂载，各自重新问一次才是它们各自的语义。
-
-                   同一个 flag 的**并发**挂载合流成一次请求；先后挂载则各自再问一次，
-                   与 React Query 在 staleTime: 0 + refetchOnMount 下的行为一致——
-                   翻到 agents 页时重新确认一遍 flag，正是它想要的。
-
-                   agents_api 失败时回落到 feature-cache 的粘性值（见该文件），
-                   browser_control 失败一律关闭。
+  【文件职责】     Gateway capabilities 的唯一 Vue Query owner。
+  【架构位置】     L3 Vue server-state adapter
+  【主要导出】     Agent、browser、MCP、subagent、references、knowledge hooks
+  【边界与注意】   每种 capability 使用独立 key，挂载时重取且不自动重试。
+                   Query 独占实时状态；Agent 的 localStorage 仅保留 React 的冷启动回退策略。
+                   loaded/refresh 是现有 Vue 消费者的兼容接口，不复制 Query 状态。
 */
 
-import { onMounted, readonly, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 import {
   readCachedAgentsApiEnabled,
@@ -31,149 +15,123 @@ import {
   writeCachedAgentsApiEnabled,
 } from "@/core/agents/feature-cache";
 import {
-  fetchFeatures,
+  fetchAgentsApiEnabled,
+  fetchBrowserControlEnabled,
+  fetchConversationReferencesCapability,
+  fetchKnowledgeBaseFeature,
+  fetchMcpTasksEnabled,
   fetchSubagentBatchesCapability,
   type SubagentBatchesCapability,
 } from "@/core/features/api";
+import { FEATURES_QUERY_KEYS } from "@/core/features/query-keys";
+import {
+  useFeatureQuery,
+  type WorkspaceFeatureOptions,
+} from "@/core/features/query";
 
-const agentsApiEnabled = ref(true);
-const agentsApiLoaded = ref(false);
-const browserControlEnabled = ref(false);
-const browserControlLoaded = ref(false);
-const mcpTasksEnabled = ref(false);
-const mcpTasksLoaded = ref(false);
-const subagentBatches = ref<SubagentBatchesCapability>({
+export function useAgentsApiEnabled(options: WorkspaceFeatureOptions = {}) {
+  const query = useFeatureQuery(
+    FEATURES_QUERY_KEYS.agentsApi,
+    fetchAgentsApiEnabled,
+    options,
+  );
+  const cached = ref<boolean>();
+  // Read browser persistence after mount to keep the hydration fallback identical.
+  onMounted(() => {
+    cached.value = readCachedAgentsApiEnabled();
+  });
+  watch(
+    query.data,
+    (value) => {
+      if (value !== undefined) {
+        cached.value = value;
+        writeCachedAgentsApiEnabled(value);
+      }
+    },
+    { immediate: true },
+  );
+  const enabled = computed(() =>
+    resolveAgentsApiEnabled(query.data.value, cached.value),
+  );
+  return { ...query, enabled, agentsApiEnabled: enabled };
+}
+
+export function useBrowserControlEnabled(
+  options: WorkspaceFeatureOptions = {},
+) {
+  const query = useFeatureQuery(
+    FEATURES_QUERY_KEYS.browserControl,
+    fetchBrowserControlEnabled,
+    options,
+  );
+  const enabled = computed(() => query.data.value ?? false);
+  return { ...query, enabled, browserControlEnabled: enabled };
+}
+
+export function useMcpTasksEnabled(options: WorkspaceFeatureOptions = {}) {
+  const query = useFeatureQuery(
+    FEATURES_QUERY_KEYS.mcpTasks,
+    fetchMcpTasksEnabled,
+    options,
+  );
+  const enabled = computed(() => query.data.value ?? false);
+  return { ...query, enabled, mcpTasksEnabled: enabled };
+}
+
+const DEFAULT_SUBAGENT_BATCHES_CAPABILITY: SubagentBatchesCapability = {
   repositoryAvailable: false,
   workerRunning: false,
   maxRunning: 0,
-});
-const subagentBatchesLoaded = ref(false);
-let agentsApiInFlight: Promise<void> | null = null;
-let browserControlInFlight: Promise<void> | null = null;
-let mcpTasksInFlight: Promise<void> | null = null;
-let subagentBatchesInFlight: Promise<void> | null = null;
-
-async function loadAgentsApi() {
-  const cached = readCachedAgentsApiEnabled();
-  try {
-    const features = await fetchFeatures();
-    agentsApiEnabled.value = features.agents_api.enabled;
-    writeCachedAgentsApiEnabled(features.agents_api.enabled);
-  } catch {
-    agentsApiEnabled.value = resolveAgentsApiEnabled(undefined, cached);
-  } finally {
-    agentsApiLoaded.value = true;
-  }
-}
-
-async function loadBrowserControl() {
-  try {
-    const features = await fetchFeatures();
-    browserControlEnabled.value = features.browser_control?.enabled ?? false;
-  } catch {
-    browserControlEnabled.value = false;
-  } finally {
-    browserControlLoaded.value = true;
-  }
-}
-
-async function loadMcpTasks() {
-  try {
-    const features = await fetchFeatures();
-    mcpTasksEnabled.value = features.mcp_tasks?.enabled ?? false;
-  } catch {
-    // 与 browser_control 同一条 fail-closed：问不到就当没有。
-    mcpTasksEnabled.value = false;
-  } finally {
-    mcpTasksLoaded.value = true;
-  }
-}
-
-async function loadSubagentBatches() {
-  try {
-    subagentBatches.value = await fetchSubagentBatchesCapability();
-  } catch {
-    // fail-closed：两个能力都当没有，入口整块不出。
-    subagentBatches.value = {
-      repositoryAvailable: false,
-      workerRunning: false,
-      maxRunning: 0,
-    };
-  } finally {
-    subagentBatchesLoaded.value = true;
-  }
-}
-
-function refreshAgentsApi() {
-  agentsApiInFlight ??= loadAgentsApi().finally(() => {
-    agentsApiInFlight = null;
-  });
-  return agentsApiInFlight;
-}
-
-function refreshBrowserControl() {
-  browserControlInFlight ??= loadBrowserControl().finally(() => {
-    browserControlInFlight = null;
-  });
-  return browserControlInFlight;
-}
-
-function refreshMcpTasks() {
-  mcpTasksInFlight ??= loadMcpTasks().finally(() => {
-    mcpTasksInFlight = null;
-  });
-  return mcpTasksInFlight;
-}
-
-export function useAgentsApiEnabled(options: { enabled?: boolean } = {}) {
-  onMounted(() => {
-    if (options.enabled !== false) void refreshAgentsApi();
-  });
-  return {
-    loaded: readonly(agentsApiLoaded),
-    agentsApiEnabled: readonly(agentsApiEnabled),
-    refresh: refreshAgentsApi,
-  };
-}
-
-export function useBrowserControlEnabled(options: { enabled?: boolean } = {}) {
-  onMounted(() => {
-    if (options.enabled !== false) void refreshBrowserControl();
-  });
-  return {
-    loaded: readonly(browserControlLoaded),
-    browserControlEnabled: readonly(browserControlEnabled),
-    refresh: refreshBrowserControl,
-  };
-}
-
-export function useMcpTasksEnabled(options: { enabled?: boolean } = {}) {
-  onMounted(() => {
-    if (options.enabled !== false) void refreshMcpTasks();
-  });
-  return {
-    loaded: readonly(mcpTasksLoaded),
-    mcpTasksEnabled: readonly(mcpTasksEnabled),
-    refresh: refreshMcpTasks,
-  };
-}
-
-function refreshSubagentBatches() {
-  subagentBatchesInFlight ??= loadSubagentBatches().finally(() => {
-    subagentBatchesInFlight = null;
-  });
-  return subagentBatchesInFlight;
-}
+};
 
 export function useSubagentBatchesCapability(
-  options: { enabled?: boolean } = {},
+  options: WorkspaceFeatureOptions = {},
 ) {
-  onMounted(() => {
-    if (options.enabled !== false) void refreshSubagentBatches();
-  });
+  const query = useFeatureQuery(
+    FEATURES_QUERY_KEYS.subagentBatches,
+    fetchSubagentBatchesCapability,
+    options,
+  );
+  const capability = computed(
+    () => query.data.value ?? DEFAULT_SUBAGENT_BATCHES_CAPABILITY,
+  );
   return {
-    loaded: readonly(subagentBatchesLoaded),
-    capability: readonly(subagentBatches),
-    refresh: refreshSubagentBatches,
+    ...query,
+    capability,
+    repositoryAvailable: computed(() => capability.value.repositoryAvailable),
+    workerRunning: computed(() => capability.value.workerRunning),
+    maxRunning: computed(() => capability.value.maxRunning),
+  };
+}
+
+export function useConversationReferencesCapability(
+  options: WorkspaceFeatureOptions = {},
+) {
+  const query = useFeatureQuery(
+    FEATURES_QUERY_KEYS.conversationReferences,
+    fetchConversationReferencesCapability,
+    options,
+  );
+  return {
+    ...query,
+    // Failed refresh must not authorize reference sends using a cached answer.
+    enabled: computed(
+      () => query.isSuccess.value && (query.data.value?.enabled ?? false),
+    ),
+    maxReferences: computed(() => query.data.value?.maxReferences ?? 0),
+  };
+}
+
+export function useKnowledgeBaseEnabled(options: WorkspaceFeatureOptions = {}) {
+  const query = useFeatureQuery(
+    FEATURES_QUERY_KEYS.knowledgeBase,
+    fetchKnowledgeBaseFeature,
+    options,
+  );
+  return {
+    ...query,
+    scopeSelectionEnabled: computed(
+      () => query.data.value?.scopeSelectionEnabled ?? false,
+    ),
   };
 }

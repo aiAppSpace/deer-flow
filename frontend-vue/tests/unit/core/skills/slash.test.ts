@@ -34,6 +34,26 @@ describe("parseSlashSkillReference", () => {
     expect(parseSlashSkillReference("/help")).toBeNull();
   });
 
+  it("allows a context skill except for the compact alias", () => {
+    for (const argument of ["compact", " COMPACT ", "Compact\n"]) {
+      expect(parseSlashSkillReference(`/context ${argument}`)).toBeNull();
+    }
+    for (const task of ["", "use this skill", "compact this report"]) {
+      expect(parseSlashSkillReference(`/context ${task}`)).toEqual({
+        name: "context",
+        remainingText: task,
+      });
+      expect(
+        resolveSlashSkillDisplay(`/context ${task}`, [makeSkill("context")]),
+      ).toEqual({ name: "context", remainingText: task });
+      expect(
+        resolveSlashSkillDisplay(`/context ${task}`, [
+          makeSkill("context", false),
+        ]),
+      ).toBeNull();
+    }
+  });
+
   it("returns null when text is not a leading slash command", () => {
     expect(parseSlashSkillReference("hello /data-analysis")).toBeNull();
     expect(parseSlashSkillReference("/a/b")).toBeNull();

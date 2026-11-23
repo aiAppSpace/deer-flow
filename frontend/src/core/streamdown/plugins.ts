@@ -2,6 +2,7 @@ import { code } from "@streamdown/code";
 import { mermaid } from "@streamdown/mermaid";
 import GithubSlugger from "github-slugger";
 import type { Element, Nodes, Root } from "hast";
+import { lazy } from "react";
 import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, {
@@ -182,9 +183,14 @@ const sharedRemarkPlugins = [
   [remarkMath, { singleDollarTextMath: true }],
 ] as StreamdownProps["remarkPlugins"];
 
+const MermaidRenderer = lazy(() => import("./mermaid-renderer"));
+
 export const streamdownRenderingPlugins = {
   code,
   mermaid,
+  // Streamdown's raw fullscreen portal is not a modal layer. Register through
+  // its public renderer extension so nested artifacts retain their own owner.
+  renderers: [{ language: "mermaid", component: MermaidRenderer }],
 } satisfies NonNullable<StreamdownProps["plugins"]>;
 
 export const streamdownPlugins = {

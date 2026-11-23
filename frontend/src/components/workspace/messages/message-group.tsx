@@ -138,6 +138,49 @@ function MessageGroupComponent({
     const filteredSteps = steps.filter((step) => step.type === "toolCall");
     return filteredSteps[filteredSteps.length - 1];
   }, [steps]);
+  const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
+    useArtifacts();
+  const lastToolPath = lastToolCallStep?.args.path;
+  const finalizedArtifactPath =
+    lastToolCallStep?.name === "finalize_artifact_write" &&
+    typeof lastToolPath === "string" &&
+    isSuccessfulToolResult(
+      lastToolCallStep.resultMessage
+        ? extractTextFromMessage(lastToolCallStep.resultMessage)
+        : lastToolCallStep.result,
+    )
+      ? lastToolPath
+      : null;
+  const pendingArtifactUrl =
+    isLoading &&
+    lastToolCallStep &&
+    (lastToolCallStep.name === "write_file" ||
+      lastToolCallStep.name === "str_replace") &&
+    typeof lastToolPath === "string" &&
+    !lastToolCallStep.resultMessage
+      ? buildWriteFileArtifactURL({
+          filepath: lastToolPath,
+          messageId: lastToolCallStep.messageId,
+          toolCallId: lastToolCallStep.id,
+        })
+      : null;
+  const autoOpenArtifactUrl =
+    autoOpen && autoSelect
+      ? (finalizedArtifactPath ?? pendingArtifactUrl)
+      : null;
+
+  // Own the pending selection above FlipDisplay: its exiting child keeps old
+  // props until the animation ends and cannot retire a superseded tool timer.
+  useEffect(() => {
+    if (!autoOpenArtifactUrl || selectedArtifact === autoOpenArtifactUrl) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      select(autoOpenArtifactUrl, true);
+      setOpen(true);
+    }, 100);
+    return () => window.clearTimeout(timeout);
+  }, [autoOpenArtifactUrl, select, selectedArtifact, setOpen]);
   const aboveLastToolCallSteps = useMemo(() => {
     if (lastToolCallStep) {
       const index = stepIndexByStep.get(lastToolCallStep) ?? -1;
@@ -274,10 +317,7 @@ function MessageGroupComponent({
     );
   };
 
-  const renderToolCall = (
-    step: CoTToolCallStep,
-    options?: { isLast?: boolean },
-  ) => {
+  const renderToolCall = (step: CoTToolCallStep) => {
     const debugStep =
       showTokenDebugSummaries && step.messageId
         ? debugStepByMessageId.get(step.messageId)
@@ -288,8 +328,6 @@ function MessageGroupComponent({
         key={step.id}
         {...step}
         threadId={threadId}
-        isLast={options?.isLast}
-        isLoading={isLoading}
         deferBrowserPreview={deferBrowserPreviews}
         showDetails={showTokenDebugSummaries}
         tokenDebugStep={
@@ -349,7 +387,7 @@ function MessageGroupComponent({
       {collapsibleAboveLastToolCallSteps.length > 0 && (
         <Button
           key="above"
-          className="w-full items-start justify-start text-left"
+          className="h-auto min-h-9 w-full items-start justify-start text-left"
           variant="ghost"
           onClick={() => setShowAbove(!showAbove)}
         >
@@ -399,7 +437,7 @@ function MessageGroupComponent({
                 stepIndexByStep.get(lastToolCallStep) ?? -1,
               )}
               <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
-                {renderToolCall(lastToolCallStep, { isLast: true })}
+                {renderToolCall(lastToolCallStep)}
               </FlipDisplay>
               {afterLastToolCallAssistantTextSteps
                 .filter((step) => !belowLastReasoningSteps.has(step))
@@ -600,10 +638,10 @@ function DebugStepLabel({
   token?: string | null;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div className="min-w-0 flex-1">{label}</div>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0 flex-1 basis-48">{label}</div>
       {token ? (
-        <div className="text-muted-foreground shrink-0 font-mono text-[11px]">
+        <div className="text-muted-foreground max-w-full shrink-0 font-mono text-[11px] wrap-anywhere">
           {token}
         </div>
       ) : null}
@@ -718,8 +756,6 @@ function ToolCall({
   name,
   args,
   result,
-  isLast = false,
-  isLoading = false,
   deferBrowserPreview = false,
   tokenDebugStep,
   showDetails = false,
@@ -733,8 +769,6 @@ function ToolCall({
   name: string;
   args: Record<string, unknown>;
   result?: string | Record<string, unknown>;
-  isLast?: boolean;
-  isLoading?: boolean;
   deferBrowserPreview?: boolean;
   tokenDebugStep?: TokenDebugStep;
   showDetails?: boolean;
@@ -745,8 +779,7 @@ function ToolCall({
 }) {
   const { t } = useI18n();
   const kind = getToolCallKind(name);
-  const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
-    useArtifacts();
+  const { setOpen, select } = useArtifacts();
   const browserViewPanel = useMaybeBrowserView();
   const tokenLabel = tokenDebugStep
     ? formatDebugToken(tokenDebugStep, t)
@@ -772,7 +805,9 @@ function ToolCall({
   const finalizedArtifactPath =
     name === "finalize_artifact_write" &&
     typeof args.path === "string" &&
-    isSuccessfulToolResult(result)
+    isSuccessfulToolResult(
+      resultMessage ? extractTextFromMessage(resultMessage) : result,
+    )
       ? args.path
       : undefined;
   const writeFileArtifactUrl = writeFilePath
@@ -783,27 +818,6 @@ function ToolCall({
       })
     : null;
   const fileArtifactUrl = finalizedArtifactPath ?? writeFileArtifactUrl;
-  const autoOpenArtifactUrl =
-    isLast &&
-    autoOpen &&
-    autoSelect &&
-    ((isLoading && writeFileArtifactUrl && !result) || finalizedArtifactPath)
-      ? (finalizedArtifactPath ?? writeFileArtifactUrl)
-      : null;
-
-  useEffect(() => {
-    if (!autoOpenArtifactUrl || selectedArtifact === autoOpenArtifactUrl) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      select(autoOpenArtifactUrl, true);
-      setOpen(true);
-    }, 100);
-
-    return () => window.clearTimeout(timeout);
-  }, [autoOpenArtifactUrl, select, selectedArtifact, setOpen]);
-
   if (kind === "browser") {
     const shot = browserView?.screenshot;
     const previewUrl =

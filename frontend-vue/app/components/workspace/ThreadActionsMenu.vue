@@ -6,7 +6,7 @@
   【依赖关系】     ui/dropdown-menu · thread API/export · clipboard · toast
   【边界与注意】   不复制 thread list；export 临时状态仅属于这一菜单实例。
 */
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import {
   Archive,
   Download,
@@ -33,8 +33,12 @@ import {
 import MoveToProjectMenu from "@/components/workspace/projects/MoveToProjectMenu.vue";
 import { useMediaQuery } from "@/composables/useMediaQuery";
 import { useThreadArchiveAction } from "@/composables/useThreadArchiveAction";
+import { useConversationExtensionOwner } from "@/composables/useFrontendExtensions";
+import { useSettingsPermissions } from "@/composables/useSettingsPermissions";
+import { hasPermission, PERMISSIONS } from "@/core/auth/permissions";
 import { getAPIClient } from "@/core/api/api-client";
 import { writeTextToClipboard } from "@/core/clipboard";
+import ConversationExtensionActions from "@/components/workspace/extensions/ConversationExtensionActions.vue";
 import { exportThread, type ThreadExportFormat } from "@/core/threads/export";
 import {
   buildThreadShareUrl,
@@ -58,6 +62,21 @@ const emit = defineEmits<{
 }>();
 
 const archiveAction = useThreadArchiveAction();
+const extensionOwner = useConversationExtensionOwner(
+  () => props.thread.thread_id,
+);
+const access = useSettingsPermissions();
+const canDeleteThreads = computed(() =>
+  hasPermission(
+    access.session.value?.tag === "authenticated"
+      ? access.session.value.user
+      : null,
+    PERMISSIONS.THREADS_DELETE,
+  ),
+);
+function requestDelete() {
+  if (!props.deleting && canDeleteThreads.value) emit("delete");
+}
 const { $i18n } = useNuxtApp();
 const toast = useWorkspaceToast();
 const exporting = ref<ThreadExportFormat | null>(null);
@@ -166,6 +185,11 @@ async function exportConversation(format: ThreadExportFormat) {
       （坑 215 的同一条：一条 x 差比 popper 的任何参数都大，先去量朝向）。
     -->
     <DropdownMenuContent side="right" align="start" class="w-48 rounded-lg">
+      <ConversationExtensionActions
+        :context="{ thread }"
+        :owner="extensionOwner"
+        placement="menu"
+      />
       <!--
         上游 recent-chat-list.tsx:370 **按置顶态换图标**：已置顶画 `PinOff`
         （取消置顶），未置顶画 `Pin`。本仓原来两种状态都画 `Pin`——
@@ -229,7 +253,7 @@ async function exportConversation(format: ThreadExportFormat) {
         @new-project="emit('newProjectForThread')"
         @move-project="emit('moveToProject', $event)"
       />
-      <DropdownMenuSeparator />
+      <DropdownMenuSeparator v-if="canDeleteThreads" />
       <!--
         **不传 `variant="destructive"`**：上游这颗删除项是普通项
         （recent-chat-list.tsx:419，图标走 `[&_svg:not([class*='text-'])]:text-muted-foreground`），
@@ -239,7 +263,11 @@ async function exportConversation(format: ThreadExportFormat) {
         红色在这里不是可访问性要求（项本身有 "Delete" 文字和垃圾桶图标），
         所以按双向规则删掉本仓多出来的这一处。
       -->
-      <DropdownMenuItem :disabled="deleting" @select="emit('delete')">
+      <DropdownMenuItem
+        v-if="canDeleteThreads"
+        :disabled="deleting"
+        @select="requestDelete"
+      >
         <Trash2 /> {{ $i18n.t.value.common.delete }}
       </DropdownMenuItem>
     </DropdownMenuContent>

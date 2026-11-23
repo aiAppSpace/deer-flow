@@ -34,6 +34,30 @@ const mocks = vi.hoisted(() => ({
   compactThreadContext: vi.fn(),
 }));
 
+vi.mock("@/composables/useAuthSession", () => ({
+  useAuthSession: () => ({
+    session: ref({ tag: "anonymous" }),
+    isFetching: ref(false),
+  }),
+}));
+
+vi.mock("@/composables/useFrontendExtensions", () => ({
+  useExtensionMentions: () => ({
+    items: ref([]),
+    failed: ref(false),
+    loading: ref(false),
+    retry: vi.fn(),
+  }),
+}));
+
+vi.mock("@/core/features/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/core/features/api")>()),
+  fetchConversationReferencesCapability: vi.fn(async () => ({
+    enabled: false,
+    maxReferences: 0,
+  })),
+}));
+
 vi.mock("@/core/skills/api", () => ({ loadSkills: mocks.loadSkills }));
 vi.mock("@/core/models/api", () => ({ loadModels: mocks.loadModels }));
 vi.mock("@/core/uploads/api", () => ({
@@ -55,6 +79,9 @@ const COMPACT_HELPER = {
   enabled: true,
 };
 
+const wrappers: ReturnType<typeof mount>[] = [];
+const queryClients: QueryClient[] = [];
+
 function mountComposer(props: Record<string, unknown> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -64,6 +91,7 @@ function mountComposer(props: Record<string, unknown> = {}) {
     return true;
   });
   const wrapper = mount(ChatComposer, {
+    attachTo: document.body,
     props: {
       threadKey: "thread-1",
       targetThreadId: "thread-1",
@@ -82,6 +110,8 @@ function mountComposer(props: Record<string, unknown> = {}) {
       stubs: { ReferenceAttachment: true, GoalStatus: true },
     },
   });
+  wrappers.push(wrapper);
+  queryClients.push(queryClient);
   return { wrapper, submitMessage };
 }
 
@@ -97,8 +127,13 @@ async function openSuggestions(
   return textarea;
 }
 
+// Commands and welcome suggestions preserve DOM identity while hidden. Assert
+// visibility (including ancestors), not destruction, for their user-facing state.
 const optionTexts = (wrapper: ReturnType<typeof mountComposer>["wrapper"]) =>
-  wrapper.findAll("[role='option']").map((option) => option.text());
+  wrapper
+    .findAll("[role='option']")
+    .filter((element) => element.isVisible())
+    .map((option) => option.text());
 
 const selectedIndex = (wrapper: ReturnType<typeof mountComposer>["wrapper"]) =>
   wrapper
@@ -143,7 +178,88 @@ describe("ChatComposer slash suggestions", () => {
   });
 
   afterEach(() => {
+    wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+    queryClients.splice(0).forEach((client) => client.clear());
+    document.body.replaceChildren();
     vi.unstubAllGlobals();
+  });
+
+  it("fits commands to the native clipping ancestor and updates its layout lifecycle", async () => {
+    const observers: {
+      callback: ResizeObserverCallback;
+      targets: Element[];
+      disconnected: boolean;
+    }[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        entry: (typeof observers)[number];
+        constructor(callback: ResizeObserverCallback) {
+          this.entry = { callback, targets: [], disconnected: false };
+          observers.push(this.entry);
+        }
+        observe(target: Element) {
+          this.entry.targets.push(target);
+        }
+        disconnect() {
+          this.entry.disconnected = true;
+        }
+      },
+    );
+    vi.stubGlobal("innerHeight", 800);
+    document.documentElement.style.fontSize = "32px";
+    const { wrapper } = mountComposer();
+    const clip = document.createElement("main");
+    clip.style.overflowY = "auto";
+    document.body.append(clip);
+    clip.append(wrapper.element);
+    let clipTop = 120,
+      rootTop = 300;
+    vi.spyOn(clip, "getBoundingClientRect").mockImplementation(
+      () => ({ top: clipTop, bottom: 800 }) as DOMRect,
+    );
+    Object.defineProperty(clip, "clientHeight", {
+      configurable: true,
+      get: () => 800 - clipTop,
+    });
+    vi.spyOn(wrapper.element, "getBoundingClientRect").mockImplementation(
+      () => ({ top: rootTop, bottom: 780 }) as DOMRect,
+    );
+    try {
+      await flushPromises();
+      const textarea = await openSuggestions(wrapper, "/");
+      const list = wrapper.get('[role="listbox"]');
+      expect((list.element as HTMLElement).style.maxHeight).toBe("156px");
+      const active = observers.filter((item) => !item.disconnected);
+      expect(active.some((item) => item.targets.includes(clip))).toBe(true);
+      clipTop = 200;
+      for (const observer of active.filter((item) =>
+        item.targets.includes(clip),
+      ))
+        observer.callback([], {} as ResizeObserver);
+      await flushPromises();
+      expect(list.element.parentElement!.classList.contains("relative")).toBe(
+        true,
+      );
+      expect((list.element as HTMLElement).style.maxHeight).toBe("568px");
+      rootTop = 480;
+      window.dispatchEvent(new Event("scroll"));
+      await flushPromises();
+      expect(list.element.parentElement!.classList.contains("absolute")).toBe(
+        true,
+      );
+      expect((list.element as HTMLElement).style.maxHeight).toBe("256px");
+      await textarea.trigger("keydown", { key: "Escape" });
+      await flushPromises();
+      expect(observers.every((item) => item.disconnected)).toBe(true);
+      rootTop = 100;
+      window.dispatchEvent(new Event("scroll"));
+      expect(wrapper.find('[role="listbox"]').isVisible()).toBe(false);
+    } finally {
+      wrapper.unmount();
+      clip.remove();
+      document.documentElement.style.removeProperty("font-size");
+    }
   });
 
   /*
@@ -151,14 +267,12 @@ describe("ChatComposer slash suggestions", () => {
     裸名字、`/goal` 拼成 "Goal — 说明"、`/compact` **连名字都没有**——三种写法，
     没有一种和上游一样，而这正是台账里那 8 行。
   */
-  it("renders every row as /name plus its description, skills before builtins", async () => {
+  it("renders only the current React builtin commands, with /name and description", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
     await openSuggestions(wrapper, "/");
 
     expect(optionTexts(wrapper)).toEqual([
-      "/data-analysisAnalyze structured data and produce charts.",
-      "/frontend-designCreate polished frontend interfaces.",
       "/goalSet, show, or clear an active goal",
       "/compactCompact earlier context while keeping the full chat visible",
     ]);
@@ -181,15 +295,27 @@ describe("ChatComposer slash suggestions", () => {
     const textarea = wrapper.get("textarea[name='message']");
     await textarea.setValue("/");
     await flushPromises();
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
 
     await textarea.trigger("focus");
     await flushPromises();
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(1);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
 
     await textarea.trigger("blur");
     await flushPromises();
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
   });
 
   /*
@@ -201,11 +327,19 @@ describe("ChatComposer slash suggestions", () => {
     const { wrapper } = mountComposer();
     await flushPromises();
     await openSuggestions(wrapper, "/");
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(1);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
 
     await wrapper.setProps({ disabled: true });
     await flushPromises();
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
   });
 
   /*
@@ -216,19 +350,35 @@ describe("ChatComposer slash suggestions", () => {
     const { wrapper } = mountComposer();
     await flushPromises();
     const textarea = await openSuggestions(wrapper, "/");
-    expect(wrapper.findAll("[role='option']")).toHaveLength(4);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(2);
 
     await textarea.trigger("keydown", { key: "Escape" });
     await flushPromises();
-    expect(wrapper.findAll("[role='option']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
 
-    await textarea.setValue("/data");
+    await textarea.setValue("/go");
     await flushPromises();
-    expect(wrapper.findAll("[role='option']")).toHaveLength(1);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
 
     await textarea.setValue("/");
     await flushPromises();
-    expect(wrapper.findAll("[role='option']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
   });
 
   /*
@@ -241,9 +391,12 @@ describe("ChatComposer slash suggestions", () => {
     await openSuggestions(wrapper, "/");
     expect(selectedIndex(wrapper)).toBe(0);
 
-    await wrapper.findAll("[role='option']")[2]!.trigger("mouseenter");
+    await wrapper
+      .findAll("[role='option']")
+      .filter((element) => element.isVisible())[1]!
+      .trigger("mouseenter");
     await flushPromises();
-    expect(selectedIndex(wrapper)).toBe(2);
+    expect(selectedIndex(wrapper)).toBe(1);
   });
 
   it("accepts the active row on Tab as well as Enter", async () => {
@@ -254,7 +407,7 @@ describe("ChatComposer slash suggestions", () => {
     await textarea.trigger("keydown", { key: "ArrowDown" });
     await textarea.trigger("keydown", { key: "ArrowDown" });
     await flushPromises();
-    expect(selectedIndex(wrapper)).toBe(2);
+    expect(selectedIndex(wrapper)).toBe(0);
 
     await textarea.trigger("keydown", { key: "Tab" });
     await flushPromises();
@@ -262,7 +415,11 @@ describe("ChatComposer slash suggestions", () => {
       (wrapper.get("textarea[name='message']").element as HTMLTextAreaElement)
         .value,
     ).toBe("/goal ");
-    expect(wrapper.findAll("[role='option']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
   });
 
   /*
@@ -279,7 +436,7 @@ describe("ChatComposer slash suggestions", () => {
   it("tracks focus on the skill-chip editor too", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
-    const textarea = await openSuggestions(wrapper, "/front");
+    const textarea = await openSuggestions(wrapper, "@front");
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
 
@@ -287,17 +444,25 @@ describe("ChatComposer slash suggestions", () => {
       "[data-slot='input-group-control'][role='textbox']",
     );
     await chip.trigger("blur");
-    Object.assign(chip.element, { innerText: "/" });
+    Object.assign(chip.element, { textContent: "/" });
     await chip.trigger("input");
     await flushPromises();
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
 
     await chip.trigger("focus");
     await flushPromises();
-    expect(wrapper.findAll("[role='listbox']")).toHaveLength(1);
+    expect(
+      wrapper
+        .findAll("[role='listbox']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
   });
 
-  it("forgets an earlier Escape once a skill is picked", async () => {
+  it("preserves exact-line command dismissal across inline skill selection and reopens on a changed query", async () => {
     mocks.loadSkills.mockResolvedValue([
       {
         name: "data-analysis",
@@ -316,7 +481,7 @@ describe("ChatComposer slash suggestions", () => {
     const textarea = await openSuggestions(wrapper, "/");
 
     await textarea.trigger("keydown", { key: "Escape" });
-    await textarea.setValue("/front");
+    await textarea.setValue("@front");
     await flushPromises();
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
@@ -326,14 +491,16 @@ describe("ChatComposer slash suggestions", () => {
     );
     await chip.trigger("blur");
     await chip.trigger("focus");
-    Object.assign(chip.element, { innerText: "/" });
+    Object.assign(chip.element, { textContent: "/" });
     await chip.trigger("input");
     await flushPromises();
 
+    expect(optionTexts(wrapper)).toEqual([]);
+    Object.assign(chip.element, { textContent: "/comp" });
+    await chip.trigger("input");
+    await flushPromises();
     expect(optionTexts(wrapper)).toEqual([
-      "/data-analysisAnalyze structured data and produce charts.",
-      "/frontend-designCreate polished frontend interfaces.",
-      "/compact-helperA skill whose name starts with a builtin command.",
+      "/compactCompact earlier context while keeping the full chat visible",
     ]);
   });
 
@@ -342,50 +509,25 @@ describe("ChatComposer slash suggestions", () => {
     `/compact` 这行文本提交出去也不是命令（它会被拼成 `/skill /compact`），
     所以那里的回车该接受的就是高亮的那条技能。
   */
-  it("still accepts the highlighted skill on Enter inside a skill chip", async () => {
-    mocks.loadSkills.mockResolvedValue([
-      {
-        name: "data-analysis",
-        description: "Analyze structured data and produce charts.",
-        enabled: true,
-      },
-      COMPACT_HELPER,
-    ]);
+  it("runs a fully typed builtin after the last inline reference is deleted", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
-    const textarea = await openSuggestions(wrapper, "/data");
+    const textarea = await openSuggestions(wrapper, "@front");
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
-
-    const chip = wrapper.get(
-      "[data-slot='input-group-control'][role='textbox']",
-    );
-    await chip.trigger("focus");
-    Object.assign(chip.element, { innerText: "/compact" });
-    await chip.trigger("input");
+    const editor = wrapper.get("[role=textbox][contenteditable]");
+    editor.element.textContent = "/compact";
+    await editor.trigger("focus");
+    await editor.trigger("input");
     await flushPromises();
-    expect(optionTexts(wrapper)).toEqual([
-      "/compact-helperA skill whose name starts with a builtin command.",
-    ]);
-
-    await chip.trigger("keydown", { key: "Enter" });
+    await editor.trigger("keydown", { key: "Enter" });
     await flushPromises();
-
-    expect(mocks.compactThreadContext).not.toHaveBeenCalled();
-    expect(wrapper.text()).toContain("/compact-helper");
+    expect(mocks.compactThreadContext).toHaveBeenCalledTimes(1);
   });
 
-  /*
-    翻历史翻到一条**本身就是斜杠查询**的旧草稿时，目录会跟着打开。按 Escape 关掉它
-    之后，方向键要还给历史继续往上翻——判据是**显示条件**而不是「有没有匹配项」，
-    因为匹配项这时还在。两条判据分家的话，用户在这里既拿不到建议也翻不动历史。
-
-    （空输入框上直接按 ArrowUp 走不到这一步：两个应用都要求「要么输入框是空的，
-    要么已经在翻历史」，见上游 input-box.tsx:1756。）
-  */
   it("keeps stepping through prompt history after the catalog is dismissed", async () => {
     const { wrapper } = mountComposer({
-      promptHistory: ["older draft", "/data"],
+      promptHistory: ["older draft", "/go"],
     });
     await flushPromises();
 
@@ -393,12 +535,20 @@ describe("ChatComposer slash suggestions", () => {
     await textarea.trigger("focus");
     await textarea.trigger("keydown", { key: "ArrowUp" });
     await flushPromises();
-    expect((textarea.element as HTMLTextAreaElement).value).toBe("/data");
-    expect(wrapper.findAll("[role='option']")).toHaveLength(1);
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("/go");
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
 
     await textarea.trigger("keydown", { key: "Escape" });
     await flushPromises();
-    expect(wrapper.findAll("[role='option']")).toHaveLength(0);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
 
     await textarea.trigger("keydown", { key: "ArrowUp" });
     await flushPromises();
@@ -408,13 +558,17 @@ describe("ChatComposer slash suggestions", () => {
   it("turns a picked skill into a chip instead of slash text", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
-    const textarea = await openSuggestions(wrapper, "/front");
+    const textarea = await openSuggestions(wrapper, "@front");
 
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
 
     expect(wrapper.findAll("textarea[name='message']")).toHaveLength(0);
-    expect(wrapper.text()).toContain("/frontend-design");
+    expect(
+      wrapper
+        .get("[data-testid=inline-skill-reference]")
+        .attributes("data-reference-kind"),
+    ).toBe("skill");
   });
 
   /*
@@ -436,7 +590,7 @@ describe("ChatComposer slash suggestions", () => {
   it("keeps the chip and the editor in one scrollable inline row", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
-    const textarea = await openSuggestions(wrapper, "/front");
+    const textarea = await openSuggestions(wrapper, "@front");
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
 
@@ -447,91 +601,46 @@ describe("ChatComposer slash suggestions", () => {
     expect(row.className).toContain("overflow-y-auto");
     expect(row.className).toContain("whitespace-pre-wrap");
     expect(row.className).not.toContain("flex items-start");
-    /*
-      chip：inline + 宽度上限，不会把可编辑区挤没。
-      **它是一颗按钮，不是一个 span**（第四十四轮）——上游 input-box.tsx:2356
-      用的是 `SlashSkillChip` 的可移除档：`<button aria-label="Remove /<name>">`
-      里包着名字和一颗 X。本仓此前是个纯 `<span class="bg-secondary …">`，
-      **没有任何移除入口**：鼠标用户选中一个斜杠技能之后取消不掉它。
-      台账看不见这一屏（要先打字再选中才出现），是 Tab 走一圈时发现的。
-    */
-    const chip = row.querySelector("button")!;
-    expect(chip.getAttribute("aria-label")).toBe(
-      enUS.primitives.removeSlashSkill("frontend-design"),
-    );
-    expect(chip.className).toContain("align-top");
-    expect(chip.className).toContain("max-w-[min(11rem,45%)]");
-    // 上游 CHIP_BASE_CLASS 的那几个可感知的：颜色档、边框、等宽字。
-    expect(chip.className).toContain("bg-primary/10");
-    expect(chip.className).toContain("border-primary/20");
-    expect(chip.className).toContain("font-mono");
-    // 可编辑区不再自己占一栏。
+    // The selected skill is a noneditable inline reference inside the same editor.
+    const chip = row.querySelector<HTMLElement>(
+      "[data-testid=inline-skill-reference]",
+    )!;
+    expect(chip.getAttribute("aria-label")).toBe("@frontend-design");
+    expect(chip.contentEditable).toBe("false");
+    expect(chip.className).toContain("inline-flex");
+    expect(chip.className).toContain("text-blue-600");
     expect(editor.classes()).not.toContain("flex-1");
-
-    /*
-      点容器空白处 → 光标落到可编辑区末尾（上游同一处的 onClick）。
-      只在 `target === currentTarget` 时动手，所以点在 chip 上不该抢焦点。
-
-      **次序是有意的：先点空白、再点 chip。** 点 chip 现在会把技能移除掉
-      （上游 input-box.tsx:2359 的 `onRemove={clearSelectedSlashSkill}`），
-      那一下之后这一行就不存在了，再去点它只会量到一个脱离文档的节点。
-    */
-    // 用 spy 而不是 document.activeElement：这个 wrapper 没有 attachTo，
-    // 脱离文档的节点 focus() 不会改 activeElement，断言会恒假。
     const focusSpy = vi.spyOn(editor.element as HTMLElement, "focus");
     row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await flushPromises();
-    expect(focusSpy).toHaveBeenCalledTimes(1);
-
-    chip.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
     expect(focusSpy).toHaveBeenCalledTimes(1);
     focusSpy.mockRestore();
   });
 
-  /*
-    **移除入口本身**（第四十四轮）。本仓此前那颗胶囊是个纯 `<span>`：
-    技能一旦选中，鼠标用户没有任何办法取消它——只能把整段草稿删掉。
-    上游点那颗 X 就回到普通输入框，并且**把焦点交回输入区**
-    （input-box.tsx:2058 的 clearSelectedSlashSkill 里那次 focus）。
-  */
-  it("removes the selected skill when the chip is clicked", async () => {
+  it("removes a selected skill through the multiselect picker while retaining the editor", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
-    const textarea = await openSuggestions(wrapper, "/front");
+    const textarea = await openSuggestions(wrapper, "@front");
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
-
-    const chip = wrapper.get(
-      `button[aria-label="${enUS.primitives.removeSlashSkill("frontend-design")}"]`,
-    );
-    expect(wrapper.find('[role="textbox"][contenteditable]').exists()).toBe(
-      true,
-    );
-
-    await chip.trigger("click");
+    await wrapper.get("[data-testid=mention-button]").trigger("click");
     await flushPromises();
-
-    // 胶囊与 chip 档的可编辑区一起消失，真 textarea 回来。
-    expect(
-      wrapper
-        .findAll("button")
-        .some(
-          (button) =>
-            button.attributes("aria-label") ===
-            enUS.primitives.removeSlashSkill("frontend-design"),
-        ),
-    ).toBe(false);
-    expect(wrapper.find('[role="textbox"][contenteditable]').exists()).toBe(
+    const option = wrapper
+      .findAll("[role=option]")
+      .find((item) => item.text().includes("frontend-design"))!;
+    expect(option.attributes("aria-selected")).toBe("true");
+    await option.trigger("click");
+    await flushPromises();
+    expect(wrapper.find("[data-testid=inline-skill-reference]").exists()).toBe(
       false,
     );
-    expect(wrapper.find("textarea").exists()).toBe(true);
+    expect(wrapper.find("[role=textbox][contenteditable]").exists()).toBe(true);
   });
 
   it("gives the chip editor the same textbox contract upstream has", async () => {
     const { wrapper } = mountComposer();
     await flushPromises();
-    const textarea = await openSuggestions(wrapper, "/front");
+    const textarea = await openSuggestions(wrapper, "@front");
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
 
@@ -545,11 +654,11 @@ describe("ChatComposer slash suggestions", () => {
       enUS.inputBox.placeholder,
     );
     // 刚选中技能时草稿是空的 → 占位要画出来。
-    expect(editor.attributes("data-empty")).toBe("true");
+    expect(editor.attributes("data-empty")).toBe("false");
     expect(editor.attributes("tabindex")).toBe("0");
 
     await editor.trigger("input");
-    Object.defineProperty(editor.element, "innerText", {
+    Object.defineProperty(editor.element, "textContent", {
       value: "hello",
       configurable: true,
     });
@@ -566,7 +675,11 @@ describe("ChatComposer slash suggestions", () => {
     const { wrapper } = mountComposer();
     await flushPromises();
     const textarea = await openSuggestions(wrapper, "/compact");
-    expect(wrapper.findAll("[role='option']")).toHaveLength(1);
+    expect(
+      wrapper
+        .findAll("[role='option']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
 
     await textarea.trigger("keydown", { key: "Enter" });
     await flushPromises();
@@ -605,14 +718,18 @@ describe("ChatComposer slash suggestions", () => {
     const textarea = wrapper.get("textarea[name='message']");
     await textarea.setValue("/");
     await flushPromises();
-    expect(wrapper.findAll("[data-testid='welcome-suggestions']")).toHaveLength(
-      1,
-    );
+    expect(
+      wrapper
+        .findAll("[data-testid='welcome-suggestions']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(1);
 
     await textarea.trigger("focus");
     await flushPromises();
-    expect(wrapper.findAll("[data-testid='welcome-suggestions']")).toHaveLength(
-      0,
-    );
+    expect(
+      wrapper
+        .findAll("[data-testid='welcome-suggestions']")
+        .filter((element) => element.isVisible()),
+    ).toHaveLength(0);
   });
 });

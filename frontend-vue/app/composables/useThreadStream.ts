@@ -28,7 +28,6 @@
                    而分叉的那一侧没有测试。
 */
 
-import type { InfiniteData } from "@tanstack/vue-query";
 import { useQueryClient } from "@tanstack/vue-query";
 import {
   computed,
@@ -52,9 +51,14 @@ import {
   STREAMING_STATUSES,
 } from "@/core/agent-deerflow/thread-runner";
 import { createDeerFlowRunProtocol } from "@/core/agent-deerflow/run-protocol";
+import { loadDeerFlowRunState } from "@/core/agent-deerflow/run-state";
 import { getBackendBaseURL, getLangGraphBaseURL } from "@/core/config";
+import { createParityObserver } from "@/core/diagnostics/parity-observation";
+import { createReplayObservation } from "@/core/diagnostics/replay-observation";
+import { bindRunInput } from "@/core/diagnostics/run-observation";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { throwGatewayResponseError } from "@/core/api/errors";
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
 import {
   buildThreadCheckpointSeedUrl,
   checkpointSeedValues,
@@ -68,6 +72,7 @@ import {
 import {
   INFINITE_THREADS_QUERY_KEY_PREFIX,
   mapInfiniteThreadsCache,
+  type InfiniteThreadsData,
 } from "@/core/threads/infinite";
 import type { AgentThread } from "@/core/threads/types";
 import {
@@ -96,10 +101,13 @@ import {
 import {
   buildRunContext,
   buildThreadSubmitMessages,
+  clientTimezoneContext,
   type ThreadRunContextInput,
+  type ThreadSubmitSnapshot,
 } from "@/core/threads/submit";
 import { isHiddenFromUIMessage } from "@/core/messages/utils";
 import type { FileInMessage } from "@/core/messages/utils";
+import type { ComposerRunSnapshot } from "@/core/threads/composer-submit";
 import type { Model } from "@/core/models/types";
 import type { Message } from "@/core/types/message";
 import {
@@ -115,12 +123,15 @@ export interface ThreadStreamNotifier {
   /** 本地化恢复警告（05 A7）。key 是字典路径，文案由调用方取。 */
   warn: (key: string) => void;
   error: (message: string) => void;
+  /** React's plain toast(message): no status icon or text-based deduplication. */
+  message?: (message: string) => void;
 }
 
 export interface UseThreadStreamOptions {
   threadId: MaybeRefOrGetter<string | null | undefined>;
   displayThreadId?: MaybeRefOrGetter<string | null | undefined>;
   context: MaybeRefOrGetter<ThreadRunContextInput>;
+  assistantId?: MaybeRefOrGetter<string>;
   model?: MaybeRefOrGetter<Model | null | undefined>;
   notify?: ThreadStreamNotifier;
   onSend?: (threadId: string) => void;
@@ -136,19 +147,14 @@ export interface UseThreadStreamOptions {
 const noopNotifier: ThreadStreamNotifier = { warn: () => {}, error: () => {} };
 
 /**
- * 每个创建 run 的入口都显式携带同一组，**与上游逐字相同**：`messages-tuple`
- * 提供文本/tool-call 分片，`updates` 提供每个节点写了哪些通道（状态由它累积），
- * `custom` 驱动自定义任务/gap 事件。漏掉整个字段时 Gateway 会退回 `values`-only，
- * SSE 仍然连着，但回答只能按完整状态成段刷新——所以字段必须在，值必须是这三个。
+ * 普通提交与 React 使用同一组 stream modes：`messages-tuple` 提供文本/tool-call
+ * 分片，`updates` 累积节点状态，`custom` 驱动任务/gap 事件。省略该字段会让 Gateway
+ * 退回 `values`-only，回答只能按完整快照刷新，因此创建 run 时显式携带这三个模式。
  *
- * **不订 `values`（wave 216 去掉）。** 上游 SDK 的 wire 上也没有它，状态同样靠
- * `updates` 累积（`reduceUpdates` 的 `patch-state` 本来就实现了这件事）。
- * 多订一个 `values` 不只是多一个字符串：`values` 是全量快照，里面**用户刚发出的
- * 那条 human 消息没有 id**（两个应用发出去的消息本来就不带 id），于是本仓要给它
- * 编一个 `values-0` 这样的位置键，而 `getLatestEditableTurn` 会据此认为这一轮可编辑、
- * 画出「编辑并重新运行」——那颗键按下去会把 `values-0` 交给
- * `POST /runs/edit-regenerate/prepare`，服务端解析不了。
- * `isSyntheticValuesMessageId` 那一套是为这件事打的补丁；**这里拔的是根**。
+ * 普通实时流不另订全量 `values`；checkpoint 与 replay-gap 的 durable snapshot
+ * 仍通过各自的历史/恢复生命周期进入同一个 runner。消息身份与 stream modes 分开：
+ * 本仓 buildThreadSubmitMessages 和 React 提交链都会为 human 生成稳定客户端 ID，
+ * 乐观展示与 wire 输入共享该 ID；本仓 accepted snapshot 也保留同一个身份。
  */
 const THREAD_STREAM_MODES = ["messages-tuple", "updates", "custom"] as const;
 
@@ -215,8 +221,11 @@ export function useThreadStream(options: UseThreadStreamOptions) {
   };
   let summarizedMessageIds = new Set<string>();
   let sendInFlight = false;
+  let submissionGeneration = 0;
+  let disposed = false;
   let pendingAcceptedCallback: (() => void) | null = null;
   let startedAnnounced = false;
+  let observingRun = false;
   /**
    * 本次 run 真正建出来的 thread id（05 C9 的边界条件）。
    *
@@ -230,6 +239,8 @@ export function useThreadStream(options: UseThreadStreamOptions) {
    */
   let adoptedThreadId: string | null = null;
   let pendingFinalizationTimer: ReturnType<typeof setTimeout> | null = null;
+  let checkpointSeedGeneration = 0;
+  let checkpointSeedController: AbortController | undefined;
   let preparedReplayController: AbortController | null = null;
   let preparedReplayGeneration = 0;
   let pendingPreparedReplay: {
@@ -241,22 +252,14 @@ export function useThreadStream(options: UseThreadStreamOptions) {
   const snapshotVersion = shallowRef(0);
   const sessionStatus = ref<string>("idle");
   const activeRunId = ref<string | null>(null);
+  let notificationOwnerIsCurrent: () => boolean = () => false;
   const customEventState = shallowRef(createThreadCustomEventState());
   const streamError = shallowRef<unknown>(null);
 
   const runner: ThreadRunner = runnerFactory({
     protocol: createDeerFlowRunProtocol({ baseUrl: getLangGraphBaseURL() }),
-    async loadDurableState(handle: DeerFlowRunHandle) {
-      const response = await globalThis.fetch(
-        `${getBackendBaseURL()}/api/threads/${encodeURIComponent(handle.threadId)}/state`,
-        { credentials: "include" },
-      );
-      if (!response.ok) return undefined;
-      const body = (await response.json()) as {
-        values?: Record<string, unknown>;
-      };
-      return body.values;
-    },
+    loadDurableState: (handle, signal) =>
+      loadDeerFlowRunState({ baseUrl: getLangGraphBaseURL(), handle, signal }),
     onSnapshot() {
       snapshotVersion.value += 1;
       triggerRef(snapshotVersion);
@@ -303,6 +306,10 @@ export function useThreadStream(options: UseThreadStreamOptions) {
   });
 
   onScopeDispose(() => {
+    disposed = true;
+    submissionGeneration += 1;
+    checkpointSeedGeneration += 1;
+    checkpointSeedController?.abort();
     if (pendingFinalizationTimer !== null) {
       clearTimeout(pendingFinalizationTimer);
     }
@@ -311,7 +318,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     preparedReplayController = null;
     customEventState.value = createThreadCustomEventState();
     pendingAcceptedCallback = null;
-    runner.abort();
+    runner.dispose();
   });
 
   // 判据来自 runner（见 STREAMING_STATUSES 的注释）：这里不能直接调
@@ -344,6 +351,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
   const history = useThreadHistory(() => threadId.value ?? "", {
     enabled: computed(() => Boolean(threadId.value) && !isStreaming.value),
     pendingSupersededRunIds,
+    onError: () => notify.error("Failed to load thread history."),
   });
 
   const visibleHistory = computed(() =>
@@ -367,6 +375,13 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     return filtered.length === 0 ? EMPTY_MESSAGES : filtered;
   });
 
+  const streamingMessageIds = computed<ReadonlySet<string>>(() => {
+    void snapshotVersion.value;
+    return isStreaming.value && hasVisibleStreamState.value
+      ? runner.getStreamingMessageIds()
+      : new Set<string>();
+  });
+
   const humanMessageCount = computed(
     () => persistedMessages.value.filter((m) => m.type === "human").length,
   );
@@ -379,6 +394,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
 
   // ---- 事件处理 ----------------------------------------------------------
   function handleStreamStart(startedThreadId: string, runId: string) {
+    notificationOwnerIsCurrent = captureWorkspaceQueryOwner(queryClient);
     streamError.value = null;
     activeRunId.value = runId;
     if (
@@ -397,7 +413,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       liveMessagesThreadId.value = startedThreadId;
     }
     adoptedThreadId = startedThreadId;
-    if (!startedAnnounced) {
+    if (!observingRun && !startedAnnounced) {
       onStart?.(startedThreadId, runId);
       startedAnnounced = true;
     }
@@ -460,7 +476,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
 
       queryClient.setQueriesData(
         { queryKey: [...INFINITE_THREADS_QUERY_KEY_PREFIX], exact: false },
-        (oldData: InfiniteData<AgentThread[]> | undefined) =>
+        (oldData: InfiniteThreadsData | undefined) =>
           mapInfiniteThreadsCache(oldData, withTitle),
       );
     }
@@ -468,6 +484,19 @@ export function useThreadStream(options: UseThreadStreamOptions) {
 
   /** task / retry / replay-gap custom 事件只在这一处进入纯 reducer。 */
   function handleCustomEvent(data: unknown) {
+    if (
+      !disposed &&
+      activeRunId.value !== null &&
+      STREAMING_STATUSES.has(sessionStatus.value) &&
+      notificationOwnerIsCurrent() &&
+      typeof data === "object" &&
+      data !== null &&
+      Reflect.get(data, "type") === "llm_retry"
+    ) {
+      const message = Reflect.get(data, "message");
+      if (typeof message === "string" && message.trim())
+        notify.message?.(message);
+    }
     const reduced = reduceThreadCustomEvent(customEventState.value, data);
     customEventState.value = reduced.state;
     if (reduced.effect !== "replay_gap") return;
@@ -527,6 +556,10 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       // `new` 提交后 URL 换成真 id：同一个 thread，不清场。见 adoptedThreadId。
       if (previous === null && next !== null && next === adoptedThreadId)
         return;
+      submissionGeneration += 1;
+      checkpointSeedGeneration += 1;
+      checkpointSeedController?.abort();
+      adoptedThreadId = null;
       preparedReplayGeneration += 1;
       preparedReplayController?.abort();
       preparedReplayController = null;
@@ -535,6 +568,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       activeRunId.value = null;
       customEventState.value = createThreadCustomEventState();
       startedAnnounced = false;
+      observingRun = false;
       sendInFlight = false;
       pendingAcceptedCallback = null;
       streamError.value = null;
@@ -584,8 +618,6 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     见上面 `onSettled` 里那段。那一次走的是 `refreshDurableState`——run settle 之后
     状态停在 `completed`，`seedDurableState` 的 `idle` 判据会把它无声丢掉。
   */
-  let checkpointSeedGeneration = 0;
-
   /**
    * `mode` 决定这一帧交给 runner 的哪个入口，两者只差放行条件：
    * · `open`——打开线程时取的，可能在 run 已经开跑之后才落地，所以只在 `idle` 放行；
@@ -594,6 +626,9 @@ export function useThreadStream(options: UseThreadStreamOptions) {
    */
   async function seedThreadCheckpoint(id: string, mode: "open" | "run-end") {
     const generation = ++checkpointSeedGeneration;
+    const controller = new AbortController();
+    checkpointSeedController?.abort();
+    checkpointSeedController = controller;
     let entries: unknown;
     try {
       const response = await fetchWithAuth(
@@ -603,6 +638,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ limit: 1 }),
+          signal: controller.signal,
         },
       );
       if (!response.ok) return;
@@ -723,7 +759,10 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     (messages) => {
       const visible = messages.filter(
         (message) =>
-          !isHiddenFromUIMessage(message) && !message.id?.startsWith("opt-"),
+          !isHiddenFromUIMessage(message) &&
+          !optimisticMessages.value.some(
+            (optimistic) => optimistic.id === message.id,
+          ),
       );
       const previousLedger =
         renderedMessageSnapshot.threadId === threadId.value
@@ -744,6 +783,31 @@ export function useThreadStream(options: UseThreadStreamOptions) {
   );
 
   // ---- 动作 --------------------------------------------------------------
+  async function joinRun(handle: DeerFlowRunHandle): Promise<boolean> {
+    if (
+      disposed ||
+      sendInFlight ||
+      runner.isStreaming() ||
+      handle.threadId !== currentViewThreadId.value
+    )
+      return false;
+    const generation = ++submissionGeneration;
+    sendInFlight = true;
+    observingRun = true;
+    streamError.value = null;
+    localTurnOrderBaseline = null;
+    liveMessagesThreadId.value = handle.threadId;
+    try {
+      await runner.join(handle);
+      return !disposed && generation === submissionGeneration;
+    } finally {
+      if (!disposed && generation === submissionGeneration) {
+        sendInFlight = false;
+        observingRun = false;
+      }
+    }
+  }
+
   async function sendMessage(
     targetThreadId: string,
     message: { text: string; files?: FileInMessage[] },
@@ -751,40 +815,67 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     sendOptions?: {
       additionalInputMessages?: Message[];
       additionalKwargs?: Record<string, unknown>;
-      onAccepted?: () => void;
+      humanMessageId?: string;
+      idempotencyKey?: string;
+      conversationReferences?: readonly string[];
+      onAccepted?: (snapshot: ThreadSubmitSnapshot) => void;
       signal?: AbortSignal;
+      runSnapshot?: ComposerRunSnapshot;
     },
   ): Promise<boolean> {
     if (sendOptions?.signal?.aborted) {
       throw new DOMException("The operation was aborted.", "AbortError");
     }
-    if (sendInFlight) return false;
+    if (disposed || sendInFlight || runner.isStreaming()) return false;
+    const generation = ++submissionGeneration;
+    const isCurrentSubmission = () =>
+      !disposed && generation === submissionGeneration;
     sendInFlight = true;
-    const abortRunner = () => runner.abort();
+    const abortRunner = () => {
+      if (isCurrentSubmission()) runner.abort();
+    };
     sendOptions?.signal?.addEventListener("abort", abortRunner, { once: true });
     streamError.value = null;
     let acceptedByBackend = false;
-    pendingAcceptedCallback = () => {
-      acceptedByBackend = true;
-      sendOptions?.onAccepted?.();
-    };
-
     const text = message.text.trim();
+    const suppliedHumanId = sendOptions?.humanMessageId;
+    const humanMessageId = suppliedHumanId ?? globalThis.crypto.randomUUID();
+    // A caller-owned replay identity is a reference, never a fresh allocation.
+    // Additional input messages have their own provenance and are untouched.
+    const humanObservation = createParityObserver("human:send");
+    const humanOrigin = humanObservation?.point();
+    humanObservation?.emit(
+      suppliedHumanId == null ? "human.allocate" : "human.reuse",
+      { raw: humanMessageId, thread: targetThreadId },
+      humanOrigin,
+    );
+    const messages: Message[] = JSON.parse(
+      JSON.stringify(
+        buildThreadSubmitMessages({
+          text,
+          humanMessageId,
+          additionalInputMessages: sendOptions?.additionalInputMessages ?? [],
+          additionalKwargs: sendOptions?.additionalKwargs,
+          filesForSubmit: message.files ?? [],
+        }),
+      ),
+    );
+    const snapshot: ThreadSubmitSnapshot = {
+      threadId: targetThreadId,
+      humanMessageId,
+      messages,
+    };
+    pendingAcceptedCallback = () => {
+      if (!isCurrentSubmission()) return;
+      acceptedByBackend = true;
+      sendOptions?.onAccepted?.(snapshot);
+    };
     previousHumanMessageCount = humanMessageCount.value;
     // C8：pre-submit 身份基线。空 set 与 null 不同，见文件头。
     localTurnOrderBaseline = identitiesOf(persistedMessages.value);
 
     const hideFromUI = sendOptions?.additionalKwargs?.hide_from_ui === true;
-    const optimistic: Message[] = hideFromUI
-      ? []
-      : [
-          {
-            type: "human",
-            id: `opt-human-${Date.now()}`,
-            content: text ? [{ type: "text", text }] : "",
-            additional_kwargs: { ...sendOptions?.additionalKwargs },
-          } as Message,
-        ];
+    const optimistic: Message[] = hideFromUI ? [] : [messages.at(-1)!];
 
     optimisticThreadId.value = targetThreadId;
     liveMessagesThreadId.value = targetThreadId;
@@ -792,29 +883,61 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     onSend?.(targetThreadId);
 
     try {
-      await runner.submit({
+      const requestedKey = sendOptions?.idempotencyKey;
+      const idempotencyKey = requestedKey ?? humanMessageId;
+      const submission: Parameters<ThreadRunner["submit"]>[0] = {
         threadId: targetThreadId,
+        idempotencyKey,
         payload: {
-          assistant_id: "lead_agent",
+          assistant_id: toValue(options.assistantId) ?? "lead_agent",
           stream_mode: THREAD_STREAM_MODES,
           ...THREAD_RUN_TRANSPORT_OPTIONS,
-          input: {
-            messages: buildThreadSubmitMessages({
-              text,
-              additionalInputMessages:
-                sendOptions?.additionalInputMessages ?? [],
-              additionalKwargs: sendOptions?.additionalKwargs,
-              filesForSubmit: message.files ?? [],
-            }),
-          },
+          input: { messages },
           config: { recursion_limit: 1000 },
-          context: buildRunContext(
-            toValue(context),
-            extraContext,
-            model ? toValue(model) : undefined,
-          ),
+          context: {
+            ...buildRunContext(
+              sendOptions?.runSnapshot?.context ?? toValue(context),
+              extraContext,
+              sendOptions?.runSnapshot
+                ? sendOptions.runSnapshot.model
+                : model
+                  ? toValue(model)
+                  : undefined,
+            ),
+            ...clientTimezoneContext(),
+            ...(sendOptions?.conversationReferences?.length
+              ? {
+                  conversation_references: [
+                    ...sendOptions.conversationReferences,
+                  ],
+                }
+              : {}),
+          },
         },
-      });
+      };
+      // An actual runner-call attempt, not HTTP admission or backend success.
+      humanObservation?.emit(
+        "human.submission",
+        {
+          raw: humanMessageId,
+          thread: targetThreadId,
+          index: messages.length - 1,
+          messageCount: messages.length,
+          keySource: requestedKey == null ? "default" : "explicit",
+          key: idempotencyKey,
+        },
+        humanOrigin,
+      );
+      bindRunInput(
+        submission,
+        humanObservation,
+        humanOrigin,
+        targetThreadId,
+        submission.payload.assistant_id as string,
+      );
+      await runner.submit(submission);
+      if (!isCurrentSubmission()) return false;
+      sendOptions?.signal?.throwIfAborted();
       const settledState = runner.getSessionState();
       if (!acceptedByBackend && settledState.status === "failed") {
         // `ThreadRunner` deliberately turns transport exceptions into a terminal
@@ -829,6 +952,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       });
       return true;
     } catch (error) {
+      if (!isCurrentSubmission()) return false;
       pendingAcceptedCallback = null;
       optimisticMessages.value = [];
       optimisticThreadId.value = null;
@@ -838,7 +962,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       throw error;
     } finally {
       sendOptions?.signal?.removeEventListener("abort", abortRunner);
-      sendInFlight = false;
+      if (isCurrentSubmission()) sendInFlight = false;
     }
   }
 
@@ -853,11 +977,14 @@ export function useThreadStream(options: UseThreadStreamOptions) {
 
   async function submitPreparedReplay(
     targetThreadId: string,
-    preparePath: string,
+    preparePath: "regenerate" | "edit-regenerate",
     prepareBody: Record<string, unknown>,
     fallbackSupersededMessageIds: readonly string[],
+    additionalKwargs?: Record<string, unknown>,
   ): Promise<boolean> {
-    if (sendInFlight || !targetThreadId) return false;
+    if (disposed || sendInFlight || runner.isStreaming() || !targetThreadId)
+      return false;
+    submissionGeneration += 1;
     sendInFlight = true;
     const generation = ++preparedReplayGeneration;
     const controller = new AbortController();
@@ -870,6 +997,32 @@ export function useThreadStream(options: UseThreadStreamOptions) {
 
     let preparedRunId: string | null = null;
     let supersededMessageIds: readonly string[] = fallbackSupersededMessageIds;
+    const replayContext = {
+      ...buildRunContext(
+        toValue(context),
+        undefined,
+        model ? toValue(model) : undefined,
+      ),
+      ...clientTimezoneContext(),
+    };
+    const source =
+      preparePath === "edit-regenerate"
+        ? prepareBody.human_message_id
+        : prepareBody.message_id;
+    const observation = createReplayObservation({
+      kind: preparePath === "edit-regenerate" ? "edit" : "regenerate",
+      thread: targetThreadId,
+      source: typeof source === "string" ? source : null,
+      agent:
+        typeof replayContext.agent_name === "string"
+          ? replayContext.agent_name
+          : null,
+    });
+    const retireObservation = () => observation?.retire();
+    if (observation)
+      controller.signal.addEventListener("abort", retireObservation, {
+        once: true,
+      });
     try {
       const response = await fetchWithAuth(
         `${getBackendBaseURL()}/api/threads/${encodeURIComponent(targetThreadId)}/runs/${preparePath}/prepare`,
@@ -887,6 +1040,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
         );
       }
       const prepared = (await response.json()) as PreparedReplay;
+      observation?.response(prepared);
       if (
         controller.signal.aborted ||
         generation !== preparedReplayGeneration ||
@@ -894,6 +1048,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       ) {
         return false;
       }
+      observation?.adopt();
       preparedRunId = prepared.target_run_id;
       supersededMessageIds =
         prepared.source_message_ids ?? fallbackSupersededMessageIds;
@@ -910,29 +1065,49 @@ export function useThreadStream(options: UseThreadStreamOptions) {
         supersededMessageIds,
       };
 
+      if (additionalKwargs && Array.isArray(prepared.input.messages)) {
+        const messages = [...prepared.input.messages];
+        for (let index = messages.length - 1; index >= 0; index--) {
+          const message = messages[index];
+          if (message?.type !== "human") continue;
+          messages[index] = {
+            ...message,
+            additional_kwargs: {
+              ...message.additional_kwargs,
+              ...JSON.parse(JSON.stringify(additionalKwargs)),
+            },
+          };
+          break;
+        }
+        prepared.input = { ...prepared.input, messages };
+      }
       const replacementMessages = prepared.input.messages ?? [];
       if (replacementMessages.length > 0) {
         optimisticThreadId.value = targetThreadId;
         optimisticMessages.value = replacementMessages;
       }
 
-      await runner.submit({
+      const idempotencyKey = globalThis.crypto.randomUUID();
+      // Preserve the actual argument evaluation order and single getter read.
+      const replayAssistantId = toValue(options.assistantId) ?? "lead_agent";
+      observation?.idempotency(idempotencyKey);
+      observation?.attempt(prepared, replayAssistantId);
+      const submission: Parameters<ThreadRunner["submit"]>[0] = {
         threadId: targetThreadId,
+        idempotencyKey,
         payload: {
-          assistant_id: "lead_agent",
+          assistant_id: replayAssistantId,
           stream_mode: THREAD_STREAM_MODES,
           ...THREAD_RUN_TRANSPORT_OPTIONS,
           input: prepared.input,
           checkpoint: prepared.checkpoint,
           metadata: prepared.metadata,
           config: { recursion_limit: 1000 },
-          context: buildRunContext(
-            toValue(context),
-            undefined,
-            model ? toValue(model) : undefined,
-          ),
+          context: replayContext,
         },
-      });
+      };
+      observation?.bindRunInput(submission, replayAssistantId);
+      await runner.submit(submission);
       if (
         controller.signal.aborted ||
         generation !== preparedReplayGeneration ||
@@ -942,6 +1117,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       }
       const status = runner.getSessionState().status;
       if (status === "failed" || status === "cancelled") {
+        observation?.failure(status);
         if (pendingPreparedReplay) {
           clearPreparedReplayMasks(
             pendingPreparedReplay.targetRunId,
@@ -954,6 +1130,13 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       invalidateThreadCaches(queryClient, targetThreadId);
       return true;
     } catch (error) {
+      observation?.failure();
+      if (
+        disposed ||
+        generation !== preparedReplayGeneration ||
+        targetThreadId !== threadId.value
+      )
+        return false;
       optimisticMessages.value = [];
       optimisticThreadId.value = null;
       liveMessagesThreadId.value = null;
@@ -971,6 +1154,14 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       }
       return false;
     } finally {
+      observation?.finish(
+        !disposed &&
+          !controller.signal.aborted &&
+          generation === preparedReplayGeneration &&
+          targetThreadId === threadId.value,
+      );
+      if (observation)
+        controller.signal.removeEventListener("abort", retireObservation);
       if (preparedReplayController === controller) {
         preparedReplayController = null;
       }
@@ -996,6 +1187,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     humanMessageId: string,
     replacementText: string,
     supersededMessageIds: readonly string[] = [humanMessageId],
+    additionalKwargs?: Record<string, unknown>,
   ) {
     return submitPreparedReplay(
       targetThreadId,
@@ -1005,33 +1197,39 @@ export function useThreadStream(options: UseThreadStreamOptions) {
         replacement_text: replacementText,
       },
       supersededMessageIds,
+      additionalKwargs,
     );
   }
 
   /** 05 A8。延迟那一次的 handle 留着，卸载时取消。 */
   async function stop(): Promise<void> {
+    const generation = submissionGeneration;
     preparedReplayGeneration += 1;
     preparedReplayController?.abort();
     preparedReplayController = null;
     try {
-      pendingFinalizationTimer = await stopThreadAndInvalidateCaches(
+      const timer = await stopThreadAndInvalidateCaches(
         queryClient,
         () => runner.stop(),
         threadId.value,
       );
+      if (disposed || generation !== submissionGeneration) clearTimeout(timer);
+      else pendingFinalizationTimer = timer;
     } finally {
-      if (pendingPreparedReplay) {
-        clearPreparedReplayMasks(
-          pendingPreparedReplay.targetRunId,
-          pendingPreparedReplay.supersededMessageIds,
-        );
-        pendingPreparedReplay = null;
+      if (!disposed && generation === submissionGeneration) {
+        if (pendingPreparedReplay) {
+          clearPreparedReplayMasks(
+            pendingPreparedReplay.targetRunId,
+            pendingPreparedReplay.supersededMessageIds,
+          );
+          pendingPreparedReplay = null;
+        }
+        optimisticMessages.value = [];
+        optimisticThreadId.value = null;
+        customEventState.value = clearThreadRetryNotice(customEventState.value);
+        sendInFlight = false;
+        pendingAcceptedCallback = null;
       }
-      optimisticMessages.value = [];
-      optimisticThreadId.value = null;
-      customEventState.value = clearThreadRetryNotice(customEventState.value);
-      sendInFlight = false;
-      pendingAcceptedCallback = null;
     }
   }
 
@@ -1050,7 +1248,11 @@ export function useThreadStream(options: UseThreadStreamOptions) {
   }
 
   function resetView() {
+    submissionGeneration += 1;
+    checkpointSeedGeneration += 1;
+    checkpointSeedController?.abort();
     adoptedThreadId = null;
+    observingRun = false;
     preparedReplayGeneration += 1;
     preparedReplayController?.abort();
     preparedReplayController = null;
@@ -1081,6 +1283,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
       return runner.getSnapshot().state;
     }),
     activeRunId,
+    streamingMessageIds,
     subtasks: computed(() => customEventState.value.tasks),
     llmRetry: computed(() => customEventState.value.retry),
     isStreaming,
@@ -1094,6 +1297,7 @@ export function useThreadStream(options: UseThreadStreamOptions) {
     hasMoreHistory: history.hasMore,
     loadMoreHistory: history.loadMore,
     sendMessage,
+    joinRun,
     regenerateMessage,
     editAndRegenerateMessage,
     stop,

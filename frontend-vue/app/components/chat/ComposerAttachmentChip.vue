@@ -64,8 +64,7 @@ onBeforeUnmount(releasePreview);
             />
             <Paperclip
               v-else
-              :size="12"
-              class="text-muted-foreground"
+              class="text-muted-foreground size-3"
               aria-hidden="true"
             />
           </div>

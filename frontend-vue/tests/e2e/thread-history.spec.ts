@@ -284,6 +284,12 @@ test.describe("Thread history", () => {
     });
     let latestPageRequestCount = 0;
     let cursorPageRequestCount = 0;
+    let durationPageResponseCount = 0;
+    let holdCursorResponses = false;
+    let releaseCursorResponses!: () => void;
+    const cursorResponseGate = new Promise<void>((resolve) => {
+      releaseCursorResponses = resolve;
+    });
 
     mockLangGraphAPI(page, {
       threads: [
@@ -309,6 +315,10 @@ test.describe("Thread history", () => {
           "before_seq",
         );
         const isLatestPage = beforeSeq === null;
+        // Let the new infinite-query snapshot finish through cursor 101, but
+        // hold cursor 51 so it cannot reload the old duration during the proof.
+        // Always release in finally.
+        if (beforeSeq === "51" && holdCursorResponses) await cursorResponseGate;
         const rows = isLatestPage
           ? latestPageRequestCount === 0
             ? initialRows
@@ -330,6 +340,7 @@ test.describe("Thread history", () => {
           latestPageRequestCount += 1;
         } else {
           cursorPageRequestCount += 1;
+          if (beforeSeq === "51") durationPageResponseCount += 1;
         }
       },
     );
@@ -351,31 +362,47 @@ test.describe("Thread history", () => {
       element.scrollTop = element.scrollHeight;
       element.dispatchEvent(new Event("scroll"));
     });
-    await expect(page.getByText("Completed in 11m 44s")).toBeVisible();
+    await expect(page.getByText("Took 11m 44s")).toBeVisible();
 
     const latestPageRequestsBeforeSubmit = latestPageRequestCount;
-    const textarea = page.locator("textarea[name='message']");
-    await textarea.fill(followUpPrompt);
-    await textarea.press("Enter");
+    const durationPagesBeforeSubmit = durationPageResponseCount;
+    holdCursorResponses = true;
+    try {
+      const textarea = page.locator("textarea[name='message']");
+      await textarea.fill(followUpPrompt);
+      await textarea.press("Enter");
 
-    await expect
-      .poll(() => latestPageRequestCount, { timeout: 15_000 })
-      .toBeGreaterThan(latestPageRequestsBeforeSubmit);
-    await expect(page.getByText(followUpPrompt)).toBeVisible();
+      await expect
+        .poll(() => latestPageRequestCount, { timeout: 15_000 })
+        .toBeGreaterThan(latestPageRequestsBeforeSubmit);
+      await expect(page.getByText(followUpPrompt)).toBeVisible();
+      // The infinite refetch must commit its new page before testing retention.
+      await expect(
+        page.getByText("New presentation step 150", { exact: true }),
+      ).toBeVisible();
 
-    let preservedDurationFound = false;
-    for (let step = 0; step <= 12; step += 1) {
-      await scroller.evaluate((element, ratio) => {
-        element.scrollTop =
-          (element.scrollHeight - element.clientHeight) * ratio;
-        element.dispatchEvent(new Event("scroll"));
-      }, step / 12);
-      if (await page.getByText("Completed in 11m 44s").isVisible()) {
-        preservedDurationFound = true;
-        break;
+      // A submission intentionally resumes tail following. Use real reader input
+      // to leave it before scanning the virtualized history, just as above.
+      await scrollLogToTop(page, scroller);
+      let preservedDurationFound = false;
+      for (let step = 0; step <= 12; step += 1) {
+        await scroller.evaluate((element, ratio) => {
+          element.scrollTop =
+            (element.scrollHeight - element.clientHeight) * ratio;
+          element.dispatchEvent(new Event("scroll"));
+        }, step / 12);
+        if (await page.getByText("Took 11m 44s").isVisible()) {
+          preservedDurationFound = true;
+          break;
+        }
       }
+      expect(preservedDurationFound).toBe(true);
+
+      expect(durationPageResponseCount).toBe(durationPagesBeforeSubmit);
+    } finally {
+      holdCursorResponses = false;
+      releaseCursorResponses();
     }
-    expect(preservedDurationFound).toBe(true);
 
     await scroller.evaluate((element) => {
       element.scrollTop = 0;
@@ -431,89 +458,58 @@ test.describe("Thread history", () => {
     });
 
     await expect(page.getByTestId("run-duration")).toHaveCount(1);
-    await expect(page.getByText("Completed in 1m 54s")).toBeVisible();
+    await expect(page.getByText("Took 1m 54s")).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Reasoning", exact: true }),
+      page.getByRole("button", { name: "Took 1m 54s Reasoning", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Thought for 114 seconds")).toHaveCount(0);
 
+    const trigger = page.getByRole("button", {
+      name: "Took 1m 54s Reasoning",
+      exact: true,
+    });
+    expect(await trigger.getAttribute("aria-expanded")).toBe("false");
+    await trigger.click();
+    await expect(
+      page.getByText("Final synthesis reasoning", { exact: true }),
+    ).toBeVisible();
+    await trigger.press("Enter");
+    await expect(
+      page.getByText("Final synthesis reasoning", { exact: true }),
+    ).not.toBeVisible();
+    const durationBox = await page.getByTestId("run-duration").boundingBox();
+    const answerBox = await page
+      .getByText("Final result", { exact: true })
+      .boundingBox();
+    expect(durationBox!.y + durationBox!.height).toBeLessThan(answerBox!.y);
+
     const assistantTurn = page.locator("[data-assistant-turn]").last();
     await assistantTurn.hover();
-    const geometry = await page.evaluate(() => {
-      const duration = document.querySelector<HTMLElement>(
-        "[data-testid='run-duration']",
-      );
-      const completedTurn = duration?.closest<HTMLElement>(
-        "[data-assistant-turn]",
-      );
-      const actions = completedTurn?.querySelector<HTMLElement>(
-        "[data-testid='assistant-turn-actions']",
-      );
-      const buttons = actions
-        ? [...actions.querySelectorAll<HTMLElement>(":scope > button")]
-        : [];
-      const composer = document.querySelector<HTMLElement>(
-        "[data-testid='composer-surface']",
-      );
-      const messageContent = document.querySelector<HTMLElement>(
-        "[data-testid='message-list-content']",
-      );
-      const scroller = messageContent?.parentElement;
-      if (
-        !actions ||
-        buttons.length !== 3 ||
-        !duration ||
-        !composer ||
-        !messageContent ||
-        !scroller
-      ) {
-        throw new Error("Missing completed-turn geometry anchors");
-      }
-      const actionsRect = actions.getBoundingClientRect();
-      const durationRect = duration.getBoundingClientRect();
-      const composerRect = composer.getBoundingClientRect();
-      const messageContentRect = messageContent.getBoundingClientRect();
-      const scrollerRect = scroller.getBoundingClientRect();
-      return {
-        buttons: buttons.map((button) => {
-          const rect = button.getBoundingClientRect();
-          return {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height,
-          };
-        }),
-        actionGap: Number.parseFloat(getComputedStyle(actions).gap),
-        actionsToDuration: durationRect.top - actionsRect.bottom,
-        durationToComposer: composerRect.top - durationRect.bottom,
-        durationToMessageContentEnd:
-          messageContentRect.bottom - durationRect.bottom,
-        messageContentRemainder:
-          scrollerRect.bottom - messageContentRect.bottom,
-        scrollerToComposer: composerRect.top - scrollerRect.bottom,
-        composerBottomInset: window.innerHeight - composerRect.bottom,
-      };
-    });
-
-    expect(geometry.buttons).toHaveLength(3);
+    const actions = assistantTurn.getByTestId("assistant-turn-actions");
+    const buttons = actions.locator(":scope > button");
+    await expect(buttons).toHaveCount(3);
+    const geometry = await actions.evaluate((element) => ({
+      gap: Number.parseFloat(getComputedStyle(element).gap),
+      buttons: [
+        ...element.querySelectorAll<HTMLElement>(":scope > button"),
+      ].map((button) => {
+        const rect = button.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      }),
+    }));
     for (const button of geometry.buttons) {
       expect(button.width).toBe(32);
       expect(button.height).toBe(32);
-      expect(button.y).toBe(geometry.buttons[0]?.y);
+      expect(button.y).toBe(geometry.buttons[0]!.y);
     }
     expect(geometry.buttons[1]!.x - geometry.buttons[0]!.x).toBe(36);
     expect(geometry.buttons[2]!.x - geometry.buttons[1]!.x).toBe(36);
-    expect(geometry.actionGap).toBe(4);
-    expect(geometry.actionsToDuration).toBe(8);
-    expect(geometry.durationToMessageContentEnd).toBe(72);
-    expect(geometry.messageContentRemainder).toBeGreaterThanOrEqual(0);
-    expect(geometry.scrollerToComposer).toBe(0);
-    expect(geometry.durationToComposer).toBeCloseTo(
-      geometry.durationToMessageContentEnd + geometry.messageContentRemainder,
-      5,
-    );
-    expect(geometry.composerBottomInset).toBe(16);
+    expect(geometry.gap).toBe(4);
+    await expect(page.getByTestId("run-duration")).toHaveCount(1);
+    await page.reload();
+    await expect(page.getByText("Final result", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("run-duration")).toHaveText("Took 1m 54s");
+    expect(await trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
   /*
@@ -589,7 +585,7 @@ test.describe("Thread history", () => {
         // reasoning 确实排在正文上面——`gap` 与 `my-3` 之所以成立的前提。
         reasoningIsFirst: reasoning !== markdownRoot,
         reasoningMarginBottom: getComputedStyle(reasoning).marginBottom,
-        // reasoning 盒底到正文盒顶的实际距离 = mb-4 + gap-2 + my-3。
+        // reasoning 盒底到正文盒顶的实际距离 = mb-3 + gap-2 + my-3。
         reasoningToBody: Math.round(
           markdownRoot.getBoundingClientRect().top -
             reasoning.getBoundingClientRect().bottom,
@@ -602,8 +598,8 @@ test.describe("Thread history", () => {
     expect(spacing.gap).toBe("8px");
     expect(spacing.marginTop).toBe("12px");
     expect(spacing.marginBottom).toBe("12px");
-    expect(spacing.reasoningMarginBottom).toBe("16px");
-    expect(spacing.reasoningToBody).toBe(36);
+    expect(spacing.reasoningMarginBottom).toBe("12px");
+    expect(spacing.reasoningToBody).toBe(32);
   });
 
   test("input box recalls previous prompts with arrow keys", async ({
@@ -692,6 +688,10 @@ test.describe("Thread history", () => {
     await inactiveThreadItem.hover();
     await inactiveThreadItem.getByRole("button", { name: /more/i }).click();
     await page.getByRole("menuitem", { name: /delete/i }).click();
+    await page
+      .getByRole("dialog", { name: "Delete chat", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
 
     await expect(page).toHaveURL(new RegExp(MOCK_THREAD_ID));
     await expect(
@@ -851,13 +851,9 @@ test.describe("Thread history", () => {
     page,
   }) => {
     mockLangGraphAPI(page);
-    // 删除一个 thread 只允许发**一次** DELETE。这里数请求而不是 stub 一个
-    // 失败响应：Vue 的 thread client 走 `/api/langgraph/threads/{id}`，
-    // 而此处原来那条 `/\/api\/threads\/[^/]+$/` 的 500 stub 压根匹配不上，
-    // 于是这个用例长期看起来在测「本地清理失败仍能恢复」，实际什么都没测。
-    // 计数同时挡住回归：多出来的第二次删除会被 Gateway 的
-    // `require_existing=True` 判成 404，而级联删除对 404 是幂等吞掉的，
-    // 只有请求数能把它暴露出来。
+    // Current React deletes the runtime thread, then cleans local thread data.
+    // Assert exactly one request per leg so neither duplicate writes nor a
+    // missing local cleanup can hide behind idempotent 404 responses.
     const deleteRequests: string[] = [];
     page.on("request", (request) => {
       if (
@@ -880,6 +876,9 @@ test.describe("Thread history", () => {
       timeout: 15_000,
     });
 
+    await expect(page).toHaveURL(/\/workspace\/chats\/[0-9a-f-]{36}$/);
+    const createdThreadId = new URL(page.url()).pathname.split("/").at(-1)!;
+    expect(createdThreadId).toMatch(/^[0-9a-f-]{36}$/);
     const sidebar = page.locator("[data-sidebar='sidebar']");
     const recentThreadItem = sidebar
       .locator("[data-sidebar='menu-item']")
@@ -892,14 +891,21 @@ test.describe("Thread history", () => {
     await recentThreadItem.hover();
     await recentThreadItem.getByRole("button", { name: /more/i }).click();
     await page.getByRole("menuitem", { name: /delete/i }).click();
+    await page
+      .getByRole("dialog", { name: "Delete chat", exact: true })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
 
     await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
     await expect(page.getByText("Previous question")).toHaveCount(0);
     await expect(page.getByText("Hello from DeerFlow!")).toHaveCount(0);
     await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
-    expect(deleteRequests).toHaveLength(1);
+    expect(deleteRequests.map((url) => new URL(url).pathname)).toEqual([
+      `/api/langgraph/threads/${createdThreadId}`,
+      `/api/threads/${createdThreadId}`,
+    ]);
 
-    await page.goto(`/workspace/chats/${MOCK_THREAD_ID}`);
+    await page.goto(`/workspace/chats/${createdThreadId}`);
     await page.waitForURL("**/workspace/chats/new");
     await expect(page.getByText("Hello from DeerFlow!")).toHaveCount(0);
     await expect(page.getByPlaceholder(/how can i assist you/i)).toBeVisible();
@@ -1051,7 +1057,9 @@ test.describe("Thread history", () => {
       `a[href='/workspace/chats/${MOCK_THREAD_ID}']`,
     );
     await expect(sidebarThread).toBeVisible({ timeout: 15_000 });
-    await expect(sidebarThread.getByLabel("Feishu channel")).toBeVisible();
+    await expect(
+      sidebarThread.getByRole("img", { name: "From Feishu", exact: true }),
+    ).toBeVisible();
 
     await page.goto("/workspace/chats");
 

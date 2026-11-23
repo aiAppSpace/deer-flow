@@ -55,7 +55,14 @@ const toast = useWorkspaceToast();
 function exportConversation(format: ThreadExportFormat) {
   if (!props.messages.length) return;
   try {
-    exportThread(props.thread, props.messages, format);
+    // Match React's live-thread export input. A list row or a local fallback
+    // cannot supply a creation date the loaded conversation does not own.
+    const thread = {
+      thread_id: props.threadId,
+      updated_at: new Date().toISOString(),
+      values: props.thread.values,
+    } as AgentThread;
+    exportThread(thread, props.messages, format);
     toast.success($i18n.t.value.common.exportSuccess);
   } catch {
     toast.error($i18n.t.value.common.exportFailed);

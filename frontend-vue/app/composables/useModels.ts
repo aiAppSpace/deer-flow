@@ -14,6 +14,7 @@
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 
+import { UnauthorizedError } from "@/core/api/errors";
 import { loadModels } from "@/core/models/api";
 
 export const MODELS_QUERY_KEY = ["models"] as const;
@@ -30,7 +31,8 @@ export function useModels(
     enabled: computed(() => toValue(options.enabled ?? true)),
     refetchOnWindowFocus: false,
     staleTime: Infinity,
-    retry: false,
+    retry: (failureCount, error) =>
+      !(error instanceof UnauthorizedError) && failureCount < 1,
   });
 
   return {

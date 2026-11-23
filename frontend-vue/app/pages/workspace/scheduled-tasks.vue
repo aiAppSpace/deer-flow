@@ -1,356 +1,389 @@
 <script setup lang="ts">
-/*
-  【文件职责】     编排 scheduled-task route 默认值、表单、筛选、selection 与 Vue Query owners。
-  【架构位置】     L3 application page
-  【主要导出】     默认 scheduled tasks page
-  【依赖关系】     useScheduledTasks · WorkspaceContainer · scheduled-task components ·
-                   form/view-model 纯逻辑 · workspace toast
-  【边界与注意】   route thread_id 只提供默认/列表 scope；表单可切 fresh/reuse；页面不保留
-                   server-state 副本。
-
-                   套 WorkspaceContainer：React 的这一页在 WorkspaceContainer /
-                   WorkspaceHeader / WorkspaceBody 三件套里，于是有面包屑、GitHub 链接和
-                   第二层 `main`。Vue 原来直接是一个 `section`，读屏器在这一页听不到
-                   「工作区 › 定时任务」。
-
-                   mutation 失败走 **toast**，不是页面上的一条内联提示：React 的六个
-                   mutation hook 都是 `toast.error(...)`。成功没有任何提示——原来那条绿色
-                   的 `role="status"` 是 Vue 独有的。留在页面里的只有两条内联文字：
-                   列表取数失败（普通 div，没有 alert 角色），以及必填项没填满时的
-                   `fillRequired`。
-
-                   删除确认是 Dialog 不是 AlertDialog，并且**归页面持有**：React 的
-                   `<Dialog>` 就在页面根上，由详情里的 Delete 打开。
-*/
 import { computed, nextTick, ref, watch } from "vue";
-
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  CalendarClock,
+  CalendarOff,
+  CirclePause,
+  Plus,
+  X,
+} from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import WorkspaceContainer from "@/components/workspace/WorkspaceContainer.vue";
 import ScheduledTaskDetail from "@/components/workspace/scheduled-tasks/ScheduledTaskDetail.vue";
-import ScheduledTaskFilters from "@/components/workspace/scheduled-tasks/ScheduledTaskFilters.vue";
-import ScheduledTaskForm from "@/components/workspace/scheduled-tasks/ScheduledTaskForm.vue";
+import ScheduledTaskFormDialog from "@/components/workspace/scheduled-tasks/ScheduledTaskFormDialog.vue";
 import ScheduledTaskList from "@/components/workspace/scheduled-tasks/ScheduledTaskList.vue";
+import TaskActionReason from "@/components/workspace/scheduled-tasks/TaskActionReason.vue";
 import {
-  buildScheduledTaskCreatePayload,
-  buildScheduledTaskUpdatePayload,
-  createScheduledTaskDraft,
-  draftForScheduledTask,
-  duplicateScheduledTaskDraft,
-  isScheduledTaskDraftComplete,
-  type ScheduledTaskDraft,
-} from "@/core/scheduled-tasks/form";
-import {
-  filterScheduledTasks,
-  resolveScheduledTaskSelection,
-  type ScheduledTaskScheduleFilter,
-  type ScheduledTaskStatusFilter,
-} from "@/core/scheduled-tasks/view-model";
-import { useWorkspaceToast } from "@/core/workspace-shell/toast";
-import {
-  useScheduledTaskMutations,
-  useScheduledTaskRuns,
   useScheduledTasks,
+  useThreadScheduledTasks,
 } from "@/composables/useScheduledTasks";
-
+import { useScheduledTasksFeature } from "@/composables/useSchedulerFeatures";
+import {
+  fill,
+  statusTabOf,
+  type StatusTab,
+} from "@/core/scheduled-tasks/presentation";
+import { matchesScheduledTaskQuery } from "@/core/scheduled-tasks/search";
+import { describeScheduledTaskError } from "@/core/scheduled-tasks/errors";
+import type {
+  TaskFormRequest,
+  TaskFormMode,
+} from "@/core/scheduled-tasks/form-state";
+import type {
+  ScheduledTask,
+  ThreadScheduledTask,
+} from "@/core/scheduled-tasks/types";
 definePageMeta({ layout: "workspace" });
-
-const route = useRoute();
+const route = useRoute(),
+  router = useRouter();
 const { $i18n } = useNuxtApp();
-const toast = useWorkspaceToast();
-const routeThreadId = computed(() => {
-  const value = route.query.thread_id;
-  const first = Array.isArray(value) ? value[0] : value;
-  return typeof first === "string" && first.trim() ? first.trim() : null;
-});
-
+const st = computed(() => $i18n.t.value.scheduledTasks);
+const queryString = (value: unknown) =>
+  Array.isArray(value)
+    ? typeof value[0] === "string"
+      ? value[0]
+      : null
+    : typeof value === "string" && value
+      ? value
+      : null;
+const threadId = computed(() => queryString(route.query.thread_id)),
+  taskId = computed(() => queryString(route.query.task_id));
 useHead(() => ({
   title: `${$i18n.t.value.sidebar.scheduledTasks} - ${$i18n.t.value.pages.appName}`,
 }));
-
-const tasksQuery = useScheduledTasks(routeThreadId);
-const statusFilter = ref<ScheduledTaskStatusFilter>("all");
-const scheduleTypeFilter = ref<ScheduledTaskScheduleFilter>("all");
-const selectedId = ref<string | null>(null);
-const filteredTasks = computed(() =>
-  filterScheduledTasks(tasksQuery.tasks.value, {
-    status: statusFilter.value,
-    scheduleType: scheduleTypeFilter.value,
-  }),
+const feature = useScheduledTasksFeature();
+const createBlocked = computed(() => !feature.running.value);
+const toolEnabled = computed(
+  () => feature.isLoading.value || feature.toolEnabled.value,
 );
-
-const editing = ref(false);
-const editDraft = ref<ScheduledTaskDraft | null>(null);
-
-/*
-  筛选把当前选中项筛没了：改选第一条并退出编辑。React 的同名 effect 只在这一种情况下
-  关掉编辑——单纯换选一条任务时编辑态是保留的，字段换成新任务的值。
-*/
-watch(
-  filteredTasks,
-  (tasks) => {
-    const next = resolveScheduledTaskSelection(tasks, selectedId.value);
-    if (next === selectedId.value) return;
-    if (selectedId.value) editing.value = false;
-    selectedId.value = next;
-  },
-  { immediate: true },
+const all = useScheduledTasks(null, { enabled: feature.available });
+const thread = useThreadScheduledTasks(threadId, {
+  enabled: feature.available,
+});
+const query = computed(() => (threadId.value ? thread : all));
+const tasks = computed(() =>
+  threadId.value
+    ? (thread.tasks.value as ThreadScheduledTask[]).filter(
+        (task) => task.thread_relation !== "run",
+      )
+    : all.tasks.value,
 );
-
-const selectedTask = computed(
+const tab = ref<StatusTab>("all"),
+  search = ref(""),
+  shownId = ref<string | null>(null),
+  request = ref<TaskFormRequest | null>(null),
+  detail = ref<HTMLElement | null>(null);
+const tabs: StatusTab[] = ["all", "active", "paused", "finished"];
+const inTab = (task: ScheduledTask, value: StatusTab) =>
+  value === "all" || statusTabOf(task) === value;
+const visible = computed(() =>
+  tasks.value.filter(
+    (task) =>
+      inTab(task, tab.value) && matchesScheduledTaskQuery(task, search.value),
+  ),
+);
+const pinned = computed(
   () =>
-    filteredTasks.value.find((task) => task.id === selectedId.value) ??
-    filteredTasks.value[0] ??
+    tasks.value.find((task) => task.id === (taskId.value ?? shownId.value)) ??
     null,
 );
-const runsQuery = useScheduledTaskRuns(() => selectedTask.value?.id ?? null);
-const mutations = useScheduledTaskMutations();
-
-// 只依赖 id：后台重取同一个任务（新对象引用）不该抹掉正在编辑的内容。
+const missing = computed(
+  () => !!taskId.value && query.value.isSuccess.value && !pinned.value,
+);
+const selected = computed(() =>
+  missing.value ? null : (pinned.value ?? visible.value[0] ?? null),
+);
 watch(
-  () => selectedTask.value?.id,
-  () => {
-    const task = selectedTask.value;
-    if (!task) {
-      editing.value = false;
-      editDraft.value = null;
-      return;
-    }
-    editDraft.value = draftForScheduledTask(task);
+  selected,
+  (task) => {
+    if (!taskId.value && task) shownId.value = task.id;
   },
   { immediate: true },
 );
-
-const createDraft = ref<ScheduledTaskDraft>(createScheduledTaskDraft());
-const createForm = ref<HTMLElement | null>(null);
-const createFormKey = ref(0);
-const formError = ref<string | null>(null);
-
-/*
-  复制一条任务：把它的内容填进**上面那张新建表单**，标题加个后缀。
-
-  填完要滚回表单：这一页上下两块，详情在下面，用户点了「复制」之后如果不滚，
-  屏幕上什么都没变，看起来像没生效。
-*/
-async function duplicateTask() {
-  const task = selectedTask.value;
+let applied: string | null = null;
+watch([taskId, tasks], () => {
+  const id = taskId.value;
+  if (!id || applied === id) return;
+  const task = tasks.value.find((item) => item.id === id);
   if (!task) return;
-  createDraft.value = duplicateScheduledTaskDraft(
-    task,
-    $i18n.t.value.scheduledTasks.actions.duplicateTitleSuffix,
-  );
-  // 上一次提交留下的报错跟这份新草稿没关系了（上游同处的 setFormError(null)）。
-  formError.value = null;
-  /*
-    重挂表单，与切换 thread 过滤时同一条：表单里的排程输入自己带本地状态
-    （cron 文本、run_at 时间），只换 draft 的话它们会停在上一次的值上。
-    上游用 `createNonce` 表达的是同一件事。
-  */
-  createFormKey.value += 1;
-  await nextTick();
-  createForm.value?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-watch(
-  routeThreadId,
-  (threadId) => {
-    createDraft.value = createScheduledTaskDraft({ routeThreadId: threadId });
-    createFormKey.value += 1;
-  },
-  { immediate: true },
-);
-
-const deleteOpen = ref(false);
-
-function failed(operation: keyof typeof $i18n.t.value.scheduledTasks.errors) {
-  return (cause: unknown) => {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    toast.error(`${$i18n.t.value.scheduledTasks.errors[operation]}: ${detail}`);
-  };
-}
-
-async function createTask() {
-  if (!isScheduledTaskDraftComplete(createDraft.value)) {
-    formError.value = $i18n.t.value.scheduledTasks.create.fillRequired;
-    return;
-  }
-  formError.value = null;
-  try {
-    await mutations.create.mutateAsync(
-      buildScheduledTaskCreatePayload(createDraft.value),
-    );
-    // 清空表单，下一个任务从头开始。
-    createDraft.value = createScheduledTaskDraft({
-      routeThreadId: routeThreadId.value,
-    });
-    createFormKey.value += 1;
-  } catch (cause) {
-    failed("create")(cause);
-  }
-}
-
-async function saveEdit() {
-  const task = selectedTask.value;
-  const draft = editDraft.value;
-  if (!task || !draft) return;
-  try {
-    await mutations.update.mutateAsync({
-      task,
-      payload: buildScheduledTaskUpdatePayload(draft),
-    });
-  } catch (cause) {
-    failed("update")(cause);
-  }
-}
-
-async function runAction(operation: "pause" | "resume" | "trigger") {
-  const task = selectedTask.value;
-  if (!task) return;
-  try {
-    await mutations[operation].mutateAsync({ task });
-  } catch (cause) {
-    failed(operation)(cause);
-  }
-}
-
-async function confirmDelete() {
-  const task = selectedTask.value;
-  if (!task) return;
-  try {
-    await mutations.remove.mutateAsync({ task });
-    deleteOpen.value = false;
-  } catch (cause) {
-    failed("delete")(cause);
-  }
-}
-
-const loadError = computed(() => {
-  const cause = tasksQuery.error.value;
-  if (!cause) return null;
-  const detail = cause instanceof Error ? cause.message : String(cause);
-  return `${$i18n.t.value.scheduledTasks.detail.loadFailed}: ${detail}`;
+  applied = id;
+  if (!inTab(task, tab.value)) tab.value = "all";
+  if (!matchesScheduledTaskQuery(task, search.value)) search.value = "";
 });
+function replaceQuery(id: string | null, keepThread = true) {
+  const query: Record<string, string> = {};
+  if (keepThread && threadId.value) query.thread_id = threadId.value;
+  if (id) query.task_id = id;
+  return router.replace({ path: route.path, query });
+}
+function changeFilter(value: { tab?: StatusTab; search?: string }) {
+  const nextTab = value.tab ?? tab.value,
+    nextSearch = value.search ?? search.value;
+  tab.value = nextTab;
+  search.value = nextSearch;
+  if (
+    selected.value &&
+    !(
+      inTab(selected.value, nextTab) &&
+      matchesScheduledTaskQuery(selected.value, nextSearch)
+    )
+  ) {
+    shownId.value = null;
+    if (taskId.value) void replaceQuery(null);
+  }
+}
+async function select(id: string) {
+  applied = id;
+  await replaceQuery(id);
+  if (!window.matchMedia?.("(min-width: 1024px)").matches) {
+    await nextTick();
+    detail.value?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+function saved(task: ScheduledTask, mode: TaskFormMode) {
+  if (mode === "edit") return;
+  applied = null;
+  const owned =
+    !!threadId.value &&
+    (task.thread_id === threadId.value ||
+      task.origin_thread_id === threadId.value);
+  void replaceQuery(task.id, owned);
+}
+const empty = computed(
+  () => all.isSuccess.value && all.tasks.value.length === 0,
+);
+const error = computed(() =>
+  query.value.error.value
+    ? describeScheduledTaskError(query.value.error.value, $i18n.t.value, {
+        locale: $i18n.locale.value,
+      })
+    : null,
+);
 </script>
-
 <template>
-  <WorkspaceContainer>
-    <div
-      class="mx-auto flex w-full max-w-[var(--container-width-md)] flex-col gap-4 p-4 sm:p-6"
+  <WorkspaceContainer
+    ><div
+      class="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-4 px-4 py-5 sm:px-6"
     >
-      <h1 class="text-2xl font-semibold">
-        {{ $i18n.t.value.sidebar.scheduledTasks }}
-      </h1>
-
-      <div ref="createForm">
-        <ScheduledTaskForm
-          :key="createFormKey"
-          v-model:draft="createDraft"
-          :pending="mutations.create.isPending.value"
-          :error="formError"
-          @submit="createTask"
-        />
-      </div>
-
-      <div v-if="routeThreadId" class="text-muted-foreground text-sm">
-        {{
-          $i18n.t.value.scheduledTasks.detail.filteredByThread.replace(
-            "{id}",
-            routeThreadId,
-          )
-        }}
-      </div>
-      <div
-        v-if="loadError"
-        class="text-destructive text-sm"
-        data-testid="scheduled-task-load-error"
-      >
-        {{ loadError }}
-      </div>
-
-      <ScheduledTaskFilters
-        v-model:status="statusFilter"
-        v-model:schedule-type="scheduleTypeFilter"
-      />
-
-      <div
-        class="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
-      >
-        <ScheduledTaskList
-          :tasks="filteredTasks"
-          :selected-id="selectedTask?.id ?? null"
-          @select="selectedId = $event"
-        />
-        <div
-          class="max-w-full min-w-0 rounded-lg border p-4 wrap-anywhere"
-          data-testid="scheduled-task-detail"
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="flex min-w-0 flex-col gap-1">
+          <h1 class="text-2xl font-semibold">
+            {{ $i18n.t.value.sidebar.scheduledTasks }}
+          </h1>
+          <p class="text-muted-foreground text-sm">
+            {{ toolEnabled ? st.page.description : st.page.descriptionNoChat }}
+          </p>
+        </div>
+        <TaskActionReason
+          v-if="feature.available.value"
+          :reason="createBlocked ? st.page.createBlocked : null"
+          ><Button
+            size="sm"
+            :disabled="createBlocked"
+            data-testid="scheduled-task-new"
+            @click="request = { mode: 'create' }"
+            ><Plus aria-hidden="true" />{{ st.page.newTask }}</Button
+          ></TaskActionReason
         >
-          <ScheduledTaskDetail
-            v-if="selectedTask && editDraft"
-            v-model:edit-draft="editDraft"
-            :task="selectedTask"
-            :runs="runsQuery.runs.value"
-            :runs-has-more="Boolean(runsQuery.hasNextPage.value)"
-            :runs-loading-more="runsQuery.isFetchingNextPage.value"
-            :editing="editing"
-            :update-pending="mutations.update.isPending.value"
-            @toggle-edit="editing = !editing"
-            @save="saveEdit"
-            @pause="runAction('pause')"
-            @resume="runAction('resume')"
-            @trigger="runAction('trigger')"
-            @duplicate="duplicateTask"
-            @delete="deleteOpen = true"
-            @load-more-runs="runsQuery.loadMore()"
-          />
-          <div v-else class="text-muted-foreground text-sm">
-            {{ $i18n.t.value.scheduledTasks.detail.noSelection }}
+      </div>
+      <div
+        v-if="!feature.available.value"
+        class="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-12 text-center"
+        data-testid="scheduled-tasks-unavailable"
+      >
+        <CalendarOff class="text-muted-foreground size-6" aria-hidden="true" />
+        <h2 class="text-base font-semibold">{{ st.page.unavailableTitle }}</h2>
+        <p class="text-muted-foreground text-sm">
+          {{ st.page.unavailableBody }}
+        </p>
+      </div>
+      <Alert
+        v-else-if="!feature.running.value"
+        class="border-amber-500/50 bg-amber-500/10"
+        data-testid="scheduler-off-notice"
+        ><CirclePause
+          class="text-amber-600 dark:text-amber-400"
+        /><AlertTitle>{{ st.page.schedulerOffTitle }}</AlertTitle
+        ><AlertDescription>{{
+          st.page.schedulerOffBody
+        }}</AlertDescription></Alert
+      >
+      <template v-if="feature.available.value">
+        <div
+          v-if="threadId"
+          class="bg-muted/60 flex w-fit items-center gap-2 rounded-full py-1 pr-1 pl-3 text-sm"
+          data-testid="scheduled-task-thread-filter"
+        >
+          <span>{{ st.page.threadFilter }}</span
+          ><Button
+            variant="ghost"
+            size="sm"
+            class="h-7 rounded-full"
+            @click="replaceQuery(taskId, false)"
+            ><X aria-hidden="true" />{{ st.page.showAll }}</Button
+          >
+        </div>
+        <div
+          v-if="error"
+          class="text-destructive flex flex-col gap-1 text-sm"
+          data-testid="scheduled-task-load-error"
+        >
+          <p role="alert">
+            {{
+              fill(st.errors.withReason, {
+                action: st.detail.loadFailed,
+                reason: error.message,
+              })
+            }}
+          </p>
+          <details v-if="error.details" class="text-xs">
+            <summary>{{ st.history.details }}</summary>
+            <p class="whitespace-pre-wrap">{{ error.details }}</p>
+          </details>
+        </div>
+        <div
+          v-if="empty"
+          class="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-12 text-center"
+          data-testid="scheduled-task-empty"
+        >
+          <span
+            class="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full"
+            ><CalendarClock class="size-5" aria-hidden="true"
+          /></span>
+          <h2 class="text-base font-semibold">{{ st.page.emptyTitle }}</h2>
+          <p class="text-muted-foreground max-w-md text-sm">
+            {{ toolEnabled ? st.page.emptyBody : st.page.emptyBodyNoChat }}
+          </p>
+          <TaskActionReason
+            :reason="createBlocked ? st.page.createBlocked : null"
+            ><Button
+              size="sm"
+              :disabled="createBlocked"
+              @click="request = { mode: 'create' }"
+              ><Plus aria-hidden="true" />{{ st.page.newTask }}</Button
+            ></TaskActionReason
+          >
+        </div>
+        <div
+          v-else
+          class="grid min-w-0 gap-4 lg:grid-cols-[330px_minmax(0,1fr)] lg:items-start"
+        >
+          <div class="flex min-w-0 flex-col gap-3">
+            <ToggleGroup
+              type="single"
+              :model-value="tab"
+              :aria-label="st.page.tabsLabel"
+              size="sm"
+              :spacing="1"
+              class="flex-wrap"
+              @update:model-value="
+                $event && changeFilter({ tab: $event as StatusTab })
+              "
+              ><ToggleGroupItem
+                v-for="value in tabs"
+                :key="value"
+                :value="value"
+                :single="true"
+                :checked="tab === value"
+                :aria-label="
+                  fill(st.page.tabCount, {
+                    tab: st.page.tabs[value],
+                    count: tasks.filter((task) => inTab(task, value)).length,
+                  })
+                "
+                class="data-[state=on]:bg-secondary gap-1 rounded-full px-2.5"
+                >{{ st.page.tabs[value]
+                }}<span
+                  aria-hidden="true"
+                  class="text-muted-foreground tabular-nums"
+                  >{{ tasks.filter((task) => inTab(task, value)).length }}</span
+                ></ToggleGroupItem
+              ></ToggleGroup
+            >
+            <div class="flex gap-2">
+              <Input
+                type="search"
+                :aria-label="st.page.search"
+                :placeholder="st.page.search"
+                :model-value="search"
+                @update:model-value="changeFilter({ search: $event })"
+              /><Button
+                v-if="search"
+                variant="outline"
+                @click="changeFilter({ search: '' })"
+                >{{ st.search.clear }}</Button
+              >
+            </div>
+            <p
+              v-if="query.isPending.value && !error"
+              role="status"
+              data-testid="scheduled-task-list-loading"
+              class="text-muted-foreground text-sm"
+            >
+              {{ st.page.loading }}
+            </p>
+            <p
+              v-if="query.isSuccess.value && !visible.length"
+              role="status"
+              data-testid="scheduled-task-search-empty"
+              class="text-muted-foreground text-sm"
+            >
+              {{ st.search.noResults }}
+            </p>
+            <ScheduledTaskList
+              :tasks="visible"
+              :selected-id="selected?.id ?? null"
+              @select="select"
+            />
+          </div>
+          <div ref="detail" class="min-w-0 scroll-mt-4">
+            <div
+              v-if="missing"
+              role="status"
+              data-testid="scheduled-task-link-missing"
+              class="text-muted-foreground flex flex-col items-center gap-2 rounded-lg border border-dashed p-6 text-center text-sm"
+            >
+              <p>
+                {{
+                  threadId ? st.page.taskNotInChat : st.apiErrors.taskNotFound
+                }}
+              </p>
+              <Button
+                v-if="threadId"
+                variant="outline"
+                size="sm"
+                @click="replaceQuery(taskId, false)"
+                >{{ st.page.showAll }}</Button
+              >
+            </div>
+            <ScheduledTaskDetail
+              v-else-if="selected"
+              :key="selected.id"
+              :task="selected"
+              :tool-enabled="toolEnabled"
+              :create-blocked="createBlocked"
+              @edit="(task, focus) => (request = { mode: 'edit', task, focus })"
+              @duplicate="(task) => (request = { mode: 'duplicate', task })"
+              @deleted="replaceQuery(null)"
+            />
+            <p
+              v-else-if="query.isSuccess.value"
+              class="text-muted-foreground rounded-lg border border-dashed p-6 text-center text-sm"
+            >
+              {{ st.page.selectHint }}
+            </p>
           </div>
         </div>
-      </div>
+      </template>
     </div>
-
-    <!-- 删除二次确认——与 agent 卡片的确认框同一种形状。 -->
-    <Dialog v-model:open="deleteOpen">
-      <DialogContent
-        data-testid="scheduled-task-delete-dialog"
-        :close-label="$i18n.t.value.primitives.close"
-      >
-        <DialogHeader>
-          <DialogTitle>
-            {{ $i18n.t.value.scheduledTasks.actions.delete }}
-          </DialogTitle>
-          <DialogDescription>
-            {{ $i18n.t.value.scheduledTasks.deleteConfirm }}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            :disabled="mutations.remove.isPending.value"
-            @click="deleteOpen = false"
-          >
-            {{ $i18n.t.value.common.cancel }}
-          </Button>
-          <Button
-            data-testid="scheduled-task-delete-confirm"
-            variant="destructive"
-            :disabled="mutations.remove.isPending.value"
-            @click="confirmDelete"
-          >
-            {{
-              mutations.remove.isPending.value
-                ? $i18n.t.value.common.loading
-                : $i18n.t.value.scheduledTasks.actions.delete
-            }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </WorkspaceContainer>
+    <ScheduledTaskFormDialog
+      :request="request"
+      :tool-enabled="feature.toolEnabled.value"
+      :min-interval-seconds="feature.minIntervalSeconds.value"
+      @update:open="!$event && (request = null)"
+      @saved="saved"
+  /></WorkspaceContainer>
 </template>

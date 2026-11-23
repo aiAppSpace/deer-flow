@@ -1,72 +1,47 @@
-# The React-vs-Vue parity ledger, run by a machine that is not one laptop.
-#
-# Why this is a separate workflow and not three more jobs in
-# `frontend-vue-verify.yml`: every gate here needs **both** applications'
-# `node_modules`, so its path filter has to include `frontend/**` — a React-only
-# change can move the ledger, that is the entire point of measuring drift. Adding
-# `frontend/**` to the verify workflow instead would drag `verify`,
-# `real-backend` and `external-gates` along on every React commit for nothing.
-#
-# Before this file existed, `frontend-vue/README.md` said of these suites: "a
-# cost decision that has never actually been made -- they are local-only by
-# default, not by design, which means the ledger that this whole effort is
-# measured by is never checked by a machine that isn't this laptop." The cost is
-# real (two production builds per job), so it is spent under a path filter
-# rather than on every push.
+# Sole formal React/Vue product/auth/SQL comparison owner.
+# frontend-vue-verify.yml retains the framework, container and visual gates.
 name: frontend-vue parity
 
 on:
   push:
     paths:
       - "frontend-vue/**"
-      # The other side of the comparison. Upstream drift lands here.
       - "frontend/**"
       - "contracts/**"
-      - "backend/app/gateway/**"
-      - "backend/packages/harness/deerflow/runtime/**"
+      - "backend/app/**"
+      - "backend/packages/**"
+      - "backend/tests/**"
+      - "config.example.yaml"
       - "backend/scripts/run_replay_gateway.py"
-      - "backend/tests/fixtures/replay/**"
-      - "backend/tests/replay_provider.py"
-      - "backend/tests/_replay_fixture.py"
-      - "backend/tests/seed_runs_router.py"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
       - "scripts/pnpm.py"
+      - "scripts/serve.sh"
+      - "Makefile"
+      - ".github/workflows/frontend-vue-verify.yml"
       - ".github/workflows/frontend-vue-parity.yml"
+      - ".github/workflows/frontend-vue-parity-diagnostic.yml"
+
   pull_request:
-    # Duplicated, not anchored: the GitHub Actions workflow parser does
-    # not resolve YAML aliases.
     paths:
       - "frontend-vue/**"
-      # The other side of the comparison. Upstream drift lands here.
       - "frontend/**"
       - "contracts/**"
-      - "backend/app/gateway/**"
-      - "backend/packages/harness/deerflow/runtime/**"
+      - "backend/app/**"
+      - "backend/packages/**"
+      - "backend/tests/**"
+      - "config.example.yaml"
       - "backend/scripts/run_replay_gateway.py"
-      - "backend/tests/fixtures/replay/**"
-      - "backend/tests/replay_provider.py"
-      - "backend/tests/_replay_fixture.py"
-      - "backend/tests/seed_runs_router.py"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
       - "scripts/pnpm.py"
+      - "scripts/serve.sh"
+      - "Makefile"
+      - ".github/workflows/frontend-vue-verify.yml"
       - ".github/workflows/frontend-vue-parity.yml"
+      - ".github/workflows/frontend-vue-parity-diagnostic.yml"
 
-  # Diagnostics. Getting one Linux reading out of this suite costs 25 minutes,
-  # and the rows it found on its first run (2026-09-17) all need re-measuring
-  # one scenario at a time. `diff.spec.ts` already supports PARITY_ONLY -- one
-  # scenario is about 4 minutes, and in that mode it deliberately neither
-  # compares against the baseline nor accepts, because a filtered report is
-  # missing every other scenario. So this input produces a *report*, not a
-  # verdict: read the uploaded artifact, do not read the job's colour.
   workflow_dispatch:
-    inputs:
-      parity_only:
-        description: "Measure ONE scenario id (PARITY_ONLY). Empty = the whole ledger."
-        type: string
-        required: false
-        default: ""
 
 concurrency:
   group: fe-vue-parity-${{ github.event.pull_request.number || github.ref }}
@@ -75,22 +50,44 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 env:
   # Without the sibling app every parity spec calls `test.skip(!reactAppPresent)`
   # and the suite exits 0 having asserted nothing — the exact shape of gate this
   # project keeps getting burned by. This flag makes `react-preview.ts` throw
   # instead of skipping, so a checkout that loses `../frontend` fails loudly
-  # here while `make e2e-parity` on a developer machine still skips politely.
+  # here and at every formal local cross-app entry.
   # Pinned by tests/guards/tooling-contracts.test.ts.
   PARITY_REQUIRE_REACT: "1"
 
 jobs:
-  # The ledger itself: 147 scenario-dimensions across twelve comparison lanes,
-  # plus the topology, scenario and sidebar specs. Serial by construction — the
-  # two apps must observe the same Gateway state, so nothing here parallelises.
-  parity:
+  # Separate jobs own separate Gateways. Each file remains serial internally.
+  # Generate the matrix from the same whole-file planner used by each runner.
+  parity-plan:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 5
+    outputs:
+      groups: ${{ steps.groups.outputs.groups }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.3"
+      - id: groups
+        run: |
+          groups=$(node frontend-vue/scripts/parity-ci.mjs --matrix)
+          echo "groups=$groups" >> "$GITHUB_OUTPUT"
+
+  parity-product:
+    needs: parity-plan
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.parity-plan.outputs.groups) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -113,7 +110,7 @@ jobs:
       - name: Install replay Gateway and browser dependencies
         working-directory: backend
         run: |
-          uv sync --group dev --extra browser
+          uv sync --frozen --group dev --extra browser
           uv run playwright install --with-deps chromium
 
       - name: Set up Node.js
@@ -129,10 +126,10 @@ jobs:
 
       # The sibling app. `scripts/pnpm.py` runs Corepack from the selected
       # workspace, so frontend/'s own pinned pnpm is used here, not this one's.
-      # Not --strict-peer-dependencies: that is frontend-vue's policy, and the
-      # sibling's lockfile is upstream's to set.
+      # Preserve the strict dependency gate previously owned by verify's
+      # duplicate cross-app job; deduplication must not remove that check.
       - name: Install frontend dependencies
-        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile
+        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile --strict-peer-dependencies
 
       - name: Install Playwright Chromium
         working-directory: frontend-vue
@@ -144,32 +141,25 @@ jobs:
       # node_modules" — which stopped being true two steps ago. Cheap (a source
       # scan, no servers), and it fails on a stale exemption, so it runs first.
       - name: Compare icons, icon sizes and button variants
+        if: matrix.group == 'ledger'
         working-directory: frontend-vue
         run: make icon-parity
 
-      - name: Measure the React-vs-Vue parity ledger
+      - name: Compare one complete product file group
         working-directory: frontend-vue
-        env:
-          # Empty on push/PR, so the suite behaves exactly as it does locally.
-          PARITY_ONLY: ${{ inputs.parity_only }}
-        run: make e2e-parity
+        run: make e2e-parity-ci GROUP="${{ matrix.group }}"
 
-      # The ledger's own failure evidence. `keep-e2e-failure-artifacts.mjs`
-      # moves the run's traces to test-results/failures/ precisely so a rerun
-      # cannot erase them; on a hosted runner "the files are still on disk"
-      # means nothing unless they leave the runner.
-      # `failure()` alone would throw away the whole point of a PARITY_ONLY run:
-      # that run is *expected* to pass (filtered mode skips the baseline
-      # comparison), and its only product is the report inside this artifact.
+      # Successful ledger screenshots and failed traces both leave the runner.
       - name: Upload the measured ledger
-        if: failure() || inputs.parity_only != ''
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: parity-failures
+          name: parity-product-${{ matrix.group }}-${{ github.run_attempt }}
           path: |
             frontend-vue/test-results/**
-          if-no-files-found: ignore
-          retention-days: 7
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
 
   # Login and setup: the first screen every user sees, and the one the main
   # parity suite can never reach. Auth is a build-time decision, so these are
@@ -196,7 +186,7 @@ jobs:
       - name: Install replay Gateway and browser dependencies
         working-directory: backend
         run: |
-          uv sync --group dev --extra browser
+          uv sync --frozen --group dev --extra browser
           uv run playwright install --with-deps chromium
 
       - name: Set up Node.js
@@ -211,7 +201,7 @@ jobs:
         run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
 
       - name: Install frontend dependencies
-        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile
+        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile --strict-peer-dependencies
 
       - name: Install Playwright Chromium
         working-directory: frontend-vue
@@ -221,12 +211,31 @@ jobs:
         working-directory: frontend-vue
         run: make e2e-parity-auth
 
+      - name: Compare authenticated SQL sessions
+        working-directory: frontend-vue
+        run: make e2e-parity-session
+
       - name: Upload failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: parity-auth-failures
+          name: parity-auth-failures-${{ github.run_attempt }}
           path: |
             frontend-vue/test-results/**
-          if-no-files-found: ignore
-          retention-days: 7
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Preserve the aggregate check name; missing/cancelled/failed groups cannot pass.
+  parity:
+    if: always()
+    needs: [parity-plan, parity-product, parity-auth]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require the complete comparison
+        run: |
+          test "${{ needs.parity-plan.result }}" = success
+          test "${{ needs.parity-product.result }}" = success
+          test "${{ needs.parity-auth.result }}" = success
+

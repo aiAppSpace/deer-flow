@@ -13,7 +13,7 @@
                    关闭时清空输入：留着上次的名字，下次打开会让人以为是草稿。
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onScopeDispose, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,7 @@ import {
   useProjectMutations,
 } from "@/composables/useProjects";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
+import { isRequestAborted } from "@/core/api/cancellation";
 
 const props = defineProps<{ threadId: string | null }>();
 const emit = defineEmits<{ close: [] }>();
@@ -47,8 +48,17 @@ const open = computed({
   },
 });
 
-watch(open, (isOpen) => {
-  if (!isOpen) name.value = "";
+let creationGeneration = 0;
+watch(
+  () => props.threadId,
+  () => {
+    creationGeneration += 1;
+    name.value = "";
+  },
+  { flush: "sync" },
+);
+onScopeDispose(() => {
+  creationGeneration += 1;
 });
 
 function onKeydown(event: KeyboardEvent) {
@@ -62,10 +72,13 @@ async function submit() {
   const threadId = props.threadId;
   if (!trimmed || !threadId || isCreating.value) return;
 
+  const generation = creationGeneration;
+  const ownsCreation = () => generation === creationGeneration;
   let project: Awaited<ReturnType<typeof create.mutateAsync>>;
   try {
     project = await create.mutateAsync({ name: trimmed });
   } catch (error) {
+    if (!ownsCreation() || isRequestAborted(error)) return;
     toast.error(
       error instanceof Error && error.message
         ? error.message
@@ -74,10 +87,13 @@ async function submit() {
     return;
   }
 
+  // Creation may already have persisted; only the active dialog may start its move.
+  if (!ownsCreation()) return;
   emit("close");
   try {
     await moveToProject.mutateAsync({ threadId, projectId: project.id });
   } catch (error) {
+    if (isRequestAborted(error)) return;
     // 项目已经建成了，别报「创建失败」。
     toast.error(
       error instanceof Error && error.message

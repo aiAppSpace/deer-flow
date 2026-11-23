@@ -27,6 +27,7 @@ import {
 } from "reka-ui";
 
 import { cn } from "@/lib/utils";
+import { useToggleGroupStyle } from "./context";
 
 const props = withDefaults(
   defineProps<
@@ -40,7 +41,14 @@ const props = withDefaults(
       checked?: boolean;
     }
   >(),
-  { variant: "default", size: "default", spacing: 0, single: false },
+  {
+    variant: undefined,
+    size: undefined,
+    spacing: 0,
+    single: false,
+    checked: undefined,
+    class: undefined,
+  },
 );
 const delegated = computed(() => {
   const {
@@ -61,6 +69,19 @@ const delegated = computed(() => {
   return rest;
 });
 const forwarded = useForwardProps(delegated);
+const groupStyle = useToggleGroupStyle();
+const style = computed(() => ({
+  variant: groupStyle?.value.variant ?? props.variant,
+  size: groupStyle?.value.size ?? props.size,
+  spacing: groupStyle?.value.spacing ?? props.spacing,
+}));
+const pressedAttributes = computed(() =>
+  props.single
+    ? { "aria-pressed": undefined }
+    : props.checked !== undefined
+      ? { "aria-pressed": props.checked }
+      : {},
+);
 
 const VARIANT_CLASS = {
   default: "bg-transparent",
@@ -76,19 +97,18 @@ const SIZE_CLASS = {
 
 <template>
   <ToggleGroupItem
-    v-bind="forwarded"
+    v-bind="{ ...forwarded, ...pressedAttributes }"
     data-slot="toggle-group-item"
-    :data-variant="props.variant"
-    :data-size="props.size"
-    :data-spacing="props.spacing"
+    :data-variant="style.variant"
+    :data-size="style.size"
+    :data-spacing="style.spacing"
     :role="props.single ? 'radio' : undefined"
     :aria-checked="props.single ? props.checked : undefined"
-    :aria-pressed="props.single ? undefined : props.checked"
     :class="
       cn(
         'hover:bg-muted hover:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 data-[state=on]:bg-accent data-[state=on]:text-accent-foreground inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-4',
-        VARIANT_CLASS[props.variant],
-        SIZE_CLASS[props.size],
+        VARIANT_CLASS[style.variant ?? 'default'],
+        SIZE_CLASS[style.size ?? 'default'],
         'w-auto min-w-0 shrink-0 cursor-pointer px-3 focus:z-10 focus-visible:z-10',
         'data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l',
         props.class,

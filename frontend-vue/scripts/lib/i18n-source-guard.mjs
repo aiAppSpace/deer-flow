@@ -31,7 +31,12 @@ import { compileTemplate, parse } from "vue/compiler-sfc";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const PRODUCT_ROOTS = ["app/components", "app/pages", "app/layouts"];
+const PRODUCT_ROOTS = [
+  "app/components",
+  "app/pages",
+  "app/layouts",
+  "app/core/settings",
+];
 const PRODUCT_ENTRY_FILES = ["app/app.vue"];
 const TEST_FIXTURE_PREFIX = "app/pages/__m0/";
 const ACCESSIBLE_ATTRIBUTES = new Set([
@@ -57,6 +62,8 @@ const UI_PROPERTY = new Set([
 ]);
 const SHORTCUT = /^[⌘⇧⌥⌃+\s]*[A-Z,./]$/;
 const BRAND = /^(?:DeerFlow(?: Vue)?|DF)$/;
+const TECHNICAL_LITERAL =
+  /^(?:https?:\/\/[^\s]+|(?:[\w-]+\.)?[A-Za-z0-9_-]+\.(?:md|json|skill|png|jpg|csv|tsv|pdf)|\.skill|\d+(?:\.\d+)? [KMGT]?i?B)$/;
 const TECHNICAL_ACRONYM =
   /^(?:API|CLI|CSS|EN|HTML|HTTP|IME|JSON|MCP|MIME|OIDC|PDF|SSE|UI|URL|WS)$/;
 const DICTIONARY_KEY = /^[a-z][\w-]*(?:\.[\w-]+)+$/;
@@ -68,6 +75,7 @@ function hasEnglishCopy(value) {
     !SHORTCUT.test(normalized) &&
     !BRAND.test(normalized) &&
     !TECHNICAL_ACRONYM.test(normalized) &&
+    !TECHNICAL_LITERAL.test(normalized) &&
     !DICTIONARY_KEY.test(normalized)
   );
 }
@@ -340,6 +348,7 @@ function allVueFiles() {
   )
     .split("\n")
     .filter(Boolean)
+    .filter((rel) => existsSync(join(ROOT, rel)))
     .sort();
 }
 
@@ -364,14 +373,19 @@ export function productVueInventory() {
     ...PRODUCT_ENTRY_FILES,
     ...PRODUCT_ROOTS.flatMap(vueFiles),
   ].sort();
-  const covered = new Set(discovered);
+  // Unit SFC fixtures live outside Nuxt app sources and are compiled only by tests.
+  // Keep them enumerated; unknown product roots must still fail as unscanned.
+  const checkout = allVueFiles();
+  const unitFixtures = checkout.filter((file) => file.startsWith("tests/"));
+  const covered = new Set([...discovered, ...unitFixtures]);
   return {
     checked: discovered.filter((file) => !file.startsWith(TEST_FIXTURE_PREFIX)),
-    excludedTestFixtures: discovered.filter((file) =>
-      file.startsWith(TEST_FIXTURE_PREFIX),
-    ),
+    excludedTestFixtures: [
+      ...discovered.filter((file) => file.startsWith(TEST_FIXTURE_PREFIX)),
+      ...unitFixtures,
+    ].sort(),
     // 白名单没盖住的 `.vue`。恒为空；不为空说明扫描面漏了一块。
-    unscanned: allVueFiles().filter((file) => !covered.has(file)),
+    unscanned: checkout.filter((file) => !covered.has(file)),
   };
 }
 

@@ -2,6 +2,18 @@
 
 This is the source of truth for repository agent guidance; `CLAUDE.md` imports it via `@AGENTS.md`.
 
+## Cross-platform project onboarding
+
+Start with **[docs/ai/README.md](docs/ai/README.md)** for the reading order,
+project relationships, evidence rules and platform-independent execution guidance.
+**[docs/ai/CURRENT_TASK.md](docs/ai/CURRENT_TASK.md)** points to the current handoff
+and records the boundary between the original checkout and the isolated candidate.
+Reading these files does not resume a paused task. Historical plans and tool-specific
+notes do not override the user's latest instructions or current source evidence.
+Keep long task status in the handoff, not duplicated in this file. When authorized
+to commit, commit on the branch where the changes were made; do not create a branch
+solely to make a commit. Do not infer permission to commit or push from a review request.
+
 This **monorepo orientation layer** maps the repo. For module details, read its guide:
 
 - **[backend/AGENTS.md](backend/AGENTS.md)** — backend depth: harness/app split, agent &
@@ -37,7 +49,7 @@ A single `make dev` / Docker stack runs four cooperating services:
 | --------------- | ------ | ------------------------------------------------------------------- |
 | **Nginx**       | `2026` | Unified reverse-proxy entry point — open this in the browser        |
 | **Gateway API** | `8001` | FastAPI REST API + embedded LangGraph-compatible agent runtime      |
-| **React frontend** | `3000` | Default Next.js web interface                                    |
+| **React frontend** | `3000` | Next.js in Docker; local `make dev` / `make dev-dual` use `3200`    |
 | **Vue frontend**   | `3000` | Nuxt on the Vue hostname; `make dev-vue` runs it on `3100` outside Docker |
 | **Provisioner** | `8002` | Optional — only when sandbox is configured for provisioner/K8s mode |
 
@@ -56,7 +68,7 @@ fonts, images, audio, and video uncompressed at the proxy layer.
 Both compose files publish that entry as `"${BIND_HOST:-127.0.0.1}:${PORT:-2026}:2026"`
 — **loopback by default**, matching the README's documented deployment model; a bare
 `"${PORT}:2026"` binds `0.0.0.0`, which does not. The root `PORT` value is Docker ingress
-configuration only; local orchestration pins Next.js to `3000` so loading `.env` cannot
+configuration only; local orchestration pins Next.js to `3200` so loading `.env` cannot
 make `make dev` wait on the wrong port. Nginx listening `default_server` on IPv4+IPv6 and
 the Gateway binding `0.0.0.0:8001` are container-internal on purpose: the published nginx
 port is the entire external surface. Any new published port needs an explicit bind
@@ -184,6 +196,10 @@ checkout before invoking Compose, matching the start and stop commands.
 
 Production `make up` explicitly reconciles both frontend containers after rebuilding.
 
+The Docker build context excludes generated `.cache` directories at every depth,
+including frontend failure archives and extension-package caches. The exclusion
+follows extension source reinclusions so runtime artifacts cannot enter an image.
+
 Run `make help` for the full list.
 
 **Per-module commands drive a single module** (run inside that module):
@@ -209,6 +225,10 @@ cd frontend-vue && make e2e-backend
 
 Rule of thumb: **root `make` = the full application**; per-module Makefiles/package
 commands own backend, React, or Vue work.
+
+`make dev-vue` and `make dev-dual` pass their explicit frontend mode to
+`scripts/check.py`; they expose direct frontend ports and do not require host Nginx.
+The default React startup and general `make check` retain the Nginx prerequisite.
 
 Host-side pnpm consumers — the root/frontend Makefiles and local diagnostic scripts — must
 run through `scripts/pnpm.py`, where `--dir frontend|frontend-vue` selects the workspace. It

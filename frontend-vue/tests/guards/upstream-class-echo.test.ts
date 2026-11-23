@@ -93,7 +93,7 @@ describe("照抄上游的 class 串", () => {
     wave 72 在设置面板上又撞到三颗。
 
     上游出处：notification-settings-page.tsx:71 / :85 各一颗
-    `<BellIcon className="mr-2 size-4" />`；skill-settings-page.tsx:95 是
+    `<BellIcon className="mr-2 size-4" />`；capabilities/skill-gallery.tsx:240 是
     `<SparklesIcon className="size-4" />`。
   */
   it("设置面板里上游有图标的三颗键都带着图标", () => {
@@ -105,7 +105,9 @@ describe("照抄上游的 class 串", () => {
       "通知设置的两颗键各要一颗 BellIcon",
     ).toHaveLength(2);
 
-    const skills = stripped("components/workspace/settings/SkillSettings.vue");
+    const skills = stripped(
+      "components/workspace/capabilities/SkillGallery.vue",
+    );
     expect(skills).toContain('<Sparkles class="size-4" />');
   });
 
@@ -143,7 +145,10 @@ describe("照抄上游的 class 串", () => {
       source,
       'data-testid="workspace-toaster"',
     ).split(/\s+/);
-    expect(list).toContain("w-[min(92vw,356px)]");
+    expect(list).toContain("w-[356px]");
+    // Sonner switches to 16px viewport offsets at max-width:600px.
+    expect(list).toContain("max-[600px]:w-[calc(100%-32px)]");
+    expect(list).toContain("max-[600px]:top-4");
     expect(list).toContain("top-6");
     expect(list).toContain("gap-[14px]");
 
@@ -257,21 +262,15 @@ describe("照抄上游的 class 串", () => {
     对照台账本身就在守它们（重新画上去 `e2e-parity` 会红），
     但那一跑要 3.8 分钟；这两条钉在源码上，改坏时秒级就红。
   */
-  it("sidecar 面板根不画底色，推理档位按选中态染色", () => {
+  it("sidecar 面板根不画底色", () => {
     // 上游 sidecar-panel.tsx:527 一条 bg-* 都没有；底色由外层容器给。
     const sidecar = stripped("components/workspace/sidecar/SidecarPanel.vue");
     const root = classOfTagContaining(sidecar, 'data-testid="sidecar-panel"');
     expect(root.split(/\s+/)).not.toContain("bg-background");
     expect(root).not.toMatch(/\bbg-/);
 
-    /*
-      上游 input-box.tsx:2597 每一项都传
-      `选中 ? "text-accent-foreground" : "text-muted-foreground/65"`
-      ——**没选中的几档是暗的**。本仓原来一项都不染，四档看起来一模一样。
-    */
-    const composer = stripped("components/chat/ChatComposer.vue");
-    expect(composer).toContain("selectedReasoningEffort === effort.id");
-    expect(composer).toContain("text-muted-foreground/65");
+    // Actual menu selection and selected/unselected color tokens are exercised
+    // by composer-read-only.dom.test.ts with the production ChatComposer.
   });
 
   /*

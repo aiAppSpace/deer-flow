@@ -1,5 +1,9 @@
 import { expect, rs, test } from "@rstest/core";
 
+import type {
+  PluginSurface,
+  SurfaceContext,
+} from "@/core/extensions/contracts";
 import { mountSurface } from "@/core/extensions/surfaces";
 
 test("surface cleanup aborts outstanding work and rejects late backend calls", async () => {
@@ -111,5 +115,48 @@ for (const failMount of [false, true]) {
     await expect(openLater("thread")).rejects.toThrow();
     expect(open).toHaveBeenCalledTimes(1);
     expect(navigate).not.toHaveBeenCalled();
+  });
+}
+
+for (const throwsOnDispose of [false, true]) {
+  test(`a rejected async mount retires its late controller (dispose throws: ${throwsOnDispose})`, async () => {
+    const container = document.createElement("div");
+    const error = rs.fn();
+    let finish!: (controller: { dispose: () => void }) => void;
+    const pending = new Promise<{ dispose: () => void }>((resolve) => {
+      finish = resolve;
+    });
+    const dispose = rs.fn(() => {
+      if (throwsOnDispose) throw new Error("broken cleanup");
+    });
+    let signal!: AbortSignal;
+    const cleanup = mountSurface(
+      container,
+      {
+        id: "broken-async",
+        slot: "page",
+        title: "Broken async",
+        mount: ((_root: HTMLElement, context: SurfaceContext) => {
+          signal = context.signal;
+          return pending;
+        }) as unknown as PluginSurface["mount"],
+      },
+      {
+        namespace: "community.example",
+        locale: "en",
+        settings: {},
+        callBackend: rs.fn(),
+      },
+      error,
+    );
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(true);
+    expect(container.shadowRoot?.textContent).toBe("");
+    finish({ dispose });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    cleanup();
+    cleanup();
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledTimes(1);
   });
 }

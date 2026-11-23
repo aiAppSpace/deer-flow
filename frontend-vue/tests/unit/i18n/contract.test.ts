@@ -33,7 +33,7 @@ describe("locale contract", () => {
       "artifacts.noSelectionDescription",
       "sidecar.placeholder",
       "channels.connectionExpired",
-      "navigation.deleteConversationFailed",
+      "chats.deleteFailed",
       "markdown.unsafeLink",
       "login.serviceUnavailableTitle",
     ];

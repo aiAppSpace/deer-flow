@@ -104,7 +104,7 @@ test("ignores sidecar search results from another parent thread", async () => {
   ).resolves.toBeNull();
 });
 
-test("coalesces concurrent creates for the same parent into one request", async () => {
+test("does not share pending creates across independent owners of the same parent", async () => {
   let resolveFetch: ((value: Response) => void) | undefined;
   fetchWithAuth.mockReturnValueOnce(
     new Promise<Response>((resolve) => {
@@ -112,6 +112,7 @@ test("coalesces concurrent creates for the same parent into one request", async 
     }),
   );
 
+  fetchWithAuth.mockResolvedValueOnce(threadResponse("sidecar-1"));
   const first = createSidecarThread({ parentThreadId: "parent-1", context });
   const second = createSidecarThread({ parentThreadId: "parent-1", context });
 
@@ -119,7 +120,7 @@ test("coalesces concurrent creates for the same parent into one request", async 
 
   const [firstThread, secondThread] = await Promise.all([first, second]);
 
-  expect(fetchWithAuth).toHaveBeenCalledTimes(1);
+  expect(fetchWithAuth).toHaveBeenCalledTimes(2);
   expect(firstThread).toEqual(secondThread);
 });
 
@@ -134,7 +135,7 @@ test("allows a new create after the in-flight request settles", async () => {
   expect(fetchWithAuth).toHaveBeenCalledTimes(2);
 });
 
-test("clears the in-flight entry when a create fails", async () => {
+test("allows an independent retry after a create fails", async () => {
   fetchWithAuth
     .mockResolvedValueOnce(new Response(null, { status: 500 }))
     .mockResolvedValueOnce(threadResponse("s-1"));

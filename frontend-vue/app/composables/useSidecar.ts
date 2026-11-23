@@ -24,6 +24,7 @@ export type SidecarReference = SidecarReferenceStateItem;
 
 export function useSidecar(options: {
   parentThreadId: MaybeRefOrGetter<string | null>;
+  ownerKey?: MaybeRefOrGetter<string | undefined>;
   context: MaybeRefOrGetter<ThreadRunContextInput>;
 }) {
   const open = ref(false);
@@ -41,7 +42,7 @@ export function useSidecar(options: {
   }
 
   watch(
-    () => toValue(options.parentThreadId),
+    [() => toValue(options.parentThreadId), () => toValue(options.ownerKey)],
     () => {
       open.value = false;
       activeReferences.value = [];
@@ -49,7 +50,7 @@ export function useSidecar(options: {
       sidecarThreadId.value = null;
       setContext({ ...toValue(options.context) });
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
 
   function createReference(nextContext: SidecarContext): SidecarReference {
@@ -83,8 +84,15 @@ export function useSidecar(options: {
     return buildMessageSidecarContext(message, displayIndex, { selectedText });
   }
 
-  function clearConversationQuotes() {
-    conversationQuotes.value = [];
+  function clearConversationQuotes(accepted?: readonly SidecarReference[]) {
+    if (!accepted) {
+      conversationQuotes.value = [];
+      return;
+    }
+    const acceptedIds = new Set(accepted.map((reference) => reference.id));
+    conversationQuotes.value = conversationQuotes.value.filter(
+      (reference) => !acceptedIds.has(reference.id),
+    );
   }
   function clearActiveReferences(accepted?: SidecarReference[]) {
     if (!accepted) {

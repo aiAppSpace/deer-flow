@@ -1,79 +1,22 @@
 <script setup lang="ts">
-/*
-  【文件职责】     统一主聊天与 Sidecar 的模型选择器：带搜索的命令面板对话框。
-  【架构位置】     L3
-  【主要导出】     默认 ComposerModelSelector 组件
-  【依赖关系】     Model 展示契约 · composer controls · ui/dialog · ui/command
-  【边界与注意】   160px 仅用于窄屏兜底；sm 以上与 React 一致放宽到 224px。
-                   对话框开合、方向键、Escape 与焦点归还都属于 primitive，
-                   这里只负责选中语义与尺寸合同。
-
-                   **是 Dialog + Command，不是下拉菜单。** 上游
-                   frontend/src/components/ai-elements/model-selector.tsx 整份就是
-                   Dialog + Command 的薄包装（ModelSelectorContent = DialogContent
-                   p-0 + sr-only DialogTitle + Command），两个调用点
-                   （input-box.tsx:2683、sidecar/sidecar-panel.tsx:949）都渲染
-                   ModelSelectorInput + ModelSelectorList。本仓原来是
-                   DropdownMenu + RadioGroup，**没有搜索框**，于是
-                   `inputBox.searchModels` 一直躺在未引用词条里。
-
-                   **筛选由本组件做**，Command primitive 不接管（与
-                   workspace/CommandPalette.vue 同一条约定）。判据字段跟着上游走：
-                   上游把 `value={m.name}` 交给 cmdk，cmdk 就只拿这一个字段打分，
-                   所以这里也只看 `model.name`。**剩下的分叉**：cmdk 是模糊评分
-                   （command-score），这里是大小写无关、**分隔符不敏感**的子串匹配。
-                   wave 37 把分隔符那一档补上了——列表写的是 `display_name`
-                   （"MiniMax M3"）而筛的是 `name`（`minimax-m3`），照屏幕上的字打
-                   原来一条都搜不到。**非连续子序列（"mm3" → minimax-m3）仍然没有**：
-                   那要连同 command-score 的排序一起来，否则 "abc" 会命中几乎所有模型；
-                   为这一处引一个评分库不划算。
-
-                   **没有 CommandEmpty**：上游两个调用点都没渲染
-                   ModelSelectorEmpty，无匹配时列表就是空的。补一句"无结果"会凭空
-                   多出一条上游没有的词条与一行可访问文本。
-
-                   **没有选中模型时触发器照样渲染**，只是没有名字——React 的
-                   ModelSelectorTrigger 就是这样（input-box.tsx 里它渲染
-                   selectedModel?.display_name）。用 v-if 把它整个藏起来，工具条的
-                   控件个数会随后端返回什么而变，键盘 Tab 顺序也跟着变。
-                   也**不加** aria-label：名字只能来自看得见的那行文字，否则读屏器会念出
-                   一个屏幕上并不存在的模型名。
-                   （sidecar 那一支例外，它在调用点上 v-if——上游
-                   SidecarModelSelector 开头就是 `if (!selectedModel) return null`。）
-
-                   开合状态留在组件内部。上游把 modelDialogOpen 提到两个调用点各自
-                   的 useState 里，只为了在 handleModelSelect 末尾 setOpen(false)；
-                   两个调用点都没有别的写入方，所以这里内聚成本组件自己的 ref，
-                   对外行为一致。
-*/
-import { computed, ref, watch } from "vue";
-import { Check } from "lucide-vue-next";
-
+import { computed, nextTick, ref, watch } from "vue";
+import { Check, Star } from "lucide-vue-next";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverPickerContent,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-
+import { useAuthSession } from "@/composables/useAuthSession";
+import { useModelFavorites } from "@/composables/useModelFavorites";
 import {
-  Command,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { filterModelsByQuery } from "@/core/models/filter";
+  AUTH_DISABLED_USER,
+  isAuthDisabledMode,
+} from "@/core/auth/auth-disabled-user";
+import { projectModelChoices } from "@/core/models/favorites";
 import type { Model } from "@/core/models/types";
 
-/*
-  外面传进来的 class 要落在**触发器按钮**上，不是落在一层包装 div 上——sidecar 用
-  `.sidecar-model-control { display: none }` 在窄面板里藏掉这个控件，而那层包装已经
-  被去掉了（原因见模板里的说明）。根节点是 Dialog 这个无 DOM 的 provider，
-  默认继承会把 class 交给它、也就是交给空气，所以这里显式绑到按钮上。
-*/
 defineOptions({ inheritAttrs: false });
-
 const props = withDefaults(
   defineProps<{
     models: readonly Model[];
@@ -82,85 +25,133 @@ const props = withDefaults(
     testId?: string;
   }>(),
   {
-    selectedModel: undefined,
     disabled: false,
     testId: "composer-model-selector",
+    selectedModel: undefined,
   },
 );
-
-const emit = defineEmits<{
-  select: [model: Model];
-}>();
-
+const emit = defineEmits<{ select: [model: Model] }>();
 const { $i18n } = useNuxtApp();
-
-const open = ref(false);
-const search = ref("");
-
-/*
-  每次打开都从空查询开始。上游每次开合都重新挂载 CommandInput（cmdk 的
-  CommandDialog 在关闭时卸载内容），于是上一次的查询不会留到下一次。
-*/
-watch(open, (value) => {
-  if (value) search.value = "";
-});
-
-/*
-  筛选与排序都走 `@/core/models/filter`，它用的是 **cmdk 的 command-score 逐行移植**
-  （`@/core/models/command-score`，与 `cmdk@1.1.1` 实测 950 组逐值相同）。
-
-  **wave 62 之前这里是分隔符不敏感的子串匹配**，注释写着「非连续子序列要连排序
-  一起来，为这一处引评分库不划算」。**引依赖确实不划算，移植算法划算**：
-  上游把 `value={m.name}` 交给 cmdk，cmdk 的默认 filter 就是 command-score，
-  所以移植之后本仓与 React **筛出同一批、排出同一序**。
-
-  wave 37 那条「分隔符不敏感」也一并删掉了，**不是放弃而是被覆盖**：
-  command-score 的 `formatInput` 把 `[\s-]` 一律归成空格，
-  「照屏幕上的字打」（`MiniMax M3` → `minimax-m3`）得分 0.9996。
-  `tests/unit/models/command-score.test.ts` 有专门用例钉这一条。
-*/
-const filteredModels = computed(() =>
-  filterModelsByQuery(props.models, search.value),
+const authDisabled = isAuthDisabledMode();
+const auth = useAuthSession({ enabled: computed(() => !authDisabled) });
+const userId = computed(() =>
+  auth.session.value?.tag === "authenticated"
+    ? auth.session.value.user.id
+    : authDisabled
+      ? AUTH_DISABLED_USER.id
+      : null,
 );
-
-function selectModel(model: Model) {
-  /*
-    上游两个 handleModelSelect 都在 disabled/润色中直接 return。触发器已经是
-    disabled 了，但键盘从已打开的对话框里仍然够得着列表项，所以这一层也要拦。
-  */
+const favorites = useModelFavorites(userId);
+const open = ref(false);
+const content = ref<InstanceType<typeof PopoverPickerContent> | null>(null);
+let focusedControl: { name: string; favorite: boolean } | null = null;
+const projection = computed(() =>
+  projectModelChoices(props.models, favorites.names.value),
+);
+const groups = computed(() =>
+  [
+    {
+      label: $i18n.t.value.modelPicker.favorites,
+      models: projection.value.favorites,
+    },
+    {
+      label: $i18n.t.value.modelPicker.otherModels,
+      models: projection.value.others,
+    },
+  ].filter((group) => group.models.length),
+);
+const ordered = computed(() => [
+  ...projection.value.favorites,
+  ...projection.value.others,
+]);
+function recordFocus(name: string, favorite: boolean) {
+  focusedControl = { name, favorite };
+}
+function controls() {
+  return (
+    content.value
+      ?.getElement()
+      ?.querySelectorAll<HTMLButtonElement>("[data-model-picker-option]") ?? []
+  );
+}
+function focusInitial() {
+  const list = Array.from(controls());
+  (
+    list.find((el) => el.dataset.modelName === props.selectedModel?.name) ??
+    list[0]
+  )?.focus();
+}
+watch(open, async (value) => {
+  if (value) {
+    await nextTick();
+    if (open.value) focusInitial();
+  }
+});
+function select(model: Model) {
   if (props.disabled) return;
-  open.value = false;
   emit("select", model);
+  open.value = false;
+}
+async function toggleFavorite(model: Model, event: MouseEvent) {
+  if (
+    auth.isFetching.value ||
+    !favorites.canEdit.value ||
+    !props.models.some((item) => item.name === model.name)
+  )
+    return;
+  event.preventDefault();
+  const control = { name: model.name, favorite: true };
+  focusedControl = control;
+  favorites.setFavorite(
+    model.name,
+    !favorites.names.value.includes(model.name),
+  );
+  await nextTick();
+  if (open.value && focusedControl === control) focusControl(control);
+}
+function focusControl(control: NonNullable<typeof focusedControl>) {
+  const attribute = control.favorite
+    ? "data-model-favorite"
+    : "data-model-name";
+  const root = content.value?.getElement();
+  Array.from(root?.querySelectorAll<HTMLButtonElement>(`[${attribute}]`) ?? [])
+    .find((button) => button.getAttribute(attribute) === control.name)
+    ?.focus();
+}
+watch(open, (value) => {
+  if (!value) focusedControl = null;
+});
+watch(favorites.names, async () => {
+  if (!open.value || !focusedControl) return;
+  const control = focusedControl;
+  await nextTick();
+  if (
+    open.value &&
+    focusedControl === control &&
+    document.activeElement === document.body
+  )
+    focusControl(control);
+});
+function onRowKeydown(event: KeyboardEvent, name: string) {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  event.preventDefault();
+  const index = ordered.value.findIndex((model) => model.name === name);
+  const next =
+    ordered.value[
+      (Math.max(index, 0) +
+        (event.key === "ArrowDown" ? 1 : -1) +
+        ordered.value.length) %
+        ordered.value.length
+    ];
+  Array.from(controls())
+    .find((el) => el.dataset.modelName === next?.name)
+    ?.focus();
 }
 </script>
 
 <template>
-  <!--
-    触发器**直接**是工具条的 flex 子项，外面不再包一层 div。包着的时候按钮是行内块，
-    行盒会在基线下面留出约 2px 的下沉空间，于是整条工具条比 React 高 2px，输入框
-    跟着下移——React 那边 ModelSelectorTrigger 用 asChild 直接落在按钮上，没有这层。
-  -->
-  <Dialog v-model:open="open">
-    <DialogTrigger>
-      <!--
-        上游 input-box.tsx:2693 是
-        `<PromptInputButton className="max-w-40 min-w-0 sm:max-w-56" disabled>`，
-        也就是 `<Button variant="ghost" size="sm">`。手写那版只留了
-        `hover:bg-accent`：少 `hover:text-accent-foreground`、
-        少 `dark:hover:bg-accent/50`（深色主题悬停底色差一档）、
-        少 `cursor-pointer`、少 3px 焦点环、少 `disabled:pointer-events-none`
-        （禁用时还能收到 hover），并且把 `text-xs` 写在了按钮上——
-        上游按钮是 `text-sm`，`text-xs` 只落在里层的 ModelSelectorName 上。
-
-        `px-2.5` 与 `shadow-none` 要显式写：上游这颗走的是 **InputGroupButton**，
-        它的 sm 档是 `h-8 px-2.5 gap-1.5 rounded-md`，而 shadcn **Button** 的 sm 档是
-        `h-8 gap-1.5 rounded-md px-3`——两套 sm 的水平内边距差 2px，
-        `shadow-none` 也只在 InputGroupButton 的 base 里。
-
-        内层两层照抄上游（一个 flex-col 容器 + 一个
-        `flex-1 truncate text-left text-xs` 的 span）：只有一层 span 时
-        `truncate` 作用在错误的盒子上，长模型名会把按钮撑过 max-w 而不是省略。
-      -->
+  <Popover v-model:open="open">
+    <PopoverTrigger as-child>
       <Button
         v-bind="$attrs"
         type="button"
@@ -176,57 +167,113 @@ function selectModel(model: Model) {
           }}</span>
         </div>
       </Button>
-    </DialogTrigger>
-    <!--
-      上游 `ModelSelectorContent`（ai-elements/model-selector.tsx:45）只往
-      DialogContent 传 `p-0`，圆角与裁剪归里面那层 Command
-      （`overflow-hidden rounded-md`，wave 78 已补进 primitive）。
-      本仓原来还传了 `gap-0 overflow-hidden`，两条都是在替 Command 做它自己的事。
-    -->
-    <DialogContent class="p-0" :close-label="$i18n.t.value.primitives.close">
-      <!--
-        上游只给了一个 sr-only 的标题、没有 DialogDescription，默认文案是写死的
-        英文 "Model Selector"（model-selector.tsx:40）。按「primitive 的可访问名
-        照抄」那条约定走 primitives.*，不另造产品文案。
-      -->
-      <DialogTitle class="sr-only">
-        {{ $i18n.t.value.primitives.modelSelector }}
-      </DialogTitle>
-      <Command>
-        <CommandInput
-          v-model="search"
-          :placeholder="$i18n.t.value.inputBox.searchModels"
-          :label="$i18n.t.value.inputBox.searchModels"
-        />
-        <!--
-          列表的可访问名。cmdk 的 Command.List 恒定带 aria-label="Suggestions"
-          （写死的英文，上游两个调用点都没覆盖），Reka 的 ListboxContent 不带名字。
-          按"primitive 的可访问名照抄"那条约定走 primitives.*。
-        -->
-        <CommandList :aria-label="$i18n.t.value.primitives.suggestions">
-          <CommandItem
-            v-for="model in filteredModels"
-            :key="model.id"
-            :value="model.name"
-            @select="selectModel(model)"
-          >
-            <div class="flex min-w-0 flex-1 flex-col">
-              <span class="flex-1 truncate text-left text-xs">{{
-                model.display_name
-              }}</span>
-              <span class="text-muted-foreground truncate text-[10px]">{{
-                model.model
-              }}</span>
-            </div>
-            <Check
-              v-if="model.name === selectedModel?.name"
-              :size="16"
-              class="ml-auto"
-            />
-            <div v-else class="ml-auto size-4" />
-          </CommandItem>
-        </CommandList>
-      </Command>
-    </DialogContent>
-  </Dialog>
+    </PopoverTrigger>
+    <PopoverPickerContent
+      ref="content"
+      :aria-label="$i18n.t.value.modelPicker.title"
+      side="top"
+      align="end"
+      :side-offset="8"
+      :collision-padding="8"
+      @open-auto-focus="
+        $event.preventDefault();
+        focusInitial();
+      "
+    >
+      <div class="min-h-0 overflow-x-hidden overflow-y-auto py-0.5">
+        <div
+          v-if="!ordered.length"
+          class="text-muted-foreground py-6 text-center text-sm"
+        >
+          {{ $i18n.t.value.modelPicker.noModels }}
+        </div>
+        <section
+          v-for="group in groups"
+          :key="group.label"
+          role="group"
+          :aria-label="group.label"
+        >
+          <h3 class="text-muted-foreground px-2 py-1.5 text-xs font-medium">
+            {{ group.label }}
+          </h3>
+          <ul class="px-1 pb-0.5">
+            <li
+              v-for="model in group.models"
+              :key="model.name"
+              class="hover:bg-accent focus-within:bg-accent flex min-h-9 min-w-0 items-stretch rounded-sm"
+            >
+              <button
+                type="button"
+                class="focus-visible:ring-ring flex min-w-0 flex-1 items-center gap-2 rounded-l-sm px-2 py-1.5 outline-none focus-visible:ring-2"
+                :aria-label="`${model.display_name} (${model.name})`"
+                :aria-current="
+                  model.name === selectedModel?.name ? 'true' : undefined
+                "
+                data-model-picker-option="true"
+                :data-model-name="model.name"
+                :data-current-model="
+                  model.name === selectedModel?.name ? 'true' : undefined
+                "
+                @click="select(model)"
+                @focus="recordFocus(model.name, false)"
+                @keydown="onRowKeydown($event, model.name)"
+              >
+                <span class="flex min-w-0 flex-1 flex-col text-left"
+                  ><span class="truncate text-xs">{{ model.display_name }}</span
+                  ><span
+                    class="text-muted-foreground truncate text-[10px] leading-4"
+                    >{{ model.model }}</span
+                  ></span
+                >
+                <Check
+                  v-if="model.name === selectedModel?.name"
+                  aria-hidden="true"
+                  class="size-4 shrink-0"
+                />
+              </button>
+              <Button
+                v-if="userId !== null"
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="size-8 shrink-0 rounded-l-none"
+                :class="
+                  favorites.names.value.includes(model.name)
+                    ? 'text-amber-500'
+                    : ''
+                "
+                :aria-label="
+                  $i18n.t.value.modelPicker.favoriteModel(
+                    model.display_name,
+                    model.name,
+                  )
+                "
+                :aria-pressed="favorites.names.value.includes(model.name)"
+                :data-model-favorite="model.name"
+                :disabled="auth.isFetching.value || !favorites.canEdit.value"
+                @click="toggleFavorite(model, $event)"
+                @focus="recordFocus(model.name, true)"
+                @keydown="onRowKeydown($event, model.name)"
+              >
+                <Star
+                  aria-hidden="true"
+                  class="size-4"
+                  :class="
+                    favorites.names.value.includes(model.name) && 'fill-current'
+                  "
+                />
+              </Button>
+            </li>
+          </ul>
+        </section>
+      </div>
+      <p
+        v-if="favorites.persistence.value === 'memory' && userId !== null"
+        role="status"
+        class="text-muted-foreground shrink-0 border-t px-3 py-2 text-xs"
+      >
+        {{ $i18n.t.value.modelPicker.sessionOnly }}
+      </p>
+    </PopoverPickerContent>
+  </Popover>
 </template>

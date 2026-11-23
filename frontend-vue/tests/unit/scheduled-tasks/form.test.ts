@@ -1,223 +1,204 @@
-/*
-  【文件职责】     固定 scheduled-task 草稿、可提交判定与 Gateway payload 合同。
-  【架构位置】     纯逻辑测试
-  【主要导出】     无；Vitest cases
-  【依赖关系】     core/scheduled-tasks/form · recipes · types
-  【边界与注意】   Gateway 只支持 once/cron；PATCH 不得出现
-                   thread_id/schedule_type/enabled/non_interactive。
-
-                   这一层**不做校验也不抛异常**：能不能提交只由
-                   `isScheduledTaskDraftComplete` 回答，其余输入交给 Gateway 的 422。
-                   run_at 进 draft 时已经是 UTC ISO（ScheduleInput 转好的），所以这里
-                   只搬运，不再做时区换算——DST 的换算合同在 core/scheduled-tasks/cron
-                   的用例里。
-*/
 import { describe, expect, it } from "vitest";
-
 import {
-  applyScheduledTaskRecipe,
-  buildScheduledTaskCreatePayload,
-  buildScheduledTaskUpdatePayload,
-  createScheduledTaskDraft,
-  draftForScheduledTask,
-  isScheduledTaskDraftComplete,
-} from "@/core/scheduled-tasks/form";
-import { RECIPES } from "@/core/scheduled-tasks/recipes";
-import type { ScheduledTask } from "@/core/scheduled-tasks/types";
-
-const CRON_TASK: ScheduledTask = {
-  id: "task-1",
-  thread_id: "thread-1",
-  context_mode: "reuse_thread",
-  title: "Daily summary",
-  prompt: "Summarize the thread",
-  schedule_type: "cron",
-  schedule_spec: { cron: "0 9 * * *" },
-  timezone: "Asia/Shanghai",
-  status: "enabled",
-  next_run_at: "2026-07-02T01:00:00+00:00",
-  last_run_at: null,
-  last_run_id: null,
-  last_thread_id: null,
-  last_error: null,
-  run_count: 0,
-  created_at: "2026-07-01T00:00:00+00:00",
-  updated_at: "2026-07-01T00:00:00+00:00",
-};
-
-function completeDraft() {
-  return {
-    ...createScheduledTaskDraft(),
-    title: "Daily",
-    prompt: "Summarize",
-  };
-}
-
-describe("scheduled-task draft", () => {
-  it("leaves the timezone empty for ScheduleInput to fill on mount", () => {
-    expect(createScheduledTaskDraft().schedule.timezone).toBe("");
-  });
-
-  it("uses the route thread only as an editable default", () => {
-    const draft = createScheduledTaskDraft({ routeThreadId: "thread-route" });
-    expect(draft.contextMode).toBe("reuse_thread");
-    expect(draft.threadId).toBe("thread-route");
-    expect(createScheduledTaskDraft().contextMode).toBe("fresh_thread_per_run");
-  });
-
-  it("hands the stored run_at to ScheduleInput without converting it", () => {
-    const draft = draftForScheduledTask({
-      ...CRON_TASK,
-      schedule_type: "once",
-      schedule_spec: { run_at: "2026-07-02T01:00:00+00:00" },
+  initialFormState,
+  validateForm,
+  createPayload,
+  updatePayload,
+} from "@/core/scheduled-tasks/form-state";
+import { task } from "./fixtures";
+const initial = () => initialFormState({ mode: "create" }, "(copy)").state;
+const complete = () => ({ ...initial(), title: "Daily", prompt: "Summarize" });
+const valid = { maxRuns: null, endAt: null };
+describe("current scheduler form contract", () => {
+  it("starts fresh with the default agent and lets the schedule input fill timezone", () => {
+    expect(initial()).toMatchObject({
+      contextMode: "fresh_thread_per_run",
+      chatId: "",
+      assistantId: "lead_agent",
+      schedule: { timezone: "" },
     });
-    expect(draft.schedule.schedule_spec.run_at).toBe(
-      "2026-07-02T01:00:00+00:00",
-    );
-    expect(draft.schedule.schedule_spec.cron).toBeUndefined();
   });
-});
-
-describe("isScheduledTaskDraftComplete", () => {
-  it("requires a title, a prompt and a schedule", () => {
-    expect(isScheduledTaskDraftComplete(completeDraft())).toBe(true);
-    expect(
-      isScheduledTaskDraftComplete({ ...completeDraft(), title: "" }),
-    ).toBe(false);
-    expect(
-      isScheduledTaskDraftComplete({ ...completeDraft(), prompt: "" }),
-    ).toBe(false);
-    expect(
-      isScheduledTaskDraftComplete({
-        ...completeDraft(),
-        schedule: {
-          schedule_type: "once",
-          schedule_spec: {},
-          timezone: "UTC",
-        },
-      }),
-    ).toBe(false);
+  it.each(["title", "prompt"] as const)("requires %s", (field) => {
+    expect(validateForm({ ...complete(), [field]: "" })).toEqual({
+      ok: false,
+      error: "required",
+    });
   });
-
-  it("requires a target thread only in reuse mode", () => {
-    const reuse = { ...completeDraft(), contextMode: "reuse_thread" } as const;
-    expect(isScheduledTaskDraftComplete({ ...reuse, threadId: "" })).toBe(
-      false,
-    );
-    expect(isScheduledTaskDraftComplete({ ...reuse, threadId: "t-1" })).toBe(
-      true,
-    );
-    // fresh 模式下残留的 thread id 不影响判定，也不进 payload。
+  it("requires a schedule and a reused target", () => {
     expect(
-      isScheduledTaskDraftComplete({
-        ...completeDraft(),
-        threadId: "stale-thread",
-      }),
+      validateForm({
+        ...complete(),
+        schedule: { schedule_type: "once", schedule_spec: {}, timezone: "UTC" },
+      }).ok,
+    ).toBe(false);
+    expect(
+      validateForm({ ...complete(), contextMode: "reuse_thread" }).ok,
+    ).toBe(false);
+    expect(
+      validateForm({
+        ...complete(),
+        contextMode: "reuse_thread",
+        chatId: "thread",
+      }).ok,
     ).toBe(true);
   });
-});
-
-describe("scheduled-task payloads", () => {
-  it("sends an explicit null thread_id in fresh mode", () => {
-    const payload = buildScheduledTaskCreatePayload({
-      ...completeDraft(),
-      threadId: "stale-thread",
-      schedule: {
-        schedule_type: "cron",
-        schedule_spec: { cron: "0 9 * * *" },
-        timezone: "UTC",
-      },
-    });
-
-    expect(payload).toEqual({
-      context_mode: "fresh_thread_per_run",
-      thread_id: null,
-      title: "Daily",
-      prompt: "Summarize",
-      schedule_type: "cron",
-      schedule_spec: { cron: "0 9 * * *" },
-      timezone: "UTC",
-    });
-    expect(JSON.stringify(payload)).not.toContain("non_interactive");
-    expect(JSON.stringify(payload)).not.toContain('"enabled"');
-  });
-
-  it("carries the target thread in reuse mode", () => {
+  it("includes explicit null thread for fresh and a target only for reuse", () => {
     expect(
-      buildScheduledTaskCreatePayload({
-        ...completeDraft(),
-        contextMode: "reuse_thread",
-        threadId: "thread-9",
-      }),
-    ).toMatchObject({ context_mode: "reuse_thread", thread_id: "thread-9" });
-  });
-
-  it("carries the UTC ISO run_at through untouched", () => {
+      createPayload({ ...complete(), chatId: "stale" }, valid),
+    ).toMatchObject({ thread_id: null, assistant_id: "lead_agent" });
     expect(
-      buildScheduledTaskCreatePayload({
-        ...completeDraft(),
-        schedule: {
-          schedule_type: "once",
-          schedule_spec: { run_at: "2026-07-02T01:00:00+00:00" },
-          timezone: "Asia/Shanghai",
-        },
-      }),
-    ).toMatchObject({
+      createPayload(
+        { ...complete(), contextMode: "reuse_thread", chatId: "thread" },
+        valid,
+      ),
+    ).toMatchObject({ thread_id: "thread" });
+  });
+  it("preserves once precision through creation and untouched PATCH", () => {
+    const source = task({
       schedule_type: "once",
-      schedule_spec: { run_at: "2026-07-02T01:00:00+00:00" },
-      timezone: "Asia/Shanghai",
+      schedule_spec: { run_at: "2030-01-01T09:00:43.123Z" },
+    });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    expect(createPayload(state, valid).schedule_spec.run_at).toBe(
+      source.schedule_spec.run_at,
+    );
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({});
+  });
+  it("preserves original interval seconds", () => {
+    const source = task({
+      schedule_type: "interval",
+      schedule_spec: { every_seconds: 91 },
+    });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    expect(createPayload(state, valid).schedule_spec.every_seconds).toBe(91);
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({});
+  });
+  it("keeps canonical equivalent cron out of PATCH so completed tasks are not rearmed", () => {
+    const source = task({
+      status: "completed",
+      schedule_spec: { cron: "0 09 * * 0,6" },
+    });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    state.schedule.schedule_spec = { cron: "0 9 * * 6,0" };
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({});
+  });
+  it("sends only changed fields and omission preserves default assistant", () => {
+    const source = task();
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    state.title = "Renamed";
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({ title: "Renamed" });
+    state.assistantId = "custom";
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({ title: "Renamed", assistant_id: "custom" });
+  });
+  it("clears goal, stop rule and safety caps with null", () => {
+    const source = task({
+      goal_objective: "Find it",
+      stop_condition: "Published",
+      max_runs: 3,
+      end_at: "2030-01-10T09:00:32Z",
+    });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    state.goal = "";
+    state.stopCondition = "";
+    state.maxRuns = "";
+    state.endAtLocal = "";
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({
+      goal_objective: null,
+      stop_condition: null,
+      max_runs: null,
+      end_at: null,
     });
   });
-
-  it("falls back to UTC when ScheduleInput has not reported a timezone", () => {
-    expect(buildScheduledTaskCreatePayload(completeDraft()).timezone).toBe(
-      "UTC",
-    );
+  it("does not touch stop condition while chat tools are unavailable", () => {
+    const source = task({ stop_condition: "Published" });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    state.stopCondition = "";
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: false }),
+    ).toEqual({});
   });
-
-  it("builds PATCH from only the four Gateway-owned mutable fields", () => {
-    const draft = draftForScheduledTask(CRON_TASK);
-    draft.title = "Updated";
-    draft.schedule.schedule_spec = { cron: "0 10 * * 1" };
-
-    const payload = buildScheduledTaskUpdatePayload(draft);
-    expect(payload).toEqual({
-      title: "Updated",
-      prompt: "Summarize the thread",
+  it("rejects goals on reused conversations and clears an existing goal when switching", () => {
+    expect(
+      validateForm({
+        ...complete(),
+        contextMode: "reuse_thread",
+        chatId: "thread",
+        goal: "Find it",
+      }),
+    ).toEqual({ ok: false, error: "goalNeedsFresh" });
+    const source = task({ goal_objective: "Find it" });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    Object.assign(state, {
+      contextMode: "reuse_thread",
+      chatId: "thread",
+      goal: "",
+    });
+    expect(
+      updatePayload(source, state, valid, { includeStopCondition: true }),
+    ).toEqual({
+      context_mode: "reuse_thread",
+      thread_id: "thread",
+      goal_objective: null,
+    });
+  });
+  it.each(["0", "1.5", "bad"])("rejects invalid max runs %s", (maxRuns) => {
+    expect(validateForm({ ...complete(), maxRuns })).toEqual({
+      ok: false,
+      error: "invalidMaxRuns",
+    });
+  });
+  it("preserves an untouched DST fold and fractional end time", () => {
+    const source = task({
+      timezone: "America/New_York",
+      end_at: "2030-11-03T06:30:45.123Z",
+    });
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    const checked = validateForm(state, source.end_at);
+    expect(checked).toEqual({ ok: true, maxRuns: null, endAt: source.end_at });
+    if (checked.ok)
+      expect(
+        updatePayload(source, state, checked, { includeStopCondition: true }),
+      ).toEqual({});
+  });
+  it("rejects nonexistent end wall time", () => {
+    expect(
+      validateForm({
+        ...complete(),
+        endAtLocal: "2030-03-10T02:30",
+        schedule: { ...initial().schedule, timezone: "America/New_York" },
+      }),
+    ).toEqual({ ok: false, error: "invalidEndAt" });
+  });
+  it("changed end time and schedule sends only those fields", () => {
+    const source = task();
+    const state = initialFormState({ mode: "edit", task: source }, "").state;
+    state.schedule = {
+      ...state.schedule,
       schedule_spec: { cron: "0 10 * * 1" },
-      timezone: "Asia/Shanghai",
+    };
+    expect(
+      updatePayload(
+        source,
+        state,
+        { maxRuns: null, endAt: "2030-01-03T12:00:00Z" },
+        { includeStopCondition: true },
+      ),
+    ).toEqual({
+      schedule_spec: { cron: "0 10 * * 1" },
+      timezone: "UTC",
+      end_at: "2030-01-03T12:00:00Z",
     });
-    expect(payload).not.toHaveProperty("context_mode");
-    expect(payload).not.toHaveProperty("thread_id");
-    expect(payload).not.toHaveProperty("schedule_type");
-    expect(payload).not.toHaveProperty("enabled");
-  });
-});
-
-describe("recipes", () => {
-  it("applies a recipe as form state and keeps placeholders", () => {
-    const draft = createScheduledTaskDraft({ routeThreadId: "thread-route" });
-    const recipe = RECIPES.find((candidate) => candidate.id === "issues")!;
-    const applied = applyScheduledTaskRecipe(draft, recipe, "Issue triage");
-
-    expect(applied.title).toBe("Issue triage");
-    expect(applied.prompt).toContain("{{repo}}");
-    expect(applied.contextMode).toBe("fresh_thread_per_run");
-    expect(applied.schedule.schedule_spec).toEqual({ cron: "0 9 * * *" });
-    // 切回 reuse 时刚才填的线程还在——React 的 applyRecipe 没有清它。
-    expect(applied.threadId).toBe("thread-route");
-  });
-
-  it("hands the recipe's empty timezone back to ScheduleInput", () => {
-    const recipe = RECIPES[0]!;
-    const applied = applyScheduledTaskRecipe(
-      {
-        ...completeDraft(),
-        schedule: { ...completeDraft().schedule, timezone: "Asia/Tokyo" },
-      },
-      recipe,
-      "Trending",
-    );
-    expect(applied.schedule.timezone).toBe("");
   });
 });

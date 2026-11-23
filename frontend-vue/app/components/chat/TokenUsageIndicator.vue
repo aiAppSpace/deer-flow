@@ -47,6 +47,7 @@ const props = withDefaults(
     preferences: TokenUsagePreferences;
   }>(),
   {
+    threadId: undefined,
     pendingMessages: () => [],
     backendUsage: null,
     contextUsage: null,
@@ -129,7 +130,7 @@ function presetDescription(value: TokenUsageViewPreset) {
         >
           {{ percentage }}%
         </span>
-        <ChevronDown :size="12" />
+        <ChevronDown class="size-3" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end" side="bottom" class="w-80">

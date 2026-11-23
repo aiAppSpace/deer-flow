@@ -45,7 +45,7 @@ test.describe("真流 gate", () => {
     await textarea.press("Enter");
 
     const answer = page.locator(
-      '[data-testid="message-list"] > [data-role="ai"]',
+      '[data-testid="message-list"] > [data-message-group-index] > [data-role="ai"]',
     );
     await expect(answer).toContainText("Streaming paragraph 18", {
       timeout: 20_000,
@@ -79,7 +79,7 @@ test.describe("真流 gate", () => {
     await textarea.press("Enter");
 
     const answer = page.locator(
-      '[data-testid="message-list"] > [data-role="ai"]',
+      '[data-testid="message-list"] > [data-message-group-index] > [data-role="ai"]',
     );
     await expect(answer).toContainText("Streaming paragraph 10", {
       timeout: 20_000,
@@ -136,23 +136,23 @@ test.describe("真流 gate", () => {
     await textarea.fill("Build a deck");
     await textarea.press("Enter");
 
-    const items = page.locator('[data-testid="message-list"] > [data-role]');
+    const items = page.locator(
+      '[data-testid="message-list"] > [data-message-group-index] > [data-role]',
+    );
     await expect(items).toHaveCount(2, { timeout: 20_000 });
     /*
       正面特征：**五片拼起来的全文**。任何一片被覆盖而不是追加，这里都会拿到一个
       截断的字符串，而截断的字符串同样「非空」。
 
-      **锚定开头，不再要求整块只有这一句**：这一块是 assistant 的**整个回合**，
-      跑完之后里面还会多一行「本次任务耗时」（上游 message-list.tsx 的
-      `withRunDuration` 把正文和时长包在同一个 div 里，wave 179 本仓补齐了同一条）。
-      旧写法的 `toHaveText("…")` 顺带断言了「这一块里没有别的东西」——那从来不是
-      这条用例要守的东西，而且上游也不成立。`^` 照样挡得住截断与重复。
+      锚定拼接后的正文开头；同一物理分组中的时长在下面单独断言。
     */
     await expect(items.nth(1)).toHaveText(/^Hello from DeerFlow!/, {
       timeout: 20_000,
     });
-    // 时长是这一块里的**另一个**元素，不是正文的一部分——顺手钉住，免得下次又被读成正文。
-    await expect(items.nth(1).getByTestId("run-duration")).toBeVisible();
+    // The duration precedes the AI content inside the same physical group row.
+    const answerRow = items.nth(1).locator("..");
+    await expect(answerRow).toHaveAttribute("data-message-group-index", "1");
+    await expect(answerRow.getByTestId("run-duration")).toBeVisible();
     await expect(items.nth(0)).toHaveAttribute("data-role", "human");
     await expect(items.nth(1)).toHaveAttribute("data-role", "ai");
   });
@@ -163,7 +163,9 @@ test.describe("真流 gate", () => {
     await textarea.fill("Build a deck");
     await textarea.press("Enter");
 
-    const items = page.locator('[data-testid="message-list"] > [data-role]');
+    const items = page.locator(
+      '[data-testid="message-list"] > [data-message-group-index] > [data-role]',
+    );
     await expect(items).toHaveCount(2, { timeout: 20_000 });
     // 假 Gateway 在**每一片之前**都发一条 `: keep-alive`。它必须在传输层
     // 就被吃掉（05 L9）；漏进 reducer 会多出若干条空消息。
@@ -179,7 +181,9 @@ test.describe("真流 gate", () => {
     await textarea.fill("Research the market");
     await textarea.press("Enter");
 
-    const retry = page.getByTestId("llm-retry-status");
+    const retry = page
+      .getByTestId("workspace-toaster")
+      .getByText("The model is busy. Retrying…", { exact: true });
     await expect(retry).toHaveText("The model is busy. Retrying…", {
       timeout: 20_000,
     });
@@ -218,13 +222,13 @@ test.describe("真流 gate", () => {
     // 它现在落在 workspace toaster 里（上游 `core/threads/hooks.ts:1805` 同样是
     // 一条 toast）；此前是 `data-testid="stream-warning"` 那条内联横幅，而那条
     // **只增不减**，一次性的警告会永远挂在屏幕上。
-    // 仍然按 testid 取容器：这一屏还有别的 role="status"（工具条的上下文用量徽标
-    // 一直在，流式期间 MessageList 再挂一条 RunActivity），裸 getByRole("status")
-    // 会先命中徽标、断言到一个与 A7 无关的元素上。
+    // 从常驻通知区域中按完整文案定位，避免命中工具条或流式活动状态。
     const warning = page
       .getByTestId("workspace-toaster")
-      .getByRole("status")
-      .first();
+      .getByText(
+        "Some live updates expired. The conversation was restored from saved state.",
+        { exact: true },
+      );
     await expect(warning).toBeVisible({ timeout: 20_000 });
     await expect(warning).toContainText(
       "Some live updates expired. The conversation was restored from saved state.",
@@ -233,7 +237,9 @@ test.describe("真流 gate", () => {
 
     // 第二条：续传**真的带了游标**。假 Gateway 把收到的 Last-Event-ID
     // 回显成一条消息；拿到 `resumed@none` 就说明是从头重放而不是续传。
-    const items = page.locator('[data-testid="message-list"] > [data-role]');
+    const items = page.locator(
+      '[data-testid="message-list"] > [data-message-group-index] > [data-role]',
+    );
     await expect(items.filter({ hasText: "resumed@e8" })).toHaveCount(1, {
       timeout: 20_000,
     });

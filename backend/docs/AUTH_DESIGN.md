@@ -266,7 +266,7 @@ DeerFlow 支持四类彼此独立的 HTTP 身份来源。它们共享同一套 *
 | 方式 | 典型入口 | 写入 `users` 表 | 外部身份映射 | 用户 / thread 隔离 |
 |---|---|---|---|---|
 | **浏览器本地账号** | `POST /api/v1/auth/login/local` 或 `/register` → `access_token` cookie | 是 | 邮箱即 DeerFlow `users.id` | `threads_meta.user_id = users.id` |
-| **OIDC / SSO** | `GET /api/v1/auth/oauth/{provider}` → callback → cookie | 是（自动创建或关联） | IdP `sub` → `users.oauth_id` | 同上 |
+| **OIDC / SSO** | `GET /api/v1/auth/oauth/{provider}` → callback → cookie | 是（自动创建或复用已关联身份） | IdP `sub` → `users.oauth_id` | 同上 |
 | **IM Channel 绑定** | Settings 里 Connect + 平台侧 `/connect <code>` | 绑定到**已注册** DeerFlow 用户 | `channel_connections` / `channel_conversations` | `owner_user_id` → `users.id` |
 | **Internal Auth（直接 HTTP）** | `X-DeerFlow-Internal-Token` + `X-DeerFlow-Owner-User-Id` | **否**（合成 internal 用户） | 平台在 header 中自声明 owner 字符串 | `threads_meta.user_id = owner`（经 `make_safe_user_id` 规范化） |
 
@@ -458,7 +458,7 @@ thread 归属读取 Gateway 所配置数据库（`config.yaml` 的 `database`）
 | `app/gateway/auth/jwt.py` | JWT 创建与解析 |
 | `app/gateway/auth/oidc.py` | OIDC 核心服务：discovery、token exchange、ID token 验证、userinfo |
 | `app/gateway/auth/oidc_state.py` | OIDC state 管理：signed cookie 存储 state/nonce/code_verifier |
-| `app/gateway/auth/user_provisioning.py` | OIDC 用户自动创建、email linking、domain 限制 |
+| `app/gateway/auth/user_provisioning.py` | OIDC 用户自动创建、同 provider/subject 复用、邮箱冲突拒绝及 domain 限制 |
 | `app/gateway/auth/models.py` | 用户数据模型（含 `oauth_provider` / `oauth_id`） |
 | `packages/harness/deerflow/config/auth_config.py` | OIDC 配置模型（OIDCProviderConfig / OIDCAuthConfig） |
 | `app/gateway/auth/reset_admin.py` | 密码 reset CLI |

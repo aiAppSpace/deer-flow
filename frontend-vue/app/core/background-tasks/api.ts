@@ -20,8 +20,11 @@ function threadTasksUrl(threadId: string, path = ""): string {
 
 export async function fetchBackgroundTasks(
   threadId: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<BackgroundTask[]> {
-  const response = await fetch(`${threadTasksUrl(threadId)}?limit=20`);
+  const response = await fetch(`${threadTasksUrl(threadId)}?limit=20`, {
+    signal: options.signal,
+  });
   if (!response.ok) {
     await throwGatewayApiError(
       response,
@@ -34,9 +37,11 @@ export async function fetchBackgroundTasks(
 export async function fetchBackgroundTask(
   threadId: string,
   taskId: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<BackgroundTaskDetail> {
   const response = await fetch(
     threadTasksUrl(threadId, `/${encodeURIComponent(taskId)}`),
+    { signal: options.signal },
   );
   if (!response.ok) {
     await throwGatewayApiError(

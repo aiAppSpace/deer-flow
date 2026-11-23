@@ -94,9 +94,9 @@ describe("a textarea is never locked with `disabled`", () => {
     // Without this the whole file passes when the tags get renamed or the
     // scan root moves, and a green run would mean "found nothing to check".
     expect(elements.length).toBeGreaterThanOrEqual(8);
-    expect(new Set(elements.map((element) => element.tag)).size).toBeGreaterThan(
-      1,
-    );
+    expect(
+      new Set(elements.map((element) => element.tag)).size,
+    ).toBeGreaterThan(1);
   });
 
   it("has no textarea whose disabled state is bound to an expression", () => {

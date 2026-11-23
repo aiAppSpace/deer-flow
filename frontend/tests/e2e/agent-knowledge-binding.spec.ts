@@ -45,11 +45,14 @@ for (const width of [1280, 390]) {
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(
       page
-        .getByRole("dialog", { name: "Agent settings", exact: true })
+        .getByRole("dialog", {
+          name: "Agent settings · researcher",
+          exact: true,
+        })
         .getByText("Company policies", { exact: true }),
     ).toBeVisible();
     const dialog = page.getByRole("dialog", {
-      name: "Agent settings",
+      name: "Agent settings · researcher",
       exact: true,
     });
     await expect(dialog).toHaveCSS("opacity", "1");
@@ -68,7 +71,10 @@ for (const width of [1280, 390]) {
     await page.getByTitle("Agent settings", { exact: true }).click();
     await expect(
       page
-        .getByRole("dialog", { name: "Agent settings", exact: true })
+        .getByRole("dialog", {
+          name: "Agent settings · researcher",
+          exact: true,
+        })
         .getByText("Company policies", { exact: true }),
     ).toBeVisible();
     // Saving another field must not overwrite a concurrently edited binding.

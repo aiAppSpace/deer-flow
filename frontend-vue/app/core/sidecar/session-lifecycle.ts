@@ -23,14 +23,17 @@ export function createSidecarSessionLifecycle(options: {
   setThreadId: (threadId: string | null) => void;
   findLatest: (input: {
     parentThreadId: string;
+    signal?: AbortSignal;
   }) => Promise<SidecarThreadIdentity | null>;
   createThread: (input: {
     parentThreadId: string;
     context: SidecarContext | SidecarContext[];
+    signal?: AbortSignal;
   }) => Promise<SidecarThreadIdentity>;
   onStateChange?: (state: SidecarSessionState) => void;
 }) {
   let active = true;
+  const controller = new AbortController();
   let state: SidecarSessionState = { phase: "idle", error: null };
   let restoreRequest: Promise<string | null> | null = null;
   let ensureRequest: Promise<string | null> | null = null;
@@ -54,6 +57,7 @@ export function createSidecarSessionLifecycle(options: {
       try {
         const restored = await options.findLatest({
           parentThreadId: options.parentThreadId,
+          signal: controller.signal,
         });
         if (!active) return null;
         const restoredThreadId = restored?.thread_id ?? null;
@@ -93,6 +97,7 @@ export function createSidecarSessionLifecycle(options: {
       try {
         const created = await options.createThread({
           parentThreadId: options.parentThreadId,
+          signal: controller.signal,
           context,
         });
         if (!active) return null;
@@ -114,6 +119,7 @@ export function createSidecarSessionLifecycle(options: {
 
   function dispose() {
     active = false;
+    controller.abort();
     restoreRequest = null;
     ensureRequest = null;
     state = { phase: "idle", error: null };

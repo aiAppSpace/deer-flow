@@ -36,6 +36,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import MAP from "../../../baseline/upstream-i18n-map.json";
@@ -50,9 +51,6 @@ const ALIASES: Record<string, string> = {
   // wave 28 两边同改浏览器关闭键：上游新加了 common.closeBrowser，
   // 本仓复用既有的 browser.close（`browser` 是本仓独有的块）。
   "common.closeBrowser": "browser.close",
-  // 本仓把会话列表的删除失败与重试放在 navigation.* 下（ThreadSidebar 用的就是它）。
-  "chats.deleteChatFailed": "navigation.deleteConversationFailed",
-  "chats.tryAgain": "navigation.tryAgain",
   // wave 169 两边同改历史加载占位：上游此前只有骨架、没有播报，本仓此前只有一行文字、
   // 没有骨架。两边都补齐之后上游新增了 conversation.loadingConversation，
   // 而本仓这句话早就在 messages.* 下（MessageList 一直在用）。
@@ -84,45 +82,61 @@ const vueDictionaryZh = fileURLToPath(
  * 只认字符串字面量：函数型词条（`(count) => …`）拿不到可比的值，
  * 它们仍然进 key 集合，只是不参与「两边同字」那一条。
  */
-function readDictionary(path: string) {
+function parseDictionary(source: string, path = "locale.ts") {
+  const file = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true);
   const keys = new Set<string>();
   const values = new Map<string, string>();
-  const stack: string[] = [];
-  let inTemplate = false;
-  for (const rawLine of readFileSync(path, "utf8").split("\n")) {
-    // 转义字符先剥掉，`\`` 不该被当成模板的起止。
-    const backticks = (rawLine.replaceAll(/\\./g, "").match(/`/g) ?? []).length;
-    const togglesTemplate = backticks % 2 === 1;
-    if (inTemplate) {
-      if (togglesTemplate) inTemplate = false;
-      continue;
+  function walk(object: ts.ObjectLiteralExpression, prefix: string[]) {
+    for (const property of object.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const name =
+        ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
+          ? property.name.text
+          : null;
+      if (name === null) continue;
+      const key = [...prefix, name];
+      if (ts.isObjectLiteralExpression(property.initializer)) {
+        walk(property.initializer, key);
+      } else {
+        keys.add(key.join("."));
+        if (ts.isStringLiteral(property.initializer)) {
+          values.set(key.join("."), property.initializer.text);
+        }
+      }
     }
-    const line = rawLine.trim();
-    const open = /^([A-Za-z_$][\w$]*): \{$/.exec(line);
-    if (open) {
-      stack.push(open[1]!);
-      continue;
+  }
+  for (const statement of file.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        declaration.initializer &&
+        ts.isObjectLiteralExpression(declaration.initializer)
+      ) {
+        walk(declaration.initializer, []);
+      }
     }
-    if (line === "}," || line === "}") {
-      stack.pop();
-      continue;
-    }
-    const leaf = /^([A-Za-z_$][\w$]*):/.exec(line);
-    if (leaf && stack.length > 0) {
-      const key = [...stack, leaf[1]!].join(".");
-      keys.add(key);
-      const literal = /^[A-Za-z_$][\w$]*: "((?:\\.|[^"\\])*)",?$/.exec(line);
-      if (literal) values.set(key, literal[1]!);
-    }
-    /*
-      **开启模板的那一行本身要先当普通行解析完**：`addServerPlaceholder: \`{`
-      既是一条 key，又是一段跨行模板的开头。先 continue 再置位的话，这条 key
-      会凭空消失——而它消失得毫无声息，只表现为「上游少了一条 key」。
-    */
-    if (togglesTemplate) inTemplate = true;
   }
   return { keys, values };
 }
+
+function readDictionary(path: string) {
+  return parseDictionary(readFileSync(path, "utf8"), path);
+}
+
+it("dictionary extraction preserves object scope across arrays and template literals", () => {
+  const parsed = parseDictionary(
+    'export const locale = { inputBox: { suggestions: [{ prompt: "example" }], afterArray: "visible", example: `{"server": {}}`, afterTemplate: "also visible" }, next: { title: "Next" } };',
+  );
+  expect([...parsed.keys]).toEqual([
+    "inputBox.suggestions",
+    "inputBox.afterArray",
+    "inputBox.example",
+    "inputBox.afterTemplate",
+    "next.title",
+  ]);
+  expect(parsed.values.get("inputBox.afterArray")).toBe("visible");
+  expect(parsed.values.get("inputBox.afterTemplate")).toBe("also visible");
+});
 
 /**
  * **`describe.skipIf` 跳过的是用例，不是收集。** 工厂函数照样执行一次，所以

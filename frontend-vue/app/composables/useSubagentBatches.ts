@@ -19,11 +19,11 @@
 
 import {
   useInfiniteQuery,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/vue-query";
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
+import { useScopedGatewayRequests } from "@/composables/useScopedGatewayRequests";
 
 import {
   controlSubagentBatch,
@@ -49,7 +49,8 @@ export function useSubagentBatches(
 ) {
   return useQuery({
     queryKey: computed(() => subagentBatchKeys.list(toValue(threadId))),
-    queryFn: () => fetchSubagentBatches(toValue(threadId)),
+    queryFn: ({ signal }) =>
+      fetchSubagentBatches(toValue(threadId), { signal }),
     enabled: computed(
       () => toValue(options.enabled) !== false && Boolean(toValue(threadId)),
     ),
@@ -75,10 +76,11 @@ export function useSubagentBatchItems(
     queryKey: computed(() =>
       subagentBatchKeys.items(toValue(threadId), toValue(batchId)),
     ),
-    queryFn: ({ pageParam }) =>
+    queryFn: ({ pageParam, signal }) =>
       fetchSubagentBatchItems(toValue(threadId), toValue(batchId), {
         offset: Number(pageParam),
         limit: SUBAGENT_BATCH_ITEMS_PAGE_SIZE,
+        signal,
       }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) =>
@@ -104,20 +106,43 @@ export function useControlSubagentBatch(
   options: { onError?: (error: Error) => void } = {},
 ) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      batchId,
-      action,
-    }: {
-      batchId: string;
-      action: SubagentBatchAction;
-    }) => controlSubagentBatch(toValue(threadId), batchId, action),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: subagentBatchKeys.list(toValue(threadId)),
-      }),
-    onError: (error: Error) => options.onError?.(error),
+  const requests = useScopedGatewayRequests();
+  const mutation = requests.mutation({
+    mutationFn: (
+      {
+        thread,
+        batchId,
+        action,
+      }: {
+        thread: string;
+        batchId: string;
+        action: SubagentBatchAction;
+      },
+      signal,
+    ) => controlSubagentBatch(thread, batchId, action, { signal }),
+    onSuccess: (_result, { thread }) => {
+      return queryClient.invalidateQueries({
+        queryKey: subagentBatchKeys.list(thread),
+      });
+    },
+    onError: (error: Error, variables) => {
+      if (variables.thread === toValue(threadId)) options.onError?.(error);
+    },
   });
+  const snapshot = (input: {
+    batchId: string;
+    action: SubagentBatchAction;
+  }) => ({
+    ...input,
+    thread: toValue(threadId),
+  });
+  return {
+    ...mutation,
+    mutate: (input: { batchId: string; action: SubagentBatchAction }) =>
+      mutation.mutate(snapshot(input)),
+    mutateAsync: (input: { batchId: string; action: SubagentBatchAction }) =>
+      mutation.mutateAsync(snapshot(input)),
+  };
 }
 
 export function useRetrySubagentBatchItem(
@@ -126,18 +151,45 @@ export function useRetrySubagentBatchItem(
   options: { onError?: (error: Error) => void } = {},
 ) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (itemId: string) =>
-      retrySubagentBatchItem(toValue(threadId), toValue(batchId), itemId),
-    onSuccess: () => {
-      const thread = toValue(threadId);
+  const requests = useScopedGatewayRequests();
+  const mutation = requests.mutation({
+    mutationFn: (
+      {
+        thread,
+        batch,
+        itemId,
+      }: {
+        thread: string;
+        batch: string;
+        itemId: string;
+      },
+      signal,
+    ) => retrySubagentBatchItem(thread, batch, itemId, { signal }),
+    onSuccess: (_result, { thread, batch }) => {
       void queryClient.invalidateQueries({
         queryKey: subagentBatchKeys.list(thread),
       });
       void queryClient.invalidateQueries({
-        queryKey: subagentBatchKeys.items(thread, toValue(batchId)),
+        queryKey: subagentBatchKeys.items(thread, batch),
       });
     },
-    onError: (error: Error) => options.onError?.(error),
+    onError: (error: Error, variables) => {
+      if (
+        variables.thread === toValue(threadId) &&
+        variables.batch === toValue(batchId)
+      )
+        options.onError?.(error);
+    },
   });
+  const snapshot = (itemId: string) => ({
+    thread: toValue(threadId),
+    batch: toValue(batchId),
+    itemId,
+  });
+  return {
+    ...mutation,
+    variables: computed(() => mutation.variables.value?.itemId),
+    mutate: (itemId: string) => mutation.mutate(snapshot(itemId)),
+    mutateAsync: (itemId: string) => mutation.mutateAsync(snapshot(itemId)),
+  };
 }

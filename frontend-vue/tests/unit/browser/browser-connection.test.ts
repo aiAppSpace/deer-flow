@@ -62,7 +62,7 @@ function createHarness() {
     delay: number;
     cancelled: boolean;
   }> = [];
-  const fallbackNavigate = vi.fn();
+  const reconnectExhausted = vi.fn();
   const frames: Array<Blob | ArrayBuffer | string> = [];
   const controller = new BrowserConnectionController({
     buildUrl: (threadId, seedUrl) =>
@@ -80,10 +80,10 @@ function createHarness() {
       const timer = timers[Number(handle)];
       if (timer) timer.cancelled = true;
     },
-    onFallbackNavigate: fallbackNavigate,
+    onReconnectExhausted: reconnectExhausted,
     onFrame: (frame) => frames.push(frame),
   });
-  return { controller, sockets, timers, fallbackNavigate, frames };
+  return { controller, sockets, timers, reconnectExhausted, frames };
 }
 
 function runTimer(
@@ -126,7 +126,7 @@ describe("BrowserConnectionController", () => {
   });
 
   it("uses one bounded exponential reconnect path for error and close", () => {
-    const { controller, sockets, timers, fallbackNavigate } = createHarness();
+    const { controller, sockets, timers, reconnectExhausted } = createHarness();
     controller.start("thread-a");
     controller.sendInput({ type: "navigate", url: "https://pending.example" });
 
@@ -147,11 +147,8 @@ describe("BrowserConnectionController", () => {
     expect(controller.snapshot.status).toBe("error");
     expect(controller.snapshot.canRetry).toBe(true);
     expect(controller.snapshot.error).toMatch(/4501|unavailable/i);
-    expect(fallbackNavigate).toHaveBeenCalledOnce();
-    expect(fallbackNavigate).toHaveBeenCalledWith({
-      type: "navigate",
-      url: "https://pending.example",
-    });
+    expect(reconnectExhausted).toHaveBeenCalledOnce();
+    expect(reconnectExhausted).toHaveBeenCalledWith();
 
     controller.retry();
     expect(controller.snapshot.status).toBe("connecting");

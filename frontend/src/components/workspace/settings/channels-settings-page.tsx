@@ -7,7 +7,7 @@ import {
   PlugIcon,
   UnplugIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -142,7 +142,25 @@ function ChannelProviderItem({
   const configureMutation = useConfigureChannelProvider();
   const disconnectProviderMutation = useDisconnectChannelProvider();
   const disconnectConnectionMutation = useDisconnectChannelConnection();
-  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupOpen, setSetupOpenState] = useState(false);
+  const ownerGeneration = useRef(0);
+  const dialogGeneration = useRef(0);
+  useLayoutEffect(() => {
+    ownerGeneration.current += 1;
+    return () => {
+      ownerGeneration.current += 1;
+    };
+  }, [user?.id, provider.provider]);
+  const setSetupOpen = (open: boolean) => {
+    dialogGeneration.current++;
+    setSetupOpenState(open);
+  };
+  const captureDialogOwner = () => {
+    const owner = ownerGeneration.current;
+    const dialog = dialogGeneration.current;
+    return () =>
+      owner === ownerGeneration.current && dialog === dialogGeneration.current;
+  };
   const [setupStep, setSetupStep] = useState<"setup" | "binding">("setup");
   const openSetup = () => {
     setSetupStep("setup");
@@ -228,9 +246,14 @@ function ChannelProviderItem({
         : connectProvider.auth_mode === "deep_link"
           ? prepareConnectWindow()
           : null;
+    const isCurrent = captureDialogOwner();
     void connectMutation
       .mutateAsync(connectProvider.provider)
       .then((result) => {
+        if (!isCurrent()) {
+          closeConnectWindow(connectWindow);
+          return;
+        }
         if (result.url) {
           openConnectUrl(result.url, connectWindow);
           return;
@@ -240,6 +263,7 @@ function ChannelProviderItem({
       })
       .catch((error) => {
         closeConnectWindow(connectWindow);
+        if (!isCurrent()) return;
         toast.error(
           error instanceof Error ? error.message : t.channels.unavailable,
         );
@@ -515,6 +539,7 @@ function ChannelProviderItem({
         submitting={configureMutation.isPending}
         onOpenChange={setSetupOpen}
         onSubmit={(submitProvider, values) => {
+          const isCurrent = captureDialogOwner();
           const connectWindow =
             submitProvider.auth_mode === "deep_link"
               ? prepareConnectWindow()
@@ -522,6 +547,10 @@ function ChannelProviderItem({
           return configureMutation
             .mutateAsync({ provider: submitProvider.provider, values })
             .then((updated) => {
+              if (!isCurrent()) {
+                closeConnectWindow(connectWindow);
+                return;
+              }
               if (updated.provider === "wechat") return updated;
               setSetupOpen(false);
               if (providerCanConnect(updated)) {
@@ -533,6 +562,7 @@ function ChannelProviderItem({
             })
             .catch((error) => {
               closeConnectWindow(connectWindow);
+              if (!isCurrent()) return;
               toast.error(
                 error instanceof Error ? error.message : t.channels.unavailable,
               );

@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 
-import { QueryClientProvider } from "@/components/query-client-provider";
 /*
   The wrapper, not `sonner` directly. Importing `Toaster` straight from the
   library skips every binding the wrapper exists for, and all three are
@@ -42,23 +41,21 @@ export async function WorkspaceContent({
   );
 
   return (
-    <QueryClientProvider>
-      <UserPreferencesBoundary>
-        <ExtensionPageBootstrap />
-        <SidebarProvider className="h-screen" defaultOpen={initialSidebarOpen}>
-          <WorkspaceSidebar />
-          <SidebarInset className="min-w-0">
-            <GatewayOfflineBanner gatewayUnavailable={gatewayUnavailable} />
-            <ModelLoadErrorBanner gatewayUnavailable={gatewayUnavailable} />
-            {children}
-          </SidebarInset>
-        </SidebarProvider>
-        <CommandPalette />
-        <WorkspaceChannelRuntimeConfigHost />
-        <SettingsDialogHost />
-        <WorkspaceSettingsDeepLink />
-        <Toaster position="top-center" />
-      </UserPreferencesBoundary>
-    </QueryClientProvider>
+    <UserPreferencesBoundary>
+      <ExtensionPageBootstrap />
+      <SidebarProvider className="h-screen" defaultOpen={initialSidebarOpen}>
+        <WorkspaceSidebar />
+        <SidebarInset className="min-w-0">
+          <GatewayOfflineBanner gatewayUnavailable={gatewayUnavailable} />
+          <ModelLoadErrorBanner gatewayUnavailable={gatewayUnavailable} />
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+      <CommandPalette />
+      <WorkspaceChannelRuntimeConfigHost />
+      <SettingsDialogHost />
+      <WorkspaceSettingsDeepLink />
+      <Toaster position="top-center" />
+    </UserPreferencesBoundary>
   );
 }

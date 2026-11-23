@@ -355,7 +355,7 @@ function MCPServerList({
         open={editor !== null}
         onOpenChange={(open) => !open && !isWriting && closeEditor()}
       >
-        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-y-auto sm:max-w-2xl">
           <DialogHeader className="shrink-0 pr-6 break-words">
             <DialogTitle>
               {editor?.mode === "edit"
@@ -363,7 +363,7 @@ function MCPServerList({
                 : t.settings.tools.addServer}
             </DialogTitle>
           </DialogHeader>
-          <div className="-m-1 flex min-h-0 flex-col gap-4 overflow-y-auto p-1">
+          <div className="-m-1 flex min-h-0 flex-none flex-col gap-4 overflow-visible p-1">
             <DialogDescription className="shrink-0 text-center break-words sm:text-left">
               {editor?.mode === "edit"
                 ? t.settings.tools.editServerDescription.replace(
@@ -387,7 +387,7 @@ function MCPServerList({
               </p>
             )}
             <Textarea
-              className="field-sizing-fixed h-96 min-h-24 resize-none overflow-auto font-mono text-xs"
+              className="field-sizing-fixed h-96 max-h-[calc(100dvh-4rem-2px)] min-h-0 resize-none overflow-auto font-mono text-xs sm:max-h-[calc(100dvh-5rem-2px)]"
               aria-label={t.settings.tools.serverDefinitionLabel}
               spellCheck={false}
               value={definition}

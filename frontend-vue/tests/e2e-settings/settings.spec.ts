@@ -117,7 +117,7 @@ test.describe.serial("real Gateway settings", () => {
     await expect(page).toHaveURL(/\/login\?redirect=/);
   });
 
-  test("admin Memory UI exercises CSRF, CRUD, export, strict preview, real import, delete, and clear", async ({
+  test("admin Memory UI exercises CSRF, CRUD, export, legacy-compatible preview, real import, delete, and clear", async ({
     context,
     page,
   }) => {
@@ -149,6 +149,16 @@ test.describe.serial("real Gateway settings", () => {
       category: "contract",
       confidence: 0.8,
     });
+    // DeerMem stores an unfamiliar category as `other` plus the original
+    // categoryExtension. Editing must use the authoritative returned category.
+    expect((await created.json()).facts).toContainEqual(
+      expect.objectContaining({
+        content: "Real manager fact",
+        category: "other",
+        categoryExtension: "contract",
+        confidence: 0.8,
+      }),
+    );
     await expect(
       page.getByText("Real manager fact", { exact: true }),
     ).toBeVisible();
@@ -166,7 +176,11 @@ test.describe.serial("real Gateway settings", () => {
       .click();
     const patched = await patchedPromise;
     expect(patched.status(), await patched.text()).toBe(200);
-    expect(patched.request().postDataJSON()).toEqual({ confidence: 0 });
+    expect(patched.request().postDataJSON()).toEqual({
+      content: "Real manager fact",
+      category: "other",
+      confidence: 0,
+    });
     // 置信度只念**档位**不念数字（上游 memory-settings-page.tsx:666），0 落在 normal 档。
     await expect(page.getByText(/Confidence: Normal/)).toBeVisible();
 
@@ -176,9 +190,9 @@ test.describe.serial("real Gateway settings", () => {
       .getByRole("dialog", { name: "Add memory fact" })
       .getByRole("button", { name: "Save fact" })
       .click();
-    await expect(
-      page.getByRole("dialog", { name: "Add memory fact" }).getByRole("alert"),
-    ).toContainText("same content already exists");
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
+      "same content already exists",
+    );
     await page
       .getByRole("dialog", { name: "Add memory fact" })
       .getByRole("button", { name: "Cancel" })
@@ -208,10 +222,12 @@ test.describe.serial("real Gateway settings", () => {
     });
     const preview = page.getByRole("dialog", { name: "Import memory?" });
     await expect(preview).toContainText("real-import.json");
-    await expect(page.getByTestId("memory-import-extra-warning")).toBeVisible();
+    await expect(page.getByTestId("memory-import-extra-warning")).toHaveCount(
+      0,
+    );
     await expect(
       page.getByTestId("memory-import-duplicate-warning"),
-    ).toBeVisible();
+    ).toHaveCount(0);
     const importedPromise = page.waitForResponse(
       (response) =>
         response.request().method() === "POST" &&
@@ -244,7 +260,7 @@ test.describe.serial("real Gateway settings", () => {
         /\/api\/memory\/facts\//.test(new URL(response.url()).pathname),
     );
     await page
-      .getByRole("alertdialog", { name: "Delete this fact?" })
+      .getByRole("dialog", { name: "Delete this fact?" })
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     expect((await deletion).status()).toBe(200);
@@ -255,7 +271,7 @@ test.describe.serial("real Gateway settings", () => {
         new URL(response.url()).pathname === "/api/memory",
     );
     await page
-      .getByRole("alertdialog", { name: "Clear all memory?" })
+      .getByRole("dialog", { name: "Clear all memory?" })
       .getByRole("button", { name: "Clear all memory" })
       .click();
     expect((await clearing).status()).toBe(200);
@@ -439,12 +455,25 @@ test.describe.serial("real Gateway settings", () => {
       if (new URL(request.url()).pathname === "/api/mcp/config")
         mcpRequests += 1;
     });
-    await page.goto("/workspace/chats/new?settings=skills");
+    await page.goto("/workspace/capabilities?tab=skills");
     await expect(page.getByText("review", { exact: true })).toBeVisible();
-    await expect(page.getByRole("switch", { name: "review" })).toBeDisabled();
-    await expect(page.getByTestId("skills-admin-required")).toBeVisible();
-    await page.getByRole("button", { name: "Tools", exact: true }).click();
-    await expect(page.getByTestId("mcp-admin-required")).toBeVisible();
+    await expect(
+      page.getByRole("switch", { name: "Enable skill review", exact: true }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Install .skill", exact: true }),
+    ).toHaveCount(0);
+    await page
+      .getByRole("tab", { name: "Tools & integrations", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Platform provided", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator('section[aria-labelledby="platform-plugins-heading"]')
+        .getByRole("switch"),
+    ).toHaveCount(0);
     expect(mcpRequests).toBe(0);
   });
 
@@ -453,19 +482,21 @@ test.describe.serial("real Gateway settings", () => {
     page,
   }) => {
     await loginAdmin(context.request);
-    await page.goto("/workspace/chats/new?settings=skills");
+    await page.goto("/workspace/capabilities?tab=skills");
     const skillWrite = page.waitForResponse(
       (response) =>
         response.request().method() === "PUT" &&
         new URL(response.url()).pathname === "/api/skills/review",
     );
-    await page.getByRole("switch", { name: "review" }).click();
+    await page
+      .getByRole("switch", { name: "Enable skill review", exact: true })
+      .click();
     const skillResponse = await skillWrite;
     expect(skillResponse.status(), await skillResponse.text()).toBe(200);
     expect(skillResponse.request().postDataJSON()).toEqual({ enabled: false });
     expect(skillResponse.request().headers()["x-csrf-token"]).toBeTruthy();
     await expect(
-      page.getByRole("switch", { name: "review" }),
+      page.getByRole("switch", { name: "Enable skill review", exact: true }),
     ).not.toBeChecked();
 
     const mcpBefore = await context.request.get(`${APP}/api/mcp/config`);
@@ -476,13 +507,20 @@ test.describe.serial("real Gateway settings", () => {
     expect(mcpBeforeBody.mcp_servers.docs.enabled).toBe(true);
     expect(JSON.stringify(mcpBeforeBody)).not.toContain("must-stay-masked");
 
-    await page.getByRole("button", { name: "Tools", exact: true }).click();
+    await page
+      .getByRole("tab", { name: "Tools & integrations", exact: true })
+      .click();
     const mcpWrite = page.waitForResponse(
       (response) =>
         response.request().method() === "PATCH" &&
         new URL(response.url()).pathname === "/api/mcp/config",
     );
-    await page.getByRole("switch", { name: "docs" }).click();
+    await page
+      .getByRole("switch", {
+        name: "Enabled docs (Platform provided)",
+        exact: true,
+      })
+      .click();
     const mcpResponse = await mcpWrite;
     expect(mcpResponse.status(), await mcpResponse.text()).toBe(200);
     expect(mcpResponse.request().postDataJSON()).toEqual({
@@ -490,7 +528,12 @@ test.describe.serial("real Gateway settings", () => {
       enabled: false,
     });
     expect(mcpResponse.request().headers()["x-csrf-token"]).toBeTruthy();
-    await expect(page.getByRole("switch", { name: "docs" })).not.toBeChecked();
+    await expect(
+      page.getByRole("switch", {
+        name: "Enabled docs (Platform provided)",
+        exact: true,
+      }),
+    ).not.toBeChecked();
 
     const skillsAfter = await context.request.get(`${APP}/api/skills`);
     expect(await skillsAfter.json()).toMatchObject({

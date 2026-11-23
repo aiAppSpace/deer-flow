@@ -1,72 +1,174 @@
-/*
-  【文件职责】     跑 `pnpm audit`，把它报出来的**包集合**与签入的分诊表逐个对。
-  【架构位置】     构建脚本（不进产物）
-  【主要导出】     collectAuditedPackages · diffTriage（供守卫单测）
-  【依赖关系】     baseline/audit-triage.json · scripts/pnpm.py
-  【边界与注意】   **这里取代的是一个「永远红」的门禁。**
-
-                   原来 `make audit` 直接跑 `pnpm audit`，Makefile 注释里写着
-                   「当前预期是红的，14 条，逐条分诊见上，免得下一个人再做一遍」。
-                   wave 202 实测那段分诊**已经盖不住它了**：实际是 **19 条 / 7 个包**
-                   （1 low / 13 moderate / 6 high），而 `svgo` / `vitest` /
-                   `@vitest/mocker` **从来没被分诊过**，其中 svgo 是 high。
-                   数字和包名都写死在散文里，而 `pnpm audit` 每天都在变，
-                   **两边漂了没有任何征兆**。
-
-                   **一个永远红的门禁不产生信息**——人只会学会忽略它，
-                   于是新冒出来的东西和老的躺在一起，谁也分不出来。
-                   改成棘轮之后判据变成：**每一个被报出来的包都表过态就绿，
-                   冒出一个没表过态的就红。**
-
-                   **两个方向都查**：漏登记会红（新漏洞混进来看不见），
-                   多登记也会红（过期条目一直躺着，正是那段散文的毛病）。
-
-                   **严重度不进判据**：advisory 的 severity 会被上游改，
-                   钉它等于把门禁绑在别人的评级上。这里钉的是「哪些包」，
-                   而「这个包要不要紧」由表里的 reachability / decision / why 回答。
-                   ——同 `backend-enum-mirror` 那条「只钉成员集合，不钉映射」。
-
-                   **要网络**，所以它是 `make audit` 而不是 `make verify` 的一步；
-                   离线时 `pnpm audit` 自己会失败，脚本原样把退出码带出去。
-*/
-
+/** Online advisory gate. A review covers one exact advisory/range/version/path set. */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TRIAGE = join(ROOT, "baseline", "audit-triage.json");
+const SEVERITIES = ["info", "low", "moderate", "high", "critical"];
+const fail = (message) => {
+  throw new Error(message);
+};
+const record = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+function nonempty(value, label) {
+  if (typeof value !== "string" || !value.trim())
+    fail(`${label} must be a nonempty string`);
+  return value;
+}
+function strings(value, label) {
+  if (!Array.isArray(value) || value.length === 0)
+    fail(`${label} must be a nonempty array`);
+  return [...new Set(value.map((item) => nonempty(item, label)))].sort();
+}
+function identity(row) {
+  if (!record(row)) fail("Invalid advisory review");
+  const advisory = nonempty(row.advisory, "advisory");
+  if (!/^GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/.test(advisory))
+    fail("Invalid GitHub advisory ID");
+  if (!SEVERITIES.includes(row.severity)) fail("Invalid advisory severity");
+  if (
+    !Array.isArray(row.installed_findings) ||
+    row.installed_findings.length === 0
+  )
+    fail("Installed version/path bindings are required");
+  const installedFindings = row.installed_findings
+    .map((finding) => ({
+      version: nonempty(finding?.version, "finding version"),
+      paths: strings(finding?.paths, "finding paths"),
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  return {
+    package: nonempty(row.package, "package"),
+    advisory,
+    vulnerable_versions: nonempty(
+      row.vulnerable_versions,
+      "vulnerable_versions",
+    ),
+    installed_versions: strings(row.installed_versions, "installed_versions"),
+    paths: strings(row.paths, "paths"),
+    installed_findings: installedFindings,
+    severity: row.severity,
+  };
+}
+const key = (row) => JSON.stringify(identity(row));
 
-/** advisories → 去重后的包名集合。 */
-export function collectAuditedPackages(auditJson) {
-  const advisories = auditJson?.advisories ?? {};
-  return [
-    ...new Set(Object.values(advisories).map((a) => a.module_name)),
-  ].sort();
+/** Invalid/network-failure/partial responses cannot masquerade as a clean audit. */
+export function collectAuditFindings(auditJson) {
+  if (
+    !record(auditJson) ||
+    auditJson.error ||
+    !record(auditJson.advisories) ||
+    !record(auditJson.metadata?.vulnerabilities)
+  )
+    fail("Incomplete pnpm audit response");
+  if (
+    auditJson.muted &&
+    (!Array.isArray(auditJson.muted) || auditJson.muted.length > 0)
+  )
+    fail("Muted advisories are not permitted");
+  const counts = auditJson.metadata.vulnerabilities;
+  if (
+    Object.keys(counts).length === 0 ||
+    Object.entries(counts).some(
+      ([severity, count]) =>
+        !SEVERITIES.includes(severity) ||
+        !Number.isSafeInteger(count) ||
+        count < 0,
+    )
+  )
+    fail("Invalid vulnerability counts");
+  const findings = Object.values(auditJson.advisories).map((advisory) => {
+    if (
+      !record(advisory) ||
+      !Array.isArray(advisory.findings) ||
+      advisory.findings.length === 0
+    )
+      fail("Advisory has no installed findings");
+    return identity({
+      package: advisory.module_name,
+      advisory: advisory.github_advisory_id,
+      vulnerable_versions: advisory.vulnerable_versions,
+      installed_versions: advisory.findings.map((finding) => finding?.version),
+      paths: advisory.findings.flatMap((finding) =>
+        strings(finding?.paths, "finding paths"),
+      ),
+      installed_findings: advisory.findings,
+      severity: advisory.severity,
+    });
+  });
+  if (
+    Object.values(counts).reduce((sum, count) => sum + count, 0) !==
+      findings.reduce((sum, row) => sum + row.installed_findings.length, 0) ||
+    SEVERITIES.some(
+      (severity) =>
+        (counts[severity] ?? 0) !==
+        findings
+          .filter((row) => row.severity === severity)
+          .reduce((sum, row) => sum + row.installed_findings.length, 0),
+    )
+  )
+    fail("Advisory count mismatch");
+  if (new Set(findings.map(key)).size !== findings.length)
+    fail("Duplicate advisory findings");
+  return findings.sort((a, b) => key(a).localeCompare(key(b)));
 }
 
-/** 两个方向的差集。空 + 空 = 通过。 */
-export function diffTriage(auditedPackages, triagedPackages) {
-  const audited = new Set(auditedPackages);
-  const triaged = new Set(triagedPackages);
+/** Changes to severity, affected range, installed version or dependency path need review. */
+export function diffTriage(auditedFindings, triagedFindings) {
+  if (!Array.isArray(auditedFindings) || !Array.isArray(triagedFindings))
+    fail("Advisories must be arrays");
+  const audited = auditedFindings.map(key);
+  const triaged = triagedFindings.map(key);
+  if (
+    new Set(audited).size !== audited.length ||
+    new Set(triaged).size !== triaged.length
+  )
+    fail("Duplicate advisory review");
+  const current = new Set(audited);
+  const reviewed = new Set(triaged);
   return {
-    untriaged: [...audited].filter((name) => !triaged.has(name)).sort(),
-    stale: [...triaged].filter((name) => !audited.has(name)).sort(),
+    untriaged: audited.filter((id) => !reviewed.has(id)).sort(),
+    stale: triaged.filter((id) => !current.has(id)).sort(),
   };
 }
 
+export function validateTriage(triage) {
+  if (
+    !record(triage) ||
+    triage.schema_version !== 2 ||
+    !Array.isArray(triage.advisories)
+  )
+    fail("Expected advisory triage schema_version 2");
+  for (const row of triage.advisories) {
+    identity(row);
+    if (
+      !["runtime", "build", "dev"].includes(row.reachability) ||
+      row.decision !== "accept-unreachable"
+    )
+      fail("Only source-reviewed unreachable advisories may remain");
+    for (const field of ["entry", "why", "revisit", "source"])
+      nonempty(row[field], field);
+    if (row.why.length < 40 || row.revisit.length < 10)
+      fail("Advisory review lacks a concrete rationale/revisit trigger");
+    if (row.source !== `https://github.com/advisories/${row.advisory}`)
+      fail("Advisory review must link its primary source");
+  }
+  diffTriage([], triage.advisories);
+  return triage.advisories;
+}
+
 function runAudit() {
+  let stdout;
   try {
-    const stdout = execFileSync(
+    stdout = execFileSync(
       "python3",
       [
         "../scripts/pnpm.py",
         "--dir",
         "frontend-vue",
         "audit",
-        "--audit-level",
-        "moderate",
         "--registry",
         "https://registry.npmjs.org",
         "--json",
@@ -75,65 +177,42 @@ function runAudit() {
         cwd: ROOT,
         encoding: "utf8",
         maxBuffer: 64 * 1024 * 1024,
-        // 有漏洞时底层 `pnpm audit` 退出码非 0，`scripts/pnpm.py` 会往 stderr 打
-        // 一行 "Error: pnpm command failed"——那不是这道门禁的结论，
-        // 让它出现在一次**绿**的运行里会误导人。判据在下面的差集上。
-        stdio: ["ignore", "pipe", "ignore"],
+        stdio: ["ignore", "pipe", "pipe"],
       },
     );
-    return JSON.parse(stdout);
   } catch (error) {
-    // 有漏洞时 `pnpm audit` 的退出码非 0，但 stdout 仍然是完整的 JSON。
-    const stdout = error?.stdout;
-    if (typeof stdout === "string" && stdout.trim().startsWith("{")) {
-      return JSON.parse(stdout);
-    }
-    console.error("pnpm audit 跑不起来（离线？registry 不可达？）：");
-    console.error(error?.message ?? error);
-    process.exit(2);
+    // pnpm returns nonzero for vulnerabilities; accept only a complete validated result.
+    if (
+      typeof error?.stdout !== "string" ||
+      !error.stdout.trim().startsWith("{")
+    )
+      throw error;
+    stdout = error.stdout;
   }
+  return collectAuditFindings(JSON.parse(stdout));
 }
 
 function main() {
-  const triage = JSON.parse(readFileSync(TRIAGE, "utf8"));
-  const triaged = triage.packages.map((row) => row.package).sort();
-  const audit = runAudit();
-  const audited = collectAuditedPackages(audit);
-  const counts = audit?.metadata?.vulnerabilities ?? {};
-
-  const { untriaged, stale } = diffTriage(audited, triaged);
-  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
-  console.log(
-    `pnpm audit 报了 ${total} 条，涉及 ${audited.length} 个包：` +
-      Object.entries(counts)
-        .filter(([, n]) => n > 0)
-        .map(([k, n]) => `${k} ${n}`)
-        .join(" / "),
-  );
-  console.log(
-    `分诊表登记了 ${triaged.length} 个包（baseline/audit-triage.json）`,
-  );
-
-  if (untriaged.length === 0 && stale.length === 0) {
-    console.log("每一个被报出来的包都表过态 ✓");
-    return;
-  }
-  if (untriaged.length > 0) {
-    console.error(
-      `\n**这些包没有表态**：${untriaged.join(", ")}\n` +
-        "  去 baseline/audit-triage.json 加一条，写清 reachability / decision / why / revisit。\n" +
-        "  写不出来就说明还没查清楚——那正是这道门禁存在的意义。",
+  try {
+    const reviews = validateTriage(JSON.parse(readFileSync(TRIAGE, "utf8")));
+    const findings = runAudit();
+    const { untriaged, stale } = diffTriage(findings, reviews);
+    console.log(
+      `pnpm audit: ${findings.length} advisories; ${reviews.length} exact source reviews`,
     );
+    if (untriaged.length || stale.length) {
+      for (const row of untriaged) console.error(`UNREVIEWED ${row}`);
+      for (const row of stale) console.error(`STALE ${row}`);
+      process.exitCode = 1;
+    } else console.log("Exact advisory/range/version/path reviews match ✓");
+  } catch (error) {
+    console.error(`Audit could not be verified: ${error?.message ?? error}`);
+    process.exitCode = 2;
   }
-  if (stale.length > 0) {
-    console.error(
-      `\n**这些登记项已经没有对应的 advisory 了**：${stale.join(", ")}\n` +
-        "  删掉它。留着过期条目，这张表就退化成它取代的那段散文。",
-    );
-  }
-  process.exit(1);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (
+  process.argv[1] &&
+  fileURLToPath(import.meta.url) === resolve(process.argv[1])
+)
   main();
-}

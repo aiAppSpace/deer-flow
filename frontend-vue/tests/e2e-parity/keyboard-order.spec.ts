@@ -59,9 +59,16 @@
                    （菜单开着时 Tab 被浮层吃掉，焦点停在菜单上不动——两个应用都是）。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import {
+  keyboardFocusTransitions,
+  keyboardRingClosed,
+  keyboardTraversalCycle,
+  walkKeyboardTraversal,
+  type KeyboardTraversal,
+} from "./support/keyboard-focus";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
 import {
   DEFAULT_DIMENSION,
@@ -96,8 +103,11 @@ const REACT_APP = process.env.E2E_REACT_APP_URL ?? "http://localhost:3116";
   同样的 `223x32@16,2112`、两个方向同样的落点数）。**那是尺子的，不是应用的。**
   同理，第四十五轮正向那次「0 条差异」在这两条环上也不构成证据。
 
-  60 给 44 留了 16 的余量。再往上加是有代价的：这一条用例的墙钟按
-  `终态数 × 2 应用 × 2 方向 × PRESSES` 线性涨。
+  当前每个终态仍完整执行这 60 次真实按键。未闭合的有限环可以继续原生遍历：
+  额外次数上限固定为遍历开始时的潜在可聚焦节点数 + 2 个浏览器边界位置。
+  有限节点变化须在同一初始预算内证明最终稳定环，新增节点不增加预算。
+  原生焦点恢复允许一圈重复落到同一节点，但须两轮完整周期及剩余采样一致；
+  前缀跌入局部小环仍拒绝。原无限列表例外、1h 总预算和完整终态不变。
 */
 const PRESSES = 60;
 /**
@@ -140,20 +150,13 @@ const UNSTABLE_RING = new Set(["thread-list-infinite-scroll"]);
 */
 const MIN_DISTINCT_STOPS = 600;
 
-const ACTIVE = () => {
-  const element = document.activeElement;
-  if (!element || element === document.body) return "(body)";
-  const label =
-    element.getAttribute("aria-label") ??
-    element.getAttribute("placeholder") ??
-    (element as HTMLElement).innerText ??
-    "";
-  return (
-    `${element.tagName.toLowerCase()}` +
-    `${element.getAttribute("role") ? `(${element.getAttribute("role")})` : ""}` +
-    `"${label.trim().replace(/\s+/g, " ").slice(0, 30)}"`
-  );
-};
+/* Current measurement separates page-local WeakMap DOM identity from the
+ * cross-application descriptor. Same-name links are separate physical stops;
+ * title-only icon actions keep their title. Physical closure and canonical
+ * cycles preserve multiplicity; the historical edge sets remain diagnostic.
+ * Sampling changes no markup or focus. The original sixty-key batch, timeout
+ * and exceptions stay fixed; bounded extra keys prove finite physical closure.
+ */
 
 type Case = {
   key: string;
@@ -171,13 +174,7 @@ const CASES: Case[] = PARITY_SCENARIOS.flatMap((scenario) =>
 );
 
 /** 相邻关系：`前一个落点 → 后一个落点`。见文件头第④条，这是旋转无关的那一层。 */
-function transitions(sequence: string[]): Set<string> {
-  const documentStops = sequence.filter((stop) => stop !== "(body)");
-  const out = new Set<string>();
-  for (let i = 0; i < documentStops.length - 1; i += 1)
-    out.add(`${documentStops[i]} → ${documentStops[i + 1]}`);
-  return out;
-}
+const transitions = keyboardFocusTransitions;
 
 function onlyIn(a: Set<string>, b: Set<string>): string[] {
   return [...a].filter((x) => !b.has(x)).sort();
@@ -192,13 +189,7 @@ function onlyIn(a: Set<string>, b: Set<string>): string[] {
  * 手上明明有一个已知答案的样本，却先读了新仪器的结论——第三十九轮的判词
  * 「先拿一个已知答案的样本验仪器」这一轮又欠了一次。
  */
-function ringClosed(sequence: string[]): boolean {
-  const documentStops = sequence.filter((stop) => stop !== "(body)");
-  const squashed = documentStops.filter(
-    (v, i) => i === 0 || v !== documentStops[i - 1],
-  );
-  return squashed.length > new Set(squashed).size;
-}
+const ringClosed = keyboardRingClosed;
 
 /**
  * 焦点被浮层吃住、整条序列一动不动的「终态×方向」：`ringClosed` 对它们是 false，
@@ -252,8 +243,19 @@ test("两个应用按 Tab / Shift+Tab 走的是同一条环", async ({ browser }
     仪器自检：是否观察到浏览器 chrome 的那一拍，不得改变应用内的相邻关系与闭环。
     这两条是第六十四轮 system Chrome 全量/单场景对照的最小复现。
   */
-  expect(transitions(["a", "(body)", "b"])).toEqual(transitions(["a", "b"]));
-  expect(ringClosed(["a", "b", "(body)", "a"])).toBe(true);
+  const physical = (values: string[]) =>
+    values.map((value) => ({ identity: value, descriptor: value }));
+  expect(transitions(physical(["a", "(body)", "b"]))).toEqual(
+    transitions(physical(["a", "b"])),
+  );
+  expect(
+    ringClosed(
+      ["a", "b", "(body)", "a"].map((value) => ({
+        identity: value,
+        descriptor: value,
+      })),
+    ),
+  ).toBe(true);
 
   const mismatched: string[] = [];
   const unreachable: string[] = [];
@@ -266,7 +268,7 @@ test("两个应用按 Tab / Shift+Tab 走的是同一条环", async ({ browser }
     base: string,
     item: Case,
     pressKey: string,
-  ): Promise<string[]> {
+  ): Promise<KeyboardTraversal> {
     const context = await browser.newContext({ ...PARITY_CONTEXT_OPTIONS });
     const page = await context.newPage();
     try {
@@ -293,65 +295,102 @@ test("两个应用按 Tab / Shift+Tab 走的是同一条环", async ({ browser }
       */
       await waitForFiniteAnimations(page);
       await waitForDomQuiet(page);
-      const sequence: string[] = [];
-      for (let i = 0; i < PRESSES; i += 1) {
-        await page.keyboard.press(pressKey);
-        sequence.push(await page.evaluate(ACTIVE));
-      }
-      return sequence;
+      return await walkKeyboardTraversal(
+        page,
+        pressKey,
+        PRESSES,
+        !UNSTABLE_RING.has(item.scenario.id),
+      );
     } finally {
       await context.close();
     }
   }
 
-  for (const item of CASES)
-    for (const direction of DIRECTIONS) {
-      const label = `${item.key}[${direction.name}]`;
-      let vue: string[];
-      let react: string[];
-      try {
-        vue = await walk(VUE_APP, item, direction.key);
-        react = await walk(REACT_APP, item, direction.key);
-      } catch (error) {
-        unreachable.push(
-          `${label}: ${String(error).split("\n")[0]?.slice(0, 90)}`,
-        );
-        continue;
-      }
+  // A continuous standard step owner avoids Playwright rescanning this
+  // macro's accumulated API history for every keypress and active-element read.
+  // Nested steps keep every state, direction and isolated application visible
+  // in the retained trace; traversal and comparisons remain serial.
+  await test.step("完整登记的键盘遍历", async () => {
+    for (const item of CASES)
+      for (const direction of DIRECTIONS) {
+        const label = `${item.key}[${direction.name}]`;
+        await test.step(label, async () => {
+          let vueWalk: KeyboardTraversal;
+          let reactWalk: KeyboardTraversal;
+          try {
+            vueWalk = await test.step("Vue", () =>
+              walk(VUE_APP, item, direction.key));
+            reactWalk = await test.step("React", () =>
+              walk(REACT_APP, item, direction.key));
+          } catch (error) {
+            unreachable.push(
+              `${label}: ${String(error).split("\n")[0]?.slice(0, 90)}`,
+            );
+            return;
+          }
+          const vue = vueWalk.sequence;
+          const react = reactWalk.sequence;
 
-      /*
+          /*
         **先体检窗口，再比环。** 窗口不够时比出来的差异是「谁在窗口内」，
         不是「谁在环上」——见文件头 PRESSES 那段。
       */
-      /*
+          /*
         ⚠ **先跳过，不体检**：这一屏的环在被走的过程中就变了，「闭没闭合」
         对它是个没有意义的问题。第五十轮先写成「跳过比对但仍体检」，
         当场收到一条误导性的红——反向那一半报「闭合了」，看起来像是可以放回比对，
         而定点复跑证明它只是那一跑恰好稳定下来。
       */
-      if (UNSTABLE_RING.has(item.scenario.id)) continue;
-      if (!SINGLE_STOP.has(label) && !ringClosed(vue))
-        notClosed.push(`${label} 本仓 ${new Set(vue).size} 个落点`);
-      if (!SINGLE_STOP.has(label) && !ringClosed(react))
-        notClosed.push(`${label} 上游 ${new Set(react).size} 个落点`);
+          if (UNSTABLE_RING.has(item.scenario.id)) return;
+          if (
+            !SINGLE_STOP.has(label) &&
+            keyboardTraversalCycle(vueWalk) === undefined
+          )
+            notClosed.push(
+              `${label} 本仓 ${new Set(vue.map((stop) => stop.identity)).size} 个物理落点` +
+                ` / extra ${vueWalk.extraPresses} / capacityChanged ${vueWalk.capacityChanged}`,
+            );
+          if (
+            !SINGLE_STOP.has(label) &&
+            keyboardTraversalCycle(reactWalk) === undefined
+          )
+            notClosed.push(
+              `${label} 上游 ${new Set(react.map((stop) => stop.identity)).size} 个物理落点` +
+                ` / extra ${reactWalk.extraPresses} / capacityChanged ${reactWalk.capacityChanged}`,
+            );
 
-      const vueStops = new Set(vue.filter((stop) => stop !== "(body)"));
-      if (direction.name === "Tab") {
-        distinctStops += vueStops.size;
-        if (vueStops.size === 0) allBody.push(item.key);
-      }
+          const vueStops = new Set(
+            vue
+              .filter((stop) => stop.identity !== "(body)")
+              .map((stop) => stop.identity),
+          );
+          if (direction.name === "Tab") {
+            distinctStops += vueStops.size;
+            if (vueStops.size === 0) allBody.push(item.key);
+          }
 
-      const vueLinks = transitions(vue);
-      const reactLinks = transitions(react);
-      const onlyVue = onlyIn(vueLinks, reactLinks);
-      const onlyReact = onlyIn(reactLinks, vueLinks);
-      if (onlyVue.length > 0 || onlyReact.length > 0) {
-        mismatched.push(
-          `${label}: 只在本仓 ${JSON.stringify(onlyVue.slice(0, 3))}` +
-            ` / 只在上游 ${JSON.stringify(onlyReact.slice(0, 3))}`,
-        );
+          const vueLinks = transitions(vue);
+          const reactLinks = transitions(react);
+          const onlyVue = onlyIn(vueLinks, reactLinks);
+          const onlyReact = onlyIn(reactLinks, vueLinks);
+          const vueCycle = keyboardTraversalCycle(vueWalk);
+          const reactCycle = keyboardTraversalCycle(reactWalk);
+          const cycleMismatch =
+            vueCycle !== undefined &&
+            reactCycle !== undefined &&
+            vueCycle !== reactCycle;
+          if (onlyVue.length > 0 || onlyReact.length > 0 || cycleMismatch) {
+            mismatched.push(
+              `${label}: 只在本仓 ${JSON.stringify(onlyVue.slice(0, 3))}` +
+                ` / 只在上游 ${JSON.stringify(onlyReact.slice(0, 3))}` +
+                (cycleMismatch
+                  ? ` / 完整物理环不同 ${vueCycle} / ${reactCycle}`
+                  : ""),
+            );
+          }
+        });
       }
-    }
+  });
 
   /*
     **窗口体检**（第五十轮新加）。环没走完的时候，上面那条比对量的是弧段而不是环,
@@ -360,9 +399,9 @@ test("两个应用按 Tab / Shift+Tab 走的是同一条环", async ({ browser }
   */
   expect(
     notClosed,
-    "这些终态的环在 PRESSES 次按键内没走完——比对量到的是两边各自窗口里的弧段，" +
-      "不是同一条环。要么把 PRESSES 提到够，要么确认这一屏的环会被遍历本身改掉、\n" +
-      "写进 UNSTABLE_RING 并附读数",
+    "这些终态在原预算内（完整60次及固定初始容量的额外原生遍历）未形成稳定环。" +
+      "弧段、卡死焦点与动态扩容都不能冒充完整物理环；" +
+      "stationary必须另有实际Tab事件与候选事实证明。",
   ).toEqual([]);
 
   expect(

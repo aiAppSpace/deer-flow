@@ -1,6 +1,6 @@
 <!--
   【文件职责】     一个批次展开后的条目列表，带分页加载。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认组件
   【依赖关系】     ui/button · composables/useSubagentBatches · SubagentBatchItemRow
   【边界与注意】   分页是**显式**的：一批可能上千条，自动无限滚动会让这个抽屉

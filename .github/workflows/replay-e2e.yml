@@ -13,6 +13,7 @@ on:
     branches: ["main", "*-dev"]
     paths:
       - "frontend/**"
+      - "scripts/pnpm.py"
       - "backend/app/gateway/**"
       - "backend/packages/harness/**"
       - "backend/tests/fixtures/replay/**"
@@ -26,6 +27,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "frontend/**"
+      - "scripts/pnpm.py"
       - "backend/app/gateway/**"
       - "backend/packages/harness/**"
       - "backend/tests/fixtures/replay/**"
@@ -92,17 +94,15 @@ jobs:
           node-version: "24"
       - name: Enable Corepack
         run: corepack enable
-      - name: Use pinned pnpm version
-        run: corepack prepare pnpm@10.26.2 --activate
       - name: Install frontend dependencies
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
+        run: python3 ../scripts/pnpm.py --dir frontend install --frozen-lockfile
       - name: Install Playwright Chromium
         working-directory: frontend
-        run: npx playwright install chromium --with-deps
+        run: python3 ../scripts/pnpm.py --dir frontend exec playwright install chromium --with-deps
       - name: Full-stack replay render (DOM assertions are the gate)
         working-directory: frontend
-        run: pnpm exec playwright test -c playwright.real-backend.config.ts
+        run: python3 ../scripts/pnpm.py --dir frontend exec playwright test -c playwright.real-backend.config.ts
       - name: Upload report + render artifact
         uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

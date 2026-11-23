@@ -1,102 +1,90 @@
-/*
-  【文件职责】     固定「复制一条定时任务」的草稿内容，以及运行状态的取值集合。
-  【架构位置】     测试
-  【依赖关系】     app/core/scheduled-tasks/form.ts · types.ts
-  【边界与注意】   复制**只改标题**：其余字段照抄，因为复制的意义就是「和这条一样，
-                   我再改两处」。标题必须变——不变的话列表里两条一模一样，
-                   谁也分不出哪条是新的。
-*/
-
-import { readFileSync } from "node:fs";
-
 import { describe, expect, it } from "vitest";
-
 import {
-  draftForScheduledTask,
-  duplicateScheduledTaskDraft,
-} from "@/core/scheduled-tasks/form";
-import type { ScheduledTask } from "@/core/scheduled-tasks/types";
-
-function task(overrides: Partial<ScheduledTask> = {}): ScheduledTask {
-  return {
-    id: "task-1",
-    title: "Daily digest",
-    prompt: "Summarise yesterday",
-    context_mode: "reuse_thread",
-    thread_id: "thread-9",
-    schedule_type: "cron",
-    schedule_spec: { cron: "0 9 * * *" },
-    timezone: "Asia/Shanghai",
-    status: "active",
-    created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z",
-    ...overrides,
-  } as unknown as ScheduledTask;
-}
-
-describe("复制一条定时任务", () => {
-  it("只有标题带后缀，其余逐字照抄", () => {
-    const original = draftForScheduledTask(task());
-    const copy = duplicateScheduledTaskDraft(task(), " (copy)");
+  initialFormState,
+  copyTitle,
+  createPayload,
+} from "@/core/scheduled-tasks/form-state";
+import { task } from "./fixtures";
+describe("duplicate current scheduled task", () => {
+  it("copies all task inputs with a localized title suffix", () => {
+    const original = task({
+      assistant_id: "research",
+      goal_objective: "Find it",
+      stop_condition: "Published",
+      max_runs: 6,
+      end_at: "2030-01-15T09:00:00Z",
+      timezone: "Asia/Shanghai",
+    });
+    const edit = initialFormState(
+      { mode: "edit", task: original },
+      "(copy)",
+    ).state;
+    const copy = initialFormState(
+      { mode: "duplicate", task: original },
+      "(copy)",
+      new Date("2030-01-01"),
+    ).state;
     expect(copy.title).toBe("Daily digest (copy)");
-    expect({ ...copy, title: original.title }).toEqual(original);
+    expect({ ...copy, title: edit.title }).toEqual(edit);
   });
-
-  it("复用会话模式下把线程 id 也带过去", () => {
-    // 复制出来的那条如果丢了线程 id，它会变成「每次新开会话」——语义完全不同。
-    const copy = duplicateScheduledTaskDraft(task(), " (copy)");
-    expect(copy.contextMode).toBe("reuse_thread");
-    expect(copy.threadId).toBe("thread-9");
+  it("keeps a reused chat ID and custom agent", () => {
+    const state = initialFormState(
+      {
+        mode: "duplicate",
+        task: task({
+          context_mode: "reuse_thread",
+          thread_id: "chat",
+          assistant_id: "analyst",
+        }),
+      },
+      "(copy)",
+    ).state;
+    expect(createPayload(state, { maxRuns: null, endAt: null })).toMatchObject({
+      context_mode: "reuse_thread",
+      thread_id: "chat",
+      assistant_id: "analyst",
+    });
   });
-
-  it("排程与时区一并照抄", () => {
-    const copy = duplicateScheduledTaskDraft(task(), " (copy)");
-    expect(copy.schedule.schedule_type).toBe("cron");
-    expect(copy.schedule.schedule_spec.cron).toBe("0 9 * * *");
-    expect(copy.schedule.timezone).toBe("Asia/Shanghai");
+  it("preserves interval seconds and timezone", () => {
+    const state = initialFormState(
+      {
+        mode: "duplicate",
+        task: task({
+          schedule_type: "interval",
+          schedule_spec: { every_seconds: 91 },
+          timezone: "Asia/Shanghai",
+        }),
+      },
+      "(copy)",
+    ).state;
+    expect(state.schedule).toEqual({
+      schedule_type: "interval",
+      schedule_spec: { cron: undefined, run_at: undefined, every_seconds: 91 },
+      timezone: "Asia/Shanghai",
+    });
   });
-
-  it("后缀是调用方给的（走词典），不是写死的", () => {
-    expect(duplicateScheduledTaskDraft(task(), "（副本）").title).toBe(
-      "Daily digest（副本）",
+  it("formats English and Chinese suffixes", () => {
+    expect(copyTitle("Daily", "(copy)")).toBe("Daily (copy)");
+    expect(copyTitle("日报", "（副本）")).toBe("日报（副本）");
+  });
+  it("drops only past end time on duplication and surfaces that fact", () => {
+    const source = task({ end_at: "2029-01-01T00:00:00Z", max_runs: 4 });
+    const result = initialFormState(
+      { mode: "duplicate", task: source },
+      "(copy)",
+      new Date("2030-01-01"),
     );
+    expect(result.endAtDropped).toBe(true);
+    expect(result.state.endAtLocal).toBe("");
+    expect(result.state.maxRuns).toBe("4");
   });
-});
-
-/*
-  页面把这三件事接在一起：换草稿、清掉上一次的报错、重挂表单再滚回去。
-
-  定时任务页依赖整条 Vue Query 数据链，本仓没有挂载它的用例（其余
-  scheduled-tasks 用例全是 core 纯函数或单个子组件）。所以这里钉源码顺序，
-  行为的那一半由子组件用例（reuse-notice-and-duplicate.dom.test.ts）覆盖。
-*/
-describe("页面把复制接起来", () => {
-  const source = readFileSync("app/pages/workspace/scheduled-tasks.vue", "utf8")
-    .replaceAll(/<!--[\s\S]*?-->/g, "")
-    .replaceAll(/\/\*[\s\S]*?\*\//g, "");
-
-  it("换草稿 → 清报错 → 重挂表单 → 滚回去，顺序不能乱", () => {
-    const body = source.slice(
-      source.indexOf("async function duplicateTask("),
-      source.indexOf("\n}", source.indexOf("async function duplicateTask(")),
+  it("keeps past end time visible while editing", () => {
+    const result = initialFormState(
+      { mode: "edit", task: task({ end_at: "2029-01-01T00:00:00Z" }) },
+      "",
+      new Date("2030-01-01"),
     );
-    const order = [
-      "duplicateScheduledTaskDraft(",
-      "formError.value = null",
-      "createFormKey.value += 1",
-      "scrollIntoView(",
-    ].map((needle) => body.indexOf(needle));
-    expect(
-      order.every((index) => index >= 0),
-      body,
-    ).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-  });
-
-  it("滚回去发生在 nextTick 之后：表单还没重挂就滚，滚的是旧节点", () => {
-    const body = source.slice(source.indexOf("async function duplicateTask("));
-    expect(body.indexOf("await nextTick()")).toBeLessThan(
-      body.indexOf("scrollIntoView("),
-    );
+    expect(result.endAtDropped).toBe(false);
+    expect(result.state.endAtLocal).not.toBe("");
   });
 });

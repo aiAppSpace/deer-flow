@@ -3,13 +3,13 @@
   【架构位置】     测试
   【主要导出】     无；Vitest cases
   【依赖关系】     app/core/markdown/math.ts
-  【边界与注意】   这条判据的两类错误代价完全不对称：多报只是白下载一次 264 KB，
-                   漏报是公式永远渲染不出来且没有任何报错。所以下面既钉住「该报的
-                   都报」，也钉住少数几类**明确**不该报的（代码里的 `$PATH`、转义的
-                   `\$`）——不追求把所有假阳性都消灭。
+  【边界与注意】   用实际 remark-math 语法固定懒加载准入，覆盖转义、代码上下文和
+                   跨行行内公式；正文里真实存在的公式不得因字符串启发式而漏渲染。
 */
-
 import { describe, expect, it } from "vitest";
+import { unified } from "unified";
+import remarkParse from "remark-parse";
+import remarkMath from "remark-math";
 
 import { containsMath } from "@/core/markdown/math";
 
@@ -39,5 +39,29 @@ describe("containsMath", () => {
     expect(containsMath("```sh\necho $PATH\n```\n\n再看 $E=mc^2$\n")).toBe(
       true,
     );
+  });
+});
+
+describe("the installed remark-math grammar owns admission", () => {
+  const parser = unified()
+    .use(remarkParse)
+    .use(remarkMath, { singleDollarTextMath: true });
+  it.each([
+    ["soft line break", "$a\n+b$"],
+    ["two escaped backslashes before delimiter", String.raw`\\$a$`],
+    ["backticks inside math", "$a ` x `$"],
+    ["code then multiline formula", "`$PATH` and $x\n+y$"],
+  ])("loads the renderer for %s", (_name, source) => {
+    const tree = parser.parse(source);
+    type MarkdownNode = { type: string; children?: MarkdownNode[] };
+    const pending: MarkdownNode[] = [tree];
+    let found = false;
+    while (pending.length) {
+      const node = pending.pop()!;
+      if (node.type === "math" || node.type === "inlineMath") found = true;
+      pending.push(...(node.children ?? []));
+    }
+    expect(found).toBe(true);
+    expect(containsMath(source)).toBe(true);
   });
 });

@@ -48,10 +48,11 @@ withDefaults(
   defineProps<{
     copied: boolean;
     copyLabel: string;
+    copiedLabel?: string;
     editLabel: string;
     showEdit?: boolean;
   }>(),
-  { showEdit: false },
+  { showEdit: false, copiedLabel: undefined },
 );
 
 const emit = defineEmits<{ copy: []; edit: [] }>();
@@ -61,7 +62,7 @@ const emit = defineEmits<{ copy: []; edit: [] }>();
   <TooltipProvider>
     <div
       data-testid="human-turn-actions"
-      class="absolute right-0 -bottom-9 left-0 z-20 mt-4 flex w-full items-center justify-end gap-4 opacity-0 transition-opacity delay-200 duration-300 group-hover:opacity-100"
+      class="absolute right-0 -bottom-9 left-0 z-20 mt-4 flex w-full items-center justify-end gap-4 opacity-0 transition-opacity delay-200 duration-300 group-hover/conversation-message:opacity-100"
     >
       <div class="pointer-events-auto flex gap-1">
         <Tooltip>
@@ -69,11 +70,11 @@ const emit = defineEmits<{ copy: []; edit: [] }>();
             <Button
               variant="ghost"
               size="icon-sm"
-              :aria-label="copyLabel"
+              :aria-label="copied ? (copiedLabel ?? copyLabel) : copyLabel"
               @click="emit('copy')"
             >
-              <Check v-if="copied" class="text-green-500" />
-              <Copy v-else />
+              <Check v-if="copied" class="size-4 text-green-500" />
+              <Copy v-else class="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{{ copyLabel }}</TooltipContent>
@@ -86,7 +87,7 @@ const emit = defineEmits<{ copy: []; edit: [] }>();
               :aria-label="editLabel"
               @click="emit('edit')"
             >
-              <PencilIcon class="size-3" />
+              <PencilIcon class="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{{ editLabel }}</TooltipContent>

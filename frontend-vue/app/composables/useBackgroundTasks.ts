@@ -27,6 +27,8 @@ import {
 } from "@tanstack/vue-query";
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
 
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
+
 import {
   backgroundTaskKeys,
   cancelBackgroundTask,
@@ -47,7 +49,8 @@ export function useBackgroundTasks(
 ) {
   return useQuery({
     queryKey: computed(() => backgroundTaskKeys.list(toValue(threadId))),
-    queryFn: () => fetchBackgroundTasks(toValue(threadId)),
+    queryFn: ({ queryKey, signal }) =>
+      fetchBackgroundTasks(String(queryKey[1]), { signal }),
     enabled: computed(
       () => toValue(options.enabled) !== false && Boolean(toValue(threadId)),
     ),
@@ -68,7 +71,8 @@ export function useBackgroundTask(
     queryKey: computed(() =>
       backgroundTaskKeys.detail(toValue(threadId), toValue(taskId)),
     ),
-    queryFn: () => fetchBackgroundTask(toValue(threadId), toValue(taskId)),
+    queryFn: ({ queryKey, signal }) =>
+      fetchBackgroundTask(String(queryKey[1]), String(queryKey[2]), { signal }),
     enabled: computed(
       () =>
         toValue(options.enabled) !== false &&
@@ -105,16 +109,36 @@ export function useCancelBackgroundTask(
   options: { onError?: (error: Error) => void } = {},
 ) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (taskId: string) =>
-      cancelBackgroundTask(toValue(threadId), taskId),
-    onSuccess: (task) => {
-      const id = toValue(threadId);
-      writeCancelledTask(queryClient, id, task);
+  type Variables = { threadId: string; taskId: string; owns: () => boolean };
+  const mutation = useMutation({
+    mutationFn: ({ threadId, taskId }: Variables) =>
+      cancelBackgroundTask(threadId, taskId),
+    onSuccess: (task, { threadId, owns }) => {
+      if (!owns()) return;
+      writeCancelledTask(queryClient, threadId, task);
       void queryClient.invalidateQueries({
-        queryKey: backgroundTaskKeys.list(id),
+        queryKey: backgroundTaskKeys.list(threadId),
       });
     },
-    onError: (error: Error) => options.onError?.(error),
+    onError: (error: Error, variables) => {
+      if (variables.owns() && variables.threadId === toValue(threadId))
+        options.onError?.(error);
+    },
   });
+  const snapshot = (taskId: string): Variables => ({
+    threadId: toValue(threadId),
+    taskId,
+    owns: captureWorkspaceQueryOwner(queryClient),
+  });
+  return {
+    ...mutation,
+    variables: computed(() => {
+      const submitted = mutation.variables.value;
+      return submitted?.threadId === toValue(threadId) && submitted.owns()
+        ? submitted.taskId
+        : undefined;
+    }),
+    mutate: (taskId: string) => mutation.mutate(snapshot(taskId)),
+    mutateAsync: (taskId: string) => mutation.mutateAsync(snapshot(taskId)),
+  };
 }

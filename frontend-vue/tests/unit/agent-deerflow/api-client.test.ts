@@ -189,11 +189,11 @@ describe("threads", () => {
 });
 
 describe("runs", () => {
-  it("list 是 GET /threads/:id/runs", async () => {
+  it("list retains the React SDK default limit and offset on the wire", async () => {
     const client = clientWith(() => jsonResponse([]));
     await client.runs.list("t-1");
     expect(recorded[0]).toMatchObject({
-      url: `${BASE}/threads/t-1/runs`,
+      url: `${BASE}/threads/t-1/runs?limit=10&offset=0`,
       method: "GET",
     });
   });
@@ -258,5 +258,26 @@ describe("错误归一化与前缀", () => {
     for (const call of recorded) {
       expect(call.url.startsWith(`${BASE}/`)).toBe(true);
     }
+  });
+});
+
+it("passes thread metadata cancellation through the GET transport", async () => {
+  const controller = new AbortController();
+  const client = clientWith(() => jsonResponse({ thread_id: "a" }));
+  await client.threads.get("a", { signal: controller.signal });
+  expect(recorded[0]).toMatchObject({
+    url: `${BASE}/threads/a`,
+    method: "GET",
+    hasSignal: true,
+  });
+});
+
+it("passes run discovery cancellation separately from default query parameters", async () => {
+  const client = clientWith(() => jsonResponse([]));
+  await client.runs.list("a/b?c", { signal: new AbortController().signal });
+  expect(recorded[0]).toEqual({
+    url: `${BASE}/threads/a%2Fb%3Fc/runs?limit=10&offset=0`,
+    method: "GET",
+    hasSignal: true,
   });
 });

@@ -7,7 +7,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onScopeDispose, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 
 import { Button } from "@/components/ui/button";
@@ -42,10 +42,20 @@ const setupStatus = ref<SetupStatusResponse | null>(null);
 const setupPhase = ref<"checking" | "ready" | "unavailable">("checking");
 const setupAttempt = ref(0);
 const error = ref(
-  typeof route.query.error === "string" ? $i18n.t.value.login.authFailed : "",
+  typeof route.query.error === "string"
+    ? ($i18n.t.value.login.errors[
+        route.query.error as keyof typeof $i18n.t.value.login.errors
+      ] ?? $i18n.t.value.login.authFailed)
+    : "",
 );
 const showSsoHint = ref(false);
 const loading = ref(false);
+let disposed = false;
+let setupGeneration = 0;
+onScopeDispose(() => {
+  disposed = true;
+  setupGeneration++;
+});
 
 const redirectPath = computed(() =>
   resolveAuthNextPath(
@@ -69,18 +79,26 @@ const setupUnavailable = computed(
 );
 
 async function checkSetupStatus() {
+  const generation = ++setupGeneration;
   setupPhase.value = "checking";
   try {
-    setupStatus.value = await fetchSetupStatus();
+    const status = await fetchSetupStatus();
+    if (disposed || generation !== setupGeneration) return;
+    setupStatus.value = status;
     setupPhase.value = "ready";
     if (setupStatus.value.needs_setup) isLogin.value = true;
   } catch {
+    if (disposed || generation !== setupGeneration) return;
     setupStatus.value = null;
     setupPhase.value = "unavailable";
   }
 }
 
 async function submit() {
+  if (loading.value) return;
+  const submittedEmail = email.value;
+  const submittedRememberMe = rememberMe.value;
+  const target = redirectPath.value;
   error.value = "";
   showSsoHint.value = false;
   if (!isLogin.value && !signupAllowed.value) {
@@ -113,21 +131,24 @@ async function submit() {
             remember_me: rememberMe.value,
           }),
     });
+    if (disposed) return;
     if (!response.ok) {
-      error.value = parseAuthError(await response.json()).message;
+      const failure = await response.json();
+      if (disposed) return;
+      error.value = parseAuthError(failure).message;
       showSsoHint.value = isLogin.value && providers.value.length > 0;
       return;
     }
     clearAuthenticatedClientState(queryClient);
     saveRememberLoginPreference({
-      email: email.value,
-      rememberMe: rememberMe.value,
+      email: submittedEmail,
+      rememberMe: submittedRememberMe,
     });
-    await navigateTo(redirectPath.value);
+    await navigateTo(target);
   } catch {
-    error.value = $i18n.t.value.login.networkError;
+    if (!disposed) error.value = $i18n.t.value.login.networkError;
   } finally {
-    loading.value = false;
+    if (!disposed) loading.value = false;
   }
 }
 
@@ -155,8 +176,10 @@ function startSso(provider: Provider) {
 */
 async function redirectIfSignedIn() {
   const { authSessionQueryOptions } = await import("@/core/auth/session-query");
+  if (disposed) return;
   const probe = await queryClient.fetchQuery(authSessionQueryOptions());
-  if (probe.tag === "authenticated") await navigateTo(redirectPath.value);
+  if (!disposed && probe.tag === "authenticated")
+    await navigateTo(redirectPath.value);
 }
 
 watch(setupAttempt, () => void checkSetupStatus(), { immediate: true });
@@ -168,7 +191,7 @@ onMounted(() => {
   void fetch("/api/v1/auth/providers", { credentials: "include" })
     .then((response) => (response.ok ? response.json() : { providers: [] }))
     .then((data: { providers?: Provider[] }) => {
-      providers.value = data.providers ?? [];
+      if (!disposed) providers.value = data.providers ?? [];
     })
     .catch(() => undefined);
 });

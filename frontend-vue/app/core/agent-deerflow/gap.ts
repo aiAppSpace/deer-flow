@@ -7,10 +7,9 @@
                    `replay_gap`（08 §错误与 watchdog）。两个名字的翻译只在这里
                    发生，别的地方出现 `"gap"` 字面量就说明协议知识漏出去了。
 
-                   校验是**严格的**：字段缺一个就抛，不返回一个字段为 undefined
-                   的对象。缺口恢复要用 `latest_available_event_id` 当新游标，
-                   拿到 undefined 会让续传从头开始——那正是 05 A6 说的
-                   「不得当作正常流结束」的另一种走形。
+                   必需字段不可缺省。终态 run 的幂等创建重试在缓冲已回收时，
+                   earliest/latest 都可以是 null；先载入 durable state，再无
+                   游标 join 同一 run，由 observer end 收敛。
 */
 
 import { AgentStreamError } from "@deerflow/agent-core";
@@ -20,8 +19,8 @@ export interface StreamReplayGapData {
   run_id: string;
   /** 初始流的缺口没有请求游标，这里是 null 而不是缺省。 */
   requested_event_id: string | null;
-  earliest_available_event_id: string;
-  latest_available_event_id: string;
+  earliest_available_event_id: string | null;
+  latest_available_event_id: string | null;
   recovery: "reload_durable_state";
 }
 
@@ -32,12 +31,14 @@ export function parseStreamReplayGap(data: unknown): StreamReplayGapData {
 
   const value = data as Record<string, unknown>;
   const requestedEventId = value.requested_event_id;
+  const earliestEventId = value.earliest_available_event_id;
+  const latestEventId = value.latest_available_event_id;
   if (
     value.code !== "stream_replay_gap" ||
     typeof value.run_id !== "string" ||
     (requestedEventId !== null && typeof requestedEventId !== "string") ||
-    typeof value.earliest_available_event_id !== "string" ||
-    typeof value.latest_available_event_id !== "string" ||
+    (earliestEventId !== null && typeof earliestEventId !== "string") ||
+    (latestEventId !== null && typeof latestEventId !== "string") ||
     value.recovery !== "reload_durable_state"
   ) {
     throw new Error("Invalid stream replay gap payload.");

@@ -290,9 +290,9 @@ def test_official_entrypoints_route_pnpm_through_shared_runner():
     assert "PNPM = $(PYTHON) ../scripts/pnpm.py" in frontend_makefile
     assert '"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" install --silent' in serve_script
     assert 'DEERFLOW_PNPM_RUNNER="$REPO_ROOT/scripts/pnpm.py"' in serve_script
-    # 本仓把它拆成了 React / Vue 两条；上游 #5053 给 React 那条加了显式 PORT=3000
-    # （Windows 上 next dev 不认 .env 里的 PORT）——两样都要断言。
-    assert 'REACT_FRONTEND_CMD=\'env PORT=3000 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev\'' in serve_script
+    # Keep React/Vue separate and pin the local React port explicitly, retaining
+    # upstream #5053's Windows rule that Next does not read PORT from .env.
+    assert 'REACT_FRONTEND_CMD=\'env PORT=3200 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev\'' in serve_script
     assert 'VUE_FRONTEND_CMD=\'"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt dev --port 3100\'' in serve_script
     assert '"\\$DEERFLOW_PNPM_RUNNER\\" run preview"' in serve_script
     assert 'Path(__file__).resolve().with_name("pnpm.py")' in doctor_script

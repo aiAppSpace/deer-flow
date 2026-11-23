@@ -234,7 +234,9 @@ async function startHeldOpenStreamServer(
       "Access-Control-Expose-Headers": "Content-Location",
       "Cache-Control": "no-cache",
       "Content-Type": "text/event-stream",
-      "Content-Location": threadId ? `/threads/${threadId}/runs/${RUN_ID}` : `/api/threads/${STREAMING_THREAD_ID}/runs/${RUN_ID}`,
+      "Content-Location": threadId
+        ? `/threads/${threadId}/runs/${RUN_ID}`
+        : `/api/threads/${STREAMING_THREAD_ID}/runs/${RUN_ID}`,
     });
     response.write(getFrames(request.url ?? "/").join(""));
   });
@@ -298,10 +300,7 @@ test("keeps the first question above reasoning while a new chat streams", async 
         `event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`,
     );
   });
-  mockLangGraphAPI(page, {
-    createdThreadMessages: [],
-    honorRequestedThreadId: true,
-  });
+  mockLangGraphAPI(page);
   await page.route("**/api/langgraph/threads/*/runs/stream", (route) => {
     const threadId = /\/threads\/([^/]+)\/runs\/stream/.exec(
       route.request().url(),

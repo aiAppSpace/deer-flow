@@ -1,22 +1,16 @@
 /*
-  【文件职责】     守住输入框在**只读**（案例页 demo）下的可访问性形状。
+  【文件职责】     守住输入框的只读形状、语音按钮锁定与推理选项的实际交互。
   【架构位置】     测试
   【主要导出】     无
   【依赖关系】     ChatComposer.vue
-  【边界与注意】   对照台账看不见这一屏：每个对照场景的输入框都是可写的，
-                   而 /showcase/<id> 没有同名的 React spec 文件（线索 107）。
-
-                   两条都是「只读态下才分叉的渲染路径」（天生看不见的第六类）：
-                   `aria-disabled` 只有 disabled 为真时才写进树里，模型目录也只有
-                   在 disabled 为真时才被关掉。
+  【边界与注意】   挂载实际 ChatComposer，检查渲染、原生禁用态、颜色与命令；
+                   语音识别和会话生命周期由各自 owner 的独立回归负责。
 */
-
-import { readFileSync } from "node:fs";
 
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { computed, h, ref, type VNode } from "vue";
 
 import ChatComposer from "@/components/chat/ChatComposer.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
@@ -26,6 +20,8 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+const clients: QueryClient[] = [];
 
 const mocks = vi.hoisted(() => ({
   loadSkills: vi.fn(),
@@ -34,6 +30,36 @@ const mocks = vi.hoisted(() => ({
   uploadFiles: vi.fn(),
   polishInputDraft: vi.fn(),
   fetchWithAuth: vi.fn(),
+  voiceSupported: true,
+  toggleVoice: vi.fn(),
+}));
+
+// The consumer must forward its lock even when the client voice owner supports
+// speech. The real voice owner has separate recognition/lifecycle regressions.
+vi.mock("@/composables/useComposerVoice", () => ({
+  useComposerVoice: () => ({
+    listening: ref(false),
+    supported: computed(() => mocks.voiceSupported),
+    toggle: mocks.toggleVoice,
+    stop: vi.fn(),
+  }),
+}));
+
+vi.mock("@/core/features/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/core/features/api")>()),
+  fetchConversationReferencesCapability: vi.fn(async () => ({
+    enabled: false,
+    maxReferences: 0,
+  })),
+}));
+
+// These tests own composer presentation/commands, while session behavior has its own suite.
+vi.mock("@/composables/useAuthSession", () => ({
+  useAuthSession: () => ({
+    session: ref({ tag: "unauthenticated" }),
+    isFetching: ref(false),
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/core/skills/api", () => ({ loadSkills: mocks.loadSkills }));
@@ -47,8 +73,17 @@ vi.mock("@/core/input-polish/api", () => ({
 }));
 vi.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetchWithAuth }));
 
-function mountComposer(props: Record<string, unknown>) {
-  return mount(ChatComposer, {
+function mountComposer(
+  props: Record<string, unknown>,
+  slots: Record<string, (props: { disabled: boolean }) => VNode> = {},
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(queryClient);
+  const wrapper = mount(ChatComposer, {
+    attachTo: document.body,
+    slots,
     props: {
       threadKey: "demo-thread",
       targetThreadId: "demo-thread",
@@ -69,15 +104,15 @@ function mountComposer(props: Record<string, unknown>) {
         [
           VueQueryPlugin,
           {
-            queryClient: new QueryClient({
-              defaultOptions: { queries: { retry: false } },
-            }),
+            queryClient,
           },
         ],
       ],
       stubs: { ReferenceAttachment: true, GoalStatus: true },
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 beforeEach(() => {
@@ -99,17 +134,61 @@ beforeEach(() => {
     ],
     token_usage: { enabled: true },
   });
-  mocks.getUploadLimits.mockReset().mockResolvedValue(undefined);
+  mocks.getUploadLimits.mockReset().mockResolvedValue({
+    max_files: 10,
+    max_file_size: 100 * 1024 * 1024,
+    max_total_size: 100 * 1024 * 1024,
+  });
   mocks.uploadFiles.mockReset();
   mocks.polishInputDraft.mockReset();
   mocks.fetchWithAuth.mockReset();
+  mocks.voiceSupported = true;
+  mocks.toggleVoice.mockReset();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  wrappers.splice(0).forEach((wrapper) => {
+    if (wrapper.exists()) wrapper.unmount();
+  });
+  clients.splice(0).forEach((client) => client.clear());
+  await flushPromises();
   vi.unstubAllGlobals();
+  document.body.innerHTML = "";
 });
 
 describe("read-only composer", () => {
+  it("keeps knowledge scope between mode and effort in native control order and forwards its lock", async () => {
+    const wrapper = mountComposer(
+      { disabled: false, context: { mode: "pro", model_name: "scenario" } },
+      {
+        knowledgeScopeControl: ({ disabled }) =>
+          h(
+            "button",
+            {
+              type: "button",
+              disabled,
+              "data-testid": "knowledge-scope-trigger",
+            },
+            "Knowledge",
+          ),
+      },
+    );
+    await flushPromises();
+    const controls = wrapper
+      .findAll("button")
+      .map((button) => button.attributes("data-testid"));
+    const mode = controls.indexOf("composer-mode-trigger");
+    const scope = controls.indexOf("knowledge-scope-trigger");
+    const effort = controls.indexOf("composer-reasoning-effort-trigger");
+    expect(mode).toBeGreaterThanOrEqual(0);
+    expect(scope).toBeGreaterThan(mode);
+    expect(effort).toBeGreaterThan(scope);
+    const button = wrapper.get('[data-testid="knowledge-scope-trigger"]');
+    expect(button.attributes("disabled")).toBeUndefined();
+    await wrapper.setProps({ disabled: true });
+    expect(button.attributes("disabled")).toBeDefined();
+  });
+
   /*
     `aria-disabled` 是**向下继承**的：挂在表单上，可访问性树里连里面两个
     `role="group"` 的 addon 都会被标成 disabled，还会替没被禁用的控件宣布不可用。
@@ -124,38 +203,29 @@ describe("read-only composer", () => {
     expect(form.classes()).toContain("pointer-events-none");
   });
 
-  /*
-    **这一条只能读源码，不能挂载后断言。** 语音按钮的可用性前面还有一道
-    `voiceSupported = import.meta.client && getSpeechRecognitionConstructor(...)`，
-    而 `import.meta.client` 在 vitest 的 `dom` project 里恒为 undefined
-    （只有 `nuxt` project 才定义它，实测：stub 掉 SpeechRecognition 之后构造器拿得到，
-    `import.meta.client` 仍然是 undefined）。于是那颗按钮在这个环境里**永远**是禁用的，
-    挂载后的 `toBeDefined()` 断言测的是环境不是产品——第一版就是这样假绿的：
-    把 `disabled ||` 整段变异掉，用例照样绿。
-  */
-  it("passes the composer's disabled down to the voice button", () => {
-    /*
-      happy-dom project 里 `import.meta.url` 是 http URL，不是 file URL，
-      `new URL(..., import.meta.url)` 交给 readFileSync 会直接抛
-      "The URL must be of scheme file"。用相对 vitest 工作目录的路径。
-    */
-    /*
-      **压掉空白再比。** 这条断言原来钉的是含换行与缩进的原样子串，于是
-      wave 68 给这颗按钮套上 `<Tooltip>` 之后，prettier 把同一个表达式折成三行，
-      表达式一个字没变，用例却红了——它钉的是格式不是语义。
-    */
-    const source = readFileSync(
-      "app/components/chat/ChatComposer.vue",
-      "utf8",
-    ).replace(/\s+/g, " ");
-    // 上游 input-box.tsx:2340 传的是 composerLocked（= disabled || polishing）。
-    expect(source).toContain(
-      ':disabled=" disabled || !voiceSupported || polishing || streaming "',
-    );
-    // 被 pointer-events-none 盖住不算禁用：读屏器听不到「不可用」。
-    expect(source).not.toContain(
-      ':disabled=" !voiceSupported || polishing || streaming "',
-    );
+  it("passes the composer's disabled down to a supported voice button", async () => {
+    const wrapper = mountComposer({ disabled: false });
+    const button = wrapper.get("[data-testid='voice-input-button']");
+    expect(button.attributes("disabled")).toBeUndefined();
+    await button.trigger("click");
+    expect(mocks.toggleVoice).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ disabled: true });
+    expect(button.attributes("disabled")).toBeDefined();
+    await button.trigger("click");
+    expect(mocks.toggleVoice).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ disabled: false });
+    expect(button.attributes("disabled")).toBeUndefined();
+    await button.trigger("click");
+    expect(mocks.toggleVoice).toHaveBeenCalledTimes(2);
+  });
+
+  it("disables voice when the client owner does not support speech", () => {
+    mocks.voiceSupported = false;
+    const wrapper = mountComposer({ disabled: false });
+    expect(
+      wrapper.get("[data-testid='voice-input-button']").attributes("disabled"),
+    ).toBeDefined();
+    expect(mocks.toggleVoice).not.toHaveBeenCalled();
   });
 
   it("disables the mode trigger when read-only", async () => {
@@ -188,13 +258,13 @@ describe("read-only composer", () => {
     await vi.waitFor(
       async () => {
         await flushPromises();
-        expect(wrapper.emitted("contextChange")).toBeTruthy();
+        expect(wrapper.emitted("resolveContext")).toBeTruthy();
       },
       { timeout: 3_000 },
     );
 
     // 上游 getResolvedMode(undefined, supportsThinking) 给出 "pro"。
-    const latest = wrapper.emitted("contextChange")!.at(-1)![0];
+    const latest = wrapper.emitted("resolveContext")!.at(-1)![0];
     expect(latest).toMatchObject({ model_name: "scenario", mode: "pro" });
 
     await wrapper.setProps({ context: latest as Record<string, unknown> });
@@ -204,5 +274,63 @@ describe("read-only composer", () => {
       enUS.inputBox.proMode,
     );
     expect(wrapper.text()).toContain("Scenario Model");
+  });
+});
+
+describe("reasoning effort selection presentation", () => {
+  it("colors the selected effort and updates selection through the actual menu", async () => {
+    const wrapper = mountComposer({
+      context: { model_name: "scenario", mode: "pro", reasoning_effort: "low" },
+    });
+    await vi.waitFor(() =>
+      expect(
+        wrapper
+          .find("[data-testid='composer-reasoning-effort-trigger']")
+          .exists(),
+      ).toBe(true),
+    );
+    await wrapper
+      .get("[data-testid='composer-reasoning-effort-trigger']")
+      .trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    const items = () =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>("[role='menuitemradio']"),
+      );
+    expect(items().length).toBeGreaterThan(1);
+    const low = items().find((item) =>
+      item.textContent?.includes(enUS.inputBox.reasoningEffortLowDescription),
+    )!;
+    const high = items().find((item) =>
+      item.textContent?.includes(enUS.inputBox.reasoningEffortHighDescription),
+    )!;
+    expect(low.getAttribute("aria-checked")).toBe("true");
+    expect(low.classList.contains("text-accent-foreground")).toBe(true);
+    expect(high.getAttribute("aria-checked")).toBe("false");
+    expect(high.classList.contains("text-muted-foreground/65")).toBe(true);
+    high.click();
+    await flushPromises();
+    const next = wrapper.emitted("contextChange")?.at(-1)?.[0];
+    expect(next).toEqual({ reasoning_effort: "high" });
+    await wrapper.setProps({
+      context: {
+        model_name: "scenario",
+        mode: "pro",
+        ...(next as Record<string, unknown>),
+      },
+    });
+    await wrapper
+      .get("[data-testid='composer-reasoning-effort-trigger']")
+      .trigger("keydown", { key: "Enter" });
+    await flushPromises();
+    const selected = items().find(
+      (item) => item.getAttribute("aria-checked") === "true",
+    )!;
+    expect(selected.textContent).toContain(
+      enUS.inputBox.reasoningEffortHighDescription,
+    );
+    expect(selected.classList.contains("text-accent-foreground")).toBe(true);
+    for (const item of items().filter((item) => item !== selected))
+      expect(item.classList.contains("text-muted-foreground/65")).toBe(true);
   });
 });

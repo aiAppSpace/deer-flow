@@ -1,5 +1,9 @@
 # React → Vue 平替：怎么接手（方法论与硬规则）
 
+> **历史资料入口说明（2026-11-03）：** 本文下面的开工指令、轮次、状态和自动提交/更新记忆等叙述属于当时会话，不再作为当前执行入口。跨平台接手先读 [docs/ai/README.md](../ai/README.md) 和 [CURRENT_TASK.md](../ai/CURRENT_TASK.md)，以用户最新指令、最新交接及现场代码为准；阅读历史文档不授权继续开发、提交或改写任何平台记忆。历史正文保留供追溯。
+
+> **证据目录位置（2026-11-23）：** 本文引用的 `docs/reports/evidence/...` 已整体移到外置盘 `/Volumes/edisk/deer-flow/docs/reports/evidence/`，内部相对路径不变；本机工作区不再保留这些文件，查阅前需接入该磁盘。
+
 > ⚠⚠ **这份不是入口。新窗口的入口是
 > `/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/docs/plans/NEXT-WINDOW.md`**
 > ——那份写「这一轮干什么」，每轮重写；这份写「怎么接手」，很少变。
@@ -9,6 +13,87 @@
 > 分工：**NEXT-WINDOW.md = 这一轮的第一步** · **本文件 = 硬规则、量法、判据的来历** ·
 > `vue-parity-open-accounts.md` = 每一笔账的判词。
 > **下面「接手时的状态」那一段是快照，不是断言**——数一律现场量。
+
+<!-- CURRENT_PARITY_FACTS:START -->
+
+## 当前事实（目标、收集与执行结果分别注明）
+
+当前签入台账是 **0 唯一行 / 0 多重集 / 751 个场景-维度 / 0 条不同的差异** 的验收目标。scope 按实际场景、终态和维度展开；十二档差异数组全部为空，要求完整浏览器运行逐项达到零差异。新增零目标与旧目标归位只更新覆盖面，**不代表这 751 个取样点已执行 PASS**；本期执行结论须读取对应完整日志。
+
+751 个场景-维度中 **536 个是 desktop**；tablet 28 个，mobile 187 个。非 desktop 的 71 族逐字是：
+`agent-knowledge-binding` `agents-feature-disabled` `artifact-batched-stream` `artifact-panel-resize` `artifact-preview` `artifact-viewer-window` `background-tasks` `bookmark-plugin` `branch-thread` `browser-feature` `business-plugins` `business-plugins-dingtalk` `business-plugins-wecom` `capability-center` `channels` `chat` `extension-mentions` `integrations` `knowledge-citations` `knowledge-scope` `mcp-settings` `mentions` `model-favorites` `model-management` `plugin-assets` `plugin-icons` `project-detail` `project-document-archived` `project-document-attach` `project-document-preview-download` `project-document-promotion` `project-document-upload` `project-trash` `project-trash-content-conflict` `project-trash-orphan` `project-trash-partial-purge` `project-workflows` `reasoning-duration` `scheduled-goal-history` `scheduled-run-history` `scheduled-run-thread` `scheduled-task-chat-card` `scheduled-task-chat-events` `scheduled-task-search` `scheduled-tasks` `scheduled-tasks-dst` `settings-memory-import` `settings-model-sync` `settings-sync` `showcase-3823e443-4e2b-4679-b496-a9506eae462b` `showcase-4f3e55ee-f853-43db-bfb3-7d1a411f03cb` `showcase-7cfa5f8f-a2f8-47ad-acbd-da7137baf990` `showcase-ad76c455-5bf9-4335-8517-fc03834ab828` `showcase-fe3f7974-1bcb-4a01-a950-79673baafefd` `showcase-public-thread` `sidebar-collapsed` `sidecar-chat` `skill-export` `skill-usage` `skills-settings` `subtask-card` `thread-activity` `thread-archive` `thread-history` `thread-history-mermaid` `thread-list-infinite-scroll` `thread-list-pin` `thread-title-sync` `tool-call-details` `ui-polish-mobile` `workspace-changes`。
+
+当前签入词典是 `词典 1825 key / 64 unused`。
+
+2026-11-01 工程清理候选 package-v2 的隔离副本完整重新收集：`e2e-parity` **1239 collected**，全部 **18 配置共1880 collected**，exit 0。实际正式八组另逐项收集，82个完整规格、1239个用例身份各出现一次，保持原用例与新增回归。证据见 `docs/reports/evidence/resume-2026-11-01/final-cleanup-fix/e2e-collection-v1-summary.json`、`e2e-collection-v1.log` 和 `actual-ci-group-collection-v1/execution.json`。输入5891公共文件及2公开夹具前后未变；这是收集结果，不是完整运行通过。Task6—9的限定验收与此分开记录，typed identity、最终统一源和全部R04—R12仍未关闭。
+
+<!-- CURRENT_PARITY_FACTS:END -->
+
+<!-- PARITY_FACTS_HISTORY:2026-10-28:START -->
+
+> 历史记录（2026-10-28）：保留 agents 路由门禁候选的当时收集范围。
+
+2026-10-28 agents 路由门禁候选的隔离副本完整重新收集：`e2e-parity` **1179 collected**，全部 **18 配置共1808 collected**，exit 0。新增10项真实路由能力门禁回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-28/agents-route-gate/static/full-collection-summary.json` 与 `full-collection.log`。这是收集结果；原生 RED 与组件、静态验证分别保留，原生 GREEN 和最终新冻结完整验收仍须读取实际执行日志。
+
+<!-- PARITY_FACTS_HISTORY:2026-10-28:END -->
+
+<!-- PARITY_FACTS_HISTORY:2026-10-27:START -->
+
+> 历史记录（2026-10-27）：以下保留新增 agents 路由回归之前的共享所有者候选收集证据。
+
+2026-10-27 当前共享所有者修复候选的隔离副本完整重新收集：`e2e-parity` **1169 collected**，全部 **18 配置共1798 collected**，exit 0。新增3项真实浏览器观察回归：二进制 multipart 正反例、viewport-fixed 与 transform-containing-block 滚动及真实位移负控，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-26/s15-complete-diff-discovery/common-owner-repair/current-full-collection.json` 与 `current-full-collection.log`。这是收集结果，不是全部运行通过；Streamdown同长度替换已修复并单独回归，完整矩阵仍有未关闭问题，最终新冻结须完整验收。
+
+> 历史记录（2026-10-27）：以下为共享所有者修复前的收集证据，原始失败与后续修复分别保留。
+
+2026-10-27 当时公开源码候选的隔离副本完整重新收集：`e2e-parity` **1166 collected**，全部 **18 配置共1795 collected**，exit 0。相较上轮1744项，新增10项响应布局及41项图标/引用/表格/文字更新/空状态/消息分组回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-26/icon-scale-discovery/current-full-collection.json` 与 `current-full-collection.log`。当时 Streamdown 同长度替换失败，现已另行修复；此历史收集不代表完整运行通过。
+
+<!-- PARITY_FACTS_HISTORY:2026-10-27:END -->
+
+<!-- PARITY_FACTS_HISTORY:2026-10-26:START -->
+
+> 历史记录（2026-10-26）：以下是上轮收集证据，当前数量以上方2026-10-27候选实测为准。
+
+2026-10-26 当前公开源码的隔离副本完整重新收集：`e2e-parity` **1115 collected**，全部 **18 配置共1744 collected**，exit 0。相较 S4 的1743项，新增1项双端侧栏内外宽度归属回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-26/collection-before-freeze/execution.json` 与 `gate.log`。这是收集结果，不是完整执行通过；最终新冻结仍须完整运行全部门禁。
+
+<!-- PARITY_FACTS_HISTORY:2026-10-26:END -->
+
+<!-- PARITY_FACTS_HISTORY:2026-10-25:START -->
+
+> 历史记录（2026-10-25）：下述旧收集结果保留，当前读数以上方 2026-10-26 实测为准。
+
+2026-10-25原工作区完整重新收集：`e2e-parity` **1114 collected**，全部 **18 配置共1738 collected**，exit 0。新增认证状态与语音流程共4项双端浏览器回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-25/r11-final-source-followups/e2e-collection.json` 与 `e2e-collection.log`。这是当前工作区收集结果，不是冻结验收；最终新冻结仍须完整运行全部门禁。
+
+<!-- PARITY_FACTS_HISTORY:2026-10-25:END -->
+
+<!-- PARITY_FACTS_HISTORY:2026-10-24:START -->
+
+2026-10-24第74版候选完整重新收集：`e2e-parity` **1110 collected**，全部 **18 配置共1734 collected**，exit 0，5790份公共输入前后未变；在第62版完整范围上新增技能详情两个终态、两个方向的4项双端真实键盘转移回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v74-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+2026-10-24第62版候选完整重新收集：`e2e-parity` **1106 collected**，全部 **18 配置共1730 collected**，exit 0，5786份公共输入前后未变；在第52版完整范围上新增亮/暗主题真实持续SSE中的消息复制归属回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v62-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+2026-10-24第47版候选完整重新收集：`e2e-parity` **1102 collected**，全部 **18 配置共1726 collected**，exit 0，5781份公共输入前后未变；在第40版完整范围上新增2项两端真实“加载全文仍返回部分内容不得编辑”回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v47-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+> 历史记录（2026-10-24）：第14版、第18版、第24版、第40版与第47版候选收集记录，已由第52版完整收集更新。
+
+2026-10-24第40版候选完整重新收集：`e2e-parity` **1100 collected**，全部 **18 配置共1724 collected**，exit 0，5780份公共输入前后未变；在第24版完整范围上新增2项两端真实无WebCrypto编辑器PUT与2项工具登记流式/历史/主题回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v40-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+2026-10-24第24版候选完整重新收集：`e2e-parity` **1096 collected**，全部 **18 配置共1720 collected**，exit 0，5777份公共输入前后未变；在第18版完整范围上新增4项两端真实Markdown/JSON导出与2项真实SSE reasoning-answer回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v24-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+2026-10-24第18版候选完整重新收集：`e2e-parity` **1090 collected**，全部 **18 配置共1714 collected**，exit 0，5776份公共输入前后未变；新增5项浏览器环境原生焦点与上下文隔离回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v18-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+2026-10-24第14版候选完整重新收集：`e2e-parity` **1085 collected**，全部 **18 配置共1709 collected**，exit 0，5772份公共输入前后未变；新增10项两端实际Mermaid导出回归（实体/Unicode、语言、视口、SVG/PNG解码与5倍尺寸）。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v14-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+2026-10-24第52版候选完整重新收集：`e2e-parity` **1104 collected**，全部 **18 配置共1728 collected**，exit 0，5783份公共输入前后未变；在第47版完整范围上新增亮/暗主题公开Showcase完整快照回归，原用例全部保留。证据见 `docs/reports/evidence/resume-2026-10-24/candidate-v52-collection/execution.json` 和 `gate.log`。这是收集结果，最终新冻结仍须完整运行验收。
+
+<!-- PARITY_FACTS_HISTORY:2026-10-24:END -->
+
+<!-- PARITY_FACTS_HISTORY:2026-10-20:START -->
+
+> 历史记录（2026-10-20）：以下为旧候选的收集记录，不能代替当前执行结果。
+
+`e2e-parity` 在2026-10-20第10版候选上实际 **1075 collected**，全部 **18 个 E2E 配置共 1699 collected**；原完整 `make -j1 e2e-list` 通过仓库 pnpm 入口运行，直接 exit 0，5766份公共源与夹具前后未变。精确逐套数量见 `docs/reports/evidence/resume-2026-10-20/candidate-v10-collection/summary.json`、`execution.json` 及 `gate.log`。本轮新增命令菜单原生焦点2项及真实通知组件生命周期16项；原全部用例保留。2026-10-18统一候选的1057/1681 collected及其49项新增回归记录仍保留于 `docs/reports/evidence/resume-2026-10-18/unified-candidate/f11-collection/`。Stage52/Stage55的1008 tests、18配置1632 collected，Stage46/Stage51的1004 tests、18配置1628 collected，以及更早轮次均为历史冻结范围。751仍是主差异门禁的取样键数，Playwright collected是整个套件展开后的用例数，不能相互代替，也不能当作已通过用例数。收集不启动浏览器或服务；上述记录只对应明确候选输入，最终新冻结仍须重新完整收集并实际运行全部门禁，不能据此宣布本期完成。下文带历史日期、轮次的passed、耗时和195取样范围继续保留为历史证据。
+
+<!-- PARITY_FACTS_HISTORY:2026-10-20:END -->
 
 ---
 
@@ -25,6 +110,10 @@
 
 **接手时的状态（2026-09-21 量的快照，**不是断言**——下面每个数都现场量一遍）**：
 
+<!-- PARITY_FACTS_HISTORY:2026-09-21:START -->
+
+> 历史记录（2026-09-21）：下段保留当时读数，不代表当前取样范围或本期执行结果。
+
 - 上一轮收工时工作区干净、**已推送到 `origin/main-wc`**。
   **领先多少、有没有未提交改动、CI 是绿是红，一律现场量**（命令见下一段）。
   **量 CI 别问「HEAD 绿不绿」**——这个 workflow 有 `paths:` 过滤，纯 docs 提交
@@ -37,6 +126,8 @@
   **把唯一行读成「还有这么多件事」是错的**，件数看的是上面那个去重数。
   **但 0 不等于对齐完成**：台账只覆盖这 195 个场景-维度，取样面之外它一个字都没说。
   边界说明与下一轮三条方向写在 `NEXT-WINDOW.md`，**那份是当前版本**。
+
+<!-- PARITY_FACTS_HISTORY:2026-09-21:END -->
 
 **这几个数字会漂，接手第一件事是现场量一遍**（别信这里的散文）：
 
@@ -54,8 +145,7 @@ print("词典", k["total"], "key /", k["unusedTotal"], "unused")
 EOF
 ```
 
-当前签入基线现场应输出 `词典 1144 key / 15 unused`；这两个活读数由
-`tests/guards/doc-facts.test.ts` 逐项反算，基线变化时必须同步更新。
+当前词典和取样目标读数见上方唯一「当前事实」区；`tests/guards/doc-facts.test.ts` 逐项反算，基线变化时必须同步更新。
 
 （`frontend-vue/scripts/parity-ledger-report.mjs` 也能报，但它**要有上一次 e2e-parity
 的运行产物**才跑得出来；签入的基线是随时可数的，所以上面直接数基线。）
@@ -82,6 +172,10 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 
 **这一阶段真正有货的是三类**，按性价比排：
 
+<!-- PARITY_FACTS_HISTORY:2026-09-21:START -->
+
+> 历史记录（2026-09-21）：下段保留当时读数，不代表当前取样范围或本期执行结果。
+
 1. **把取样面往没人看过的维度开一扇窗。** 2026-09-11 实测：
    - 开 `dark`（只给 `integrations`）→ **零条新差异**，但从此有机器守着
      「固定红 vs destructive token」那一类（浅色下两者**同值**，只有深色才现形）；
@@ -105,6 +199,8 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 3. **上游的缺陷。** 2026-09-11 那一轮修掉的 16 处用户可见缺陷里**大半在上游**，
    包括一颗叫 "Disconnect"、实际删掉整个部署渠道配置、而且对所有人可见的按钮。
    判据是「修 React 自身缺陷是已授权的例外，做法是两边同改」。
+
+<!-- PARITY_FACTS_HISTORY:2026-09-21:END -->
 
 ### 第一步：按这个顺序读，不要跳
 
@@ -218,7 +314,9 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 6. 提交（fix / chore / docs 分开），更新 `NEXT-WINDOW.md` + `vue-parity-open-accounts.md` + 记忆。
 7. **直接开下一轮。**
 
-### 收工门禁（命令与上一轮实测读数）
+### 收工门禁（当前收集与历史执行记录）
+
+`doc-facts` 每文件仅调用一次 Playwright `--list`，强制无 `PARITY_ONLY` 筛选、`PARITY_REQUIRE_REACT=0`，并检查子进程退出码与非零收集数；不会启动服务或浏览器。此前静态「基线条目 + 固定调用点」只推得历史数字，不能代表循环展开后的当前套件，现已删除。下表除明确的当前 collected 外，带轮次的 passed/耗时均为历史执行证据；本期是否完整通过须读取本期日志。
 
 > **节奏（用户 2026-09-07 要求改的）**：**不再每轮跑全套**。
 > **每轮仍跑** `e2e-parity`（**它就是「先量再改」那把尺子，不能省**）+ `vitest run tests/unit`
@@ -226,6 +324,10 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 > - 该场景的定向 e2e；**每 3~4 轮跑一次下面这九条全套**，**批不超过 4 轮**
 >   ——批里某一轮引入的回归要到批尾才发现，红了就在批内二分。
 >   **硬规则没变**：改动前后各一次读数、负向验证逐条做、收工文档与记忆每轮写。
+
+<!-- PARITY_FACTS_HISTORY:2026-09-21:START -->
+
+> 历史记录（2026-09-21）：下段保留当时读数，不代表当前取样范围或本期执行结果。
 
 ```bash
 # 2026-09-16 第二十一轮收工实测（每一条都是真跑出来的，不是抄的；
@@ -243,7 +345,7 @@ IM 账号」）。**每一轮这条方向都有货，而且货比台账上剩下
 #   e2e-backend 的 passed 数——那几个每加一条测试就变，写进散文只会不断说谎，
 #   跑一次即可，别照抄。
 make -C <abs>/frontend-vue verify         # 第七十一轮实测 lint、类型、全部 Vitest + production build，exit 0
-E2E_PARITY_BROWSER_CHANNEL=chrome make -C <abs>/frontend-vue e2e-parity  # **233 collected**；第七十一轮最终实测 233 passed / 1.6h / exit 0
+E2E_PARITY_BROWSER_CHANNEL=chrome make -C <abs>/frontend-vue e2e-parity  # 当前 collected 见上方「当前事实」区；历史第七十一轮曾实测 233 passed / 1.6h / exit 0，非当前完整套件通过证明
                                           #   （第七十一轮在同一 triple-overlay-keyboard 两条固定用例中继续加入
                                           #   Space、重复 typeahead、submenu traversal 与 disabled-item skip；
                                           #   无筛选产品扫描双端各 61 状态、7 个浮层，新增轴分别
@@ -315,7 +417,7 @@ make -C <abs>/frontend-vue standalone-sim # exit 0（跑过 18 / 未跑 5 / 红 
                                           #   wave 83 那条坑在另一份文件上复发），
                                           #  而这道门当时既不在 verify 里也不在 CI 里，
                                           #  红了二十多轮没人看见。**第二十七轮把它加进了 CI**。
-make -C <abs>/frontend-vue e2e-visual     # 8 passed（只有 -darwin 基线，本机门禁；第十三轮复跑）
+make -C <abs>/frontend-vue e2e-visual     # 2026-10-09 Linux ARM 最终8 passed，9PNG审图后无更新复验；Darwin保留原基线，固定Linux CI必跑
                                           #  **第十二轮的教训**：这一档改完侧栏字重仍然全绿，
                                           #  而那**不是**「侧栏没变」的证据——它是 fullPage +
                                           #  maxDiffPixelRatio 0.01，一个词的字重差远在容差内。
@@ -324,8 +426,10 @@ make -C <abs>/frontend-vue asset-budget   # exit 0（第五轮查清是存量并
 make -C <abs>/frontend-vue icon-parity    # exit 0、**0 处待核**（第十三轮复跑；第五轮把 `Unplug` 那处从根因清掉）
 make -C <abs>/frontend-vue audit          # 棘轮（wave 202 起分诊在 baseline/audit-triage.json）；
                                           #  实测 exit 0，20 条 / 7 个包逐条表过态
-make -C <abs>/frontend-vue e2e-external   # 3 passed（不在任何聚合入口）
+make -C <abs>/frontend-vue e2e-external   # 历史3 passed；当前CI强制独立执行，不能由mock/backend聚合代替
 ```
+
+<!-- PARITY_FACTS_HISTORY:2026-09-21:END -->
 
 > **第四轮踩出来的一条教训，留在这里**：上面这块读数**本身也会过期**，而且过期得
 > 毫无迹象——第四轮逐条真跑之前，`asset-budget` 与 `icon-parity` 两条都记着
@@ -471,10 +575,16 @@ while [ $SECONDS -lt $end ]; do :; done' &); done`，**自限时、跑完 `pgrep
 却没有任何查询拥有这个 key，四处全是空操作。
 **「本仓不需要」和「本仓缺了那一层」长得很像。**
 
+<!-- PARITY_FACTS_HISTORY:2026-09-21:START -->
+
+> 历史记录（2026-09-21）：下段保留当时读数，不代表当前取样范围或本期执行结果。
+
 **清零不等于对齐完成，而且那个 0 是 macOS 的读数**——第三十七轮在
 ubuntu-latest 上用同一棵树量出 16 行（逐组见挂账文档第三十七轮条目）。
 台账只覆盖 195 个场景-维度，
 取样面之外它一个字都没说。边界与下一步写在 `NEXT-WINDOW.md`。
+
+<!-- PARITY_FACTS_HISTORY:2026-09-21:END -->
 
 ### 再上一轮（2026-09-17 第三十五轮）做了什么
 
@@ -643,6 +753,10 @@ Claude 记忆 `measure-dont-guess`）。
 
 **下一轮最该先拿的（按顺序）**：
 
+<!-- PARITY_FACTS_HISTORY:2026-09-21:START -->
+
+> 历史记录（2026-09-21）：下段保留当时读数，不代表当前取样范围或本期执行结果。
+
 > **⚠ 第三十六轮把对照台账推到 0（起点 170 个投影）。** 这张单子因此重排了：
 > 原来排在前面的「还台账欠账」已经没有欠账可还，**接 CI 与扩取样面升到最前**。
 >
@@ -651,6 +765,8 @@ Claude 记忆 `measure-dont-guess`）。
 > 台账只覆盖 195 个场景-维度，取样面之外它一个字都没说。
 > 完整的边界说明、下一轮三条方向、以及第三十六轮那两条教训，
 > 都写在 `NEXT-WINDOW.md`，**那份是这张单子的当前版本**。
+
+<!-- PARITY_FACTS_HISTORY:2026-09-21:END -->
 
 1. **核实「`e2e-parity` 接进 CI」那套东西——它已经在仓库里了，别重做。**
    **这一条原本写的是「去做」，是错的，2026-09-17 当场订正**：写那句话时
@@ -1285,6 +1401,10 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 
 ### D. ~~挂着的账~~ —— **wave 101/102/103 全部处理完，这一段空了**
 
+<!-- PARITY_FACTS_HISTORY:2026-09-23:START -->
+
+> 历史记录（2026-09-23）：下段保留当时读数，不代表当前取样范围或本期执行结果。
+
 > **⚠ 这一段是历史，留着看判据怎么演进。**
 > 里面点名的账 F（Mermaid 工具条）与账 G（`channels#settings-panel-connected`）
 > **第二十三轮就结清了**，台账第三十六轮清零。
@@ -1292,6 +1412,8 @@ wave 83/84/85/89 证明过一次，**wave 101~105 又连着五轮证明**：这�
 > ——那一节的数同样停在第二十三轮（它自己已就地标注）。
 > **活读数只看本文开头那一处**，2026-09-23 实测：
 > **0 唯一行 / 0 多重集 / 195 个场景-维度 / 0 条不同的差异**。
+
+<!-- PARITY_FACTS_HISTORY:2026-09-23:END -->
 
 一页纸清单「真正还开着的」当时是 **5 条**，且**全部是「已决定 / 够不着」**：
 覆盖率棘轮的 pending 1 条（wave 101 按判据量到底，**不翻案**）、

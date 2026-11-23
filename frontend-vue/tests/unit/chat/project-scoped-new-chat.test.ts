@@ -5,13 +5,9 @@
   【边界与注意】   守的是**顺序**：归属必须发生在消息发出去之前。顺序反了，
                    会话会先落在项目外面，而用户是从项目里点进来的。
 
-                   AgentChat 是两千多行、依赖整条流式链的组件，本仓从来没有
-                   挂载它的用例（其余九个 AgentChat 用例全是源码守卫）。所以
-                   这里同样钉源码，另一半用真单测钉 `createThread` 的请求形状——
-                   顺序与请求体各有一份证据，而不是靠读代码相信。
+                   创建与项目归属顺序由 chat-thread-owner.dom.test.ts 真实挂载 owner 验证；
+                   本文件验证 createThread 的 HTTP 请求体和后端失败传播。
 */
-
-import { readFileSync } from "node:fs";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -20,38 +16,11 @@ vi.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetchWithAuth }));
 
 import { createThread } from "@/core/threads/api";
 
-/** 注释先剥掉：下面钉的每一条在文件里都同时出现在解释它的注释里。 */
-const agentChat = readFileSync("app/components/chat/AgentChat.vue", "utf8")
-  .replaceAll(/<!--[\s\S]*?-->/g, "")
-  .replaceAll(/\/\*[\s\S]*?\*\//g, "");
-
 afterEach(() => {
   mocks.fetchWithAuth.mockReset();
 });
 
 describe("从项目里新建会话", () => {
-  it("先归属到项目，再发消息", () => {
-    const ensure = agentChat.indexOf("await ensureProjectMembership(");
-    const create = agentChat.indexOf(
-      "const targetThreadId = await ensureThread()",
-    );
-    const send = agentChat.indexOf("await stream.sendMessage(");
-    expect(create).toBeGreaterThan(-1);
-    expect(ensure).toBeGreaterThan(create);
-    expect(send).toBeGreaterThan(ensure);
-  });
-
-  it("归属失败就不发这条消息", () => {
-    const start = agentChat.indexOf("async function ensureProjectMembership(");
-    expect(start).toBeGreaterThan(-1);
-    const body = agentChat.slice(start, agentChat.indexOf("\n}", start));
-    // 报一句话给用户，然后抛出——吞掉异常就等于「悄悄发到项目外面」。
-    expect(body).toContain("projects.projectUnavailable");
-    expect(body).toContain("throw error");
-    // 没有 project 参数时什么都不做。
-    expect(body).toContain("if (!projectId) return;");
-  });
-
   it("createThread 把 project_id 放进请求体，并且带 thread_id", async () => {
     mocks.fetchWithAuth.mockResolvedValue({
       ok: true,

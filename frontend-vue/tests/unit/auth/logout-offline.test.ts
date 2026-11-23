@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
 import { performLogout } from "@/core/auth/logout";
 
 function ports(post: () => Promise<{ ok: boolean }>) {
@@ -30,7 +31,10 @@ function ports(post: () => Promise<{ ok: boolean }>) {
     post,
     navigate: vi.fn(),
     hardNavigate: vi.fn(),
-    queryClient: { clear: vi.fn() },
+    queryClient: {
+      clear: vi.fn(),
+      cancelQueries: vi.fn(async () => undefined),
+    },
   };
 }
 
@@ -39,7 +43,7 @@ describe("performLogout", () => {
     const p = ports(async () => ({ ok: true }));
     await expect(performLogout(p)).resolves.toBe("signed-out");
 
-    expect(p.navigate).toHaveBeenCalledWith("/login");
+    expect(p.navigate).toHaveBeenCalledWith("/");
     expect(p.hardNavigate).not.toHaveBeenCalled();
   });
 
@@ -62,7 +66,7 @@ describe("performLogout", () => {
     // 本地态无论哪一支都要清掉，否则旧用户的数据会留在 Query 树里。
     expect(p.queryClient.clear).toHaveBeenCalledTimes(1);
     // 硬跳转，不是客户端路由：这一支的前提就是「后端状态不可信」。
-    expect(p.hardNavigate).toHaveBeenCalledWith("/login");
+    expect(p.hardNavigate).toHaveBeenCalledWith("/");
     expect(p.navigate).not.toHaveBeenCalled();
   });
 });
@@ -93,4 +97,16 @@ describe("退出的两个入口", () => {
       sourceOf("app/components/workspace/GatewayStatusBanner.vue"),
     ).toContain("$i18n.t.value.workspace.logout");
   });
+});
+
+it("retires existing mutation owners before the logout transport is sent", async () => {
+  const p = ports(async () => ({ ok: true }));
+  const owns = captureWorkspaceQueryOwner(p.queryClient);
+  p.post = async () => {
+    expect(owns()).toBe(false);
+    expect(p.queryClient.cancelQueries).toHaveBeenCalledOnce();
+    return { ok: true };
+  };
+  await performLogout(p);
+  expect(owns()).toBe(false);
 });

@@ -29,6 +29,7 @@ WORKDIR /app
 # node_modules itself remains in this image layer for downstream stages.
 FROM base AS dependencies
 COPY frontend/package.json frontend/pnpm-lock.yaml ./frontend/
+COPY frontend/patches ./frontend/patches
 RUN --mount=type=cache,id=deer-flow-frontend-pnpm,target=${PNPM_STORE_PATH} \
     cd /app/frontend && pnpm install --frozen-lockfile
 
@@ -38,7 +39,7 @@ WORKDIR /app/frontend
 # 2026-09-08: the dev image carried `lightningcss-darwin-arm64` — the macOS
 # build of Tailwind's CSS engine — on an Alpine/arm64 container, from a
 # `dependencies` layer Docker had cached a month earlier. Nothing revalidates
-# such a layer: its only inputs are package.json and pnpm-lock.yaml, so as long
+# such a layer: its inputs are package.json, pnpm-lock.yaml and patches, so as long
 # as those do not change the same tree is served forever. It surfaced ten hours
 # into a session as a 500 the first time Tailwind compiled a stylesheet from
 # cold, because the compile cache had answered everything until then.
@@ -65,6 +66,7 @@ WORKDIR /app
 # ── Dev: install only, CMD is overridden by docker-compose ───────────────────
 FROM dependencies AS dev
 COPY frontend ./frontend
+ENV PORT=3000
 EXPOSE 3000
 
 # ── Builder: install + compile Next.js ───────────────────────────────────────
@@ -102,6 +104,7 @@ COPY --from=builder --chown=node:node /app/frontend ./frontend
 # chart separately forced runAsUser 1000, so Kubernetes was hardened and
 # Compose was not.
 USER node
+ENV PORT=3000
 EXPOSE 3000
 
 # A TCP connect, not an HTTP GET, and deliberately so.

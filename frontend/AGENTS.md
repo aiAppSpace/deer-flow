@@ -11,59 +11,219 @@ DeerFlow Frontend is a Next.js 16 web interface for an AI agent system. It commu
 ### Core dependencies
 
 - **LangGraph SDK** (`@langchain/langgraph-sdk` ^1.5.3) — Agent orchestration and streaming
-- **LangChain Core** (`@langchain/core` ^1.1.15) — Fundamental AI building blocks
+- **LangChain Core** (`@langchain/core` ^1.3.0) — Fundamental AI building blocks
 - **TanStack Query** (`@tanstack/react-query` ^5.90.17) — Server state management
 - **UI**: Shadcn UI, MagicUI, React Bits, and Vercel AI SDK elements (generated from registries — see Code Style)
 
-`pnpm-workspace.yaml` overrides vulnerable `@xmldom/xmldom` 0.9.x releases to
+`package.json`'s `pnpm.overrides` overrides vulnerable `@xmldom/xmldom` 0.9.x releases to
 0.9.12 for GHSA-965w-775f-mr7g. Nextra pulls it in through MathJax and
 `speech-rule-engine@4.1.2`, which pins 0.9.8. Keep the override until the
 upstream dependency chain resolves a patched version without it; regenerate
 `pnpm-lock.yaml` and verify the docs build when changing this constraint.
 
+The same override map pins `@codemirror/language` to 6.12.4, matching the
+Vue editor's resolved version. This includes upstream initial bracket matching
+and composition fixes absent in 6.12.1. Keep `@lezer/common` 1.5.3 and
+`@lezer/highlight` 1.2.5 unified across grammars and themes: parallel highlight
+instances create different tag/NodeProp identities and silently lose syntax
+coloring. The mounted initial-JSON and actual CSS-highlight regressions plus
+the cross-app code-editor suite cover these behaviors; do not hide matching
+bracket decorations from the rendering comparison.
+
+Nextra Theme Docs 4.6.1 has a pnpm-locked backport of upstream PR #4990:
+validate complete Layout props before separating children from theme config.
+Keep its schema strict and Zod at the security-fixed version. The production
+browser regression `tests/e2e/docs-layout.spec.ts` covers both languages, nested
+MDX, navigation and reload. Remove the patch when an official release includes
+the equivalent fix and those checks pass; never edit installed dependencies.
+
+The public Streamdown `components.table` adapter in `core/streamdown/table-renderer.tsx`
+owns inline/fullscreen table containers and Radix modal lifetime. Keep the exported
+Streamdown copy/download controls and serializers; do not patch private DOM after render.
+Both actual tables keep their `table-wrapper` ancestry, so exported actions read the
+selected table. Caller component overrides and public control settings retain priority.
+Table and Mermaid renderers share control glyphs through `control-icon.tsx`.
+Mounted table tests and the shared native table action/presentation suites cover focus,
+Escape, downloads, clipboard payloads, independent tables and viewport geometry.
+
+Citation copy continuations belong to the mounted source button. Departure clears its
+feedback timer and retires late success/denial notifications without cancelling a browser
+clipboard write already in progress. Keep live feedback and repeat-copy deadlines intact.
+
+Streamdown 2.5.0 has a pnpm-locked backport of upstream commit 89c6877 (PR #584).
+Markup memoization compares rendered props rather than source positions; code
+fences also compare their metadata. Equal-length replacements must update text,
+links, list starts and table cells while retaining their DOM and open dialogs.
+Unchanged earlier blocks still remain memoized. Install the patch through pnpm;
+keep Docker dependency inputs, Compose watches and CI patch paths covered.
+`rendered-props.dom.test.tsx` and the shared `markdown-update.spec.ts` exercise
+the installed renderer. Remove the backport once an official release includes
+the equivalent fix and full mounted/native/streaming regressions pass.
+
+Send and replay share an operation-owned submission guard. Retired callbacks must
+not clear a newer turn. Replay preparation belongs to the committed displayed
+thread/agent; preserve ordinary send's native adoption and Promise error contract.
+
+Opt-in parity observation keeps ordinary human allocation and its submission
+attempt on the same local observer. Emit only after uploads, callbacks and actual
+submit-argument construction, preserving the initiating action across async work.
+This proves a call attempt, not HTTP or backend admission; React's absent ordinary
+idempotency key must remain absent. Default-off observation does not generate IDs.
+
+Run context must not contain `thread_id`, including values restored from settings
+or supplied through extra context. The request URL and Gateway own that identity.
+Keep references and other permitted run options intact when removing it.
+
+The project document attach dialog enables its thread query only while a document
+is selected. Closing retains the query cache but does not refetch it on invalidation;
+reopening resumes the existing stale-query and pagination behavior.
+
+Composer persistence debounces the effective draft content and owner, not
+React effect or capability-object identity. Same-content renders retain the
+300 ms deadline; owner departure/pagehide flush it and accepted sends retire it.
+The mounted draft-deadline tests exercise real query completion and storage.
+
+Current-thread deletion hands focus from the closing Dialog to the new composer
+through the existing thread-chat reset command. Only the matching main page
+claims that completion; its current InputBox ref checks the new UUID, account
+and editable state. Keep the account revision and newer-focus checks. Native
+history adoption retains the prepared UUID and editor; deletion changes the UUID
+and the existing ChatBox MessageDetailsProvider key replaces its subtree before
+the welcome effect updates autoFocus. Native adoption preserves Next's route tree;
+`useThreadChat` resolves recognized main, agent and Showcase thread identities from
+public `usePathname` before its first consumer render. Back may retain `new` in
+`useParams`, so do not mint a draft from that stale parameter. Keep native adoption
+and its active stream mounted; never rewrite Next's private history state.
+Initial draft allocation and later route synchronization share one identity, even
+when the public route renders before the browser URL commits. Showcase mode also
+belongs to that public route; the old browser URL cannot make it editable.
+Initialization and synchronization use the same decoded new-chat classification;
+other routes ending in `new` must not create another conversation owner. Do not add remounts or focus on every
+welcome-state change to compensate for that ordering.
+
+Opt-in Memory import observation binds the original normalized document and pending
+preview through local weak receipts. Settings passes the optional observer through
+its real mutation/API to the authenticated fetcher's before-native-fetch boundary,
+after static/CSRF/init preparation. This proves only a call attempt, not delivery.
+Unknown, unselected and retired consumers remain visible; clones never acquire a
+source by content equality. Default-off calls do no extra signal inspection. The
+observer cannot change bytes, headers, cancellation, cache updates or product errors;
+serialization/preflight/static early returns have no dispatch event. Tests include
+real Settings→mutation→API→fetcher imports, failed retries and abandoned previews.
+
+Memory file reads belong to the mounted settings page and its latest selection.
+Check both before parsing or reporting a read failure; unmount retires pending
+reads, and Strict Mode effect replay must keep new selections usable.
+
 ## Commands
 
-| Command          | Purpose                                       |
-| ---------------- | --------------------------------------------- |
-| `pnpm dev`       | Start the development server with Webpack     |
-| `pnpm build`     | Production build                              |
-| `pnpm check`     | Lint + type check (run before committing)     |
-| `pnpm lint`      | ESLint only                                   |
-| `pnpm lint:fix`  | ESLint with auto-fix                          |
-| `pnpm format`    | Prettier check (`pnpm format:write` to apply) |
-| `pnpm test`      | Run unit tests with Rstest                    |
-| `pnpm test:e2e`  | Run E2E tests with Playwright (Chromium)      |
-| `pnpm typecheck` | TypeScript type check (`tsc --noEmit`)        |
-| `pnpm start`     | Start production server                       |
+| Command          | Purpose                                           |
+| ---------------- | ------------------------------------------------- |
+| `pnpm dev`       | Start the development server on 3200 with Webpack |
+| `pnpm build`     | Production build                                  |
+| `pnpm check`     | Lint + type check (run before committing)         |
+| `pnpm lint`      | ESLint only                                       |
+| `pnpm lint:fix`  | ESLint with auto-fix                              |
+| `pnpm format`    | Prettier check (`pnpm format:write` to apply)     |
+| `pnpm test`      | Run unit tests with Rstest                        |
+| `pnpm test:e2e`  | Run E2E tests with Playwright (Chromium)          |
+| `pnpm typecheck` | TypeScript type check (`tsc --noEmit`)            |
+| `pnpm start`     | Start production server                           |
 
 Unit tests live under `tests/unit/` and mirror the `src/` layout (e.g., `tests/unit/core/api/stream-mode.test.ts` tests `src/core/api/stream-mode.ts`). Powered by Rstest; import source modules via the `@/` path alias.
 
 Webpack is the default development bundler. Use `DEER_FLOW_DEV_BUNDLER=turbo` with `pnpm dev` to opt in to Turbopack when diagnosing a local Next.js bundler issue.
 
+The dev/start launchers share `scripts/next-server.mjs`: local port `3200`, with
+explicit CLI port or `PORT` taking precedence. Both Docker runtime stages set
+`PORT=3000`; local orchestration and its Nginx upstream use `3200` explicitly.
+Keep the service command, readiness, stop ownership and documentation consistent.
+
+Host Playwright web servers and asset builds use `../scripts/pnpm.py --dir frontend`.
+The asset measurement process directly owns the installed Next CLI child so its
+normal/failure cleanup stops the actual listener. The manual recording config
+uses `3212` (override `E2E_RECORD_FRONTEND_PORT`) consistently for startup and
+readiness; it does not inherit the local development or container port.
+
 On Windows `pnpm dev` binds `127.0.0.1` by default because Hyper-V/winnat excluded port ranges can reject Next's default `0.0.0.0` bind with `EACCES` (#2870). Pass `pnpm dev -- --hostname 0.0.0.0` to listen on a LAN interface instead.
 
 Rstest runs them as two projects (`rstest.config.ts`). `*.test.ts` / `*.test.tsx` run in a plain **node** environment — that is nearly the whole suite, and it is the default for anything that is pure logic. `*.dom.test.ts` / `*.dom.test.tsx` run in **happy-dom**, for tests that need a document: hooks driven through `renderHook` from `@testing-library/react`, and components. Keep the split — a DOM environment costs roughly 3x the runtime of the node suite, so tests that do not render should not opt into it. A hook whose behavior only exists under real React (effect ordering, cleanup on unmount, re-render on store change) belongs in a `.dom.test.*` file rather than a node test that mocks `react` itself.
 
+Both frontends pin Happy DOM 21.0.4 and apply the same pnpm source patch for
+Animation.finished cancellation/replay and CSSStyleDeclaration's Web IDL brand.
+`tests/unit/tooling/happy-dom-contracts.test.ts` runs the installed public API in
+an ordinary Node child with fatal unhandled rejections. Keep normal animations
+and error reporting enabled; do not restore getComputedStyle/markRaw shims.
+React binds only `@rstest/core@0.10.6>happy-dom` to 21.0.4 until Rstest's peer
+range includes the verified version. Remove that override and the source patch
+when upstream equivalents pass the same contracts and full suites.
+Vue additionally owns the deterministic MutationObserver garbage-collection
+regression in `../frontend-vue/tests/unit/tooling/mutation-observer-lifetime.test.ts`.
+These dependency checks do not replace native browser focus/overlay acceptance.
+
+The two create aliases in `tests/e2e/utils/mock-api.ts` share the Gateway's
+idempotent contract: honor requested UUIDs, validate active projects before the
+first insert, strip server-reserved metadata and return existing rows unchanged.
+Creation starts with no messages; `handleRunStream` records the messages it
+actually emits, including custom stream handlers. The same history owner retains
+seeded and previous turns, replaces matching explicit message IDs in place, and
+emits the complete merged values. Default new responses receive fresh message
+IDs; explicit caller IDs remain unchanged. Input-less runs do not invent human
+messages. Prepared replay consumers supply a known checkpoint base bound to the
+request checkpoint ID and an explicit response message identity; replay folds its
+input onto that base, and REST message rows retain the emitted run attribution.
+Ordinary sends continue from existing history. Seed prior history explicitly
+in `threads`, rather than manufacturing it during create.
+
 E2E tests live under `tests/e2e/` and use Playwright with Chromium. They mock all backend APIs via `page.route()` network interception and test real page interactions (navigation, chat input, streaming responses). Config: `playwright.config.ts`. The real-backend auth contract in `tests/e2e-real-backend/auth-disabled-contract.spec.ts` and `backend/tests/test_auth_me_permissions.py` pin the complete route-permission list; update both when adding registered permissions (including `projects:read/write/delete`).
 E2E tests live under `tests/e2e/` and use Playwright with Chromium. They mock all backend APIs via `page.route()` network interception and test real page interactions (navigation, chat input, streaming responses). Config: `playwright.config.ts`. The default suite owns an isolated production server on port `3002` and never reuses an arbitrary existing listener; use `PLAYWRIGHT_SKIP_WEB_SERVER=1` only when intentionally supplying and validating an external server.
 
-The dedicated `run-history.ts` hook replaces the unpaged runs hook. Show counts
-only after a successful history read, never during initial loading or errors.
-Scheduled run history uses task/page query keys and the existing live offset API.
-Fetch 51 rows to display 50 plus a next-page sentinel; never append pages. Only
-page zero polls or refreshes on focus/reconnect. Task switches reset to page zero,
-and consumed AbortSignals cancel obsolete reads. Live offsets are not snapshots;
-explicit mutations or navigation may observe newly inserted runs.
-Run status `unmet` identifies a finished occurrence whose scheduled goal was not satisfied; keep it distinct from execution failure.
-`core/scheduled-tasks/goal-outcome.ts` maps goal verdicts and host reason codes for run history; show known codes as localized labels; unknown codes, raw run errors and the evaluator's reason stay behind the run row's Details. Check-failure codes are "unchecked", not a miss. `contracts/scheduled_goal_notes_contract.json` pins the host strings it and `run-error.ts` match.
-Scheduled-task views read state through the pure `core/scheduled-tasks` helpers (`status.ts`, `actions.ts`, `format.ts`, `describeTaskSchedule`, `errors.ts`) so list, detail and chat card agree. "Is a run active?" is `status === "running"` or `active_run_status` (a recurring task stays `enabled` while it runs). Default views show no IDs, ISO times, cron strings or enum names; errors localize by `detail.code` (`contracts/scheduled_task_errors_contract.json`) with raw text only behind Details. `tests/e2e/utils/readable.ts` and `tests/unit/helpers/readable.ts` assert this.
-The tasks page (`app/workspace/scheduled-tasks/page.tsx`) only composes `components/workspace/scheduled-tasks/*`: list with status tabs, detail (Runs / Stops when / goal / Does / notes / History), outcome notice, create/edit/duplicate dialog (PATCH sends only changed fields, `null` clears) and the renew dialog that a `limits_exhausted` Resume opens. `?task_id=` selects a task; `?thread_id=` scopes the list to one chat.
-In chat, a `schedule_task` result becomes an `assistant:scheduled-task` group (`core/scheduled-tasks/tool-result.ts`, last card per task per turn; not a turn boundary) rendered by `ScheduledTaskCard`, which polls the task only while on screen. A human message with `additional_kwargs.deerflow_scheduled_origin` stays a `human` group with `scheduledOrigin`: `ScheduledRunPrompt` renders the origin's user-language parts, never the launched text, and it is not editable.
-Server-created threads: `core/threads/origin.ts` reads `metadata.deerflow_origin` (`contracts/thread_origin_contract.json`), then `channel_source`, then a legacy `scheduled_task_id`; provider names come from `threads.origin.providers`. `core/threads/activity.ts` polls `/api/thread-activity` (mount `useThreadActivity` once; unmounting resets its cursor; first poll only seeds; invalidate lists only on server-origin threads, truncation or a higher `read_version`) and `useMarkThreadRead` posts reads. `core/scheduled-tasks/events.ts` loads a chat's lifecycle events, not gated on its task list; `placeTaskEvents` puts each at the end of its `after_run_id` turn. The UI language is saved as the `locale` preference once per session and on each switch, only when the Gateway's preferences include `locale`.
-Thread rows (sidebar, `/workspace/chats`) show `ThreadOriginIcon` and, if `unread === true` and not the open thread, `ThreadUnreadDot` with `threads.unreadLabel` as row label. `WorkspaceSidebar` mounts `useThreadActivity`. Chat pages call `useMarkOpenThreadRead` once metadata loads (marks read on load, on an unread flip, on tab visible, and via its callback from `onFinish`).
-Chat pages pass `useThreadScheduledTaskEvents` data to `MessageList` (`scheduledTaskEvents`; the custom-agent page also passes its agent for the run link), which renders `ScheduledTaskEventLine` through `VirtualMessageList.renderAfterGroup` at the `placeTaskEvents` position, inside the group's measured row. Lines are history: never gated on the task list. Channel provider cards (Settings and the sidebar list) render `ChannelScheduledUpdates` from `proactive_notifications`, and nothing when the field is absent.
+Scheduled tasks, conversation origins, models, plugins, composer references, Lark
+authorization and artifact revisions have detailed [workspace behavior contracts](docs/workspace-behavior-contracts.md).
+Read the relevant section before changing these surfaces; preserve their shared contracts
+and mounted/browser regressions.
+
+Before changing chat scrolling, overlays, or settings/project/artifact capacity,
+read [responsive capacity contracts](docs/responsive-capacity-contracts.md).
+Preserve their native scroll owners, complete controls and shared browser gates.
+
+Sonner 2.0.7 has a pnpm-locked source repair under `patches/`: ordinary list blur
+must not force focus back to an earlier control. `components/ui/sonner.tsx` owns
+Alt+T visits separately from native Tab traversal. Install through pnpm; never
+edit `node_modules`. Keep the repair in Docker dependency inputs, Compose rebuild
+watches, Vue CI paths and cross-component drift review. On a Sonner upgrade,
+review both package entrypoints and rerun mounted focus/keyboard tests plus the
+shared production-browser traversals before retiring or replacing the repair.
+A native blur with no next focus target must retire the recorded entry immediately;
+unmount must not restore it later. The shared notification-lifecycle browser
+regression mounts the real components to cover blur, dismissal and unmount.
+Its isolated component boundary complements the full application traversals.
+
+Radix Tooltip 1.2.8 also has a pnpm-locked repair under `patches/`: its global
+open notification identifies the originating content, so a popup retained by
+an exit animation cannot close itself when it reopens. Other instances and
+legacy unidentified notifications still close it. Keep both CJS/ESM entrypoints
+in sync, install through pnpm, and rerun mounted lifecycle tests plus the shared
+production Tooltip presentation and keyboard suites when upgrading or retiring
+the repair. Preserve the existing animation, hover, Escape and scroll behavior.
+The paired DismissableLayer 1.1.11 repair adds an optional `enabled` lifetime
+(default true), and Tooltip passes its real open state. Closed, animated content
+keeps its DOM but leaves the dismissal stack; reopening registers it as active
+again. Keep both runtime and declaration entrypoints synchronized. Mounted tests
+also require a stable internal node ref: layer-stack updates must not detach a
+still-mounted Dialog/Sheet host or replace its native iframe focus boundaries.
+Compose the forwarded ref with React's stable state setter; preserve normal
+cleanup on actual unmount. The same mounted tests
+cover peer reentry, controlled/uncontrolled owners, modal Escape ordering and
+body pointer restoration, force-mounted closed hints, and preventDefault on
+Escape/outside pointer events. Do not substitute forced unmounts or timer delays
+for that interaction lifetime.
 
 ## Architecture
+
+Read [workspace behavior contracts](docs/workspace-behavior-contracts.md) before
+changing delimited artifact previews or the Capability Center. Detailed contracts
+remain there; this guide owns module commands, dependencies and conventions.
 
 ```
 Frontend (Next.js) ──▶ LangGraph SDK ──▶ LangGraph Backend (lead_agent)
@@ -93,6 +253,54 @@ The frontend is a stateful chat application. Users create **threads** (conversat
 More specific `AGENTS.md` files under `src/` contain the frontend sections split from this file.
 
 ## Code Style
+
+Dialog/Sheet native iframe, radio and negative-entry focus ownership,
+notification and controlled-dialog focus return, mobile artifact capacity, and
+stationary-pointer reference highlight behavior are documented in
+[responsive capacity contracts](docs/responsive-capacity-contracts.md).
+
+`ui/dialog-focus-boundary.ts` installs its native Tab guards in the content
+owner's effect after Radix FocusScope mount autofocus, never from the ref callback.
+Keep default mount entry (including raw radio order and input selection), caller
+cancellation/redirects, and nested scope ownership with Radix. The shared hook
+owns guard cleanup and forwarded refs; initial-focus and frame-boundary component
+tests cover replay, reopening, dynamic children, and retirement.
+
+`ui/toggle-group.tsx` preserves Radix's initial roving entry and blur reset.
+For an item's ordinary Shift+Tab, publish the requested root back-out state
+synchronously before an enclosing FocusScope reads its edges. Run the caller's
+handler first and respect preventDefault; leave disabled roving focus, embedded
+inputs, modified keys and other key behavior with their existing owners. Do not
+make the root permanently untabbable: before its first focus, its items have no
+current tab stop.
+
+Mermaid uses Streamdown's public `plugins.renderers` registration in
+`core/streamdown/plugins.ts`. The project renderer preserves Streamdown 2.5's
+diagram toolbar and engine configuration while its fullscreen uses a native
+Radix Dialog layer. Keep Escape and focus inside that inner dialog; closing it
+must retain the enclosing artifact Sheet and restore its trigger. Drawing and
+downloads retire late results, viewport work, pointer capture and object URLs
+with their component owner. Do not patch generated primitives or Streamdown's
+installed package to coordinate nested overlays.
+`core/streamdown/mermaid-export.ts` serializes the detached Mermaid HTML fragment
+as XML before SVG download or PNG decoding. Keep foreignObject HTML namespaces,
+void tags, entities and Unicode intact; a string containing `<svg` is not proof
+that an exported image decodes. The shared native image-export regression checks
+both applications, languages, viewport sizes and the original 5x PNG scale.
+
+Artifact auto-selection belongs to `MessageGroup`'s current last tool, above
+`FlipDisplay`'s exiting children. Keep the 100ms effect and cleanup for target,
+pending/result, loading, selection and owner changes. Read a finalize tool's
+actual result message; generic display parsing must not erase its success.
+`CodeEditor` owns autofocus for the readonly-to-editable transition through
+CodeMirror's committed `ViewUpdate`. UIW's autofocus effect runs before its
+editable reconfiguration; focus only when that actual state becomes editable
+and the caller requests it. Keep the same view and draft, and do not reclaim
+focus for later document or configuration updates.
+`InputBox` keeps a completed-turn followup snapshot across temporary disabled
+or config loading states, then submits it once. Stop, a new run, thread/user/
+composer lifetime changes and unmount retire and abort that owner; historical
+initial mounts do not generate followups.
 
 `core/utils/markdown.ts` reads web-fetch titles from the first nonblank line.
 Match zero to three literal spaces before `# ` without trimming indentation;
@@ -205,16 +413,6 @@ organization requests can otherwise roll back each other's confirmed state.
 Run-created optimistic snapshots have no archive flag: refresh archive-filtered
 lists from the server instead of inserting those snapshots into either view.
 
-### Delimited artifact preview
-
-CSV/TSV previews share `artifact-table-preview.tsx` between the panel and standalone viewer. Papa Parse runs only inside `delimited-preview.worker.ts`; `use-delimited-preview.ts` bounds input before transfer, cancels stale work, and enforces a five-second timeout. The parser detects the first record separator outside quoted fields and passes it explicitly to Papa Parse, so embedded newlines in an incomplete quoted field cannot corrupt newline detection. It retains at most 202 logical records and 50 columns, discarding an incomplete final record from truncated input. UI pagination displays at most 200 data rows in pages of 50. Keep the table mounted but inactive when switching to source so header/pagination state survives; changing file identity resets it. Pending `write_file` content stays in source mode until success.
-
-For a truncated sample whose first separator is LF or CRLF, strip a terminal CR
-before parsing so a split CRLF separator cannot make a quoted final field
-invalidate the whole preview, including LF-first files with later CRLF records.
-The terminal record remains incomplete and is discarded; complete CR-only files
-and malformed quotes retain their existing behavior.
-
 Custom skill export is admin-only and disabled in static demos. The lazy
 `skill-export-dialog.tsx` must abort requests and ignore stale callbacks on close
 or user/skill changes. `core/skills/export.ts` owns the revision-bound Blob download;
@@ -230,47 +428,6 @@ with a localized fallback, and log the rejection for debugging. The shared
 delete helper accepts remote 404 (not 403) before retrying local cleanup, and
 `onDeleted` runs only after both deletion steps succeed.
 
-## Capability Center
-
-`/workspace/capabilities` owns Plugins and Skills navigation. Plugins composes the
-MCP manager and a lazily loaded Lark configuration dialog; installation, OAuth,
-mutation permissions, and cache ownership remain in the existing hooks. Skill display names/summaries are presentation
-metadata; runtime names and full descriptions remain unchanged. Public, custom,
-integration, and legacy sources must stay distinct. Community currently offers
-archive import, not a remote marketplace. Screenshot E2E fixtures are demo data.
-`backend/packages/harness/deerflow/capabilities/builtin.json` owns localized
-catalog manifests. Refresh the generated demo snapshot with `pnpm catalog:sync`
-after changing the catalog; unit tests enforce equality with the source. Demo
-business projections derive provider IDs from the catalog adapter metadata. The
-sync script uses decoded filesystem paths for formatter configuration lookup.
-`plugin-catalog.ts` only resolves localized text and explicit
-installation metadata; never infer provider identity from server display names.
-`plugin-directory.tsx` groups rows and applies search/category/installed filters.
-`core/capabilities` consumes catalog and safe status projections; MCP secrets and
-raw settings remain in the administrator-only editor. `plugin-adapters.tsx`
-registers integration-specific settings flows once, independent of catalog size.
-The `business` form uses manifest credential fields without asking for an MCP URL;
-its backend adapter generates bundled DingTalk/WeCom notification or HubSpot CRM
-connections. These also appear in MCP discovery, so deduplicate projections by
-installation ID. Keep their labels as configuration, not package installation.
-Keep installation, enabled state, configured credentials, and verified authorization
-distinct. Agent `mcp_plugins` uses stable installation IDs; null means all, [] means
-none. The settings dialog submits only selections changed from its opening
-snapshot, preserving concurrent updates on unrelated saves and treating restored
-selections as unchanged. It is runtime selection, not a replacement authorization policy. See
-`docs/capability-center.md` for the complete contract and extension example.
-`PluginIcon` is shared by recommendations, configured entries, and the editor;
-brand assets and their provenance live in `public/images/plugins/`. Brand icons
-require explicit catalog metadata; a custom server name never selects a brand.
-Ambiguous installation IDs remain visible but cannot be selected for an Agent. The icon picker
-accepts local PNG/JPEG/WebP up to 2 MiB, checks the signature, decodes and contains
-the image in a 128px PNG, and stages changes until the existing targeted MCP save.
-`presentation.icon` is a bounded PNG data URL carried by the API's existing extra
-metadata support; it must never enter transport parameters. Preserve sibling
-presentation fields and masked credentials; cancel/reset/unmount must fence stale
-image-decoding results. Uploaded remote URLs and SVG are never rendered. Existing
-shared-MCP administrator checks remain authoritative; this adds no personal scope.
-
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
@@ -281,75 +438,30 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-### Shared model settings
+Radix Dialog 1.1.15 and FocusScope 1.1.7 have local pnpm source repairs for
+programmatic nested closes. A real DialogTrigger keeps its declared return target;
+without one, FocusScope restores its captured opener. The existing scope stack
+records the parent host so automatic orphan recovery is distinguishable from a
+new control's focus. Closed generations cannot restore into a reopened scope;
+removed, disabled or inert openers return to the surviving parent scope. Caller
+close cancellation/redirects retain priority. These are locally maintained repairs,
+not upstream-approved backports. Keep CJS/ESM entries synchronized and install
+through pnpm; the mounted Dialog/Memory tests and shared memory-dialog-close
+native suite cover both chooser and direct-input entry. Recheck all public UI
+and direct consumers, including Sheet and nested renderer dialogs, on upgrades.
 
-Settings → Models (`?settings=models`) offers administrator-only catalog management
-through `/api/managed-models`. YAML entries are read-only. `core/models/management.ts`
-whitelists editable fields so source metadata and `has_api_key` never get posted.
-Draft credentials stay in editor state, never query cache or browser storage; blank
-keeps the saved key, explicit removal sends an empty key. Saving invalidates both the
-admin catalog and `MODELS_QUERY_KEY`. Editor unmount aborts probes and fences late
-callbacks. Static demos and non-admin users must not query the management API.
+A paused stack entry can outlive a removed nested scope until deferred cleanup.
+Close ownership checks distinguish connected newer scopes from those departing
+descendants, so simultaneous parent/child removal preserves a surviving outer
+Trigger. Exercise the installed CJS and ESM exports through mount/open/close as
+well as the public component tests; import-only checks do not validate lifecycle.
 
-### Model reasoning capabilities
+Thread deletion captures the account revision when its dialog is requested. A
+retired request cancels the primitive's default close return even when no
+successful deletion completion exists; DOM connectivity alone cannot identify
+a reused editor's account. Same-account Cancel/background close retains ordinary
+opener return, independently of the successful current-delete composer handoff.
+Tests observe both owners and wait through the actual close event before asserting
+no stale focus, preserving the programmatic and physically focused entry paths.
 
-`/api/models` projects a per-model `reasoning` contract (issue #5073) beside the
-deprecated `supports_thinking` / `supports_reasoning_effort` booleans.
-`core/models/reasoning.ts` is the only place that interprets it: it falls back to
-the booleans for older Gateways, clamps the chat mode (`getResolvedMode` never
-yields `flash` for a required-thinking model), lists the effort options the
-composer and the sidecar render, and maps mode presets and remembered values
-through the contract's aliases/default (`resolveReasoningEffort`). Effort values
-are open strings (`ReasoningEffortValue`), so provider-specific tokens such as
-`max` flow through local settings and account preferences unchanged; the custom
-agent dialog offers only the intersection with the per-agent `low/medium/high`
-schema and hides "off" for required-thinking models. Do not read the booleans in
-components directly. On a legacy model, `resolveReasoningEffort` keeps only its
-advertised generic values; this drops a remembered provider-specific token after
-a model switch without changing the backend's direct legacy-request behavior.
-
-## Full-stack plugin UI
-
-`core/extensions/` loads authenticated deployment-installed ES modules from `/api/plugins`.
-Inline modules use authenticated fetch plus a released Blob URL. Manifest assets use
-native credentialed module scripts, preserving relative imports and resource URLs.
-Both honor the backend base and prefixes; transport and cache semantics are documented in
-`docs/full-stack-plugins.md`. Host copy belongs in the typed locale dictionaries.
-Conversation action factories, shapes and availability callbacks are guarded per plugin;
-only validated value snapshots reach the toolbar/sidebar render paths.
-`PluginNavigation` and the dynamic workspace extension route consume page declarations;
-Capability Center defaults to the repository examples in `core/extensions/catalog.ts`,
-merged by explicit namespace with runtime descriptors. Catalog-only entries are discovery
-metadata, never module-loader inputs or proof of installation. Backend-only examples may
-have no plugin descriptor; keep their runtime status unasserted. Details link to package
-installation instructions. Keep the catalog aligned with `examples/deerflow-extension-*`.
-Agent teams uses `community.agent-teams`; merge its installed descriptor into the
-localized catalog entry without asserting runtime status for a catalog-only row.
-Conversation action slots augment normal/custom-agent toolbars and sidebar menus without replacing native export or notification.
-Plugin views use mount/dispose and abort signals; Shadow DOM is CSS isolation, not a sandbox.
-Descriptors are user-keyed page snapshots, refreshed manually. Backend calls bind the plugin's
-namespace, action allowlist and expected viewer identity. See `docs/full-stack-plugins.md`.
-
-Plugin page `openConversation(threadId)` resolves authenticated thread metadata
-with `pathOfThread`; do not let plugins hardcode default-agent routes. The page's
-abort signal fences late navigation after unmount/account changes. Synchronous
-conversation-action callbacks reject Promise returns while consuming rejections.
-
-### Composer references
-
-`components/workspace/mentions/` owns cursor-local `@` detection, the picker,
-and atomic references. Render labels as DOM text, never HTML; canonical tokens
-preserve draft positions. Submission expands tokens to `@label` and sends up to
-16 unique skill IDs in `additional_kwargs.skill_references`; the backend checks
-each against the user registry and agent allowlist. The web slash picker lists
-only `/goal` and `/compact`; skill selection uses `@`. Legacy typed slash text
-continues through normal message submission for backend and channel compatibility.
-Project files require confirmed `additional_kwargs.files`. Conversation context
-is reconciled from tokens against the current capability and limit. Only successful
-discovery may flatten references; pending/errors preserve IDs and block reference
-sends, with retry on failure. Polish restores whole labels longest-first in one
-pass. Confirmed thread creation seeds metadata before migration; references stay
-locked during attachment. Deleting an object removes its context; undo restores
-references already attached to the draft. Labels grant no read authority. IME,
-caret, thread changes and attachment fences apply to editor and picker. The `@`
-and attachment buttons share the picker.
+Run observation is default-off and binds the actual submit input object to the existing human/replay observer. The compatible SDK client captures that binding when stream() is called while preserving lazy network iteration; only a normally returned original onRunCreated callback records delivery. Observation ownership retires with the displayed owner, not submit Promise completion. It never adds request fields, UUIDs, storage or an SSE reader.

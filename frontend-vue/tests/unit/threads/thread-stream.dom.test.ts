@@ -24,6 +24,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref, type Ref } from "vue";
 
 import { STREAM_RENDER_COALESCE_MS } from "@/core/threads/coalesce";
+import type { ObservationPacket } from "@/core/diagnostics/parity-observation";
 
 import type {
   ThreadRunner,
@@ -37,21 +38,43 @@ import { zhCN } from "@/core/i18n/locales/zh-CN";
 
 import { useThreadStream } from "@/composables/useThreadStream";
 import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
+import { invalidateWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
+
+beforeEach(() => {
+  // This fixture owns checkpoint reads too; never let a DOM unit test reach a
+  // development server through happy-dom's default fetch implementation.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("[]", { status: 200 })),
+  );
+});
 
 // `useThreadHistory` 真的会发请求。这里给一个空历史，让被测对象只剩实时那一路。
+const { historyOptions } = vi.hoisted(() => ({
+  historyOptions: {
+    onError: undefined as ((error: Error) => void) | undefined,
+  },
+}));
 vi.mock("@/composables/useThreadHistory", () => ({
-  useThreadHistory: () => ({
-    messages: ref<Message[]>([]),
-    loading: ref(false),
-    loadingInitial: ref(false),
-    loadingMore: ref(false),
-    hasMore: ref(false),
-    loadMore: () => Promise.resolve(),
-    error: ref(null),
-  }),
+  useThreadHistory: (
+    _threadId: unknown,
+    options: { onError?: (error: Error) => void },
+  ) => {
+    historyOptions.onError = options.onError;
+    return {
+      messages: ref<Message[]>([]),
+      loading: ref(false),
+      loadingInitial: ref(false),
+      loadingMore: ref(false),
+      hasMore: ref(false),
+      loadMore: () => Promise.resolve(),
+      error: ref(null),
+    };
+  },
 }));
 
 interface FakeRunner extends ThreadRunner {
+  joins: Parameters<ThreadRunner["join"]>[0][];
   submissions: Parameters<ThreadRunner["submit"]>[0][];
   /** `seedDurableState` 真正收下的那几帧 checkpoint values。 */
   seeds: Record<string, unknown>[];
@@ -59,6 +82,7 @@ interface FakeRunner extends ThreadRunner {
   emitCustom(data: unknown): void;
   emitUpdate(data: unknown): void;
   setMessages(messages: Message[]): void;
+  setStreamingMessageIds(ids: readonly string[]): void;
   settle(status: "completed" | "cancelled"): void;
 }
 
@@ -67,9 +91,15 @@ function createFakeRunner(
   {
     autoStart = true,
     failBeforeStart = false,
-  }: { autoStart?: boolean; failBeforeStart?: boolean } = {},
+    submitBarrier,
+  }: {
+    autoStart?: boolean;
+    failBeforeStart?: boolean;
+    submitBarrier?: (threadId: string) => Promise<void>;
+  } = {},
 ): FakeRunner {
   let messages: Message[] = [];
+  let streamingMessageIds: ReadonlySet<string> = new Set();
   let status = "idle";
   const snapshot = {
     state: {},
@@ -80,6 +110,7 @@ function createFakeRunner(
   } as unknown as AgentSnapshot<Record<string, unknown>>;
 
   const submissions: Parameters<ThreadRunner["submit"]>[0][] = [];
+  const joins: Parameters<ThreadRunner["join"]>[0][] = [];
   const seeds: Record<string, unknown>[] = [];
   /*
     `values` 对 reducer 是全量替换，这里照同一语义换掉消息集合，
@@ -94,10 +125,12 @@ function createFakeRunner(
     return true;
   };
   return {
+    joins,
     submissions,
     seeds,
     getSnapshot: () => snapshot,
     getWireMessages: () => messages,
+    getStreamingMessageIds: () => streamingMessageIds,
     getSessionState: () => ({ status }) as never,
     isStreaming: () => status === "streaming",
     seedDurableState(values) {
@@ -131,18 +164,33 @@ function createFakeRunner(
         options.onStart?.({ threadId: input.threadId, runId: "run-1" });
       }
       options.onSnapshot?.();
+      await submitBarrier?.(input.threadId);
+    },
+    async join(handle) {
+      joins.push(handle);
+      status = "streaming";
+      options.onStart?.(handle);
+      options.onSnapshot?.();
+      await submitBarrier?.(handle.threadId);
     },
     stop() {
       status = "cancelled";
     },
     abort() {},
-    reset() {},
+    dispose() {},
+    reset() {
+      status = "idle";
+    },
     flushNotifications() {},
     emitStart(startedThreadId = "thread-1", runId = "run-1") {
       options.onStart?.({ threadId: startedThreadId, runId });
     },
     emitCustom: (data) => options.onCustomEvent?.(data),
     emitUpdate: (data) => options.onUpdateEvent?.(data),
+    setStreamingMessageIds(ids) {
+      streamingMessageIds = new Set(ids);
+      options.onSnapshot?.();
+    },
     setMessages(next) {
       messages = next;
       options.onSnapshot?.();
@@ -186,6 +234,7 @@ describe("useThreadStream · K3 编辑并重跑", () => {
         "human-1",
         "Revised prompt",
         ["human-1", "ai-1"],
+        { knowledge_scope: { version: 1, mode: "disabled" } },
       ),
     ).resolves.toBe(true);
 
@@ -206,7 +255,14 @@ describe("useThreadStream · K3 编辑并重跑", () => {
         on_disconnect: "continue",
         input: {
           messages: [
-            { id: "human-2", type: "human", content: "Revised prompt" },
+            {
+              id: "human-2",
+              type: "human",
+              content: "Revised prompt",
+              additional_kwargs: {
+                knowledge_scope: { version: 1, mode: "disabled" },
+              },
+            },
           ],
         },
         checkpoint: { checkpoint_id: "checkpoint-1" },
@@ -304,7 +360,11 @@ describe("useThreadStream · K3 编辑并重跑", () => {
 
 function mountStream(
   threadId = ref<string | null>("thread-1"),
-  runnerOptions: { autoStart?: boolean; failBeforeStart?: boolean } = {},
+  runnerOptions: {
+    autoStart?: boolean;
+    failBeforeStart?: boolean;
+    submitBarrier?: (threadId: string) => Promise<void>;
+  } = {},
   onFinish?: (
     state: Record<string, unknown>,
     messages: readonly Message[],
@@ -313,6 +373,8 @@ function mountStream(
   runOptions?: {
     context?: Ref<Record<string, unknown>>;
     model?: Ref<Model | null | undefined>;
+    assistantId?: Ref<string>;
+    onSend?: (threadId: string) => void;
   },
 ) {
   let fake: FakeRunner | undefined;
@@ -322,6 +384,7 @@ function mountStream(
   });
   const invalidated: unknown[][] = [];
   const errors: string[] = [];
+  const notices: string[] = [];
   const originalInvalidate = queryClient.invalidateQueries.bind(queryClient);
   queryClient.invalidateQueries = ((filters?: { queryKey?: unknown[] }) => {
     if (filters?.queryKey) invalidated.push(filters.queryKey);
@@ -335,11 +398,16 @@ function mountStream(
         ...(displayThreadId ? { displayThreadId } : {}),
         context: runOptions?.context ?? ref({ mode: "flash" }),
         ...(runOptions?.model ? { model: runOptions.model } : {}),
+        ...(runOptions?.assistantId
+          ? { assistantId: runOptions.assistantId }
+          : {}),
         notify: {
           warn: (key) => warnings.push(key),
           error: (message) => errors.push(message),
+          message: (message) => notices.push(message),
         },
         onFinish,
+        onSend: runOptions?.onSend,
         runnerFactory: (options) => {
           fake = createFakeRunner(options, runnerOptions);
           return fake;
@@ -364,10 +432,87 @@ function mountStream(
     },
     warnings,
     errors,
+    notices,
     invalidated,
     queryClient,
   };
 }
+
+describe("LLM retry notification ownership", () => {
+  it("routes history failures to the same generic error toast as React while retaining Gateway detail in the query", () => {
+    const ctx = mountStream();
+    expect(historyOptions.onError).toBeTypeOf("function");
+    historyOptions.onError!(new Error("Private gateway detail."));
+    expect(ctx.errors).toEqual(["Failed to load thread history."]);
+    expect(ctx.notices).toEqual([]);
+    ctx.wrapper.unmount();
+    ctx.queryClient.clear();
+  });
+
+  it("announces each non-empty message unchanged without requiring provider retry metadata or deduplicating its text", async () => {
+    const ctx = mountStream();
+    await ctx.api.sendMessage("thread-1", { text: "hi" });
+    ctx.fake.emitCustom({ type: "llm_retry", message: "  Retrying…  " });
+    ctx.fake.emitCustom({ type: "llm_retry", message: "  Retrying…  " });
+    ctx.fake.emitCustom({ type: "llm_retry", message: "  " });
+    ctx.fake.emitCustom({ type: "llm_retry", message: 3 });
+    ctx.fake.emitCustom({
+      type: "task_running",
+      task_id: "t-1",
+      message: "Ignored",
+    });
+    expect(ctx.notices).toEqual(["  Retrying…  ", "  Retrying…  "]);
+    ctx.wrapper.unmount();
+  });
+
+  it("fences the run's account and then permits notices for the new account's run", async () => {
+    const ctx = mountStream();
+    await ctx.api.sendMessage("thread-1", { text: "hi" });
+    invalidateWorkspaceQueryOwner(ctx.queryClient);
+    ctx.fake.emitCustom({ type: "llm_retry", message: "Old account" });
+    expect(ctx.notices).toEqual([]);
+    ctx.fake.settle("completed");
+    await ctx.api.sendMessage("thread-1", { text: "New account" });
+    ctx.fake.emitCustom({ type: "llm_retry", message: "Current account" });
+    expect(ctx.notices).toEqual(["Current account"]);
+    ctx.wrapper.unmount();
+  });
+
+  it("does not announce events from a retired thread, terminal run or unmounted owner", async () => {
+    const ctx = mountStream();
+    await ctx.api.sendMessage("thread-1", { text: "hi" });
+    ctx.fake.settle("completed");
+    ctx.fake.emitCustom({ type: "llm_retry", message: "Completed run" });
+    ctx.threadId.value = "thread-2";
+    ctx.fake.emitCustom({ type: "llm_retry", message: "Old thread" });
+    await ctx.api.sendMessage("thread-2", { text: "New thread" });
+    ctx.fake.emitCustom({ type: "llm_retry", message: "Current thread" });
+    expect(ctx.notices).toEqual(["Current thread"]);
+    ctx.wrapper.unmount();
+    ctx.fake.emitCustom({ type: "llm_retry", message: "Late event" });
+    expect(ctx.notices).toEqual(["Current thread"]);
+  });
+});
+
+describe("observer join ownership", () => {
+  it("joins only the displayed thread and blocks a concurrent local submission", async () => {
+    const ctx = mountStream(ref<string | null>("thread-1"));
+    await expect(
+      ctx.api.joinRun({ threadId: "thread-2", runId: "run-2" }),
+    ).resolves.toBe(false);
+    expect(ctx.fake.joins).toEqual([]);
+    await expect(
+      ctx.api.joinRun({ threadId: "thread-1", runId: "run-1" }),
+    ).resolves.toBe(true);
+    expect(ctx.fake.joins).toEqual([{ threadId: "thread-1", runId: "run-1" }]);
+    expect(ctx.api.activeRunId.value).toBe("run-1");
+    await expect(
+      ctx.api.sendMessage("thread-1", { text: "new turn" }),
+    ).resolves.toBe(false);
+    expect(ctx.fake.submissions).toEqual([]);
+    ctx.wrapper.unmount();
+  });
+});
 
 /**
  * 等到合帧层把最新数组发出来。
@@ -395,6 +540,92 @@ const injectedHuman = {
 } as Message;
 
 describe("useThreadStream · production stream modes", () => {
+  it("uses the agent assistant and only grants explicitly submitted conversations in run context", async () => {
+    const ctx = mountStream(ref("thread-1"), {}, undefined, undefined, {
+      assistantId: ref("researcher"),
+      context: ref({ mode: "pro", conversation_references: ["stale"] }),
+    });
+    await ctx.api.sendMessage("thread-1", { text: "read" }, undefined, {
+      conversationReferences: ["reference-thread"],
+    });
+    expect(ctx.fake.submissions[0]?.payload).toMatchObject({
+      assistant_id: "researcher",
+      context: { conversation_references: ["reference-thread"] },
+    });
+    expect(ctx.fake.submissions[0]?.payload).not.toHaveProperty(
+      "conversation_references",
+    );
+    ctx.wrapper.unmount();
+  });
+  it("optimistic, wire and accepted snapshot share the human identity and attachment snapshot", async () => {
+    const ctx = mountStream();
+    const onAccepted = vi.fn();
+    const files = [{ filename: "local.txt", size: 2, path: "/mnt/local.txt" }];
+    const staged = {
+      filename: "project.pdf",
+      size: 4,
+      path: "/mnt/project.pdf",
+    };
+    await ctx.api.sendMessage("thread-1", { text: "read", files }, undefined, {
+      humanMessageId: "human-immutable",
+      additionalKwargs: { files: [staged] },
+      onAccepted,
+    });
+    files[0]!.filename = "later.txt";
+    const input = ctx.fake.submissions[0]?.payload.input as {
+      messages: Message[];
+    };
+    expect(input.messages[0]).toMatchObject({
+      id: "human-immutable",
+      additional_kwargs: { files: [staged, { filename: "local.txt" }] },
+    });
+    expect(
+      ctx.api.messages.value.find((message) => message.type === "human")?.id,
+    ).toBe("human-immutable");
+    expect(onAccepted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        threadId: "thread-1",
+        humanMessageId: "human-immutable",
+        messages: input.messages,
+      }),
+    );
+    ctx.wrapper.unmount();
+  });
+
+  it("late completion and abort from A cannot release or abort B's submission", async () => {
+    let finishA!: () => void;
+    let finishB!: () => void;
+    const barriers = {
+      "thread-1": new Promise<void>((resolve) => {
+        finishA = resolve;
+      }),
+      "thread-2": new Promise<void>((resolve) => {
+        finishB = resolve;
+      }),
+    };
+    const ctx = mountStream(ref("thread-1"), {
+      submitBarrier: (id) => barriers[id as keyof typeof barriers],
+    });
+    const abort = vi.spyOn(ctx.fake, "abort");
+    const controller = new AbortController();
+    const first = ctx.api.sendMessage("thread-1", { text: "A" }, undefined, {
+      signal: controller.signal,
+    });
+    ctx.threadId.value = "thread-2";
+    const second = ctx.api.sendMessage("thread-2", { text: "B" });
+    controller.abort();
+    expect(abort).not.toHaveBeenCalled();
+    finishA();
+    await expect(first).resolves.toBe(false);
+    await expect(
+      ctx.api.sendMessage("thread-2", { text: "duplicate" }),
+    ).resolves.toBe(false);
+    expect(ctx.fake.submissions).toHaveLength(2);
+    finishB();
+    await expect(second).resolves.toBe(true);
+    ctx.wrapper.unmount();
+  });
+
   /*
     **这三个模式与上游 wire 上逐字相同，`values` 不在里面**（wave 216）。
     状态由 `updates` 累积——`reduceUpdates` 的 `patch-state` 本来就是干这件事的。
@@ -427,7 +658,7 @@ describe("useThreadStream · production stream modes", () => {
     ctx.wrapper.unmount();
   });
 
-  it("sends the same mode-derived reasoning context as React for a thinking-only model", async () => {
+  it("omits effort for a legacy thinking-only model with no advertised effort values", async () => {
     const context = ref<Record<string, unknown>>({
       model_name: "minimax-m3",
       mode: "pro",
@@ -453,7 +684,67 @@ describe("useThreadStream · production stream modes", () => {
       thinking_enabled: true,
       is_plan_mode: true,
       subagent_enabled: false,
-      reasoning_effort: "medium",
+      reasoning_effort: undefined,
+    });
+    ctx.wrapper.unmount();
+  });
+
+  it("normalizes a captured composer context with its captured model, then uses live defaults for the next send", async () => {
+    const context = ref<Record<string, unknown>>({
+      model_name: "plain",
+      mode: "flash",
+    });
+    const model = ref<Model>({
+      id: "plain",
+      name: "plain",
+      model: "plain",
+      display_name: "Plain",
+      supports_thinking: false,
+      supports_reasoning_effort: false,
+    });
+    const ctx = mountStream(ref("thread-1"), {}, undefined, undefined, {
+      context,
+      model,
+    });
+    await ctx.api.sendMessage(
+      "thread-1",
+      { text: "Uploaded earlier" },
+      undefined,
+      {
+        runSnapshot: {
+          context: {
+            model_name: "reasoner",
+            mode: "pro",
+            reasoning_effort: "high",
+          },
+          model: {
+            id: "reasoner",
+            name: "reasoner",
+            model: "reasoner",
+            display_name: "Reasoner",
+            supports_thinking: true,
+            supports_reasoning_effort: true,
+          },
+        },
+      },
+    );
+    expect(ctx.fake.submissions[0]?.payload.context).toMatchObject({
+      model_name: "reasoner",
+      mode: "pro",
+      thinking_enabled: true,
+      is_plan_mode: true,
+      subagent_enabled: false,
+      reasoning_effort: "high",
+    });
+    ctx.fake.settle("completed");
+    await ctx.api.sendMessage("thread-1", { text: "Next live turn" });
+    expect(ctx.fake.submissions[1]?.payload.context).toMatchObject({
+      model_name: "plain",
+      mode: "flash",
+      thinking_enabled: false,
+      is_plan_mode: false,
+      subagent_enabled: false,
+      reasoning_effort: undefined,
     });
     ctx.wrapper.unmount();
   });
@@ -670,20 +961,23 @@ describe("useThreadStream · 标题定稿写回侧栏缓存", () => {
       [...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"],
       {
         pages: [
-          [
-            {
-              thread_id: "thread-1",
-              status: "idle",
-              metadata: { agent_name: "lead" },
-              values: { title: "New chat", messages: [] },
-            },
-            {
-              thread_id: "thread-2",
-              status: "idle",
-              metadata: {},
-              values: { title: "Other", messages: [] },
-            },
-          ],
+          {
+            threads: [
+              {
+                thread_id: "thread-1",
+                status: "idle",
+                metadata: { agent_name: "lead" },
+                values: { title: "New chat", messages: [] },
+              },
+              {
+                thread_id: "thread-2",
+                status: "idle",
+                metadata: {},
+                values: { title: "Other", messages: [] },
+              },
+            ],
+            nextOffset: null,
+          },
         ],
         pageParams: [0],
       },
@@ -693,15 +987,11 @@ describe("useThreadStream · 标题定稿写回侧栏缓存", () => {
     await flushPromises();
 
     const rows = ctx.queryClient
-      .getQueryData<{
-        pages: {
-          thread_id: string;
-          status: string;
-          metadata: Record<string, unknown>;
-          values: { title: string };
-        }[][];
-      }>([...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"])
-      ?.pages.flat();
+      .getQueryData<import("@/core/threads/infinite").InfiniteThreadsData>([
+        ...INFINITE_THREADS_QUERY_KEY_PREFIX,
+        "all",
+      ])
+      ?.pages.flatMap((page) => page.threads);
     expect(rows?.[0]?.values.title).toBe("Generated Title");
     // 正面特征：**其余字段原样**。用 upsert 的那一版会把 metadata 冲掉。
     expect(rows?.[0]?.metadata).toEqual({ agent_name: "lead" });
@@ -714,7 +1004,7 @@ describe("useThreadStream · 标题定稿写回侧栏缓存", () => {
     const ctx = mountStream();
     ctx.queryClient.setQueryData(
       [...INFINITE_THREADS_QUERY_KEY_PREFIX, "all"],
-      { pages: [[]], pageParams: [0] },
+      { pages: [{ threads: [], nextOffset: null }], pageParams: [0] },
     );
 
     ctx.fake.emitUpdate({ some_node: { title: "Generated Title" } });
@@ -725,7 +1015,7 @@ describe("useThreadStream · 标题定稿写回侧栏缓存", () => {
         ...INFINITE_THREADS_QUERY_KEY_PREFIX,
         "all",
       ]),
-    ).toEqual({ pages: [[]], pageParams: [0] });
+    ).toEqual({ pages: [{ threads: [], nextOffset: null }], pageParams: [0] });
     ctx.wrapper.unmount();
   });
 });
@@ -967,3 +1257,958 @@ describe("useThreadStream · 打开线程时的 checkpoint 种子", () => {
     vi.unstubAllGlobals();
   });
 });
+
+it("reactively projects current-run identities and clears the view on settlement and thread departure", async () => {
+  const ctx = mountStream();
+  try {
+    await flushPromises();
+    ctx.fake.setStreamingMessageIds(["stale"]);
+    expect([...ctx.api.streamingMessageIds.value]).toEqual([]);
+    await ctx.fake.submit({ threadId: "thread-1", payload: {} });
+    ctx.fake.setStreamingMessageIds(["live"]);
+    await flushPromises();
+    expect([...ctx.api.streamingMessageIds.value]).toEqual(["live"]);
+    const published = ctx.api.streamingMessageIds.value;
+    ctx.fake.setStreamingMessageIds(["live", "second"]);
+    await flushPromises();
+    expect([...ctx.api.streamingMessageIds.value]).toEqual(["live", "second"]);
+    expect([...published]).toEqual(["live"]);
+    ctx.fake.settle("completed");
+    await flushPromises();
+    expect([...ctx.api.streamingMessageIds.value]).toEqual([]);
+    ctx.fake.setStreamingMessageIds(["late"]);
+    await flushPromises();
+    expect([...ctx.api.streamingMessageIds.value]).toEqual([]);
+    ctx.threadId.value = "other-thread";
+    await flushPromises();
+    expect([...ctx.api.streamingMessageIds.value]).toEqual([]);
+  } finally {
+    ctx.wrapper.unmount();
+    ctx.queryClient.clear();
+  }
+});
+
+it("observes new versus reused human provenance without claiming additional messages", async () => {
+  const capability = "__deerflow_parity_capture_v1__";
+  const eventName = "deerflow:parity-identity:v1";
+  const packets: ObservationPacket[] = [];
+  const receive = (event: Event) =>
+    packets.push((event as CustomEvent<(typeof packets)[number]>).detail);
+  Object.defineProperty(window, capability, {
+    configurable: true,
+    value: { version: 1, token: "human-capture", action: "send:0" },
+  });
+  window.addEventListener(eventName, receive);
+  const ctx = mountStream();
+  try {
+    await ctx.api.sendMessage("thread-1", { text: "Hello" }, undefined, {
+      additionalInputMessages: [
+        {
+          type: "human",
+          id: "historical-context",
+          content: "Additional context",
+        },
+      ],
+    });
+    expect(packets).toHaveLength(2);
+    expect(packets[0]).toMatchObject({
+      event: "human.allocate",
+      values: { thread: "thread-1", raw: expect.any(String) },
+    });
+    expect(ctx.fake.submissions[0]).toMatchObject({
+      threadId: "thread-1",
+      idempotencyKey: packets[0]?.values.raw,
+      payload: {
+        input: {
+          messages: expect.arrayContaining([
+            expect.objectContaining({
+              id: packets[0]?.values.raw,
+              type: "human",
+            }),
+            expect.objectContaining({
+              id: "historical-context",
+              type: "human",
+            }),
+          ]),
+        },
+      },
+    });
+    expect(packets[1]).toMatchObject({
+      event: "human.submission",
+      values: {
+        raw: packets[0]!.values.raw,
+        thread: "thread-1",
+        index: 1,
+        messageCount: 2,
+        keySource: "default",
+        key: packets[0]!.values.raw,
+      },
+    });
+    expect(packets[1]).toMatchObject({
+      instance: packets[0]!.instance,
+    });
+    ctx.fake.settle("completed");
+    await ctx.api.sendMessage("thread-1", { text: "Replay" }, undefined, {
+      humanMessageId: "existing-human",
+    });
+    expect(packets.map((packet) => packet.event)).toEqual([
+      "human.allocate",
+      "human.submission",
+      "human.reuse",
+      "human.submission",
+    ]);
+    expect(packets[2]?.values).toEqual({
+      raw: "existing-human",
+      thread: "thread-1",
+    });
+    expect(ctx.fake.submissions[1]).toMatchObject({
+      idempotencyKey: "existing-human",
+    });
+  } finally {
+    ctx.wrapper.unmount();
+    window.removeEventListener(eventName, receive);
+    Reflect.deleteProperty(window, capability);
+  }
+});
+
+it("a send rejected by the existing busy guard does not invent another human producer", async () => {
+  const capability = "__deerflow_parity_capture_v1__";
+  const eventName = "deerflow:parity-identity:v1";
+  const packets: { event: string; values: Record<string, unknown> }[] = [];
+  const receive = (event: Event) =>
+    packets.push((event as CustomEvent<(typeof packets)[number]>).detail);
+  Object.defineProperty(window, capability, {
+    configurable: true,
+    value: { version: 1, token: "human-busy", action: "send:0" },
+  });
+  window.addEventListener(eventName, receive);
+  const ctx = mountStream();
+  try {
+    await ctx.api.sendMessage("thread-1", { text: "First" });
+    await expect(
+      ctx.api.sendMessage("thread-1", { text: "Busy" }),
+    ).resolves.toBe(false);
+    expect(packets.map((packet) => packet.event)).toEqual([
+      "human.allocate",
+      "human.submission",
+    ]);
+    expect(ctx.fake.submissions).toHaveLength(1);
+  } finally {
+    ctx.wrapper.unmount();
+    window.removeEventListener(eventName, receive);
+    Reflect.deleteProperty(window, capability);
+  }
+});
+
+for (const observed of [false, true])
+  it.each([undefined, null, "", "existing-human", "explicit-key"])(
+    `keeps the effective submission key and getter order with observation=${observed}, key=%s`,
+    async (requested) => {
+      const capability = "__deerflow_parity_capture_v1__";
+      const eventName = "deerflow:parity-identity:v1";
+      const packets: ObservationPacket[] = [];
+      const receive = (event: Event) =>
+        packets.push((event as CustomEvent<ObservationPacket>).detail);
+      if (observed)
+        Object.defineProperty(window, capability, {
+          configurable: true,
+          value: { version: 1, token: "key-source", action: "send:0" },
+        });
+      window.addEventListener(eventName, receive);
+      const order: string[] = [];
+      let actual: string | null | undefined = "before-onSend";
+      const ctx = mountStream(undefined, undefined, undefined, undefined, {
+        onSend: () => {
+          order.push("onSend");
+          actual = requested;
+        },
+      });
+      const random = vi.spyOn(globalThis.crypto, "randomUUID");
+      try {
+        await ctx.api.sendMessage("thread-1", { text: "Hello" }, undefined, {
+          humanMessageId: "existing-human",
+          get idempotencyKey() {
+            order.push("key");
+            return actual as string | undefined;
+          },
+        });
+        expect(order).toEqual(["onSend", "key"]);
+        expect(random).not.toHaveBeenCalled();
+        expect(ctx.fake.submissions[0]!.idempotencyKey).toBe(
+          requested ?? "existing-human",
+        );
+        if (observed) {
+          expect(packets.map((packet) => packet.event)).toEqual([
+            "human.reuse",
+            "human.submission",
+          ]);
+          expect(packets[1]!.instance).toBe(packets[0]!.instance);
+          expect(packets[1]!.values).toEqual({
+            raw: "existing-human",
+            thread: "thread-1",
+            index: 0,
+            messageCount: 1,
+            keySource: requested == null ? "default" : "explicit",
+            key: requested ?? "existing-human",
+          });
+        } else expect(packets).toEqual([]);
+      } finally {
+        random.mockRestore();
+        ctx.wrapper.unmount();
+        ctx.queryClient.clear();
+        window.removeEventListener(eventName, receive);
+        Reflect.deleteProperty(window, capability);
+      }
+    },
+  );
+
+it.each(["key-getter", "pre-aborted"])(
+  "does not publish a submission for %s failure",
+  async (failure) => {
+    const capability = "__deerflow_parity_capture_v1__";
+    const eventName = "deerflow:parity-identity:v1";
+    const packets: ObservationPacket[] = [];
+    const receive = (event: Event) =>
+      packets.push((event as CustomEvent<ObservationPacket>).detail);
+    Object.defineProperty(window, capability, {
+      configurable: true,
+      value: { version: 1, token: "send-rejected", action: "send:0" },
+    });
+    window.addEventListener(eventName, receive);
+    const ctx = mountStream();
+    const cause = new Error("key getter failed");
+    const controller = new AbortController();
+    if (failure === "pre-aborted") controller.abort();
+    try {
+      const pending = ctx.api.sendMessage(
+        "thread-1",
+        { text: "Hello" },
+        undefined,
+        {
+          signal: controller.signal,
+          get idempotencyKey(): string {
+            throw cause;
+          },
+        },
+      );
+      if (failure === "key-getter") await expect(pending).rejects.toBe(cause);
+      else await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+      expect(ctx.fake.submissions).toEqual([]);
+      expect(packets.map((packet) => packet.event)).toEqual(
+        failure === "key-getter" ? ["human.allocate"] : [],
+      );
+    } finally {
+      ctx.wrapper.unmount();
+      ctx.queryClient.clear();
+      window.removeEventListener(eventName, receive);
+      Reflect.deleteProperty(window, capability);
+    }
+  },
+);
+
+it.each([false, true])(
+  "keeps fresh UUID allocation and submit unchanged with observation=%s",
+  async (observed) => {
+    const capability = "__deerflow_parity_capture_v1__";
+    const eventName = "deerflow:parity-identity:v1";
+    if (observed)
+      Object.defineProperty(window, capability, {
+        configurable: true,
+        value: {
+          version: 1,
+          token: "send-throwing-observer",
+          action: "send:0",
+        },
+      });
+    const ctx = mountStream();
+    const random = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockReturnValue("11111111-1111-4111-8111-111111111111");
+    const dispatch = window.dispatchEvent.bind(window);
+    let observedCalls = 0;
+    const spy = vi
+      .spyOn(window, "dispatchEvent")
+      .mockImplementation((event) => {
+        if (event.type === eventName) {
+          observedCalls++;
+          throw new Error("observer dispatch failed");
+        }
+        return dispatch(event);
+      });
+    try {
+      await expect(
+        ctx.api.sendMessage("thread-1", { text: "Hello" }),
+      ).resolves.toBe(true);
+      expect(random).toHaveBeenCalledTimes(1);
+      expect(ctx.fake.submissions).toHaveLength(1);
+      expect(ctx.fake.submissions[0]).toMatchObject({
+        idempotencyKey: "11111111-1111-4111-8111-111111111111",
+        payload: {
+          input: {
+            messages: [
+              expect.objectContaining({
+                id: "11111111-1111-4111-8111-111111111111",
+              }),
+            ],
+          },
+        },
+      });
+      expect(observedCalls).toBe(observed ? 2 : 0);
+    } finally {
+      spy.mockRestore();
+      random.mockRestore();
+      ctx.wrapper.unmount();
+      ctx.queryClient.clear();
+      Reflect.deleteProperty(window, capability);
+    }
+  },
+);
+
+function observedPreparedReplay(kind: "edit" | "regenerate") {
+  const raw = kind === "edit" ? "replacement-observed" : "human-observed";
+  return {
+    target_run_id: "source-run-observed",
+    ...(kind === "edit"
+      ? {
+          replacement_human_message_id: raw,
+          source_message_ids: ["human-observed", "answer-observed"],
+        }
+      : {}),
+    input: {
+      messages: [
+        {
+          type: "human",
+          id: raw,
+          content: "private replay text",
+          additional_kwargs: { retained: "private extra field" },
+        },
+      ],
+      title: "private title",
+    },
+    checkpoint: { checkpoint_id: "checkpoint-observed", checkpoint_ns: "" },
+    metadata: {
+      replay_kind: kind,
+      regenerate_from_run_id: "source-run-observed",
+      regenerate_from_message_id: "answer-observed",
+      regenerate_checkpoint_id: "checkpoint-observed",
+      ...(kind === "edit"
+        ? {
+            edit_message_id: raw,
+            edit_from_message_id: "human-observed",
+            edit_version_group_id: "human-observed",
+          }
+        : {}),
+      unknown: "private metadata",
+    },
+  };
+}
+
+for (const enabled of [false, true])
+  for (const kind of ["edit", "regenerate"] as const)
+    it(`actual ${kind} replay preserves its prepared provenance across cloning (observation=${enabled})`, async () => {
+      const packets: ObservationPacket[] = [];
+      const capability = "__deerflow_parity_capture_v1__";
+      const eventName = "deerflow:parity-identity:v1";
+      const receive = (event: Event) =>
+        packets.push((event as CustomEvent<ObservationPacket>).detail);
+      const control = {
+        version: 1,
+        token: "vue-replay-capture",
+        action: "replay:0",
+      };
+      if (enabled)
+        Object.defineProperty(window, capability, {
+          configurable: true,
+          value: control,
+        });
+      window.addEventListener(eventName, receive);
+      const prepared = observedPreparedReplay(kind);
+      const response = new Response(JSON.stringify(prepared), {
+        headers: { "Content-Type": "application/json" },
+      });
+      const parse = vi.spyOn(response, "json");
+      let resolvePrepare: (value: Response) => void = () => undefined;
+      let prepareCalls = 0;
+      vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/prepare")) {
+          prepareCalls += 1;
+          return new Promise<Response>((resolve) => {
+            resolvePrepare = resolve;
+          });
+        }
+        if (url.includes("/history"))
+          return Promise.resolve(
+            new Response("[]", {
+              headers: { "Content-Type": "application/json" },
+            }),
+          );
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const ctx = mountStream();
+      const uuid = vi
+        .spyOn(globalThis.crypto, "randomUUID")
+        .mockReturnValue("11111111-1111-4111-8111-111111111111");
+      let pending: Promise<boolean> | undefined;
+      try {
+        pending =
+          kind === "edit"
+            ? ctx.api.editAndRegenerateMessage(
+                "thread-1",
+                "human-observed",
+                "private revised text",
+                ["human-observed", "answer-observed"],
+                { added: "private added field" },
+              )
+            : ctx.api.regenerateMessage("thread-1", "answer-observed");
+        await flushPromises();
+        expect(prepareCalls).toBe(1);
+        control.action = "later:1";
+        resolvePrepare(response);
+        expect(await pending).toBe(true);
+        expect(parse).toHaveBeenCalledTimes(1);
+        expect(uuid).toHaveBeenCalledTimes(1);
+        expect(ctx.fake.submissions).toHaveLength(1);
+        expect(ctx.fake.submissions[0]).toMatchObject({
+          threadId: "thread-1",
+          idempotencyKey: "11111111-1111-4111-8111-111111111111",
+          payload: {
+            checkpoint: prepared.checkpoint,
+            metadata: prepared.metadata,
+            input: {
+              ...prepared.input,
+              messages: [
+                {
+                  ...prepared.input.messages[0],
+                  additional_kwargs: {
+                    retained: "private extra field",
+                    ...(kind === "edit"
+                      ? { added: "private added field" }
+                      : {}),
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+        if (enabled) {
+          expect(
+            packets.filter((packet) => packet.event === "replay.begin"),
+          ).toHaveLength(1);
+          expect(
+            packets.find((packet) => packet.event === "replay.begin"),
+          ).toMatchObject({
+            action: "replay:0",
+            values: {
+              kind,
+              thread: "thread-1",
+              source: kind === "edit" ? "human-observed" : "answer-observed",
+            },
+          });
+          expect(
+            packets.filter((packet) => packet.event === "replay.adopt"),
+          ).toHaveLength(1);
+          for (const phase of ["response", "attempt"]) {
+            expect(
+              packets.find(
+                (packet) =>
+                  packet.event === "replay.message" &&
+                  packet.values.phase === phase,
+              ),
+            ).toMatchObject({
+              action: "replay:0",
+              values: {
+                phase,
+                index: 0,
+                type: "human",
+                raw: prepared.input.messages[0]!.id,
+              },
+            });
+            expect(
+              packets.find(
+                (packet) =>
+                  packet.event === "replay.snapshot" &&
+                  packet.values.phase === phase,
+              ),
+            ).toMatchObject({
+              values: { phase, complete: true, messageCount: 1 },
+            });
+          }
+          expect(packets.some((packet) => packet.event === "invalid")).toBe(
+            false,
+          );
+          expect(new Set(packets.map((packet) => packet.instance)).size).toBe(
+            1,
+          );
+          expect(JSON.stringify(packets)).not.toContain("private");
+        } else expect(packets).toEqual([]);
+
+        if (enabled)
+          expect(
+            packets.find((packet) => packet.event === "idempotency.allocate"),
+          ).toMatchObject({
+            action: "replay:0",
+            values: {
+              raw: "11111111-1111-4111-8111-111111111111",
+              thread: "thread-1",
+            },
+          });
+      } finally {
+        resolvePrepare(response);
+        await pending;
+        uuid.mockRestore();
+        parse.mockRestore();
+        ctx.wrapper.unmount();
+        ctx.queryClient.clear();
+        window.removeEventListener(eventName, receive);
+        Reflect.deleteProperty(window, capability);
+        vi.unstubAllGlobals();
+      }
+    });
+
+for (const enabled of [false, true])
+  it(`replay observation preserves the actual UUID then assistant read (enabled=${enabled})`, async () => {
+    Reflect.deleteProperty(window, "__deerflow_parity_capture_v1__");
+    const capture = enabled ? captureActualReplay() : undefined;
+    const order: string[] = [];
+    const assistant = ref("assistant-on-submit");
+    const getter = vi
+      .spyOn(assistant, "value", "get")
+      .mockImplementation(() => {
+        order.push("assistant");
+        return "assistant-on-submit";
+      });
+    const uuid = vi
+      .spyOn(globalThis.crypto, "randomUUID")
+      .mockImplementation(() => {
+        order.push("uuid");
+        return "11111111-1111-4111-8111-111111111111";
+      });
+    let resolvePrepare: (value: Response) => void = () => undefined;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/prepare"))
+        return new Promise<Response>((resolve) => {
+          resolvePrepare = resolve;
+        });
+      if (url.includes("/history")) return Promise.resolve(new Response("[]"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    const ctx = mountStream(ref("thread-1"), {}, undefined, undefined, {
+      assistantId: assistant,
+    });
+    let pending: Promise<boolean> | undefined;
+    const response = new Response(
+      JSON.stringify(observedPreparedReplay("regenerate")),
+      { headers: { "Content-Type": "application/json" } },
+    );
+    try {
+      await flushPromises();
+      getter.mockClear();
+      uuid.mockClear();
+      order.length = 0;
+      pending = ctx.api.regenerateMessage("thread-1", "answer-observed");
+      await flushPromises();
+      const prepareReads = getter.mock.calls.length;
+      const prepareOrder = [...order];
+      resolvePrepare(response);
+      expect(await pending).toBe(true);
+      expect(prepareReads).toBe(0);
+      expect(prepareOrder).toEqual([]);
+      expect(order).toEqual(["uuid", "assistant"]);
+      expect(uuid).toHaveBeenCalledTimes(1);
+      if (enabled)
+        expect(
+          capture?.packets.find(
+            (packet) => packet.event === "replay.submission",
+          ),
+        ).toMatchObject({ values: { assistant: "assistant-on-submit" } });
+      expect(getter).toHaveBeenCalledTimes(1);
+      expect(ctx.fake.submissions[0]?.payload.assistant_id).toBe(
+        "assistant-on-submit",
+      );
+    } finally {
+      resolvePrepare(response);
+      await pending;
+      getter.mockRestore();
+      uuid.mockRestore();
+      capture?.dispose();
+      ctx.wrapper.unmount();
+      ctx.queryClient.clear();
+      vi.unstubAllGlobals();
+    }
+  });
+
+for (const status of ["failed", "cancelled"] as const)
+  it(`retains the replay attempt while recording the runner's ${status} outcome`, async () => {
+    const packets: ObservationPacket[] = [];
+    const capability = "__deerflow_parity_capture_v1__";
+    const eventName = "deerflow:parity-identity:v1";
+    const receive = (event: Event) =>
+      packets.push((event as CustomEvent<ObservationPacket>).detail);
+    Object.defineProperty(window, capability, {
+      configurable: true,
+      value: { version: 1, token: "replay-outcome", action: "replay:0" },
+    });
+    window.addEventListener(eventName, receive);
+    vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/prepare"))
+        return Promise.resolve(
+          new Response(JSON.stringify(observedPreparedReplay("regenerate")), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      if (url.includes("/history")) return Promise.resolve(new Response("[]"));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    let release: () => void = () => undefined;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ctx = mountStream(ref("thread-1"), {
+      failBeforeStart: status === "failed",
+      submitBarrier: () => barrier,
+    });
+    let pending: Promise<boolean> | undefined;
+    try {
+      pending = ctx.api.regenerateMessage("thread-1", "answer-observed");
+      await flushPromises();
+      expect(ctx.fake.submissions).toHaveLength(1);
+      if (status === "cancelled") ctx.fake.settle("cancelled");
+      release();
+      expect(await pending).toBe(false);
+      expect(
+        packets.find((packet) => packet.event === "replay.failure"),
+      ).toMatchObject({ values: { status } });
+      expect(
+        packets.find(
+          (packet) =>
+            packet.event === "replay.snapshot" &&
+            packet.values.phase === "attempt",
+        ),
+      ).toMatchObject({ values: { complete: true } });
+      expect(
+        packets.filter((packet) => packet.event === "replay.adopt"),
+      ).toHaveLength(1);
+    } finally {
+      release();
+      await pending;
+      ctx.wrapper.unmount();
+      ctx.queryClient.clear();
+      window.removeEventListener(eventName, receive);
+      Reflect.deleteProperty(window, capability);
+      vi.unstubAllGlobals();
+    }
+  });
+
+function captureActualReplay() {
+  const packets: ObservationPacket[] = [];
+  const capability = "__deerflow_parity_capture_v1__";
+  const eventName = "deerflow:parity-identity:v1";
+  const control = { version: 1, token: "boundary-capture", action: "replay:0" };
+  const receive = (event: Event) =>
+    packets.push((event as CustomEvent<ObservationPacket>).detail);
+  Object.defineProperty(window, capability, {
+    configurable: true,
+    value: control,
+  });
+  window.addEventListener(eventName, receive);
+  return {
+    packets,
+    control,
+    dispose() {
+      window.removeEventListener(eventName, receive);
+      Reflect.deleteProperty(window, capability);
+    },
+  };
+}
+
+for (const kind of ["edit", "regenerate"] as const)
+  for (const mode of [
+    "thread-switch",
+    "unmount",
+    "http-error",
+    "json-error",
+    "submit-throw",
+    "capture-replaced",
+  ] as const)
+    it(`actual ${kind} provenance preserves its original owner through ${mode}`, async () => {
+      let resolvePrepare: (value: Response) => void = () => undefined;
+      let prepareCalls = 0;
+      let signal: AbortSignal | null | undefined;
+      vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith("/prepare")) {
+          prepareCalls += 1;
+          signal = init?.signal;
+          return new Promise<Response>((resolve) => {
+            resolvePrepare = resolve;
+          });
+        }
+        if (url.includes("/history"))
+          return Promise.resolve(new Response("[]"));
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+      const ctx = mountStream(ref("thread-1"), {
+        submitBarrier: async () => {
+          if (mode === "submit-throw")
+            throw new Error("private submission failure");
+        },
+      });
+      const capture = captureActualReplay();
+      let pending: Promise<boolean> | undefined;
+      let unmounted = false;
+      const retired = mode === "thread-switch" || mode === "unmount";
+      const prepared = observedPreparedReplay(kind);
+      try {
+        pending =
+          kind === "edit"
+            ? ctx.api.editAndRegenerateMessage(
+                "thread-1",
+                "human-observed",
+                "private revised text",
+                ["human-observed", "answer-observed"],
+              )
+            : ctx.api.regenerateMessage("thread-1", "answer-observed");
+        await flushPromises();
+        expect(prepareCalls).toBe(1);
+        expect(capture.packets.map((packet) => packet.event)).toEqual([
+          "replay.begin",
+        ]);
+        capture.control.action = "later:1";
+        if (mode === "thread-switch") {
+          ctx.threadId.value = "thread-2";
+          await flushPromises();
+        } else if (mode === "unmount") {
+          ctx.wrapper.unmount();
+          unmounted = true;
+        } else if (mode === "capture-replaced")
+          capture.control.token = "replacement-capture";
+        if (retired) expect(signal?.aborted).toBe(true);
+        const response =
+          mode === "http-error"
+            ? new Response(JSON.stringify({ detail: "private denied" }), {
+                status: 409,
+                headers: { "Content-Type": "application/json" },
+              })
+            : new Response(
+                mode === "json-error"
+                  ? "{ private invalid json"
+                  : JSON.stringify(prepared),
+                { headers: { "Content-Type": "application/json" } },
+              );
+        resolvePrepare(response);
+        const accepted = await pending;
+
+        expect(accepted).toBe(mode === "capture-replaced");
+        expect(ctx.fake.submissions.length).toBe(
+          mode === "submit-throw" || mode === "capture-replaced" ? 1 : 0,
+        );
+        expect(capture.packets[0]).toMatchObject({
+          event: "replay.begin",
+          action: "replay:0",
+          values: { kind, thread: "thread-1" },
+        });
+        expect(
+          capture.packets.every(
+            (packet) =>
+              packet.capture === "boundary-capture" &&
+              packet.action === "replay:0",
+          ),
+        ).toBe(true);
+        expect(JSON.stringify(capture.packets)).not.toContain("private");
+        expect(
+          capture.packets.some((packet) => packet.event === "invalid"),
+        ).toBe(false);
+        if (mode === "capture-replaced") {
+          expect(capture.packets.map((packet) => packet.event)).toEqual([
+            "replay.begin",
+          ]);
+        } else {
+          const expectedPhases =
+            mode === "http-error" || mode === "json-error"
+              ? []
+              : mode === "submit-throw"
+                ? ["response", "attempt"]
+                : ["response"];
+          expect(
+            capture.packets
+              .filter((packet) => packet.event === "replay.snapshot")
+              .map((packet) => packet.values.phase),
+          ).toEqual(expectedPhases);
+          expect(
+            capture.packets
+              .filter((packet) => packet.event === "replay.snapshot")
+              .every((packet) => packet.values.complete === true),
+          ).toBe(true);
+          expect(
+            capture.packets.filter((packet) => packet.event === "replay.adopt"),
+          ).toHaveLength(mode === "submit-throw" ? 1 : 0);
+          expect(
+            capture.packets.filter(
+              (packet) => packet.event === "replay.submission",
+            ),
+          ).toHaveLength(mode === "submit-throw" ? 1 : 0);
+          expect(
+            capture.packets.filter(
+              (packet) => packet.event === "replay.retire",
+            ),
+          ).toHaveLength(retired ? 1 : 0);
+          expect(
+            capture.packets.filter(
+              (packet) => packet.event === "replay.failure",
+            ),
+          ).toHaveLength(retired ? 0 : 1);
+          if (!retired)
+            expect(
+              capture.packets.find(
+                (packet) => packet.event === "replay.failure",
+              ),
+            ).toMatchObject({ values: { status: "exception" } });
+          expect(capture.packets.at(-1)).toMatchObject({
+            event: "replay.finish",
+            values: { current: !retired },
+          });
+        }
+      } finally {
+        resolvePrepare(new Response(JSON.stringify(prepared)));
+        await pending;
+        if (!unmounted) ctx.wrapper.unmount();
+        ctx.queryClient.clear();
+        capture.dispose();
+        vi.unstubAllGlobals();
+      }
+    });
+for (const enabled of [false, true])
+  for (const sourceShape of ["absent", "empty", "getter"] as const)
+    it(`regenerate adopts its exact source list without observation interference (shape=${sourceShape}, enabled=${enabled})`, async () => {
+      const emptySources = sourceShape !== "absent";
+      vi.useFakeTimers();
+      let release: () => void = () => undefined;
+      const barrier = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const ctx = mountStream(ref("thread-1"), {
+        submitBarrier: () => barrier,
+      });
+      const oldIds = ["answer-observed", "source-step", "unrelated-answer"];
+      let pending: Promise<boolean> | undefined;
+      let capture: ReturnType<typeof captureActualReplay> | undefined;
+      const prepared = {
+        ...observedPreparedReplay("regenerate"),
+        ...(emptySources ? { source_message_ids: [] } : {}),
+      };
+      const response = new Response(JSON.stringify(prepared));
+      const parse = vi.spyOn(response, "json");
+      const readSources = vi.fn(() => [] as string[]);
+      if (sourceShape === "getter") {
+        Object.defineProperty(prepared, "source_message_ids", {
+          get: readSources,
+        });
+        // Synthetic robustness only: normal JSON cases above use real parsing.
+        parse.mockResolvedValue(prepared);
+      }
+      const uuid = vi
+        .spyOn(globalThis.crypto, "randomUUID")
+        .mockReturnValue("11111111-1111-4111-8111-111111111111");
+      const calls: { url: string; body: unknown }[] = [];
+      try {
+        await flushPromises();
+        ctx.fake.setMessages(
+          oldIds.map((id) => ({ id, type: "ai", content: id })),
+        );
+        await settleCoalescing();
+        expect(ctx.api.messages.value.map((message) => message.id)).toEqual(
+          oldIds,
+        );
+        capture = captureActualReplay();
+        if (!enabled)
+          Reflect.deleteProperty(window, "__deerflow_parity_capture_v1__");
+        vi.stubGlobal(
+          "fetch",
+          (input: RequestInfo | URL, init?: RequestInit) => {
+            const url = String(input);
+            if (url.endsWith("/prepare")) {
+              calls.push({ url, body: init?.body });
+              return Promise.resolve(response);
+            }
+            if (url.includes("/history"))
+              return Promise.resolve(new Response("[]"));
+            throw new Error(`Unexpected fetch: ${url}`);
+          },
+        );
+        pending = ctx.api.regenerateMessage("thread-1", "answer-observed", [
+          "answer-observed",
+          "source-step",
+        ]);
+        await flushPromises();
+        await settleCoalescing();
+        expect(calls).toEqual([
+          {
+            url: expect.stringContaining(
+              "/api/threads/thread-1/runs/regenerate/prepare",
+            ),
+            body: JSON.stringify({ message_id: "answer-observed" }),
+          },
+        ]);
+        expect(ctx.fake.submissions).toHaveLength(1);
+        expect(ctx.fake.submissions[0]).toMatchObject({
+          idempotencyKey: "11111111-1111-4111-8111-111111111111",
+          payload: {
+            input: prepared.input,
+            checkpoint: prepared.checkpoint,
+            metadata: prepared.metadata,
+          },
+        });
+        expect(parse).toHaveBeenCalledTimes(1);
+        expect(readSources).toHaveBeenCalledTimes(
+          sourceShape === "getter" ? 1 : 0,
+        );
+        expect(uuid).toHaveBeenCalledTimes(1);
+        const visible = ctx.api.messages.value.map((message) => message.id);
+        expect(visible.filter((id) => oldIds.includes(id!))).toEqual(
+          emptySources ? oldIds : ["unrelated-answer"],
+        );
+        expect(visible).toContain("human-observed");
+        if (enabled) {
+          expect(
+            capture.packets
+              .filter((packet) => packet.event === "replay.snapshot")
+              .map((packet) => packet.values),
+          ).toEqual(
+            ["response", "attempt"].map((phase) => ({
+              phase,
+              sourcesType:
+                sourceShape === "getter"
+                  ? "unreadable"
+                  : emptySources
+                    ? "array"
+                    : "absent",
+              sourceCount: sourceShape === "getter" ? null : 0,
+              messageCount: sourceShape === "getter" ? null : 1,
+              complete: sourceShape !== "getter",
+            })),
+          );
+          expect(
+            capture.packets.filter((packet) => packet.event === "replay.adopt"),
+          ).toHaveLength(1);
+          expect(
+            capture.packets.some((packet) => packet.event === "invalid"),
+          ).toBe(sourceShape === "getter");
+        } else expect(capture.packets).toEqual([]);
+        release();
+        expect(await pending).toBe(true);
+      } finally {
+        release();
+        await pending;
+        capture?.dispose();
+        parse.mockRestore();
+        uuid.mockRestore();
+        ctx.wrapper.unmount();
+        ctx.queryClient.clear();
+        vi.unstubAllGlobals();
+        vi.useRealTimers();
+      }
+    });

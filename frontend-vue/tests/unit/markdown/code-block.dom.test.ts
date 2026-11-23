@@ -17,6 +17,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 
 import StreamMarkdown from "@/components/markdown/StreamMarkdown.vue";
+import CodeBlock from "@/components/markdown/CodeBlock.vue";
 import { richContentComponents } from "@/components/markdown/components";
 import { appRemarkPlugins } from "@/core/markdown/plugins";
 
@@ -68,6 +69,55 @@ function findSlot(
 }
 
 describe("代码块槽位 · 首帧 DOM 与上游一致", () => {
+  for (const suffix of ["\n", "\n\n\n"]) {
+    it(`fallback and real highlighting omit terminal newlines (${suffix.length}) while preserving interior blank lines`, async () => {
+      const code = `const first = 1;\n\nconst last = 2;${suffix}`;
+      const wrapper = mount(CodeBlock, {
+        props: { code, language: "ts" },
+      });
+      const rows = () =>
+        wrapper.findAll('[data-streamdown="code-block-body"] code > span');
+      expect(rows()).toHaveLength(3);
+      await vi.waitFor(() => {
+        expect(
+          wrapper
+            .find('[data-streamdown="code-block-body"] code span span')
+            .attributes("style"),
+        ).toMatch(/--sdm-c:\s*#[0-9a-f]{6}/i);
+      });
+      expect(rows()).toHaveLength(3);
+      expect(rows()[1]?.text()).toBe("");
+      expect(rows()[2]?.text()).toBe("const last = 2;");
+      expect(wrapper.props("code")).toBe(code);
+      const clipboard = vi
+        .spyOn(navigator.clipboard, "writeText")
+        .mockResolvedValue();
+      const createURL = vi
+        .spyOn(URL, "createObjectURL")
+        .mockReturnValue("blob:raw-code");
+      const anchorClick = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(() => {});
+      try {
+        await wrapper
+          .find('[data-streamdown="code-block-copy-button"]')
+          .trigger("click");
+        expect(clipboard).toHaveBeenCalledExactlyOnceWith(code);
+        await wrapper
+          .find('[data-streamdown="code-block-download-button"]')
+          .trigger("click");
+        expect(createURL).toHaveBeenCalledTimes(1);
+        expect(await (createURL.mock.calls[0]![0] as Blob).text()).toBe(code);
+        expect(anchorClick).toHaveBeenCalledTimes(1);
+      } finally {
+        clipboard.mockRestore();
+        createURL.mockRestore();
+        anchorClick.mockRestore();
+      }
+      wrapper.unmount();
+    });
+  }
+
   for (const [id, language] of [
     ["code-block", "ts"],
     ["code-block-no-language", ""],

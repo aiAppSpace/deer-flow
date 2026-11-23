@@ -37,12 +37,13 @@ describe("ConversationEmptyState primitive", () => {
       "size-full",
       "flex-col",
       "items-center",
-      "justify-center",
+      "justify-center-safe",
+      "overflow-y-auto",
       "gap-3",
       "p-8",
       "text-center",
     ]) {
-      expect(className, token).toContain(token);
+      expect(className.split(/\s+/), token).toContain(token);
     }
 
     // icon 外面必须有那一层 text-muted-foreground；上游靠它给图标上色。

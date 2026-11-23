@@ -6,6 +6,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 
 import {
+  observeUploadLimits,
+  type ThreadConsumptionObservation,
+} from "@/core/diagnostics/parity-observation";
+
+import {
   deleteUploadedFile,
   getUploadLimits,
   listUploadedFiles,
@@ -28,11 +33,17 @@ import {
  */
 export function useUploadLimits(
   threadId: string,
-  options?: { enabled?: boolean },
+  options?: {
+    enabled?: boolean;
+    observation?: ThreadConsumptionObservation | null;
+  },
 ) {
   return useQuery({
     queryKey: ["uploads", "limits", threadId],
-    queryFn: () => getUploadLimits(threadId),
+    queryFn: () => {
+      observeUploadLimits(threadId, () => options?.observation);
+      return getUploadLimits(threadId);
+    },
     enabled: !!threadId && (options?.enabled ?? true),
     retry: false,
     staleTime: 60_000,

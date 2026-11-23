@@ -200,3 +200,52 @@ describe("Shimmer", () => {
     expect(wrapper.classes()).toContain("bg-clip-text");
   });
 });
+
+describe("ChainOfThought controlled and initial state", () => {
+  const content = () =>
+    h(ChainOfThoughtContent, {}, () => "initially open panel");
+  it("honors defaultOpen when open is omitted and treats it only as initial state", async () => {
+    const wrapper = mount(ChainOfThought, {
+      props: { defaultOpen: true },
+      slots: { default: content },
+    });
+    try {
+      await wrapper.vm.$nextTick();
+      expect(
+        wrapper.get('[data-slot="collapsible"]').attributes("data-state"),
+      ).toBe("open");
+      expect(wrapper.text()).toContain("initially open panel");
+      expect(
+        wrapper.get('[data-slot="collapsible-content"]').attributes("hidden"),
+      ).toBeUndefined();
+      await wrapper.setProps({ defaultOpen: false });
+      expect(
+        wrapper.get('[data-slot="collapsible"]').attributes("data-state"),
+      ).toBe("open");
+    } finally {
+      wrapper.unmount();
+    }
+  });
+  it("lets an explicit open state override defaultOpen and react to controlled changes", async () => {
+    const wrapper = mount(ChainOfThought, {
+      props: { open: false, defaultOpen: true },
+      slots: { default: content },
+    });
+    try {
+      await wrapper.vm.$nextTick();
+      expect(
+        wrapper.get('[data-slot="collapsible"]').attributes("data-state"),
+      ).toBe("closed");
+      await wrapper.setProps({ open: true });
+      expect(
+        wrapper.get('[data-slot="collapsible"]').attributes("data-state"),
+      ).toBe("open");
+      await wrapper.setProps({ open: false });
+      expect(
+        wrapper.get('[data-slot="collapsible"]').attributes("data-state"),
+      ).toBe("closed");
+    } finally {
+      wrapper.unmount();
+    }
+  });
+});

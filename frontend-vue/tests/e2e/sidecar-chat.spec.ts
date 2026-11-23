@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { threadIdFromRequest } from "./utils/thread-request";
 
 import {
   mockLangGraphAPI,
@@ -6,6 +7,7 @@ import {
   MOCK_THREAD_ID,
   MOCK_THREAD_ID_2,
 } from "./utils/mock-api";
+import { hasOpeningPaneAnimation } from "./utils/sidecar-observation";
 
 function textFromContent(content: unknown) {
   if (typeof content === "string") {
@@ -132,16 +134,10 @@ async function expectSidecarSelectionToolbarActions(page: Page, text: string) {
 }
 
 /*
-  侧栏面板由 splitpanes 驱动，`.splitpanes--ready .splitpanes__pane` 带
-  `transition: width .2s ease-out`——面板刚打开的那 200ms 里 form 只有几十像素宽，
-  工具条里的按钮全被 flex 压扁并溢出。
-
-  在此之前这里不需要等：sidecar 面板自己**又发了一次 `GET /api/models`**，
-  「等模型名出现」这一步顺带把动画等完了。那次重复请求已经修掉（改走共享的
-  useModels，与 AgentChat 同一份 Vue Query 缓存），模型名于是第一帧就在，
-  这几个几何断言就直接量在动画中间。
-
-  所以要等的是**布局本身**，不是某个控件出现。连续两次量到同一个宽度才算停。
+  Toolbar geometry is measured after the panel's layout settles. Model data can
+  already be cached, so a visible model label does not prove that the open/close
+  transition has finished. Keep the existing consecutive-width observation and
+  polling budget independent of the presentation owner's transition duration.
 */
 async function waitForSidecarPaneSettled(page: Page) {
   let previous = -1;
@@ -360,54 +356,402 @@ async function expectSidecarScrollDoesNotAnimateAfterOpen(page: Page) {
   expect(secondScrollTop).toBe(firstScrollTop);
 }
 
-async function openSidecarAndExpectNoAnimatedScroll(page: Page) {
-  await page.evaluate(() => {
-    const targetWindow = window as Window & {
-      __sidecarPanelTransforms?: string[];
-    };
-    targetWindow.__sidecarPanelTransforms = [];
-  });
+type SidecarScrollFrame = {
+  time: number;
+  top: number;
+  scrollHeight: number;
+  clientHeight: number;
+  clientWidth: number;
+  panelWidth: number;
+  contentWidth: number;
+  paneWidth: number;
+  paneTransitionProperty: string;
+  paneTransitionDuration: string;
+  windowWidth: number;
+  windowHeight: number;
+  rootFontSize: string;
+};
 
-  await page.getByTestId("sidecar-header-trigger").click();
-  await expect(page.getByTestId("sidecar-message-list")).toBeVisible();
-  for (let index = 0; index < 20; index += 1) {
-    await page.waitForTimeout(25);
-    await page.evaluate(() => {
-      const targetWindow = window as Window & {
-        __sidecarPanelTransforms?: string[];
-      };
-      const panel = document.querySelector('[data-testid="sidecar-panel"]');
-      const shell = panel?.parentElement;
-      if (shell) {
-        targetWindow.__sidecarPanelTransforms?.push(
-          window.getComputedStyle(shell).transform,
-        );
-      }
-    });
-  }
+type SidecarLifecycleFrame = {
+  paneOwner: number | null;
+  time: number;
+  panelAttached: boolean;
+  hiddenFromA11y: boolean;
+  focusInside: boolean;
+  opacity: number;
+  paneWidth: number;
+  transitionProperty: string;
+  transitionDuration: string;
+};
 
-  const { panelTransforms, scrollBehavior } = await page.evaluate(() => {
-    const targetWindow = window as Window & {
-      __sidecarPanelTransforms?: string[];
-    };
-    const root = document.querySelector('[data-testid="sidecar-message-list"]');
-    const scrollElement = root?.firstElementChild;
-    if (!(scrollElement instanceof HTMLElement)) {
-      throw new Error("Sidecar scroll container was not found.");
+type SidecarObservation = {
+  reducedMotion: boolean;
+  panelTransforms: string[];
+  frames: SidecarScrollFrame[];
+  lifecycle: SidecarLifecycleFrame[];
+  transitions: Array<{
+    time: number;
+    target: "pane" | "aside";
+    property: string;
+    durationMs: number;
+    paneOwner: number | null;
+  }>;
+};
+
+type SidecarObservationWindow = Window & {
+  __sidecarObservation?: SidecarObservation;
+  __sidecarScrollFrame?: number;
+  __sidecarScrollTask?: number;
+  __sidecarTransitionListener?: (event: TransitionEvent) => void;
+};
+
+function animatedSidecarFrames(frames: SidecarScrollFrame[]) {
+  const animated: SidecarScrollFrame[] = [];
+  let positions: SidecarScrollFrame[] = [];
+  for (const current of frames) {
+    const previous = positions.at(-1);
+    const sameLayout =
+      previous?.scrollHeight === current.scrollHeight &&
+      previous.clientHeight === current.clientHeight &&
+      previous.clientWidth === current.clientWidth;
+    if (!sameLayout) positions = [];
+    if (positions.at(-1)?.top === current.top) continue;
+    positions.push(current);
+    if (positions.length < 3) continue;
+    const beforePrevious = positions.at(-3)!;
+    const middle = positions.at(-2)!;
+    // React's instant owner intentionally stops one pixel before the maximum.
+    // A direct tail jump remains valid. Three distinct, same-direction positions
+    // with an intermediate non-tail position expose progressive scrolling.
+    const middleAtTail =
+      Math.abs(middle.scrollHeight - middle.clientHeight - middle.top) <= 1;
+    if (
+      !middleAtTail &&
+      Math.sign(middle.top - beforePrevious.top) ===
+        Math.sign(current.top - middle.top)
+    ) {
+      animated.push(current);
     }
-    return {
-      panelTransforms: targetWindow.__sidecarPanelTransforms ?? [],
-      scrollBehavior: window.getComputedStyle(scrollElement).scrollBehavior,
-    };
-  });
+  }
+  return animated;
+}
 
-  expect(scrollBehavior).toBe("auto");
-  expect(
-    panelTransforms.every(
-      (transform) =>
-        transform === "none" || transform === "matrix(1, 0, 0, 1, 0, 0)",
-    ),
-  ).toBe(true);
+async function startSidecarObservation(page: Page) {
+  await page.evaluate((paneSelector) => {
+    const targetWindow = window as SidecarObservationWindow;
+    const observation: SidecarObservation = {
+      reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      panelTransforms: [],
+      frames: [],
+      lifecycle: [],
+      transitions: [],
+    };
+    targetWindow.__sidecarObservation = observation;
+    const paneOwners = new WeakMap<Element, number>();
+    let nextPaneOwner = 0;
+    const paneOwner = (pane: Element | null | undefined) => {
+      if (!pane) return null;
+      let id = paneOwners.get(pane);
+      if (id === undefined) {
+        id = ++nextPaneOwner;
+        paneOwners.set(pane, id);
+      }
+      return id;
+    };
+    const start = performance.now();
+    const onTransition = (event: TransitionEvent) => {
+      const aside = document.querySelector("#artifacts");
+      const pane = aside?.closest(paneSelector);
+      if (event.target !== pane && event.target !== aside) return;
+      if (!(event.target instanceof HTMLElement)) return;
+      const style = getComputedStyle(event.target);
+      const properties = style.transitionProperty
+        .split(",")
+        .map((p) => p.trim());
+      const durations = style.transitionDuration.split(",").map((duration) => {
+        const value = Number.parseFloat(duration);
+        return duration.trim().endsWith("ms") ? value : value * 1000;
+      });
+      const propertyIndex = properties.indexOf(event.propertyName);
+      const durationIndex =
+        propertyIndex < 0 ? properties.indexOf("all") : propertyIndex;
+      observation.transitions.push({
+        paneOwner: paneOwner(pane),
+        time: performance.now() - start,
+        target: event.target === pane ? "pane" : "aside",
+        property: event.propertyName,
+        durationMs:
+          durations[Math.max(0, durationIndex) % durations.length] ?? 0,
+      });
+    };
+    targetWindow.__sidecarTransitionListener = onTransition;
+    document.addEventListener("transitionrun", onTransition, true);
+    const sample = () => {
+      const aside = document.querySelector<HTMLElement>("#artifacts");
+      const pane = aside?.closest(paneSelector);
+      const panel = document.querySelector('[data-testid="sidecar-panel"]');
+      const root = document.querySelector(
+        '[data-testid="sidecar-message-list"]',
+      );
+      const viewport = root?.firstElementChild;
+      const asideStyle = aside ? getComputedStyle(aside) : undefined;
+      const paneStyle = pane ? getComputedStyle(pane) : undefined;
+      observation.lifecycle.push({
+        paneOwner: paneOwner(pane),
+        time: performance.now() - start,
+        panelAttached: panel !== null,
+        hiddenFromA11y:
+          aside?.getAttribute("aria-hidden") === "true" ||
+          aside?.inert === true,
+        focusInside: aside?.contains(document.activeElement) ?? false,
+        opacity: Number(asideStyle?.opacity ?? 0),
+        paneWidth: pane?.getBoundingClientRect().width ?? 0,
+        transitionProperty: asideStyle?.transitionProperty ?? "missing",
+        transitionDuration: asideStyle?.transitionDuration ?? "missing",
+      });
+      if (!(viewport instanceof HTMLElement) || viewport.clientHeight <= 0)
+        return;
+      const rect = viewport.getBoundingClientRect();
+      let left = Math.max(rect.left, 0);
+      let right = Math.min(rect.right, innerWidth);
+      let top = Math.max(rect.top, 0);
+      let bottom = Math.min(rect.bottom, innerHeight);
+      for (
+        let node: HTMLElement | null = viewport;
+        node;
+        node = node.parentElement
+      ) {
+        const style = getComputedStyle(node);
+        if (
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          Number(style.opacity) === 0 ||
+          node.inert ||
+          node.getAttribute("aria-hidden") === "true"
+        )
+          return;
+        const box = node.getBoundingClientRect();
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowX)) {
+          left = Math.max(left, box.left);
+          right = Math.min(right, box.right);
+        }
+        if (/(auto|scroll|hidden|clip)/.test(style.overflowY)) {
+          top = Math.max(top, box.top);
+          bottom = Math.min(bottom, box.bottom);
+        }
+      }
+      if (left >= right || top >= bottom) return;
+      observation.frames.push({
+        time: performance.now() - start,
+        top: viewport.scrollTop,
+        scrollHeight: viewport.scrollHeight,
+        clientHeight: viewport.clientHeight,
+        clientWidth: viewport.clientWidth,
+        panelWidth: panel?.getBoundingClientRect().width ?? 0,
+        contentWidth: root?.getBoundingClientRect().width ?? 0,
+        paneWidth: pane?.getBoundingClientRect().width ?? 0,
+        paneTransitionProperty: paneStyle?.transitionProperty ?? "missing",
+        paneTransitionDuration: paneStyle?.transitionDuration ?? "missing",
+        windowWidth: innerWidth,
+        windowHeight: innerHeight,
+        rootFontSize: getComputedStyle(document.documentElement).fontSize,
+      });
+    };
+    const observe = () => {
+      // A task after this rendering update observes any legitimate instant
+      // adjustment made by a later owner rAF in that same update.
+      targetWindow.__sidecarScrollTask = window.setTimeout(() => {
+        sample();
+        targetWindow.__sidecarScrollFrame = requestAnimationFrame(observe);
+      }, 0);
+    };
+    sample();
+    targetWindow.__sidecarScrollFrame = requestAnimationFrame(observe);
+  }, "[data-panel]");
+}
+
+async function stopSidecarObservation(page: Page) {
+  await page.evaluate(() => {
+    const targetWindow = window as SidecarObservationWindow;
+    if (targetWindow.__sidecarScrollFrame !== undefined) {
+      cancelAnimationFrame(targetWindow.__sidecarScrollFrame);
+    }
+    if (targetWindow.__sidecarScrollTask !== undefined) {
+      clearTimeout(targetWindow.__sidecarScrollTask);
+    }
+    if (targetWindow.__sidecarTransitionListener) {
+      document.removeEventListener(
+        "transitionrun",
+        targetWindow.__sidecarTransitionListener,
+        true,
+      );
+    }
+    delete targetWindow.__sidecarScrollFrame;
+    delete targetWindow.__sidecarScrollTask;
+    delete targetWindow.__sidecarTransitionListener;
+    delete targetWindow.__sidecarObservation;
+  });
+}
+
+async function readSidecarObservation(page: Page) {
+  return page.evaluate(() => {
+    const observation = (window as SidecarObservationWindow)
+      .__sidecarObservation;
+    if (!observation)
+      throw new Error("Sidecar observation owner was not started.");
+    return observation;
+  });
+}
+
+async function openSidecarAndExpectNoAnimatedScroll(page: Page) {
+  await startSidecarObservation(page);
+  try {
+    await page.getByTestId("sidecar-header-trigger").click();
+    await expect(page.getByTestId("sidecar-message-list")).toBeVisible();
+    for (let index = 0; index < 20; index += 1) {
+      await page.waitForTimeout(25);
+      await page.evaluate(() => {
+        const targetWindow = window as SidecarObservationWindow;
+        const panel = document.querySelector('[data-testid="sidecar-panel"]');
+        const shell = panel?.parentElement;
+        if (shell) {
+          targetWindow.__sidecarObservation?.panelTransforms.push(
+            window.getComputedStyle(shell).transform,
+          );
+        }
+      });
+    }
+    const observation = await readSidecarObservation(page);
+    const { panelTransforms, frames, reducedMotion } = observation;
+    const scrollBehavior = await page.evaluate(() => {
+      const root = document.querySelector(
+        '[data-testid="sidecar-message-list"]',
+      );
+      const scrollElement = root?.firstElementChild;
+      if (!(scrollElement instanceof HTMLElement))
+        throw new Error("Sidecar scroll container was not found.");
+      return getComputedStyle(scrollElement).scrollBehavior;
+    });
+    await test.info().attach("sidecar-open-scroll-frames", {
+      body: JSON.stringify(observation),
+      contentType: "application/json",
+    });
+    expect(scrollBehavior).toBe("auto");
+    expect(
+      panelTransforms.every(
+        (transform) =>
+          transform === "none" || transform === "matrix(1, 0, 0, 1, 0, 0)",
+      ),
+    ).toBe(true);
+    expect(
+      frames.filter((frame) => frame.scrollHeight > frame.clientHeight).length,
+      "Observe the visible overflowing native scrollport",
+    ).toBeGreaterThan(1);
+    expect(animatedSidecarFrames(frames), JSON.stringify(frames)).toEqual([]);
+    const widthEpochs: SidecarScrollFrame[][] = [];
+    for (const frame of frames) {
+      const epoch = widthEpochs.at(-1);
+      const previous = epoch?.at(-1);
+      // Only an external viewport/font change starts a new layout epoch.
+      // The pane's own opening animation must not reflow its loaded content.
+      if (
+        frame.windowWidth !== previous?.windowWidth ||
+        frame.windowHeight !== previous?.windowHeight ||
+        frame.rootFontSize !== previous?.rootFontSize
+      ) {
+        widthEpochs.push([frame]);
+      } else {
+        epoch!.push(frame);
+      }
+    }
+    for (const epoch of widthEpochs) {
+      const contentWidths = epoch.map((frame) => frame.contentWidth);
+      const viewportWidths = epoch.map((frame) => frame.clientWidth);
+      // Native fractional CSS sizing can straddle one integer clientWidth.
+      expect(
+        Math.max(...contentWidths) - Math.min(...contentWidths),
+        JSON.stringify(epoch),
+      ).toBeLessThan(1);
+      expect(
+        Math.max(...viewportWidths) - Math.min(...viewportWidths),
+        JSON.stringify(epoch),
+      ).toBeLessThanOrEqual(1);
+    }
+    if (!reducedMotion) {
+      expect(
+        hasOpeningPaneAnimation(observation),
+        "The same native pane has intermediate widths during its opening transition: " +
+          JSON.stringify(observation),
+      ).toBe(true);
+    }
+  } finally {
+    await stopSidecarObservation(page);
+  }
+}
+
+async function closeSidecarAndExpectExitLifecycle(page: Page) {
+  await startSidecarObservation(page);
+  try {
+    await page.getByTestId("sidecar-header-trigger").click();
+    const afterClick = await page.evaluate(() => {
+      const aside = document.querySelector<HTMLElement>("#artifacts");
+      return {
+        hiddenFromA11y:
+          aside?.getAttribute("aria-hidden") === "true" ||
+          aside?.inert === true,
+        focusInside: aside?.contains(document.activeElement) ?? false,
+      };
+    });
+    await expect(page.getByTestId("sidecar-panel")).toBeHidden();
+    await page.waitForTimeout(350);
+    const observation = await readSidecarObservation(page);
+    await test.info().attach("sidecar-close-lifecycle", {
+      body: JSON.stringify({ afterClick, ...observation }),
+      contentType: "application/json",
+    });
+    expect(
+      afterClick.hiddenFromA11y,
+      "Closing immediately removes the pane from accessibility",
+    ).toBe(true);
+    expect(
+      afterClick.focusInside,
+      "Closing does not retain focus in the inaccessible pane",
+    ).toBe(false);
+    const { lifecycle, transitions, reducedMotion } = observation;
+    expect(
+      lifecycle.some((frame) => frame.panelAttached && !frame.hiddenFromA11y),
+    ).toBe(true);
+    const closingFrames = lifecycle.filter((frame) => frame.hiddenFromA11y);
+    expect(closingFrames.length).toBeGreaterThan(1);
+    expect(
+      closingFrames.every((frame) => !frame.focusInside),
+      JSON.stringify(closingFrames),
+    ).toBe(true);
+    if (!reducedMotion) {
+      expect(
+        closingFrames.some(
+          (frame) =>
+            frame.panelAttached && frame.opacity > 0 && frame.opacity < 1,
+        ),
+        "The inaccessible exiting child remains mounted during the opacity fade",
+      ).toBe(true);
+      expect(
+        transitions.some(
+          (event) =>
+            event.target === "aside" &&
+            event.property === "opacity" &&
+            event.durationMs > 0,
+        ),
+        JSON.stringify(transitions),
+      ).toBe(true);
+    }
+    expect(
+      lifecycle.at(-1)?.panelAttached,
+      "The child retires after the existing close observation",
+    ).toBe(false);
+  } finally {
+    await stopSidecarObservation(page);
+  }
 }
 
 test.describe("Side chat", () => {
@@ -429,6 +773,15 @@ test.describe("Side chat", () => {
     ];
     let createdThreadBody: { metadata?: Record<string, unknown> } | undefined;
     let sidecarThreadCreateCount = 0;
+    let sidecarThreadId: string | null = null;
+    let sidecarCreated: Promise<string> | null = null;
+    const sidecarReadPaths: string[] = [];
+    async function matchesSidecar(route: Route) {
+      return (
+        sidecarCreated !== null &&
+        threadIdFromRequest(route.request().url()) === (await sidecarCreated)
+      );
+    }
     let streamBody:
       | {
           input?: {
@@ -509,6 +862,15 @@ test.describe("Side chat", () => {
       createdThreadBody = route.request().postDataJSON() as {
         metadata?: Record<string, unknown>;
       };
+      const request = route.request();
+      sidecarCreated = page
+        .waitForResponse((response) => response.request() === request)
+        .then(async (response) => {
+          expect(response.status()).toBe(200);
+          const created = (await response.json()) as { thread_id: string };
+          sidecarThreadId = created.thread_id;
+          return created.thread_id;
+        });
       return route.fallback();
     });
     await page.route(
@@ -605,16 +967,42 @@ test.describe("Side chat", () => {
         });
       },
     );
-    await page.route(
-      `**/api/langgraph/threads/${MOCK_SIDECAR_THREAD_ID}/state`,
-      (route) => {
-        if (route.request().method() !== "GET") {
-          return route.fallback();
-        }
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
+    await page.route("**/api/langgraph/threads/*/state", async (route) => {
+      if (
+        route.request().method() !== "GET" ||
+        !(await matchesSidecar(route))
+      ) {
+        return route.fallback();
+      }
+      sidecarReadPaths.push(new URL(route.request().url()).pathname);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          values: {
+            title: "Side chat",
+            messages: sidecarThreadMessages,
+            artifacts: [],
+          },
+          next: [],
+          metadata: {},
+          created_at: "2025-01-01T00:00:00Z",
+        }),
+      });
+    });
+    await page.route("**/api/langgraph/threads/*/history", async (route) => {
+      if (
+        route.request().method() !== "GET" ||
+        !(await matchesSidecar(route))
+      ) {
+        return route.fallback();
+      }
+      sidecarReadPaths.push(new URL(route.request().url()).pathname);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
             values: {
               title: "Side chat",
               messages: sidecarThreadMessages,
@@ -623,43 +1011,21 @@ test.describe("Side chat", () => {
             next: [],
             metadata: {},
             created_at: "2025-01-01T00:00:00Z",
-          }),
-        });
-      },
-    );
+            parent_config: null,
+          },
+        ]),
+      });
+    });
     await page.route(
-      `**/api/langgraph/threads/${MOCK_SIDECAR_THREAD_ID}/history`,
-      (route) => {
-        if (route.request().method() !== "GET") {
+      new RegExp(`/api/langgraph/threads/[^/]+/runs(?:\\?|$)`),
+      async (route) => {
+        if (
+          route.request().method() !== "GET" ||
+          !(await matchesSidecar(route))
+        ) {
           return route.fallback();
         }
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify([
-            {
-              values: {
-                title: "Side chat",
-                messages: sidecarThreadMessages,
-                artifacts: [],
-              },
-              next: [],
-              metadata: {},
-              created_at: "2025-01-01T00:00:00Z",
-              parent_config: null,
-            },
-          ]),
-        });
-      },
-    );
-    await page.route(
-      new RegExp(
-        `/api/langgraph/threads/${MOCK_SIDECAR_THREAD_ID}/runs(?:\\?|$)`,
-      ),
-      (route) => {
-        if (route.request().method() !== "GET") {
-          return route.fallback();
-        }
+        sidecarReadPaths.push(new URL(route.request().url()).pathname);
         return route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -667,8 +1033,8 @@ test.describe("Side chat", () => {
             sidecarThreadMessages.length > 0
               ? [
                   {
-                    run_id: `run-${MOCK_SIDECAR_THREAD_ID}`,
-                    thread_id: MOCK_SIDECAR_THREAD_ID,
+                    run_id: `run-${sidecarThreadId}`,
+                    thread_id: sidecarThreadId,
                     assistant_id: "lead_agent",
                     status: "success",
                     metadata: {},
@@ -683,17 +1049,21 @@ test.describe("Side chat", () => {
       },
     );
     await page.route(
-      new RegExp(`/api/threads/${MOCK_SIDECAR_THREAD_ID}/messages/page`),
-      (route) => {
-        if (route.request().method() !== "GET") {
+      new RegExp(`/api/threads/[^/]+/messages/page`),
+      async (route) => {
+        if (
+          route.request().method() !== "GET" ||
+          !(await matchesSidecar(route))
+        ) {
           return route.fallback();
         }
+        sidecarReadPaths.push(new URL(route.request().url()).pathname);
         return route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
             data: sidecarThreadMessages.map((message, index) => ({
-              run_id: `run-${MOCK_SIDECAR_THREAD_ID}`,
+              run_id: `run-${sidecarThreadId}`,
               seq: index + 1,
               content: message,
               metadata: { caller: "lead_agent" },
@@ -706,6 +1076,9 @@ test.describe("Side chat", () => {
       },
     );
     const fulfillSidecarRunStream = async (route: Route) => {
+      expect(sidecarCreated).not.toBeNull();
+      const targetThreadId = await sidecarCreated!;
+      expect(threadIdFromRequest(route.request().url())).toBe(targetThreadId);
       const body = route.request().postDataJSON() as typeof streamBody;
       if (body?.input?.messages) {
         streamBody = body;
@@ -724,8 +1097,8 @@ test.describe("Side chat", () => {
         {
           event: "metadata",
           data: {
-            run_id: `run-${MOCK_SIDECAR_THREAD_ID}`,
-            thread_id: MOCK_SIDECAR_THREAD_ID,
+            run_id: `run-${targetThreadId}`,
+            thread_id: targetThreadId,
           },
         },
         {
@@ -740,7 +1113,7 @@ test.describe("Side chat", () => {
         status: 200,
         contentType: "text/event-stream",
         headers: {
-          "Content-Location": `/api/threads/${MOCK_SIDECAR_THREAD_ID}/runs/run-${MOCK_SIDECAR_THREAD_ID}`,
+          "Content-Location": `/api/threads/${targetThreadId}/runs/run-${targetThreadId}`,
           "Access-Control-Expose-Headers": "Content-Location",
         },
         body: events
@@ -892,6 +1265,9 @@ test.describe("Side chat", () => {
         referenced_message_roles: ["assistant", "assistant"],
       });
     expect(sidecarThreadCreateCount).toBe(1);
+    expect(await sidecarCreated!).toBe(sidecarThreadId);
+    expect(sidecarThreadId).not.toBe(MOCK_THREAD_ID);
+    expect(sidecarThreadId).not.toBe(MOCK_THREAD_ID_2);
 
     await expect
       .poll(() => streamBody?.input?.messages?.length, { timeout: 10_000 })
@@ -907,8 +1283,8 @@ test.describe("Side chat", () => {
       thinking_enabled: false,
       is_plan_mode: false,
       subagent_enabled: false,
-      reasoning_effort: "minimal",
     });
+    expect(streamBody?.context).not.toHaveProperty("reasoning_effort");
     expect(streamBody?.context).not.toHaveProperty("thread_id");
 
     const messages = streamBody?.input?.messages ?? [];
@@ -1058,6 +1434,35 @@ test.describe("Side chat", () => {
     expect(textFromContent(followUpMessages[0]?.content)).not.toContain(
       "<referenced_message",
     );
+    await expect(sidecarInput).toHaveValue("");
+    // A real reload retires the in-memory session; restore must read this exact
+    // newly created UUID and its saved history without creating another thread.
+    await page.reload();
+    const restoredPanel = page.getByTestId("sidecar-panel");
+    await expect(page.getByTestId("sidecar-header-trigger")).toBeVisible();
+    if (!(await restoredPanel.isVisible()))
+      await page.getByTestId("sidecar-header-trigger").click();
+    await expect(restoredPanel).toBeVisible();
+    await expect(page.getByTestId("sidecar-message-list")).toContainText(
+      "What tradeoffs should we consider?",
+    );
+    await expect(page.getByTestId("sidecar-message-list")).toContainText(
+      "Can you continue with the left context?",
+    );
+    expect(sidecarThreadCreateCount).toBe(1);
+    expect(
+      sidecarReadPaths.some((path) =>
+        path.includes(`/threads/${sidecarThreadId}/`),
+      ),
+    ).toBe(true);
+    const restoredHistory = await page.evaluate(async (id) => {
+      const response = await fetch(`/api/langgraph/threads/${id}/history`);
+      if (!response.ok) throw new Error(`history status ${response.status}`);
+      return (await response.json()) as {
+        values: { messages: { content: unknown }[] };
+      }[];
+    }, sidecarThreadId);
+    expect(restoredHistory[0]!.values.messages).toEqual(sidecarThreadMessages);
   });
 
   test("keeps sidecar uploads and human input on the sidecar thread", async ({
@@ -1496,9 +1901,7 @@ test.describe("Side chat", () => {
 
     await openSidecarAndExpectNoAnimatedScroll(page);
     await expectSidecarScrollDoesNotAnimateAfterOpen(page);
-    await page.getByTestId("sidecar-header-trigger").click();
-    await expect(page.getByTestId("sidecar-panel")).toBeHidden();
-    await page.waitForTimeout(350);
+    await closeSidecarAndExpectExitLifecycle(page);
     await openSidecarAndExpectNoAnimatedScroll(page);
   });
 
@@ -1733,19 +2136,20 @@ test.describe("Side chat", () => {
     await expect(page.getByTestId("sidecar-panel")).toBeVisible();
 
     await page.getByTestId("sidecar-delete-button").click();
-    // 删除确认是 alertdialog：只有取消与确认两个出口，没有第三个「X」——
-    // 一个中途会消失的关闭按钮反而会让人以为点它等于取消。
-    const dialog = page.getByRole("alertdialog");
+    // Current React uses Dialog; its close control disappears only while deleting.
+    const dialog = page.getByRole("dialog", {
+      name: "Delete side chat",
+      exact: true,
+    });
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText("Delete side chat");
     await expect(
-      page.locator(
-        '[data-slot="alert-dialog-content"] [data-slot="dialog-close"]',
-      ),
-    ).toHaveCount(0);
+      page.locator('[data-slot="dialog-content"] [data-slot="dialog-close"]'),
+    ).toHaveCount(1);
 
     await page.getByTestId("sidecar-delete-confirm-button").click();
 
+    await expect(dialog.locator('[data-slot="dialog-close"]')).toHaveCount(0);
     // Delete is in flight: confirm shows the loading label and Cancel disables.
     await expect(
       page.getByTestId("sidecar-delete-confirm-button"),
@@ -1756,7 +2160,7 @@ test.describe("Side chat", () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toBeVisible();
     await page
-      .locator('[data-slot="alert-dialog-overlay"]')
+      .locator('[data-slot="dialog-overlay"]')
       .click({ position: { x: 5, y: 5 } });
     await expect(dialog).toBeVisible();
 

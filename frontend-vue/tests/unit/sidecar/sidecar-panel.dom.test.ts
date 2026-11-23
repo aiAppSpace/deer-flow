@@ -1,6 +1,13 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
-import { computed, defineComponent, nextTick, ref, type Ref } from "vue";
+import {
+  computed,
+  defineComponent,
+  nextTick,
+  ref,
+  type PropType,
+  type Ref,
+} from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import SidecarPanel from "@/components/workspace/sidecar/SidecarPanel.vue";
@@ -15,6 +22,7 @@ import type {
 } from "@/core/messages/human-input";
 import type { SidecarSessionPhase } from "@/core/sidecar/session-lifecycle";
 import type { ThreadRunContextInput } from "@/core/threads/submit";
+import type { ArtifactEntry } from "@/core/threads/types";
 import type { Message } from "@/core/types/message";
 import {
   createWorkspaceToastStore,
@@ -29,12 +37,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/core/models/api", () => ({ loadModels: mocks.loadModels }));
+vi.mock("@/composables/useAuthSession", () => ({
+  useAuthSession: () => ({
+    session: ref({ tag: "unauthenticated" }),
+    isFetching: ref(false),
+    refresh: vi.fn(),
+  }),
+}));
 vi.mock("@/composables/useThreadStream", async () => {
   const { ref: vueRef } = await import("vue");
   return {
     useThreadStream: () => ({
       messages: vueRef([]),
+      state: vueRef({}),
       isStreaming: vueRef(false),
+      streamingMessageIds: vueRef<ReadonlySet<string>>(new Set()),
       isUploading: vueRef(false),
       isHistoryLoading: vueRef(false),
       error: vueRef(null),
@@ -43,23 +60,39 @@ vi.mock("@/composables/useThreadStream", async () => {
   };
 });
 
+// Keep this protocol test at the public synchronous renderer boundary.
+// An inner StreamMarkdown stub cannot stop MessageMarkdown's async import.
+const MessageMarkdownStub = defineComponent({
+  name: "MessageMarkdown",
+  props: { content: { type: String, required: true } },
+  template: '<div data-testid="message-markdown-stub">{{ content }}</div>',
+});
+
 const MessageListStub = defineComponent({
   name: "MessageList",
   props: {
     threadId: { type: String, default: null },
+    paddingBottom: { type: Number, default: undefined },
+    toolArtifacts: { default: undefined },
+    streamingMessageIds: {
+      type: Object as PropType<ReadonlySet<string>>,
+      required: true,
+    },
     threadError: { default: null },
     submitHumanInput: { type: Function, default: undefined },
+    interactive: { type: Boolean, default: false },
   },
   template: '<div data-testid="message-list-stub" />',
 });
 
-/*
-  面板只从 stream 上读这四个口子（SidecarPanel.vue:421-426）。useThreadStream 另外
-  十几个成员这些用例既不读也不写，其中 `__runner` 还是一整台流式状态机——造它等于
-  在测试里重写一遍运行时。所以夹具只造这四个，但**类型从真契约 Pick 出来**：
-  真的改了名字或换了类型，这里当场编译不过。
-*/
-type PanelStreamKey = "messages" | "isStreaming" | "isHistoryLoading" | "error";
+// The panel consumes this exact public subset; state now owns registry updates.
+type PanelStreamKey =
+  | "messages"
+  | "state"
+  | "isStreaming"
+  | "streamingMessageIds"
+  | "isHistoryLoading"
+  | "error";
 /*
   值类型从真契约里推，但一律换成**可写** ref：面板只读它们（真身多半是 computed），
   用例却要驱动它们。这样名字改了、值类型换了，这里当场编译不过；
@@ -78,8 +111,8 @@ type FakeSidecarSession = Omit<SidecarSession, "stream"> & {
 
 /*
   唯一一处收窄发生的地方。挂载时 props 要的是完整 SidecarSession，而夹具的 stream
-  只有四个口子——把这个断言收在一个具名函数里，比在每个 mount 上各写一次
-  `as never` 好：将来 stream 用到第五个口子，改 PanelStream 一处即可。
+  仅包含实际消费的口子——把这个断言收在一个具名函数里，比在每个 mount 上各写一次
+  `as never` 好：将来 stream 使用新成员，改 PanelStream 一处即可。
 */
 function asSidecarSession(session: FakeSidecarSession): SidecarSession {
   return session as unknown as SidecarSession;
@@ -110,7 +143,9 @@ function makeSession() {
     ready: computed(() => true),
     stream: {
       messages: ref<Message[]>([]),
+      state: ref<{ tool_artifacts?: ArtifactEntry[] }>({}),
       isStreaming: ref(false),
+      streamingMessageIds: ref<ReadonlySet<string>>(new Set()),
       isHistoryLoading: ref(false),
       error: ref<Error | null>(new Error("sidecar run failed")),
     },
@@ -186,15 +221,77 @@ describe("SidecarPanel session adapter", () => {
     }));
   });
 
+  it("hides the close control and blocks outside dismissal while deletion is pending", async () => {
+    const { wrapper, session } = mountPanel();
+    await wrapper.get('[data-testid="sidecar-delete-button"]').trigger("click");
+    await flushPromises();
+    session.deleting.value = true;
+    await nextTick();
+    const content = wrapper.findComponent({ name: "DialogContent" });
+    expect(content.props("showClose")).toBe(false);
+    const event = { preventDefault: vi.fn() };
+    content.vm.$emit("interactOutside", event);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
   it("passes the sidecar thread, run error, and HIL submitter to MessageList", async () => {
     const { wrapper, session } = mountPanel();
     const messageList = wrapper.findComponent(MessageListStub);
 
     expect(messageList.props("threadId")).toBe("sidecar-1");
+    expect(messageList.props("paddingBottom")).toBe(12);
+    session.stream.streamingMessageIds.value = new Set(["sidecar-live"]);
+    await nextTick();
+    expect([...messageList.props("streamingMessageIds")]).toEqual([
+      "sidecar-live",
+    ]);
+    session.stream.streamingMessageIds.value = new Set();
+    await nextTick();
+    expect(messageList.props("streamingMessageIds").size).toBe(0);
     expect(messageList.props("threadError")).toBe(session.stream.error.value);
     expect(messageList.props("submitHumanInput")).toBe(
       session.submitHumanInput,
     );
+    session.stream.state.value = {
+      tool_artifacts: [
+        {
+          handle: "art_sidecar",
+          tool_name: "make_report",
+          tool_call_id: "sidecar-call",
+          call_index: 0,
+          artifact_type: "file",
+          display_name: "Report",
+          real_ref: "/outputs/report",
+        },
+      ],
+    };
+    await nextTick();
+    expect(messageList.props("toolArtifacts")).toBe(
+      session.stream.state.value.tool_artifacts,
+    );
+    wrapper.unmount();
+  });
+
+  it("keeps restored history readable while readonly blocks composer, files, delete and HIL", async () => {
+    const { wrapper, session } = mountPanel();
+    await wrapper.setProps({ readonly: true });
+    expect(wrapper.findComponent(MessageListStub).props("interactive")).toBe(
+      false,
+    );
+    expect(wrapper.get("textarea").attributes("readonly")).toBeDefined();
+    expect(wrapper.find('[data-testid="sidecar-delete-button"]').exists()).toBe(
+      false,
+    );
+    await wrapper.get("form").trigger("submit");
+    await wrapper.get("textarea").trigger("keydown", { key: "Enter" });
+    expect(session.submit).not.toHaveBeenCalled();
+    expect(
+      wrapper
+        .get('[data-testid="sidecar-add-attachments-button"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    wrapper.unmount();
   });
 
   it("uses the session draft, preserves IME composition, and submits once after composition", async () => {
@@ -380,63 +477,73 @@ describe("SidecarPanel session adapter", () => {
         provide: { [workspaceToastKey as symbol]: toastStore },
         plugins: [[VueQueryPlugin, { queryClient }]],
         stubs: {
-          StreamMarkdown: { template: "<div />" },
+          MessageMarkdown: MessageMarkdownStub,
           ReferenceAttachment: true,
           WorkspaceChangesBadge: true,
           SubtaskCard: true,
         },
       },
     });
-    const card = wrapper.getComponent(HumanInputCard);
+    try {
+      const card = wrapper.getComponent(HumanInputCard);
+      expect(
+        card
+          .findAll("[data-testid='message-markdown-stub']")
+          .map((node) => node.text()),
+      ).toEqual([request.question]);
 
-    // 走表单 submit，不用 button click：happy-dom 只对真 MouseEvent 跑
-    // activation behavior，VTU 的 trigger("click") 派发的是普通 Event（坑 76）。
-    await card.get("form").trigger("submit");
-    expect(card.get("[role='alert']").text()).toContain("required");
-    expect(session.submitHumanInput).not.toHaveBeenCalled();
+      // 走表单 submit，不用 button click：happy-dom 只对真 MouseEvent 跑
+      // activation behavior，VTU 的 trigger("click") 派发的是普通 Event（坑 76）。
+      await card.get("form").trigger("submit");
+      expect(card.get("[role='alert']").text()).toContain("required");
+      expect(session.submitHumanInput).not.toHaveBeenCalled();
 
-    const owner = card.get("input[type='text']");
-    await owner.setValue("Dana");
-    await card.get("form").trigger("submit");
-    await flushPromises();
-    expect(session.submitHumanInput).toHaveBeenCalledWith(
-      expect.objectContaining({ request_id: "sidecar-request-1" }),
-      expect.objectContaining({
-        value:
-          'Owner: Dana; Approved: no [values: {"owner":"Dana","approved":false}]',
-      }),
-    );
-    expect(card.props("pending")).toBe(false);
-    expect((owner.element as HTMLInputElement).value).toBe("Dana");
+      const owner = card.get("input[type='text']");
+      await owner.setValue("Dana");
+      await card.get("form").trigger("submit");
+      await flushPromises();
+      expect(session.submitHumanInput).toHaveBeenCalledWith(
+        expect.objectContaining({ request_id: "sidecar-request-1" }),
+        expect.objectContaining({
+          value:
+            'Owner: Dana; Approved: no [values: {"owner":"Dana","approved":false}]',
+        }),
+      );
+      expect(card.props("pending")).toBe(false);
+      expect((owner.element as HTMLInputElement).value).toBe("Dana");
 
-    await card.get("form").trigger("submit");
-    await flushPromises();
-    expect(card.props("pending")).toBe(true);
-    session.stream.error.value = new Error("sidecar run failed again");
-    await nextTick();
-    expect(card.props("pending")).toBe(false);
-    expect((owner.element as HTMLInputElement).value).toBe("Dana");
+      await card.get("form").trigger("submit");
+      await flushPromises();
+      expect(card.props("pending")).toBe(true);
+      session.stream.error.value = new Error("sidecar run failed again");
+      await nextTick();
+      expect(card.props("pending")).toBe(false);
+      expect((owner.element as HTMLInputElement).value).toBe("Dana");
 
-    await card.get("form").trigger("submit");
-    await flushPromises();
-    const acceptedResponse = session.submitHumanInput.mock.calls.at(-1)?.[1];
-    session.stream.messages.value = [
-      requestMessage,
-      {
-        id: "sidecar-response-1",
-        type: "human",
-        content: "Hidden response",
-        additional_kwargs: {
-          hide_from_ui: true,
-          human_input_response: acceptedResponse,
-        },
-      } as Message,
-    ];
-    await flushPromises();
-    expect(wrapper.text()).toContain("Answered:");
-    // 答过之后表单仍然挂着（禁用），不是被一行文字替换掉。
-    const answeredOwner = wrapper.get("input[type='text']");
-    expect(answeredOwner.attributes("disabled")).toBeDefined();
+      await card.get("form").trigger("submit");
+      await flushPromises();
+      const acceptedResponse = session.submitHumanInput.mock.calls.at(-1)?.[1];
+      session.stream.messages.value = [
+        requestMessage,
+        {
+          id: "sidecar-response-1",
+          type: "human",
+          content: "Hidden response",
+          additional_kwargs: {
+            hide_from_ui: true,
+            human_input_response: acceptedResponse,
+          },
+        } as Message,
+      ];
+      await flushPromises();
+      expect(wrapper.text()).toContain("Answered:");
+      // 答过之后表单仍然挂着（禁用），不是被一行文字替换掉。
+      const answeredOwner = wrapper.get("input[type='text']");
+      expect(answeredOwner.attributes("disabled")).toBeDefined();
+    } finally {
+      wrapper.unmount();
+      queryClient.clear();
+    }
   });
 
   /*

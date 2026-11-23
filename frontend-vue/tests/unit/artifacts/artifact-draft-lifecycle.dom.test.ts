@@ -48,7 +48,7 @@ describe("useArtifactDraft", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it("uses one confirmation decision for file switch, panel close, route leave, and exit edit", () => {
+  it("uses one confirmation decision for file switch, panel close, and route leave", () => {
     const confirm = vi.fn(() => false);
     const { owner, wrapper } = mountOwner(confirm);
     owner.reconcile("/a.txt", { content: "server", sha256: SHA });
@@ -56,15 +56,27 @@ describe("useArtifactDraft", () => {
     owner.update("/a.txt", "draft");
 
     expect(owner.requestLeave("/a.txt")).toBe(false);
-    expect(owner.requestExitEdit("/a.txt")).toBe(false);
     expect(routeGuards.leave?.()).toBe(false);
     expect(routeGuards.update?.()).toBe(false);
     expect(owner.records["/a.txt"]?.draftContent).toBe("draft");
 
     confirm.mockReturnValue(true);
-    expect(owner.requestExitEdit("/a.txt")).toBe(true);
+    expect(owner.requestLeave("/a.txt")).toBe(true);
     expect(owner.records["/a.txt"]?.draftContent).toBe("server");
     expect(owner.editingPath.value).toBeNull();
+    wrapper.unmount();
+  });
+
+  it("exits editing without discarding the draft or asking to leave the file", () => {
+    const { owner, wrapper, confirm } = mountOwner();
+    owner.reconcile("/a.txt", { content: "server", sha256: SHA });
+    owner.beginEdit("/a.txt");
+    owner.update("/a.txt", "draft");
+    expect(owner.requestExitEdit("/a.txt")).toBe(true);
+    expect(owner.editingPath.value).toBeNull();
+    expect(owner.records["/a.txt"]?.draftContent).toBe("draft");
+    expect(owner.hasUnsavedDrafts.value).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 

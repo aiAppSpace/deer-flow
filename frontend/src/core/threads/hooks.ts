@@ -11,7 +11,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
@@ -19,6 +26,12 @@ import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { getAPIClient } from "../api";
 import { fetch } from "../api/fetcher";
 import { getBackendBaseURL } from "../config";
+import { createParityObserver } from "../diagnostics/parity-observation";
+import { createReplayObservation } from "../diagnostics/replay-observation";
+import {
+  bindRunInput,
+  type RunObservation,
+} from "../diagnostics/run-observation";
 import { useI18n } from "../i18n/hooks";
 import { getMessageRunId } from "../messages/run-duration";
 import {
@@ -247,12 +260,10 @@ export function buildThreadSubmitMessages({
  */
 export function buildRunContext({
   settings,
-  threadId,
   extraContext,
   conversationReferences,
 }: {
   settings: LocalSettings["context"];
-  threadId: string;
   extraContext?: Record<string, unknown>;
   conversationReferences?: string[];
 }): Record<string, unknown> {
@@ -261,7 +272,7 @@ export function buildRunContext({
       ([key]) => key !== "conversation_references",
     ),
   );
-  return {
+  const context: Record<string, unknown> = {
     ...extraContext,
     ...ownedSettings,
     ...(conversationReferences?.length
@@ -279,9 +290,11 @@ export function buildRunContext({
           : settings.mode === "thinking"
             ? "low"
             : undefined),
-    thread_id: threadId,
     ...clientTimezoneContext(),
   };
+  // Gateway owns identity from the URL; stale settings or extra context cannot supply it.
+  delete context.thread_id;
+  return context;
 }
 
 /**
@@ -2476,7 +2489,61 @@ export function useThreadStream({
     (m) => m.type === "human",
   ).length;
   const latestMessageCountsRef = useRef({ humanMessageCount });
-  const sendInFlightRef = useRef(false);
+  type ReplayScope = {
+    viewThreadId: string | null;
+    assistantId: string;
+    agentName: string | null;
+    mock: boolean;
+  };
+  type Submission =
+    | { kind: "send" }
+    | { kind: "replay"; scope: ReplayScope; controller: AbortController };
+  const submissionRef = useRef<Submission | null>(null);
+  const runObservationRef = useRef<{
+    token: RunObservation;
+    scope: ReplayScope | null;
+  } | null>(null);
+  const replayScopeRef = useRef<ReplayScope | null>(null);
+  const replayAgentName =
+    typeof context.agent_name === "string" ? context.agent_name : null;
+  const replayMock = Boolean(isMock);
+  const retireSubmission = useCallback(() => {
+    runObservationRef.current?.token.retire();
+    runObservationRef.current = null;
+    const submission = submissionRef.current;
+    submissionRef.current = null;
+    // The retiring send releases its upload UI here; its late finally must
+    // never clear a newer send's busy state.
+    if (submission?.kind === "send") setIsUploading(false);
+    if (submission?.kind === "replay") submission.controller.abort();
+  }, []);
+  useLayoutEffect(() => retireSubmission, [retireSubmission]);
+  useLayoutEffect(() => {
+    const scope = {
+      viewThreadId: currentViewThreadId,
+      assistantId,
+      agentName: replayAgentName,
+      mock: replayMock,
+    };
+    replayScopeRef.current = scope;
+    return () => {
+      if (replayScopeRef.current === scope) replayScopeRef.current = null;
+      const submission = submissionRef.current;
+      if (submission?.kind === "replay" && submission.scope === scope)
+        retireSubmission();
+      if (runObservationRef.current?.scope === scope) {
+        runObservationRef.current.token.retire();
+        runObservationRef.current = null;
+      }
+      // Ordinary sends keep the existing native-adoption teardown below.
+    };
+  }, [
+    currentViewThreadId,
+    assistantId,
+    replayAgentName,
+    replayMock,
+    retireSubmission,
+  ]);
   const messagesRef = useRef<Message[]>([]);
   // Non-null only after a turn submitted by this mounted client. Keep it after
   // finish/stop/error because the SDK can retain its transient event order in
@@ -2545,7 +2612,7 @@ export function useThreadStream({
       return;
     }
     startedRef.current = false;
-    sendInFlightRef.current = false;
+    retireSubmission();
     messagesRef.current = [];
     transientHistoryBridgeRef.current = [];
     transientHistoryOrderRef.current = [];
@@ -2562,7 +2629,7 @@ export function useThreadStream({
     setPendingSupersededMessageIds(new Set());
     prevHumanMsgCountRef.current =
       latestMessageCountsRef.current.humanMessageCount;
-  }, [threadId]);
+  }, [threadId, retireSubmission]);
 
   // Confirming a new thread only assigns its SDK id; the displayed
   // conversation and its submitted human anchor have not changed.
@@ -2647,10 +2714,12 @@ export function useThreadStream({
       extraContext?: Record<string, unknown>,
       options?: SendMessageOptions,
     ) => {
-      if (sendInFlightRef.current) {
+      if (submissionRef.current) {
         return;
       }
-      sendInFlightRef.current = true;
+      const submission: Submission = { kind: "send" };
+      submissionRef.current = submission;
+      const isCurrentSubmission = () => submissionRef.current === submission;
 
       const text = message.text.trim();
 
@@ -2670,6 +2739,18 @@ export function useThreadStream({
       // turn's anchor).
       const hideFromUI = options?.additionalKwargs?.hide_from_ui === true;
       const humanMessageId = `local-human-${uuid()}`;
+      // The actual producer is observed before upload/submit. This is local
+      // allocation evidence, not proof that a backend run was admitted.
+      const humanObservation = createParityObserver("human:send");
+      const humanOrigin = humanObservation?.point();
+      humanObservation?.emit(
+        "human.allocate",
+        {
+          raw: humanMessageId,
+          thread: threadId ?? null,
+        },
+        humanOrigin,
+      );
       localTurnAnchorRef.current = {
         threadId,
         humanIdentity: hideFromUI ? null : `message:${humanMessageId}`,
@@ -2741,6 +2822,7 @@ export function useThreadStream({
             );
 
             const conversionResults = await Promise.all(filePromises);
+            if (!isCurrentSubmission()) return;
             const files = conversionResults.filter(
               (file): file is File => file !== null,
             );
@@ -2758,6 +2840,7 @@ export function useThreadStream({
 
             if (files.length > 0) {
               const uploadResponse = await uploadFiles(threadId, files);
+              if (!isCurrentSubmission()) return;
               uploadedFiles = uploadResponse.files.map((info) => ({
                 filename: info.filename,
                 size: info.size,
@@ -2788,68 +2871,97 @@ export function useThreadStream({
               error instanceof Error
                 ? error.message
                 : "Failed to upload files.";
-            toast.error(errorMessage);
-            setOptimisticMessages([]);
-            setOptimisticThreadId(null);
-            setLiveMessagesThreadId(null);
+            if (isCurrentSubmission()) {
+              toast.error(errorMessage);
+              setOptimisticMessages([]);
+              setOptimisticThreadId(null);
+              setLiveMessagesThreadId(null);
+            }
             throw error;
           } finally {
-            setIsUploading(false);
+            if (isCurrentSubmission()) setIsUploading(false);
           }
         }
 
         // Attachments are uploaded, so the send is genuinely dispatched and
         // callers can drop one-time state. A failed upload rejected above
         // without reaching here, leaving that state for a retry.
+        if (!isCurrentSubmission()) return;
         options?.onSent?.();
-        await thread.submit(
-          {
-            messages: buildThreadSubmitMessages({
-              text,
-              additionalKwargs: options?.additionalKwargs,
-              additionalInputMessages: options?.additionalInputMessages,
-              filesForSubmit: uploadedFiles,
-              humanMessageId,
-            }),
+        const submitInput = {
+          messages: buildThreadSubmitMessages({
+            text,
+            additionalKwargs: options?.additionalKwargs,
+            additionalInputMessages: options?.additionalInputMessages,
+            filesForSubmit: uploadedFiles,
+            humanMessageId,
+          }),
+        };
+        const submitOptions: Parameters<typeof thread.submit>[1] = {
+          threadId: threadId,
+          // No streamSubgraphs: subtask progress arrives via root-namespace
+          // custom events, while subgraph frames would leak a delegated
+          // subagent's values/messages into the thread view (#4399).
+          // DeerFlow keeps the run alive and rejoins through Last-Event-ID;
+          // it does not implement the SDK's server-side resumable stream.
+          onDisconnect: "continue",
+          streamResumable: false,
+          config: {
+            recursion_limit: 1000,
           },
+          context: buildRunContext({
+            settings: context,
+            extraContext,
+            conversationReferences: options?.conversationReferences,
+          }),
+        };
+        // This call does not supply an idempotency key. Wire header presence
+        // and backend admission remain independently observed facts.
+        humanObservation?.emit(
+          "human.submission",
           {
-            threadId: threadId,
-            // No streamSubgraphs: subtask progress arrives via root-namespace
-            // custom events, while subgraph frames would leak a delegated
-            // subagent's values/messages into the thread view (#4399).
-            // DeerFlow keeps the run alive and rejoins through Last-Event-ID;
-            // it does not implement the SDK's server-side resumable stream.
-            onDisconnect: "continue",
-            streamResumable: false,
-            config: {
-              recursion_limit: 1000,
-            },
-            context: buildRunContext({
-              settings: context,
-              threadId,
-              extraContext,
-              conversationReferences: options?.conversationReferences,
-            }),
+            raw: humanMessageId,
+            thread: threadId ?? null,
+            index: submitInput.messages.length - 1,
+            messageCount: submitInput.messages.length,
+            keySource: "none",
+            key: null,
           },
+          humanOrigin,
         );
+        runObservationRef.current?.token.retire();
+        const runObservation = bindRunInput(
+          submitInput,
+          humanObservation,
+          humanOrigin,
+          threadId,
+          assistantId,
+        );
+        runObservationRef.current = runObservation
+          ? { token: runObservation, scope: null }
+          : null;
+        await thread.submit(submitInput, submitOptions);
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
         void queryClient.invalidateQueries({
           queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
         });
       } catch (error) {
-        setOptimisticMessages([]);
-        setOptimisticThreadId(null);
-        setLiveMessagesThreadId(null);
-        setIsUploading(false);
-        localTurnAnchorRef.current = null;
+        if (isCurrentSubmission()) {
+          setOptimisticMessages([]);
+          setOptimisticThreadId(null);
+          setLiveMessagesThreadId(null);
+          setIsUploading(false);
+          localTurnAnchorRef.current = null;
+        }
         throw error;
       } finally {
-        sendInFlightRef.current = false;
+        if (isCurrentSubmission()) submissionRef.current = null;
       }
     },
     [
       thread,
       t.uploads.uploadingFiles,
+      assistantId,
       context,
       queryClient,
       humanMessageCount,
@@ -2861,19 +2973,57 @@ export function useThreadStream({
   const submitPreparedReplay = useCallback(
     async <TPrepared extends RegeneratePrepareResponse>({
       threadId,
+      kind,
+      source,
       prepare,
       getSupersededMessageIds,
       getOptimisticMessages,
     }: {
       threadId: string;
-      prepare: () => Promise<TPrepared>;
+      kind: "edit" | "regenerate";
+      source: string;
+      prepare: (
+        signal: AbortSignal,
+        observe: ((prepared: unknown) => void) | undefined,
+      ) => Promise<TPrepared>;
       getSupersededMessageIds: (prepared: TPrepared) => string[];
       getOptimisticMessages?: (prepared: TPrepared) => Message[];
     }) => {
-      if (sendInFlightRef.current || !threadId) {
+      const scope = replayScopeRef.current;
+      if (
+        submissionRef.current ||
+        !threadId ||
+        scope?.viewThreadId !== threadId ||
+        scope.viewThreadId !== currentViewThreadId ||
+        scope.assistantId !== assistantId ||
+        scope.agentName !== replayAgentName ||
+        scope.mock !== replayMock
+      ) {
         return false;
       }
-      sendInFlightRef.current = true;
+      const submission: Submission = {
+        kind: "replay",
+        scope,
+        controller: new AbortController(),
+      };
+      submissionRef.current = submission;
+      const observation = createReplayObservation({
+        kind,
+        thread: threadId,
+        source,
+        agent: scope.agentName,
+      });
+      const retireObservation = () => observation?.retire();
+      if (observation)
+        submission.controller.signal.addEventListener(
+          "abort",
+          retireObservation,
+          { once: true },
+        );
+      const isCurrentSubmission = () =>
+        submissionRef.current === submission &&
+        replayScopeRef.current === scope &&
+        !submission.controller.signal.aborted;
       prevHumanMsgCountRef.current = humanMessageCount;
       pendingUsageBaselineMessageIdsRef.current = new Set(
         persistedMessages
@@ -2907,7 +3057,12 @@ export function useThreadStream({
       let preparedSupersededMessageIds: string[] = [];
 
       try {
-        const prepared = await prepare();
+        const prepared = await prepare(
+          submission.controller.signal,
+          observation?.response,
+        );
+        if (!isCurrentSubmission()) return false;
+        observation?.adopt();
         preparedSupersededRunId = prepared.target_run_id;
         preparedSupersededMessageIds = getSupersededMessageIds(prepared);
         prevHumanMsgCountRef.current = countHumanMessagesExcludingSuperseded(
@@ -2954,6 +3109,15 @@ export function useThreadStream({
           setOptimisticMessages(nextOptimisticMessages);
         }
 
+        observation?.attempt(prepared, assistantId);
+        runObservationRef.current?.token.retire();
+        const runObservation = observation?.bindRunInput(
+          prepared.input,
+          assistantId,
+        );
+        runObservationRef.current = runObservation
+          ? { token: runObservation, scope }
+          : null;
         await thread.submit(prepared.input, {
           threadId,
           checkpoint: prepared.checkpoint,
@@ -2969,7 +3133,7 @@ export function useThreadStream({
           // Replaying a turn never carries conversation references: the grant
           // is per send, so a regenerate or edit runs without them unless the
           // user attaches them again.
-          context: buildRunContext({ settings: context, threadId }),
+          context: buildRunContext({ settings: context }),
         });
         void queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
         void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
@@ -2982,8 +3146,10 @@ export function useThreadStream({
         void queryClient.invalidateQueries({
           queryKey: threadTokenUsageQueryKey(threadId),
         });
-        return true;
+        return isCurrentSubmission();
       } catch (error) {
+        observation?.failure();
+        if (!isCurrentSubmission()) return false;
         setOptimisticMessages([]);
         setOptimisticThreadId(null);
         setLiveMessagesThreadId(null);
@@ -3001,11 +3167,21 @@ export function useThreadStream({
         toast.error(getStreamErrorMessage(error));
         return false;
       } finally {
-        sendInFlightRef.current = false;
+        observation?.finish(isCurrentSubmission());
+        if (observation)
+          submission.controller.signal.removeEventListener(
+            "abort",
+            retireObservation,
+          );
+        if (submissionRef.current === submission) submissionRef.current = null;
       }
     },
     [
       context,
+      currentViewThreadId,
+      assistantId,
+      replayAgentName,
+      replayMock,
       humanMessageCount,
       persistedMessages,
       queryClient,
@@ -3025,13 +3201,16 @@ export function useThreadStream({
       }
       return submitPreparedReplay({
         threadId,
-        prepare: async () => {
+        kind: "regenerate",
+        source: messageId,
+        prepare: async (signal, observe) => {
           const response = await fetch(
             `${getBackendBaseURL()}/api/threads/${encodeURIComponent(
               threadId,
             )}/runs/regenerate/prepare`,
             {
               method: "POST",
+              signal,
               headers: {
                 "Content-Type": "application/json",
               },
@@ -3042,7 +3221,9 @@ export function useThreadStream({
           if (!response.ok) {
             throw new Error(await readResponseErrorMessage(response));
           }
-          return (await response.json()) as RegeneratePrepareResponse;
+          const prepared = (await response.json()) as RegeneratePrepareResponse;
+          observe?.(prepared);
+          return prepared;
         },
         getSupersededMessageIds: () => supersededMessageIds,
       });
@@ -3062,13 +3243,16 @@ export function useThreadStream({
       }
       return submitPreparedReplay<EditRegeneratePrepareResponse>({
         threadId,
-        prepare: async () => {
+        kind: "edit",
+        source: humanMessageId,
+        prepare: async (signal, observe) => {
           const response = await fetch(
             `${getBackendBaseURL()}/api/threads/${encodeURIComponent(
               threadId,
             )}/runs/edit-regenerate/prepare`,
             {
               method: "POST",
+              signal,
               headers: {
                 "Content-Type": "application/json",
               },
@@ -3084,6 +3268,7 @@ export function useThreadStream({
           }
           const prepared =
             (await response.json()) as EditRegeneratePrepareResponse;
+          observe?.(prepared);
           if (!additionalKwargs || !Array.isArray(prepared.input.messages)) {
             return prepared;
           }
@@ -3960,7 +4145,9 @@ async function deleteSidecarThreadsForParent(
   }
 
   const results = await Promise.allSettled(
-    sidecarThreadIds.map((threadId) => deleteThreadEverywhere(apiClient, threadId)),
+    sidecarThreadIds.map((threadId) =>
+      deleteThreadEverywhere(apiClient, threadId),
+    ),
   );
 
   const failedDeletions = results

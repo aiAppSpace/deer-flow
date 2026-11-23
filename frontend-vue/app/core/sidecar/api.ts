@@ -1,3 +1,4 @@
+import { throwGatewayApiError } from "@/core/api/errors";
 import { getAPIClient } from "@/core/api";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
@@ -16,45 +17,18 @@ type SidecarThreadSearchClient = {
   };
 };
 
-// The find-then-create flow is two independent round-trips with no backend
-// upsert, so a double-click on "Ask in side chat" or two callers racing on the
-// same parent thread can each create a duplicate sidecar thread. Coalesce
-// concurrent creates for the same parent behind a single in-flight promise so
-// only one thread is created; the entry is cleared once it settles.
-const inFlightCreates = new Map<string, Promise<AgentThread>>();
-
 export async function createSidecarThread({
   parentThreadId,
   context,
+  signal,
 }: {
   parentThreadId: string;
   context: SidecarContext | SidecarContext[];
-}): Promise<AgentThread> {
-  const inFlight = inFlightCreates.get(parentThreadId);
-  if (inFlight) {
-    return inFlight;
-  }
-
-  const request = createSidecarThreadRequest({ parentThreadId, context });
-  inFlightCreates.set(parentThreadId, request);
-  try {
-    return await request;
-  } finally {
-    if (inFlightCreates.get(parentThreadId) === request) {
-      inFlightCreates.delete(parentThreadId);
-    }
-  }
-}
-
-async function createSidecarThreadRequest({
-  parentThreadId,
-  context,
-}: {
-  parentThreadId: string;
-  context: SidecarContext | SidecarContext[];
+  signal?: AbortSignal;
 }): Promise<AgentThread> {
   const response = await fetchWithAuth(`${getBackendBaseURL()}/api/threads`, {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
     },
@@ -64,7 +38,7 @@ async function createSidecarThreadRequest({
   });
 
   if (!response.ok) {
-    throw new Error("Failed to create side conversation.");
+    await throwGatewayApiError(response, "Failed to create side conversation.");
   }
 
   return (await response.json()) as AgentThread;
@@ -73,10 +47,12 @@ async function createSidecarThreadRequest({
 export async function findLatestSidecarThread({
   parentThreadId,
   isMock,
+  signal,
   apiClient = getAPIClient(isMock) as SidecarThreadSearchClient,
 }: {
   parentThreadId: string;
   isMock?: boolean;
+  signal?: AbortSignal;
   apiClient?: SidecarThreadSearchClient;
 }): Promise<AgentThread | null> {
   const response = await apiClient.threads.search({
@@ -88,6 +64,7 @@ export async function findLatestSidecarThread({
     offset: 0,
     sortBy: "updated_at",
     sortOrder: "desc",
+    ...(signal ? { signal } : {}),
   });
 
   return (

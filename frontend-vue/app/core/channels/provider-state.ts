@@ -13,6 +13,17 @@
 */
 
 import type { ChannelProvider } from "./types";
+import type { Translations } from "@/core/i18n/locales/types";
+
+export function channelProviderName(
+  provider: Pick<ChannelProvider, "provider" | "display_name">,
+  t: Pick<Translations, "threads">,
+): string {
+  const localized: Record<string, string> = t.threads.origin.providers;
+  return Object.hasOwn(localized, provider.provider)
+    ? localized[provider.provider]!
+    : provider.display_name;
+}
 
 export function providerSupportsConnect(provider: ChannelProvider): boolean {
   return provider.connectable ?? (provider.enabled && provider.configured);

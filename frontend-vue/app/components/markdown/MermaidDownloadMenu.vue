@@ -22,9 +22,14 @@
 -->
 
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, onMounted, ref } from "vue";
+import { renderMermaidSvg } from "@/core/markdown/mermaid-renderer";
+import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-import { saveBlob, svgToPngBlob } from "@/core/markdown/mermaid-export";
+import {
+  saveBlob,
+  serializeMermaidSvg,
+  svgToPngBlob,
+} from "@/core/markdown/mermaid-export";
 import { markdownStreamingKey } from "@/core/markdown/rendering-context";
 
 import MarkdownIcon from "./MarkdownIcon.vue";
@@ -32,12 +37,20 @@ import MarkdownIcon from "./MarkdownIcon.vue";
 const props = defineProps<{
   /** mermaid 源码，`MMD` 那一项直接下载它。 */
   code: string;
-  /** 已渲染好的 SVG 字符串。 */
-  svg: string;
 }>();
 
 const open = ref(false);
 const root = ref<HTMLElement | null>(null);
+let owner: AbortController;
+watch(
+  () => props.code,
+  (_code, _previous, onCleanup) => {
+    const controller = new AbortController();
+    owner = controller;
+    onCleanup(() => controller.abort());
+  },
+  { immediate: true, flush: "sync" },
+);
 const streaming = inject(
   markdownStreamingKey,
   computed(() => false),
@@ -55,14 +68,23 @@ onBeforeUnmount(() =>
 );
 
 async function download(format: "svg" | "png" | "mmd") {
+  const signal = owner.signal;
+  const code = props.code;
+  if (signal.aborted) return;
   try {
+    let blob: Blob;
     if (format === "mmd") {
-      saveBlob("diagram.mmd", new Blob([props.code], { type: "text/plain" }));
-    } else if (format === "svg") {
-      saveBlob("diagram.svg", new Blob([props.svg], { type: "image/svg+xml" }));
+      blob = new Blob([code], { type: "text/plain" });
     } else {
-      saveBlob("diagram.png", await svgToPngBlob(props.svg));
+      const svg = await renderMermaidSvg(code);
+      if (signal.aborted) return;
+      blob =
+        format === "svg"
+          ? new Blob([serializeMermaidSvg(svg)], { type: "image/svg+xml" })
+          : await svgToPngBlob(svg, signal);
     }
+    if (signal.aborted) return;
+    saveBlob(`diagram.${format}`, blob);
     open.value = false;
   } catch {
     // 见文件头 ④。

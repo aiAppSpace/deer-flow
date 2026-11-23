@@ -4,41 +4,47 @@ on:
   push:
     paths:
       - "frontend-vue/**"
+      - "frontend/src/**"
+      - "frontend/tests/**"
+      - "frontend/package.json"
+      - "frontend/pnpm-lock.yaml"
+      - "frontend/patches/**"
+      - "frontend/next.config.js"
       - "contracts/**"
-      - "backend/app/gateway/**"
-      - "backend/packages/harness/deerflow/runtime/**"
+      - "backend/app/**"
+      - "backend/packages/**"
+      - "backend/tests/**"
+      - "config.example.yaml"
       - "backend/scripts/run_replay_gateway.py"
-      - "backend/tests/fixtures/replay/**"
-      - "backend/tests/replay_provider.py"
-      - "backend/tests/_replay_fixture.py"
-      - "backend/tests/seed_runs_router.py"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
       - "scripts/pnpm.py"
       - "scripts/serve.sh"
       - "Makefile"
-      - "backend/tests/test_pnpm_script.py"
-      - "backend/tests/test_frontend_vue_startup.py"
       - ".github/workflows/frontend-vue-verify.yml"
+      - ".github/workflows/frontend-vue-parity-diagnostic.yml"
   pull_request:
     paths:
       - "frontend-vue/**"
+      - "frontend/src/**"
+      - "frontend/tests/**"
+      - "frontend/package.json"
+      - "frontend/pnpm-lock.yaml"
+      - "frontend/patches/**"
+      - "frontend/next.config.js"
       - "contracts/**"
-      - "backend/app/gateway/**"
-      - "backend/packages/harness/deerflow/runtime/**"
+      - "backend/app/**"
+      - "backend/packages/**"
+      - "backend/tests/**"
+      - "config.example.yaml"
       - "backend/scripts/run_replay_gateway.py"
-      - "backend/tests/fixtures/replay/**"
-      - "backend/tests/replay_provider.py"
-      - "backend/tests/_replay_fixture.py"
-      - "backend/tests/seed_runs_router.py"
       - "backend/pyproject.toml"
       - "backend/uv.lock"
       - "scripts/pnpm.py"
       - "scripts/serve.sh"
       - "Makefile"
-      - "backend/tests/test_pnpm_script.py"
-      - "backend/tests/test_frontend_vue_startup.py"
       - ".github/workflows/frontend-vue-verify.yml"
+      - ".github/workflows/frontend-vue-parity-diagnostic.yml"
 
   workflow_dispatch:
     inputs:
@@ -84,19 +90,8 @@ jobs:
         working-directory: frontend-vue
         run: make asset-budget
 
-      # Same story as the budget step above, and the reason this one is here:
-      # `standalone-sim` moves `../frontend` aside and re-runs every file that
-      # is declared as reading the sibling app, which is the only machine that
-      # checks this project's stated goal -- Vue stays self-sufficient once the
-      # React app is gone. It is not part of `make verify`, so nothing ran it:
-      # `invented-palette-colors.test.ts` read the sibling app at *collection*
-      # time from the day it was written (2026-09-12) and stayed red for twenty
-      # rounds, invisible on every developer machine because `../frontend` is
-      # always present there.
-      #
-      # It is safe in CI precisely because the job is sequential: the script
-      # restores the sibling app before it exits, and nothing else in this job
-      # runs while it is away.
+      # Install, build and test a separate source copy without the React app.
+      # The checked-out sources and build outputs are never moved or reused.
       - name: Prove the app still stands without its sibling
         working-directory: frontend-vue
         run: make standalone-sim
@@ -117,29 +112,22 @@ jobs:
         working-directory: frontend-vue
         run: make e2e-install
 
-      # Every suite that needs no backend process: product contracts, auth UI,
-      # the same-origin proxy and the real chunked-SSE gate. Each suite builds
-      # once, instead of rebuilding per --grep slice.
-      #
-      # e2e-visual is deliberately NOT part of e2e-mock: the screenshot
-      # baselines are `-darwin` only and this runner is Linux. The Makefile
-      # target carries the same note, and
-      # frontend-vue/tests/guards/visual-baseline-platforms.test.ts now
-      # enforces the coupling in both directions -- `-linux` baselines without
-      # this step, or this step without `-linux` baselines, both fail.
-      #
-      # To land it: add a temporary step here running
-      #   npx playwright test --config=playwright.visual.config.ts --update-snapshots
-      # upload the snapshots directory with actions/upload-artifact, download
-      # it, commit the `-linux` PNGs, and add `make e2e-visual` in the same
-      # change. Do NOT generate them locally on an Apple Silicon Mac through
-      # QEMU: there is no evidence that emulated amd64 font rasterisation
-      # matches this runner, and `maxDiffPixelRatio: 0.01` over a fullPage
-      # screenshot is loose enough to hide the difference -- which yields a
-      # gate that looks green while guarding nothing.
       - name: Run every suite that needs no backend
         working-directory: frontend-vue
         run: make e2e-mock
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vue-verify-failure-${{ github.run_attempt }}
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/playwright-report/**
+            frontend-vue/.cache/standalone-failures/run-*/**
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
   real-backend:
     runs-on: ubuntu-latest
@@ -167,7 +155,7 @@ jobs:
       - name: Install replay Gateway and browser dependencies
         working-directory: backend
         run: |
-          uv sync --group dev --extra browser
+          uv sync --frozen --group dev --extra browser
           uv run playwright install --with-deps chromium
 
       - name: Set up Node.js
@@ -181,6 +169,12 @@ jobs:
       - name: Install frontend-vue dependencies
         run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
 
+      - name: Verify current core Gateway schema and generated types
+        working-directory: frontend-vue
+        run: |
+          make export-openapi-check gen-api-types-check
+          ../backend/.venv/bin/python scripts/export-openapi.py --check-extension-fixture
+
       - name: Install Playwright Chromium
         working-directory: frontend-vue
         run: make e2e-install
@@ -189,11 +183,22 @@ jobs:
         working-directory: frontend-vue
         run: make e2e-backend
 
-  # G0-6 (browser WebSocket) and G0-7 (OIDC dual callback). Separate from the
-  # real-backend job only because these need the backend browser extra and a
-  # Gateway whose toolset includes browser_navigate, which changes the system
-  # prompt and would break the run-protocol replay fixture's hash. Both are
-  # hermetic — the IdP is tests/support/run_m0_idp.py, no external service.
+      # G0-6 (browser WebSocket) and G0-7 (OIDC dual callback). Separate from the
+      # real-backend job only because these need the backend browser extra and a
+      # Gateway whose toolset includes browser_navigate, which changes the system
+      # prompt and would break the run-protocol replay fixture's hash. Both are
+      # hermetic — the IdP is tests/support/run_m0_idp.py, no external service.
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vue-real-backend-failure-${{ github.run_attempt }}
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
   external-gates:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -215,7 +220,7 @@ jobs:
       - name: Install replay Gateway and browser dependencies
         working-directory: backend
         run: |
-          uv sync --group dev --extra browser
+          uv sync --frozen --group dev --extra browser
           uv run playwright install --with-deps chromium
 
       - name: Set up Node.js
@@ -237,32 +242,66 @@ jobs:
         working-directory: frontend-vue
         run: make e2e-external
 
-  # One-shot, manual. `make e2e-visual` cannot enter CI until `-linux`
-  # screenshot baselines exist, and this runner is the only place allowed to
-  # produce them: baselines generated locally through amd64 emulation have no
-  # evidence of matching this runner's font rasterisation, and
-  # `maxDiffPixelRatio: 0.01` over a fullPage screenshot is loose enough to
-  # hide the difference — which yields a gate that looks green while guarding
-  # nothing. See frontend-vue/tests/guards/visual-baseline-platforms.test.ts.
-  #
-  # Run this job from the Actions tab with the input checked, download the
-  # `visual-baselines-linux` artifact, commit the `-linux` PNGs, and add
-  # `make e2e-visual` to the verify job in the SAME change — that guard fails
-  # if either half lands alone. Deliberately does NOT invoke `make e2e-visual`:
-  # generating baselines is not running the gate, and the guard reads this
-  # file for that command.
-  visual-baselines:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.generate_visual_baselines }}
-    runs-on: ubuntu-latest
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vue-external-gates-failure-${{ github.run_attempt }}
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Formal React/Vue product/auth/SQL comparison is owned only by
+  # frontend-vue-parity.yml. This workflow retains Vue verification gates.
+  product-visual:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
+      options: --ipc=host
     timeout-minutes: 60
     steps:
+      - name: Install build orchestration
+        run: apt-get update && apt-get install -y --no-install-recommends make
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+      - run: corepack enable
+      - name: Install locked Vue dependencies
+        run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
+      - name: Verify Linux product screenshots
+        working-directory: frontend-vue
+        run: make e2e-visual
+      - name: Upload screenshot failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vue-product-visual-failure-${{ github.run_attempt }}
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  visual-baselines:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.generate_visual_baselines }}
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: mcr.microsoft.com/playwright:v1.59.1-noble@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53
+      options: --ipc=host
+    timeout-minutes: 60
+    steps:
+      - name: Install build orchestration
+        run: apt-get update && apt-get install -y --no-install-recommends make
       - name: Checkout repository
         uses: actions/checkout@v6
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.22.3"
+          node-version: "24.15.0"
 
       - name: Enable Corepack
         run: corepack enable
@@ -270,16 +309,12 @@ jobs:
       - name: Install frontend-vue dependencies
         run: python3 scripts/pnpm.py --dir frontend-vue install --frozen-lockfile --strict-peer-dependencies
 
-      - name: Install Playwright Chromium
-        working-directory: frontend-vue
-        run: make e2e-install
-
       - name: Generate -linux screenshot baselines
         working-directory: frontend-vue
         run: >-
           node scripts/with-loopback-no-proxy.mjs --
           python3 ../scripts/pnpm.py --dir frontend-vue exec
-          playwright test -c playwright.visual.config.ts --update-snapshots
+          playwright test -c playwright.visual.config.ts --update-snapshots=all
 
       - name: Upload generated baselines
         uses: actions/upload-artifact@v4
@@ -287,3 +322,13 @@ jobs:
           name: visual-baselines-linux
           path: frontend-vue/tests/e2e-visual/**/*-linux.png
           if-no-files-found: error
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-vue-visual-baselines-failure-${{ github.run_attempt }}
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/playwright-report/**
+          if-no-files-found: warn
+          retention-days: 14

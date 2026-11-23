@@ -3,23 +3,8 @@
   【架构位置】     L3 类型断言（纯 type-only，编译后不产出任何运行时代码）
   【主要导出】     只有类型别名，运行时为空模块
   【依赖关系】     app/core/types/message.ts
-  【边界与注意】   这个文件在 `app/` 而不是 `tests/`。
-
-                   **当初的理由已经过期，留着是因为它现在还有另一个理由**
-                   （2026-09-12 第十六轮核对）。原文写的是「`tests/` 根本不过
-                   vue-tsc」——`.nuxt/tsconfig.app.json` 的 include 只放了
-                   `../tests/nuxt/` 一支，所以 `tests/` 里的 `@ts-expect-error`
-                   全是空操作（当时实测：把 `AgentMessageContent` 改成 `string` 后
-                   guard 测试 8 个用例照样全绿、vue-tsc 一声不吭）。
-                   **2026-09-11 起这句话是假的**：`make typecheck-tests`
-                   （`vue-tsc -p tsconfig.tests.json`，include 收下整棵 `tests/`）
-                   已经接进 `make verify`；第十六轮实测在 `tests/` 里塞一个
-                   `const x: number = "s"` 当场报 TS2322。
-
-                   **仍然留在 `app/`**：这里骑的是已有的 typecheck 预算门禁
-                   （联合一塌就多一条 vue-tsc 报错，预算「多一条红」立刻生效），
-                   而 `typecheck-tests` 是另一条命令、另一份预算。两边都行，不折腾。
-                   门禁：tests/guards/stale-coverage-claims.test.ts 盯着那句话别回来。
+  【边界与注意】   类型断言放在 app 类型检查链中；tests 也由 typecheck-tests 独立检查。
+                   两条命令都接入 verify，不能把测试目录描述为不参与类型检查。
 */
 
 import type { AgentContentPart, AgentMessageContent, Message } from "./message";

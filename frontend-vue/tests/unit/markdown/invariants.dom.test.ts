@@ -33,6 +33,29 @@ const PIPELINE = {
   rehypePlugins: [], // 消息路径的同步 rehype 链现在是空的：KaTeX 由 core/markdown/math.ts 按内容加载。
 };
 
+describe("Vue component slot boundary", () => {
+  it("updates real Markdown component slots without eager-slot warnings or remounting", async () => {
+    const warnings: string[] = [];
+    const wrapper = mount(StreamMarkdown, {
+      props: {
+        content: "First **answer**",
+        ...PIPELINE,
+        components: richContentComponents as unknown as Record<string, unknown>,
+      },
+      global: { config: { warnHandler: (message) => warnings.push(message) } },
+    });
+    const paragraph = wrapper.get("p").element;
+    expect(wrapper.get('[data-streamdown="strong"]').text()).toBe("answer");
+    await wrapper.setProps({ content: "First **answer expanded**" });
+    expect(wrapper.get("p").element).toBe(paragraph);
+    expect(wrapper.get('[data-streamdown="strong"]').text()).toBe(
+      "answer expanded",
+    );
+    expect(warnings).toEqual([]);
+    wrapper.unmount();
+  });
+});
+
 describe("组件覆盖收到的是 class 不是 className", () => {
   it("覆盖组件的 props 里有 class，没有 className", () => {
     const seen: Record<string, unknown>[] = [];

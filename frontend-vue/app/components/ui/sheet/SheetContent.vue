@@ -11,19 +11,26 @@
 -->
 
 <script setup lang="ts">
-import { computed, type HTMLAttributes } from "vue";
+import { computed, onBeforeUnmount, watch, type HTMLAttributes } from "vue";
 import {
   DialogClose,
   DialogContent,
+  Primitive,
   DialogOverlay,
   DialogPortal,
   type DialogContentEmits,
   type DialogContentProps,
+  useForwardExpose,
   useForwardProps,
+  injectDialogRootContext,
 } from "reka-ui";
 import { X } from "lucide-vue-next";
 
 import { cn } from "@/lib/utils";
+import {
+  useDialogFocusBoundary,
+  enterDialogContent,
+} from "@/components/ui/dialog/focus-boundary";
 
 import { sheetVariants, type SheetVariants } from "./variants";
 
@@ -54,10 +61,15 @@ const props = withDefaults(
   },
 );
 const emits = defineEmits<DialogContentEmits>();
+const { forwardRef, currentElement } = useForwardExpose();
+useDialogFocusBoundary(currentElement);
+const context = injectDialogRootContext();
 
 const forwarded = useForwardProps(props);
 const delegated = computed(() => {
   const {
+    as: _as,
+    asChild: _asChild,
     class: _class,
     overlayClass: _overlayClass,
     side: _side,
@@ -65,6 +77,8 @@ const delegated = computed(() => {
     modal: _modal,
     ...rest
   } = forwarded.value;
+  void _as;
+  void _asChild;
   void _class;
   void _overlayClass;
   void _side;
@@ -73,13 +87,52 @@ const delegated = computed(() => {
   return rest;
 });
 
+let revealFrame: number | undefined;
+let revealWindow: Window | null = null;
+let revealRevision = 0;
+function retireFocusReveal() {
+  revealRevision += 1;
+  if (revealFrame !== undefined)
+    revealWindow?.cancelAnimationFrame(revealFrame);
+  revealFrame = undefined;
+  revealWindow = null;
+}
 function keepFocusedControlVisible(event: FocusEvent) {
+  retireFocusReveal();
+  if (event.defaultPrevented) return;
+  const host = currentElement.value;
   const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  requestAnimationFrame(() => {
-    if (target.isConnected) target.scrollIntoView({ block: "nearest" });
+  const view = host?.ownerDocument.defaultView;
+  if (
+    !host ||
+    !view ||
+    !(target instanceof view.HTMLElement) ||
+    !host.contains(target) ||
+    target.closest(
+      '[data-slot="dialog-content"],[data-slot="sheet-content"]',
+    ) !== host
+  )
+    return;
+  const revision = revealRevision;
+  revealWindow = view;
+  revealFrame = view.requestAnimationFrame(() => {
+    if (
+      revision !== revealRevision ||
+      !context.open.value ||
+      currentElement.value !== host ||
+      !host.isConnected ||
+      !target.isConnected ||
+      !host.contains(target) ||
+      target.ownerDocument.activeElement !== target
+    )
+      return;
+    revealFrame = undefined;
+    revealWindow = null;
+    target.scrollIntoView({ block: "nearest" });
   });
 }
+watch([context.open, currentElement], retireFocusReveal, { flush: "sync" });
+onBeforeUnmount(retireFocusReveal);
 </script>
 
 <template>
@@ -94,6 +147,7 @@ function keepFocusedControlVisible(event: FocusEvent) {
       "
     />
     <DialogContent
+      as-child
       data-slot="sheet-content"
       :data-side="props.side"
       :aria-modal="props.modal ? 'true' : undefined"
@@ -106,15 +160,19 @@ function keepFocusedControlVisible(event: FocusEvent) {
       @open-auto-focus="emits('openAutoFocus', $event)"
       @close-auto-focus="emits('closeAutoFocus', $event)"
       @focusin="keepFocusedControlVisible"
+      @focusout="retireFocusReveal"
+      @keydown="enterDialogContent"
     >
-      <slot />
-      <DialogClose
-        data-slot="sheet-close"
-        :aria-label="props.closeLabel"
-        class="ring-offset-background focus-visible:ring-ring absolute top-4 right-4 flex size-7 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
-      >
-        <X :size="18" aria-hidden="true" />
-      </DialogClose>
+      <Primitive :ref="forwardRef" :as="props.as" :as-child="props.asChild">
+        <slot />
+        <DialogClose
+          data-slot="sheet-close"
+          :aria-label="props.closeLabel"
+          class="ring-offset-background focus-visible:ring-ring absolute top-4 right-4 flex size-7 cursor-pointer items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <X aria-hidden="true" class="size-4" />
+        </DialogClose>
+      </Primitive>
     </DialogContent>
   </DialogPortal>
 </template>

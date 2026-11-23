@@ -148,10 +148,16 @@ test("renders reasoning above the answer text while the turn is streaming", asyn
     await textarea.fill("Summarize that briefly");
     await textarea.press("Enter");
 
-    // The streaming turn renders inside the chain-of-thought panel, whose
-    // reasoning disclosure is labelled "Thinking".
+    // A chunk with both actual reasoning and answer text retains its assistant
+    // bubble while streaming. Thinking-only/tool steps use the processing panel.
+    await expect(
+      page.getByRole("button", { name: "Stop", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Reasoning", exact: true }),
+    ).toHaveAttribute("aria-expanded", "true");
     await expectRenderedAbove(
-      page.getByText("Thinking", { exact: true }),
+      page.getByText(REASONING_TEXT, { exact: true }),
       page.getByText(ANSWER_TEXT),
     );
   } finally {

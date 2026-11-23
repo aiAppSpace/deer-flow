@@ -47,6 +47,7 @@ export class SkillRequestError extends Error {
     readonly body: unknown = null,
     readonly responseText = "",
     findings: SkillSecurityFinding[] = [],
+    readonly skillName?: string,
   ) {
     super(message);
     this.name = "SkillRequestError";
@@ -60,16 +61,28 @@ export class SkillRequestError extends Error {
 }
 
 async function readErrorDetail(response: Response): Promise<SkillRequestError> {
-  const error = await readGatewayResponseError(
-    response,
-    `HTTP ${response.status}: ${response.statusText}`,
-  );
+  const fallback = `HTTP ${response.status}${response.statusText ? `: ${response.statusText}` : ""}`;
+  const error = await readGatewayResponseError(response, fallback);
+  const detail = (error.body as { detail?: unknown } | null)?.detail;
+  const structured =
+    detail && typeof detail === "object" && !Array.isArray(detail)
+      ? (detail as Record<string, unknown>)
+      : undefined;
+  const message =
+    typeof detail === "string"
+      ? detail
+      : typeof structured?.message === "string"
+        ? structured.message
+        : fallback;
   return new SkillRequestError(
     response.status,
-    error.message,
+    message,
     error.body,
     error.responseText,
     parseSecurityFindings(error.body),
+    typeof structured?.skill_name === "string"
+      ? structured.skill_name
+      : undefined,
   );
 }
 
@@ -215,13 +228,14 @@ export async function installSkill(
  */
 export async function uploadSkillArchive(
   archive: File,
+  options: { signal?: AbortSignal } = {},
 ): Promise<InstallSkillResponse> {
   const formData = new FormData();
   formData.append("archive", archive);
 
   const response = await fetch(
     `${getBackendBaseURL()}/api/skills/install/upload`,
-    { method: "POST", body: formData },
+    { method: "POST", body: formData, signal: options.signal },
   );
 
   if (!response.ok) {

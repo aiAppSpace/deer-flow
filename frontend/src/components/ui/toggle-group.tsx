@@ -23,6 +23,7 @@ function ToggleGroup({
   size,
   spacing = 0,
   children,
+  onKeyDown,
   ...props
 }: React.ComponentProps<typeof ToggleGroupPrimitive.Root> &
   VariantProps<typeof toggleVariants> & {
@@ -40,6 +41,26 @@ function ToggleGroup({
         className,
       )}
       {...props}
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        if (
+          props.rovingFocus !== false &&
+          !event.defaultPrevented &&
+          event.key === "Tab" &&
+          event.shiftKey &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          event.target instanceof Element &&
+          event.target
+            .closest('[data-slot="toggle-group-item"]')
+            ?.closest('[data-slot="toggle-group"]') === event.currentTarget
+        ) {
+          // Publish Radix's requested back-out before a parent FocusScope reads
+          // its edges. The initial root entry and Radix's blur reset stay intact.
+          event.currentTarget.tabIndex = -1;
+        }
+      }}
     >
       <ToggleGroupContext.Provider value={{ variant, size, spacing }}>
         {children}

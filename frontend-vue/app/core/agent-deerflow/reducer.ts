@@ -41,7 +41,7 @@ import type {
 import { AgentStreamError } from "@deerflow/agent-core";
 
 import type { Todo } from "../todos/types";
-import type { GoalState } from "../threads/types";
+import type { ArtifactEntry, GoalState } from "../threads/types";
 
 import { parseWireEventName } from "./event-map";
 import type { WireMessageLike } from "./message-adapt";
@@ -58,6 +58,7 @@ import { accumulateStreamedMessage, toAgentMessage } from "./message-adapt";
 export interface DeerFlowThreadState extends Record<string, unknown> {
   title?: string;
   artifacts?: string[];
+  tool_artifacts?: ArtifactEntry[];
   todos?: Todo[];
   goal?: GoalState | null;
 }
@@ -82,7 +83,8 @@ export interface DeerFlowReducerOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * 非 `messages` 通道一律「最后写入者胜」——LangGraph 里这些是 `LastValue` 通道。
+ * 已渲染通道按当前 Gateway reducer 归约；未消费的扩展字段保留最新 wire 值，
+ * 不把未解释的字段宣称为后端权威快照。
  * `messages` 走 `add_messages`，它不在这张表里，因为它的产物是消息动作
  * 而不是 state 补丁。
  */
@@ -136,6 +138,93 @@ export function isSyntheticValuesMessageId(id: string | undefined): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeArtifacts(
+  existing: DeerFlowThreadState["artifacts"],
+  incoming: unknown,
+): string[] | undefined {
+  if (incoming == null || !Array.isArray(incoming)) {
+    return undefined;
+  }
+  if (!incoming.every((path) => typeof path === "string")) {
+    return undefined;
+  }
+
+  return [...new Set([...(existing ?? []), ...incoming])];
+}
+
+function isArtifactEntry(value: unknown): value is ArtifactEntry {
+  return (
+    isRecord(value) &&
+    [
+      "handle",
+      "tool_name",
+      "tool_call_id",
+      "artifact_type",
+      "display_name",
+      "real_ref",
+    ].every((key) => typeof value[key] === "string") &&
+    Number.isInteger(value.call_index)
+  );
+}
+
+function mergeToolArtifacts(
+  existing: ArtifactEntry[] | undefined,
+  incoming: unknown,
+): ArtifactEntry[] | undefined {
+  if (!Array.isArray(incoming)) return undefined;
+  // Same-handle updates replace metadata without moving first-seen order.
+  // Capture can append a retention directive after its entries.
+  const byHandle = new Map<string, ArtifactEntry>();
+  for (const item of [...(existing ?? []), ...incoming]) {
+    if (isArtifactEntry(item)) byHandle.set(item.handle, item);
+  }
+  let keep = 1000;
+  for (let index = incoming.length - 1; index >= 0; index--) {
+    const item: unknown = incoming[index];
+    if (isRecord(item) && item.op === "trim_to") {
+      if (
+        typeof item.keep === "number" &&
+        Number.isInteger(item.keep) &&
+        item.keep > 0
+      ) {
+        keep = Math.min(item.keep, keep);
+      }
+      break;
+    }
+  }
+  return [...byHandle.values()].slice(-keep);
+}
+
+function isGoalState(value: unknown): value is GoalState {
+  return (
+    isRecord(value) &&
+    typeof value.objective === "string" &&
+    value.status === "active" &&
+    typeof value.created_at === "string" &&
+    typeof value.updated_at === "string"
+  );
+}
+
+function reduceStateChannel(
+  channel: string,
+  previous: unknown,
+  next: unknown,
+): unknown {
+  if (channel === "artifacts") {
+    return mergeArtifacts(previous as string[] | undefined, next) ?? previous;
+  }
+  if (channel === "tool_artifacts") {
+    return (
+      mergeToolArtifacts(previous as ArtifactEntry[] | undefined, next) ??
+      previous
+    );
+  }
+  if (channel === "todos") return Array.isArray(next) ? next : previous;
+  if (channel === "goal") return isGoalState(next) ? next : previous;
+  if (channel === "title") return typeof next === "string" ? next : previous;
+  return DEERFLOW_CHANNEL_REDUCERS.lastValue(previous, next);
 }
 
 function wireMessagesOf(value: unknown): WireMessageLike[] | undefined {
@@ -212,6 +301,7 @@ function reduceUpdates(
   snapshot: Readonly<AgentSnapshot<DeerFlowThreadState>>,
 ): Actions {
   const actions: Actions = [];
+  const state = { ...snapshot.state };
 
   for (const nodeWrite of Object.values(payload)) {
     if (!isRecord(nodeWrite)) continue;
@@ -221,10 +311,8 @@ function reduceUpdates(
 
     for (const [channel, value] of Object.entries(nodeWrite)) {
       if (channel !== MESSAGES_CHANNEL) {
-        patch[channel] = DEERFLOW_CHANNEL_REDUCERS.lastValue(
-          snapshot.state[channel],
-          value,
-        );
+        patch[channel] = reduceStateChannel(channel, state[channel], value);
+        state[channel] = patch[channel];
         hasPatch = true;
         continue;
       }

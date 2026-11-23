@@ -56,6 +56,9 @@ function nameOfSegment(segment: string | undefined) {
   if (!segment) return $i18n.t.value.common.home;
   if (segment === "workspace") return $i18n.t.value.breadcrumb.workspace;
   if (segment === "chats") return $i18n.t.value.breadcrumb.chats;
+  if (segment === "scheduled-tasks")
+    return $i18n.t.value.sidebar.scheduledTasks;
+  if (segment === "agents") return $i18n.t.value.sidebar.agents;
   return segment[0]!.toUpperCase() + segment.slice(1);
 }
 

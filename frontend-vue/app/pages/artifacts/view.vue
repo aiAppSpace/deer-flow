@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /*
   【文件职责】     独立产物视窗路由：解析 query 里的目标，交给阅读器。
-  【架构位置】     L4 页面
+  【架构位置】     L3 页面
   【主要导出】     默认页面组件
   【依赖关系】     core/artifacts/viewer · ArtifactViewer
   【边界与注意】   **这条路径本身不标识任何东西**，目标整个在 query 里。

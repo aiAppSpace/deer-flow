@@ -1,34 +1,11 @@
 /*
-  【文件职责】     08 §54 的可移植性验收：临时 consumer workspace 的 clean install + typecheck + 最小 session 测试。
+  【文件职责】     验证 agent-core tarball 的独立安装、类型检查与实际最小会话。
   【架构位置】     构建脚本
   【主要导出】     无（CLI）
   【依赖关系】     scripts/pnpm.py · packages/agent-core
-  【边界与注意】   08 §54 逐字写了「可移植性的验收**不是**『复制目录后能编译』」。
-                   上一窗口给包配了独立 tsconfig，那证明的是「包自己能独立类型
-                   检查」——**证明不了 `exports` 与 `dependencies` 完整**：
-                   自家 tsconfig 是按相对路径 include `src/**` 的，根本不经过
-                   `package.json` 的 `exports`；而 `node_modules` 里少声明的依赖
-                   在本仓库里会被 workspace 根的 node_modules 兜住，只有换一个
-                   没有那层兜底的目录才会暴露。
-
-                   所以这里做三件事，缺一件都不算数：
-                     1. `pnpm pack` 打真包 → 只有真的被打进 tarball 的文件才存在；
-                     2. 在一个系统临时目录里 clean install（`mkdtemp`，往上
-                        找不到本仓库的 node_modules，没有任何兜底）；
-                     3. 从 **bare specifier** `@deerflow/agent-core` 消费——
-                        深路径 import 会绕过 `exports`，那正是要验的东西。
-
-                   最小 session 测试要**真的跑起来**而不只是编译：类型对但
-                   `exports.import` 指错文件，tsc 一样绿。运行时用 esbuild 打包
-                   之后交给 node——Node 的类型擦除对 `node_modules` 下的 `.ts`
-                   是关闭的，而这个包的 `exports` 指的正是 TS 源码
-                   （它是给打包器消费的 workspace 包）。所以"用打包器"不是绕路，
-                   就是真实消费方式。
-
-                   pnpm 一律走 `scripts/pnpm.py`（AGENTS.md 的仓库规矩）。
-                   它只认 `--dir frontend|frontend-vue`，所以临时目录用 pnpm
-                   **自己的** `--dir` 覆盖 cwd：第一个 `--dir` 被 wrapper 吃掉，
-                   第二个原样转发给 pnpm。
+  【边界与注意】   用真实 tarball 在 workspace 外 clean install，从 bare specifier 消费 package exports。
+                   独立类型检查后，由 esbuild 打包并实际执行最小 session，验证导出与依赖完整性。
+                   pnpm 均经 scripts/pnpm.py；临时目录由转发的 pnpm --dir 指定。
 */
 
 import { execFileSync } from "node:child_process";

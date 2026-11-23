@@ -1,26 +1,6 @@
 <script setup lang="ts">
-/*
-  【文件职责】     采集一个 channel provider 的运行时凭据，提交给调用方。
-  【架构位置】     L3 product UI
-  【主要导出】     默认 ChannelRuntimeConfigDialog 组件
-  【依赖关系】     ui/dialog · ui/button · channels types
-  【边界与注意】   对照 frontend/src/components/workspace/channels/channel-runtime-config-dialog.tsx。
-
-                   侧栏与设置页都要开这个表单，所以它是**一个共享组件**而不是各写一份：
-                   凭据字段的种子、密文遮挡与提交语义只有一处，改一次两处都改到。
-
-                   values 由本组件自己持有，每次打开时从 provider.credential_values 重新播种，
-                   与 React 的 useEffect 同义。让调用方持有会多出一条「谁负责清空」的约定，
-                   而那正是上一版把 editing/values 两个 ref 摆在设置页里时踩到的地方。
-
-                   密文字段用 -webkit-text-security 遮挡而不是 type="password"：后端回的是
-                   掩码占位串，浏览器与密码管理器不该把它当成一次真实的登录输入，
-                   data-lpignore / data-1p-ignore / data-bwignore 是同一个目的。
-*/
-
-import { LoaderCircle } from "lucide-vue-next";
-import { computed, ref, watch } from "vue";
-
+import { KeyRound, LoaderCircle, QrCode, ShieldCheck } from "lucide-vue-next";
+import { computed, onScopeDispose, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,128 +11,305 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { channelProviderName } from "@/core/channels/provider-state";
 import type {
   ChannelProvider,
   ChannelRuntimeConfigValues,
 } from "@/core/channels/types";
+import ChannelProviderIcon from "./ChannelProviderIcon.vue";
+import WechatQRLogin from "./WechatQRLogin.vue";
+import WechatQRCompletion, {
+  type PendingWechatBinding,
+} from "./WechatQRCompletion.vue";
 
-const props = defineProps<{
-  provider: ChannelProvider | null;
-  open: boolean;
-  submitting: boolean;
-}>();
-
+const props = withDefaults(
+  defineProps<{
+    provider: ChannelProvider | null;
+    open: boolean;
+    submitting: boolean;
+    initialStep?: "setup" | "binding";
+    submit?:
+      | ((
+          provider: ChannelProvider,
+          values: ChannelRuntimeConfigValues,
+        ) => void)
+      | ((
+          provider: ChannelProvider,
+          values: ChannelRuntimeConfigValues,
+        ) => Promise<ChannelProvider | undefined>);
+    onConfigured?: (provider: ChannelProvider) => void;
+  }>(),
+  { initialStep: "setup", submit: undefined, onConfigured: undefined },
+);
 const emit = defineEmits<{
   "update:open": [open: boolean];
   submit: [provider: ChannelProvider, values: ChannelRuntimeConfigValues];
 }>();
-
 const { $i18n } = useNuxtApp();
 const text = computed(() => $i18n.t.value.channels);
-
 const values = ref<ChannelRuntimeConfigValues>({});
 const fields = computed(() => props.provider?.credential_fields ?? []);
 const isEditing = computed(() => props.provider?.configured ?? false);
-
+const step = ref<"setup" | null>(null);
+const method = ref<"qr" | "token" | null>(null);
+const configuredProvider = ref<ChannelProvider | null>(null);
+const pendingBinding = ref<PendingWechatBinding | null>(null);
+let generation = 0;
+watch(
+  () => [props.open, props.provider?.provider, props.initialStep],
+  () => {
+    generation++;
+    step.value = null;
+    method.value = null;
+    configuredProvider.value = null;
+    pendingBinding.value = null;
+  },
+  { immediate: true, flush: "sync" },
+);
 watch(
   () => [props.open, props.provider] as const,
   ([open, provider]) => {
-    if (!open || !provider) {
-      values.value = {};
-      return;
-    }
-    const seeded = provider.credential_values ?? {};
-    values.value = Object.fromEntries(
-      (provider.credential_fields ?? []).map((field) => [
-        field.name,
-        seeded[field.name] ?? "",
-      ]),
-    );
+    values.value =
+      open && provider
+        ? Object.fromEntries(
+            (provider.credential_fields ?? []).map((field) => [
+              field.name,
+              provider.credential_values?.[field.name] ?? "",
+            ]),
+          )
+        : {};
   },
   { immediate: true },
 );
-
-function onSubmit() {
-  if (props.provider) emit("submit", props.provider, { ...values.value });
+onScopeDispose(() => {
+  generation++;
+  values.value = {};
+});
+const hasWechatQR = computed(
+  () => props.provider?.provider === "wechat" && !!props.onConfigured,
+);
+const selectedMethod = computed(
+  () => method.value ?? (isEditing.value ? "token" : "qr"),
+);
+const completionProvider = computed(
+  () =>
+    configuredProvider.value ??
+    (step.value === null &&
+    props.initialStep === "binding" &&
+    props.provider?.configured
+      ? props.provider
+      : null),
+);
+const showQR = computed(
+  () =>
+    hasWechatQR.value &&
+    !completionProvider.value &&
+    selectedMethod.value === "qr",
+);
+function changeOpen(open: boolean) {
+  if (!open) generation++;
+  emit("update:open", open);
 }
-
-function fieldId(field: { name: string }) {
-  return `channel-${props.provider?.provider}-${field.name}`;
+async function onSubmit() {
+  if (
+    !props.provider ||
+    props.submitting ||
+    !props.open ||
+    showQR.value ||
+    completionProvider.value
+  )
+    return;
+  const captured = generation;
+  if (props.submit) {
+    const updated = await props.submit(props.provider, { ...values.value });
+    if (updated && hasWechatQR.value && captured === generation)
+      configuredProvider.value = updated;
+  } else emit("submit", props.provider, { ...values.value });
+}
+function restart(binding: PendingWechatBinding | null) {
+  pendingBinding.value = binding;
+  step.value = "setup";
+  method.value = "qr";
+  configuredProvider.value = null;
+}
+function fieldId(name: string) {
+  return `channel-${props.provider?.provider}-${name}`;
 }
 </script>
 
 <template>
-  <Dialog :open="open" @update:open="emit('update:open', $event)">
+  <Dialog :open="open" @update:open="changeOpen">
     <DialogContent
       v-if="provider"
       :close-label="$i18n.t.value.primitives.close"
+      :class="
+        hasWechatQR
+          ? 'max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl sm:max-w-[440px]'
+          : undefined
+      "
     >
-      <form class="space-y-4" @submit.prevent="onSubmit">
-        <DialogHeader>
-          <DialogTitle>
-            {{
-              isEditing
-                ? text.setupEditTitle(provider.display_name)
-                : text.setupTitle(provider.display_name)
-            }}
-          </DialogTitle>
-          <DialogDescription>{{ text.setupDescription }}</DialogDescription>
-        </DialogHeader>
-
-        <div class="space-y-3">
-          <div v-for="field in fields" :key="field.name" class="space-y-1.5">
+      <form
+        :class="['space-y-4', hasWechatQR && 'space-y-5']"
+        @submit.prevent="onSubmit"
+      >
+        <div :class="hasWechatQR ? 'flex items-center gap-3 pr-4' : undefined">
+          <div
+            v-if="hasWechatQR"
+            class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10"
+          >
+            <ChannelProviderIcon provider="wechat" size="size-7" />
+          </div>
+          <DialogHeader :class="hasWechatQR ? 'gap-1 text-left' : undefined"
+            ><DialogTitle>{{
+              isEditing && !completionProvider
+                ? text.setupEditTitle(
+                    channelProviderName(provider, $i18n.t.value),
+                  )
+                : text.setupTitle(channelProviderName(provider, $i18n.t.value))
+            }}</DialogTitle
+            ><DialogDescription
+              :class="hasWechatQR ? 'text-xs leading-relaxed' : undefined"
+              >{{
+                hasWechatQR ? text.wechatQr.description : text.setupDescription
+              }}</DialogDescription
+            ></DialogHeader
+          >
+        </div>
+        <WechatQRCompletion
+          v-if="hasWechatQR && completionProvider && open"
+          :provider="completionProvider"
+          :binding-to-resume="pendingBinding"
+          @done="onConfigured?.(completionProvider)"
+          @restart="restart"
+        />
+        <Tabs
+          v-else-if="hasWechatQR"
+          :model-value="selectedMethod"
+          class="gap-0"
+          @update:model-value="
+            (value) => {
+              if (value === 'qr' || value === 'token') method = value;
+            }
+          "
+          ><TabsList
+            :aria-label="text.wechatQr.methodLabel"
+            class="grid w-full grid-cols-2"
+            ><TabsTrigger value="qr" :disabled="submitting"
+              ><QrCode />{{ text.wechatQr.login }}</TabsTrigger
+            ><TabsTrigger value="token" :disabled="submitting"
+              ><KeyRound />{{ text.wechatQr.manual }}</TabsTrigger
+            ></TabsList
+          ><TabsContent value="qr" class="pt-5"
+            ><WechatQRLogin
+              v-if="showQR && open"
+              @configured="configuredProvider = $event" /></TabsContent
+          ><TabsContent value="token" class="pt-5"
+            ><div class="flex min-h-[328px] flex-col justify-center gap-6 pb-5">
+              <div class="space-y-2">
+                <h3 class="text-sm font-medium">
+                  {{ text.wechatQr.tokenTitle }}
+                </h3>
+                <p class="text-muted-foreground text-sm leading-relaxed">
+                  {{ text.wechatQr.tokenDescription }}
+                </p>
+              </div>
+              <div class="space-y-4">
+                <div
+                  v-for="field in fields"
+                  :key="field.name"
+                  class="space-y-2"
+                >
+                  <label
+                    :for="fieldId(field.name)"
+                    class="text-sm leading-none font-medium"
+                    >{{ field.label }}</label
+                  ><Input
+                    :id="fieldId(field.name)"
+                    v-model="values[field.name]"
+                    type="text"
+                    :required="field.required"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="none"
+                    :spellcheck="false"
+                    class="h-11 rounded-lg"
+                    :placeholder="text.wechatQr.tokenPlaceholder"
+                    :data-1p-ignore="
+                      field.type === 'password' ? 'true' : undefined
+                    "
+                    :data-bwignore="
+                      field.type === 'password' ? 'true' : undefined
+                    "
+                    :data-form-type="
+                      field.type === 'password' ? 'other' : undefined
+                    "
+                    :data-lpignore="
+                      field.type === 'password' ? 'true' : undefined
+                    "
+                    :style="
+                      field.type === 'password'
+                        ? { WebkitTextSecurity: 'disc' }
+                        : undefined
+                    "
+                  />
+                </div>
+              </div>
+              <p class="text-muted-foreground text-xs leading-relaxed">
+                {{ text.wechatQr.tokenHint }}
+              </p>
+            </div></TabsContent
+          ></Tabs
+        >
+        <div v-else class="space-y-4">
+          <div v-for="field in fields" :key="field.name" class="space-y-2">
             <label
-              :for="fieldId(field)"
+              :for="fieldId(field.name)"
               class="text-sm leading-none font-medium"
-            >
-              {{ field.label }}
-            </label>
-            <!--
-              走 `ui/input`（上游同一处也是 `<Input>`，
-              `channel-runtime-config-dialog.tsx:113`）。这里原来是**把 primitive
-              的整串基类抄进 `class`**——今天看起来一样，但 `Input.vue` 一改就悄悄分叉，
-              而且抄的那一份已经漏了 `aria-invalid:` 与 `placeholder:` / `selection:`
-              那几段。
-            -->
-            <Input
-              :id="fieldId(field)"
+              >{{ field.label }}</label
+            ><Input
+              :id="fieldId(field.name)"
               v-model="values[field.name]"
               type="text"
               :required="field.required"
               autocomplete="off"
               autocorrect="off"
               autocapitalize="none"
-              spellcheck="false"
+              :spellcheck="false"
               :data-1p-ignore="field.type === 'password' ? 'true' : undefined"
               :data-bwignore="field.type === 'password' ? 'true' : undefined"
               :data-form-type="field.type === 'password' ? 'other' : undefined"
               :data-lpignore="field.type === 'password' ? 'true' : undefined"
-              :class="field.type === 'password' ? 'channel-secret-input' : ''"
+              :style="
+                field.type === 'password'
+                  ? { WebkitTextSecurity: 'disc' }
+                  : undefined
+              "
             />
           </div>
         </div>
-
-        <DialogFooter>
-          <Button
+        <p
+          v-if="hasWechatQR"
+          class="text-muted-foreground flex items-center justify-center gap-1.5 text-xs"
+        >
+          <ShieldCheck class="size-3.5" />{{ text.wechatQr.privacy }}
+        </p>
+        <DialogFooter
+          v-if="!completionProvider"
+          :class="hasWechatQR ? 'border-t pt-4' : undefined"
+          ><Button
             type="button"
             variant="outline"
             :disabled="submitting"
-            @click="emit('update:open', false)"
-          >
-            {{ $i18n.t.value.common.cancel }}
-          </Button>
-          <Button type="submit" :disabled="submitting">
-            <LoaderCircle v-if="submitting" class="animate-spin" />
-            {{ isEditing ? text.saveChanges : text.saveAndConnect }}
-          </Button>
-        </DialogFooter>
+            @click="changeOpen(false)"
+            >{{ $i18n.t.value.common.cancel }}</Button
+          ><Button v-if="!showQR" type="submit" :disabled="submitting"
+            ><LoaderCircle v-if="submitting" class="animate-spin" />{{
+              isEditing ? text.saveChanges : text.saveAndConnect
+            }}</Button
+          ></DialogFooter
+        >
       </form>
     </DialogContent>
   </Dialog>
 </template>
-
-<style scoped>
-.channel-secret-input {
-  -webkit-text-security: disc;
-}
-</style>

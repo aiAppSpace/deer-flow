@@ -17,83 +17,80 @@ const invariants = readFileSync(
   "utf8",
 );
 
-/*
-  条目行长这样：`| A1  | …` 或 `| **L9**  | …`（加粗的是后补的条目）。
-
-  **正则原来写的是 `/^[A-N]\d+$/`**（wave 150 改）。合同表实际是 **A–S 共 19 组、
-  221 条**——`O` `P` `Q` `R` `S` 五组一共 **45 条从来没被这份守卫读过**，
-  而下面那条用例的名字叫「读取到**完整**的合同」，断言的是 `组数 === 14`：
-  **那个 14 恰恰因为 O–S 看不见才成立**。
-
-  **⚠ wave 151 订正**：wave 150 由此推出「再加一组 `T` 没有任何机器会响」——**那句是错的**，
-  `doc-facts` 会响（实测加 `T` 之后它当场红，本文件当时全绿）。
-  真正没人守的是**这份守卫自己声称的两件事都只覆盖了子集**：
-  「完整」其实是 176/221 条，而「**条目 id 唯一**」因此**看不见 O–S 里的重复 id**
-  ——wave 150 的负向验证 N3 当场证实。
-*/
-function declaredInvariants(): string[] {
+/** 合同条目支持加粗 ID；字母范围不随当前组数收窄。 */
+function declaredInvariants(source: string): string[] {
   const found: string[] = [];
-  for (const line of invariants.split("\n")) {
+  for (const line of source.split("\n")) {
     if (!line.startsWith("|")) continue;
     const first = (line.split("|")[1] ?? "").replaceAll("*", "").trim();
-    if (/^[A-Z]\d+$/.test(first)) found.push(first);
+    if (/^[A-Z]\d+[a-z]*$/.test(first)) found.push(first);
   }
   return found;
 }
 
-/**
- * 文档开头那句「全表 **A–S 共 19 组**」里写的字母区间与组数。
- *
- * **⚠ wave 151 订正 wave 150 写在这里的一句话。** 当时写的是「这句话此前没有
- * 任何机器在核」——**假的**：`doc-facts.test.ts` 的
- * 「BEHAVIOR_CONTRACTS 声明的组数就是实际的组数」一直在核它。
- * 实测（加一组 `T` 之后）：改动前的本文件**全绿**、`doc-facts` **当场红**。
- *
- * 两条**互补、不重复**，比的是不同的东西：
- * - `doc-facts` 比「`## X.` 标题 vs 句子」；
- * - 这一条比「**表行**的组 vs 句子」。
- *
- * 实测差别：加一个**有标题、没有表行**的空组 `T` 并把句子改成 20 组，
- * `doc-facts` 全绿、这一条红。两条合起来才把「标题 == 表行 == 句子」三者钉住。
- *
- * 真正此前没人守的是另一件事，见上面 `declaredInvariants` 的说明：
- * 那个正则只读 A–N，**`条目 id 唯一` 因此只覆盖 176/221 条**。
- */
-function claimedGroups(): { last: string; count: number } {
-  const match = invariants.match(
-    /全表\s*\*\*A[–-]([A-Z])\s*共\s*(\d+)\s*组\*\*/,
+/** 文首声明与标题、合同表行必须互相对应，不能靠历史条数判定完整。 */
+function contractProblems(
+  source: string,
+  declared = declaredInvariants(source),
+): string[] {
+  const problems: string[] = [];
+  const match = source.match(/全表\s*\*\*A[–-]([A-Z])\s*共\s*(\d+)\s*组\*\*/);
+  if (!match) return ["缺少全表组数声明"];
+  const expectedGroups = Array.from({ length: Number(match[2]) }, (_, index) =>
+    String.fromCharCode("A".charCodeAt(0) + index),
   );
-  if (!match)
-    throw new Error("BEHAVIOR_CONTRACTS.md 开头那句「全表 A–X 共 N 组」不见了");
-  return { last: match[1]!, count: Number(match[2]) };
+  if (!expectedGroups.length || expectedGroups.at(-1) !== match[1])
+    problems.push("组数声明的区间不连续");
+  const sections = source.split(/(?=^## )/m).flatMap((section) => {
+    const heading = /^## ([A-Z])\./.exec(section);
+    return heading ? [{ group: heading[1]!, source: section }] : [];
+  });
+  const groups = sections.map(({ group }) => group);
+  if (groups.join(",") !== expectedGroups.join(","))
+    problems.push("合同标题与声明的组不一致");
+  const rows: string[] = [];
+  for (const section of sections) {
+    const table = /\|\s*#\s*\|[^\n]*\n((?:\|[^\n]*(?:\n|$))+)/.exec(
+      section.source,
+    );
+    const entries = (table?.[1] ?? "")
+      .split("\n")
+      .filter((line) => line.startsWith("|") && !/^\|\s*-/.test(line));
+    if (!entries.length) problems.push(`${section.group} 组没有合同表行`);
+    for (const entry of entries) {
+      const id = (entry.split("|")[1] ?? "").replaceAll("*", "").trim();
+      if (!new RegExp(`^${section.group}\\d+[a-z]*$`).test(id))
+        problems.push(`非法或跨组合同 ID：${id}`);
+      rows.push(id);
+    }
+  }
+  if (!declared.length || rows.join(",") !== declared.join(","))
+    problems.push("解析结果没有覆盖全部合同表行");
+  if (new Set(declared).size !== declared.length) problems.push("合同 ID 重复");
+  return problems;
 }
 
 describe("Vue 行为合同结构", () => {
-  const declared = declaredInvariants();
+  const declared = declaredInvariants(invariants);
 
   it("读取到完整的合同，而不是解析失败后假绿", () => {
-    // 阈值按实测（wave 150：221 条）留余量；真正的判据是下面那条双向核对。
-    expect(declared.length).toBeGreaterThanOrEqual(200);
+    expect(contractProblems(invariants, declared)).toEqual([]);
   });
 
   it("文档开头那句「全表 A–X 共 N 组」与表里实际的组恰好相等（双向）", () => {
-    /*
-      **两个方向都要查**：
-      - 表里出现了文档没声明的组（加了 `T` 却忘了改那句话）；
-      - 文档声明了表里没有的组（删掉一整组却忘了改那句话）。
-      只查一个方向，会在池子变化之后静默留下一句过期的「全表」（坑 186）。
-      而且组必须**从 A 连续**——中间缺一个字母，「A–S 共 19 组」这句话就不成立。
-    */
-    const claimed = claimedGroups();
+    const match = invariants.match(
+      /全表\s*\*\*A[–-]([A-Z])\s*共\s*(\d+)\s*组\*\*/,
+    )!;
     const actual = [...new Set(declared.map((id) => id[0]))].sort();
-    const expectedLetters = Array.from({ length: claimed.count }, (_, index) =>
-      String.fromCharCode("A".charCodeAt(0) + index),
+    const expectedLetters = Array.from(
+      { length: Number(match[2]) },
+      (_, index) => String.fromCharCode("A".charCodeAt(0) + index),
     );
     expect(
       actual,
       "合同表里的组与文档开头那句「全表 A–X 共 N 组」对不上：改了表就同时改那句话",
     ).toEqual(expectedLetters);
-    expect(expectedLetters.at(-1)).toBe(claimed.last);
+    expect(expectedLetters.at(-1)).toBe(match[1]);
   });
 
   it("条目 id 唯一", () => {
@@ -102,6 +99,56 @@ describe("Vue 行为合同结构", () => {
     expect(
       [...seen].filter(([, count]) => count > 1).map(([id]) => id),
     ).toEqual([]);
+  });
+
+  const fixture = (last = "B") => {
+    const groups = Array.from({ length: last.charCodeAt(0) - 64 }, (_, i) =>
+      String.fromCharCode(65 + i),
+    );
+    return (
+      `全表 **A–${last} 共 ${groups.length} 组**\n` +
+      groups
+        .map(
+          (group) =>
+            `## ${group}. 合同\n| # | 约束 |\n| --- | --- |\n| **${group}1** | 行为 |\n`,
+        )
+        .join("\n")
+    );
+  };
+
+  it("读取后续字母组与加粗 ID，规模较小的完整合同同样有效", () => {
+    expect(contractProblems(fixture())).toEqual([]);
+    expect(declaredInvariants(fixture("Z"))).toContain("Z1");
+    expect(contractProblems(fixture("Z"))).toEqual([]);
+    expect(contractProblems(fixture().replace("B1", "B1a"))).toEqual([]);
+  });
+
+  it("拒绝空扫描、漏掉后续组、空组、跨组和重复 ID", () => {
+    const source = fixture();
+    expect(contractProblems(source, [])).toContain(
+      "解析结果没有覆盖全部合同表行",
+    );
+    expect(contractProblems(source, ["A1"])).toContain(
+      "解析结果没有覆盖全部合同表行",
+    );
+    expect(contractProblems(source.replace("| **B1** | 行为 |", ""))).toContain(
+      "B 组没有合同表行",
+    );
+    expect(contractProblems(source.replace("**B1**", "**A2**"))).toContain(
+      "非法或跨组合同 ID：A2",
+    );
+    expect(
+      contractProblems(source.replace("**B1**", "**Binvalid**")),
+    ).toContain("非法或跨组合同 ID：Binvalid");
+    expect(contractProblems(source + "| A1 | 重复 |\n")).toContain(
+      "合同 ID 重复",
+    );
+    expect(contractProblems(source.replace("全表", "合同"))).toContain(
+      "缺少全表组数声明",
+    );
+    expect(contractProblems(source.replace("共 2 组", "共 3 组"))).toContain(
+      "组数声明的区间不连续",
+    );
   });
 });
 
@@ -150,7 +197,7 @@ const threadQueries = readFileSync(
   "utf8",
 );
 const toolSettings = readFileSync(
-  new URL("../../app/composables/useMCPConfig.ts", import.meta.url),
+  new URL("../../app/composables/useScopedMCPConfig.ts", import.meta.url),
   "utf8",
 );
 
@@ -170,7 +217,7 @@ describe("所有权不变量", () => {
     expect(threadSidebar).toMatch(
       /await threads\.rename[\s\S]*renameThreadId\.value = null;[\s\S]*catch \(cause\)/,
     );
-    expect(threadSidebar).toContain('role="alert"');
+    expect(threadSidebar).toContain("toast.error(");
   });
 
   it("keeps thread server state in Vue Query and routes deletes through the sidecar cascade", () => {
@@ -182,16 +229,21 @@ describe("所有权不变量", () => {
 
   it("updates one MCP server through the single query owner before authoritative re-read", () => {
     expect(toolSettings).toContain("updateMCPServerState");
-    expect(toolSettings).toContain("MCP_CONFIG_QUERY_KEY");
+    expect(toolSettings).toContain(
+      '["mcpConfig", toValue(scope), user.value?.id]',
+    );
+    expect(toolSettings).toContain("requestKey");
+    expect(toolSettings).toContain("captureWorkspaceQueryOwner");
     expect(toolSettings).toContain("invalidateQueries");
     expect(toolSettings).not.toContain("defineStore");
   });
 
-  it("does not reintroduce React DOM or fixed-timer shims in Vue panel behavior", () => {
+  it("keeps Vue panel DOM and business owners independent of React shims", () => {
     expect(workspacePanels).not.toContain('data-slot="resizable-');
     expect(workspacePanels).not.toContain("data-separator");
     expect(workspacePanels).not.toContain("flexGrow");
-    expect(workspacePanels).not.toContain("animationTimer");
+    // Presentation deadlines belong to WorkspacePanels. Their cancellation,
+    // reversal and owner retirement are exercised by the mounted lifecycle suite.
     expect(agentChat).not.toContain("artifactOpenTimer");
     expect(messageList).not.toContain("AIMessageChunk");
   });

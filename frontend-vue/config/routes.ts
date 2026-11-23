@@ -1,7 +1,7 @@
 /*
-  【文件职责】     定义渲染分区与 Gateway 代理规则的单一来源。
+  【文件职责】     定义渲染分区与 Nitro Gateway 代理共享安全规则。
   【架构位置】     L3
-  【主要导出】     buildProxyRules、csrRoutes
+  【主要导出】     csrRoutes、MAX_PROXY_BODY_BYTES、buildForwardingHeaders、hasUnsafeProxyPath
   【依赖关系】     渲染分区供 nuxt.config.ts 使用；代理契约供 handler 与单测校验
   【边界与注意】   生产代理由 server/routes/api catch-all 执行，不能改回会绕过 guard 的 routeRules.proxy。
 */
@@ -14,32 +14,6 @@ export const csrRoutes = [
 ] as const;
 
 export const MAX_PROXY_BODY_BYTES = 20 * 1024 * 1024;
-
-const streamOptions = { sendStream: true, streamRequest: true } as const;
-
-export type ProxyEnvironment = Readonly<Record<string, string | undefined>>;
-
-export function buildProxyRules(env: ProxyEnvironment = process.env) {
-  const gateway =
-    env.DEER_FLOW_INTERNAL_GATEWAY_BASE_URL ?? "http://127.0.0.1:8001";
-
-  return {
-    ...(env.NUXT_PUBLIC_LANGGRAPH_BASE_URL
-      ? {}
-      : {
-          "/api/langgraph/**": {
-            proxy: { to: `${gateway}/api/**`, ...streamOptions },
-          },
-        }),
-    ...(env.NUXT_PUBLIC_BACKEND_BASE_URL
-      ? {}
-      : {
-          "/api/**": {
-            proxy: { to: `${gateway}/api/**`, ...streamOptions },
-          },
-        }),
-  };
-}
 
 /**
  * Hosts safe to interpolate into a quoted RFC 7239 `Forwarded` value.

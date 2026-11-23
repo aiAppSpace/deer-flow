@@ -23,9 +23,11 @@ const status = ref<"loading" | "success" | "unauthenticated" | "unavailable">(
   "loading",
 );
 let redirectTimer: number | undefined;
+let disposed = false;
 
 onMounted(async () => {
   const session = await queryClient.fetchQuery(authSessionQueryOptions());
+  if (disposed) return;
   const resolution = resolveAuthCallback(
     session,
     typeof route.query.next === "string" ? route.query.next : null,
@@ -41,6 +43,7 @@ onMounted(async () => {
 });
 
 onScopeDispose(() => {
+  disposed = true;
   if (redirectTimer !== undefined) window.clearTimeout(redirectTimer);
 });
 </script>

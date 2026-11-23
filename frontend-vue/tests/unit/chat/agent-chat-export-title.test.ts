@@ -13,6 +13,10 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
+
+import ts from "typescript";
+import { computed, ref } from "vue";
 
 import { describe, expect, it } from "vitest";
 
@@ -37,11 +41,52 @@ function currentThreadBlock() {
 }
 
 describe("AgentChat synthesised thread", () => {
-  it("does not invent a title for the export path", () => {
-    const block = currentThreadBlock();
+  it.each([
+    [false, "stale public title", undefined],
+    [true, "Actual public report", "Actual public report"],
+    [true, undefined, undefined],
+  ])(
+    "uses only an actual public title for demo=%s, title=%s",
+    (demo, title, expected) => {
+      const actual = runInNewContext(
+        ts.transpileModule(`${currentThreadBlock()}\ncurrentThread.value;`, {
+          compilerOptions: { target: ts.ScriptTarget.ES2022 },
+        }).outputText,
+        {
+          computed,
+          routeThreadId: ref("public-or-user-thread"),
+          threads: { threads: [] },
+          isDemo: ref(demo),
+          showcaseState: ref({ title }),
+          visibleMessages: ref([]),
+          stream: { state: ref({}) },
+        },
+      ) as AgentThread;
+      expect(actual.values.title).toBe(expected);
+      expect(titleOfThread(actual)).toBe(expected ?? "Untitled");
+    },
+  );
 
-    expect(block).toContain("values: { messages: visibleMessages.value }");
-    expect(block).not.toMatch(/\btitle\s*:/);
+  it("a public report title takes precedence over a same-ID account list row", () => {
+    const actual = runInNewContext(
+      ts.transpileModule(`${currentThreadBlock()}\ncurrentThread.value;`, {
+        compilerOptions: { target: ts.ScriptTarget.ES2022 },
+      }).outputText,
+      {
+        computed,
+        routeThreadId: ref("public-thread"),
+        threads: {
+          threads: [
+            { thread_id: "public-thread", values: { title: "Account title" } },
+          ],
+        },
+        isDemo: ref(true),
+        showcaseState: ref({ title: "Public title" }),
+        visibleMessages: ref([]),
+        stream: { state: ref({}) },
+      },
+    ) as AgentThread;
+    expect(actual.values.title).toBe("Public title");
   });
 
   it("has no localized title fallback left in the file", () => {

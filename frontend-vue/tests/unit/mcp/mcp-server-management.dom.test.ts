@@ -1,7 +1,8 @@
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 /*
   【文件职责】     守住 MCP server 的增/改/删：校验在哪一步拦住、错误说的是哪一条。
   【架构位置】     测试
-  【依赖关系】     ToolSettings.vue · core/mcp/parse · composables/useMCPConfig
+  【依赖关系】     MCPPluginManager.vue · core/mcp/parse · composables/useScopedMCPConfig
   【边界与注意】   这一屏的校验有**四种拦法**，每一种给的是不同的话：
                    解析不了（六种错误码）、加的时候重名、改的时候一次改了多个、
                    改的时候把名字改了。任何一种说错话，用户都不知道自己该改哪儿。
@@ -17,30 +18,27 @@ const mcp = vi.hoisted(() => ({
   config: undefined as unknown as { value: unknown },
   mutate: vi.fn(),
   pending: undefined as unknown as { value: boolean },
+  error: undefined as unknown as { value: Error | null },
   toggle: vi.fn(),
 }));
-vi.mock("@/composables/useMCPConfig", async () => {
-  const { ref: makeRef } = await import("vue");
+vi.mock("@/composables/useScopedMCPConfig", async () => {
+  const { ref: makeRef, computed: makeComputed } = await import("vue");
   mcp.config = makeRef({ mcp_servers: {} });
   mcp.pending = makeRef(false);
+  mcp.error = makeRef<Error | null>(null);
   return {
-    useMCPConfig: () => ({
-      config: mcp.config,
-      loading: makeRef(false),
-      fetching: makeRef(false),
-      error: makeRef(null),
-      refetch: vi.fn(),
-      toggle: mcp.toggle,
-      pending: makeRef(false),
-      mutationError: makeRef(null),
-    }),
-    useMCPServerMutations: () => ({
-      mutateAsync: mcp.mutate,
-      isPending: mcp.pending,
-      error: makeRef(null),
+    useScopedMCPConfig: () => ({
+      query: {
+        data: mcp.config,
+        isError: makeComputed(() => mcp.error.value !== null),
+        isLoading: makeRef(false),
+        error: mcp.error,
+      },
+      mutation: { mutateAsync: mcp.mutate, isPending: mcp.pending },
     }),
   };
 });
+
 vi.mock("@/composables/useSettingsPermissions", async () => {
   const { computed, ref: makeRef } = await import("vue");
   const permissions = makeRef({
@@ -59,7 +57,8 @@ vi.mock("@/composables/useSettingsPermissions", async () => {
   };
 });
 
-import ToolSettings from "@/components/workspace/settings/ToolSettings.vue";
+import MCPPluginManager from "@/components/workspace/capabilities/MCPPluginManager.vue";
+import { MCPConfigRequestError } from "@/core/mcp/api";
 import { enUS } from "@/core/i18n/locales/en-US";
 
 const labels = enUS.settings.tools;
@@ -68,6 +67,7 @@ beforeEach(() => {
   mcp.mutate.mockReset();
   mcp.mutate.mockResolvedValue({ mcp_servers: {} });
   mcp.pending.value = false;
+  mcp.error.value = null;
   mcp.config.value = {
     mcp_servers: {
       github: { enabled: true, description: "GitHub tools", command: "npx" },
@@ -83,7 +83,11 @@ afterEach(() => {
 });
 
 function mountTools() {
-  return mount(ToolSettings, { attachTo: document.body });
+  return mount(MCPPluginManager, {
+    global: { plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]] },
+    props: { scope: "deployment" },
+    attachTo: document.body,
+  });
 }
 
 const definitionBox = () =>
@@ -96,12 +100,14 @@ const buttonWithText = (text: string) =>
   );
 const definitionError = () =>
   document.body
-    .querySelector('[data-testid="mcp-definition-error"]')
+    .querySelector('[role="dialog"] [role="alert"]')
     ?.textContent?.trim() ?? "";
 
 async function openAdd(wrapper: ReturnType<typeof mountTools>) {
   document.body
-    .querySelector<HTMLElement>('[data-testid="mcp-add-server"]')!
+    .querySelector<HTMLElement>(
+      `button[aria-label^="${enUS.capabilities.addPlugin}"]`,
+    )!
     .click();
   await flushPromises();
   await wrapper.vm.$nextTick();
@@ -125,6 +131,82 @@ async function save(wrapper: ReturnType<typeof mountTools>) {
 }
 
 describe("MCP server 增删改", () => {
+  it("keeps the bounded editor native and preserves the complete draft through resize", async () => {
+    const server = {
+      enabled: true,
+      description: "完整配置 🙂",
+      command: "npx",
+      headers: Object.fromEntries(
+        Array.from({ length: 80 }, (_, index) => [
+          `X-Field-${index}`,
+          `完整值-${index}`,
+        ]),
+      ),
+    };
+    mcp.config.value = { mcp_servers: { github: server } };
+    const wrapper = mountTools();
+    try {
+      document.body
+        .querySelector<HTMLElement>(
+          `button[aria-label^="${enUS.common.edit} github ("]`,
+        )!
+        .click();
+      await flushPromises();
+      const box = definitionBox();
+      expect(JSON.parse(box.value)).toEqual({ mcpServers: { github: server } });
+      // DOM tests guard the actual primitive's capacity policy and value owner;
+      // browser reflow tests alone establish physical geometry and native pan.
+      expect(box.classList.contains("h-96")).toBe(true);
+      expect(box.classList.contains("min-h-0")).toBe(true);
+      expect(box.classList.contains("max-h-[calc(100dvh-4rem-2px)]")).toBe(
+        true,
+      );
+      expect(box.classList.contains("sm:max-h-[calc(100dvh-5rem-2px)]")).toBe(
+        true,
+      );
+      expect(box.classList.contains("overflow-auto")).toBe(true);
+      expect(box.closest('[role="dialog"]')?.classList).toContain(
+        "overflow-y-auto",
+      );
+      const draft = JSON.stringify({
+        mcpServers: { github: { ...server, description: "编辑后 🙂" } },
+      });
+      await typeDefinition(wrapper, draft);
+      window.dispatchEvent(new Event("resize"));
+      await flushPromises();
+      expect(definitionBox()).toBe(box);
+      expect(box.value).toBe(draft);
+      expect(mcp.mutate).not.toHaveBeenCalled();
+      await save(wrapper);
+      expect(mcp.mutate).toHaveBeenCalledExactlyOnceWith({
+        operation: "update",
+        serverName: "github",
+        server: { ...server, description: "编辑后 🙂" },
+      });
+    } finally {
+      wrapper.unmount();
+    }
+  });
+  it.each([
+    [new MCPConfigRequestError(403, "Admin only"), labels.adminRequired],
+    [
+      new MCPConfigRequestError(503, "Gateway unavailable"),
+      `${enUS.common.error} Gateway unavailable`,
+    ],
+  ])(
+    "renders the current React error copy and removes mutation controls for %s",
+    async (error, message) => {
+      mcp.error.value = error;
+      const wrapper = mountTools();
+      await flushPromises();
+      expect(wrapper.get('[role="alert"]').text()).toBe(message);
+      expect(
+        wrapper.find('button[aria-label^="Add MCP plugin"]').exists(),
+      ).toBe(false);
+      expect(wrapper.find('[role="switch"]').exists()).toBe(false);
+      wrapper.unmount();
+    },
+  );
   it("粘一段 README 里的 JSON 就能加进来", async () => {
     const wrapper = mountTools();
     await openAdd(wrapper);
@@ -190,7 +272,7 @@ describe("MCP server 增删改", () => {
     const wrapper = mountTools();
     document.body
       .querySelector<HTMLElement>(
-        `button[aria-label="${enUS.common.edit} github"]`,
+        `button[aria-label^="${enUS.common.edit} github ("]`,
       )!
       .click();
     await flushPromises();
@@ -230,7 +312,7 @@ describe("MCP server 增删改", () => {
     const wrapper = mountTools();
     document.body
       .querySelector<HTMLElement>(
-        `button[aria-label="${enUS.common.edit} github"]`,
+        `button[aria-label^="${enUS.common.edit} github ("]`,
       )!
       .click();
     await flushPromises();
@@ -245,7 +327,7 @@ describe("MCP server 增删改", () => {
     const wrapper = mountTools();
     document.body
       .querySelector<HTMLElement>(
-        `button[aria-label="${enUS.common.delete} github"]`,
+        `button[aria-label^="${enUS.common.delete} github ("]`,
       )!
       .click();
     await flushPromises();
@@ -283,6 +365,43 @@ describe("MCP server 增删改", () => {
     // 用户改了半天的 JSON 不能就这么没了。
     expect(definitionBox()).not.toBeNull();
     expect(definitionError()).toContain("gateway refused");
+    wrapper.unmount();
+  });
+});
+
+describe("actual MCP settings controls while a scoped mutation is pending", () => {
+  it("locks the toggle and management actions until the one mutation finishes", async () => {
+    let finish!: () => void;
+    mcp.mutate.mockImplementation(() => {
+      mcp.pending.value = true;
+      return new Promise<void>((resolve) => {
+        finish = () => {
+          mcp.pending.value = false;
+          resolve();
+        };
+      });
+    });
+    const wrapper = mountTools();
+    await flushPromises();
+    const toggle = wrapper.get('[role="switch"]');
+    await toggle.trigger("click");
+    await flushPromises();
+    expect(toggle.attributes("disabled")).toBeDefined();
+    await toggle.trigger("click");
+    expect(mcp.mutate).toHaveBeenCalledTimes(1);
+    expect(mcp.mutate).toHaveBeenCalledWith({
+      operation: "toggle",
+      serverName: "github",
+      enabled: false,
+    });
+    expect(
+      wrapper
+        .get(`button[aria-label^="${enUS.common.edit}"]`)
+        .attributes("disabled"),
+    ).toBeDefined();
+    finish();
+    await flushPromises();
+    expect(toggle.attributes("disabled")).toBeUndefined();
     wrapper.unmount();
   });
 });

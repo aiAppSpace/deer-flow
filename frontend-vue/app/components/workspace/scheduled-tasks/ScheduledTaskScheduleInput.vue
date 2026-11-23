@@ -1,27 +1,4 @@
 <script setup lang="ts">
-/*
-  【文件职责】     编辑 once/cron 两种 Gateway schedule，并提供五种 cron preset、时区和预览。
-  【架构位置】     L3 scheduled-task form component
-  【主要导出】     默认 ScheduledTaskScheduleInput
-  【依赖关系】     scheduled-tasks cron/schedule · ui/button · ui/select · app i18n
-  【边界与注意】   接口是 `initial` + `@change`，**不是** v-model：与
-                   frontend/src/components/workspace/scheduled-task-schedule-input.tsx
-                   一样，组件自己持有 preset/parts/时区，把它们规范化成一个
-                   `ScheduleValue` 发出去，包括挂载那一次——挂载时发出的那一次正是
-                   「时区留空则用浏览器时区」「cron 写回规范形式」生效的地方。
-                   要重置（应用 recipe、换选中任务）由调用方换 `key` 重新挂载，同 React。
-
-                   `run_at` 发出去的是 **UTC ISO**，不是 datetime-local 的墙上时间：
-                   转换在这里发生，payload 构建那一层只做搬运。此前 Vue 把墙上时间留在
-                   模型里、在 form.ts 边界转换，还额外做了「这个本地时间在该时区不存在」
-                   和「必须是将来」两条本地校验——React 没有这两条，它把这类输入直接
-                   POST 给 Gateway，由 422 的 detail 回来。两条校验各自带着一句写死的
-                   英文文案，两个应用在同一次误操作上会说不同的话。
-
-                   `hourly` 只给分钟输入框，其余 preset 给一个 `type="time"`：一个时间
-                   选择器，不是「小时」+「分钟」两个数字框。数字框那版把 `fields.time`
-                   («Time») 挂在 0~23 的小时框上，读屏器会念出一个叫「时间」的微调框。
-*/
 import { computed, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
@@ -40,14 +17,22 @@ import {
   serializeCron,
   utcToZonedLocalInput,
   WEEKDAYS,
-  zonedLocalToUtcIso,
+  validZonedLocalToUtcIso,
+  onceRunAtInstant,
+  secondsToInterval,
+  intervalToSeconds,
+  clampIntervalAmount,
+  minIntervalAmount,
+  maxIntervalAmount,
+  type IntervalUnit,
+  type ScheduleType,
   type CronParts,
   type CronPreset,
   type ScheduleLocale,
   type Weekday,
 } from "@/core/scheduled-tasks/cron";
+import { browserTimeZone } from "@/core/scheduled-tasks/format";
 import {
-  detectBrowserTimezone,
   timezoneOptions,
   withCurrentTimezone,
   type ScheduleValue,
@@ -67,8 +52,9 @@ const props = withDefaults(
   defineProps<{
     initial: ScheduleValue;
     scheduleTypeLocked?: boolean;
+    minIntervalSeconds?: number;
   }>(),
-  { scheduleTypeLocked: false },
+  { scheduleTypeLocked: false, minIntervalSeconds: 60 },
 );
 const emit = defineEmits<{ change: [value: ScheduleValue] }>();
 const { $i18n } = useNuxtApp();
@@ -79,33 +65,113 @@ const scheduleLocale = computed<ScheduleLocale>(() =>
 );
 
 const initialCron = parseCron(props.initial.schedule_spec.cron ?? "0 9 * * *");
-const scheduleType = ref<"once" | "cron">(props.initial.schedule_type);
+const scheduleType = ref<ScheduleType>(props.initial.schedule_type);
 const preset = ref<CronPreset>(initialCron.preset);
 const parts = ref<CronParts>(initialCron.parts);
+const timezone = ref(props.initial.timezone || browserTimeZone());
 const runAtLocal = ref(
   props.initial.schedule_type === "once" && props.initial.schedule_spec.run_at
     ? utcToZonedLocalInput(
-        props.initial.schedule_spec.run_at,
-        props.initial.timezone || "UTC",
+        onceRunAtInstant(props.initial.schedule_spec.run_at, timezone.value),
+        timezone.value,
       )
     : "",
 );
-const timezone = ref(props.initial.timezone || detectBrowserTimezone());
+const initialOnce =
+  props.initial.schedule_type === "once" && props.initial.schedule_spec.run_at
+    ? {
+        runAt: props.initial.schedule_spec.run_at,
+        local: runAtLocal.value,
+        timezone: timezone.value,
+      }
+    : null;
+const rawInterval = props.initial.schedule_spec.every_seconds;
+const initialInterval =
+  typeof rawInterval === "number" &&
+  Number.isInteger(rawInterval) &&
+  rawInterval > 0
+    ? secondsToInterval(rawInterval)
+    : { amount: 60, unit: "minutes" as IntervalUnit };
+const intervalAmount = ref(initialInterval.amount);
+const intervalAmountText = ref(String(initialInterval.amount));
+const intervalUnit = ref<IntervalUnit>(initialInterval.unit);
+const intervalEdited = ref(false);
+const onceRunAt = computed(() =>
+  runAtLocal.value
+    ? validZonedLocalToUtcIso(runAtLocal.value, timezone.value)
+    : null,
+);
+const invalidOnceTime = computed(
+  () => scheduleType.value === "once" && !!runAtLocal.value && !onceRunAt.value,
+);
+function editInterval(raw: string) {
+  intervalEdited.value = true;
+  intervalAmountText.value = raw;
+  const n = Number(raw);
+  if (Number.isInteger(n) && n > 0) intervalAmount.value = n;
+}
+function blurInterval() {
+  if (!intervalEdited.value) return;
+  intervalAmount.value = clampIntervalAmount(
+    Number(intervalAmountText.value),
+    intervalUnit.value,
+    props.minIntervalSeconds,
+  );
+  intervalAmountText.value = String(intervalAmount.value);
+}
+function changeIntervalUnit(value: IntervalUnit) {
+  intervalEdited.value = true;
+  intervalUnit.value = value;
+  intervalAmount.value = clampIntervalAmount(
+    intervalAmount.value,
+    value,
+    props.minIntervalSeconds,
+  );
+  intervalAmountText.value = String(intervalAmount.value);
+}
 // 候选里必须有当前值，否则触发器显示为空，见 schedule.ts 文件头。
 const timezoneChoices = computed(() =>
   withCurrentTimezone(TIMEZONE_OPTIONS, timezone.value),
 );
 
 watch(
-  [scheduleType, preset, parts, runAtLocal, timezone],
+  [
+    scheduleType,
+    preset,
+    parts,
+    runAtLocal,
+    timezone,
+    intervalAmount,
+    intervalUnit,
+    intervalEdited,
+    () => props.minIntervalSeconds,
+  ],
   () => {
     if (scheduleType.value === "once") {
-      const runAt = runAtLocal.value
-        ? zonedLocalToUtcIso(runAtLocal.value, timezone.value)
-        : "";
+      const unchanged =
+        runAtLocal.value === initialOnce?.local &&
+        timezone.value === initialOnce.timezone;
+      const runAt = unchanged ? initialOnce.runAt : onceRunAt.value;
       emit("change", {
         schedule_type: "once",
         schedule_spec: runAt ? { run_at: runAt } : {},
+        timezone: timezone.value,
+      });
+      return;
+    }
+    if (scheduleType.value === "interval") {
+      const amount = intervalEdited.value
+        ? clampIntervalAmount(
+            intervalAmount.value,
+            intervalUnit.value,
+            props.minIntervalSeconds,
+          )
+        : intervalAmount.value;
+      emit("change", {
+        schedule_type: "interval",
+        schedule_spec: {
+          every_seconds: intervalToSeconds(amount, intervalUnit.value),
+        },
         timezone: timezone.value,
       });
       return;
@@ -172,6 +238,8 @@ const preview = computed(() =>
       parts: parts.value,
       runAtLocal: runAtLocal.value,
       timezone: timezone.value,
+      intervalAmount: intervalAmount.value,
+      intervalUnit: intervalUnit.value,
     },
     scheduleLocale.value,
   ),
@@ -201,6 +269,13 @@ const preview = computed(() =>
       >
         {{ labels.scheduleType.once }}
       </Button>
+      <Button
+        :variant="scheduleType === 'interval' ? 'default' : 'outline'"
+        :aria-pressed="scheduleType === 'interval'"
+        size="sm"
+        @click="scheduleType = 'interval'"
+        >{{ labels.scheduleType.interval }}</Button
+      >
     </div>
 
     <template v-if="scheduleType === 'cron'">
@@ -208,7 +283,11 @@ const preview = computed(() =>
         :model-value="preset"
         @update:model-value="changePreset($event as CronPreset)"
       >
-        <SelectTrigger class="w-full" data-testid="schedule-preset">
+        <SelectTrigger
+          class="w-full"
+          data-testid="schedule-preset"
+          :aria-label="labels.preset.label"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -286,8 +365,42 @@ const preview = computed(() =>
         </a>
       </div>
     </template>
+    <div v-else-if="scheduleType === 'interval'" class="flex gap-2">
+      <Input
+        type="number"
+        :min="minIntervalAmount(intervalUnit, minIntervalSeconds)"
+        :max="maxIntervalAmount(intervalUnit)"
+        :model-value="intervalAmountText"
+        :aria-label="labels.fields.intervalAmount"
+        @update:model-value="editInterval($event)"
+        @blur="blurInterval"
+      />
+      <Select
+        :model-value="intervalUnit"
+        @update:model-value="changeIntervalUnit($event as IntervalUnit)"
+      >
+        <SelectTrigger
+          :aria-label="labels.fields.intervalUnit"
+          class="w-36"
+          data-testid="schedule-interval-unit"
+          ><SelectValue
+        /></SelectTrigger>
+        <SelectContent
+          ><SelectItem value="seconds">{{
+            labels.fields.intervalUnitSeconds
+          }}</SelectItem
+          ><SelectItem value="minutes">{{
+            labels.fields.intervalUnitMinutes
+          }}</SelectItem
+          ><SelectItem value="hours">{{
+            labels.fields.intervalUnitHours
+          }}</SelectItem></SelectContent
+        >
+      </Select>
+    </div>
     <Input
       v-else
+      :aria-invalid="invalidOnceTime"
       data-testid="scheduled-task-run-at"
       type="datetime-local"
       :model-value="runAtLocal"
@@ -296,7 +409,11 @@ const preview = computed(() =>
     />
 
     <Select v-model="timezone">
-      <SelectTrigger class="w-full" data-testid="schedule-timezone">
+      <SelectTrigger
+        class="w-full"
+        data-testid="schedule-timezone"
+        :aria-label="labels.fields.timezone"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -310,8 +427,27 @@ const preview = computed(() =>
       </SelectContent>
     </Select>
 
+    <p v-if="invalidOnceTime" role="alert" class="text-destructive text-sm">
+      {{ labels.fields.invalidRunAt }}
+    </p>
     <div class="text-muted-foreground text-sm" data-testid="schedule-preview">
       {{ preview }}
+    </div>
+    <div
+      v-if="
+        scheduleType === 'interval' &&
+        (intervalUnit === 'seconds' ||
+          minIntervalAmount(intervalUnit, minIntervalSeconds) > 1)
+      "
+      class="text-muted-foreground text-xs"
+      data-testid="schedule-interval-min-hint"
+    >
+      {{
+        labels.fields.intervalMinHint.replace(
+          "{n}",
+          String(minIntervalAmount("seconds", minIntervalSeconds)),
+        )
+      }}
     </div>
   </div>
 </template>

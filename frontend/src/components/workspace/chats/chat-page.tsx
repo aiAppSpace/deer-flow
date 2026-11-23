@@ -17,6 +17,7 @@ import { GoalStatus } from "@/components/workspace/goal-status";
 import {
   InputBox,
   type InputBoxSubmitOptions,
+  type InputBoxHandle,
 } from "@/components/workspace/input-box";
 import { KnowledgeScopeSelector } from "@/components/workspace/knowledge-scope-selector";
 import {
@@ -93,8 +94,26 @@ export default function ChatPage() {
   const canCreateRuns = hasPermission(user, PERMISSIONS.RUNS_CREATE);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { threadId, setThreadId, isNewThread, setIsNewThread, isMock } =
-    useThreadChat();
+  const composer = useRef<InputBoxHandle>(null);
+  const userId = user?.id;
+  const focusDeletedComposer = useCallback(
+    (threadId: string) => {
+      composer.current?.focusIfOwned(threadId, userId);
+    },
+    [userId],
+  );
+  const {
+    threadId,
+    setThreadId,
+    isNewThread,
+    setIsNewThread,
+    isMock,
+    consumptionObservation,
+  } = useThreadChat(focusDeletedComposer, {
+    surface: "main",
+    account: userId ?? null,
+    agent: null,
+  });
   // Project-scoped new chat: `/workspace/chats/new?project={id}` assigns the
   // thread to the project on the FIRST submit — primarily via an explicit
   // `POST /api/threads` pre-create with `project_id`, with the run-request
@@ -110,6 +129,7 @@ export default function ChatPage() {
   // the moment the user submits so the UI animates immediately, even though
   // `isNewThread` stays true until the backend actually creates the thread.
   const [isWelcomeMode, setIsWelcomeMode] = useState(isNewThread);
+  const [tailRequest, setTailRequest] = useState(0);
   const queryClient = useQueryClient();
   const [settings, setSettings] = useThreadSettings(threadId);
   const [localSettings, setLocalSettings] = useLocalSettings();
@@ -198,6 +218,7 @@ export default function ChatPage() {
     // thread id and assumes the thread exists on the backend (issue #2746).
     onSend: () => {
       setIsWelcomeMode(false);
+      setTailRequest((request) => request + 1);
     },
     onStart: (createdThreadId) => {
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
@@ -480,98 +501,115 @@ export default function ChatPage() {
     <ThreadContext.Provider value={{ thread, isMock }}>
       <SidecarProvider
         parentThreadId={threadId}
+        consumptionObservation={consumptionObservation}
         context={settings.context}
         isMock={isMock}
       >
         <ChatBox threadId={threadId} browserEnabled={browserEnabled}>
-          <div className="relative flex size-full min-h-0 justify-between">
-            <header
-              className={cn(
-                "absolute top-0 right-0 left-0 flex h-12 shrink-0 items-center gap-2 px-2 sm:px-4",
-                isWelcomeMode
-                  ? "bg-background/0 z-40 backdrop-blur-none"
-                  : "bg-background/80 z-30 shadow-xs backdrop-blur",
-              )}
-            >
-              {!isMock && (
-                <SidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
-              )}
-              <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
-                <ThreadTitle
-                  threadId={threadId}
-                  thread={thread}
-                  canonicalTitle={threadMetadata.data?.values?.title}
-                />
-                {!isNewThread &&
-                  !isMock &&
-                  env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
-                    <ThreadArchiveStatus
-                      threadId={threadId}
-                      metadata={threadMetadata.data?.metadata}
-                    />
-                  )}
-                {affiliatedProjectId && (
-                  <ProjectAffiliationBadge projectId={affiliatedProjectId} />
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2 max-[361px]:min-w-0 max-[361px]:flex-1 max-[361px]:shrink max-[361px]:flex-nowrap max-[361px]:justify-end max-[361px]:gap-[8px] max-[361px]:[&_[data-slot=button]]:size-[36px]! max-[361px]:[&_[data-slot=button]]:p-0! max-[361px]:[&_[data-slot=button]_svg]:size-[16px]!">
-                {!isNewThread &&
-                  !isMock &&
-                  env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
-                    <ThreadBackgroundTasks threadId={threadId} />
-                  )}
-                {!isNewThread &&
-                  !isMock &&
-                  env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
-                    <ThreadSubagentBatches threadId={threadId} />
-                  )}
-                {!isNewThread && !isMock && (
-                  <ThreadScheduledTasksButton threadId={threadId} />
-                )}
-                {tokenUsageEnabled ? (
-                  <TokenUsageIndicator
-                    threadId={isNewThread ? undefined : threadId}
-                    backendUsage={backendTokenUsage}
-                    contextUsage={contextUsage}
-                    enabled={tokenUsageEnabled}
-                    messages={thread.messages}
-                    pendingMessages={pendingUsageMessages}
-                    preferences={localSettings.tokenUsage}
-                    onPreferencesChange={(preferences) =>
-                      setLocalSettings("tokenUsage", preferences)
-                    }
-                  />
-                ) : (
-                  <ContextUsageBadge contextUsage={contextUsage} />
-                )}
-                <SidecarTrigger />
-                {browserEnabled && <BrowserTrigger />}
-                <ExportTrigger threadId={threadId} />
-                <ThreadExtensionActions threadId={threadId} />
-                <ArtifactTrigger />
-              </div>
-            </header>
+          <div className="@container/chat-pane relative flex size-full min-h-0 min-w-0 justify-between max-[361px]:flex-col">
             <main
-              className="flex min-h-0 max-w-full grow flex-col max-[361px]:overflow-y-auto"
+              className="flex min-h-0 max-w-full min-w-0 grow flex-col @max-3xl/chat-pane:overflow-y-auto"
               onFocusCapture={(event) => {
                 const target = event.target;
+                const viewport = event.currentTarget;
                 window.requestAnimationFrame(() => {
-                  if (target.isConnected) {
-                    target.scrollIntoView({ block: "nearest" });
+                  if (
+                    target.isConnected &&
+                    target.ownerDocument.activeElement === target
+                  ) {
+                    target.scrollIntoView({
+                      block:
+                        getComputedStyle(viewport).overflowY === "auto"
+                          ? "center"
+                          : "nearest",
+                    });
                   }
                 });
               }}
             >
-              <div className="flex min-h-0 flex-1 justify-center">
+              <header
+                className={cn(
+                  "absolute top-0 right-0 left-0 flex h-12 shrink-0 items-center gap-2 px-2 sm:px-4 @max-3xl/chat-pane:relative @max-3xl/chat-pane:h-auto @max-3xl/chat-pane:min-h-12 @max-3xl/chat-pane:flex-wrap @max-3xl/chat-pane:py-2",
+                  isWelcomeMode
+                    ? "bg-background/0 z-40 backdrop-blur-none"
+                    : "bg-background/80 z-30 shadow-xs backdrop-blur",
+                )}
+              >
+                {!isMock && (
+                  <SidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
+                )}
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+                  <ThreadTitle
+                    threadId={threadId}
+                    thread={thread}
+                    canonicalTitle={threadMetadata.data?.values?.title}
+                  />
+                  {!isNewThread &&
+                    !isMock &&
+                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
+                      <ThreadArchiveStatus
+                        threadId={threadId}
+                        metadata={threadMetadata.data?.metadata}
+                      />
+                    )}
+                  {affiliatedProjectId && (
+                    <ProjectAffiliationBadge projectId={affiliatedProjectId} />
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2 max-[361px]:gap-[8px] @max-3xl/chat-pane:min-w-0 @max-3xl/chat-pane:shrink @max-3xl/chat-pane:grow-0 @max-3xl/chat-pane:basis-full @max-3xl/chat-pane:flex-wrap @max-3xl/chat-pane:justify-end max-[361px]:[&_[data-slot=button]]:size-[36px]! max-[361px]:[&_[data-slot=button]]:p-0! max-[361px]:[&_[data-slot=button]_svg]:size-[16px]!">
+                  {!isNewThread &&
+                    !isMock &&
+                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
+                      <ThreadBackgroundTasks threadId={threadId} />
+                    )}
+                  {!isNewThread &&
+                    !isMock &&
+                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" && (
+                      <ThreadSubagentBatches threadId={threadId} />
+                    )}
+                  {!isNewThread && !isMock && (
+                    <ThreadScheduledTasksButton threadId={threadId} />
+                  )}
+                  {tokenUsageEnabled ? (
+                    <TokenUsageIndicator
+                      threadId={isNewThread ? undefined : threadId}
+                      backendUsage={backendTokenUsage}
+                      contextUsage={contextUsage}
+                      enabled={tokenUsageEnabled}
+                      messages={thread.messages}
+                      pendingMessages={pendingUsageMessages}
+                      preferences={localSettings.tokenUsage}
+                      onPreferencesChange={(preferences) =>
+                        setLocalSettings("tokenUsage", preferences)
+                      }
+                    />
+                  ) : (
+                    <ContextUsageBadge contextUsage={contextUsage} />
+                  )}
+                  <SidecarTrigger />
+                  {browserEnabled && <BrowserTrigger />}
+                  <ExportTrigger threadId={threadId} />
+                  <ThreadExtensionActions threadId={threadId} />
+                  <ArtifactTrigger />
+                </div>
+              </header>
+              <div
+                className={cn(
+                  "flex min-h-0 flex-1 justify-center",
+                  !isWelcomeMode &&
+                    "@max-3xl/chat-pane:max-h-dvh @max-3xl/chat-pane:min-h-auto",
+                )}
+              >
                 <MessageList
                   archiveDownloadsEnabled={
                     isNewThread || isMock || threadMetadata.data != null
                   }
                   className={cn(
-                    "size-full max-[361px]:h-auto! max-[361px]:flex-none max-[361px]:overflow-visible! max-[361px]:[&>div]:h-auto! max-[361px]:[&>div]:overflow-visible!",
-                    !isWelcomeMode && "pt-10",
+                    "size-full",
+                    !isWelcomeMode && "pt-10 @max-3xl/chat-pane:pt-0",
                   )}
                   testId="main-message-list"
+                  tailRequest={tailRequest}
                   threadId={threadId}
                   thread={thread}
                   scheduledTaskEvents={scheduledTaskEvents.data}
@@ -618,7 +656,7 @@ export default function ChatPage() {
               </div>
               <div
                 className={cn(
-                  "right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4",
+                  "right-0 bottom-0 left-0 z-30 flex justify-center px-3 has-[[contenteditable][aria-controls]]:z-50 has-[textarea[aria-controls]]:z-50 sm:px-4",
                   isWelcomeMode ? "absolute" : "relative shrink-0 pb-4",
                   isWelcomeMode &&
                     "max-[361px]:relative max-[361px]:shrink-0 max-[361px]:pb-4",
@@ -660,6 +698,7 @@ export default function ChatPage() {
                   )}
                   {mountedRef.current ? (
                     <InputBox
+                      ref={composer}
                       className={cn(
                         "bg-background/5 w-full",
                         isWelcomeMode &&
@@ -667,6 +706,7 @@ export default function ChatPage() {
                       )}
                       isWelcomeMode={isWelcomeMode}
                       threadId={threadId}
+                      consumptionObservation={consumptionObservation}
                       projectId={projectParam ?? affiliatedProjectId}
                       draftThreadId={isNewThread ? "new" : threadId}
                       knowledgeScopeControl={

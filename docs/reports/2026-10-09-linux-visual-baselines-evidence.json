@@ -1,0 +1,83 @@
+[
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/artifact-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1239,
+    "sha256": "c542654ccd69886fadf2a28e047d2624337f15cb8830aa72d51d0f46578168f1",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/dark-mode-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1149,
+    "sha256": "8671632274c052a14a552f41363306c2d149faa25f8511aa0c1a61ce6aa031e9",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/empty-chat-attachment-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1825,
+    "sha256": "06aa6f60f264ea3284c2e92ec213521aa6048373a2a4296ba01012afdc51ba1e",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/empty-chat-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1641,
+    "sha256": "8615448a3e2855238c36ee06d9e509c33becf2ee2f23f8b9cde0a0d06a04354f",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/mobile-chromium-linux.png",
+    "width": 390,
+    "height": 844,
+    "rgb_colors": 1187,
+    "sha256": "cbf27d18bf602459dcaebae28ed98171bfff638079a7e3ac87d5bb90705f7937",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/reasoning-tool-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1320,
+    "sha256": "38bf690188f1e52ef1ae49f410219fc828fb9dd9bb34cd742db03128761681be",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/settings-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1373,
+    "sha256": "07015dad10ba333aac07ecec7dc16fe7e6fa61ea3df38dc388e2be45afa76f28",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/settings-zh-cn-dark-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 1174,
+    "sha256": "60dc6c643118b3638036d1659fdf5c7acdc74612e7af494c0b5230081907cff2",
+    "reviewed": true,
+    "captureStage": 22
+  },
+  {
+    "file": "frontend-vue/tests/e2e-visual/workspace-states.spec.ts-snapshots/streaming-message-chromium-linux.png",
+    "width": 1280,
+    "height": 720,
+    "rgb_colors": 2278,
+    "sha256": "8d5c2befbe8256ba04d2d8b2018424560affa6ce199f71c8b88e6fbc33f81dfb",
+    "reviewed": true,
+    "captureStage": 22
+  }
+]

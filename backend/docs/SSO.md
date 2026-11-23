@@ -51,6 +51,17 @@ Browser                      Gateway                    OIDC Provider
 - **No email auto-linking** — a pre-existing local (email/password) account is never auto-linked to an SSO identity. If the IdP-reported email collides with an existing local account, the SSO login is blocked with a 409 so an SSO login can never seize a password account.
 - **Existing DeerFlow JWT** — After successful OIDC authentication, DeerFlow creates its own JWT session cookie. The OIDC provider's tokens are never exposed to the browser.
 
+### Concurrent account provisioning
+
+Concurrent first callbacks for the same stored provider/subject reuse one user,
+including when one callback commits between the identity and email lookups or
+before insertion. Email equality alone never links a local account or another
+SSO identity: those collisions remain 409. Existing email verification, domain,
+auto-creation and role policies still apply.
+
+`backend/tests/test_oidc_provisioning_concurrency.py` interleaves real SQLite
+callbacks at both read boundaries and checks that the winning row is unchanged.
+
 ## Configuration
 
 ### Step 1: Enable OIDC in `config.yaml`

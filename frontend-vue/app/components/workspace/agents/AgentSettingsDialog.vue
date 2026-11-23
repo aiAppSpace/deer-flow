@@ -1,4 +1,17 @@
 <script setup lang="ts">
+import {
+  supportsThinking as modelSupportsThinking,
+  isThinkingRequired,
+  getReasoningEffortOptions,
+} from "@/core/models/reasoning";
+import AgentCapabilitySelection from "@/components/workspace/agents/AgentCapabilitySelection.vue";
+import KnowledgeScopeSelector from "@/components/workspace/KnowledgeScopeSelector.vue";
+import { useKnowledgeBaseEnabled } from "@/composables/useWorkspaceFeatures";
+import {
+  buildKnowledgeScopeSnapshot,
+  knowledgeScopeToSelection,
+  type KnowledgeScopeSelection,
+} from "@/core/knowledge";
 /*
   【文件职责】     用真实 /api/models capability 编辑 Agent 模型与生成参数。
   【架构位置】     L3 Agent settings component
@@ -6,7 +19,8 @@
   【依赖关系】     agents/settings · agents/types · models/types · ui/dialog · ui/select · i18n
   【边界与注意】   pending 时锁定冲突操作；失败不关闭；unsupported capability 由 exact payload 清空。
 */
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
+import { ChevronRight } from "lucide-vue-next";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,12 +69,22 @@ const emit = defineEmits<{
 }>();
 const { $i18n } = useNuxtApp();
 const model = ref(DEFAULT_AGENT_MODEL_VALUE);
+const displayName = ref("");
+const knowledgeSelection = ref<KnowledgeScopeSelection>({ mode: "all" });
+const knowledgeChanged = ref(false);
+const { scopeSelectionEnabled } = useKnowledgeBaseEnabled();
+const initialSelections = ref<{
+  plugins: string[] | null;
+  skills: string[] | null;
+}>({ plugins: null, skills: null });
 // Vue deliberately casts v-model values from number inputs to numbers in the
 // browser, while reset starts from serialized API strings.
 const temperature = ref<string | number>("");
 const maxTokens = ref<string | number>("");
 const thinking = ref<AgentThinkingSelection>("inherit");
 const reasoningEffort = ref<AgentReasoningSelection>("inherit");
+const plugins = ref<string[] | null>(null);
+const selectedSkills = ref<string[] | null>(null);
 const validationError = ref("");
 
 /*
@@ -71,6 +95,12 @@ const validationError = ref("");
 const { subagents } = useSubagents();
 const subagentAccess = ref<OptionalNameListMode>("all");
 const selectedSubagents = ref<string[]>([]);
+const subagentDescriptionId = useId();
+function showSubagentDescription(event: Event) {
+  const details = event.currentTarget as HTMLDetailsElement;
+  if (details.open)
+    details.querySelector("p")?.scrollIntoView({ block: "nearest" });
+}
 
 /** 只有启用了的、且没有名字冲突的才选得中——冲突的那条压根没进运行时。 */
 const selectableSubagents = computed(() =>
@@ -95,6 +125,15 @@ function toggleSubagent(name: string, checked: boolean) {
 }
 
 function reset(agent: Agent) {
+  displayName.value = agent.display_name ?? "";
+  knowledgeSelection.value = knowledgeScopeToSelection(agent.knowledge_scope);
+  knowledgeChanged.value = false;
+  plugins.value = agent.mcp_plugins ? [...agent.mcp_plugins] : null;
+  selectedSkills.value = agent.skills ? [...agent.skills] : null;
+  initialSelections.value = {
+    plugins: plugins.value,
+    skills: selectedSkills.value,
+  };
   model.value = agent.model ?? DEFAULT_AGENT_MODEL_VALUE;
   temperature.value = agent.model_settings?.temperature?.toString() ?? "";
   maxTokens.value = agent.model_settings?.max_tokens?.toString() ?? "";
@@ -109,7 +148,11 @@ function reset(agent: Agent) {
   selectedSubagents.value = agent.allowed_subagents ?? [];
   validationError.value = "";
 }
-watch(() => props.agent, reset, { immediate: true });
+watch(
+  () => props.agent.name,
+  () => reset(props.agent),
+  { immediate: true },
+);
 
 const selectedModel = computed(() =>
   resolveAgentSettingsModel(props.models, model.value),
@@ -119,15 +162,30 @@ const unknownCurrentModel = computed(
     props.agent.model !== null &&
     !props.models.some((item) => item.name === props.agent.model),
 );
-const supportsThinking = computed(
-  () => selectedModel.value?.supports_thinking === true,
+const supportsThinking = computed(() =>
+  modelSupportsThinking(selectedModel.value),
+);
+const thinkingRequired = computed(() =>
+  isThinkingRequired(selectedModel.value),
+);
+const allowedReasoningEfforts = computed(() =>
+  getReasoningEffortOptions(selectedModel.value).filter((value) =>
+    ["low", "medium", "high"].includes(value),
+  ),
 );
 const supportsReasoning = computed(
-  () => selectedModel.value?.supports_reasoning_effort === true,
+  () => allowedReasoningEfforts.value.length > 0,
 );
+watch(thinkingRequired, (required) => {
+  if (required && thinking.value === "off") thinking.value = "inherit";
+});
 
 function save() {
   validationError.value = "";
+  if ([...displayName.value.trim()].length > 100) {
+    validationError.value = $i18n.t.value.agents.settingsDisplayNameTooLong;
+    return;
+  }
   const result = buildAgentSettingsUpdatePayload(props.models, {
     model: model.value,
     temperature: temperature.value,
@@ -139,18 +197,46 @@ function save() {
     validationError.value =
       result.error === "temperature"
         ? $i18n.t.value.agents.settingsInvalidTemperature
-        : result.error === "max_tokens"
-          ? $i18n.t.value.agents.settingsInvalidMaxTokens
-          : $i18n.t.value.agents.settingsInvalidModel;
+        : $i18n.t.value.agents.settingsInvalidMaxTokens;
+    return;
+  }
+  let knowledge;
+  try {
+    knowledge =
+      knowledgeChanged.value && knowledgeSelection.value.mode !== "all"
+        ? buildKnowledgeScopeSnapshot(knowledgeSelection.value)
+        : null;
+  } catch {
+    validationError.value = $i18n.t.value.knowledge.scope.selectionInvalid;
     return;
   }
   emit("save", {
     ...result.request,
+    display_name: displayName.value.trim() || null,
+    ...(knowledgeChanged.value ? { knowledge_scope: knowledge } : {}),
+    ...(!sameSelection(plugins.value, initialSelections.value.plugins)
+      ? { mcp_plugins: plugins.value }
+      : {}),
+    ...(!sameSelection(selectedSkills.value, initialSelections.value.skills)
+      ? { skills: selectedSkills.value }
+      : {}),
     allowed_subagents: modeToAllowedSubagents(
       subagentAccess.value,
       selectedSubagents.value,
     ),
   });
+}
+function sameSelection(left: string[] | null, right: string[] | null) {
+  if (left === null || right === null) return left === right;
+  const values = new Set(left);
+  return (
+    values.size === new Set(right).size &&
+    right.every((value) => values.has(value))
+  );
+}
+function selectKnowledge(selection: KnowledgeScopeSelection) {
+  knowledgeSelection.value = selection;
+  knowledgeChanged.value = true;
 }
 </script>
 
@@ -164,12 +250,13 @@ function save() {
       去掉覆盖、回到共用的默认值（「primitive 的默认值」正是天生看不见的第⑤类）。
     -->
     <DialogContent
+      class="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(min(12rem,40dvh),1fr)_auto]"
       :close-label="$i18n.t.value.primitives.close"
       @escape-key-down="pending && $event.preventDefault()"
       @pointer-down-outside="$event.preventDefault()"
     >
-      <form novalidate class="space-y-4 py-1" @submit.prevent="save">
-        <DialogHeader>
+      <form novalidate class="contents" @submit.prevent="save">
+        <DialogHeader class="pr-6">
           <!--
             **不要在这里再写一次 `text-lg`**（wave 139）。`DialogTitle` 这颗 primitive
             的基类就是 `text-lg leading-none font-semibold`；在调用点重复传 `text-lg`，
@@ -189,22 +276,96 @@ function save() {
           </DialogDescription>
         </DialogHeader>
 
-        <p
-          v-if="modelsLoading"
-          role="status"
-          class="text-muted-foreground text-sm"
+        <div
+          class="min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-contain px-1 py-1"
         >
-          {{ $i18n.t.value.agents.settingsModelsLoading }}
-        </p>
-        <p v-if="modelError" role="alert" class="text-destructive text-sm">
-          {{ modelError }}
-        </p>
+          <AgentCapabilitySelection
+            v-model:plugins="plugins"
+            v-model:skills="selectedSkills"
+          />
+          <div
+            v-if="scopeSelectionEnabled || agent.knowledge_scope"
+            class="space-y-1.5 rounded-md border p-3"
+          >
+            <p class="text-sm font-medium">
+              {{ $i18n.t.value.agents.settingsKnowledge }}
+            </p>
+            <p class="text-muted-foreground text-xs">
+              {{ $i18n.t.value.agents.settingsKnowledgeHint }}
+            </p>
+            <KnowledgeScopeSelector
+              :agent-name="agent.name"
+              :selection="knowledgeSelection"
+              :description="$i18n.t.value.agents.settingsKnowledgeHint"
+              show-label
+              :disabled="pending"
+              :unavailable-reason="
+                !scopeSelectionEnabled
+                  ? $i18n.t.value.knowledge.scope.loadFailed
+                  : agent.tool_groups != null &&
+                      !agent.tool_groups.includes('knowledge')
+                    ? $i18n.t.value.knowledge.scope.agentUnavailable
+                    : undefined
+              "
+              @change="selectKnowledge"
+            />
+            <p
+              v-if="knowledgeSelection.mode === 'selected'"
+              class="text-muted-foreground text-xs [overflow-wrap:anywhere]"
+            >
+              {{
+                knowledgeSelection.datasets
+                  .map((dataset) => dataset.name)
+                  .join(", ")
+              }}
+            </p>
+            <Button
+              v-if="knowledgeSelection.mode !== 'all'"
+              type="button"
+              variant="outline"
+              size="sm"
+              class="h-auto min-h-8 max-w-full whitespace-normal"
+              :disabled="pending"
+              @click="selectKnowledge({ mode: 'all' })"
+              >{{ $i18n.t.value.agents.settingsKnowledgeReset }}</Button
+            >
+          </div>
+          <div class="space-y-1.5">
+            <label for="agent-display-name" class="text-sm font-medium">{{
+              $i18n.t.value.agents.settingsDisplayName
+            }}</label>
+            <Input
+              id="agent-display-name"
+              v-model="displayName"
+              :placeholder="agent.name"
+              aria-describedby="agent-display-name-hint"
+            />
+            <p
+              id="agent-display-name-hint"
+              class="text-muted-foreground text-xs"
+            >
+              {{ $i18n.t.value.agents.settingsDisplayNameHint }} ({{
+                agent.name
+              }}) · {{ [...displayName.trim()].length }}/100
+            </p>
+          </div>
 
-        <div class="space-y-1.5">
-          <span id="agent-settings-model-label" class="text-sm font-medium">
-            {{ $i18n.t.value.agents.settingsModel }}
-          </span>
-          <!--
+          <p
+            v-if="modelsLoading"
+            role="status"
+            class="text-muted-foreground text-sm"
+          >
+            {{ $i18n.t.value.agents.settingsModelsLoading }}
+          </p>
+          <p v-if="modelError" role="alert" class="text-destructive text-sm">
+            {{ modelError }}
+          </p>
+
+          <div class="space-y-1.5">
+            <span id="agent-settings-model-label" class="text-sm font-medium">
+              {{ $i18n.t.value.agents.settingsModel }}
+            </span>
+            <!--
             **清单还在取的时候不要把这颗选择器禁掉**（只认 `pending`，也就是正在保存）。
 
             两个原因。一是信息：这颗选择器**任何时候都有东西可显示**——agent 当前的
@@ -217,38 +378,38 @@ function save() {
             对照台账 `agents-feature-disabled#gallery` 上那行
             `focus: React=button Vue=input[number]` 报的就是它。
           -->
-          <Select v-model="model" :disabled="pending">
-            <SelectTrigger
-              class="w-full"
-              data-testid="agent-settings-model"
-              aria-labelledby="agent-settings-model-label"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="DEFAULT_AGENT_MODEL_VALUE">
-                {{ $i18n.t.value.agents.settingsModelDefault }}
-              </SelectItem>
-              <SelectItem
-                v-if="unknownCurrentModel"
-                :value="agent.model!"
-                disabled
+            <Select v-model="model" :disabled="pending">
+              <SelectTrigger
+                class="w-full"
+                data-testid="agent-settings-model"
+                aria-labelledby="agent-settings-model-label"
               >
-                {{ agent.model }} ·
-                {{ $i18n.t.value.agents.settingsModelUnavailable }}
-              </SelectItem>
-              <SelectItem
-                v-for="item in models"
-                :key="item.name"
-                :value="item.name"
-              >
-                {{ item.display_name || item.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="DEFAULT_AGENT_MODEL_VALUE">
+                  {{ $i18n.t.value.agents.settingsModelDefault }}
+                </SelectItem>
+                <SelectItem
+                  v-if="unknownCurrentModel"
+                  :value="agent.model!"
+                  disabled
+                >
+                  {{ agent.model }} ·
+                  {{ $i18n.t.value.agents.settingsModelUnavailable }}
+                </SelectItem>
+                <SelectItem
+                  v-for="item in models"
+                  :key="item.name"
+                  :value="item.name"
+                >
+                  {{ item.display_name || item.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        <!--
+          <!--
           **提示文字不能包在 `<label>` 里**（wave 138）。这两个数字输入原来是
           「`<label>` 整个包住输入框」的隐式关联，而温度那条提示 `<span>` 也在
           `<label>` 内部——于是读屏器把它念成控件名字的一部分：对照台账量到的是
@@ -258,7 +419,7 @@ function save() {
           改成与同一个对话框里那三个 Select 一样的写法（`id` + `aria-labelledby`），
           这份文件内部也就只剩一种命名方式了。
         -->
-        <!--
+          <!--
           **这两个数字输入原来是手写的 `<input class="border-input … px-3 py-2">`。**
           仓里有 `ui/input`（与上游 `ui/input.tsx` 同源），手写那一版丢掉的是
           焦点环（`focus-visible:ring-[3px]`）、无效态（`aria-invalid:`）、
@@ -270,215 +431,250 @@ function save() {
           温度那颗**还缺一个 placeholder**：上游写的是 `t.agents.settingsInherit`
           （「继承」）——空着的时候用户看不出这是「跟随全局」还是「还没填」。
         -->
-        <div class="space-y-1.5">
-          <span
-            id="agent-settings-temperature-label"
-            class="text-sm font-medium"
-          >
-            {{ $i18n.t.value.agents.settingsTemperature }}
-          </span>
-          <Input
-            v-model="temperature"
-            data-testid="agent-settings-temperature"
-            type="number"
-            min="0"
-            max="2"
-            step="0.1"
-            :placeholder="$i18n.t.value.agents.settingsInherit"
-            :disabled="pending"
-            aria-labelledby="agent-settings-temperature-label"
-            aria-describedby="agent-settings-temperature-hint"
-          />
-          <!--
+          <div class="space-y-1.5">
+            <span
+              id="agent-settings-temperature-label"
+              class="text-sm font-medium"
+            >
+              {{ $i18n.t.value.agents.settingsTemperature }}
+            </span>
+            <Input
+              v-model="temperature"
+              data-testid="agent-settings-temperature"
+              type="number"
+              min="0"
+              max="2"
+              step="0.1"
+              :placeholder="$i18n.t.value.agents.settingsInherit"
+              :disabled="pending"
+              aria-labelledby="agent-settings-temperature-label"
+              aria-describedby="agent-settings-temperature-hint"
+            />
+            <!--
             `<p>` 不是 `<span>`：上游那条提示是
             `<p className="text-muted-foreground text-xs">`（同上文件），
             在可访问性树里是一个 `paragraph` 节点；`<span>` 不产生节点，
             于是它和下一段的标签文字在树里粘成同一段
             （对照台账量到 `ariaOnlyVue: - text: 0 = deterministic… Max output tokens`）。
           -->
-          <p
-            id="agent-settings-temperature-hint"
-            class="text-muted-foreground text-xs"
-          >
-            {{ $i18n.t.value.agents.settingsTemperatureHint }}
-          </p>
-        </div>
-        <div class="space-y-1.5">
-          <span
-            id="agent-settings-max-tokens-label"
-            class="text-sm font-medium"
-          >
-            {{ $i18n.t.value.agents.settingsMaxTokens }}
-          </span>
-          <Input
-            v-model="maxTokens"
-            data-testid="agent-settings-max-tokens"
-            type="number"
-            min="1"
-            max="200000"
-            step="1"
-            :placeholder="$i18n.t.value.agents.settingsMaxTokensPlaceholder"
-            :disabled="pending"
-            aria-labelledby="agent-settings-max-tokens-label"
-          />
-        </div>
-
-        <div v-if="supportsThinking" class="space-y-1.5">
-          <span id="agent-settings-thinking-label" class="text-sm font-medium">
-            {{ $i18n.t.value.agents.settingsThinking }}
-          </span>
-          <Select v-model="thinking" :disabled="pending">
-            <SelectTrigger
-              class="w-full"
-              data-testid="agent-settings-thinking"
-              aria-labelledby="agent-settings-thinking-label"
+            <p
+              id="agent-settings-temperature-hint"
+              class="text-muted-foreground text-xs"
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inherit">
-                {{ $i18n.t.value.agents.settingsInherit }}
-              </SelectItem>
-              <SelectItem value="on">
-                {{ $i18n.t.value.agents.settingsThinkingOn }}
-              </SelectItem>
-              <SelectItem value="off">
-                {{ $i18n.t.value.agents.settingsThinkingOff }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div v-if="supportsReasoning" class="space-y-1.5">
-          <span id="agent-settings-reasoning-label" class="text-sm font-medium">
-            {{ $i18n.t.value.agents.settingsReasoningEffort }}
-          </span>
-          <Select v-model="reasoningEffort" :disabled="pending">
-            <SelectTrigger
-              class="w-full"
-              data-testid="agent-settings-reasoning"
-              aria-labelledby="agent-settings-reasoning-label"
+              {{ $i18n.t.value.agents.settingsTemperatureHint }}
+            </p>
+          </div>
+          <div class="space-y-1.5">
+            <span
+              id="agent-settings-max-tokens-label"
+              class="text-sm font-medium"
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inherit">
-                {{ $i18n.t.value.agents.settingsInherit }}
-              </SelectItem>
-              <SelectItem value="low">
-                {{ $i18n.t.value.agents.settingsReasoningLow }}
-              </SelectItem>
-              <SelectItem value="medium">
-                {{ $i18n.t.value.agents.settingsReasoningMedium }}
-              </SelectItem>
-              <SelectItem value="high">
-                {{ $i18n.t.value.agents.settingsReasoningHigh }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+              {{ $i18n.t.value.agents.settingsMaxTokens }}
+            </span>
+            <Input
+              v-model="maxTokens"
+              data-testid="agent-settings-max-tokens"
+              type="number"
+              min="1"
+              max="200000"
+              step="1"
+              :placeholder="$i18n.t.value.agents.settingsMaxTokensPlaceholder"
+              :disabled="pending"
+              aria-labelledby="agent-settings-max-tokens-label"
+            />
+          </div>
 
-        <!--
+          <div v-if="supportsThinking" class="space-y-1.5">
+            <span
+              id="agent-settings-thinking-label"
+              class="text-sm font-medium"
+            >
+              {{ $i18n.t.value.agents.settingsThinking }}
+            </span>
+            <Select v-model="thinking" :disabled="pending">
+              <SelectTrigger
+                class="w-full"
+                data-testid="agent-settings-thinking"
+                aria-labelledby="agent-settings-thinking-label"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">
+                  {{ $i18n.t.value.agents.settingsInherit }}
+                </SelectItem>
+                <SelectItem value="on">
+                  {{ $i18n.t.value.agents.settingsThinkingOn }}
+                </SelectItem>
+                <SelectItem v-if="!thinkingRequired" value="off">
+                  {{ $i18n.t.value.agents.settingsThinkingOff }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div v-if="supportsReasoning" class="space-y-1.5">
+            <span
+              id="agent-settings-reasoning-label"
+              class="text-sm font-medium"
+            >
+              {{ $i18n.t.value.agents.settingsReasoningEffort }}
+            </span>
+            <Select v-model="reasoningEffort" :disabled="pending">
+              <SelectTrigger
+                class="w-full"
+                data-testid="agent-settings-reasoning"
+                aria-labelledby="agent-settings-reasoning-label"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">
+                  {{ $i18n.t.value.agents.settingsInherit }}
+                </SelectItem>
+                <SelectItem
+                  v-if="allowedReasoningEfforts.includes('low')"
+                  value="low"
+                >
+                  {{ $i18n.t.value.agents.settingsReasoningLow }}
+                </SelectItem>
+                <SelectItem
+                  v-if="allowedReasoningEfforts.includes('medium')"
+                  value="medium"
+                >
+                  {{ $i18n.t.value.agents.settingsReasoningMedium }}
+                </SelectItem>
+                <SelectItem
+                  v-if="allowedReasoningEfforts.includes('high')"
+                  value="high"
+                >
+                  {{ $i18n.t.value.agents.settingsReasoningHigh }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <!--
           subagent 访问绑定，与上游 agent-settings-dialog.tsx 同一块。
           勾选框用原生 `<input type="checkbox">`——上游同样是原生的，
           本仓也没有 Checkbox primitive，为这一处新造一个不划算。
         -->
-        <div class="space-y-2 border-t pt-4">
-          <div>
-            <p class="text-sm font-medium">
-              {{ $i18n.t.value.settings.subagents.bindingTitle }}
-            </p>
-            <p class="text-muted-foreground text-xs">
-              {{ $i18n.t.value.settings.subagents.bindingDescription }}
-            </p>
-          </div>
-          <!--
+          <div class="space-y-2 border-t pt-4">
+            <div>
+              <p class="text-sm font-medium">
+                {{ $i18n.t.value.settings.subagents.bindingTitle }}
+              </p>
+              <p class="text-muted-foreground text-xs">
+                {{ $i18n.t.value.settings.subagents.bindingDescription }}
+              </p>
+            </div>
+            <!--
             提交中整块锁住，与这一屏其余控件一致：请求已经在飞，这时候改的值
             不会进入这一次保存，而界面上看不出这件事。
           -->
-          <Select v-model="subagentAccess" :disabled="pending">
-            <SelectTrigger
-              class="w-full"
-              :aria-label="$i18n.t.value.settings.subagents.bindingTitle"
+            <Select v-model="subagentAccess" :disabled="pending">
+              <SelectTrigger
+                class="w-full"
+                :aria-label="$i18n.t.value.settings.subagents.bindingTitle"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {{ $i18n.t.value.settings.subagents.allAllowed }}
+                </SelectItem>
+                <SelectItem value="none">
+                  {{ $i18n.t.value.settings.subagents.noneAllowed }}
+                </SelectItem>
+                <SelectItem value="selected">
+                  {{ $i18n.t.value.settings.subagents.selectedAllowed }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <div
+              v-if="subagentAccess === 'selected'"
+              class="space-y-3 rounded-md border p-3"
+              data-testid="subagent-access-list"
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                {{ $i18n.t.value.settings.subagents.allAllowed }}
-              </SelectItem>
-              <SelectItem value="none">
-                {{ $i18n.t.value.settings.subagents.noneAllowed }}
-              </SelectItem>
-              <SelectItem value="selected">
-                {{ $i18n.t.value.settings.subagents.selectedAllowed }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <div
-            v-if="subagentAccess === 'selected'"
-            class="max-h-40 space-y-2 overflow-y-auto rounded-md border p-3"
-            data-testid="subagent-access-list"
-          >
-            <label
-              v-for="item in selectableSubagents"
-              :key="item.name"
-              class="flex items-start gap-2 text-sm"
-            >
-              <input
-                type="checkbox"
-                class="mt-0.5 size-4"
-                :disabled="pending"
-                :checked="selectedSubagents.includes(item.name)"
-                @change="
-                  toggleSubagent(
-                    item.name,
-                    ($event.target as HTMLInputElement).checked,
-                  )
-                "
-              />
-              <span>
-                <span class="font-medium">{{
-                  item.display_name ?? item.name
-                }}</span>
-                <span class="text-muted-foreground block text-xs">{{
-                  item.description
-                }}</span>
-              </span>
-            </label>
-            <!--
-              已经绑上、但目录里已经没有的名字：仍然显示且保持勾选，取消勾选才移除。
-              静默丢掉的话，用户一保存就删掉了一条自己没动过的绑定。
-            -->
-            <label
-              v-for="name in missingSubagents"
-              :key="name"
-              class="text-muted-foreground flex items-start gap-2 text-sm"
-            >
-              <input
-                type="checkbox"
-                class="mt-0.5 size-4"
-                checked
-                :disabled="pending"
-                @change="toggleSubagent(name, false)"
-              />
-              <span>
-                <span class="font-medium">{{ name }}</span>
-                <span class="block text-xs">{{
-                  $i18n.t.value.settings.subagents.missing
-                }}</span>
-              </span>
-            </label>
+              <div
+                v-for="item in selectableSubagents"
+                :key="item.name"
+                class="min-w-0 space-y-1"
+              >
+                <label class="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    class="mt-0.5 size-4 shrink-0"
+                    :disabled="pending"
+                    :checked="selectedSubagents.includes(item.name)"
+                    @change="
+                      toggleSubagent(
+                        item.name,
+                        ($event.target as HTMLInputElement).checked,
+                      )
+                    "
+                  />
+                  <span class="min-w-0 font-medium [overflow-wrap:anywhere]">{{
+                    item.display_name ?? item.name
+                  }}</span>
+                </label>
+                <details
+                  v-if="item.description"
+                  class="group text-muted-foreground ml-6 text-xs"
+                  @toggle="showSubagentDescription"
+                >
+                  <summary
+                    class="focus-visible:ring-ring flex cursor-pointer list-none items-start gap-1 rounded-sm focus-visible:ring-2 [&::-webkit-details-marker]:hidden"
+                    :aria-label="`${item.display_name ?? item.name}: ${$i18n.t.value.settings.subagents.descriptionLabel}`"
+                    :aria-describedby="`${subagentDescriptionId}-${item.name}`"
+                  >
+                    <ChevronRight
+                      class="size-3 shrink-0 transition-transform group-open:rotate-90"
+                    />
+                    <span
+                      :id="`${subagentDescriptionId}-${item.name}`"
+                      class="line-clamp-2 [overflow-wrap:anywhere] group-open:hidden"
+                      >{{ item.description }}</span
+                    >
+                    <span class="hidden group-open:inline">{{
+                      $i18n.t.value.settings.subagents.descriptionLabel
+                    }}</span>
+                  </summary>
+                  <p class="mt-1 [overflow-wrap:anywhere] whitespace-pre-wrap">
+                    {{ item.description }}
+                  </p>
+                </details>
+              </div>
+              <label
+                v-for="name in missingSubagents"
+                :key="name"
+                class="text-muted-foreground flex items-start gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  class="mt-0.5 size-4 shrink-0"
+                  checked
+                  :disabled="pending"
+                  @change="toggleSubagent(name, false)"
+                />
+                <span class="min-w-0 [overflow-wrap:anywhere]">
+                  <span class="font-medium">{{ name }}</span>
+                  <span class="block text-xs">{{
+                    $i18n.t.value.settings.subagents.missing
+                  }}</span>
+                </span>
+              </label>
+            </div>
           </div>
-        </div>
 
-        <p
-          v-if="validationError || submitError"
-          role="alert"
-          class="text-destructive text-sm"
-        >
-          {{ validationError || submitError }}
-        </p>
+          <p
+            v-if="validationError || submitError"
+            role="alert"
+            class="text-destructive text-sm"
+          >
+            {{ validationError || submitError }}
+          </p>
+        </div>
         <DialogFooter>
           <Button variant="outline" :disabled="pending" @click="emit('cancel')">
             {{ $i18n.t.value.agents.settingsCancel }}
@@ -486,7 +682,7 @@ function save() {
           <Button
             data-testid="agent-settings-save"
             type="submit"
-            :disabled="pending || modelsLoading || Boolean(modelError)"
+            :disabled="pending"
           >
             {{
               pending

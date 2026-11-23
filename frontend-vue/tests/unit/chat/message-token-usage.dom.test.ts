@@ -108,4 +108,29 @@ describe("MessageTokenUsage step_debug", () => {
     expect(list.classes()).toContain("mt-1");
     expect(list.classes()).toContain("border-border/60");
   });
+
+  it("prefers globally attributed caller steps and does not recompute their message ownership", () => {
+    const wrapper = mount(MessageTokenUsage, {
+      props: {
+        messages: [aiMessage],
+        mode: "step_debug",
+        tokenDebugSteps: [{ ...step, label: "Caller-owned action" }],
+      },
+    });
+    expect(wrapper.text()).toContain("Caller-owned action");
+    expect(mocks.buildTokenDebugSteps).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("treats an explicitly empty group projection as empty instead of falling back to the whole turn", () => {
+    mocks.buildTokenDebugSteps.mockReturnValue([step]);
+    const wrapper = mount(MessageTokenUsage, {
+      props: { messages: [aiMessage], mode: "step_debug", tokenDebugSteps: [] },
+    });
+    expect(wrapper.find("[data-testid=message-token-debug]").exists()).toBe(
+      false,
+    );
+    expect(mocks.buildTokenDebugSteps).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
 });

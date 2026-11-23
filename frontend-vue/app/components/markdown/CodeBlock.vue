@@ -1,6 +1,5 @@
 <!--
   【文件职责】     代码块 UI：语言标签、复制/下载、shiki 高亮、行号。
-                    真正的 UI 在同包那个 67,773 字节的 chunk 内）
   【架构位置】     L2 —— 通用渲染层组件
   【主要导出】     默认组件
   【依赖关系】     shiki（异步高亮）· @/lib/utils · ./MarkdownCopyButton.vue · ./MarkdownIcon.vue
@@ -56,13 +55,10 @@ interface HighlightedToken {
   background: string;
 }
 
-const lines = computed(() => {
-  // 末尾换行不产生额外一行——上游 shiki 的分行口径与此一致。
-  const source = props.code.endsWith("\n")
-    ? props.code.slice(0, -1)
-    : props.code;
-  return source.split("\n");
-});
+// Streamdown removes terminal LF characters before both fallback and Shiki
+// rendering. Keep the original prop for exact clipboard/download contents.
+const displayCode = computed(() => props.code.replace(/\n+$/, ""));
+const lines = computed(() => displayCode.value.split("\n"));
 
 /** 高亮结果；`null` 表示还没回来（或失败），走未高亮回退。 */
 const highlighted = shallowRef<HighlightedToken[][] | null>(null);
@@ -74,19 +70,24 @@ const streaming = inject(
 watch(
   // ⚠️ `immediate: true`（05 M5）：watch 默认惰性，首帧不跑就永远等不到第一次高亮，
   // 而首帧正是代码块最长停留的那一帧。
-  () => [props.code, props.language] as const,
-  async ([code, language]) => {
+  () => [displayCode.value, props.language] as const,
+  async ([code, language], _previous, onCleanup) => {
+    let active = true;
+    onCleanup(() => {
+      active = false;
+    });
     highlighted.value = null;
     if (!code) return;
     try {
       const { codeToTokens } = await import("shiki");
+      if (!active) return;
       const result = await codeToTokens(code, {
         lang: (language || "text") as never,
         themes: THEMES,
         defaultColor: false,
       });
       // 晚到的结果不许覆盖新内容——流式代码块每个 chunk 都会触发一次高亮。
-      if (props.code !== code) return;
+      if (!active) return;
       highlighted.value = result.tokens.map((line) =>
         line.map((token) => ({
           content: token.content,
@@ -97,7 +98,7 @@ watch(
       );
     } catch {
       // 语言不认识 / shiki 加载失败都退回未高亮结构，不让代码块消失。
-      highlighted.value = null;
+      if (active) highlighted.value = null;
     }
   },
   { immediate: true },

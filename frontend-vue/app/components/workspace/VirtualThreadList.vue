@@ -25,7 +25,7 @@
                    往上跑一截。
 */
 import { useVirtualizer } from "@tanstack/vue-virtual";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import {
   calculateScrollMargin,
@@ -67,13 +67,29 @@ function syncScrollMargin() {
   );
 }
 
-onMounted(syncScrollMargin);
 watch(
-  () => [props.items.length, virtualized.value],
-  async () => {
-    await nextTick();
-    syncScrollMargin();
+  [root, () => props.items.length, () => props.scrollParentSelector],
+  ([element], _previous, onCleanup) => {
+    const parent = scrollElement();
+    if (!element || !parent) return;
+    let active = true;
+    const measure = () => {
+      if (active && root.value === element && scrollElement() === parent) {
+        syncScrollMargin();
+      }
+    };
+    measure();
+    // Padding and preceding sections can reflow without changing the rows.
+    // Keep the margin relative to the same physical viewport as React does.
+    const observer = new ResizeObserver(measure);
+    observer.observe(parent);
+    for (const child of parent.children) observer.observe(child);
+    onCleanup(() => {
+      active = false;
+      observer.disconnect();
+    });
   },
+  { flush: "post" },
 );
 
 const virtualizer = useVirtualizer(

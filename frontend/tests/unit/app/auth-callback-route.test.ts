@@ -81,6 +81,17 @@ describe("/auth/callback route placement", () => {
     ).toEqual([]);
   });
 
+  it("provides locale context without an AuthProvider or a server session probe", () => {
+    const source = readFileSync(path.join(appDir, "auth/layout.tsx"), "utf8");
+    expect(source).toContain("I18nProvider initialLocale={locale}");
+    expect(source).toContain("detectLocaleServer()");
+    expect(source).not.toMatch(/<AuthProvider\b/);
+    expect(source).not.toContain('from "@/core/auth/AuthProvider"');
+    expect(source.replace(/\/\*[\s\S]*?\*\//g, "")).not.toContain(
+      "getServerSideUser",
+    );
+  });
+
   it("still honours the ?next= deep link it was handed", () => {
     const source = readFileSync(page, "utf8");
     expect(source).toContain('searchParams.get("next")');

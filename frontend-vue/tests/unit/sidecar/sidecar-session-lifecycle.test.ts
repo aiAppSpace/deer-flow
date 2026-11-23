@@ -50,6 +50,7 @@ describe("sidecar session lifecycle", () => {
     await vi.waitFor(() => expect(createThread).toHaveBeenCalledTimes(1));
     expect(createThread).toHaveBeenCalledWith({
       parentThreadId: "parent-1",
+      signal: expect.any(AbortSignal),
       context: [context],
     });
 
@@ -106,21 +107,49 @@ describe("sidecar session lifecycle", () => {
   it("ignores stale restore and create results after disposal", async () => {
     const restore = deferred<{ thread_id: string } | null>();
     const setThreadId = vi.fn();
+    let requestSignal: AbortSignal | undefined;
     const lifecycle = createSidecarSessionLifecycle({
       parentThreadId: "parent-1",
       getThreadId: () => null,
       setThreadId,
-      findLatest: vi.fn(() => restore.promise),
+      findLatest: vi.fn(({ signal }) => {
+        requestSignal = signal;
+        return restore.promise;
+      }),
       createThread: vi.fn(),
     });
 
     const pending = lifecycle.restore();
     lifecycle.dispose();
+    expect(requestSignal?.aborted).toBe(true);
     restore.resolve({ thread_id: "stale-sidecar" });
 
     await expect(pending).resolves.toBeNull();
     expect(setThreadId).not.toHaveBeenCalled();
     expect(lifecycle.state.phase).toBe("idle");
+  });
+
+  it("cancels a pending create without adopting a late sidecar from the previous owner", async () => {
+    const create = deferred<{ thread_id: string }>();
+    let requestSignal: AbortSignal | undefined;
+    const setThreadId = vi.fn();
+    const lifecycle = createSidecarSessionLifecycle({
+      parentThreadId: "parent-a",
+      getThreadId: () => null,
+      setThreadId,
+      findLatest: async () => null,
+      createThread: ({ signal }) => {
+        requestSignal = signal;
+        return create.promise;
+      },
+    });
+    const pending = lifecycle.ensure(context);
+    await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
+    lifecycle.dispose();
+    expect(requestSignal?.aborted).toBe(true);
+    create.resolve({ thread_id: "late-a" });
+    await expect(pending).resolves.toBeNull();
+    expect(setThreadId).not.toHaveBeenCalled();
   });
 
   it("force restore clears a cached id when the backend no longer has it", async () => {

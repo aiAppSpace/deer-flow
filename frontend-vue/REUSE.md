@@ -11,11 +11,11 @@ application is ready to replace React.
 
 ## 1. Choose the layer you need
 
-| Layer | Reuse boundary                                                             | What the new project supplies                                                 |
-| ----- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| L1    | `packages/agent-core/`                                                     | Backend `RunProtocol`, event classifier, `EventReducer`, message adapter      |
-| L2    | Markdown + Button sources listed below; documented chat behavior contracts | Host message model, product composition, styling and business extension cards |
-| L3    | DeerFlow application wiring                                                | Replace it; do not copy it as if it were generic                              |
+| Layer | Reuse boundary                                                         | What the new project supplies                                                 |
+| ----- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| L1    | `packages/agent-core/`                                                 | Backend `RunProtocol`, event classifier, `EventReducer`, message adapter      |
+| L2    | Markdown + UI sources listed below; documented chat behavior contracts | Host message model, product composition, styling and business extension cards |
+| L3    | DeerFlow application wiring                                            | Replace it; do not copy it as if it were generic                              |
 
 There is deliberately no `packages/agent-ui-kit`. The current chat components
 still import DeerFlow stores, endpoints and product types. Creating a package
@@ -121,9 +121,9 @@ The independently reusable source set is intentionally small:
 
 - `app/core/markdown/**`;
 - `app/components/markdown/**`;
-- `app/components/ui/**`, the Reka-based primitive layer (Dialog, AlertDialog,
-  Sheet, Popover, DropdownMenu, Select, Tabs, Switch, Tooltip, HoverCard,
-  ScrollArea, Command, Button);
+- `app/components/ui/**`, including the Reka-backed controls (Dialog,
+  AlertDialog, Sheet, Popover, DropdownMenu, Select, Tabs, Switch, Tooltip,
+  HoverCard, ScrollArea, Command), Button and the native-pointer ResizablePanels;
 - `app/lib/utils.ts`, which the variants use.
 
 `tests/architecture.test.ts` freezes this exact set, requires final `L2` file
@@ -143,6 +143,19 @@ Current public component seams are:
 - `CodeBlock`: code and language; copy/download/highlight behavior stays local.
 - `MermaidDiagram`: code and dark mode; parse failure falls back to code.
 - `Button`: shadcn-vue-compatible variants and sizes.
+- `ResizablePanels`: pane constraints, percentage `sizes`, `disabled`, opaque
+  `ownerKey`, keyboard step, pane/handle classes and named pane/handle slots;
+  `resize` previews and one `resized` commit per completed changed gesture.
+  Cancellation, owner retirement and unmount release capture and temporary
+  listeners without a commit. Styling, presentation animation and persistence
+  belong to the host. It requires the host Tailwind styles and `app/lib/utils.ts`;
+  it is a source seam, not a separately published package.
+
+AlertDialog remains part of the public primitive set, with mounted role, label,
+cancel and action tests. Current product dialogs use Dialog and Sheet; the source
+guard checks those actual consumers and checks the Reka implementation boundary
+for all three primitives. The CodeBlock public barrel is likewise retained as a
+documented reusable entry point even when a product imports its SFC directly.
 
 The following behavior has focused tests and is reusable as a pattern, but those
 tests do not prove complete product parity. Its current Vue component is an
@@ -190,7 +203,7 @@ Replace every applicable group below when moving to another backend/product:
      pages and the relevant auth layout.
 3. Vue/thread application adapter:
    - `app/composables/useThreadStream.ts`, `useThreadHistory.ts`, `useThreads.ts`,
-     `thread-context.ts`, `useCoalescedStreamMessages.ts`;
+     `useChatThreadOwner.ts`, `useCoalescedStreamMessages.ts`;
    - `app/core/threads/**` and thread routes. Nothing owns a duplicate thread list.
 4. DeerFlow product extensions:
    - `app/core/artifacts/**`, `components/workspace/artifacts/**`,

@@ -30,6 +30,8 @@ import {
   AgentsApiDisabledError,
   checkAgentName,
   updateAgent,
+  importAgentPackage,
+  exportAgentPackage,
 } from "@/core/agents/api";
 import { fetch as fetcher } from "@/core/api/fetcher";
 
@@ -44,6 +46,69 @@ function jsonResponse(status: number, body: unknown): Response {
 
 beforeEach(() => {
   mockedFetch.mockReset();
+});
+
+describe("portable Agent packages", () => {
+  test("imports untrusted JSON through the create-only endpoint with an explicit renamed name", async () => {
+    const document = {
+      format: "deerflow.custom-agent",
+      version: 1,
+      agent: { name: "original", display_name: "Reviewer" },
+    };
+    mockedFetch.mockResolvedValue(jsonResponse(201, { name: "renamed/一" }));
+    await expect(importAgentPackage(document, "renamed/一")).resolves.toEqual({
+      name: "renamed/一",
+    });
+    expect(mockedFetch).toHaveBeenCalledWith(
+      "/api/agents/import?name=renamed%2F%E4%B8%80",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(document),
+      }),
+    );
+  });
+  test("keeps 409 conflicts explicit without overwrite or retry", async () => {
+    mockedFetch.mockResolvedValue(
+      jsonResponse(409, { detail: "Agent already exists" }),
+    );
+    await expect(importAgentPackage({}, "existing")).rejects.toMatchObject({
+      status: 409,
+      message: "Agent already exists",
+    });
+    expect(mockedFetch).toHaveBeenCalledTimes(1);
+  });
+  test("joins FastAPI 422 messages while ignoring malformed issue entries", async () => {
+    mockedFetch.mockResolvedValue(
+      jsonResponse(422, {
+        detail: [
+          { msg: "Unsupported package version" },
+          { msg: "Missing agent name" },
+          null,
+          { msg: 42 },
+        ],
+      }),
+    );
+    await expect(importAgentPackage({})).rejects.toMatchObject({
+      status: 422,
+      message: "Unsupported package version; Missing agent name",
+    });
+  });
+  test("exports the Gateway definition instead of serializing the local Agent with runtime state", async () => {
+    const signal = new AbortController().signal;
+    const document = {
+      format: "deerflow.custom-agent",
+      version: 1,
+      agent: { name: "stable", memory_enabled: true },
+    };
+    mockedFetch.mockResolvedValue(jsonResponse(200, document));
+    await expect(exportAgentPackage("stable/一", { signal })).resolves.toEqual(
+      document,
+    );
+    expect(mockedFetch).toHaveBeenCalledWith(
+      "/api/agents/stable%2F%E4%B8%80/export",
+      { signal },
+    );
+  });
 });
 
 describe("checkAgentName", () => {

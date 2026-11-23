@@ -1,0 +1,170 @@
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index dccc025abb4e6a600e8c6e86abeac76942f7bb8d..88e8aea766891ec33b5ed9e10840d897dfbce585 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -3,6 +3,8 @@ import { Primitive } from '@radix-ui/react-primitive';
+ 
+ type PrimitiveDivProps = React.ComponentPropsWithoutRef<typeof Primitive.div>;
+ interface DismissableLayerProps extends PrimitiveDivProps {
++    /** Whether the mounted layer participates in dismissal and outside interaction handling. Defaults to true. */
++    enabled?: boolean;
+     /**
+      * When `true`, hover/focus/click interactions will be disabled on elements outside
+      * the `DismissableLayer`. Users will need to click twice on outside elements to
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index dccc025abb4e6a600e8c6e86abeac76942f7bb8d..88e8aea766891ec33b5ed9e10840d897dfbce585 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -3,6 +3,8 @@ import { Primitive } from '@radix-ui/react-primitive';
+ 
+ type PrimitiveDivProps = React.ComponentPropsWithoutRef<typeof Primitive.div>;
+ interface DismissableLayerProps extends PrimitiveDivProps {
++    /** Whether the mounted layer participates in dismissal and outside interaction handling. Defaults to true. */
++    enabled?: boolean;
+     /**
+      * When `true`, hover/focus/click interactions will be disabled on elements outside
+      * the `DismissableLayer`. Users will need to click twice on outside elements to
+diff --git a/dist/index.js b/dist/index.js
+index 16c48898e85048392a31e654c9c072c0d8d7ad18..d5a4dbb4673e53224b5f761a698006812b1278df 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -59,6 +59,7 @@ var DismissableLayerContext = React.createContext({
+ var DismissableLayer = React.forwardRef(
+   (props, forwardedRef) => {
+     const {
++      enabled = true,
+       disableOutsidePointerEvents = false,
+       onEscapeKeyDown,
+       onPointerDownOutside,
+@@ -71,13 +72,13 @@ var DismissableLayer = React.forwardRef(
+     const [node, setNode] = React.useState(null);
+     const ownerDocument = node?.ownerDocument ?? globalThis?.document;
+     const [, force] = React.useState({});
+-    const composedRefs = (0, import_react_compose_refs.useComposedRefs)(forwardedRef, (node2) => setNode(node2));
++    const composedRefs = (0, import_react_compose_refs.useComposedRefs)(forwardedRef, setNode);
+     const layers = Array.from(context.layers);
+     const [highestLayerWithOutsidePointerEventsDisabled] = [...context.layersWithOutsidePointerEventsDisabled].slice(-1);
+     const highestLayerWithOutsidePointerEventsDisabledIndex = layers.indexOf(highestLayerWithOutsidePointerEventsDisabled);
+     const index = node ? layers.indexOf(node) : -1;
+     const isBodyPointerEventsDisabled = context.layersWithOutsidePointerEventsDisabled.size > 0;
+-    const isPointerEventsEnabled = index >= highestLayerWithOutsidePointerEventsDisabledIndex;
++    const isPointerEventsEnabled = enabled && index >= highestLayerWithOutsidePointerEventsDisabledIndex;
+     const pointerDownOutside = usePointerDownOutside((event) => {
+       const target = event.target;
+       const isPointerDownOnBranch = [...context.branches].some((branch) => branch.contains(target));
+@@ -89,13 +90,13 @@ var DismissableLayer = React.forwardRef(
+     const focusOutside = useFocusOutside((event) => {
+       const target = event.target;
+       const isFocusInBranch = [...context.branches].some((branch) => branch.contains(target));
+-      if (isFocusInBranch) return;
++      if (!enabled || isFocusInBranch) return;
+       onFocusOutside?.(event);
+       onInteractOutside?.(event);
+       if (!event.defaultPrevented) onDismiss?.();
+     }, ownerDocument);
+     (0, import_react_use_escape_keydown.useEscapeKeydown)((event) => {
+-      const isHighestLayer = index === context.layers.size - 1;
++      const isHighestLayer = enabled && index >= 0 && index === context.layers.size - 1;
+       if (!isHighestLayer) return;
+       onEscapeKeyDown?.(event);
+       if (!event.defaultPrevented && onDismiss) {
+@@ -104,7 +105,7 @@ var DismissableLayer = React.forwardRef(
+       }
+     }, ownerDocument);
+     React.useEffect(() => {
+-      if (!node) return;
++      if (!node || !enabled) return;
+       if (disableOutsidePointerEvents) {
+         if (context.layersWithOutsidePointerEventsDisabled.size === 0) {
+           originalBodyPointerEvents = ownerDocument.body.style.pointerEvents;
+@@ -119,15 +120,15 @@ var DismissableLayer = React.forwardRef(
+           ownerDocument.body.style.pointerEvents = originalBodyPointerEvents;
+         }
+       };
+-    }, [node, ownerDocument, disableOutsidePointerEvents, context]);
++    }, [node, ownerDocument, enabled, disableOutsidePointerEvents, context]);
+     React.useEffect(() => {
+       return () => {
+-        if (!node) return;
++        if (!node || !enabled) return;
+         context.layers.delete(node);
+         context.layersWithOutsidePointerEventsDisabled.delete(node);
+         dispatchUpdate();
+       };
+-    }, [node, context]);
++    }, [node, enabled, context]);
+     React.useEffect(() => {
+       const handleUpdate = () => force({});
+       document.addEventListener(CONTEXT_UPDATE, handleUpdate);
+diff --git a/dist/index.mjs b/dist/index.mjs
+index d668167e42ed3bacb20bf72ae6bbb78e411c378e..03d8527d4410fc2c816b94d9b9e31cf6e42f71f9 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -21,6 +21,7 @@ var DismissableLayerContext = React.createContext({
+ var DismissableLayer = React.forwardRef(
+   (props, forwardedRef) => {
+     const {
++      enabled = true,
+       disableOutsidePointerEvents = false,
+       onEscapeKeyDown,
+       onPointerDownOutside,
+@@ -33,13 +34,13 @@ var DismissableLayer = React.forwardRef(
+     const [node, setNode] = React.useState(null);
+     const ownerDocument = node?.ownerDocument ?? globalThis?.document;
+     const [, force] = React.useState({});
+-    const composedRefs = useComposedRefs(forwardedRef, (node2) => setNode(node2));
++    const composedRefs = useComposedRefs(forwardedRef, setNode);
+     const layers = Array.from(context.layers);
+     const [highestLayerWithOutsidePointerEventsDisabled] = [...context.layersWithOutsidePointerEventsDisabled].slice(-1);
+     const highestLayerWithOutsidePointerEventsDisabledIndex = layers.indexOf(highestLayerWithOutsidePointerEventsDisabled);
+     const index = node ? layers.indexOf(node) : -1;
+     const isBodyPointerEventsDisabled = context.layersWithOutsidePointerEventsDisabled.size > 0;
+-    const isPointerEventsEnabled = index >= highestLayerWithOutsidePointerEventsDisabledIndex;
++    const isPointerEventsEnabled = enabled && index >= highestLayerWithOutsidePointerEventsDisabledIndex;
+     const pointerDownOutside = usePointerDownOutside((event) => {
+       const target = event.target;
+       const isPointerDownOnBranch = [...context.branches].some((branch) => branch.contains(target));
+@@ -51,13 +52,13 @@ var DismissableLayer = React.forwardRef(
+     const focusOutside = useFocusOutside((event) => {
+       const target = event.target;
+       const isFocusInBranch = [...context.branches].some((branch) => branch.contains(target));
+-      if (isFocusInBranch) return;
++      if (!enabled || isFocusInBranch) return;
+       onFocusOutside?.(event);
+       onInteractOutside?.(event);
+       if (!event.defaultPrevented) onDismiss?.();
+     }, ownerDocument);
+     useEscapeKeydown((event) => {
+-      const isHighestLayer = index === context.layers.size - 1;
++      const isHighestLayer = enabled && index >= 0 && index === context.layers.size - 1;
+       if (!isHighestLayer) return;
+       onEscapeKeyDown?.(event);
+       if (!event.defaultPrevented && onDismiss) {
+@@ -66,7 +67,7 @@ var DismissableLayer = React.forwardRef(
+       }
+     }, ownerDocument);
+     React.useEffect(() => {
+-      if (!node) return;
++      if (!node || !enabled) return;
+       if (disableOutsidePointerEvents) {
+         if (context.layersWithOutsidePointerEventsDisabled.size === 0) {
+           originalBodyPointerEvents = ownerDocument.body.style.pointerEvents;
+@@ -81,15 +82,15 @@ var DismissableLayer = React.forwardRef(
+           ownerDocument.body.style.pointerEvents = originalBodyPointerEvents;
+         }
+       };
+-    }, [node, ownerDocument, disableOutsidePointerEvents, context]);
++    }, [node, ownerDocument, enabled, disableOutsidePointerEvents, context]);
+     React.useEffect(() => {
+       return () => {
+-        if (!node) return;
++        if (!node || !enabled) return;
+         context.layers.delete(node);
+         context.layersWithOutsidePointerEventsDisabled.delete(node);
+         dispatchUpdate();
+       };
+-    }, [node, context]);
++    }, [node, enabled, context]);
+     React.useEffect(() => {
+       const handleUpdate = () => force({});
+       document.addEventListener(CONTEXT_UPDATE, handleUpdate);

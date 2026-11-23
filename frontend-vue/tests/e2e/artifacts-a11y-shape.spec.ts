@@ -13,6 +13,7 @@
 */
 
 import { expect, test, type Page } from "@playwright/test";
+import { expectDesktopSidebarWidth } from "./utils/sidebar";
 
 import { mockLangGraphAPI, MOCK_THREAD_ID } from "./utils/mock-api";
 
@@ -193,15 +194,15 @@ test.describe("artifacts accessibility shape", () => {
     await openThreadWithArtifacts(page);
 
     const sidebar = page.locator("#workspace-sidebar");
-    await expect(sidebar).toHaveCSS("width", "256px");
+    await expectDesktopSidebarWidth(page, 256);
 
     await page.getByTestId("artifact-trigger").click();
-    await expect(sidebar).toHaveCSS("width", "256px");
+    await expectDesktopSidebarWidth(page, 256);
     await page.getByTestId("artifact-overview").getByText("report.md").click();
 
     // React 在 artifacts context 的 select() 里调 setSidebarOpen(false)：面板一展开，
     // 收起侧栏是把宽度还给正文。收起态下会话列表整块不渲染，Logo 只剩 "DF"。
-    await expect(sidebar).toHaveCSS("width", "48px");
+    await expectDesktopSidebarWidth(page, 48);
     await expect(sidebar.getByText("DF", { exact: true })).toBeVisible();
     await expect(sidebar.getByText("Recent chats")).toHaveCount(0);
     // 收起态的触发器是 display:none，直到悬停头部才出现。
@@ -269,10 +270,7 @@ test.describe("artifacts accessibility shape", () => {
       都没点，工作区却换了个样子。
     */
     await expect(page.locator("#artifacts")).toBeHidden();
-    await expect(page.locator("#workspace-sidebar")).toHaveCSS(
-      "width",
-      "256px",
-    );
+    await expectDesktopSidebarWidth(page, 256);
   });
 
   test("a successful finalize_artifact_write does open the panel by itself", async ({
@@ -480,14 +478,24 @@ test.describe("artifacts accessibility shape", () => {
     // 工具条挂在气泡上而不是挂在 section#chat 上：挂错了它会跑到聊天区右下角，
     // 还会把面板撑出 28px 的可滚动溢出。
     const bubbleBox = (await bubble.boundingBox())!;
-    const toolbarBox = (await bubble.locator("> div").last().boundingBox())!;
+    const toolbar = bubble.getByTestId("human-turn-actions");
+    await expect(toolbar).toHaveCSS("position", "absolute");
+    // The human content wrapper owns the actions; editing/attachments can add sibling divs.
+    expect(
+      await toolbar.evaluate(
+        (element) =>
+          element instanceof HTMLElement &&
+          element.offsetParent === element.closest('[data-role="human"]'),
+      ),
+    ).toBe(true);
+    const toolbarBox = (await toolbar.boundingBox())!;
     expect(toolbarBox.y).toBeGreaterThan(bubbleBox.y);
     expect(toolbarBox.y).toBeLessThan(bubbleBox.y + bubbleBox.height + 48);
 
     /*
-      聊天区几乎不能有可滚动溢出。React 那边只有输入框上方那条 `-bottom-[17px]`
-      的渐隐层多出 1px；工具条挂错祖先时这里是 28px，而那 28px 会让本该
-      overflow:hidden 的面板变得可滚动，一次焦点变化就把整个聊天区推上去。
+      聊天区不能由装饰层撑出额外滚动范围。composer 背景与宿主 pb-4 共享
+      同一 spacing；工具条挂错祖先时这里是 28px，会让原本有界的面板
+      变得可滚动，一次焦点变化就把整个聊天区推上去。
     */
     const chatOverflow = await page.evaluate(() => {
       const chat = document.querySelector("#chat");

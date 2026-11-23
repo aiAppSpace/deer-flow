@@ -1,0 +1,31 @@
+{
+  "date": "2026-10-09",
+  "stage": 28,
+  "source": "/Users/wangcheng/Documents/workSpace/frontEnd/aiAppSpace/deer-flow/frontend-vue/app/components/chat/ComposerModelSelector.vue",
+  "sha256": "84e69d94800202f7d0b8da4adffb9468dde4b74a4277bcc758e0d3863962560a",
+  "focused": {
+    "files": 5,
+    "passed": 20
+  },
+  "actualStrictArtifactRepeats": {
+    "startTime": "2026-10-09T14:08:22.521Z",
+    "duration": 18540.022999999997,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "instrumentedInitialIdentityRequests": 0,
+  "instrumentedArtifactAborts": 0,
+  "assertionsPreserved": [
+    "206",
+    "Range bytes=0-1048575",
+    "original response finished null",
+    "exact server baseline body",
+    "412 concurrent write with retained draft",
+    "binary download only",
+    "large HTML preview limit"
+  ],
+  "httpFallbackAdded": false,
+  "privateCookieOrTokenStored": false
+}

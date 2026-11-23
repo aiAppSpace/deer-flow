@@ -13,10 +13,8 @@
                    是 no-op，不挂上去这条用例会恒绿。
 */
 
-import { readFileSync } from "node:fs";
-
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
@@ -28,6 +26,8 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+const clients: QueryClient[] = [];
 
 const mocks = vi.hoisted(() => ({
   loadSkills: vi.fn(),
@@ -36,6 +36,15 @@ const mocks = vi.hoisted(() => ({
   uploadFiles: vi.fn(),
   polishInputDraft: vi.fn(),
   fetchWithAuth: vi.fn(),
+}));
+
+// These tests own composer presentation/commands, while session behavior has its own suite.
+vi.mock("@/composables/useAuthSession", () => ({
+  useAuthSession: () => ({
+    session: ref({ tag: "unauthenticated" }),
+    isFetching: ref(false),
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/core/skills/api", () => ({ loadSkills: mocks.loadSkills }));
@@ -51,7 +60,11 @@ vi.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetchWithAuth }));
 
 /* 线索 121：没传的 Boolean prop 会被 Vue 变成 false，每一个都显式传上。 */
 function mountComposer(props: Record<string, unknown>) {
-  return mount(ChatComposer, {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  clients.push(queryClient);
+  const wrapper = mount(ChatComposer, {
     attachTo: document.body,
     props: {
       threadKey: "new",
@@ -75,15 +88,15 @@ function mountComposer(props: Record<string, unknown>) {
         [
           VueQueryPlugin,
           {
-            queryClient: new QueryClient({
-              defaultOptions: { queries: { retry: false } },
-            }),
+            queryClient,
           },
         ],
       ],
       stubs: { ReferenceAttachment: true, GoalStatus: true },
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 beforeEach(() => {
@@ -95,13 +108,22 @@ beforeEach(() => {
   mocks.loadModels
     .mockReset()
     .mockResolvedValue({ models: [], token_usage: { enabled: false } });
-  mocks.getUploadLimits.mockReset().mockResolvedValue(undefined);
+  mocks.getUploadLimits.mockReset().mockResolvedValue({
+    max_files: 10,
+    max_file_size: 100 * 1024 * 1024,
+    max_total_size: 100 * 1024 * 1024,
+  });
   mocks.uploadFiles.mockReset();
   mocks.polishInputDraft.mockReset();
   mocks.fetchWithAuth.mockReset();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  wrappers.splice(0).forEach((wrapper) => {
+    if (wrapper.exists()) wrapper.unmount();
+  });
+  clients.splice(0).forEach((client) => client.clear());
+  await flushPromises();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
@@ -119,19 +141,5 @@ describe("composer autoFocus", () => {
     wrapper.unmount();
   });
 
-  /*
-    上游把 `autoFocus={isWelcomeMode}` 传给 InputBox，而 `isWelcomeMode` 的**初值**
-    就是 `isNewThread`（chat-page.tsx:73 的 `useState(isNewThread)`），autoFocus 又只在
-    挂载那一刻起作用——所以上游实际表达的是「挂载时这是不是一条新线程」。
-
-    本仓的 `isWelcomeMode` 是个 computed（`visibleMessages.length === 0 &&
-    !isHistoryLoading`），打开已有线程时会先真后假地抖一下。跟着它走会在上游根本不
-    聚焦的屏上抢焦点，所以这里钉的是「传的是挂载那一刻的 initialRouteThreadId」，
-    不是 isWelcomeMode。
-  */
-  it("is wired from the mount-time thread id, not the reactive welcome flag", () => {
-    const source = readFileSync("app/components/chat/AgentChat.vue", "utf8");
-    expect(source).toContain(':auto-focus="initialRouteThreadId === null"');
-    expect(source).not.toContain(':auto-focus="isWelcomeMode"');
-  });
+  // AgentChat mount-time request and route reuse are exercised in agent-chat-consumer-contracts.dom.test.ts.
 });

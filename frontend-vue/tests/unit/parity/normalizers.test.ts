@@ -34,10 +34,19 @@ describe("请求归一化", () => {
     expect(normalizeRequest("GET", "http://x/workspace/chats/new")).toBeNull();
   });
 
-  it("保留产品 API 请求，并归一成 方法 + 路径 + 排序后的查询", () => {
+  it("保留产品 API 请求，显式保留来源、路径和原查询顺序", () => {
     expect(
       normalizeRequest("get", "http://x/api/threads/search?b=2&a=1", KNOWN),
-    ).toBe("GET /api/threads/search?a=1&b=2");
+    ).toBe(
+      JSON.stringify([
+        "GET",
+        {
+          origin: ["external", "http://x"],
+          path: ["", "api", "threads", "search"],
+          query: "?b=2&a=1",
+        },
+      ]),
+    );
   });
 
   /*
@@ -58,10 +67,19 @@ describe("请求归一化", () => {
   it("不丢弃任何查询参数——包括看起来像破缓存的那种", () => {
     expect(
       normalizeRequest("GET", "http://x/api/models?_=1699999", KNOWN),
-    ).toBe("GET /api/models?_=1699999");
+    ).toBe(
+      JSON.stringify([
+        "GET",
+        {
+          origin: ["external", "http://x"],
+          path: ["", "api", "models"],
+          query: "?_=1699999",
+        },
+      ]),
+    );
   });
 
-  it("把客户端生成的 id 抹成占位符", () => {
+  it("没有 producer 来源的 UUID 不能归一成同一身份", () => {
     // /workspace/chats/new 上两个应用各自生成一个新线程 id，必然不同，
     // 这是页面的定义而不是产品差异。
     const a = normalizeRequest(
@@ -74,8 +92,8 @@ describe("请求归一化", () => {
       "http://x/api/threads/7475b747-4fe3-4c00-a7a6-759cba2e7cca/uploads/limits",
       KNOWN,
     );
-    expect(a).toBe("GET /api/threads/«generated»/uploads/limits");
-    expect(b).toBe(a);
+    expect(a).toContain("45400545-eacd-44da-a15f-7f5348bb37f8");
+    expect(b).not.toBe(a);
   });
 
   it("**不**抹掉场景认识的 id", () => {
@@ -91,9 +109,7 @@ describe("请求归一化", () => {
       "http://x/api/threads/00000000-0000-0000-0000-000000000002/state",
       KNOWN,
     );
-    expect(known).toBe(
-      "GET /api/threads/00000000-0000-0000-0000-000000000001/state",
-    );
+    expect(known).toContain("00000000-0000-0000-0000-000000000001");
     expect(other).not.toBe(known);
   });
 });

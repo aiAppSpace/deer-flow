@@ -282,7 +282,7 @@ function TrashDocumentRow({
   };
 
   return (
-    <li className="flex items-center gap-3 rounded-md border p-3">
+    <li className="flex flex-wrap items-center gap-3 rounded-md border p-3">
       {getFileIcon(document.name, "size-5 shrink-0")}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">{document.name}</span>
@@ -298,17 +298,23 @@ function TrashDocumentRow({
           )}
         </span>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-1">
         <Button
           variant="outline"
           size="sm"
+          className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
           disabled={restoreDocument.isPending}
           onClick={() => restore()}
         >
           <RotateCcw className="size-4" />
           {t.trash.restore}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onPurge}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+          onClick={onPurge}
+        >
           <Trash2 className="size-4" />
           {t.trash.deletePermanently}
         </Button>

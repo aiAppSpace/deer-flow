@@ -6,8 +6,7 @@
                    （builtin/config 来自代码和配置文件）。两层各有样本——
                    只测管理员那层的话，一个管理员就能"编辑"一条内置 subagent。
 
-                   删除走本仓的确认对话框而不是 `window.confirm`（上游用的是后者），
-                   所以这里断言的是那个对话框，不是 confirm 的 stub。
+                   删除使用当前 React 的原生确认；取消确认不能发出删除请求。
 */
 
 import { flushPromises, mount } from "@vue/test-utils";
@@ -90,6 +89,7 @@ beforeEach(() => {
   }));
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
@@ -196,7 +196,11 @@ describe("SubagentSettings", () => {
     await flushPromises();
     await wrapper.find('[role="switch"]').trigger("click");
     await flushPromises();
-    expect(api.update).toHaveBeenCalledWith("researcher", { enabled: false });
+    expect(api.update).toHaveBeenCalledWith(
+      "researcher",
+      { enabled: false },
+      { signal: expect.any(AbortSignal) },
+    );
     expect(toastStore.toasts.value.at(-1)?.message).toBe(
       enUS.settings.subagents.saved,
     );
@@ -206,6 +210,10 @@ describe("SubagentSettings", () => {
   it("删除要先确认，确认前不发请求", async () => {
     api.list.mockResolvedValue([subagent()]);
     api.remove.mockResolvedValue(undefined);
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => true),
+    );
     const wrapper = mountSettings();
     await flushPromises();
 
@@ -213,21 +221,31 @@ describe("SubagentSettings", () => {
       .querySelector<HTMLElement>(`button[aria-label="${enUS.common.delete}"]`)!
       .click();
     await flushPromises();
-    expect(api.remove).not.toHaveBeenCalled();
-    // 走的是本仓的确认对话框，不是 window.confirm。
-    expect(document.body.textContent).toContain(
+    expect(window.confirm).toHaveBeenCalledWith(
       enUS.settings.subagents.deleteConfirm,
     );
-
-    const confirm = [...document.body.querySelectorAll("button")].find(
-      (button) => button.textContent?.trim() === enUS.common.delete,
-    )!;
-    confirm.click();
-    await flushPromises();
-    expect(api.remove).toHaveBeenCalledWith("researcher");
+    expect(api.remove).toHaveBeenCalledWith("researcher", {
+      signal: expect.any(AbortSignal),
+    });
     expect(toastStore.toasts.value.at(-1)?.message).toBe(
       enUS.settings.subagents.deleted,
     );
+    wrapper.unmount();
+  });
+  it("取消原生删除确认时不发请求", async () => {
+    api.list.mockResolvedValue([subagent()]);
+    vi.stubGlobal(
+      "confirm",
+      vi.fn(() => false),
+    );
+    const wrapper = mountSettings();
+    await flushPromises();
+    row("researcher")!
+      .querySelector<HTMLElement>(`button[aria-label="${enUS.common.delete}"]`)!
+      .click();
+    await flushPromises();
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(api.remove).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

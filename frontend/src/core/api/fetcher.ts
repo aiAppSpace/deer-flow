@@ -60,6 +60,7 @@ export function readCsrfCookie(): string | null {
 export async function fetch(
   input: RequestInfo | string,
   init?: RequestInit,
+  beforeNativeFetch?: (preAborted: boolean) => void,
 ): Promise<Response> {
   const url = typeof input === "string" ? input : input.url;
 
@@ -89,11 +90,19 @@ export async function fetch(
     }
   }
 
-  const res = await globalThis.fetch(url, {
+  const requestInit: RequestInit = {
     ...init,
     headers,
     credentials: "include",
-  });
+  };
+  if (beforeNativeFetch) {
+    try {
+      beforeNativeFetch(requestInit.signal?.aborted ?? false);
+    } catch {
+      // Optional read-only diagnostics cannot change the product fetch/error path.
+    }
+  }
+  const res = await globalThis.fetch(url, requestInit);
 
   if (res.status === 401) {
     // Include the search string: routes that carry their target in the query

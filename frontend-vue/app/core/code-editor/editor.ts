@@ -2,19 +2,41 @@
   【文件职责】     在任意宿主 DOM 上创建一个 CodeMirror 6 编辑器，并暴露框架无关的操作句柄。
   【架构位置】     L2
   【主要导出】     CodeEditorHandle · CodeEditorOptions · createCodeEditor
-  【依赖关系】     @codemirror/{state,view,language,commands} · @lezer/highlight · ./language · ./palette
-  【边界与注意】   本模块**必须**被动态 import：静态引用会把 CodeMirror 拽进首屏包，
-                   同时让 nuxt.config 的 vendor-codemirror 分包规则命中一个混着
-                   应用代码的 chunk，预算数字随即失去意义。
+  【依赖关系】     @codemirror/{state,view,language,commands,search,autocomplete,lint} · @lezer/highlight · ./language · ./palette
+  【边界与注意】   宿主必须动态 import 本模块，view/language/autocomplete 共享此平台边界，
+                   state/highlight 与 commands/search/lint 保持并行命名导入，语法包再按语言单独加载。
 
                    语言、主题、只读三项都走 Compartment 而不是重建 EditorView：
                    重建会丢掉光标、选区和撤销历史——用户切一次主题就等于被
                    重置一次编辑状态。
 */
 
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from "@codemirror/autocomplete";
+import {
+  bracketMatching,
+  defaultHighlightStyle,
+  foldKeymap,
+  HighlightStyle,
+  indentOnInput,
+  syntaxHighlighting,
+} from "@codemirror/language";
+import {
+  drawSelection,
+  dropCursor,
+  EditorView,
+  highlightSpecialChars,
+  keymap,
+  rectangularSelection,
+} from "@codemirror/view";
+
 import type { CodeEditorLanguage } from "./language";
 import { loadCodeEditorLanguage } from "./language";
-import { CODE_EDITOR_PALETTES } from "./palette";
+import { CODE_EDITOR_PALETTES, codeEditorHighlightStyles } from "./palette";
 
 export interface CodeEditorOptions {
   parent: HTMLElement;
@@ -41,18 +63,40 @@ export interface CodeEditorHandle {
 export async function createCodeEditor(
   options: CodeEditorOptions,
 ): Promise<CodeEditorHandle> {
-  const [state, view, language, commands, highlight] = await Promise.all([
-    import("@codemirror/state"),
-    import("@codemirror/view"),
-    import("@codemirror/language"),
-    import("@codemirror/commands"),
-    import("@lezer/highlight"),
+  // The host dynamically loads this owner and the platform shared by grammars.
+  // State, highlight, and action systems retain parallel lazy boundaries;
+  // language factories remain on-demand rather than joining initialization.
+  const [
+    { Annotation, Compartment, EditorState },
+    { history, defaultKeymap, historyKeymap, indentWithTab },
+    { tags },
+    { highlightSelectionMatches, searchKeymap },
+    { lintKeymap },
+  ] = await Promise.all([
+    import("@codemirror/state").then(
+      ({ Annotation, Compartment, EditorState }) => ({
+        Annotation,
+        Compartment,
+        EditorState,
+      }),
+    ),
+    import("@codemirror/commands").then(
+      ({ history, defaultKeymap, historyKeymap, indentWithTab }) => ({
+        history,
+        defaultKeymap,
+        historyKeymap,
+        indentWithTab,
+      }),
+    ),
+    import("@lezer/highlight").then(({ tags }) => ({ tags })),
+    import("@codemirror/search").then(
+      ({ highlightSelectionMatches, searchKeymap }) => ({
+        highlightSelectionMatches,
+        searchKeymap,
+      }),
+    ),
+    import("@codemirror/lint").then(({ lintKeymap }) => ({ lintKeymap })),
   ]);
-  const { Annotation, Compartment, EditorState } = state;
-  const { EditorView, keymap } = view;
-  const { HighlightStyle, syntaxHighlighting } = language;
-  const { tags } = highlight;
-
   /*
     区分「用户敲的」和「父组件写回来的」。少了这条，父层每次把
     modelValue 同步进来都会被当成一次用户编辑再 emit 出去，
@@ -71,63 +115,31 @@ export async function createCodeEditor(
           "&": {
             height: "100%",
             backgroundColor: "transparent",
-            color: "var(--color-foreground)",
-            fontSize: "var(--text-xs, 0.75rem)",
+            color: palette.foreground,
+            fontSize: "var(--text-sm)",
           },
           "&.cm-focused": { outline: "none" },
-          ".cm-scroller": {
-            fontFamily:
-              "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
-            lineHeight: "1.5",
-          },
-          ".cm-content": { padding: "1rem", caretColor: "currentColor" },
-          ".cm-line": { padding: "0" },
-          ".cm-cursor, .cm-dropCursor": { borderLeftColor: "currentColor" },
-          ".cm-content ::selection, .cm-selectionBackground": {
-            backgroundColor: "var(--color-accent)",
-          },
+          ".cm-scroller": { fontFamily: "monospace", lineHeight: "1.4" },
+          ".cm-content": { padding: "4px 0", caretColor: palette.caret },
+          ".cm-line": { padding: "0 8px" },
+          ".cm-cursor, .cm-dropCursor": { borderLeftColor: palette.caret },
+          "&.cm-focused .cm-selectionBackground, & .cm-line::selection, & .cm-selectionLayer .cm-selectionBackground, .cm-content ::selection":
+            { background: `${palette.selection} !important` },
+          ".cm-selectionMatch": { backgroundColor: palette.selectionMatch },
           ".cm-gutters": {
-            backgroundColor: "transparent",
-            border: "none",
-            color: "var(--color-muted-foreground)",
+            backgroundColor: palette.gutterBackground,
+            color: palette.gutterForeground,
           },
-          ".cm-activeLine, .cm-activeLineGutter": {
-            backgroundColor: "transparent",
+          ".cm-activeLine": { backgroundColor: palette.lineHighlight },
+          ".cm-activeLineGutter": {
+            backgroundColor: palette.lineHighlight,
+            color: palette.gutterActiveForeground,
           },
         },
         { dark: theme === "dark" },
       ),
       syntaxHighlighting(
-        HighlightStyle.define([
-          { tag: tags.comment, color: palette.comment, fontStyle: "italic" },
-          {
-            tag: [tags.keyword, tags.modifier, tags.self, tags.null],
-            color: palette.keyword,
-          },
-          { tag: [tags.bool, tags.atom], color: palette.keyword },
-          {
-            tag: [tags.string, tags.special(tags.string)],
-            color: palette.string,
-          },
-          { tag: [tags.number, tags.regexp], color: palette.number },
-          {
-            tag: [tags.variableName, tags.propertyName, tags.attributeName],
-            color: palette.name,
-          },
-          {
-            tag: [tags.typeName, tags.className, tags.tagName, tags.namespace],
-            color: palette.typeName,
-          },
-          {
-            tag: [tags.operator, tags.punctuation, tags.separator],
-            color: palette.operator,
-          },
-          { tag: tags.invalid, color: palette.invalid },
-          { tag: tags.heading, color: palette.heading, fontWeight: "bold" },
-          { tag: [tags.link, tags.url], color: palette.link },
-          { tag: tags.emphasis, fontStyle: "italic" },
-          { tag: tags.strong, fontWeight: "bold" },
-        ]),
+        HighlightStyle.define(codeEditorHighlightStyles(theme, tags)),
       ),
     ];
   }
@@ -144,8 +156,21 @@ export async function createCodeEditor(
     state: EditorState.create({
       doc: options.doc,
       extensions: [
-        commands.history(),
-        EditorView.lineWrapping,
+        // React's actual basicSetup consumer disables line numbers/fold gutter/active
+        // line markers. Its other defaults stay enabled, including native search and
+        // completion. Line wrapping is deliberately absent: long lines scroll.
+        highlightSpecialChars(),
+        history(),
+        drawSelection(),
+        dropCursor(),
+        EditorState.allowMultipleSelections.of(true),
+        indentOnInput(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        bracketMatching(),
+        closeBrackets(),
+        autocompletion(),
+        rectangularSelection(),
+        highlightSelectionMatches(),
         /*
           Mod-s 必须排在默认按键表**前面**：默认表里没有 Mod-s，但浏览器有
           （「保存网页」）。不 preventDefault 就会在编辑器里触发浏览器的保存对话框。
@@ -160,7 +185,16 @@ export async function createCodeEditor(
             },
           },
         ]),
-        keymap.of([...commands.defaultKeymap, ...commands.historyKeymap]),
+        keymap.of([
+          ...closeBracketsKeymap,
+          ...defaultKeymap,
+          ...searchKeymap,
+          ...historyKeymap,
+          ...foldKeymap,
+          ...completionKeymap,
+          ...lintKeymap,
+        ]),
+        keymap.of([indentWithTab]),
         EditorView.contentAttributes.of(
           options.contentLabel ? { "aria-label": options.contentLabel } : {},
         ),
@@ -177,16 +211,28 @@ export async function createCodeEditor(
   });
 
   let disposed = false;
+  let languageRequest = 0;
 
   async function setLanguage(next: CodeEditorLanguage) {
-    const extensions = await loadCodeEditorLanguage(next);
     if (disposed) return;
+    const request = ++languageRequest;
+    const extensions = await loadCodeEditorLanguage(next);
+    if (disposed || request !== languageRequest) return;
     editor.dispatch({
       effects: languageCompartment.reconfigure(extensions),
     });
   }
 
-  await setLanguage(options.language);
+  try {
+    await setLanguage(options.language);
+  } catch (error) {
+    // Initialization has not handed a handle to the host yet. The factory
+    // still owns this view and must release it if grammar loading fails.
+    disposed = true;
+    languageRequest += 1;
+    editor.destroy();
+    throw error;
+  }
 
   return {
     setDocument(value: string) {
@@ -213,7 +259,9 @@ export async function createCodeEditor(
       if (!disposed) editor.focus();
     },
     destroy() {
+      if (disposed) return;
       disposed = true;
+      languageRequest += 1;
       editor.destroy();
     },
   };

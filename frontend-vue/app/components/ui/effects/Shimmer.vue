@@ -31,7 +31,7 @@ const props = withDefaults(
     spread?: number;
     class?: string;
   }>(),
-  { duration: 2, spread: 2 },
+  { duration: 2, spread: 2, class: undefined },
 );
 const classes = computed(() =>
   cn(

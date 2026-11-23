@@ -87,8 +87,10 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
         }
       }
     } catch (err) {
+      // Transport and response parsing failures do not establish logout.
+      // Retain the identified owner (and its mounted workspace) until a 401
+      // or explicit logout retires it; preserve the existing error channel.
       console.error("Failed to refresh user:", err);
-      setUser(null);
     } finally {
       setIsLoading(false);
     }

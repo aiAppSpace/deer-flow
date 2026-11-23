@@ -17,6 +17,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -108,7 +109,7 @@ function DocumentSelector({
 
   return (
     <div className="bg-muted/40 mt-2 space-y-3 rounded-md p-3">
-      <div className="flex gap-4 text-xs">
+      <div className="flex flex-wrap gap-4 text-xs">
         <label className="flex items-center gap-2">
           <input
             checked={dataset.documents.mode === "all"}
@@ -340,6 +341,7 @@ export function KnowledgeScopeSelector({
       aria-pressed={active}
       className={cn(
         "text-muted-foreground",
+        showLabel && "h-auto min-h-8 max-w-full whitespace-normal",
         active && "text-foreground hover:text-foreground hover:bg-transparent",
       )}
       data-testid="knowledge-scope-trigger"
@@ -347,7 +349,6 @@ export function KnowledgeScopeSelector({
       size={showLabel ? "sm" : "icon-sm"}
       type="button"
       variant="ghost"
-      onClick={() => setOpen(true)}
     >
       <DatabaseIcon className="size-4" />
       {showLabel && label}
@@ -356,7 +357,9 @@ export function KnowledgeScopeSelector({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Tooltip content={unavailableReason ?? label}>{trigger}</Tooltip>
+      <Tooltip content={unavailableReason ?? label}>
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      </Tooltip>
       <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t.knowledge.scope.title}</DialogTitle>
@@ -403,7 +406,7 @@ export function KnowledgeScopeSelector({
             <div className="text-muted-foreground text-xs">
               {t.knowledge.scope.selectedCount(draft.datasets.length)}
             </div>
-            <ScrollArea className="min-h-48 flex-1 pr-3">
+            <ScrollArea className="min-h-48 flex-1 pr-3 [&_[data-slot=scroll-area-viewport]>div]:block!">
               {query.isPending ? (
                 <Loader2Icon className="text-muted-foreground mx-auto mt-8 size-5 animate-spin" />
               ) : query.isError ? (

@@ -1,6 +1,6 @@
 <!--
   【文件职责】     长会话右侧的章节跳转目录。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认组件
   【依赖关系】     ui/button · ui/dropdown-menu · core/messages/conversation-outline
   【边界与注意】   收起时那一列**刻度**是纯装饰（`aria-hidden`）：它表达的是「你在

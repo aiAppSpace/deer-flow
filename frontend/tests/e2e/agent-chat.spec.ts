@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import {
   handleRunStream,
@@ -6,6 +6,34 @@ import {
   MOCK_RUN_ID,
   MOCK_THREAD_ID,
 } from "./utils/mock-api";
+
+async function readReplaySnapshot(page: Page, threadId: string) {
+  return page.evaluate(async (id) => {
+    const responses = await Promise.all([
+      fetch(`/api/langgraph/threads/${id}/state`),
+      fetch(`/api/langgraph/threads/${id}/history`),
+      fetch(`/api/threads/${id}/messages/page`),
+    ]);
+    for (const response of responses) {
+      if (!response.ok)
+        throw new Error(`Replay read failed: ${response.status}`);
+    }
+    const state = (await responses[0].json()) as {
+      values: { messages: unknown[] };
+    };
+    const history = (await responses[1].json()) as {
+      values: { messages: unknown[] };
+    }[];
+    const rows = (await responses[2].json()) as {
+      data: { content: unknown; run_id: string }[];
+    };
+    return {
+      state: state.values.messages,
+      history: history[0]!.values.messages,
+      rows: rows.data,
+    };
+  }, threadId);
+}
 
 const MOCK_AGENTS = [
   {
@@ -53,10 +81,12 @@ test.describe("Agent chat", () => {
     page,
   }, testInfo) => {
     let streamBody: Record<string, unknown> | undefined;
+    let streamPath: string | undefined;
     const agent = { ...MOCK_AGENTS[0]!, display_name: "" };
     mockLangGraphAPI(page, {
       agents: [agent],
       runStreamHandler: async (route) => {
+        streamPath = new URL(route.request().url()).pathname;
         streamBody = route.request().postDataJSON() as Record<string, unknown>;
         await handleRunStream(route);
       },
@@ -79,7 +109,12 @@ test.describe("Agent chat", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeHidden();
     await expect(page.getByText("代码审查助手", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Chat", exact: true }).click();
+    const chatLink = page.getByRole("link", { name: "Chat", exact: true });
+    await expect(chatLink).toHaveAttribute(
+      "href",
+      "/workspace/agents/test-agent/chats/new",
+    );
+    await chatLink.click();
     await page.waitForURL("**/workspace/agents/test-agent/chats/**");
     await expect(
       page.getByText("代码审查助手", { exact: true }).first(),
@@ -91,6 +126,14 @@ test.describe("Agent chat", () => {
     await textarea.fill("Review this code");
     await textarea.press("Enter");
     await expect.poll(() => streamBody).toBeDefined();
+    await expect(page).toHaveURL(
+      /\/workspace\/agents\/test-agent\/chats\/[0-9a-f-]{36}$/,
+    );
+    const actualThreadId = new URL(page.url()).pathname.split("/").at(-1);
+    expect(streamPath).toBe(
+      `/api/langgraph/threads/${actualThreadId}/runs/stream`,
+    );
+    expect(streamBody?.context).not.toHaveProperty("thread_id");
     expect(streamBody).toMatchObject({
       assistant_id: "test-agent",
       context: { agent_name: "test-agent" },
@@ -173,6 +216,7 @@ test.describe("Agent chat", () => {
   }) => {
     const threadId = "00000000-0000-0000-0000-000000000168";
     let streamBody: Record<string, unknown> | undefined;
+    let streamPath: string | undefined;
     mockLangGraphAPI(page, {
       agents: [
         {
@@ -192,6 +236,7 @@ test.describe("Agent chat", () => {
         },
       ],
       runStreamHandler: async (route) => {
+        streamPath = new URL(route.request().url()).pathname;
         streamBody = route.request().postDataJSON() as Record<string, unknown>;
         await handleRunStream(route);
       },
@@ -211,10 +256,11 @@ test.describe("Agent chat", () => {
     await textarea.press("Enter");
 
     await expect.poll(() => streamBody).toBeDefined();
+    expect(streamPath).toBe(`/api/langgraph/threads/${threadId}/runs/stream`);
+    expect(streamBody?.context).not.toHaveProperty("thread_id");
     expect(streamBody).toMatchObject({
       context: {
         agent_name: "researcher",
-        thread_id: threadId,
       },
     });
   });
@@ -426,6 +472,11 @@ test.describe("Agent chat", () => {
       id: "msg-ai-agent",
       content: "Custom agent response",
     };
+    const regeneratedAiMessage = {
+      type: "ai",
+      id: "msg-ai-agent-regenerated",
+      content: "Hello from DeerFlow!",
+    };
     mockLangGraphAPI(page, {
       agents: MOCK_AGENTS,
       threads: [
@@ -440,6 +491,7 @@ test.describe("Agent chat", () => {
 
     let prepareMessageId: string | undefined;
     let streamBody: Record<string, unknown> | undefined;
+    let streamPath: string | undefined;
     await page.route(
       `**/api/threads/${MOCK_THREAD_ID}/runs/regenerate/prepare`,
       (route) => {
@@ -469,8 +521,15 @@ test.describe("Agent chat", () => {
     await page.route(
       `**/api/langgraph/threads/${MOCK_THREAD_ID}/runs/stream`,
       (route) => {
+        streamPath = new URL(route.request().url()).pathname;
         streamBody = route.request().postDataJSON() as Record<string, unknown>;
-        return handleRunStream(route);
+        return handleRunStream(route, {}, undefined, {
+          responseMessage: regeneratedAiMessage,
+          checkpointBase: {
+            checkpointId: "checkpoint-before-human",
+            messages: [],
+          },
+        });
       },
     );
 
@@ -505,6 +564,10 @@ test.describe("Agent chat", () => {
 
     await expect.poll(() => prepareMessageId).toBe(aiMessage.id);
     await expect.poll(() => streamBody).toBeDefined();
+    expect(streamPath).toBe(
+      `/api/langgraph/threads/${MOCK_THREAD_ID}/runs/stream`,
+    );
+    expect(streamBody?.context).not.toHaveProperty("thread_id");
     expect(streamBody).toMatchObject({
       checkpoint: {
         checkpoint_id: "checkpoint-before-human",
@@ -518,9 +581,18 @@ test.describe("Agent chat", () => {
       },
       context: {
         agent_name: "test-agent",
-        thread_id: MOCK_THREAD_ID,
       },
     });
+    await expect(page.getByText(regeneratedAiMessage.content)).toBeVisible();
+    await expect(page.getByText(aiMessage.content)).not.toBeVisible();
+    const snapshot = await readReplaySnapshot(page, MOCK_THREAD_ID);
+    expect(snapshot.state).toEqual([humanMessage, regeneratedAiMessage]);
+    expect(snapshot.history).toEqual(snapshot.state);
+    expect(snapshot.rows.map((row) => row.content)).toEqual(snapshot.state);
+    expect(snapshot.rows.map((row) => row.run_id)).toEqual([
+      MOCK_RUN_ID,
+      MOCK_RUN_ID,
+    ]);
   });
 
   test("agent chat can edit and rerun its latest user message", async ({
@@ -541,6 +613,11 @@ test.describe("Agent chat", () => {
       id: "msg-ai-agent",
       content: "Custom agent response",
     };
+    const replacementAiMessage = {
+      type: "ai",
+      id: "msg-ai-1",
+      content: "Hello from DeerFlow!",
+    };
     mockLangGraphAPI(page, {
       agents: MOCK_AGENTS,
       threads: [
@@ -552,34 +629,11 @@ test.describe("Agent chat", () => {
         },
       ],
     });
-    let historyRows = [
-      { run_id: `run-${MOCK_THREAD_ID}`, content: humanMessage },
-      { run_id: `run-${MOCK_THREAD_ID}`, content: aiMessage },
-    ];
-    await page.route(
-      `**/api/threads/${MOCK_THREAD_ID}/messages/page`,
-      (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            data: historyRows.map((row, index) => ({
-              run_id: row.run_id,
-              seq: index + 1,
-              content: row.content,
-              metadata: { caller: "lead_agent" },
-              created_at: `2025-01-01T00:00:${String(index).padStart(2, "0")}Z`,
-            })),
-            has_more: false,
-            next_before_seq: null,
-          }),
-        }),
-    );
-
     let prepareBody:
       | { human_message_id?: string; replacement_text?: string }
       | undefined;
     let streamBody: Record<string, unknown> | undefined;
+    let streamPath: string | undefined;
     await page.route(
       `**/api/threads/${MOCK_THREAD_ID}/runs/edit-regenerate/prepare`,
       (route) => {
@@ -616,19 +670,15 @@ test.describe("Agent chat", () => {
     await page.route(
       `**/api/langgraph/threads/${MOCK_THREAD_ID}/runs/stream`,
       (route) => {
+        streamPath = new URL(route.request().url()).pathname;
         streamBody = route.request().postDataJSON() as Record<string, unknown>;
-        historyRows = [
-          { run_id: MOCK_RUN_ID, content: replacementHumanMessage },
-          {
-            run_id: MOCK_RUN_ID,
-            content: {
-              type: "ai",
-              id: "msg-ai-1",
-              content: "Hello from DeerFlow!",
-            },
+        return handleRunStream(route, {}, undefined, {
+          responseMessage: replacementAiMessage,
+          checkpointBase: {
+            checkpointId: "checkpoint-before-human",
+            messages: [],
           },
-        ];
-        return handleRunStream(route);
+        });
       },
     );
 
@@ -641,8 +691,9 @@ test.describe("Agent chat", () => {
     await humanTurn.hover();
     await page.getByRole("button", { name: "Edit and rerun" }).click();
 
-    const editor = page.locator("textarea").first();
+    const editor = page.locator(".is-user textarea");
     await expect(editor).toHaveValue("Original agent question");
+    await expect(editor).toBeFocused();
     await editor.fill("Edited agent question");
     await page.getByRole("button", { name: "Update and rerun" }).click();
 
@@ -653,6 +704,10 @@ test.describe("Agent chat", () => {
         replacement_text: "Edited agent question",
       });
     await expect.poll(() => streamBody).toBeDefined();
+    expect(streamPath).toBe(
+      `/api/langgraph/threads/${MOCK_THREAD_ID}/runs/stream`,
+    );
+    expect(streamBody?.context).not.toHaveProperty("thread_id");
     expect(streamBody).toMatchObject({
       input: { messages: [replacementHumanMessage] },
       checkpoint: {
@@ -671,11 +726,22 @@ test.describe("Agent chat", () => {
       },
       context: {
         agent_name: "test-agent",
-        thread_id: MOCK_THREAD_ID,
       },
     });
     await expect(page.getByText("Edited agent question")).toBeVisible();
     await expect(page.getByText("Original agent question")).not.toBeVisible();
     await expect(page.getByText("Hello from DeerFlow!")).toBeVisible();
+    await expect(page.getByText(aiMessage.content)).not.toBeVisible();
+    const snapshot = await readReplaySnapshot(page, MOCK_THREAD_ID);
+    expect(snapshot.state).toEqual([
+      replacementHumanMessage,
+      replacementAiMessage,
+    ]);
+    expect(snapshot.history).toEqual(snapshot.state);
+    expect(snapshot.rows.map((row) => row.content)).toEqual(snapshot.state);
+    expect(snapshot.rows.map((row) => row.run_id)).toEqual([
+      MOCK_RUN_ID,
+      MOCK_RUN_ID,
+    ]);
   });
 });

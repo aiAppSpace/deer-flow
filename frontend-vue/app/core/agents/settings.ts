@@ -8,6 +8,11 @@
 
 import type { ReasoningEffort, UpdateAgentRequest } from "@/core/agents/types";
 import type { Model } from "@/core/models/types";
+import {
+  supportsThinking,
+  isThinkingRequired,
+  getReasoningEffortOptions,
+} from "@/core/models/reasoning";
 
 export const DEFAULT_AGENT_MODEL_VALUE = "__default__";
 export const MAX_AGENT_OUTPUT_TOKENS = 200_000;
@@ -23,7 +28,7 @@ export interface AgentSettingsDraft {
   reasoningEffort: AgentReasoningSelection;
 }
 
-export type AgentSettingsError = "model" | "temperature" | "max_tokens";
+export type AgentSettingsError = "temperature" | "max_tokens";
 
 export type AgentSettingsPayloadResult =
   | { ok: true; request: UpdateAgentRequest }
@@ -65,7 +70,6 @@ export function buildAgentSettingsUpdatePayload(
   draft: AgentSettingsDraft,
 ): AgentSettingsPayloadResult {
   const selectedModel = resolveAgentSettingsModel(models, draft.model);
-  if (!selectedModel) return { ok: false, error: "model" };
   const settings = parseSettings(draft);
   if (!settings.ok) return settings;
 
@@ -76,22 +80,28 @@ export function buildAgentSettingsUpdatePayload(
           max_tokens: settings.maxTokens,
         }
       : null;
-  const supportsThinking = selectedModel.supports_thinking === true;
-  const supportsReasoning = selectedModel.supports_reasoning_effort === true;
+  const thinkingSupported = supportsThinking(selectedModel);
+  const allowedEfforts = getReasoningEffortOptions(selectedModel).filter(
+    (value) => ["low", "medium", "high"].includes(value),
+  );
+  const thinking =
+    isThinkingRequired(selectedModel) && draft.thinking === "off"
+      ? "inherit"
+      : draft.thinking;
 
   return {
     ok: true,
     request: {
-      model:
-        draft.model === DEFAULT_AGENT_MODEL_VALUE ? null : selectedModel.name,
+      model: draft.model === DEFAULT_AGENT_MODEL_VALUE ? null : draft.model,
       model_settings: modelSettings,
-      thinking_enabled: supportsThinking
-        ? draft.thinking === "inherit"
+      thinking_enabled: thinkingSupported
+        ? thinking === "inherit"
           ? null
-          : draft.thinking === "on"
+          : thinking === "on"
         : null,
       reasoning_effort:
-        supportsReasoning && draft.reasoningEffort !== "inherit"
+        allowedEfforts.includes(draft.reasoningEffort) &&
+        draft.reasoningEffort !== "inherit"
           ? draft.reasoningEffort
           : null,
     },

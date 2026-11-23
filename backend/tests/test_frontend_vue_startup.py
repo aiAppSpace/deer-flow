@@ -27,7 +27,7 @@ def test_serve_routes_host_pnpm_through_allowlisted_runner_and_stops_vue():
     assert '_kill_repo_processes "nuxt dev"' in serve
     assert "_kill_repo_port 3100" in serve
     assert 'if [ "$FRONTEND_MODE" = "react" ]; then' in serve
-    assert "React http://localhost:3000 · Vue http://localhost:3100" in serve
+    assert "React http://localhost:3200 · Vue http://localhost:3100" in serve
 
 
 def test_serve_shell_syntax_and_make_dry_runs_are_valid():
@@ -50,3 +50,9 @@ def test_serve_shell_syntax_and_make_dry_runs_are_valid():
         )
         assert result.returncode == 0, result.stderr
         assert flag in result.stdout
+        assert f"scripts/check.py --frontend {flag.removeprefix('--')}" in result.stdout
+
+    default = subprocess.run(["make", "-n", "dev"], cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    assert default.returncode == 0, default.stderr
+    assert "scripts/check.py\n" in default.stdout
+    assert "--frontend" not in default.stdout

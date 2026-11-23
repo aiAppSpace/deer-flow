@@ -1,0 +1,83 @@
+diff --git a/lib/animation/Animation.js b/lib/animation/Animation.js
+index bbfe3f4e32b215c356b3dbeceac0e726855c3163..3f9e430526f93812c298153beb8b02082acf6382 100644
+--- a/lib/animation/Animation.js
++++ b/lib/animation/Animation.js
+@@ -103,7 +103,7 @@ export default class Animation extends EventTarget {
+      * Starts or resumes playback.
+      */
+     play() {
+-        if (this.#playState === 'finished' || this.#playState === 'idle') {
++        if (this.#playState === 'finished') {
+             this.finished = this.#createFinishedPromise();
+         }
+         const currentTime = this.#currentTime ?? (this.playbackRate < 0 ? this.#getEndTime() : 0);
+@@ -158,7 +158,10 @@ export default class Animation extends EventTarget {
+         this.#playState = 'idle';
+         this.#currentTime = null;
+         this.startTime = null;
++        // Web Animations cancel marks the old finished promise handled.
++        this.finished.catch(() => {});
+         this.#rejectFinished?.(new this[PropertySymbol.window].DOMException('The animation was canceled.', DOMExceptionNameEnum.abortError));
++        this.finished = this.#createFinishedPromise();
+         this.dispatchEvent(new this[PropertySymbol.window].Event('cancel'));
+     }
+     /**
+diff --git a/lib/css/declaration/CSSStyleDeclaration.js b/lib/css/declaration/CSSStyleDeclaration.js
+index 1ff5e316cd675e1090232c8e1f82938abf47b7a0..aedd71899c6672eeb762184c832c70f72dcc4254 100644
+--- a/lib/css/declaration/CSSStyleDeclaration.js
++++ b/lib/css/declaration/CSSStyleDeclaration.js
+@@ -279,4 +279,10 @@ export default class CSSStyleDeclaration {
+         return cache.propertyManager;
+     }
+ }
++
++// Preserve the Web IDL interface brand for CSSOM consumers.
++Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
++    value: 'CSSStyleDeclaration',
++    configurable: true
++});
+ //# sourceMappingURL=CSSStyleDeclaration.js.map
+\ No newline at end of file
+diff --git a/src/animation/Animation.ts b/src/animation/Animation.ts
+index 594d0610a2448043da900c2c8b8a1d070338f6be..de32ebd92f28e306c0ac00e855721bab5d2845f9 100644
+--- a/src/animation/Animation.ts
++++ b/src/animation/Animation.ts
+@@ -130,7 +130,7 @@ export default class Animation extends EventTarget {
+ 	 * Starts or resumes playback.
+ 	 */
+ 	public play(): void {
+-		if (this.#playState === 'finished' || this.#playState === 'idle') {
++		if (this.#playState === 'finished') {
+ 			this.finished = this.#createFinishedPromise();
+ 		}
+ 		const currentTime = this.#currentTime ?? (this.playbackRate < 0 ? this.#getEndTime() : 0);
+@@ -192,12 +192,15 @@ export default class Animation extends EventTarget {
+ 		this.#playState = 'idle';
+ 		this.#currentTime = null;
+ 		this.startTime = null;
++		// Web Animations cancel marks the old finished promise handled.
++		this.finished.catch(() => {});
+ 		this.#rejectFinished?.(
+ 			new this[PropertySymbol.window].DOMException(
+ 				'The animation was canceled.',
+ 				DOMExceptionNameEnum.abortError
+ 			)
+ 		);
++		this.finished = this.#createFinishedPromise();
+ 		this.dispatchEvent(new this[PropertySymbol.window].Event('cancel'));
+ 	}
+ 
+diff --git a/src/css/declaration/CSSStyleDeclaration.ts b/src/css/declaration/CSSStyleDeclaration.ts
+index 044f426b55aa04590480b210b75bfc4caed9b901..065b52ed80a503a419211d3a269541daaddd164e 100644
+--- a/src/css/declaration/CSSStyleDeclaration.ts
++++ b/src/css/declaration/CSSStyleDeclaration.ts
+@@ -353,3 +353,9 @@ export default class CSSStyleDeclaration {
+ 		return <CSSPropertyManager>cache.propertyManager;
+ 	}
+ }
++
++// Preserve the Web IDL interface brand for CSSOM consumers.
++Object.defineProperty(CSSStyleDeclaration.prototype, Symbol.toStringTag, {
++	value: 'CSSStyleDeclaration',
++	configurable: true
++});

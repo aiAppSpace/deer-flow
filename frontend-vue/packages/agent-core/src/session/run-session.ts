@@ -28,6 +28,9 @@ import type { RunSessionState, SessionOutput } from "./state";
 
 export interface RunSessionOptions<TStart, THandle> {
   protocol: RunProtocol<TStart, THandle>;
+  /** A known run is observed through resume; it must never be created again. */
+  initialHandle?: THandle;
+  initialCursor?: string;
   classifyEvent: ClassifyEvent;
   /** 05 L6：后端一直不发分隔空行时最多攒多少字节。 */
   maxBufferBytes: number;
@@ -61,6 +64,8 @@ export function createRunSession<TStart, THandle>(
 ): RunSession<TStart, THandle> {
   const {
     protocol,
+    initialHandle,
+    initialCursor,
     classifyEvent,
     maxBufferBytes,
     maxReconnects,
@@ -80,7 +85,7 @@ export function createRunSession<TStart, THandle>(
   const controlController = new AbortController();
   let state: RunSessionState<THandle> = { status: "idle" };
   let stopRequested = false;
-  let cursor: string | undefined;
+  let cursor: string | undefined = initialCursor;
   let reconnects = 0;
 
   function setState(next: RunSessionState<THandle>): SessionOutput<THandle> {
@@ -175,11 +180,10 @@ export function createRunSession<TStart, THandle>(
         result.response,
         currentHandle,
         controlController.signal,
+        result,
       );
       if (drained !== "open") return;
-      // drain 读完了却没有终止事件：run 确实停了，但没人说它是怎么停的。
-      yield setState({ status: "cancelled", handle: currentHandle });
-      return;
+      // EOF is not confirmation. Inspect and observe the remaining tail below.
     }
 
     yield setState({
@@ -204,13 +208,43 @@ export function createRunSession<TStart, THandle>(
         return;
       }
       if (inspected.terminal) {
-        yield setState(
-          terminalFromOutcome(
-            inspected.outcome,
-            inspected.reason,
+        // A durable terminal status can precede finalization and the stream's
+        // end frame. Keep the observer until the producer closes the run.
+        try {
+          const response = await protocol.resume(
             currentHandle,
-          ),
-        );
+            cursor,
+            controlController.signal,
+          );
+          yield setState({
+            status: "stopping",
+            handle: currentHandle,
+            ...optional("cursor", cursor),
+            mode: "draining",
+          });
+          const outcome = yield* pump(
+            response,
+            currentHandle,
+            controlController.signal,
+            inspected,
+          );
+          if (outcome === "open") {
+            yield setState({
+              status: "failed",
+              handle: currentHandle,
+              error: new AgentStreamError(
+                "network",
+                "Run stream ended before a terminal event.",
+              ),
+            });
+          }
+        } catch (error) {
+          yield setState({
+            status: "failed",
+            handle: currentHandle,
+            error: toAgentStreamError(error, "http"),
+          });
+        }
         return;
       }
       await sleep(inspectPolling.intervalMs);
@@ -237,6 +271,7 @@ export function createRunSession<TStart, THandle>(
     response: Response,
     currentHandle: THandle,
     signal: AbortSignal,
+    completion?: { outcome?: RunOutcome; reason?: string },
   ): AsyncGenerator<SessionOutput<THandle>, "open" | "settled"> {
     if (!response.body) {
       yield setState({
@@ -267,7 +302,13 @@ export function createRunSession<TStart, THandle>(
         }
         if (signal.kind === "completed") {
           yield { kind: "event", event: frame.event };
-          yield setState({ status: "completed", handle: currentHandle });
+          yield setState(
+            terminalFromOutcome(
+              completion?.outcome ?? "completed",
+              completion?.reason,
+              currentHandle,
+            ),
+          );
           return "settled";
         }
         if (signal.kind === "failed") {
@@ -310,32 +351,53 @@ export function createRunSession<TStart, THandle>(
   async function* runInternal(
     input: TStart,
   ): AsyncGenerator<SessionOutput<THandle>> {
-    yield setState({ status: "creating" });
-
-    let opened;
-    try {
-      opened = await protocol.create(input, streamController.signal);
-    } catch (error) {
-      // 硬规则 1：响应头到达前断掉，结果不确定。**不重发 POST。**
-      // 收敛成 missing_handle（不可重试）而不是保留 network（可重试），
-      // 是为了让「不能重放 create」写在类型里而不是靠调用方自觉。
-      const cause = toAgentStreamError(error, "network");
-      yield setState({
-        status: "failed",
-        error:
-          cause.kind === "abort"
-            ? cause
-            : new AgentStreamError(
-                "missing_handle",
-                `Run creation failed before a run handle was returned: ${cause.message}`,
-                { cause },
-              ),
-      });
-      return;
+    let runHandle: THandle;
+    let response: Response;
+    if (initialHandle !== undefined) {
+      runHandle = initialHandle;
+      if (stopRequested) {
+        yield* settleStop(runHandle);
+        return;
+      }
+      try {
+        response = await protocol.resume(
+          runHandle,
+          cursor,
+          streamController.signal,
+        );
+      } catch (error) {
+        yield setState({
+          status: "failed",
+          handle: runHandle,
+          error: toAgentStreamError(error, "network"),
+        });
+        return;
+      }
+    } else {
+      yield setState({ status: "creating" });
+      try {
+        const opened = await protocol.create(input, streamController.signal);
+        runHandle = opened.handle;
+        response = opened.response;
+      } catch (error) {
+        // 硬规则 1：响应头到达前断掉，结果不确定。**不重发 POST。**
+        // 收敛成 missing_handle（不可重试）而不是保留 network（可重试），
+        // 是为了让「不能重放 create」写在类型里而不是靠调用方自觉。
+        const cause = toAgentStreamError(error, "network");
+        yield setState({
+          status: "failed",
+          error:
+            cause.kind === "abort"
+              ? cause
+              : new AgentStreamError(
+                  "missing_handle",
+                  `Run creation failed before a run handle was returned: ${cause.message}`,
+                  { cause },
+                ),
+        });
+        return;
+      }
     }
-
-    const runHandle = opened.handle;
-    let response = opened.response;
 
     while (true) {
       if (stopRequested) {

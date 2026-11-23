@@ -6,6 +6,10 @@ import {
 } from "@langchain/langgraph-sdk/client";
 
 import { getLangGraphBaseURL } from "../config";
+import {
+  captureRunInvocation,
+  ownRunInput,
+} from "../diagnostics/run-observation";
 import { isStaticWebsiteOnly } from "../static-mode";
 import {
   loadStaticDemoThread,
@@ -483,41 +487,48 @@ function createCompatibleClient(isMock?: boolean): LangGraphClient {
   // Preserve the SDK's lazy AsyncIterable contract. Its StreamManager consumes
   // this return value with `for await`, so run creation still starts on first
   // iteration rather than when `runs.stream()` is called.
-  client.runs.stream = async function* (threadId, assistantId, payload) {
-    const sanitizedPayload = forceChatRunStreamOptions(payload);
-    const originalOnRunCreated = sanitizedPayload?.onRunCreated;
-    let runId: string | undefined;
-    const initialStream = originalRunStream(threadId, assistantId, {
-      ...sanitizedPayload,
-      onRunCreated(meta) {
-        runId = meta.run_id;
-        originalOnRunCreated?.(meta);
-      },
-    });
+  client.runs.stream = function (threadId, assistantId, payload) {
+    const observation = captureRunInvocation(() => ownRunInput(payload), "sdk");
+    return (async function* () {
+      const sanitizedPayload = forceChatRunStreamOptions(payload);
+      observation?.verifyInput(ownRunInput(sanitizedPayload));
+      const originalOnRunCreated = sanitizedPayload?.onRunCreated;
+      let runId: string | undefined;
+      const initialStream = originalRunStream(threadId, assistantId, {
+        ...sanitizedPayload,
+        onRunCreated(meta) {
+          runId = meta.run_id;
+          observation?.received(meta, meta.thread_id, runId);
+          originalOnRunCreated?.(meta);
+          if (originalOnRunCreated)
+            observation?.delivered(meta, meta.thread_id, runId);
+        },
+      });
 
-    const recoveredStream = recoverStreamReplayGaps({
-      client,
-      threadId,
-      expectedRunId: () => runId,
-      initialStream,
-      signal: streamOptionSignal(sanitizedPayload),
-      reconnectRun: undefined,
-      resume: (resolvedRunId, lastEventId) => {
-        // Keep the recovery run id available to the shared inactive-stream
-        // handler even if the SDK omitted its onRunCreated callback.
-        runId = resolvedRunId;
-        return originalJoinStream(threadId, resolvedRunId, {
-          lastEventId,
-          signal: sanitizedPayload?.signal,
-          streamMode: sanitizedPayload?.streamMode,
-        });
-      },
-    });
-    yield* handleInactiveRunStream({
-      threadId,
-      expectedRunId: () => runId,
-      stream: recoveredStream,
-    });
+      const recoveredStream = recoverStreamReplayGaps({
+        client,
+        threadId,
+        expectedRunId: () => runId,
+        initialStream,
+        signal: streamOptionSignal(sanitizedPayload),
+        reconnectRun: undefined,
+        resume: (resolvedRunId, lastEventId) => {
+          // Keep the recovery run id available to the shared inactive-stream
+          // handler even if the SDK omitted its onRunCreated callback.
+          runId = resolvedRunId;
+          return originalJoinStream(threadId, resolvedRunId, {
+            lastEventId,
+            signal: sanitizedPayload?.signal,
+            streamMode: sanitizedPayload?.streamMode,
+          });
+        },
+      });
+      yield* handleInactiveRunStream({
+        threadId,
+        expectedRunId: () => runId,
+        stream: recoveredStream,
+      });
+    })();
   } as typeof client.runs.stream;
 
   const originalCancel = client.runs.cancel.bind(client.runs);
@@ -595,7 +606,7 @@ function createCompatibleClient(isMock?: boolean): LangGraphClient {
 function createStaticClient(): LangGraphClient {
   const apiUrl =
     typeof window === "undefined"
-      ? "http://localhost:3000"
+      ? "http://localhost:3200"
       : window.location.origin;
   const client = new LangGraphClient({ apiUrl });
 

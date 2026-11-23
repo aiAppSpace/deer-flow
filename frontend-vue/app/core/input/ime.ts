@@ -15,3 +15,17 @@ export function isImeComposing(
 ): boolean {
   return compositionActive || event.isComposing || event.keyCode === 229;
 }
+
+export const COMPOSITION_CONFIRM_ENTER_MS = 50;
+
+/** Safari may report the composition-confirming Enter after compositionend. */
+export function isCompositionConfirmEnter(
+  event: ImeKeyboardEvent & Pick<KeyboardEvent, "key" | "shiftKey">,
+  compositionEndedAt: number,
+  now = Date.now(),
+): boolean {
+  if (event.key !== "Enter" || event.shiftKey || isImeComposing(event))
+    return false;
+  const elapsed = now - compositionEndedAt;
+  return elapsed >= 0 && elapsed < COMPOSITION_CONFIRM_ENTER_MS;
+}

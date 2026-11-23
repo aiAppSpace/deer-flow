@@ -65,7 +65,7 @@ export function AppearanceSettingsPage() {
         title={t.settings.appearance.themeTitle}
         description={t.settings.appearance.themeDescription}
       >
-        <div className="grid gap-3 lg:grid-cols-3">
+        <div className="@container/appearance-controls grid gap-3 lg:grid-cols-3">
           {themeOptions.map((option) => (
             <ThemePreviewCard
               key={option.id}
@@ -135,7 +135,7 @@ function ThemePreviewCard({
       type="button"
       onClick={() => onSelect(mode)}
       className={cn(
-        "group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all",
+        "group flex h-full flex-col gap-3 rounded-lg border p-4 text-left transition-all @max-md/appearance-controls:min-w-0",
         active
           ? "border-primary ring-primary/30 shadow-sm ring-2"
           : "hover:border-border hover:shadow-sm",
@@ -145,7 +145,7 @@ function ThemePreviewCard({
         <div className="bg-muted rounded-md p-2">
           <Icon className="size-4" />
         </div>
-        <div className="space-y-1">
+        <div className="space-y-1 @max-md/appearance-controls:min-w-0 @max-md/appearance-controls:wrap-anywhere">
           <div className="text-sm leading-none font-semibold">{label}</div>
           <p className="text-muted-foreground text-xs leading-snug">
             {description}
@@ -160,7 +160,7 @@ function ThemePreviewCard({
             : "border-slate-200 bg-white text-slate-900",
         )}
       >
-        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2">
+        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2 @max-md/appearance-controls:flex-wrap">
           <div
             className={cn(
               "h-2 w-2 rounded-full",
@@ -170,21 +170,17 @@ function ThemePreviewCard({
           <div className="h-2 w-10 rounded-full bg-current/20" />
           <div className="h-2 w-6 rounded-full bg-current/15" />
         </div>
-        {/*
-          `minmax(0,240px)`, not a bare `240px`: a fixed track never shrinks, so
-          this preview pinned the whole appearance panel's min-content at 348px
-          against a 293px cell on a 375px screen — measured panelOverflow 55 at
-          375 and 70 at 360, i.e. the panel hung out of the settings dialog on
-          every phone. The max stays 240, so nothing changes above ~420px.
-        */}
-        <div className="grid grid-cols-[1fr_minmax(0,240px)] gap-3 px-3 py-3">
+        {/* Keep the desktop illustration geometry. In a narrow content
+            container, both tracks and the decorative blocks can shrink and
+            wrap so enlarged text does not force the theme card out of view. */}
+        <div className="grid grid-cols-[1fr_minmax(0,240px)] gap-3 px-3 py-3 @max-md/appearance-controls:grid-cols-[minmax(0,1fr)_minmax(0,240px)] @max-md/appearance-controls:[&_*]:max-w-full @max-md/appearance-controls:[&_*]:min-w-0">
           <div className="space-y-2">
             <div className="h-3 w-3/4 rounded-full bg-current/15" />
             <div className="h-3 w-1/2 rounded-full bg-current/10" />
             <div className="h-[90px] rounded-md border border-current/10 bg-current/5" />
           </div>
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 @max-md/appearance-controls:flex-wrap">
               <div className="h-8 w-8 rounded-md bg-current/10" />
               <div className="space-y-2">
                 <div className="h-2 w-14 rounded-full bg-current/15" />

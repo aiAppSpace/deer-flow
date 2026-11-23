@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const python = process.platform === "win32" ? "python" : "python3";
+
 const frontendPort = process.env.E2E_FRONTEND_PORT ?? "3000";
 const gatewayPort = process.env.E2E_GATEWAY_PORT ?? "8011";
 const frontendUrl = `http://localhost:${frontendPort}`;
@@ -51,7 +53,7 @@ export default defineConfig({
       },
     },
     {
-      command: "pnpm build && pnpm start",
+      command: `${python} ../scripts/pnpm.py --dir frontend build && ${python} ../scripts/pnpm.py --dir frontend start`,
       url: frontendUrl,
       reuseExistingServer: false,
       timeout: 240_000,

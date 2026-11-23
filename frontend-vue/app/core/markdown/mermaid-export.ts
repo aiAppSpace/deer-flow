@@ -13,7 +13,8 @@
                    而这张图多半要贴进文档。
 
                    ③ **转码依赖 SVG 自包含**：外链字体或图片会让 canvas 被污染，
-                   `toBlob` 直接抛。mermaid 的 `securityLevel: "strict"` 保证了这点。
+                   `toBlob` 可能直接抛；保留这条失败路径，不把 mermaid 的
+                   `securityLevel: "strict"` 当成浏览器可导出的保证。
 
                    ④ `unescape(encodeURIComponent(...))` 这一步不能省：`btoa` 只吃
                    Latin-1，图里出现任何非 ASCII 字符（中文标签是常态）都会让它抛
@@ -23,19 +24,58 @@
 /** 见文件头 ②。 */
 const PNG_SCALE = 5;
 
-export async function svgToPngBlob(svg: string): Promise<Blob> {
+/** Mermaid emits HTML labels in foreignObject. Standalone SVG images require
+ * XML serialization, including closed void tags and resolved HTML entities.
+ * The detached template never mounts the chart or executes its contents.
+ */
+export function serializeMermaidSvg(source: string): string {
+  const template = document.createElement("template");
+  template.innerHTML = source;
+  const svg = template.content.firstElementChild;
+  if (
+    svg?.localName !== "svg" ||
+    svg.namespaceURI !== "http://www.w3.org/2000/svg"
+  )
+    throw new Error("Mermaid output has no SVG root");
+  return new XMLSerializer().serializeToString(svg);
+}
+
+export async function svgToPngBlob(
+  svg: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const aborted = () => new DOMException("Aborted", "AbortError");
+  if (signal?.aborted) throw aborted();
   // 见文件头 ④。
   const source = `data:image/svg+xml;base64,${btoa(
-    unescape(encodeURIComponent(svg)),
+    unescape(encodeURIComponent(serializeMermaidSvg(svg))),
   )}`;
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const element = new Image();
+    const cleanup = () => {
+      element.onload = null;
+      element.onerror = null;
+      signal?.removeEventListener("abort", abort);
+    };
+    const abort = () => {
+      cleanup();
+      element.src = "";
+      reject(aborted());
+    };
     element.crossOrigin = "anonymous";
-    element.onload = () => resolve(element);
-    element.onerror = () => reject(new Error("mermaid: svg image load failed"));
+    element.onload = () => {
+      cleanup();
+      resolve(element);
+    };
+    element.onerror = () => {
+      cleanup();
+      reject(new Error("mermaid: svg image load failed"));
+    };
+    signal?.addEventListener("abort", abort, { once: true });
     element.src = source;
   });
 
+  if (signal?.aborted) throw aborted();
   const canvas = document.createElement("canvas");
   canvas.width = image.width * PNG_SCALE;
   canvas.height = image.height * PNG_SCALE;
@@ -45,7 +85,8 @@ export async function svgToPngBlob(svg: string): Promise<Blob> {
 
   return await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
+      if (signal?.aborted) reject(aborted());
+      else if (blob) resolve(blob);
       else reject(new Error("mermaid: png encode failed"));
     }, "image/png");
   });

@@ -24,6 +24,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -33,6 +34,7 @@ import {
   type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  type Ref,
 } from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -71,6 +73,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  getCommandPopupPlacement,
+  getMentionPopupPlacement,
+  mentionPopupAncestors,
+} from "@/components/workspace/mentions/popup-placement";
 import { fetch } from "@/core/api/fetcher";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { getBackendBaseURL } from "@/core/config";
@@ -78,6 +85,7 @@ import {
   buildConversationReferenceMetadata,
   type ConversationReference,
 } from "@/core/conversation-references";
+import type { ThreadConsumptionObservation } from "@/core/diagnostics/parity-observation";
 import {
   extensionMentionId,
   MAX_EXTENSION_MENTIONS,
@@ -119,6 +127,7 @@ import {
   buildComposerDraftKey,
   clearComposerDraft,
   getSessionComposerDraftStorage,
+  isSameComposerDraft,
   readComposerDraft,
   resolveComposerDraft,
   retireSentComposerDraft,
@@ -317,7 +326,12 @@ function buildHiddenConversationQuoteMessage({
   } as Message;
 }
 
+export type InputBoxHandle = {
+  focusIfOwned: (threadId: string, userId: string | undefined) => void;
+};
+
 export function InputBox({
+  ref,
   className,
   disabled,
   autoFocus,
@@ -325,6 +339,7 @@ export function InputBox({
   context,
   extraHeader,
   isWelcomeMode,
+  consumptionObservation,
   threadId,
   draftThreadId = threadId,
   projectId,
@@ -344,7 +359,8 @@ export function InputBox({
   agentSkillNames,
   agentSkillsLoading = false,
   ...props
-}: Omit<ComponentProps<typeof PromptInput>, "onSubmit"> & {
+}: Omit<ComponentProps<typeof PromptInput>, "onSubmit" | "ref"> & {
+  ref?: Ref<InputBoxHandle>;
   assistantId?: string | null;
   status?: ChatStatus;
   disabled?: boolean;
@@ -362,6 +378,7 @@ export function InputBox({
    * decoupled from "the backend has created the thread" — see issue #2746.
    */
   isWelcomeMode?: boolean;
+  consumptionObservation?: ThreadConsumptionObservation | null;
   threadId: string;
   draftThreadId?: string;
   projectId?: string | null;
@@ -437,7 +454,9 @@ export function InputBox({
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const mentionListId = useId();
+  const commandListId = useId();
   const mentionPickerRef = useRef<MentionPickerHandle>(null);
+  const mentionPopupRef = useRef<HTMLDivElement>(null);
   const [activeMentionOption, setActiveMentionOption] = useState<
     string | undefined
   >();
@@ -447,6 +466,7 @@ export function InputBox({
   const [mentionBusy, setMentionBusy] = useState(false);
   const [mentionPlacement, setMentionPlacement] = useState({
     above: true,
+    inline: false,
     maxHeight: 400,
   });
   const [mentionError, setMentionError] = useState<string | null>(null);
@@ -495,6 +515,7 @@ export function InputBox({
   } = useSkills({ enabled: workspaceQueriesEnabled });
   const { data: uploadLimits } = useUploadLimits(threadId, {
     enabled: workspaceQueriesEnabled,
+    observation: consumptionObservation,
   });
   const promptRootRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -631,6 +652,20 @@ export function InputBox({
   // half-finished response, so we must NOT generate follow-up suggestions for it.
   const stoppedByUserRef = useRef(false);
   const messagesRef = useRef(thread.messages);
+  const pendingFollowupsRef = useRef<{
+    lifetime: number;
+    threadId: string;
+    userId: string | undefined;
+    modelName: string | undefined;
+    aiId: string;
+    messages: Array<{ role: "user" | "assistant"; content: string }>;
+  } | null>(null);
+  const followupsControllerRef = useRef<AbortController | null>(null);
+  const cancelFollowups = useCallback(() => {
+    pendingFollowupsRef.current = null;
+    followupsControllerRef.current?.abort();
+    followupsControllerRef.current = null;
+  }, []);
 
   const clearVoiceRestartTimer = useCallback(() => {
     if (voiceRestartTimerRef.current === null) {
@@ -970,6 +1005,10 @@ export function InputBox({
         text: reconciled.text,
         conversationReferences: reconciled.references,
       };
+      const latest = latestDraftRef.current;
+      if (latest?.key === key && isSameComposerDraft(latest.draft, draft)) {
+        return draftSaveTimerRef.current;
+      }
       latestDraftRef.current = { key, draft };
       cancelDraftSaveTimer();
       draftSaveGenerationRef.current += 1;
@@ -1135,16 +1174,9 @@ export function InputBox({
       text: textInput.value ?? "",
       skillName: null,
     };
-    const timer = scheduleDraftSave(draft, draftKey);
-    return () => {
-      if (timer === null) {
-        return;
-      }
-      window.clearTimeout(timer);
-      if (draftSaveTimerRef.current === timer) {
-        draftSaveTimerRef.current = null;
-      }
-    };
+    // The composer lifetime owns this timer. Re-rendering or settling a query
+    // must not cancel an unchanged draft's deadline; owner cleanup flushes it.
+    scheduleDraftSave(draft, draftKey);
   }, [draftKey, hydratedDraftKey, scheduleDraftSave, textInput.value]);
 
   useEffect(() => {
@@ -1633,11 +1665,12 @@ export function InputBox({
     // Mark the in-progress turn as user-interrupted so the next
     // streaming->ready transition does not suggest follow-ups for it.
     stoppedByUserRef.current = true;
+    cancelFollowups();
     setFollowups([]);
     setFollowupsHidden(true);
     setFollowupsLoading(false);
     onStop?.();
-  }, [canStopStreaming, onStop]);
+  }, [canStopStreaming, cancelFollowups, onStop]);
 
   const handleSubmit = useCallback(
     async (message: PromptInputMessage) => {
@@ -1827,6 +1860,23 @@ export function InputBox({
   const isComposerDisabled = disabled === true;
   const isMockThread = isMock === true;
   const composerLocked = isComposerDisabled || polishingInput || mentionBusy;
+  useImperativeHandle(
+    ref,
+    () => ({
+      focusIfOwned(expectedThreadId, expectedUserId) {
+        if (
+          composerLocked ||
+          threadId !== expectedThreadId ||
+          user?.id !== expectedUserId
+        )
+          return;
+        const editor = inlineSkillTextRef.current ?? textareaRef.current;
+        if (editor?.isConnected) editor.focus();
+      },
+    }),
+    [composerLocked, threadId, user?.id],
+  );
+
   const showCommandSuggestions =
     !composerLocked &&
     textareaFocused &&
@@ -1838,27 +1888,9 @@ export function InputBox({
     if (!root) {
       return;
     }
-    const rootFontSize = Number.parseFloat(
-      window.getComputedStyle(document.documentElement).fontSize,
-    );
-    const remCap = Number.isFinite(rootFontSize) ? rootFontSize * 18 : 288;
-    // The popup sits 8px above the composer; retain another 8px at the top of
-    // the viewport instead of letting the first options escape above it.
-    const available = Math.max(
-      0,
-      Math.floor(root.getBoundingClientRect().top - 16),
-    );
-    // `bottom-full` needs enough room above the composer for at least one
-    // option. Under narrow + low + 200% text the composer can itself exceed the
-    // viewport, leaving a 16px listbox. In that case normal flow lets the chat's
-    // existing scroll owner traverse the catalog and composer together.
-    const minimumOverlayHeight = Math.min(160, rootFontSize * 3.5);
-    const inline = available < minimumOverlayHeight;
-    setCommandSuggestionsInline(inline);
-    const inlineAvailable = Math.max(0, window.innerHeight - 32);
-    setCommandSuggestionsMaxHeight(
-      `${Math.min(remCap, inline ? inlineAvailable : available)}px`,
-    );
+    const placement = getCommandPopupPlacement(root);
+    setCommandSuggestionsInline(placement.inline);
+    setCommandSuggestionsMaxHeight(`${placement.maxHeight}px`);
   }, []);
   useLayoutEffect(() => {
     if (!showCommandSuggestions) {
@@ -1870,18 +1902,35 @@ export function InputBox({
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(syncCommandSuggestionsMaxHeight);
-    if (root) observer?.observe(root);
-    observer?.observe(document.documentElement);
+    if (root) {
+      observer?.observe(root);
+      for (const ancestor of mentionPopupAncestors(root))
+        observer?.observe(ancestor);
+    }
     window.addEventListener("resize", syncCommandSuggestionsMaxHeight);
+    window.addEventListener("scroll", syncCommandSuggestionsMaxHeight, true);
     window.visualViewport?.addEventListener(
       "resize",
+      syncCommandSuggestionsMaxHeight,
+    );
+    window.visualViewport?.addEventListener(
+      "scroll",
       syncCommandSuggestionsMaxHeight,
     );
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", syncCommandSuggestionsMaxHeight);
+      window.removeEventListener(
+        "scroll",
+        syncCommandSuggestionsMaxHeight,
+        true,
+      );
       window.visualViewport?.removeEventListener(
         "resize",
+        syncCommandSuggestionsMaxHeight,
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
         syncCommandSuggestionsMaxHeight,
       );
     };
@@ -1892,23 +1941,28 @@ export function InputBox({
     (mentionButtonOpen || mentionQuery !== null);
   useLayoutEffect(() => {
     if (!showMentions) return;
-    const place = () => {
-      const box = promptRootRef.current?.getBoundingClientRect();
-      if (!box) return;
-      const top = box.top - 12;
-      const bottom = window.innerHeight - box.bottom - 12;
-      const above = top >= bottom;
-      setMentionPlacement({
-        above,
-        maxHeight: Math.max(100, above ? top : bottom),
-      });
-    };
+    const root = promptRootRef.current;
+    const popup = mentionPopupRef.current;
+    if (!root || !popup) return;
+    const place = () =>
+      setMentionPlacement(getMentionPopupPlacement(root, popup));
     place();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    observer?.observe(root);
+    if (popup.firstElementChild) observer?.observe(popup.firstElementChild);
+    for (const ancestor of mentionPopupAncestors(root))
+      observer?.observe(ancestor);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
+    window.visualViewport?.addEventListener("resize", place);
+    window.visualViewport?.addEventListener("scroll", place);
     return () => {
+      observer?.disconnect();
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
+      window.visualViewport?.removeEventListener("resize", place);
+      window.visualViewport?.removeEventListener("scroll", place);
     };
   }, [showMentions]);
   const closeMentions = useCallback(() => {
@@ -2852,49 +2906,82 @@ export function InputBox({
     messagesRef.current = thread.messages;
   }, [thread.messages]);
 
+  useLayoutEffect(() => {
+    cancelFollowups();
+    wasStreamingRef.current = false;
+    stoppedByUserRef.current = false;
+    lastGeneratedForAiIdRef.current = null;
+    setFollowups([]);
+    setFollowupsHidden(false);
+    setFollowupsLoading(false);
+    return cancelFollowups;
+  }, [cancelFollowups, draftKey, isMock, threadId, user?.id]);
+
   useEffect(() => {
     const streaming = status === "streaming";
     const wasStreaming = wasStreamingRef.current;
     wasStreamingRef.current = streaming;
-    if (!wasStreaming || streaming) {
+    if (streaming) {
+      if (!wasStreaming) {
+        cancelFollowups();
+        stoppedByUserRef.current = false;
+        setFollowups([]);
+        setFollowupsLoading(false);
+      }
       return;
     }
 
-    // The turn was interrupted by the user, so skip generating follow-ups for
-    // this half-finished response.
-    if (stoppedByUserRef.current) {
-      stoppedByUserRef.current = false;
-      return;
+    if (wasStreaming) {
+      if (stoppedByUserRef.current) {
+        stoppedByUserRef.current = false;
+        pendingFollowupsRef.current = null;
+        return;
+      }
+      const lastAi = [...messagesRef.current]
+        .reverse()
+        .find((m) => m.type === "ai");
+      const aiId = lastAi?.id;
+      if (aiId && aiId !== lastGeneratedForAiIdRef.current) {
+        // Finishing enables the history query, which temporarily disables the
+        // composer. Keep this completed turn until admission and config are
+        // ready; hydration must not replace its messages or model meanwhile.
+        pendingFollowupsRef.current = {
+          lifetime: composerLifetimeRef.current,
+          threadId,
+          userId: user?.id,
+          modelName:
+            typeof context.model_name === "string"
+              ? context.model_name
+              : undefined,
+          aiId,
+          messages: messagesRef.current
+            .filter((m) => m.type === "human" || m.type === "ai")
+            .filter((m) => !isHiddenFromUIMessage(m))
+            .map((m) => ({
+              role:
+                m.type === "human" ? ("user" as const) : ("assistant" as const),
+              content: textOfMessage(m) ?? "",
+            }))
+            .filter((m) => m.content.trim().length > 0)
+            .slice(-6),
+        };
+      }
     }
 
-    if (disabled || isMock) {
+    const pending = pendingFollowupsRef.current;
+    if (!pending || disabled || isMock || !suggestionsConfigLoaded) {
       return;
     }
-
-    const lastAi = [...messagesRef.current]
-      .reverse()
-      .find((m) => m.type === "ai");
-    const lastAiId = lastAi?.id ?? null;
-    if (!lastAiId || lastAiId === lastGeneratedForAiIdRef.current) {
+    pendingFollowupsRef.current = null;
+    if (
+      pending.lifetime !== composerLifetimeRef.current ||
+      pending.threadId !== threadId ||
+      pending.userId !== user?.id
+    ) {
       return;
     }
-    if (!suggestionsConfigLoaded) {
-      return;
-    }
-    lastGeneratedForAiIdRef.current = lastAiId;
-
-    const recent = messagesRef.current
-      .filter((m) => m.type === "human" || m.type === "ai")
-      .filter((m) => !isHiddenFromUIMessage(m))
-      .map((m) => {
-        const role = m.type === "human" ? "user" : "assistant";
-        const content = textOfMessage(m) ?? "";
-        return { role, content };
-      })
-      .filter((m) => m.content.trim().length > 0)
-      .slice(-6);
-
-    if (recent.length === 0) {
+    lastGeneratedForAiIdRef.current = pending.aiId;
+    if (pending.messages.length === 0) {
       return;
     }
 
@@ -2904,20 +2991,28 @@ export function InputBox({
     }
 
     const controller = new AbortController();
+    followupsControllerRef.current = controller;
+    const isCurrent = () =>
+      followupsControllerRef.current === controller &&
+      !controller.signal.aborted &&
+      composerLifetimeRef.current === pending.lifetime;
     setFollowupsHidden(false);
     setFollowupsLoading(true);
     setFollowups([]);
 
-    fetch(`${getBackendBaseURL()}/api/threads/${threadId}/suggestions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages: recent,
-        n: maxFollowupSuggestions,
-        model_name: context.model_name ?? undefined,
-      }),
-      signal: controller.signal,
-    })
+    fetch(
+      `${getBackendBaseURL()}/api/threads/${pending.threadId}/suggestions`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: pending.messages,
+          n: maxFollowupSuggestions,
+          model_name: pending.modelName,
+        }),
+        signal: controller.signal,
+      },
+    )
       .then(async (res) => {
         if (!res.ok) {
           return { suggestions: [] as string[] };
@@ -2925,6 +3020,7 @@ export function InputBox({
         return (await res.json()) as { suggestions?: string[] };
       })
       .then((data) => {
+        if (!isCurrent()) return;
         const suggestions = (data.suggestions ?? [])
           .map((s) => (typeof s === "string" ? s.trim() : ""))
           .filter((s) => s.length > 0)
@@ -2932,22 +3028,26 @@ export function InputBox({
         setFollowups(suggestions);
       })
       .catch(() => {
-        setFollowups([]);
+        if (isCurrent()) setFollowups([]);
       })
       .finally(() => {
-        setFollowupsLoading(false);
+        if (isCurrent()) {
+          followupsControllerRef.current = null;
+          setFollowupsLoading(false);
+        }
       });
-
-    return () => controller.abort();
   }, [
+    cancelFollowups,
     context.model_name,
     disabled,
+    draftKey,
     isMock,
     maxFollowupSuggestions,
     status,
     suggestionsConfigLoaded,
     suggestionsEnabled,
     threadId,
+    user?.id,
   ]);
 
   const onSelectPlaceholder = useCallback((newText: string) => {
@@ -3004,9 +3104,14 @@ export function InputBox({
       )}
       {showMentions && (
         <div
+          ref={mentionPopupRef}
           className={cn(
-            "absolute right-0 left-0 z-50 overflow-y-auto px-1",
-            mentionPlacement.above ? "bottom-full mb-2" : "top-full mt-2",
+            "right-0 left-0 z-50 overflow-y-auto px-1",
+            mentionPlacement.inline
+              ? "relative mb-2"
+              : mentionPlacement.above
+                ? "absolute bottom-full mb-2"
+                : "absolute top-full mt-2",
           )}
           style={{ maxHeight: mentionPlacement.maxHeight }}
         >
@@ -3040,16 +3145,18 @@ export function InputBox({
           />
         </div>
       )}
-      {showCommandSuggestions && !showMentions && (
+      {commandSuggestions.length > 0 && (
         <div
+          hidden={!showCommandSuggestions || showMentions}
           className={cn(
-            "z-40 mb-2 px-1",
+            "z-50 mb-2 px-1",
             commandSuggestionsInline
               ? "relative"
               : "absolute right-0 bottom-full left-0",
           )}
         >
           <div
+            id={commandListId}
             aria-label="Command suggestions"
             style={{ maxHeight: commandSuggestionsMaxHeight }}
             className="bg-popover/95 text-popover-foreground border-border overflow-y-auto rounded-xl border p-1 shadow-lg backdrop-blur-sm"
@@ -3059,6 +3166,8 @@ export function InputBox({
               const selected = index === commandSuggestionIndex;
               return (
                 <button
+                  id={`${commandListId}-${suggestion.name}`}
+                  tabIndex={-1}
                   aria-selected={selected}
                   className={cn(
                     "flex min-h-12 w-full min-w-0 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
@@ -3218,9 +3327,20 @@ export function InputBox({
                   inlineSkillComposingRef.current = true;
                 }}
                 onFocus={() => setTextareaFocused(true)}
-                aria-controls={showMentions ? mentionListId : undefined}
+                aria-controls={
+                  showMentions
+                    ? mentionListId
+                    : showCommandSuggestions
+                      ? commandListId
+                      : undefined
+                }
                 aria-activedescendant={
-                  showMentions ? activeMentionOption : undefined
+                  showMentions
+                    ? activeMentionOption
+                    : showCommandSuggestions &&
+                        commandSuggestions[commandSuggestionIndex]
+                      ? `${commandListId}-${commandSuggestions[commandSuggestionIndex].name}`
+                      : undefined
                 }
                 onClick={(event) =>
                   updateMentionQuery(
@@ -3264,9 +3384,20 @@ export function InputBox({
               autoFocus={autoFocus}
               defaultValue={initialValue}
               onBlur={() => setTextareaFocused(false)}
-              aria-controls={showMentions ? mentionListId : undefined}
+              aria-controls={
+                showMentions
+                  ? mentionListId
+                  : showCommandSuggestions
+                    ? commandListId
+                    : undefined
+              }
               aria-activedescendant={
-                showMentions ? activeMentionOption : undefined
+                showMentions
+                  ? activeMentionOption
+                  : showCommandSuggestions &&
+                      commandSuggestions[commandSuggestionIndex]
+                    ? `${commandListId}-${commandSuggestions[commandSuggestionIndex].name}`
+                    : undefined
               }
               onSelect={(event) => {
                 const input = event.currentTarget;
@@ -3529,7 +3660,7 @@ export function InputBox({
             {supportReasoningEffort && context.mode !== "flash" && (
               <PromptInputActionMenu>
                 <PromptInputActionMenuTrigger
-                  className="hidden gap-1! px-2! sm:inline-flex"
+                  className="gap-1! px-2!"
                   disabled={composerLocked}
                 >
                   <div className="text-xs font-normal">
@@ -3656,17 +3787,17 @@ export function InputBox({
         </PromptInputFooter>
       </PromptInput>
       {!isWelcomeMode && (
-        <div className="bg-background absolute right-0 -bottom-[17px] left-0 z-0 h-4"></div>
+        <div className="bg-background absolute right-0 -bottom-4 left-0 z-0 h-4"></div>
       )}
 
-      {isWelcomeMode &&
-        searchParams.get("mode") !== "skill" &&
-        !showCommandSuggestions &&
-        !showMentions && (
-          <div className="flex items-center justify-center pt-2">
-            <SuggestionList onSelectPlaceholder={onSelectPlaceholder} />
-          </div>
-        )}
+      {isWelcomeMode && searchParams.get("mode") !== "skill" && (
+        <div
+          hidden={showCommandSuggestions || showMentions}
+          className="flex items-center justify-center pt-2"
+        >
+          <SuggestionList onSelectPlaceholder={onSelectPlaceholder} />
+        </div>
+      )}
 
       <p
         className={cn(

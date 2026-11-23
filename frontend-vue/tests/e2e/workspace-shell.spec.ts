@@ -194,7 +194,7 @@ test("sidebar share/export and chats updated time use the real browser boundarie
   await row.getByRole("button", { name: "More" }).click();
   await page.getByTestId("thread-share").click();
   await expect(
-    page.getByRole("status").filter({ hasText: "Link copied" }),
+    page.getByTestId("workspace-toaster").filter({ hasText: "Link copied" }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => Reflect.get(globalThis, "__wp11Copied")),
@@ -210,7 +210,9 @@ test("sidebar share/export and chats updated time use the real browser boundarie
   await page.getByTestId("thread-export-markdown").click();
   expect((await download).suggestedFilename()).toBe("WP 11 conversation.md");
   await expect(
-    page.getByRole("status").filter({ hasText: "Conversation exported" }),
+    page
+      .getByTestId("workspace-toaster")
+      .filter({ hasText: "Conversation exported" }),
   ).toBeVisible();
 
   await page.evaluate(() => {
@@ -222,7 +224,9 @@ test("sidebar share/export and chats updated time use the real browser boundarie
   await row.getByRole("button", { name: "More" }).click();
   await page.getByTestId("thread-share").click();
   await expect(
-    page.getByRole("alert").filter({ hasText: /failed to copy/i }),
+    page
+      .getByTestId("workspace-toaster")
+      .filter({ hasText: /failed to copy/i }),
   ).toBeVisible();
 
   await page.route(`**/api/langgraph/threads/${THREAD_ID}/state`, (route) =>
@@ -241,7 +245,7 @@ test("sidebar share/export and chats updated time use the real browser boundarie
   */
   await expect(
     page
-      .getByRole("alert")
+      .getByTestId("workspace-toaster")
       .filter({ hasText: "Failed to export conversation" }),
   ).toBeVisible();
 });

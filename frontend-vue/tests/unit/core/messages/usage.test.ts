@@ -1,11 +1,9 @@
+import { getAssistantTurnUsageMessages } from "@/core/messages/derived-state";
 import type { Message } from "@/core/types/message";
 import { expect, test } from "vitest";
 
 import { accumulateUsage, selectHeaderTokenUsage } from "@/core/messages/usage";
-import {
-  getAssistantTurnUsageMessages,
-  getMessageGroups,
-} from "@/core/messages/utils";
+import { getMessageGroups } from "@/core/messages/utils";
 
 test("accumulates each AI message usage only once by message id", () => {
   const aiMessage = {

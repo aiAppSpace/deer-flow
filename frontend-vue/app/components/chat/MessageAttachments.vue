@@ -1,5 +1,5 @@
 <!--
-  【文件职责】     渲染持久化 HumanMessage 的图片预览与普通文件下载卡。
+  【文件职责】     渲染HumanMessage 的图片预览、上传状态与普通文件信息卡。
   【架构位置】     L3 消息 UI adapter
   【主要导出】     默认 MessageAttachments 组件
   【依赖关系】     core/messages/attachments · core/artifacts
@@ -13,6 +13,7 @@ import { computed } from "vue";
 // （ExportTrigger / ThreadActionsMenu）与上游一致，不动。
 import { FileIcon, LoaderCircle } from "lucide-vue-next";
 
+import { Badge } from "@/components/ui/badge";
 import { resolveArtifactURL } from "@/core/artifacts/utils";
 import {
   extractMessageAttachments,
@@ -30,6 +31,36 @@ function fileUrl(path: string) {
   return props.threadId
     ? resolveArtifactURL(path, props.threadId, { isMock: props.isMock })
     : null;
+}
+// Same presentation names as message-list-item.tsx's RichFileCard.
+const FILE_TYPE_MAP: Record<string, string> = {
+  json: "JSON",
+  csv: "CSV",
+  txt: "TXT",
+  md: "Markdown",
+  py: "Python",
+  js: "JavaScript",
+  ts: "TypeScript",
+  tsx: "TSX",
+  jsx: "JSX",
+  html: "HTML",
+  css: "CSS",
+  xml: "XML",
+  yaml: "YAML",
+  yml: "YAML",
+  pdf: "PDF",
+  png: "PNG",
+  jpg: "JPG",
+  jpeg: "JPEG",
+  gif: "GIF",
+  svg: "SVG",
+  zip: "ZIP",
+  tar: "TAR",
+  gz: "GZ",
+};
+function fileTypeLabel(filename: string) {
+  const extension = filename.split(".").pop()?.toLowerCase() ?? "";
+  return FILE_TYPE_MAP[extension] ?? (extension.toUpperCase() || "FILE");
 }
 function formatBytes(bytes: number) {
   if (bytes === 0) return "—";
@@ -49,58 +80,70 @@ function formatBytes(bytes: number) {
       :key="`${file.filename}:${file.path ?? file.status}`"
     >
       <div
-        v-if="file.status === 'uploading' || !file.path || !fileUrl(file.path)"
-        class="border-border bg-background flex max-w-56 items-center gap-2 rounded-lg border p-3 text-sm"
+        v-if="file.status === 'uploading'"
+        class="bg-background border-border/40 flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 opacity-60 shadow-sm"
       >
-        <LoaderCircle
-          v-if="file.status === 'uploading'"
-          :size="16"
-          class="animate-spin"
-        />
-        <FileIcon v-else :size="16" />
-        <span class="truncate">{{ file.filename }}</span>
-        <!--
-          「还在上传」这件事此前只有那颗转圈图标在说，而它没有任何文字替代——
-          读屏器念得出文件名，念不出它还没传完。上游 message-list-item.tsx:701
-          在同一张卡片上写着 `{t.uploads.uploading}`。
-        -->
-        <span
-          v-if="file.status === 'uploading'"
-          class="text-muted-foreground shrink-0 text-[10px]"
-        >
-          {{ $i18n.t.value.uploads.uploading }}
-        </span>
-      </div>
-      <a
-        v-else-if="isImageAttachment(file)"
-        :href="fileUrl(file.path!)!"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="border-border block overflow-hidden rounded-lg border"
-      >
-        <img
-          :src="fileUrl(file.path!)!"
-          :alt="file.filename"
-          loading="lazy"
-          decoding="async"
-          class="h-32 w-auto max-w-60 object-cover"
-        />
-      </a>
-      <a
-        v-else
-        :href="fileUrl(file.path!)!"
-        target="_blank"
-        rel="noopener noreferrer"
-        class="border-border bg-background flex max-w-56 items-center gap-2 rounded-lg border p-3 text-sm"
-      >
-        <FileIcon :size="16" class="shrink-0" />
-        <span class="min-w-0">
-          <span class="block truncate">{{ file.filename }}</span>
-          <span class="text-muted-foreground block text-[10px]">{{
-            formatBytes(file.size)
+        <div class="flex items-start gap-2">
+          <LoaderCircle
+            class="text-muted-foreground mt-0.5 size-4 shrink-0 animate-spin"
+          />
+          <span
+            class="text-foreground truncate text-sm font-medium"
+            :title="file.filename"
+            >{{ file.filename }}</span
+          >
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <Badge
+            variant="secondary"
+            class="rounded px-1.5 py-0.5 text-[10px] font-normal"
+            >{{ fileTypeLabel(file.filename) }}</Badge
+          >
+          <span class="text-muted-foreground text-[10px]">{{
+            $i18n.t.value.uploads.uploading
           }}</span>
-        </span>
-      </a>
+        </div>
+      </div>
+      <template v-else-if="file.path && fileUrl(file.path)">
+        <a
+          v-if="isImageAttachment(file)"
+          :href="fileUrl(file.path)!"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group border-border/40 relative block overflow-hidden rounded-lg border"
+        >
+          <img
+            :src="fileUrl(file.path)!"
+            :alt="file.filename"
+            loading="lazy"
+            decoding="async"
+            class="h-32 w-auto max-w-60 object-cover transition-transform group-hover:scale-105"
+          />
+        </a>
+        <div
+          v-else
+          class="bg-background border-border/40 flex max-w-50 min-w-30 flex-col gap-1 rounded-lg border p-3 shadow-sm"
+        >
+          <div class="flex items-start gap-2">
+            <FileIcon class="text-muted-foreground mt-0.5 size-4 shrink-0" />
+            <span
+              class="text-foreground truncate text-sm font-medium"
+              :title="file.filename"
+              >{{ file.filename }}</span
+            >
+          </div>
+          <div class="flex items-center justify-between gap-2">
+            <Badge
+              variant="secondary"
+              class="rounded px-1.5 py-0.5 text-[10px] font-normal"
+              >{{ fileTypeLabel(file.filename) }}</Badge
+            >
+            <span class="text-muted-foreground text-[10px]">{{
+              formatBytes(file.size)
+            }}</span>
+          </div>
+        </div>
+      </template>
     </template>
   </div>
 </template>

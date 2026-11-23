@@ -1,8 +1,14 @@
 "use client";
 
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type ViewUpdate } from "@uiw/react-codemirror";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -40,6 +46,25 @@ export function CodeEditor({
   const [loaded, setLoaded] = useState<
     Awaited<ReturnType<typeof loadCodeEditorExtensions>> | undefined
   >();
+  const pendingAutoFocus = useRef(false);
+  useLayoutEffect(() => {
+    pendingAutoFocus.current = autoFocus === true;
+  }, [autoFocus]);
+  const handleUpdate = useCallback(
+    (update: ViewUpdate) => {
+      // UIW's autofocus effect runs before its editable reconfiguration. Focus
+      // an outstanding request after the new DOM attributes are applied. Once
+      // fulfilled, later saving locks must not reclaim the user's focus.
+      if (!update.state.readOnly) {
+        const requested = pendingAutoFocus.current;
+        pendingAutoFocus.current = false;
+        if (requested && autoFocus && update.startState.readOnly) {
+          update.view.focus();
+        }
+      }
+    },
+    [autoFocus],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +126,7 @@ export function CodeEditor({
               (settings as { lineNumbers?: boolean })?.lineNumbers ?? false,
           }}
           autoFocus={autoFocus}
+          onUpdate={handleUpdate}
           onChange={onChange}
           value={value}
         />

@@ -12,6 +12,7 @@ RUN if [ -n "${NPM_REGISTRY}" ]; then \
 RUN if [ -n "${NPM_REGISTRY}" ]; then pnpm config set registry "${NPM_REGISTRY}"; fi
 COPY frontend-vue/package.json frontend-vue/pnpm-lock.yaml frontend-vue/pnpm-workspace.yaml ./frontend-vue/
 COPY frontend-vue/packages/agent-core/package.json ./frontend-vue/packages/agent-core/package.json
+COPY frontend-vue/patches ./frontend-vue/patches
 RUN cd frontend-vue && pnpm install --frozen-lockfile --strict-peer-dependencies
 
 WORKDIR /workspace/frontend-vue
@@ -20,7 +21,7 @@ WORKDIR /workspace/frontend-vue
 # 2026-09-08: the dev image carried `lightningcss-darwin-arm64` — the macOS
 # build of Tailwind's CSS engine — on an Alpine/arm64 container, from a
 # `dependencies` layer Docker had cached a month earlier. Nothing revalidates
-# such a layer: its only inputs are package.json and pnpm-lock.yaml, so as long
+# such a layer: its inputs include package manifests, pnpm-lock.yaml and patches, so as long
 # as those do not change the same tree is served forever. It surfaced ten hours
 # into a session as a 500 the first time Tailwind compiled a stylesheet from
 # cold, because the compile cache had answered everything until then.

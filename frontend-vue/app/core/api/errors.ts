@@ -3,7 +3,7 @@
   【架构位置】     L3
   【主要导出】     GatewayResponseError · UnauthorizedError · read/throw helpers
   【依赖关系】     Web Response
-  【边界与注意】   body 只能消费一次；旧函数名委托同一实现，不再维持第二套解析器。
+  【边界与注意】   body 只消费一次；通用诊断与 coded API 的展示规则不同，原文均保留。
 */
 
 /**
@@ -111,7 +111,24 @@ export async function throwGatewayApiError(
   response: Response,
   fallback: string,
 ): Promise<never> {
-  return throwGatewayResponseError(response, fallback);
+  const error = await readGatewayResponseError(response, fallback);
+  const detail =
+    typeof error.body === "object" && error.body !== null
+      ? Reflect.get(error.body, "detail")
+      : undefined;
+  // API callers display the coded message, while validation details and raw
+  // proxy responses remain available to domain-specific diagnostic presenters.
+  error.message =
+    typeof detail === "string"
+      ? detail
+      : detail &&
+          typeof detail === "object" &&
+          !Array.isArray(detail) &&
+          typeof detail.message === "string" &&
+          detail.message
+        ? detail.message
+        : fallback;
+  throw error;
 }
 
 export function isGatewayResponseError(

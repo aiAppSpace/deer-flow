@@ -18,7 +18,7 @@
 */
 import { flushPromises, mount } from "@vue/test-utils";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
@@ -29,7 +29,21 @@ import {
   workspaceToastKey,
 } from "@/core/workspace-shell/toast";
 
+// These tests own message-group and interaction state, not the Markdown renderer.
+// Mock its module boundary so the async content pipeline cannot outlive the fixture.
+vi.mock("@/components/chat/MessageMarkdown.vue", () => ({
+  default: {
+    name: "MessageMarkdown",
+    props: ["content"],
+    template: "<div data-testid='markdown'>{{ content }}</div>",
+  },
+}));
+
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+});
 
 function turn(humanId: string | undefined): Message[] {
   return [
@@ -49,7 +63,7 @@ function mountList(messages: Message[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return mount(MessageList, {
+  const wrapper = mount(MessageList, {
     props: {
       messages,
       rawMessages: messages,
@@ -62,13 +76,14 @@ function mountList(messages: Message[]) {
       provide: { [workspaceToastKey as symbol]: toastStore },
       plugins: [[VueQueryPlugin, { queryClient }]],
       stubs: {
-        StreamMarkdown: { template: "<div data-testid='markdown' />" },
         ReferenceAttachment: true,
         WorkspaceChangesBadge: true,
         SubtaskCard: true,
       },
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 function editButtons(wrapper: ReturnType<typeof mountList>) {

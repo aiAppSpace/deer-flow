@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RememberSessionOption } from "@/components/auth/remember-session-option";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,13 @@ export default function SetupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const pageGeneration = useRef(0);
+  useLayoutEffect(() => {
+    pageGeneration.current += 1;
+    return () => {
+      pageGeneration.current += 1;
+    };
+  }, [user?.id]);
   const [rememberMe, setRememberMe] = useState(
     () => loadRememberLoginPreference().rememberMe,
   );
@@ -76,10 +83,13 @@ export default function SetupPage() {
   // ── Init-admin handler ─────────────────────────────────────────────
   const handleInitAdmin = async (e: React.SubmitEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const generation = pageGeneration.current;
+    const current = () => generation === pageGeneration.current;
     setError("");
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t.setup.passwordMismatch);
       return;
     }
 
@@ -96,8 +106,10 @@ export default function SetupPage() {
         }),
       });
 
+      if (!current()) return;
       if (!res.ok) {
         const data = await res.json();
+        if (!current()) return;
         if (isSystemAlreadyInitializedError(data)) {
           router.replace("/login");
           return;
@@ -109,23 +121,26 @@ export default function SetupPage() {
 
       router.push("/workspace");
     } catch {
-      setError("Network error. Please try again.");
+      if (current()) setError(t.login.networkError);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 
   // ── Change-password handler ────────────────────────────────────────
   const handleChangePassword = async (e: React.SubmitEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const generation = pageGeneration.current;
+    const current = () => generation === pageGeneration.current;
     setError("");
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(t.setup.passwordMismatch);
       return;
     }
     if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError(t.setup.passwordTooShort);
       return;
     }
 
@@ -146,8 +161,10 @@ export default function SetupPage() {
         }),
       });
 
+      if (!current()) return;
       if (!res.ok) {
         const data = await res.json();
+        if (!current()) return;
         const authError = parseAuthError(data);
         setError(authError.message);
         return;
@@ -155,9 +172,9 @@ export default function SetupPage() {
 
       router.push("/workspace");
     } catch {
-      setError("Network error. Please try again.");
+      if (current()) setError(t.login.networkError);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 
@@ -166,7 +183,7 @@ export default function SetupPage() {
   if (mode === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <p className="text-muted-foreground text-sm">{t.common.loading}</p>
       </div>
     );
   }
@@ -221,20 +238,23 @@ export default function SetupPage() {
         <div className="border-border/20 bg-background/5 w-full max-w-md space-y-6 rounded-3xl border p-8 backdrop-blur-sm">
           <div className="text-center">
             <h1 className="font-serif text-3xl">DeerFlow</h1>
-            <p className="text-muted-foreground mt-2">Create admin account</p>
+            <p className="text-muted-foreground mt-2">
+              {t.setup.createAdminTitle}
+            </p>
             <p className="text-muted-foreground mt-1 text-xs">
-              Set up the administrator account to get started.
+              {t.setup.createAdminSubtitle}
             </p>
           </div>
           <form onSubmit={handleInitAdmin} className="space-y-2">
             <div className="flex flex-col space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
-                Email
+                {t.login.email}
               </label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                autoComplete="email"
+                placeholder={t.login.emailPlaceholder}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -242,12 +262,13 @@ export default function SetupPage() {
             </div>
             <div className="flex flex-col space-y-1">
               <label htmlFor="password" className="text-sm font-medium">
-                Password
+                {t.setup.password}
               </label>
               <Input
                 id="password"
                 type="password"
-                placeholder="Password (min. 8 characters)"
+                autoComplete="new-password"
+                placeholder={t.setup.passwordPlaceholder}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -256,12 +277,13 @@ export default function SetupPage() {
             </div>
             <div className="flex flex-col space-y-1">
               <label htmlFor="confirmPassword" className="text-sm font-medium">
-                Confirm Password
+                {t.setup.confirmPassword}
               </label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Confirm password"
+                autoComplete="new-password"
+                placeholder={t.setup.confirmPasswordPlaceholder}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -272,9 +294,13 @@ export default function SetupPage() {
               checked={rememberMe}
               onCheckedChange={setRememberMe}
             />
-            {error && <p className="text-destructive ms-1 text-sm">{error}</p>}
+            {error && (
+              <p role="alert" className="text-destructive ms-1 text-sm">
+                {error}
+              </p>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account…" : "Create Admin Account"}
+              {loading ? t.setup.creatingAdmin : t.setup.createAdmin}
             </Button>
           </form>
         </div>
@@ -297,30 +323,36 @@ export default function SetupPage() {
         <div className="text-center">
           <h1 className="font-serif text-3xl">DeerFlow</h1>
           <p className="text-muted-foreground mt-2">
-            Complete admin account setup
+            {t.setup.completeAdminTitle}
           </p>
           <p className="text-muted-foreground mt-1 text-xs">
-            Set your real email and a new password.
+            {t.setup.completeAdminSubtitle}
           </p>
         </div>
         <form onSubmit={handleChangePassword} className="space-y-4">
           <Input
             type="email"
-            placeholder="Your email"
+            placeholder={t.setup.emailPlaceholder}
+            aria-label={t.setup.emailPlaceholder}
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
           <Input
             type="password"
-            placeholder="Current password"
+            placeholder={t.setup.currentPassword}
+            aria-label={t.setup.currentPassword}
+            autoComplete="current-password"
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             required
           />
           <Input
             type="password"
-            placeholder="New password"
+            placeholder={t.setup.newPassword}
+            aria-label={t.setup.newPassword}
+            autoComplete="new-password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             required
@@ -328,7 +360,9 @@ export default function SetupPage() {
           />
           <Input
             type="password"
-            placeholder="Confirm new password"
+            placeholder={t.setup.confirmNewPassword}
+            aria-label={t.setup.confirmNewPassword}
+            autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
@@ -338,9 +372,13 @@ export default function SetupPage() {
             checked={rememberMe}
             onCheckedChange={setRememberMe}
           />
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {error && (
+            <p role="alert" className="text-destructive text-sm">
+              {error}
+            </p>
+          )}
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Setting up…" : "Complete Setup"}
+            {loading ? t.setup.settingUp : t.setup.completeSetup}
           </Button>
         </form>
       </div>

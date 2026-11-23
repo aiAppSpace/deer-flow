@@ -338,11 +338,22 @@ describe("停止：cancel 与 abort 是两回事（08 硬规则 7/8 · 05 L13/L1
         { terminal: false },
         { terminal: true, outcome: "cancelled", reason: "interrupted" },
       ],
+      resumes: [
+        async () =>
+          responseOf("data: confirmed-tail\n\nevent: end\ndata: null\n\n"),
+      ],
     });
     session.stop();
     const outputs = await collect(session.run("hi"));
 
     expect(calls.inspect).toBe(3);
+    expect(calls.resume).toHaveLength(1);
+    expect(
+      outputs.some(
+        (output) =>
+          output.kind === "event" && output.event.data === "confirmed-tail",
+      ),
+    ).toBe(true);
     expect(statesOf(outputs).some((s) => s.status === "stopping")).toBe(true);
     expect(finalState(outputs)).toMatchObject({
       status: "cancelled",
@@ -369,6 +380,7 @@ describe("停止：cancel 与 abort 是两回事（08 硬规则 7/8 · 05 L13/L1
       creates: [async () => responseOf("data: a\nid: 1\n\n")],
       cancel: { kind: "accepted" },
       inspects: [{ terminal: true, outcome: "completed" }],
+      resumes: [async () => responseOf("event: end\ndata: null\n\n")],
     });
     session.stop();
     expect(finalState(await collect(session.run("hi")))?.status).toBe(
@@ -386,6 +398,34 @@ describe("停止：cancel 与 abort 是两回事（08 硬规则 7/8 · 05 L13/L1
       status: "failed",
       error: { kind: "backend_error" },
     });
+  });
+
+  it("known handles only resume, including stop before the first read", async () => {
+    const { session, calls } = makeSession(
+      {
+        resumes: [async () => responseOf("event: end\ndata: null\n\n")],
+      },
+      { initialHandle: { runId: "run-1" }, initialCursor: "saved" },
+    );
+    await collect(session.run("ignored"));
+    expect(calls.create).toBe(0);
+    expect(calls.resume).toEqual(["saved"]);
+    const stopped = makeSession({}, { initialHandle: { runId: "run-1" } });
+    stopped.session.stop();
+    await collect(stopped.session.run("ignored"));
+    expect(stopped.calls.create).toBe(0);
+    expect(stopped.calls.resume).toHaveLength(0);
+    expect(stopped.calls.cancel).toHaveLength(1);
+  });
+
+  it("a cancelled drain without END and without a confirmed tail is never success", async () => {
+    const { session } = makeSession({
+      cancel: { kind: "drain", response: responseOf("data: partial\n\n") },
+      inspects: [{ terminal: true, outcome: "cancelled" }],
+      resumes: [async () => responseOf("data: still partial\n\n")],
+    });
+    session.stop();
+    expect(finalState(await collect(session.run("hi")))?.status).toBe("failed");
   });
 
   it("L13：abort 只断本地读取，**绝不**发 cancel", async () => {

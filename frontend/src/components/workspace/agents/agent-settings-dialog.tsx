@@ -232,9 +232,11 @@ export function AgentSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(min(12rem,40dvh),1fr)_auto]">
         <DialogHeader className="pr-6">
-          <DialogTitle>{t.agents.settingsTitle} · {agent.name}</DialogTitle>
+          <DialogTitle>
+            {t.agents.settingsTitle} · {agent.name}
+          </DialogTitle>
           <DialogDescription>{t.agents.settingsDescription}</DialogDescription>
         </DialogHeader>
 
@@ -284,6 +286,7 @@ export function AgentSettingsDialog({
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="h-auto min-h-8 max-w-full whitespace-normal"
                   disabled={updateAgent.isPending}
                   onClick={() => {
                     setKnowledgeSelection({ mode: "all" });

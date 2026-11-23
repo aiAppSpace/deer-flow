@@ -50,7 +50,7 @@ export function CapabilityCenter() {
   }
   return (
     <div className="bg-background flex h-full min-h-0 flex-col">
-      <div className="text-muted-foreground flex h-14 shrink-0 items-center gap-3 border-b px-4 text-xs md:px-8">
+      <div className="text-muted-foreground flex min-h-14 shrink-0 flex-wrap items-center gap-3 border-b px-4 text-xs md:px-8">
         <SidebarTrigger className="md:hidden" />
         <span>{t.breadcrumb.workspace}</span>
         <span className="opacity-40">/</span>
@@ -91,8 +91,15 @@ export function CapabilityCenter() {
               />
             </div>
           </header>
-          <Tabs value={tab} onValueChange={changeTab} className="mb-7 border-b">
-            <TabsList variant="line" className="h-12 gap-7">
+          <Tabs
+            value={tab}
+            onValueChange={changeTab}
+            className="@container/capability-tabs mb-7 border-b"
+          >
+            <TabsList
+              variant="line"
+              className="h-12 gap-7 @max-sm/capability-tabs:max-w-full @max-sm/capability-tabs:flex-wrap @max-sm/capability-tabs:group-data-[orientation=horizontal]/tabs:h-auto @max-sm/capability-tabs:[&>button]:h-auto @max-sm/capability-tabs:[&>button]:max-w-full @max-sm/capability-tabs:[&>button]:min-w-0 @max-sm/capability-tabs:[&>button]:flex-auto @max-sm/capability-tabs:[&>button]:wrap-anywhere @max-sm/capability-tabs:[&>button]:whitespace-normal"
+            >
               <TabsTrigger value="plugins" className="gap-2 px-1 pb-4 text-sm">
                 <BlocksIcon className="size-4" />
                 {t.capabilities.toolsAndIntegrations}

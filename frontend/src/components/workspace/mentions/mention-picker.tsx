@@ -358,7 +358,15 @@ export function MentionPicker({
                   aria-disabled={busy || option.disabled}
                   disabled={busy || option.disabled}
                   onMouseDown={(event) => event.preventDefault()}
-                  onMouseEnter={() => setActiveId(option.id)}
+                  onPointerMove={(event) => {
+                    // Reflow under a still pointer must not steal keyboard highlight.
+                    if (
+                      (event.pointerType === "mouse" ||
+                        event.pointerType === "pen") &&
+                      (event.movementX || event.movementY)
+                    )
+                      setActiveId(option.id);
+                  }}
                   onClick={() => choose(option)}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm disabled:opacity-40",
@@ -414,7 +422,7 @@ export function MentionPicker({
         (capability.enabled && conversations.hasNextPage)) && (
         <button
           type="button"
-          className="px-2 py-2 text-xs underline"
+          className="px-2 py-2 text-xs underline disabled:cursor-not-allowed disabled:opacity-50"
           disabled={
             documents.isFetchingNextPage || conversations.isFetchingNextPage
           }

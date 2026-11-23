@@ -3,17 +3,12 @@
                    元数据、以及按钮名字带正文。
   【架构位置】     L3 测试
   【依赖关系】     components/workspace/settings/MemorySettings.vue
-  【边界与注意】   这一屏**从来没进过对照取样面**（棘轮要求场景 id 必须是 React 某个
-                   spec 的文件名，settings 没有对应的那一个），所以台账对它一行都报不出来。
-                   实测差异是靠 probe 直接打开 `?settings=memory` 量出来的：74 行。
-                   守住它只能靠这里。
-
-                   摘要区断言的是**渲染结果**（标题层级、引用块、行内代码），不是那段
-                   markdown 文本——文本本身由 core/memory/document 的用例钉住，这里要
-                   回答的是「它真的被当成 markdown 渲染了」。
+  【边界与注意】   摘要合同使用真实异步 Markdown 渲染器，验证标题层级、引用块与 raw
+                   HTML 的 DOM 结果；筛选、metadata 与按钮名合同只保留正文边界。
+                   每条用例结束都卸载组件，再清理 globals 与 DOM。
 */
 
-import { flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
@@ -44,6 +39,7 @@ const MEMORY: UserMemory = {
     },
     personalContext: { summary: "", updatedAt: "" },
     topOfMind: { summary: "Recent work", updatedAt: "2026-08-22T00:00:00Z" },
+    cognitiveStyle: { summary: "", updatedAt: "" },
   },
   history: {
     recentMonths: { summary: "Settings", updatedAt: "2026-08-22T00:00:00Z" },
@@ -79,10 +75,8 @@ function mutation() {
 }
 
 /*
-  摘要区的渲染器是 defineAsyncComponent（MessageMarkdown 里的 StreamMarkdown）。
-  `flushPromises` 只冲微任务，冲多少轮都等不到那条动态 import——它要的是真的定时器
-  时钟。`vi.waitFor` 才行（message-list-links.dom.test.ts 是同一个办法）。
-  不这么等的话，量出来的是「markdown 没渲染」，而那不是产品的问题。
+  摘要渲染跨越两层 defineAsyncComponent 与模块加载，flushPromises 不代表加载完成。
+  真实渲染合同等待可见标题；其它合同不启动与其断言无关的异步模块链。
 */
 async function settleMarkdown(wrapper: ReturnType<typeof mount>) {
   await flushPromises();
@@ -95,7 +89,7 @@ async function settleMarkdown(wrapper: ReturnType<typeof mount>) {
   );
 }
 
-function mountMemory() {
+function mountMemory({ renderMarkdown = false } = {}) {
   memoryFactory.mockReturnValue({
     memory: ref(MEMORY),
     loading: ref(false),
@@ -115,6 +109,13 @@ function mountMemory() {
       provide: { [workspaceToastKey as symbol]: toastStore },
       stubs: {
         NuxtLink: { template: '<a :href="to"><slot /></a>', props: ["to"] },
+        MessageMarkdown: renderMarkdown
+          ? false
+          : {
+              name: "MessageMarkdown",
+              props: ["content"],
+              template: "<div>{{ content }}</div>",
+            },
       },
     },
   });
@@ -127,15 +128,19 @@ beforeEach(() => {
   vi.stubGlobal("navigateTo", vi.fn());
 });
 
-afterEach(() => {
-  vi.clearAllMocks();
-  vi.unstubAllGlobals();
-  document.body.innerHTML = "";
+enableAutoUnmount((unmountAll) => {
+  afterEach(() => {
+    unmountAll();
+    toastStore.clear();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
 });
 
 describe("MemorySettings 呈现层", () => {
   it("renders the summaries as a markdown document, empty sections included", async () => {
-    const wrapper = mountMemory();
+    const wrapper = mountMemory({ renderMarkdown: true });
     await settleMarkdown(wrapper);
 
     const block = wrapper.get('[data-testid="memory-summary"]');
@@ -149,6 +154,7 @@ describe("MemorySettings 呈现层", () => {
       enUS.settings.memory.markdown.work,
       enUS.settings.memory.markdown.personal,
       enUS.settings.memory.markdown.topOfMind,
+      enUS.settings.memory.markdown.cognitiveStyle,
       enUS.settings.memory.markdown.recentMonths,
       enUS.settings.memory.markdown.earlierContext,
       enUS.settings.memory.markdown.longTermBackground,
@@ -164,18 +170,16 @@ describe("MemorySettings 呈现层", () => {
     // 粗体走 Streamdown 的镜像（span.font-semibold），不是裸 <strong>。
     expect(block.findAll("strong")).toHaveLength(0);
     expect(block.html()).toContain('data-streamdown="strong"');
-    wrapper.unmount();
   });
 
   it("shows relative times, not the raw ISO timestamps the Gateway sends", async () => {
-    const wrapper = mountMemory();
+    const wrapper = mountMemory({ renderMarkdown: true });
     await settleMarkdown(wrapper);
 
     expect(wrapper.text()).not.toContain("2026-08-22T00:00:00Z");
     expect(wrapper.get('[data-testid="memory-summary"]').text()).toContain(
       "ago",
     );
-    wrapper.unmount();
   });
 
   /*
@@ -210,7 +214,6 @@ describe("MemorySettings 呈现层", () => {
         .map((r) => r.attributes("aria-checked")),
     ).toEqual(["false", "true", "false"]);
     expect(wrapper.find('[data-testid="memory-summary"]').exists()).toBe(false);
-    wrapper.unmount();
   });
 
   it("keeps the search box a plain textbox", async () => {
@@ -218,7 +221,6 @@ describe("MemorySettings 呈现层", () => {
     await flushPromises();
     const search = wrapper.get('[data-testid="memory-search"]');
     expect(search.attributes("type")).not.toBe("search");
-    wrapper.unmount();
   });
 
   /*
@@ -242,7 +244,6 @@ describe("MemorySettings 呈现层", () => {
     const link = factB.get("a");
     expect(link.text()).toBe(enUS.settings.memory.markdown.table.view);
     expect(link.attributes("href")).toContain("thread-42");
-    wrapper.unmount();
   });
 
   /*
@@ -255,7 +256,6 @@ describe("MemorySettings 呈现层", () => {
     expect(text.indexOf("Category:")).toBeLessThan(
       text.indexOf("Prefers Chinese"),
     );
-    wrapper.unmount();
   });
 
   /*
@@ -282,6 +282,5 @@ describe("MemorySettings 呈现层", () => {
       expect(button.text()).toBe("");
       expect(button.attributes("title")).toBe(button.attributes("aria-label"));
     }
-    wrapper.unmount();
   });
 });

@@ -3,11 +3,11 @@
 .PHONY: help install dev build preview lint format format-check typecheck typecheck-tests typecheck-core test verify asset-budget \
 	e2e-install e2e-preflight e2e e2e-auth e2e-visual e2e-infra e2e-proxy-options e2e-stream \
 	e2e-protocol e2e-real e2e-scheduled e2e-channels e2e-agents e2e-settings e2e-shell \
-	e2e-browser e2e-external e2e-parity e2e-parity-auth e2e-mock e2e-backend e2e-list \
+	e2e-browser e2e-external e2e-parity e2e-parity-ci e2e-parity-auth e2e-parity-session e2e-cross-app e2e-mock e2e-backend e2e-list \
 	proxy-security audit docker-build container-smoke \
 	upstream-drift upstream-accept dom-parity icon-parity parity-accept parity-auth-accept \
 	i18n-check i18n-diff i18n-unused i18n-source-check i18n-refresh \
-	gen-api-types gen-api-types-check gen-contract-constants gen-contract-constants-check \
+	export-openapi export-openapi-check gen-api-types gen-api-types-check gen-contract-constants gen-contract-constants-check \
 	consumer-check standalone-check standalone-sim coverage
 
 PYTHON ?= python3
@@ -16,7 +16,7 @@ EXEC = $(PNPM) exec
 E2E_EXEC = node scripts/with-loopback-no-proxy.mjs -- $(EXEC)
 DEV_PORT ?= 3100
 # 每个 e2e 套件一个前端端口 + 需要真实后端的再加一个 Gateway 端口，
-# 这样多个套件可以并行跑而不抢端口。默认值同时写在各自的 config 里。
+# 默认值同时写在各自的 config 里；构建产物共享，套件仍须串行执行。
 E2E_PORT ?= 3101
 E2E_PROXY_OPTIONS_PORT ?= 3102
 E2E_STREAM_PORT ?= 3104
@@ -31,13 +31,17 @@ E2E_SHELL_PORT ?= 3114
 E2E_PARITY_PORT ?= 3115
 E2E_PARITY_REACT_PORT ?= 3116
 E2E_PARITY_GATEWAY_PORT ?= 8021
+# Real SQL sessions/RBAC must not initialize the anonymous auth suite's store.
+E2E_PARITY_SESSION_PORT ?= 3119
+E2E_PARITY_SESSION_REACT_PORT ?= 3120
+E2E_PARITY_SESSION_GATEWAY_PORT ?= 8023
 IMAGE ?= deer-flow-frontend-vue:ci
 
 help:
 	@echo "frontend-vue commands:"
 	@echo "  make dev / build / preview     Nuxt lifecycle (dev port $(DEV_PORT))"
-	@echo "  make verify                    lint + format + types + unit + i18n + OpenAPI"
-	@echo "                                 + contracts + standalone + build"
+	@echo "  make verify                    lint + format + types + unit + i18n + generated types"
+	@echo "                                 + contracts + static independence + build"
 	@echo ""
 	@echo "  E2E 套件（一个套件 = 一种后端拓扑，名字说的是测什么）:"
 	@echo "  make e2e                       product contracts on a mocked Gateway (default gate)"
@@ -56,6 +60,9 @@ help:
 	@echo "  make e2e-browser               browser panel against a real Chromium backend"
 	@echo "  make e2e-external              WebSocket and OIDC; needs the backend browser extra"
 	@echo "  make e2e-parity                React and Vue on one replay Gateway; needs ../frontend"
+	@echo "  make e2e-parity-ci GROUP=<id>  one whole-file CI group; all groups are mandatory"
+	@echo "  make e2e-parity-session        real authenticated SQL owners and live RBAC in both apps"
+	@echo "  make e2e-cross-app             mandatory product + anonymous auth + real session parity"
 	@echo "  make e2e-mock                  every suite that needs no backend process"
 	@echo "  make e2e-backend               every suite that needs a real Gateway"
 	@echo "  make e2e-list                  collect every suite and print its test count"
@@ -63,8 +70,8 @@ help:
 	@echo "  make coverage                  unit-test line coverage (diagnostic, not a gate)"
 	@echo "  make asset-budget              build and enforce raw/gzip client asset budgets"
 	@echo "  make container-smoke           non-root /health / SIGTERM production image smoke"
-	@echo "  make upstream-drift            report what ../frontend changed since the marker"
-	@echo "  make upstream-accept           advance the reviewed-upstream marker to HEAD"
+	@echo "  make upstream-drift            report React, backend and contract changes and WIP"
+	@echo "  make upstream-accept           accept explicit REVIEWED_REVISION + REVIEW_EVIDENCE"
 	@echo "  make dom-parity                diff React vs Vue semantic DOM (needs both apps running)"
 	@echo "  make icon-parity               diff React vs Vue icon glyphs/sizes and tooltips (source scan)"
 	@echo "  make parity-accept             re-record the checked-in parity difference list"
@@ -74,7 +81,7 @@ help:
 	@echo "  make gen-contract-constants    regenerate backend contract constants from contracts/*.json"
 	@echo "  make consumer-check            clean-install packages/agent-core into a temp consumer"
 	@echo "  make standalone-check          P0 gate: no cross-app reference to ../frontend"
-	@echo "  make standalone-sim            P0 gate (dynamic): move ../frontend away and run"
+	@echo "  make standalone-sim            isolated install/build/test without React"
 	@echo "  make i18n-check                dictionary health: locales in sync, no key lost"
 	@echo "  make i18n-diff / i18n-unused   exact key and audited-unused drift against baseline"
 	@echo "  make i18n-source-check         reject core English literals in product Vue SFCs"
@@ -137,6 +144,12 @@ typecheck-core:
 # 让 CI 去 curl 一个跑着的后端，门禁就会随部署状态变色。
 # check 检的是幂等性——同一份快照生成两次必须一致。刷新快照的命令见
 # baseline/openapi.snapshot.README.md。OpenAPI 不承担 SSE schema（06 原话）。
+export-openapi:
+	../backend/.venv/bin/python scripts/export-openapi.py
+
+export-openapi-check:
+	../backend/.venv/bin/python scripts/export-openapi.py --check
+
 gen-api-types:
 	node scripts/gen-api-types.mjs
 
@@ -162,14 +175,8 @@ consumer-check:
 standalone-check:
 	node scripts/standalone-check.mjs
 
-# 同一条判据的**动态**那一半：真把 ../frontend 移出 checkout 跑一遍，再移回来。
-#
-# 为什么两条都要：`standalone-check` 是静态证明（没有代码级跨应用引用），
-# wave 83 之前它已经 0 了几十轮，而第一次真做实验时 `make verify` 当场红——
-# `upstream-key-coverage.test.ts` 的 `describe.skipIf` 工厂函数照样执行。
-#
-# **有意不进 verify**：它动文件系统，而且不能与任何构建/测试并发。它是收工清单
-# 的一项，和 e2e-backend / asset-budget 同级。
+# 动态证明：隔离副本中去掉 React，独立安装、构建并跑整套单测。
+# node scripts/standalone-sim.mjs --with-e2e 另外验证真实 mock/backend 套件。
 standalone-sim:
 	node scripts/standalone-sim.mjs
 
@@ -290,16 +297,32 @@ e2e-browser:
 e2e-external:
 	$(call run_suite,external)
 
-# 唯一需要**兄弟应用**的套件：React 与 Vue 同时架在一个 replay Gateway 上。
-# 因此它不进任何聚合入口——本仓的 install/build/test/e2e 都不依赖 ../frontend
-# （见 make standalone-check）。frontend/ 缺席时 React 不启动，用例整组跳过。
+# Cross-app gates have their own aggregate. The standalone mock/backend gates
+# remain independently executable; every formal cross-app entry requires React.
+e2e-parity e2e-parity-ci e2e-parity-auth e2e-parity-session e2e-cross-app parity-accept parity-auth-accept: export PARITY_REQUIRE_REACT = 1
 e2e-parity:
 	$(call run_suite,parity)
+
+# CI only: all whole-file groups are required by the workflow aggregate.
+e2e-parity-ci:
+	node scripts/parity-ci.mjs --group "$(GROUP)"
 
 # 开着鉴权才到得了的那几屏（登录、安装向导）。与 e2e-parity 分开是因为
 # auth 模式是构建期决定的，一个 preview 只能是一种——见该 config 的文件头。
 e2e-parity-auth:
 	$(call run_suite,parity-auth)
+
+# Real session cookies, CSRF, expected SQL owner and dynamically assigned roles.
+# A separate Gateway home preserves parity-auth's needs_setup precondition.
+e2e-parity-session:
+	$(call run_suite,parity-session)
+
+# Recipes are sequential even when an outer make uses -j: all Nuxt/Next builds
+# share output directories, and anonymous auth must run before session setup.
+e2e-cross-app:
+	$(MAKE) --no-print-directory e2e-parity
+	$(MAKE) --no-print-directory e2e-parity-auth
+	$(MAKE) --no-print-directory e2e-parity-session
 
 # 刷新对照差异清单。
 #
@@ -325,13 +348,9 @@ parity-auth-accept:
 # ── 聚合入口 ────────────────────────────────────────────────────────────
 # 不需要任何后端进程，CI 的主门禁。
 #
-# e2e-visual **不在**这里：截图基线目前只有 `-darwin` 一份，而 CI 跑 Linux，
-# 两边的字体栅格化不同。要把它接进 CI，得先生成 `-linux` 基线并签入。在那之前
-# 它是本机门禁——这也正是它悄悄红了三个提交没人发现的原因（旧 CI 只跑
-# @visual-seed，从没跑过产品截图）。
-# 「基线平台集合 == 门禁运行平台集合」现在由
-# tests/guards/visual-baseline-platforms.test.ts 双向守着，具体解除步骤写在
-# 那个文件的头注释里。
+# Product screenshots run in the mandatory platform-pinned product-visual CI
+# job; cross-app suites run in e2e-cross-app. Neither belongs to the portable
+# mock/backend aggregates, which must work without the sibling application.
 e2e-mock: e2e e2e-auth e2e-infra e2e-proxy-options e2e-stream
 
 # 需要 backend 的 uv 环境。
@@ -339,10 +358,7 @@ e2e-backend: e2e-protocol e2e-real e2e-scheduled e2e-channels e2e-agents e2e-set
 
 e2e-list:
 	@$(MAKE) --no-print-directory e2e-preflight
-	@for c in playwright*.config.ts; do \
-		printf '%-38s ' "$$c"; \
-		$(E2E_EXEC) playwright test -c "$$c" --list --reporter=line 2>&1 | grep -oE 'Total: [0-9]+ test' || echo '收集失败'; \
-	done
+	node scripts/list-e2e.mjs
 
 proxy-security: e2e-infra e2e-proxy-options
 	$(EXEC) vitest run tests/unit/config/routes.test.ts tests/unit/server/gateway-proxy.test.ts
@@ -355,11 +371,11 @@ upstream-drift:
 	node scripts/upstream-drift.mjs
 
 upstream-accept:
-	node scripts/upstream-drift.mjs --accept
+	node scripts/upstream-drift.mjs --accept --reviewed-revision "$(REVIEWED_REVISION)" --review-evidence "$(REVIEW_EVIDENCE)"
 
 # 语义 DOM 对照。需要两个 app 都在跑，所以是顾问命令而不是门禁：
-#   React  cd ../frontend && pnpm build && PORT=3000 pnpm start
-#   Vue    make build && PORT=3100 HOST=127.0.0.1 pnpm exec nuxt preview
+#   React  cd ../frontend && python3 ../scripts/pnpm.py --dir frontend build && PORT=3200 python3 ../scripts/pnpm.py --dir frontend start
+#   Vue    make build && PORT=3100 HOST=127.0.0.1 python3 ../scripts/pnpm.py --dir frontend-vue exec nuxt preview
 # 端口可用 DOM_PARITY_REACT_BASE / DOM_PARITY_VUE_BASE 覆盖。
 # 为什么不用词典比对：见 scripts/dom-parity.mjs 的文件头。
 dom-parity:
@@ -371,16 +387,8 @@ dom-parity:
 icon-parity:
 	node scripts/icon-parity.mjs
 
-# `make audit` 是**棘轮，不是「永远红」**（wave 202 改的）。
-#
-# 原来它直接跑 `pnpm audit`，注释里写着「当前预期是红的，14 条，逐条分诊见上」。
-# wave 202 实测那段分诊已经盖不住它了：**7 个包**里 svgo / vitest / @vitest/mocker
-# 从来没被分诊过（svgo 还是 high），而数字和包名写死在散文里、`pnpm audit` 每天在变，
-# **两边漂了没有任何征兆**。**一个永远红的门禁不产生信息**——人只会学会忽略它。
-#
-# 现在的判据：**每一个被报出来的包都在 baseline/audit-triage.json 里表过态就绿，
-# 冒出一个没表过态的、或者表里有已经不报的过期条目，就红。**
-# 逐包的可达性 / 决定 / 为什么 / 翻案判据都在那张表里，不在这段注释里。
+# Dependency findings match advisory ID, vulnerable range, installed version, path and severity.
+# Unknown, mismatched or stale entries fail; reachability evidence lives in baseline/audit-triage.json.
 audit:
 	node scripts/audit-triage.mjs
 

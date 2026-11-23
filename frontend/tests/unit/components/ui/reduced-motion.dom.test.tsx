@@ -134,7 +134,9 @@ describe("FlickeringGrid", () => {
     globalThis.cancelAnimationFrame = (() =>
       undefined) as typeof cancelAnimationFrame;
     class IO {
-      constructor(private cb: (entries: { isIntersecting: boolean }[]) => void) {}
+      constructor(
+        private cb: (entries: { isIntersecting: boolean }[]) => void,
+      ) {}
       observe() {
         this.cb([{ isIntersecting: true }]);
       }
@@ -142,7 +144,8 @@ describe("FlickeringGrid", () => {
         /* nothing to release */
       }
     }
-    globalThis.IntersectionObserver = IO as unknown as typeof IntersectionObserver;
+    globalThis.IntersectionObserver =
+      IO as unknown as typeof IntersectionObserver;
     class RO {
       observe() {
         /* size never changes in jsdom */

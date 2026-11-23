@@ -182,7 +182,7 @@ function SkillList({ skills, query }: { skills: Skill[]; query: string }) {
           {t.capabilities.skillHint}
         </p>
       </div>
-      <header className="mt-2 flex max-w-full min-w-0 flex-wrap items-center justify-between gap-3">
+      <header className="@container/capability-tabs mt-2 flex max-w-full min-w-0 flex-wrap items-center justify-between gap-3">
         <Tabs
           className="max-w-full min-w-0"
           value={filter}
@@ -190,7 +190,7 @@ function SkillList({ skills, query }: { skills: Skill[]; query: string }) {
         >
           <TabsList
             aria-label={t.capabilities.skills}
-            className="bg-muted/50 h-auto max-w-full flex-wrap rounded-lg"
+            className="bg-muted/50 h-auto max-w-full flex-wrap rounded-lg @max-sm/capability-tabs:max-w-full @max-sm/capability-tabs:flex-wrap @max-sm/capability-tabs:group-data-[orientation=horizontal]/tabs:h-auto @max-sm/capability-tabs:[&>button]:h-auto @max-sm/capability-tabs:[&>button]:max-w-full @max-sm/capability-tabs:[&>button]:min-w-0 @max-sm/capability-tabs:[&>button]:flex-auto @max-sm/capability-tabs:[&>button]:wrap-anywhere @max-sm/capability-tabs:[&>button]:whitespace-normal"
           >
             <TabsTrigger value="public" className="rounded-md px-3 text-xs">
               {t.capabilities.builtin}

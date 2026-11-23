@@ -20,6 +20,10 @@ import { mount } from "@vue/test-utils";
 import { nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  createWorkspaceToastStore,
+  workspaceToastKey,
+} from "@/core/workspace-shell/toast";
 import BrowserPanel from "@/components/workspace/browser-view/BrowserPanel.vue";
 import type { BrowserViewFrame } from "@/core/browser/frame";
 import { enUS } from "@/core/i18n/locales/en-US";
@@ -33,6 +37,7 @@ const harness = vi.hoisted(() => {
     error: { value: null as string | null },
     canRetry: { value: false },
     isPending: { value: false },
+    exhausted: null as (() => void) | null,
     /*
       返回类型写成真契约的联合，不是 `"sent" as const`——写死一个字面量之后
       `mockReturnValue("unavailable")` 这条分支根本表达不出来。
@@ -70,21 +75,29 @@ vi.mock("@/components/workspace/browser-view/useBrowserStream", async () => {
   harness.error = error;
   harness.canRetry = canRetry;
   return {
-    useBrowserStream: () => ({
-      status,
-      frameUrl,
-      liveUrl,
-      title: vueRef(""),
-      tabs: vueRef([]),
-      error,
-      rejectedUrl: vueRef(null),
-      reconnectAttempt: vueRef(0),
-      canRetry,
-      fallbackNavigate: vueRef(null),
-      sendInput: harness.sendInput,
-      retry: vi.fn(),
-      clearError: vi.fn(),
-    }),
+    useBrowserStream: (
+      _thread: unknown,
+      _enabled: unknown,
+      _seed: unknown,
+      callbacks: { onReconnectExhausted?: () => void },
+    ) => {
+      harness.exhausted = callbacks.onReconnectExhausted ?? null;
+      return {
+        status,
+        frameUrl,
+        liveUrl,
+        title: vueRef(""),
+        tabs: vueRef([]),
+        error,
+        rejectedUrl: vueRef(null),
+        reconnectAttempt: vueRef(0),
+        canRetry,
+        fallbackNavigate: vueRef(null),
+        sendInput: harness.sendInput,
+        retry: vi.fn(),
+        clearError: vi.fn(),
+      };
+    },
   };
 });
 
@@ -97,6 +110,9 @@ const STATIC_FRAME: BrowserViewFrame = {
 function mountPanel(frame: BrowserViewFrame | null = null) {
   return mount(BrowserPanel, {
     props: { threadId: "thread-1", active: true, frame },
+    global: {
+      provide: { [workspaceToastKey as symbol]: createWorkspaceToastStore() },
+    },
   });
 }
 
@@ -298,19 +314,15 @@ describe("BrowserPanel header", () => {
     harness.status.value = "error";
     harness.error.value = "Live browser connection closed.";
     harness.canRetry.value = true;
+    harness.exhausted?.();
     await nextTick();
 
     expect(mode().text()).not.toContain("…");
     expect(mode().text()).toContain(enUS.browser.live);
-    // live 模式还开着，所以 title 仍是「停止」而不是「接管」。
+    expect(mode().attributes("title")).toBe(enUS.browser.takeLiveControl);
+    expect(wrapper.find("[role='alert']").exists()).toBe(false);
+    await mode().trigger("click");
     expect(mode().attributes("title")).toBe(enUS.browser.stopLiveControl);
-    // 失败的事实与出路留在内联提示里——这正是本仓与上游有意分叉的那一处，
-    // 改标签不许把它一起改没了。
-    const alert = wrapper.get("[role='alert']");
-    expect(alert.text()).toContain("Live browser connection closed.");
-    expect(
-      alert.find(`button[aria-label='${enUS.browser.retryLive}']`).exists(),
-    ).toBe(true);
   });
 
   it("only makes the panel a focus target while it is forwarding keys", async () => {

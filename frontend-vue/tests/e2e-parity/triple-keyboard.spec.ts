@@ -15,12 +15,13 @@
      的元素上，不能算「可达」。
 
   菜单、列表框和模态框可以依法接管键盘，因此按运行时语义判断，不维护场景白名单。
-  `TRIPLE_KEYBOARD_ONLY` 只用于定位，默认仍强制双端 61 个终态 × 两个方向。
+  `TRIPLE_KEYBOARD_ONLY` 只用于定位，默认仍强制双端当前全部登记终态 × 两个方向。
 */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import { stateCoverageFailures } from "./support/state-coverage";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
 import {
   DEFAULT_DIMENSION,
@@ -49,9 +50,10 @@ const ONLY = new Set(
 const SCENARIOS = ONLY.size
   ? PARITY_SCENARIOS.filter((scenario) => ONLY.has(scenario.id))
   : PARITY_SCENARIOS;
-const EXPECTED_STATES = SCENARIOS.reduce(
-  (count, scenario) => count + scenarioStates(scenario).length,
-  0,
+const EXPECTED_SCANS = SCENARIOS.flatMap((scenario) =>
+  scenarioStates(scenario).flatMap((state) =>
+    DIRECTIONS.map((direction) => `${scenario.id}#${state.id}[${direction}]`),
+  ),
 );
 
 const INSTALL_FOCUS_LOG = () => {
@@ -325,7 +327,7 @@ test("三轴键盘量具只在 360px × 360px × 200% 交集识别吞键", async
 });
 
 for (const [name, base] of APPS) {
-  test(`${name}: 61 个三轴终态的 Tab / Shift+Tab 可达且无陷阱`, async ({
+  test(`${name}: 全部登记三轴终态的 Tab / Shift+Tab 可达且无陷阱`, async ({
     browser,
   }) => {
     test.setTimeout(3_600_000);
@@ -338,6 +340,7 @@ for (const [name, base] of APPS) {
     const heights = new Set<number>();
     const rootSizes = new Set<number>();
     let scanned = 0;
+    const scannedStates: string[] = [];
     let focusEvents = 0;
     let bodyEdges = 0;
     let overlayOwned = 0;
@@ -408,6 +411,7 @@ for (const [name, base] of APPS) {
               invisible.push(`${key}: ${row}`);
             }
             scanned += 1;
+            scannedStates.push(`${scenario.id}#${state.id}[${direction}]`);
           } catch (error) {
             unreachable.push(
               `${key}: ${String(error).split("\n")[0]?.slice(0, 120)}`,
@@ -432,8 +436,14 @@ for (const [name, base] of APPS) {
     console.info(
       `[triple-keyboard-invisible] ${name} ${JSON.stringify(invisible)}`,
     );
-    expect(scanned).toBe(EXPECTED_STATES * DIRECTIONS.length);
-    if (!ONLY.size) expect(scanned).toBe(61 * DIRECTIONS.length);
+    expect(EXPECTED_SCANS.length, "登记表不能空转").toBeGreaterThan(0);
+    expect(scanned).toBe(EXPECTED_SCANS.length);
+    expect(stateCoverageFailures(EXPECTED_SCANS, scannedStates)).toEqual({
+      missing: [],
+      unexpected: [],
+      duplicateExpected: [],
+      duplicateScans: [],
+    });
     expect([...widths], "360px 宽度没有稳定落地").toEqual([WIDTH]);
     expect([...heights], "360px 高度没有稳定落地").toEqual([HEIGHT]);
     expect([...rootSizes], "200% 根字号没有稳定落地").toEqual([ROOT_PX]);

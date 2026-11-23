@@ -40,8 +40,10 @@ function subagentsUrl(name?: string): string {
   return name === undefined ? base : `${base}/${encodeURIComponent(name)}`;
 }
 
-export async function listSubagents(): Promise<Subagent[]> {
-  const res = await fetch(subagentsUrl());
+export async function listSubagents(
+  options: { signal?: AbortSignal } = {},
+): Promise<Subagent[]> {
+  const res = await fetch(subagentsUrl(), { signal: options.signal });
   if (!res.ok) {
     throw new Error(await errorDetail(res, "Failed to load subagents"));
   }
@@ -51,9 +53,11 @@ export async function listSubagents(): Promise<Subagent[]> {
 
 export async function createManagedSubagent(
   request: CreateManagedSubagentRequest,
+  options: { signal?: AbortSignal } = {},
 ): Promise<Subagent> {
   const res = await fetch(subagentsUrl(), {
     method: "POST",
+    signal: options.signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
@@ -66,9 +70,11 @@ export async function createManagedSubagent(
 export async function updateManagedSubagent(
   name: string,
   request: UpdateManagedSubagentRequest,
+  options: { signal?: AbortSignal } = {},
 ): Promise<Subagent> {
   const res = await fetch(subagentsUrl(name), {
     method: "PUT",
+    signal: options.signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });
@@ -78,8 +84,14 @@ export async function updateManagedSubagent(
   return (await res.json()) as Subagent;
 }
 
-export async function deleteManagedSubagent(name: string): Promise<void> {
-  const res = await fetch(subagentsUrl(name), { method: "DELETE" });
+export async function deleteManagedSubagent(
+  name: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<void> {
+  const res = await fetch(subagentsUrl(name), {
+    method: "DELETE",
+    signal: options.signal,
+  });
   if (!res.ok) {
     throw new Error(await errorDetail(res, "Failed to delete subagent"));
   }

@@ -2,7 +2,7 @@
   【文件职责】     钉住「构建产物预算的桶」与「chunk 命名规则」一一对应。
   【架构位置】     门禁测试
   【主要导出】     无
-  【依赖关系】     nuxt.config.ts · scripts/asset-budget.mjs
+  【依赖关系】     config/client-chunk-file-name.ts · scripts/asset-budget.mjs
   【边界与注意】   **这里钉的是对应关系，不是字节数。** 字节数在
                    `scripts/asset-budget.mjs` 里，改它要写实测值和日期。
 
@@ -28,10 +28,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { clientChunkFileName } from "../../config/client-chunk-file-name";
+
 const read = (rel: string) =>
   readFileSync(fileURLToPath(new URL(`../../${rel}`, import.meta.url)), "utf8");
 
-const nuxtConfig = read("nuxt.config.ts");
+const nuxtConfig = read("config/client-chunk-file-name.ts");
 const budgetScript = read("scripts/asset-budget.mjs");
 
 /** `clientChunkFileName` 会产出的每个 `vendor-*` 名字。 */
@@ -102,19 +104,34 @@ describe("构建产物预算的桶与 chunk 命名规则", () => {
       几乎每个组件都 import，把它们当种子会让任何产品 chunk 都被叫成 vendor-ui
       ——wave 66 之前就是这样，于是 asset-budget 长期红着而红的原因和注释对不上。
     */
-    const rule = /\(\?:reka-ui\|splitpanes\)/.test(nuxtConfig);
-    expect(rule, "vendor-ui 的种子应当只有 reka-ui 与 splitpanes").toBe(true);
+    for (const prefix of [
+      "/repo/node_modules/",
+      "/repo/node_modules/.pnpm/reka-ui@2.10.1/node_modules/",
+    ]) {
+      expect(
+        clientChunkFileName({
+          name: "product",
+          moduleIds: [`${prefix}reka-ui/dist/index.js`],
+        }),
+      ).toBe("_nuxt/vendor-ui-[hash].js");
+    }
     for (const seed of [
       "lucide-vue-next",
       "class-variance-authority",
+      "clsx",
       "tailwind-merge",
+      "splitpanes",
+      "reka-ui-extra",
     ]) {
       expect(
-        new RegExp(`\\(\\?:[^)]*${seed}[^)]*\\)[^]{0,80}vendor-ui`).test(
-          nuxtConfig,
-        ),
+        clientChunkFileName({
+          name: "product",
+          moduleIds: [
+            `/repo/node_modules/.pnpm/package@1/node_modules/${seed}/index.js`,
+          ],
+        }),
         `${seed} 不该再作为 vendor-ui 的种子`,
-      ).toBe(false);
+      ).toBe("_nuxt/product-[hash].js");
     }
   });
 });

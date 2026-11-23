@@ -51,7 +51,7 @@ function state(
  *   one-time task mid-run), Resume while it is paused, or finished for a
  *   recurring task (a finished one-time task is edited instead).
  * - A starting/running run blocks every change (`running`). A queued run
- *   blocks edit, delete and resume (`queued`) but not Pause, which cancels it;
+ *   blocks edit and resume (`queued`) but not Pause or Delete, which cancel it;
  *   Run once now would only return the waiting run (`alreadyQueued`).
  * - Duplicate is a create, so it is blocked like New task when the scheduler
  *   is off (`createBlocked`).
@@ -86,6 +86,6 @@ export function availableActions(
     ),
     edit: state(true, blocked),
     duplicate: state(true, createBlocked ? "createBlocked" : undefined),
-    delete: state(true, blocked),
+    delete: state(true, busy ? "running" : undefined),
   };
 }

@@ -16,7 +16,7 @@
 */
 import { computed, defineComponent, h, type PropType } from "vue";
 
-import CodeBlock from "./CodeBlock.vue";
+import MarkdownCodeBlock from "./CodeBlock.vue";
 import MermaidDiagram from "./MermaidDiagram.vue";
 
 import type { Element } from "hast";
@@ -73,7 +73,12 @@ export default defineComponent({
       if (value.language === "mermaid") {
         return h(MermaidDiagram, { code: value.text });
       }
-      return h(CodeBlock, { code: value.text, language: value.language });
+      // Nuxt's h(Component) loader resolves registered names before local imports.
+      // Keep this Markdown renderer distinct from the shadcn tool CodeBlock.
+      return h(MarkdownCodeBlock, {
+        code: value.text,
+        language: value.language,
+      });
     };
   },
 });

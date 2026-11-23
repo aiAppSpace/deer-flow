@@ -4,7 +4,7 @@
   【主要导出】     tabsListVariants · TabsListVariants
   【依赖关系】     class-variance-authority
   【边界与注意】   **`line` 这一档不是装饰**：上游技能设置页用的就是它
-                   （`skill-settings-page.tsx:87` 的 `<TabsList variant="line">`）。
+                   （`capabilities/skill-gallery.tsx:169` 的 `<TabsList variant="line">`）。
                    wave 144 第一次给那一屏取样，量出本仓另写了一套带边框的胶囊
                    （tablist 少 `text-muted-foreground`、选中项多一块底色、字重 400 对 500、
                    高 34 对 29），**而此前没有任何一档看得见**。

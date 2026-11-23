@@ -8,7 +8,19 @@ export const BACKEND_CONTRACT_VERSIONS = {
   subagentStatus: 2,
   slashSkill: 1,
   runEventStream: 1,
+  threadOrigin: 1,
+  scheduledGoalNotes: 3,
+  scheduledTaskErrors: 1,
 } as const;
+
+export const THREAD_ORIGIN_KEY = "deerflow_origin";
+export const THREAD_ORIGIN_KINDS = [
+  "extension",
+  "github",
+  "im_channel",
+  "mcp_notification",
+  "schedule",
+] as const;
 
 /** `ToolMessage.additional_kwargs.subagent_status` 的合法取值。 */
 export const SUBAGENT_STATUS_VALUES = [
@@ -61,3 +73,102 @@ export type RunEventCategory = (typeof RUN_EVENT_CATEGORIES)[number];
 export const LEGACY_RUN_EVENT_ALIASES = {
   "ai_message": "llm.ai.response",
 } as const;
+
+/** Host-owned scheduled-task notes; readers must not duplicate their text. */
+export const SCHEDULED_AGENT_STOP_LAST_ERROR_PREFIX =
+  "stopped by the agent in run ";
+export const SCHEDULED_AUTO_PAUSE_LAST_ERROR =
+  "paused after 3 unmet scheduled goal runs";
+export const SCHEDULED_ORIGIN_KEY = "deerflow_scheduled_origin";
+
+export const SCHEDULED_GOAL_UNMET_REASON_CODES = [
+  "blocked:missing_evidence",
+  "blocked:needs_user_input",
+  "blocked:run_failed",
+  "blocked:external_wait",
+  "blocked:goal_not_met_yet",
+  "max_continuations_reached",
+  "no_progress_detected",
+  "token_capped",
+  "evaluator_failed",
+  "no_durable_end_of_turn",
+  "thread_changed_after_evaluation",
+  "thread_changed_before_continuation",
+  "no_verdict",
+] as const;
+export type BackendScheduledGoalUnmetReasonCode =
+  (typeof SCHEDULED_GOAL_UNMET_REASON_CODES)[number];
+
+export const SCHEDULED_GOAL_CHECK_FAILURE_CODES = [
+  "evaluator_failed",
+  "no_durable_end_of_turn",
+  "thread_changed_after_evaluation",
+  "thread_changed_before_continuation",
+] as const;
+
+export const SCHEDULED_HOST_RUN_ERRORS = {
+  restarted: "interrupted: gateway restarted before the run reached a terminal state",
+  lease_lost: "interrupted: the owning gateway stopped renewing its run lease",
+  queue_timeout: "scheduled task queue wait timeout exceeded",
+  paused_while_queued: "scheduled task was paused while queued",
+  deleted_while_queued: "scheduled task was deleted while queued",
+  end_reached: "schedule end condition reached",
+  interrupted: "run was interrupted before completion",
+} as const;
+export type BackendScheduledHostRunError =
+  (typeof SCHEDULED_HOST_RUN_ERRORS)[keyof typeof SCHEDULED_HOST_RUN_ERRORS];
+
+export const SCHEDULED_TASK_LIFECYCLE_EVENTS = [
+  "task_stopped",
+  "task_paused",
+  "task_finished",
+] as const;
+export type BackendScheduledTaskLifecycleEvent =
+  (typeof SCHEDULED_TASK_LIFECYCLE_EVENTS)[number];
+
+export const SCHEDULED_TASK_LIFECYCLE_REASONS = {
+  task_stopped: ["agent_stop"],
+  task_paused: ["consecutive_unmet"],
+  task_finished: ["max_runs", "end_at", "once_done", "once_failed"],
+} as const satisfies Record<BackendScheduledTaskLifecycleEvent, readonly string[]>;
+export type BackendScheduledTaskLifecycleReason<
+  Event extends BackendScheduledTaskLifecycleEvent,
+> = (typeof SCHEDULED_TASK_LIFECYCLE_REASONS)[Event][number];
+
+/** Codes returned to the UI; agent-only codes have no UI consumer. */
+export const SCHEDULED_TASK_UI_ERROR_CODES = [
+  "invalid_request",
+  "invalid_schedule",
+  "invalid_schedule_type",
+  "invalid_timezone",
+  "interval_too_short",
+  "interval_too_long",
+  "once_in_past",
+  "once_too_soon",
+  "once_time_passed",
+  "invalid_context_mode",
+  "reuse_thread_requires_thread",
+  "thread_not_found",
+  "invalid_assistant",
+  "unknown_assistant",
+  "invalid_goal",
+  "goal_requires_fresh_thread",
+  "invalid_stop_condition",
+  "invalid_max_runs",
+  "end_at_in_past",
+  "end_at_before_first_run",
+  "frequent_requires_limit",
+  "max_runs_not_above_used",
+  "limits_exhausted",
+  "task_not_found",
+  "task_running",
+  "run_queued",
+  "task_changed",
+  "task_finished",
+  "task_quota_exceeded",
+  "scheduler_not_running",
+  "scheduler_unavailable",
+  "trigger_failed",
+] as const;
+export type BackendScheduledTaskErrorCode =
+  (typeof SCHEDULED_TASK_UI_ERROR_CODES)[number];

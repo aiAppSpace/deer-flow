@@ -7,7 +7,10 @@
                    列表语义（ul/li）与设置页那张 `ui/item` 卡片不是同一件事，别为了省一个组件把它们合回去。
 */
 
-import { mount } from "@vue/test-utils";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { openConnectUrl } from "@/core/channels/open-connect-url";
+import { useWorkspaceChannelRuntimeConfig } from "@/composables/useWorkspaceChannelRuntimeConfig";
 import { nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +18,14 @@ import WorkspaceChannelsList from "@/components/workspace/channels/WorkspaceChan
 import WorkspaceChannelRuntimeConfigHost from "@/components/workspace/channels/WorkspaceChannelRuntimeConfigHost.vue";
 import type { ChannelProvider } from "@/core/channels/types";
 import { enUS } from "@/core/i18n/locales/en-US";
+
+const wrappers: VueWrapper[] = [];
+const clients: QueryClient[] = [];
+function createClient() {
+  const client = new QueryClient();
+  clients.push(client);
+  return client;
+}
 
 const ownerFactory = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -81,8 +92,12 @@ function mountList(providers = [provider()]) {
   ownerFactory.mockReturnValue(owner);
   const wrapper = mount(WorkspaceChannelsList, {
     attachTo: document.body,
-    global: { stubs: { ChannelProviderIcon: true } },
+    global: {
+      plugins: [[VueQueryPlugin, { queryClient: createClient() }]],
+      stubs: { ChannelProviderIcon: true },
+    },
   });
+  wrappers.push(wrapper);
   return { owner, wrapper };
 }
 
@@ -90,7 +105,13 @@ beforeEach(() => {
   vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: ref(enUS) } }));
 });
 
-afterEach(() => {
+afterEach(async () => {
+  wrappers.splice(0).forEach((wrapper) => {
+    if (wrapper.exists()) wrapper.unmount();
+  });
+  useWorkspaceChannelRuntimeConfig().close();
+  clients.splice(0).forEach((client) => client.clear());
+  await flushPromises();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
@@ -170,6 +191,9 @@ describe("WorkspaceChannelsList", () => {
     // as the workspace layout does; the list now only publishes the provider.
     const host = mount(WorkspaceChannelRuntimeConfigHost, {
       attachTo: document.body,
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createClient() }]],
+      },
     });
 
     await wrapper.get("li button").trigger("click");
@@ -200,8 +224,150 @@ describe("WorkspaceChannelsList", () => {
     owner.error.value = new Error("boom");
     ownerFactory.mockReturnValue(owner);
     const wrapper = mount(WorkspaceChannelsList, {
-      global: { stubs: { ChannelProviderIcon: true } },
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createClient() }]],
+        stubs: { ChannelProviderIcon: true },
+      },
     });
+    wrappers.push(wrapper);
     expect(wrapper.find("[data-sidebar='group']").exists()).toBe(false);
   });
 });
+
+function pending<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+for (const outcome of ["success", "failure"] as const) {
+  it(`a retired channel configuration ${outcome} cannot affect a reopened provider dialog`, async () => {
+    const owner = createOwner([]);
+    const result = pending<ChannelProvider>();
+    owner.configure.mockReturnValue(result.promise);
+    ownerFactory.mockReturnValue(owner);
+    const dialog = useWorkspaceChannelRuntimeConfig();
+    const host = mount(WorkspaceChannelRuntimeConfigHost, {
+      attachTo: document.body,
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createClient() }]],
+      },
+    });
+    try {
+      dialog.open(
+        provider({ configured: false, connection_status: "not_connected" }),
+      );
+      await nextTick();
+      (
+        document.querySelector('[role="dialog"] form') as HTMLFormElement
+      ).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await vi.waitFor(() => expect(owner.configure).toHaveBeenCalledOnce());
+      dialog.close();
+      dialog.open(
+        provider({
+          provider: "telegram",
+          display_name: "Telegram",
+          configured: false,
+        }),
+      );
+      await nextTick();
+      if (outcome === "success")
+        result.resolve(provider({ connection_status: "not_connected" }));
+      else result.reject(new Error("old configuration failed"));
+      await flushPromises();
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+        "Telegram",
+      );
+      expect(owner.connect).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    } finally {
+      host.unmount();
+      dialog.close();
+    }
+  });
+}
+it("a current channel configuration still closes its dialog and starts binding", async () => {
+  const owner = createOwner([]);
+  owner.configure.mockResolvedValue(
+    provider({ connection_status: "not_connected" }),
+  );
+  owner.connect.mockResolvedValue({ instruction: "bind current provider" });
+  ownerFactory.mockReturnValue(owner);
+  const dialog = useWorkspaceChannelRuntimeConfig();
+  const host = mount(WorkspaceChannelRuntimeConfigHost, {
+    attachTo: document.body,
+    global: { plugins: [[VueQueryPlugin, { queryClient: createClient() }]] },
+  });
+  try {
+    dialog.open(
+      provider({ configured: false, connection_status: "not_connected" }),
+    );
+    await nextTick();
+    (
+      document.querySelector('[role="dialog"] form') as HTMLFormElement
+    ).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() =>
+      expect(owner.connect).toHaveBeenCalledExactlyOnceWith("slack"),
+    );
+    await flushPromises();
+    expect(dialog.provider.value).toBeNull();
+    expect(toast.success).toHaveBeenCalledWith("bind current provider");
+  } finally {
+    host.unmount();
+    dialog.close();
+  }
+});
+
+for (const outcome of ["success", "failure"] as const) {
+  it(`a retired binding ${outcome} cannot affect the next configuration`, async () => {
+    const owner = createOwner([]);
+    const result = pending<{ url: string }>();
+    owner.configure.mockResolvedValue(
+      provider({ connection_status: "not_connected" }),
+    );
+    owner.connect.mockReturnValue(result.promise);
+    ownerFactory.mockReturnValue(owner);
+    const dialog = useWorkspaceChannelRuntimeConfig();
+    const host = mount(WorkspaceChannelRuntimeConfigHost, {
+      attachTo: document.body,
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createClient() }]],
+      },
+    });
+    try {
+      dialog.open(
+        provider({ configured: false, connection_status: "not_connected" }),
+      );
+      await nextTick();
+      (
+        document.querySelector('[role="dialog"] form') as HTMLFormElement
+      ).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await vi.waitFor(() => expect(owner.connect).toHaveBeenCalledOnce());
+      dialog.open(
+        provider({
+          provider: "telegram",
+          display_name: "Telegram",
+          configured: false,
+        }),
+      );
+      await nextTick();
+      if (outcome === "success")
+        result.resolve({ url: "https://example.test/old-binding" });
+      else result.reject(new Error("old binding failed"));
+      await flushPromises();
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+        "Telegram",
+      );
+      expect(openConnectUrl).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    } finally {
+      host.unmount();
+      dialog.close();
+    }
+  });
+}

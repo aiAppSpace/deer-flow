@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, rs } from "@rstest/core";
+import { afterEach, beforeEach, describe, expect, it, rs } from "@rstest/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { useEffect, type ReactNode } from "react";
@@ -13,6 +13,9 @@ import { AuthProvider, useAuth } from "@/core/auth/AuthProvider";
 import type { User } from "@/core/auth/types";
 import { DEFAULT_LOCALE } from "@/core/i18n";
 import { I18nProvider } from "@/core/i18n/context";
+
+const networkFetch = rs.fn<typeof fetch>();
+const queryClients = new Set<QueryClient>();
 
 // AuthProvider and the panel both reach into next/navigation. Keep it inert
 // under happy-dom (banner-test pattern).
@@ -33,6 +36,33 @@ rs.mock("@/core/models/hooks", () => ({
     error: null,
     refetch: rs.fn(),
   }),
+}));
+
+// Keep stream/history, thread lookup and upload transport outside this
+// permission test. AuthProvider, SidecarProvider and SidecarPanel stay real.
+rs.mock("@/core/threads/hooks", () => {
+  const stream = {
+    thread: { isLoading: false, messages: [], values: {} },
+    sendMessage: rs.fn(),
+    isUploading: false,
+    isHistoryLoading: false,
+    hasMoreHistory: false,
+    loadMoreHistory: rs.fn(),
+  };
+  const deletion = { mutateAsync: rs.fn(), isPending: false };
+  return {
+    useThreadStream: () => stream,
+    useDeleteThread: () => deletion,
+  };
+});
+
+rs.mock("@/core/sidecar/api", () => ({
+  findLatestSidecarThread: async () => null,
+  createSidecarThread: rs.fn(),
+}));
+
+rs.mock("@/core/uploads/hooks", () => ({
+  useUploadLimits: () => ({ data: undefined }),
 }));
 
 function makeUser(permissions: string[] | null | undefined): User {
@@ -78,6 +108,7 @@ function buildTree(
     }),
   } = {},
 ): ReactNode {
+  queryClients.add(queryClient);
   return (
     <I18nProvider initialLocale={DEFAULT_LOCALE}>
       <QueryClientProvider client={queryClient}>
@@ -101,9 +132,29 @@ function buildTree(
   );
 }
 
+beforeEach(() => {
+  networkFetch.mockReset();
+  // Fail closed without forwarding any request to an unrelated local server.
+  // The zero-call assertion below still fails if a dependency leaks transport.
+  networkFetch.mockImplementation(
+    async () =>
+      new Response("Unexpected network in sidecar permission unit", {
+        status: 400,
+      }),
+  );
+  rs.stubGlobal("fetch", networkFetch);
+});
+
 afterEach(() => {
-  rs.restoreAllMocks();
-  cleanup();
+  try {
+    cleanup();
+    for (const client of queryClients) client.clear();
+    queryClients.clear();
+    expect(networkFetch).not.toHaveBeenCalled();
+  } finally {
+    rs.unstubAllGlobals();
+    rs.restoreAllMocks();
+  }
 });
 
 describe("SidecarPanel delete-button permission gating", () => {

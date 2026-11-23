@@ -62,7 +62,11 @@ function animations(): Animation[] {
     let body = "";
     if (frames) {
       let depth = 0;
-      for (let i = frames.index + frames[0].length - 1; i < css.length; i += 1) {
+      for (
+        let i = frames.index + frames[0].length - 1;
+        i < css.length;
+        i += 1
+      ) {
         if (css[i] === "{") depth += 1;
         else if (css[i] === "}") {
           depth -= 1;
@@ -94,7 +98,9 @@ describe("animation-driven visibility", () => {
 
   it("an animation that starts transparent is never `forwards`", () => {
     const offenders = animations()
-      .filter((a) => a.startsHidden && !/\b(both|backwards)\b/.test(a.declaration))
+      .filter(
+        (a) => a.startsHidden && !/\b(both|backwards)\b/.test(a.declaration),
+      )
       .map((a) => `${a.name}: ${a.declaration}`);
     expect(offenders).toEqual([]);
   });

@@ -63,9 +63,11 @@ def run_make(project: Path, *args: str, fail_group: str = "", parallel: bool = T
         "EXPECT_PARALLEL": "1" if parallel else "0",
         "FAIL_GROUP": fail_group,
     }
-    env.pop("MAKEFLAGS", None)
-    env.pop("MFLAGS", None)
-    env.pop("MAKELEVEL", None)
+    # GNU make exports command-line variables as well as its recursive flags.
+    # The outer suite may use TEST_JOBS=2; this fixture tests its own defaults
+    # and opts into overrides only through the explicit arguments above.
+    for option in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "TEST_JOBS", "SPLITS", "GROUP", "DURATIONS_FILE"):
+        env.pop(option, None)
     return subprocess.run([MAKE, *args], cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", check=False, timeout=30)
 
 
@@ -95,6 +97,19 @@ def test_ci_can_still_run_one_shard(test_project: Path) -> None:
 
 def test_make_test_can_limit_concurrency(test_project: Path) -> None:
     result = run_make(test_project, "test", "TEST_JOBS=1", parallel=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4"}
+
+
+def test_make_fixture_does_not_inherit_parent_scheduler_options(test_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A canonical outer gate may throttle itself without throttling this double."""
+    monkeypatch.setenv("TEST_JOBS", "2")
+    monkeypatch.setenv("SPLITS", "7")
+    monkeypatch.setenv("GROUP", "6")
+    monkeypatch.setenv("DURATIONS_FILE", "outer-durations.json")
+
+    result = run_make(test_project, "test")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4"}

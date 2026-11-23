@@ -108,6 +108,32 @@ async function type(
 }
 
 describe("SubagentEditorDialog", () => {
+  it("keeps a newer editor open when an earlier save finishes", async () => {
+    let resolve!: (value: Subagent) => void;
+    api.update.mockReturnValueOnce(
+      new Promise<Subagent>((done) => {
+        resolve = done;
+      }),
+    );
+    const wrapper = mountEditor(subagent());
+    await flushPromises();
+    saveButton().click();
+    await flushPromises();
+    await wrapper.setProps({
+      value: subagent({ name: "new-owner", description: "Newer editor" }),
+    });
+    resolve(subagent());
+    await flushPromises();
+    expect(api.update).toHaveBeenCalledWith("researcher", expect.any(Object), {
+      signal: expect.any(AbortSignal),
+    });
+    expect(wrapper.emitted("close")).toBeUndefined();
+    expect(field(enUS.settings.subagents.descriptionLabel)!.value).toBe(
+      "Newer editor",
+    );
+    wrapper.unmount();
+  });
+
   it("编辑时名字禁用：改名等于删了重建，不是同一件事", async () => {
     const wrapper = mountEditor(subagent());
     await flushPromises();
@@ -184,18 +210,21 @@ describe("SubagentEditorDialog", () => {
     saveButton().click();
     await flushPromises();
 
-    expect(api.create).toHaveBeenCalledWith({
-      name: "ok-name",
-      display_name: null,
-      description: "does things",
-      system_prompt: "be useful",
-      model: "inherit",
-      // 默认三态是「全部」，送的是 null 而不是 []。
-      tools: null,
-      skills: null,
-      max_turns: 50,
-      timeout_seconds: 900,
-    });
+    expect(api.create).toHaveBeenCalledWith(
+      {
+        name: "ok-name",
+        display_name: null,
+        description: "does things",
+        system_prompt: "be useful",
+        model: "inherit",
+        // 默认三态是「全部」，送的是 null 而不是 []。
+        tools: null,
+        skills: null,
+        max_turns: 50,
+        timeout_seconds: 900,
+      },
+      { signal: expect.any(AbortSignal) },
+    );
     expect(toastStore.toasts.value.at(-1)?.message).toBe(
       enUS.settings.subagents.created,
     );

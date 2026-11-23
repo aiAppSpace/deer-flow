@@ -40,6 +40,8 @@ export function useThreadTokenUsage(
     enabled: computed(
       () => Boolean(threadId.value) && toValue(options.enabled ?? true),
     ),
+    retry: false,
+    refetchOnWindowFocus: false,
     placeholderData: (previous) =>
       retainThreadTokenUsagePlaceholder(previous, threadId.value),
   });

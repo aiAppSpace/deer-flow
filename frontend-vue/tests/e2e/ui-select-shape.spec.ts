@@ -22,6 +22,8 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { settledBox } from "../support/settled-box";
+
 import { mockLangGraphAPI } from "./utils/mock-api";
 
 const TASK = {
@@ -45,12 +47,17 @@ const TASK = {
 async function openSelect(page: Page, testId: string) {
   mockLangGraphAPI(page, { threads: [], scheduledTasks: [TASK] });
   await page.goto("/workspace/scheduled-tasks");
+  await page.getByRole("button", { name: "New task", exact: true }).click();
   const trigger = page.getByTestId(testId);
   await expect(trigger).toBeVisible({ timeout: 15_000 });
-  const triggerBox = (await trigger.boundingBox())!;
+  await settledBox(page.getByRole("dialog"), "scheduled task dialog");
   await trigger.click();
   await expect(page.locator('[data-slot="select-content"]')).toBeVisible();
-  return triggerBox;
+  await settledBox(
+    page.locator('[data-slot="select-content"]'),
+    "select content",
+  );
+  return (await trigger.boundingBox())!;
 }
 
 test.describe("select primitive shape", () => {
@@ -120,15 +127,19 @@ test.describe("select primitive shape", () => {
   }) => {
     mockLangGraphAPI(page, { threads: [], scheduledTasks: [TASK] });
     await page.goto("/workspace/scheduled-tasks");
+    await page.getByRole("button", { name: "New task", exact: true }).click();
     const trigger = page.getByTestId("schedule-preset");
     await expect(trigger).toBeVisible({ timeout: 15_000 });
     await expect(trigger).toHaveAttribute("data-size", "default");
+    await settledBox(page.getByRole("dialog"), "scheduled task dialog");
+    await settledBox(trigger, "schedule preset trigger");
     // data-size=default 就是 h-9。
     expect(Math.round((await trigger.boundingBox())!.height)).toBe(36);
     // 这两处调用方都传了 w-full，宽度应当跟随所在列而不是内容。
-    const form = page.getByTestId("scheduled-task-create-form");
+    await settledBox(page.getByRole("dialog"), "scheduled task dialog");
+    const form = page.getByTestId("schedule-input");
     const formBox = (await form.boundingBox())!;
     const triggerBox = (await trigger.boundingBox())!;
-    expect(formBox.width - triggerBox.width).toBeLessThan(50);
+    expect(Math.abs(formBox.width - triggerBox.width)).toBeLessThan(1);
   });
 });

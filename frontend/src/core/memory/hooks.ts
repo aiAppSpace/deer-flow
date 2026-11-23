@@ -7,6 +7,7 @@ import {
   importMemory,
   loadMemory,
   updateMemoryFact,
+  type MemoryImportDispatchObserver,
 } from "./api";
 import type {
   MemoryFactInput,
@@ -44,11 +45,16 @@ export function useDeleteMemoryFact() {
   });
 }
 
-export function useImportMemory() {
+export function useImportMemory(
+  observeDispatch?: MemoryImportDispatchObserver,
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (memory: UserMemory) => importMemory(memory),
+    mutationFn: (memory: UserMemory) =>
+      observeDispatch
+        ? importMemory(memory, observeDispatch)
+        : importMemory(memory),
     onSuccess: (memory) => {
       queryClient.setQueryData<UserMemory>(["memory"], memory);
     },

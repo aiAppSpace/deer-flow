@@ -8,7 +8,14 @@ import {
   UploadIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useDeferredValue, useId, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { createMarkdownLinkComponent } from "@/components/workspace/messages/markdown-link";
+import { createMemoryImportObservation } from "@/core/diagnostics/parity-observation";
 import { useI18n } from "@/core/i18n/hooks";
 import { exportMemory } from "@/core/memory/api";
 import {
@@ -235,8 +243,18 @@ export function MemorySettingsPage() {
   const clearMemory = useClearMemory();
   const createMemoryFact = useCreateMemoryFact();
   const deleteMemoryFact = useDeleteMemoryFact();
-  const importMemoryMutation = useImportMemory();
+  const [importObservation] = useState(() => createMemoryImportObservation());
+  const importMemoryMutation = useImportMemory(importObservation?.dispatch);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const importReadOwner = useRef({ active: true, selection: 0 });
+  useEffect(() => {
+    const owner = importReadOwner.current;
+    owner.active = true;
+    return () => {
+      owner.active = false;
+      owner.selection += 1;
+    };
+  }, []);
   const updateMemoryFact = useUpdateMemoryFact();
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [factToDelete, setFactToDelete] = useState<MemoryFact | null>(null);
@@ -250,6 +268,10 @@ export function MemorySettingsPage() {
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(
     null,
   );
+  useLayoutEffect(() => {
+    importObservation?.select(pendingImport);
+    return () => importObservation?.select(null);
+  }, [importObservation, pendingImport]);
   const [isExporting, setIsExporting] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const normalizedQuery = deferredQuery.trim().toLowerCase();
@@ -374,19 +396,26 @@ export function MemorySettingsPage() {
       return;
     }
 
+    const owner = importReadOwner.current;
+    const selection = ++owner.selection;
+    const observation = importObservation?.begin();
     try {
-      const parsed: unknown = JSON.parse(await file.text());
-      const memory = normalizeMemoryPayload(parsed);
+      const text = await file.text();
+      if (!owner.active || selection !== owner.selection) return;
+      const parsed: unknown = JSON.parse(text);
+      const memory = normalizeMemoryPayload(parsed, {
+        onFactIdentity: observation?.fact,
+      });
       if (!memory) {
         toast.error(t.settings.memory.importInvalidFile);
         return;
       }
-      setPendingImport({
-        fileName: file.name,
-        memory,
-      });
+      const pending = { fileName: file.name, memory };
+      observation?.retain(pending, memory);
+      setPendingImport(pending);
     } catch {
-      toast.error(t.settings.memory.importInvalidFile);
+      if (owner.active && selection === owner.selection)
+        toast.error(t.settings.memory.importInvalidFile);
     }
   }
 
@@ -514,7 +543,7 @@ export function MemorySettingsPage() {
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-3">
+            <div className="@container/memory-controls flex flex-col gap-3">
               {/* Row 1: search + filter tabs */}
               <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                 <Input
@@ -530,7 +559,7 @@ export function MemorySettingsPage() {
                     if (value) setFilter(value as MemoryViewFilter);
                   }}
                   variant="outline"
-                  className="shrink-0 self-start sm:ml-auto sm:self-auto"
+                  className="shrink-0 self-start sm:ml-auto sm:self-auto @max-md/memory-controls:max-w-full @max-md/memory-controls:flex-wrap"
                 >
                   <ToggleGroupItem value="all" className="whitespace-nowrap">
                     {filterAll}
@@ -548,7 +577,7 @@ export function MemorySettingsPage() {
               </div>
 
               {/* Row 2: actions — constructive group on the left, destructive separated to the right */}
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 @max-md/memory-controls:[&>button]:h-auto @max-md/memory-controls:[&>button]:min-h-9 @max-md/memory-controls:[&>button]:max-w-full @max-md/memory-controls:[&>button]:min-w-0 @max-md/memory-controls:[&>button]:wrap-anywhere @max-md/memory-controls:[&>button]:whitespace-normal">
                 <input
                   ref={fileInputRef}
                   type="file"

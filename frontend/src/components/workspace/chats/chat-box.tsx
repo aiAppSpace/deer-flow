@@ -88,7 +88,6 @@ const MessageDetailsPanel = dynamic(
   { loading: RightPanelLoading },
 );
 
-const RIGHT_PANEL_ANIMATION_MS = 280;
 const RIGHT_PANEL_DEFAULT_SIZE = "40%";
 
 type RightPanelKind = "sidecar" | "artifacts" | "browser" | "details";
@@ -130,6 +129,7 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
   const threadIdRef = useRef(threadId);
   const chatRegionRef = useRef<HTMLDivElement | null>(null);
   const rightPanelContainerRef = useRef<HTMLElement | null>(null);
+  const mobileSheetRef = useRef<HTMLDivElement | null>(null);
 
   const {
     artifacts,
@@ -221,6 +221,7 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
   }, [pathname]);
 
   const sidePanelRef = usePanelRef();
+  const sidePanelElementRef = useRef<HTMLDivElement | null>(null);
   // Width the panel reopens at: the last size the user dragged it to.
   const openSizeRef = useRef(RIGHT_PANEL_DEFAULT_SIZE);
   // While the panel width animates, the content is held at its final width and
@@ -301,55 +302,84 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
       setAnimatingRightPanel(false);
       setPinnedContentWidth(null);
       sidePanelRef.current?.collapse();
-      return;
-    }
+    } else {
+      setAnimatingRightPanel(true);
+      if (!rightPanelOpen) {
+        // getSize() reads the library's logical layout, not an interpolated
+        // DOM width. Preserve that layout before requesting collapse.
+        const size = sidePanelRef.current?.getSize().asPercentage ?? 0;
+        if (size > 0) {
+          openSizeRef.current = `${size}%`;
+        }
+      }
 
-    setAnimatingRightPanel(true);
-    if (!rightPanelOpen) {
-      // Remember the width now: the closing animation reports shrinking sizes,
-      // so sampling those would reopen the panel a few pixels wide.
-      const size = sidePanelRef.current?.getSize().asPercentage ?? 0;
-      if (size > 0) {
-        openSizeRef.current = `${size}%`;
+      const openPercentage = Number.parseFloat(openSizeRef.current);
+      setPinnedContentWidth(
+        Number.isFinite(openPercentage) ? `${openPercentage}cqw` : null,
+      );
+
+      // resize() rather than expand(): the library expands to `minSize` until
+      // it has recorded a size of its own.
+      if (rightPanelOpen) {
+        sidePanelRef.current?.resize(openSizeRef.current);
+      } else {
+        sidePanelRef.current?.collapse();
       }
     }
 
-    const openPercentage = Number.parseFloat(openSizeRef.current);
-    setPinnedContentWidth(
-      Number.isFinite(openPercentage) ? `${openPercentage}cqw` : null,
-    );
-
-    // resize() rather than expand(): the library expands to `minSize` until it
-    // has recorded a size of its own, which would reopen narrower than before.
-    if (rightPanelOpen) {
-      sidePanelRef.current?.resize(openSizeRef.current);
-    } else {
-      sidePanelRef.current?.collapse();
-    }
-
-    const timeout = window.setTimeout(() => {
+    let retired = false;
+    let frame = 0;
+    function settle() {
+      if (retired) return;
+      // A React effect does not mark the start of a CSS transition. Observe
+      // the committed hosts, then keep the presentation until their actual
+      // animations finish. Descendant spinners/streaming content do not own it.
+      const aside = rightPanelContainerRef.current;
+      const hosts = isMobile
+        ? [{ element: mobileSheetRef.current, property: undefined }]
+        : [
+            { element: sidePanelElementRef.current, property: "flex-grow" },
+            { element: aside, property: "opacity" },
+          ];
+      const pending = hosts.flatMap(({ element, property }) =>
+        (element?.getAnimations() ?? []).filter(
+          (animation) =>
+            (animation.effect as KeyframeEffect | null)?.target === element &&
+            (property === undefined ||
+              ("transitionProperty" in animation &&
+                animation.transitionProperty === property)) &&
+            (animation.pending === true ||
+              (animation.playState !== "finished" &&
+                animation.playState !== "idle")),
+        ),
+      );
+      if (pending.length) {
+        // Cancellation may start a replacement animation on the same host.
+        // Re-read the public animation list instead of treating rejection as
+        // completion. Cleanup retires both this continuation and its frame.
+        void Promise.allSettled(
+          pending.map((animation) => animation.finished),
+        ).then(() => {
+          if (!retired) frame = requestAnimationFrame(settle);
+        });
+        return;
+      }
       setAnimatingRightPanel(false);
       setPinnedContentWidth(null);
-    }, RIGHT_PANEL_ANIMATION_MS);
+      if (!rightPanelOpen) setRenderedRightPanel(null);
+    }
+    frame = requestAnimationFrame(settle);
 
     return () => {
-      window.clearTimeout(timeout);
+      retired = true;
+      cancelAnimationFrame(frame);
     };
   }, [isMobile, rightPanelOpen, sidePanelRef]);
 
   useEffect(() => {
     if (activeRightPanel) {
       setRenderedRightPanel(activeRightPanel);
-      return;
     }
-
-    const timeout = window.setTimeout(() => {
-      setRenderedRightPanel(null);
-    }, RIGHT_PANEL_ANIMATION_MS);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
   }, [activeRightPanel]);
 
   useLayoutEffect(() => {
@@ -462,55 +492,6 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
     setArtifactsOpen,
   ]);
 
-  if (isMobile) {
-    return (
-      <>
-        <div className="relative size-full min-w-0">{children}</div>
-        <Sheet
-          open={rightPanelOpen}
-          onOpenChange={(open) => {
-            if (open) {
-              return;
-            }
-            if (detailsOpen) {
-              messageDetails?.close();
-            }
-            if (sidecarOpen) {
-              sidecar?.close();
-            }
-            if (browserViewOpen) {
-              browserView?.close();
-            }
-            if (artifactsOpen) {
-              setArtifactsOpen(false);
-            }
-          }}
-        >
-          <SheetContent
-            className="w-[calc(100vw-1rem)] max-w-none gap-0 p-0 sm:max-w-md [&>button]:hidden"
-            side="right"
-          >
-            <SheetHeader className="sr-only">
-              <SheetTitle>
-                {renderedRightPanel === "sidecar"
-                  ? "Sidecar"
-                  : renderedRightPanel === "browser"
-                    ? "Browser"
-                    : renderedRightPanel === "details"
-                      ? (messageDetails?.selectedDetail?.title ?? t.common.more)
-                      : "Artifacts"}
-              </SheetTitle>
-              <SheetDescription>
-                Browse the side panel for this conversation.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="min-h-0 flex-1 p-3 pt-10">{rightPanelContent}</div>
-          </SheetContent>
-        </Sheet>
-      </>
-    );
-  }
-
   return (
     <>
       {/* Keep the chat subtree under one stable owner across the md breakpoint.
@@ -556,6 +537,7 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
         <ResizablePanel
           id={`${resizableIdBase}-side`}
           panelRef={sidePanelRef}
+          elementRef={sidePanelElementRef}
           collapsible
           collapsedSize="0%"
           defaultSize={initialRightPanelSize}
@@ -594,6 +576,9 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
           if (open) {
             return;
           }
+          if (detailsOpen) {
+            messageDetails?.close();
+          }
           if (sidecarOpen) {
             sidecar?.close();
           }
@@ -606,6 +591,7 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
         }}
       >
         <SheetContent
+          ref={mobileSheetRef}
           className="w-[calc(100vw-1rem)] max-w-none gap-0 p-0 sm:max-w-md [&>button]:hidden"
           side="right"
         >
@@ -615,7 +601,9 @@ const ChatBoxContent: React.FC<ChatBoxProps> = ({
                 ? "Sidecar"
                 : renderedRightPanel === "browser"
                   ? "Browser"
-                  : "Artifacts"}
+                  : renderedRightPanel === "details"
+                    ? (messageDetails?.selectedDetail?.title ?? t.common.more)
+                    : "Artifacts"}
             </SheetTitle>
             <SheetDescription>
               Browse the side panel for this conversation.

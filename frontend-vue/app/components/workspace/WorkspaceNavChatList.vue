@@ -15,7 +15,8 @@
                    **所以这个查询必须住在抽屉里面的组件里**——别再把它提上去。
 -->
 <script setup lang="ts">
-import { Bot, CalendarClock, MessagesSquare } from "lucide-vue-next";
+import { ref, watch } from "vue";
+import { Blocks, Bot, CalendarClock, MessagesSquare } from "lucide-vue-next";
 
 import {
   SidebarGroup,
@@ -23,6 +24,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAgentsApiEnabled } from "@/composables/useWorkspaceFeatures";
 import { useWorkspaceSidebar } from "@/composables/useWorkspaceSidebar";
 
@@ -30,6 +36,24 @@ const { $i18n } = useNuxtApp();
 const route = useRoute();
 const { collapsed } = useWorkspaceSidebar();
 const features = useAgentsApiEnabled();
+const disabledTooltipOpen = ref(false);
+
+// React's focus handler bubbles from the button to its hoverable wrapper.
+// Native focusin/out provide the same focus-within boundary without a tab stop.
+function onDisabledTooltipFocusOut(event: FocusEvent) {
+  const host = event.currentTarget as HTMLElement;
+  if (event.relatedTarget instanceof Node && host.contains(event.relatedTarget))
+    return;
+  disabledTooltipOpen.value = false;
+}
+
+watch(
+  features.agentsApiEnabled,
+  () => {
+    disabledTooltipOpen.value = false;
+  },
+  { flush: "sync" },
+);
 
 function isActive(path: string) {
   return route.path === path;
@@ -42,10 +66,7 @@ function isActive(path: string) {
       <SidebarMenuItem>
         <SidebarMenuButton
           as-child
-          :is-active="
-            route.path.startsWith('/workspace/chats') &&
-            !isActive('/workspace/chats/new')
-          "
+          :is-active="isActive('/workspace/chats')"
           :tooltip="$i18n.t.value.sidebar.chats"
           :tooltip-hidden="!collapsed"
         >
@@ -77,32 +98,32 @@ function isActive(path: string) {
              于是这个禁用的入口**还会跟着鼠标高亮**，看起来和能点的一样；
           ③ 颜色是 `text-muted-foreground/50`（半透明），不是全实的 muted。
         -->
-        <div v-else class="group relative block w-full cursor-not-allowed">
-          <SidebarMenuButton
-            type="button"
-            class="text-muted-foreground/50"
-            :aria-label="$i18n.t.value.sidebar.agents"
-            aria-disabled="true"
-            aria-describedby="agents-disabled-description"
-          >
-            <Bot :size="16" class="shrink-0" />
-            <span>{{ $i18n.t.value.sidebar.agents }}</span>
-          </SidebarMenuButton>
-          <span id="agents-disabled-description" class="sr-only">{{
+        <Tooltip v-else v-model:open="disabledTooltipOpen">
+          <TooltipTrigger as-child>
+            <span
+              class="block w-full cursor-not-allowed"
+              @focusin="disabledTooltipOpen = true"
+              @focusout="onDisabledTooltipFocusOut"
+            >
+              <SidebarMenuButton
+                type="button"
+                class="text-muted-foreground/50"
+                :aria-label="$i18n.t.value.sidebar.agents"
+                aria-disabled="true"
+                aria-describedby="agents-disabled-description"
+              >
+                <Bot :size="16" class="shrink-0" />
+                <span>{{ $i18n.t.value.sidebar.agents }}</span>
+              </SidebarMenuButton>
+              <span id="agents-disabled-description" class="sr-only">{{
+                $i18n.t.value.sidebar.agentsDisabledTooltip
+              }}</span>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right">{{
             $i18n.t.value.sidebar.agentsDisabledTooltip
-          }}</span>
-          <!--
-            这里刻意**不**换成 Tooltip primitive。禁用入口的原因必须对键盘和读屏器
-            恒定可见，所以它挂在一个常驻的 aria-describedby 上；Reka 的 tooltip 只在
-            打开时才写 aria-describedby，as-child 合并会把这条常驻关联覆盖成 undefined。
-            悬停浮层在这里只是视觉补充，用 CSS 就够。
-          -->
-          <span
-            aria-hidden="true"
-            class="bg-popover text-popover-foreground absolute top-full left-2 z-50 hidden rounded-md border px-2 py-1 text-xs whitespace-nowrap shadow group-focus-within:block group-hover:block"
-            >{{ $i18n.t.value.sidebar.agentsDisabledTooltip }}</span
-          >
-        </div>
+          }}</TooltipContent>
+        </Tooltip>
       </SidebarMenuItem>
       <SidebarMenuItem>
         <SidebarMenuButton
@@ -117,6 +138,17 @@ function isActive(path: string) {
           >
             <CalendarClock :size="16" class="shrink-0" />
             <span>{{ $i18n.t.value.sidebar.scheduledTasks }}</span>
+          </NuxtLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          as-child
+          :is-active="route.path.startsWith('/workspace/capabilities')"
+        >
+          <NuxtLink class="text-muted-foreground" to="/workspace/capabilities">
+            <Blocks :size="16" class="shrink-0" />
+            <span>{{ $i18n.t.value.capabilities.title }}</span>
           </NuxtLink>
         </SidebarMenuButton>
       </SidebarMenuItem>

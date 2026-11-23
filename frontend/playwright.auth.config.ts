@@ -1,8 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const frontendPort = process.env.E2E_AUTH_FRONTEND_PORT ?? "3001";
+const python = process.platform === "win32" ? "python" : "python3";
+
+const defaultFrontendPort = process.env.E2E_AUTH_FRONTEND_PORT ?? "3001";
 const frontendURL =
-  process.env.PLAYWRIGHT_AUTH_BASE_URL ?? `http://localhost:${frontendPort}`;
+  process.env.PLAYWRIGHT_AUTH_BASE_URL ??
+  `http://localhost:${defaultFrontendPort}`;
+const frontendPort = new URL(frontendURL).port || defaultFrontendPort;
 const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === "1";
 
 /**
@@ -35,11 +39,12 @@ export default defineConfig({
   webServer: skipWebServer
     ? undefined
     : {
-        command: `pnpm build && pnpm exec next start -p ${frontendPort}`,
+        command: `${python} ../scripts/pnpm.py --dir frontend build && ${python} ../scripts/pnpm.py --dir frontend exec next start`,
         url: frontendURL,
         reuseExistingServer: false,
         timeout: 240_000,
         env: {
+          PORT: frontendPort,
           SKIP_ENV_VALIDATION: "1",
           DEER_FLOW_AUTH_DISABLED: "0",
           DEER_FLOW_INTERNAL_GATEWAY_BASE_URL: "http://127.0.0.1:65535",

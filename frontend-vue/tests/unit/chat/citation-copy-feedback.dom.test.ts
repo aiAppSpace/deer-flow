@@ -47,9 +47,9 @@ const source: CitationSource = {
   occurrences: [{ index: 1, title: "Agent trends 2026" }],
 };
 
-function mountPanel() {
+function mountPanel(sources = [source]) {
   return mount(CitationSourcesPanel, {
-    props: { sources: [source] },
+    props: { sources },
     attachTo: document.body,
     global: { provide: { [workspaceToastKey as symbol]: toastStore } },
   });
@@ -64,11 +64,95 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
 
 describe("citation copy feedback", () => {
+  for (const outcome of ["success", "denied", "rejected"] as const) {
+    it(`retires a ${outcome} clipboard continuation when the source leaves`, async () => {
+      let resolve!: (copied: boolean) => void;
+      let reject!: (reason: Error) => void;
+      clipboard.writeTextToClipboard.mockImplementationOnce(
+        () =>
+          new Promise<boolean>((done, fail) => {
+            resolve = done;
+            reject = fail;
+          }),
+      );
+      const previous = mountPanel();
+      await previous.get("button").trigger("click");
+      previous.unmount();
+      const current = mountPanel([
+        { ...source, id: "source-new", title: "New reference" },
+      ]);
+      // Start observing after mount: Vue's first devtools discovery has its own
+      // one-time timer. Only the late clipboard continuation is under this clock.
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      if (outcome === "rejected") reject(new Error("Late denial"));
+      else resolve(outcome === "success");
+      await flushPromises();
+      expect(toastStore.toasts.value).toEqual([]);
+      expect(current.get("button").attributes("aria-label")).toBe(
+        enUS.citations.copyReference("New reference"),
+      );
+      expect(vi.getTimerCount()).toBe(0);
+      current.unmount();
+    });
+  }
+
+  it("keeps independent feedback for two copied sources", async () => {
+    clipboard.writeTextToClipboard.mockResolvedValue(true);
+    const other = { ...source, id: "source-2", title: "Another source" };
+    const wrapper = mountPanel([source, other]);
+    for (const button of wrapper.findAll("button")) {
+      await button.trigger("click");
+      await flushPromises();
+    }
+    expect(
+      wrapper
+        .findAll("button")
+        .map((button) => button.attributes("aria-label")),
+    ).toEqual([
+      enUS.citations.copiedReference(source.title),
+      enUS.citations.copiedReference(other.title),
+    ]);
+    wrapper.unmount();
+  });
+
+  it("restarts the feedback deadline when the same source is copied again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    clipboard.writeTextToClipboard.mockResolvedValue(true);
+    const wrapper = mountPanel();
+    const button = wrapper.get("button");
+    await button.trigger("click");
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(1500);
+    await button.trigger("click");
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(button.attributes("aria-label")).toBe(
+      enUS.citations.copiedReference(source.title),
+    );
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(button.attributes("aria-label")).toBe(
+      enUS.citations.copyReference(source.title),
+    );
+    wrapper.unmount();
+  });
+
+  it("retires its own pending feedback timer when unmounted", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    clipboard.writeTextToClipboard.mockResolvedValue(true);
+    const wrapper = mountPanel();
+    await wrapper.get("button").trigger("click");
+    await flushPromises();
+    toastStore.clear();
+    expect(vi.getTimerCount()).toBe(1);
+    wrapper.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it("renames the button and announces success once the reference is copied", async () => {
     clipboard.writeTextToClipboard.mockResolvedValue(true);
     const wrapper = mountPanel();

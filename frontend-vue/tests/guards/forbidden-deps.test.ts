@@ -3,22 +3,9 @@
   【架构位置】     门禁测试
   【主要导出】     无
   【依赖关系】     package.json
-  【边界与注意】   这条门禁是**被现实逼出来的，不是预防性洁癖**：同一个坑连着踩了两次。
-
-                     - `058836aa`（M1 窗口 2）为了让
-                       `uploads/prompt-input-files.ts` 能解析，悄悄装了 `ai`，
-                       提交说明一个字没提；而 02 §321 写着「决策：内联定义，不装这个包」。
-                     - `d682f048`（M1 窗口 3）为了让 `api/api-client.ts` 能落地，
-                       装了 `@langchain/langgraph-sdk`，还在 evidence 里写了一整段论证；
-                       而 02 §372 写着「不必装进项目」。
-
-                   两次的形状完全一样：**搬运时遇到一个解析不了的 import，
-                   装包是最省事的出路，而计划里那条「不装、改成自写类型」的裁决
-                   躺在另一个文档里没人翻。** 文档挡不住这个——第二次就是在读了文档
-                   （读的是 08，依赖裁决其实在 02）之后发生的。所以要有机器门禁。
-
-                   清单的判据不是「我觉得不该装」，而是 02/04 里逐条写明的裁决，
-                   每条都带出处。真要放开某一条，得先改 02 并在 review 里被看见。
+  【边界与注意】   依赖禁用约定保持有效：Vue 使用自有框架无关协议/消息类型和渲染器，
+                   不因搬运 React 适配器引入第二套 SDK。清单变更须审阅实际生产边界，
+                   不能为孤立的适配器安装完整依赖。
 */
 
 import { readFileSync } from "node:fs";
@@ -32,7 +19,7 @@ const FORBIDDEN: Record<string, string> = {
     "02 §106 ❌ 移除 / §372「不必装进项目」；值导入的处置是自写 core/api/client.ts（02 §249，M2）",
   "@langchain/core":
     "02 §107 ❌ 移除；唯一的 type-only 引用（ToolCall）内联进 app/core/types/message.ts",
-  ai: "02 §321「决策：内联定义，不装这个包」；FileUIPart 内联进 app/core/types/message.ts",
+  ai: "Vue 使用本地 File 与消息附件描述符；上传提交由 core/uploads/submission-files.ts 负责，不引入第二套 SDK",
   // M3 补的三条。同一个形状第三次出现：搬 `core/streamdown/` 时遇到解析不了的
   // `import { code } from "@streamdown/code"`，装包最省事，而「不装」的裁决
   // 躺在 02 §259 的「内容渲染」表里。这次在写代码之前就先把门关上。

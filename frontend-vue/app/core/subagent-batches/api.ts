@@ -26,9 +26,10 @@ async function readJson<T>(response: Response, fallback: string): Promise<T> {
 
 export async function fetchSubagentBatches(
   threadId: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<SubagentBatch[]> {
   return readJson(
-    await fetch(`${batchUrl(threadId)}?limit=20`),
+    await fetch(`${batchUrl(threadId)}?limit=20`, { signal: options.signal }),
     "Failed to load subagent batches",
   );
 }
@@ -42,6 +43,7 @@ export async function fetchSubagentBatchItems(
     offset?: number;
     limit?: number;
     status?: SubagentBatchItem["status"];
+    signal?: AbortSignal;
   } = {},
 ): Promise<SubagentBatchItem[]> {
   const params = new URLSearchParams({
@@ -52,6 +54,7 @@ export async function fetchSubagentBatchItems(
   return readJson(
     await fetch(
       batchUrl(threadId, `/${encodeURIComponent(batchId)}/items?${params}`),
+      { signal: options.signal },
     ),
     "Failed to load batch items",
   );
@@ -63,11 +66,12 @@ export async function controlSubagentBatch(
   threadId: string,
   batchId: string,
   action: SubagentBatchAction,
+  options: { signal?: AbortSignal } = {},
 ): Promise<SubagentBatch> {
   return readJson(
     await fetch(
       batchUrl(threadId, `/${encodeURIComponent(batchId)}/${action}`),
-      { method: "POST" },
+      { method: "POST", signal: options.signal },
     ),
     `Failed to ${action} subagent batch`,
   );
@@ -77,6 +81,7 @@ export async function retrySubagentBatchItem(
   threadId: string,
   batchId: string,
   itemId: string,
+  options: { signal?: AbortSignal } = {},
 ): Promise<SubagentBatchItem> {
   return readJson(
     await fetch(
@@ -84,7 +89,7 @@ export async function retrySubagentBatchItem(
         threadId,
         `/${encodeURIComponent(batchId)}/items/${encodeURIComponent(itemId)}/retry`,
       ),
-      { method: "POST" },
+      { method: "POST", signal: options.signal },
     ),
     "Failed to retry subagent batch item",
   );

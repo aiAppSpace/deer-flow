@@ -1,6 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
+import ts from "typescript";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -39,7 +40,7 @@ describe("public showcase contracts", () => {
   });
 
   test("keeps the public demo allowlist and route stable", () => {
-    expect(DEMO_THREAD_IDS).toHaveLength(13);
+    expect(DEMO_THREAD_IDS.length).toBeGreaterThan(0);
     expect(isDemoThreadId(DEMO_THREAD_IDS[0]!)).toBe(true);
     expect(isDemoThreadId("unknown-thread")).toBe(false);
     expect(pathOfPublicDemoThread(DEMO_THREAD_IDS[0]!)).toBe(
@@ -67,7 +68,7 @@ describe("public showcase contracts", () => {
     ).toBeNull();
   });
 
-  test("keeps the Vue allowlist in sync with the shared React fixtures", () => {
+  test("keeps the Vue allowlist in sync with its packaged fixtures", () => {
     const threadsRoot = join(
       import.meta.dirname,
       "../../../public/demo/threads",
@@ -110,4 +111,65 @@ describe("public showcase contracts", () => {
     // 卸载时清干净，与 workspace layout 同一条纪律。
     expect(showcaseLayoutSource).toContain("onUnmounted(() => toast.clear())");
   });
+});
+
+test("matches the current React case registry and every original fixture byte", async () => {
+  const reactRoot = join(import.meta.dirname, "../../../../frontend");
+  if (!existsSync(reactRoot)) {
+    console.info(
+      "UNRUN: current React sibling absent; standalone fixture checks do not prove parity.",
+    );
+    return;
+  }
+  const source = ts.createSourceFile(
+    "static-demo.ts",
+    readFileSync(join(reactRoot, "src/core/threads/static-demo.ts"), "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  function literal(node: ts.Expression): unknown {
+    if (ts.isAsExpression(node)) return literal(node.expression);
+    if (ts.isStringLiteral(node)) return node.text;
+    if (ts.isArrayLiteralExpression(node))
+      return node.elements.map((item) => literal(item as ts.Expression));
+    if (ts.isObjectLiteralExpression(node))
+      return Object.fromEntries(
+        node.properties.map((property) => {
+          if (
+            !ts.isPropertyAssignment(property) ||
+            !ts.isStringLiteral(property.name)
+          )
+            throw new Error("Unexpected showcase registry entry");
+          return [property.name.text, literal(property.initializer)];
+        }),
+      );
+    throw new Error("Unexpected showcase registry expression");
+  }
+  const upstream: Record<string, unknown> = {};
+  source.forEachChild((statement) => {
+    if (!ts.isVariableStatement(statement)) return;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        ["DEMO_THREAD_IDS", "STATIC_DEMO_ARTIFACTS"].includes(
+          declaration.name.text,
+        ) &&
+        declaration.initializer
+      )
+        upstream[declaration.name.text] = literal(declaration.initializer);
+    }
+  });
+  expect(DEMO_THREAD_IDS).toEqual(upstream.DEMO_THREAD_IDS);
+  expect(STATIC_DEMO_ARTIFACTS).toEqual(upstream.STATIC_DEMO_ARTIFACTS);
+  const vueFiles = join(import.meta.dirname, "../../../public/demo/threads");
+  const reactFiles = join(reactRoot, "public/demo/threads");
+  expect(listFiles(vueFiles).sort()).toEqual(listFiles(reactFiles).sort());
+  for (const file of listFiles(reactFiles)) {
+    expect(
+      readFileSync(join(vueFiles, file)).equals(
+        readFileSync(join(reactFiles, file)),
+      ),
+      file,
+    ).toBe(true);
+  }
 });

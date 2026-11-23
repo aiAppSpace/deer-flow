@@ -18,7 +18,6 @@
 
 import {
   useInfiniteQuery,
-  useMutation,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -45,6 +44,7 @@ import { moveThreadToProject } from "@/core/threads/api";
 import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
 import { threadMetadataQueryKey } from "@/core/threads/metadata";
 import { THREAD_PROJECT_METADATA_KEY } from "@/core/threads/utils";
+import { useScopedGatewayRequests } from "@/composables/useScopedGatewayRequests";
 
 /** 与上游 `PROJECT_THREADS_PAGE_SIZE` 同值：两边翻页边界一致才好对照。 */
 export const PROJECT_THREADS_PAGE_SIZE = 100;
@@ -67,6 +67,7 @@ export function useProject(
   return useQuery<Project>({
     queryKey: computed(() => projectKeys.detail(toValue(projectId) ?? "")),
     queryFn: ({ signal }) => getProject(toValue(projectId)!, { signal }),
+    retry: false,
     enabled: computed(
       () => Boolean(toValue(projectId)) && (toValue(options.enabled) ?? true),
     ),
@@ -144,18 +145,23 @@ export function useMoveThreadToProject(options?: {
   ) => void;
 }) {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      threadId,
-      projectId,
-    }: {
-      threadId: string;
-      projectId: string | null;
-    }) => moveThreadToProject(threadId, projectId),
+  const requests = useScopedGatewayRequests();
+  return requests.mutation({
+    mutationFn: (
+      {
+        threadId,
+        projectId,
+      }: {
+        threadId: string;
+        projectId: string | null;
+      },
+      signal,
+    ) => moveThreadToProject(threadId, projectId, { signal }),
     onError: options?.onError,
-    async onSuccess(_response, { threadId, projectId }) {
+    async onSuccess(_response, { threadId, projectId }, isCurrent) {
       const metadataKey = threadMetadataQueryKey(threadId);
       await queryClient.cancelQueries({ queryKey: metadataKey });
+      if (!isCurrent()) return;
       queryClient.setQueriesData<Record<string, unknown> | undefined>(
         { queryKey: metadataKey },
         (previous) =>
@@ -179,34 +185,38 @@ export function useMoveThreadToProject(options?: {
 
 export function useProjectMutations() {
   const queryClient = useQueryClient();
+  const requests = useScopedGatewayRequests();
+  const invalidate = (includeThreads = false) => {
+    invalidateProjectCaches(queryClient, { includeThreads });
+  };
 
-  const create = useMutation({
-    mutationFn: (input: ProjectCreateInput) => createProject(input),
-    onSuccess: () => invalidateProjectCaches(queryClient),
+  const create = requests.mutation({
+    mutationFn: (input: ProjectCreateInput, signal) =>
+      createProject(input, { signal }),
+    onSuccess: () => invalidate(),
   });
 
-  const patch = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: ProjectPatchInput }) =>
-      patchProject(id, input),
-    onSuccess: () => invalidateProjectCaches(queryClient),
+  const patch = requests.mutation({
+    mutationFn: (
+      { id, input }: { id: string; input: ProjectPatchInput },
+      signal,
+    ) => patchProject(id, input, { signal }),
+    onSuccess: () => invalidate(),
   });
 
-  const archive = useMutation({
-    mutationFn: (id: string) => archiveProject(id),
-    onSuccess: () =>
-      invalidateProjectCaches(queryClient, { includeThreads: true }),
+  const archive = requests.mutation({
+    mutationFn: (id: string, signal) => archiveProject(id, { signal }),
+    onSuccess: () => invalidate(true),
   });
 
-  const restore = useMutation({
-    mutationFn: (id: string) => restoreProject(id),
-    onSuccess: () =>
-      invalidateProjectCaches(queryClient, { includeThreads: true }),
+  const restore = requests.mutation({
+    mutationFn: (id: string, signal) => restoreProject(id, { signal }),
+    onSuccess: () => invalidate(true),
   });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => deleteProject(id),
-    onSuccess: () =>
-      invalidateProjectCaches(queryClient, { includeThreads: true }),
+  const remove = requests.mutation({
+    mutationFn: (id: string, signal) => deleteProject(id, { signal }),
+    onSuccess: () => invalidate(true),
   });
 
   return { create, patch, archive, restore, remove };

@@ -68,7 +68,11 @@ describe("ExportTrigger", () => {
     await flushPromises();
 
     expect(mocks.exportThread).toHaveBeenCalledWith(
-      thread,
+      {
+        thread_id: thread.thread_id,
+        updated_at: expect.any(String),
+        values: thread.values,
+      },
       messages,
       "markdown",
     );

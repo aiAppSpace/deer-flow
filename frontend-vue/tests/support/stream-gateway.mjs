@@ -24,10 +24,46 @@
 */
 
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 
 const port = Number(process.env.M4A_STREAM_PORT ?? 8014);
-const THREAD_ID = "00000000-0000-0000-0000-0000000000a1";
 const RUN_ID = "00000000-0000-0000-0000-0000000000b1";
+const threads = new Map();
+
+function threadRecord(threadId, metadata = {}) {
+  const now = new Date().toISOString();
+  return {
+    thread_id: threadId,
+    created_at: now,
+    updated_at: now,
+    metadata,
+    status: "idle",
+    values: { title: "", messages: [] },
+    interrupts: {},
+  };
+}
+
+function completeThread(thread, startedAt) {
+  thread.status = "idle";
+  // The Gateway's completed durable read attributes the last AI message to its
+  // run and stamps that run's elapsed integer seconds, including sub-second 0.
+  const assistant = thread.values.messages.findLast(
+    (message) => message.type === "ai",
+  );
+  if (assistant) {
+    assistant.run_id = RUN_ID;
+    assistant.additional_kwargs = {
+      ...assistant.additional_kwargs,
+      turn_duration: Math.max(0, Math.floor((Date.now() - startedAt) / 1000)),
+    };
+  }
+}
+
+async function requestBody(request) {
+  let raw = "";
+  for await (const chunk of request) raw += chunk;
+  return raw ? JSON.parse(raw) : {};
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -59,8 +95,12 @@ const SCROLL_DELTAS = Array.from(
 );
 
 /** 初始段：metadata → 一个乱序的 AI 步骤 → human（values）→ 逐片 delta。 */
-function* initialScript(deltas = DELTAS) {
-  yield frame("metadata", { run_id: RUN_ID, thread_id: THREAD_ID }, "e1");
+function* initialScript(thread, human, deltas = DELTAS) {
+  yield frame(
+    "metadata",
+    { run_id: RUN_ID, thread_id: thread.thread_id },
+    "e1",
+  );
   // 05 C8 的形状：AI 步骤先于 human 到达。
   yield frame(
     "messages",
@@ -71,15 +111,17 @@ function* initialScript(deltas = DELTAS) {
     "values",
     {
       title: "Generated Title",
-      messages: [
-        { id: "ai-early", type: "ai", content: "" },
-        { id: "human-1__user", type: "human", content: "Build a deck" },
-      ],
+      messages: [{ id: "ai-early", type: "ai", content: "" }, human],
     },
     "e3",
   );
+  const assistant = { id: "ai-early", type: "ai", content: "" };
+  // The transport deliberately delivers AI before human. The durable checkpoint
+  // retains the submitted input followed by the accumulated assistant answer.
+  thread.values = { title: "Generated Title", messages: [human, assistant] };
   let index = 4;
   for (const delta of deltas) {
+    assistant.content += delta;
     yield frame(
       "messages",
       [{ id: "ai-early", type: "ai", content: delta }, {}],
@@ -89,43 +131,34 @@ function* initialScript(deltas = DELTAS) {
   }
 }
 
-async function writeTaskScript(response) {
-  response.write(
-    frame("metadata", { run_id: RUN_ID, thread_id: THREAD_ID }, "t1"),
-  );
-  await sleep(40);
-  response.write(
-    frame(
-      "values",
+async function writeTaskScript(response, thread, human, startedAt) {
+  thread.values = {
+    title: "Market research",
+    messages: [
+      human,
       {
-        title: "Market research",
-        messages: [
+        id: "ai-task",
+        type: "ai",
+        content: "",
+        tool_calls: [
           {
-            id: "human-task__user",
-            type: "human",
-            content: "Research the market",
-          },
-          {
-            id: "ai-task",
-            type: "ai",
-            content: "",
-            tool_calls: [
-              {
-                id: "task-1",
-                name: "task",
-                type: "tool_call",
-                args: {
-                  description: "Research the market",
-                  prompt: "Find current evidence",
-                },
-              },
-            ],
+            id: "task-1",
+            name: "task",
+            type: "tool_call",
+            args: {
+              description: "Research the market",
+              prompt: "Find current evidence",
+            },
           },
         ],
       },
-      "t2",
-    ),
+    ],
+  };
+  response.write(
+    frame("metadata", { run_id: RUN_ID, thread_id: thread.thread_id }, "t1"),
   );
+  await sleep(40);
+  response.write(frame("values", thread.values, "t2"));
   await sleep(40);
   response.write(
     frame(
@@ -141,8 +174,7 @@ async function writeTaskScript(response) {
       "t3",
     ),
   );
-  // Keep the retry visible long enough for the browser to observe the
-  // transient state before task progress clears it.
+  // Task progress is independent of the retry toast's own lifecycle.
   await sleep(700);
   response.write(
     frame(
@@ -207,6 +239,7 @@ async function writeTaskScript(response) {
     ),
   );
   await sleep(80);
+  completeThread(thread, startedAt);
   response.write(frame("end", {}, "t8"));
   response.end();
 }
@@ -228,11 +261,11 @@ async function writeChunked(
   return true;
 }
 
-function openSse(response) {
+function openSse(response, threadId, runId = RUN_ID) {
   response.writeHead(200, {
     "cache-control": "no-cache",
     "content-type": "text/event-stream",
-    "content-location": `/api/threads/${THREAD_ID}/runs/${RUN_ID}`,
+    "content-location": `/api/threads/${threadId}/runs/${runId}`,
     "x-accel-buffering": "no",
   });
 }
@@ -251,39 +284,34 @@ const server = createServer(async (request, response) => {
   // Thread lifecycle: the production Gateway requires an explicit thread
   // before a run starts, so this fixture must model the same contract.
   if (url.pathname === "/api/threads" && request.method === "POST") {
-    let raw = "";
-    for await (const chunk of request) raw += chunk;
-    const body = raw ? JSON.parse(raw) : {};
-    const now = new Date().toISOString();
+    const body = await requestBody(request);
+    const threadId = body.thread_id ?? randomUUID();
+    if (!threads.has(threadId))
+      threads.set(threadId, threadRecord(threadId, body.metadata ?? {}));
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify(threads.get(threadId)));
+    return;
+  }
+
+  if (url.pathname === "/api/threads/search" && request.method === "POST") {
+    const body = await requestBody(request);
     response.setHeader("content-type", "application/json");
     response.end(
-      JSON.stringify({
-        thread_id: body.thread_id ?? THREAD_ID,
-        created_at: now,
-        updated_at: now,
-        metadata: body.metadata ?? {},
-        status: "idle",
-        values: { title: "", messages: [] },
-        interrupts: {},
-      }),
+      JSON.stringify(
+        [...threads.values()].slice(
+          body.offset ?? 0,
+          (body.offset ?? 0) + (body.limit ?? 100),
+        ),
+      ),
     );
     return;
   }
 
-  if (/\/api\/threads\/[^/]+$/.test(url.pathname)) {
-    const now = new Date().toISOString();
+  if (/\/api\/threads\/[^/]+$/.test(url.pathname) && request.method === "GET") {
+    const thread = threads.get(url.pathname.split("/").at(-1));
     response.setHeader("content-type", "application/json");
-    response.end(
-      JSON.stringify({
-        thread_id: url.pathname.split("/").at(-1),
-        created_at: now,
-        updated_at: now,
-        metadata: {},
-        status: "idle",
-        values: { title: "Generated Title", messages: [] },
-        interrupts: {},
-      }),
-    );
+    response.writeHead(thread ? 200 : 404);
+    response.end(JSON.stringify(thread ?? { detail: "Thread not found" }));
     return;
   }
 
@@ -292,18 +320,38 @@ const server = createServer(async (request, response) => {
     /\/threads\/[^/]+\/runs\/stream$/.test(url.pathname) &&
     request.method === "POST"
   ) {
-    request.resume();
-    openSse(response);
+    const threadId = url.pathname.split("/").at(-3);
+    const thread = threads.get(threadId);
+    if (!thread) {
+      response.writeHead(404).end();
+      return;
+    }
+    const body = await requestBody(request);
+    const human = body.input?.messages?.findLast(
+      (message) => message.type === "human",
+    ) ?? {
+      id: "human-1__user",
+      type: "human",
+      content: "Build a deck",
+    };
+    thread.status = "busy";
+    const startedAt = Date.now();
+    openSse(response, threadId);
     if (script === "task") {
-      await writeTaskScript(response);
+      await writeTaskScript(response, thread, human, startedAt);
       return;
     }
     const deltas = script === "scroll" ? SCROLL_DELTAS : DELTAS;
-    const ok = await writeChunked(response, [...initialScript(deltas)], {
-      delayMs: script === "scroll" ? 90 : 40,
-      heartbeat: true,
-    });
+    const ok = await writeChunked(
+      response,
+      initialScript(thread, human, deltas),
+      {
+        delayMs: script === "scroll" ? 90 : 40,
+        heartbeat: true,
+      },
+    );
     if (!ok) return;
+    completeThread(thread, startedAt);
     if (script === "gap") {
       // 缺口：告诉客户端「你要的游标已经被淘汰了，从 latest 重来」。
       response.write(
@@ -334,22 +382,25 @@ const server = createServer(async (request, response) => {
     request.method === "GET"
   ) {
     const cursor = request.headers["last-event-id"];
-    openSse(response);
+    const parts = url.pathname.split("/");
+    const threadId = parts.at(-4);
+    const runId = parts.at(-2);
+    const thread = threads.get(threadId);
+    if (!thread) {
+      response.writeHead(404).end();
+      return;
+    }
+    const resumed = {
+      id: "ai-resumed",
+      type: "ai",
+      content: `resumed@${cursor ?? "none"}`,
+    };
+    thread.values.messages.push(resumed);
+    openSse(response, threadId, runId);
     // 把收到的游标回显成一条 AI 消息：用例据此断言**续传真的带了游标**，
     // 而不是从头重放。
     await writeChunked(response, [
-      frame(
-        "messages",
-        [
-          {
-            id: "ai-resumed",
-            type: "ai",
-            content: `resumed@${cursor ?? "none"}`,
-          },
-          {},
-        ],
-        "r1",
-      ),
+      frame("messages", [resumed, {}], "r1"),
       frame("end", {}, "r2"),
     ]);
     response.end();
@@ -365,18 +416,25 @@ const server = createServer(async (request, response) => {
 
   // durable state（gap 之后的 reload）
   if (/\/threads\/[^/]+\/state$/.test(url.pathname)) {
+    const thread = threads.get(url.pathname.split("/").at(-2));
     response.setHeader("content-type", "application/json");
+    response.writeHead(thread ? 200 : 404);
     response.end(
-      JSON.stringify({
-        values: {
-          title: "Generated Title",
-          messages: [
-            { id: "human-1__user", type: "human", content: "Build a deck" },
-            { id: "ai-early", type: "ai", content: "Hello from DeerFlow!" },
-          ],
-        },
-      }),
+      JSON.stringify(
+        thread ? { values: thread.values } : { detail: "Thread not found" },
+      ),
     );
+    return;
+  }
+
+  if (
+    /\/threads\/[^/]+\/history$/.test(url.pathname) &&
+    request.method === "POST"
+  ) {
+    request.resume();
+    const thread = threads.get(url.pathname.split("/").at(-2));
+    response.setHeader("content-type", "application/json");
+    response.end(JSON.stringify(thread ? [{ values: thread.values }] : []));
     return;
   }
 

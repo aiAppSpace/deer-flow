@@ -1,365 +1,189 @@
-/*
-  【文件职责】     解析并运行时校验 Memory export，明确 extra 与 duplicate import 合同。
-  【架构位置】     L3 framework-neutral Memory contract
-  【主要导出】     validateImportedMemory · parseMemoryImportText
-  【依赖关系】     memory types
-  【边界与注意】   完整结构跟随 React import 预检；extra 保留并警告，重复 ID 拒绝，重复内容保留并警告。
-*/
+import type { UserMemory } from "./types";
 
-import type { MemoryFact, UserMemory } from "./types";
+type ContextSection = UserMemory["user"]["workContext"];
+type MemoryFact = UserMemory["facts"][number];
+type InvalidFactStrategy = "reject" | "drop";
+export type MemoryFactIdentity = Readonly<{
+  index: number;
+  raw: string;
+  generated: boolean;
+}>;
 
-export type MemoryImportIssueCode =
-  | "malformed-json"
-  | "root-type"
-  | "missing-field"
-  | "invalid-type"
-  | "invalid-confidence"
-  | "invalid-fact"
-  | "duplicate-fact-id";
+const USER_SECTION_KEYS = [
+  "workContext",
+  "personalContext",
+  "topOfMind",
+  "cognitiveStyle",
+] as const satisfies ReadonlyArray<keyof UserMemory["user"]>;
 
-export type MemoryImportWarningCode = "extra-field" | "duplicate-fact-content";
+const HISTORY_SECTION_KEYS = [
+  "recentMonths",
+  "earlierContext",
+  "longTermBackground",
+] as const satisfies ReadonlyArray<keyof UserMemory["history"]>;
 
-export interface MemoryImportIssue {
-  code: MemoryImportIssueCode;
-  path: string;
+function emptySection(): ContextSection {
+  return { summary: "", updatedAt: "" };
 }
-
-export interface MemoryImportWarning {
-  code: MemoryImportWarningCode;
-  path: string;
-}
-
-export type MemoryImportValidation =
-  | {
-      ok: true;
-      memory: UserMemory;
-      warnings: MemoryImportWarning[];
-    }
-  | {
-      ok: false;
-      issues: MemoryImportIssue[];
-    };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function addExtraWarnings(
-  value: Record<string, unknown>,
-  known: ReadonlySet<string>,
-  path: string,
-  warnings: MemoryImportWarning[],
-) {
-  for (const key of Object.keys(value)) {
-    if (!known.has(key)) {
-      warnings.push({ code: "extra-field", path: `${path}.${key}` });
-    }
+function normalizeContextSection(value: unknown): ContextSection {
+  if (!isRecord(value)) {
+    return emptySection();
   }
+
+  return {
+    ...value,
+    summary: typeof value.summary === "string" ? value.summary : "",
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : "",
+  } as ContextSection;
 }
 
-function requireRecord(
-  value: unknown,
-  path: string,
-  issues: MemoryImportIssue[],
-): value is Record<string, unknown> {
-  if (isRecord(value)) return true;
-  issues.push({ code: "invalid-type", path });
-  return false;
+function generateLegacyFactId(index: number): string {
+  const randomUUID = globalThis.crypto?.randomUUID?.();
+  return randomUUID
+    ? `fact_${randomUUID.replaceAll("-", "").slice(0, 8)}`
+    : `fact_legacy_${index}`;
 }
 
-function requireString(
-  value: unknown,
-  path: string,
-  issues: MemoryImportIssue[],
-) {
-  if (typeof value === "string") return true;
-  issues.push({ code: "invalid-type", path });
-  return false;
-}
-
-function requireField(
-  value: Record<string, unknown>,
-  key: string,
-  path: string,
-  issues: MemoryImportIssue[],
-) {
-  if (Object.hasOwn(value, key)) return true;
-  issues.push({ code: "missing-field", path: `${path}.${key}` });
-  return false;
-}
-
-const SECTION_KEYS = new Set(["summary", "updatedAt"]);
-
-function validateSection(
-  value: unknown,
-  path: string,
-  issues: MemoryImportIssue[],
-  warnings: MemoryImportWarning[],
-) {
-  if (!requireRecord(value, path, issues)) return;
-  for (const key of SECTION_KEYS) {
-    if (requireField(value, key, path, issues)) {
-      requireString(value[key], `${path}.${key}`, issues);
-    }
-  }
-  addExtraWarnings(value, SECTION_KEYS, path, warnings);
-}
-
-const FACT_KEYS = new Set([
-  "id",
-  "content",
-  "category",
-  "categoryExtension",
-  "topics",
-  "confidence",
-  "createdAt",
-  "source",
-  "sourceError",
-  "schemaVersion",
-  "status",
-  "scope",
-  "revision",
-  "updatedAt",
-  "consolidatedAt",
-  "consolidatedFrom",
-]);
-const REQUIRED_FACT_STRING_KEYS = [
-  "id",
-  "content",
-  "category",
-  "createdAt",
-  "source",
-] as const;
-
-function optionalString(
-  value: Record<string, unknown>,
-  key: string,
-  path: string,
-  issues: MemoryImportIssue[],
-) {
-  const field = value[key];
-  if (field !== undefined && field !== null && typeof field !== "string") {
-    issues.push({ code: "invalid-type", path: `${path}.${key}` });
-  }
-}
-
-function optionalInteger(
-  value: Record<string, unknown>,
-  key: string,
-  path: string,
-  issues: MemoryImportIssue[],
-) {
-  const field = value[key];
-  if (
-    field !== undefined &&
-    field !== null &&
-    (typeof field !== "number" || !Number.isInteger(field))
-  ) {
-    issues.push({ code: "invalid-type", path: `${path}.${key}` });
-  }
-}
-
-function optionalStringArray(
-  value: Record<string, unknown>,
-  key: string,
-  path: string,
-  issues: MemoryImportIssue[],
-) {
-  const field = value[key];
-  if (
-    field !== undefined &&
-    field !== null &&
-    (!Array.isArray(field) || field.some((item) => typeof item !== "string"))
-  ) {
-    issues.push({ code: "invalid-type", path: `${path}.${key}` });
-  }
-}
-
-function validateFact(
+function normalizeMemoryFact(
   value: unknown,
   index: number,
-  issues: MemoryImportIssue[],
-  warnings: MemoryImportWarning[],
-): value is MemoryFact {
-  const path = `$.facts[${index}]`;
-  if (!requireRecord(value, path, issues)) return false;
-  for (const key of REQUIRED_FACT_STRING_KEYS) {
-    if (requireField(value, key, path, issues)) {
-      requireString(value[key], `${path}.${key}`, issues);
-    }
-  }
-  if (
-    typeof value.id === "string" &&
-    (!value.id || !/^[A-Za-z0-9_-]+$/.test(value.id))
-  ) {
-    issues.push({ code: "invalid-fact", path: `${path}.id` });
-  }
-  if (typeof value.content === "string" && !value.content.trim()) {
-    issues.push({ code: "invalid-fact", path: `${path}.content` });
-  }
-  if (requireField(value, "confidence", path, issues)) {
-    const confidence = value.confidence;
-    if (
-      typeof confidence !== "number" ||
-      !Number.isFinite(confidence) ||
-      confidence < 0 ||
-      confidence > 1
-    ) {
-      issues.push({ code: "invalid-confidence", path: `${path}.confidence` });
-    }
-  }
-  optionalString(value, "categoryExtension", path, issues);
-  optionalString(value, "sourceError", path, issues);
-  optionalString(value, "status", path, issues);
-  optionalString(value, "updatedAt", path, issues);
-  optionalString(value, "consolidatedAt", path, issues);
-  optionalInteger(value, "schemaVersion", path, issues);
-  optionalInteger(value, "revision", path, issues);
-  optionalStringArray(value, "topics", path, issues);
-  optionalStringArray(value, "consolidatedFrom", path, issues);
-  if (
-    value.status !== undefined &&
-    value.status !== null &&
-    value.status !== "active"
-  ) {
-    issues.push({ code: "invalid-fact", path: `${path}.status` });
-  }
-  if (
-    value.revision !== undefined &&
-    value.revision !== null &&
-    typeof value.revision === "number" &&
-    Number.isInteger(value.revision) &&
-    value.revision < 1
-  ) {
-    issues.push({ code: "invalid-fact", path: `${path}.revision` });
-  }
-  if (value.scope !== undefined && value.scope !== null) {
-    if (
-      !isRecord(value.scope) ||
-      Object.values(value.scope).some(
-        (entry) => entry !== null && typeof entry !== "string",
-      )
-    ) {
-      issues.push({ code: "invalid-type", path: `${path}.scope` });
-    }
-  }
-  addExtraWarnings(value, FACT_KEYS, path, warnings);
-  return true;
-}
-
-const ROOT_KEYS = new Set([
-  "version",
-  "revision",
-  "lastUpdated",
-  "user",
-  "history",
-  "facts",
-]);
-const USER_KEYS = new Set(["workContext", "personalContext", "topOfMind"]);
-const HISTORY_KEYS = new Set([
-  "recentMonths",
-  "earlierContext",
-  "longTermBackground",
-]);
-
-function normalizedFactContent(value: unknown) {
-  return typeof value === "string" ? value.trim().toLocaleLowerCase() : "";
-}
-
-export function validateImportedMemory(value: unknown): MemoryImportValidation {
+  onIdentity?: (identity: MemoryFactIdentity) => void,
+): MemoryFact | null {
   if (!isRecord(value)) {
-    return { ok: false, issues: [{ code: "root-type", path: "$" }] };
+    return null;
   }
 
-  const issues: MemoryImportIssue[] = [];
-  const warnings: MemoryImportWarning[] = [];
-  for (const key of ["version", "lastUpdated", "user", "history", "facts"]) {
-    requireField(value, key, "$", issues);
+  const content = typeof value.content === "string" ? value.content.trim() : "";
+  if (!content) {
+    return null;
   }
-  if (Object.hasOwn(value, "version")) {
-    requireString(value.version, "$.version", issues);
-  }
-  if (Object.hasOwn(value, "lastUpdated")) {
-    requireString(value.lastUpdated, "$.lastUpdated", issues);
-  }
-  optionalInteger(value, "revision", "$", issues);
+
+  const category =
+    typeof value.category === "string" && value.category.trim()
+      ? value.category.trim()
+      : "context";
+  const rawConfidence = value.confidence;
+  const numericConfidence =
+    typeof rawConfidence === "number"
+      ? rawConfidence
+      : typeof rawConfidence === "string" &&
+          /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(rawConfidence.trim())
+        ? Number(rawConfidence)
+        : NaN;
+  const confidence = Number.isFinite(numericConfidence)
+    ? Math.min(1, Math.max(0, numericConfidence))
+    : 0.5;
+
+  const retainedId = typeof value.id === "string" ? value.id.trim() : "";
+  const fact = {
+    ...value,
+    id: retainedId || generateLegacyFactId(index),
+    content,
+    category,
+    confidence,
+    createdAt:
+      typeof value.createdAt === "string" ? value.createdAt.trim() : "",
+    source:
+      typeof value.source === "string" && value.source.trim()
+        ? value.source.trim()
+        : "unknown",
+  } as MemoryFact & Record<string, unknown>;
 
   if (
-    Object.hasOwn(value, "user") &&
-    requireRecord(value.user, "$.user", issues)
+    "sourceError" in fact &&
+    fact.sourceError !== null &&
+    typeof fact.sourceError !== "string"
   ) {
-    for (const key of USER_KEYS) {
-      if (requireField(value.user, key, "$.user", issues)) {
-        validateSection(value.user[key], `$.user.${key}`, issues, warnings);
-      }
-    }
-    addExtraWarnings(value.user, USER_KEYS, "$.user", warnings);
-  }
-  if (
-    Object.hasOwn(value, "history") &&
-    requireRecord(value.history, "$.history", issues)
-  ) {
-    for (const key of HISTORY_KEYS) {
-      if (requireField(value.history, key, "$.history", issues)) {
-        validateSection(
-          value.history[key],
-          `$.history.${key}`,
-          issues,
-          warnings,
-        );
-      }
-    }
-    addExtraWarnings(value.history, HISTORY_KEYS, "$.history", warnings);
+    delete fact.sourceError;
   }
 
-  if (Object.hasOwn(value, "facts")) {
-    if (!Array.isArray(value.facts)) {
-      issues.push({ code: "invalid-type", path: "$.facts" });
-    } else {
-      const ids = new Map<string, number>();
-      const contents = new Map<string, number>();
-      value.facts.forEach((fact, index) => {
-        validateFact(fact, index, issues, warnings);
-        if (!isRecord(fact)) return;
-        if (typeof fact.id === "string") {
-          const previous = ids.get(fact.id);
-          if (previous !== undefined) {
-            issues.push({
-              code: "duplicate-fact-id",
-              path: `$.facts[${index}].id`,
-            });
-          } else {
-            ids.set(fact.id, index);
-          }
-        }
-        const content = normalizedFactContent(fact.content);
-        if (content) {
-          const previous = contents.get(content);
-          if (previous !== undefined) {
-            warnings.push({
-              code: "duplicate-fact-content",
-              path: `$.facts[${index}].content`,
-            });
-          } else {
-            contents.set(content, index);
-          }
-        }
-      });
+  if (onIdentity) {
+    try {
+      onIdentity(
+        Object.freeze({ index, raw: fact.id, generated: !retainedId }),
+      );
+    } catch {
+      // Evidence callbacks cannot change the normalized product value.
     }
   }
-  addExtraWarnings(value, ROOT_KEYS, "$", warnings);
-
-  return issues.length > 0
-    ? { ok: false, issues }
-    : { ok: true, memory: value as UserMemory, warnings };
+  return fact;
 }
 
-export function parseMemoryImportText(text: string): MemoryImportValidation {
-  let value: unknown;
-  try {
-    value = JSON.parse(text) as unknown;
-  } catch {
-    return { ok: false, issues: [{ code: "malformed-json", path: "$" }] };
+/**
+ * Normalize and validate memory JSON (unknown → UserMemory | null).
+ *
+ * Normalization is additive: only contract-owned fields are validated and
+ * defaulted, while every unrecognized field (top-level, section, and per-fact)
+ * passes through untouched. The frontend must never be narrower than the
+ * Gateway contract — `MemoryResponse` declares fields such as the top-level
+ * `revision`, and rebuilding from a whitelist here would silently drop them
+ * from every response passing through `readMemoryResponse()`.
+ *
+ * The envelope (string `version`/`lastUpdated`, record `user`/`history`, array
+ * `facts`) is strict on both call paths. Unrecoverable facts can either reject
+ * a user-initiated import or be dropped on the background API read path.
+ */
+export function normalizeMemoryPayload(
+  value: unknown,
+  options: {
+    invalidFactStrategy?: InvalidFactStrategy;
+    onFactIdentity?: (identity: MemoryFactIdentity) => void;
+  } = {},
+): UserMemory | null {
+  if (
+    !isRecord(value) ||
+    typeof value.version !== "string" ||
+    typeof value.lastUpdated !== "string" ||
+    !isRecord(value.user) ||
+    !isRecord(value.history) ||
+    !Array.isArray(value.facts)
+  ) {
+    return null;
   }
-  return validateImportedMemory(value);
+
+  const user = value.user;
+  const history = value.history;
+  const invalidFactStrategy = options.invalidFactStrategy ?? "reject";
+  const facts: MemoryFact[] = [];
+
+  for (const [index, factValue] of value.facts.entries()) {
+    const fact = normalizeMemoryFact(factValue, index, options.onFactIdentity);
+    if (!fact) {
+      if (invalidFactStrategy === "reject") {
+        return null;
+      }
+      continue;
+    }
+    facts.push(fact);
+  }
+
+  const normalizedUser = {
+    ...user,
+    ...Object.fromEntries(
+      USER_SECTION_KEYS.map((key) => [key, normalizeContextSection(user[key])]),
+    ),
+  } as unknown as UserMemory["user"];
+  const normalizedHistory = {
+    ...history,
+    ...Object.fromEntries(
+      HISTORY_SECTION_KEYS.map((key) => [
+        key,
+        normalizeContextSection(history[key]),
+      ]),
+    ),
+  } as unknown as UserMemory["history"];
+
+  return {
+    ...value,
+    version: value.version,
+    lastUpdated: value.lastUpdated,
+    user: normalizedUser,
+    history: normalizedHistory,
+    facts,
+  } as unknown as UserMemory;
 }

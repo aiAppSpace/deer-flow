@@ -1,38 +1,11 @@
 /*
   【文件职责】     跑一条 e2e 命令；它失败时把失败现场从 `test-results/` 里另存一份。
-                   同时**独占**：同一个仓下不许有第二轮 e2e 同时在跑。
   【架构位置】     构建脚本（不进产物）
   【主要导出】     collectFailureArtifactDirs · collectSuiteReportFiles ·
-                   archiveFailureArtifacts · acquireRunLock
   【依赖关系】     只用 node 内置模块
-  【边界与注意】   **为什么要独占**：wave 202 实测，两轮 `make e2e-parity` 撞在一起会
-                   **互相拆台**，而且两个方向都走这个文件里的代码——
-                   ① 后开的那轮启动时 Playwright 清空 `test-results/<套件>/`，
-                      先开的那轮正在录的 trace 当场 ENOENT；
-                   ② 先结束的那轮 `archiveFailureArtifacts` 用 `renameSync`
-                      把失败目录**搬走**，后开的那轮 artifacts 被抽走，同样 ENOENT。
-                   两种都表现为 `ENOENT` + 180s 超时，长得像回归；共用 Gateway 的套件
-                   还会互相污染种子数据（那一轮 topology 的种子会话被播种了两遍，
-                   4 条断言收到 8 条）。**判断它们不是回归花了两轮、25 分钟。**
-                   所以这里 fail fast，不排队等——静默等 14 分钟比报错更糟。
-
-                   **Playwright 每次运行都会先清空 `outputDir`。** wave 197 实测：
-                   往 `test-results/e2e/` 放一个 marker 文件，跑任意一条用例之后
-                   它就没了。而偶发红之后最自然的动作恰恰是**重跑一次看看**——
-                   于是 trace / video / 截图在有人看它之前就被自己删掉了。
-                   本轮就这么丢过一份：`thread-history` 那次红的 trace，
-                   在我为了确认「是不是回归」而重跑两次之后消失。
-
-                   wave 195 修的是「trace 从来没被录过」（`retries: 0` 配
-                   `trace: "on-first-retry"`）。**这一条是它的下一段**：录下来了，
-                   但活不过下一次运行。两条合起来才谈得上「偶发红可查」。
-
-                   **为什么不按套件名归档**：套件名要从 Makefile 传进来，就多一处
-                   会漂的对应关系。这里改成扫「哪些用例目录里有失败产物」，
-                   什么套件、什么 config 都不用知道，也就没有漂移面。
-
-                   **只在命令失败时归档**：绿的运行里 `test-results/` 是空的
-                   （`preserveOutput` 默认只留失败用例的产物），扫也扫不到东西。
+  【边界与注意】   同一 checkout 的 E2E 独占输出目录与种子数据，冲突时立即失败。
+                   Playwright 下次运行会清空 outputDir；失败后先归档 trace、截图与报告，再允许重跑。
+                   按实际失败产物发现目录，不另维护套件名映射。
 */
 
 import { spawn } from "node:child_process";

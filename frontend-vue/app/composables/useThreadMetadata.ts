@@ -51,11 +51,11 @@ export function useThreadMetadata(
 
   return useQuery<AgentThread | null>({
     queryKey: computed(() => threadMetadataQueryKey(id.value)),
-    queryFn: async () => {
-      const value = id.value;
+    queryFn: async ({ queryKey, signal }) => {
+      const value = typeof queryKey[2] === "string" ? queryKey[2] : null;
       if (!value) return null;
       try {
-        return await apiClient.threads.get(value);
+        return await apiClient.threads.get(value, { signal });
       } catch (error) {
         if (isThreadMissingError(error)) return null;
         throw error;

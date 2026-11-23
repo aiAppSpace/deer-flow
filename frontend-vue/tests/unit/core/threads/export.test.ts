@@ -53,6 +53,57 @@ function toolMsg(content: string): Message {
   } as unknown as Message;
 }
 
+describe.each([
+  ["Markdown", formatThreadAsMarkdown],
+  ["JSON", formatThreadAsJSON],
+] as const)("%s export context and literal code", (_name, format) => {
+  it("removes attributed project instructions and shelf context from visible messages", () => {
+    const content = [
+      '<project name="Private project">private-instructions</project>',
+      '<documents count="1" shown="1">private-shelf-path</documents>',
+      "Public request",
+    ].join("\n");
+    const result = format(makeThread(), [
+      human(content, { id: "public-request" }),
+      ai("Public answer"),
+    ]);
+    expect(result).not.toContain("private-instructions");
+    expect(result).not.toContain("private-shelf-path");
+    expect(result).not.toContain("Private project");
+    expect(result).toContain("Public request");
+    expect(result).toContain("Public answer");
+  });
+
+  it("preserves a literal marker inside code while removing injected prose context", () => {
+    const content = [
+      "Code example:",
+      "```xml",
+      "<memory>literal-code-payload</memory>",
+      "```",
+      "<memory>injected-secret-payload</memory>",
+      "Public answer",
+    ].join("\n");
+    const result = format(makeThread(), [ai(content, { id: "public-answer" })]);
+    expect(result).toContain("<memory>literal-code-payload</memory>");
+    expect(result).not.toContain("injected-secret-payload");
+    expect(result).toContain("Public answer");
+  });
+
+  it("keeps project XML within a fence containing a language-labelled fence line", () => {
+    const content = [
+      "Fence tutorial:",
+      "```",
+      "```xml",
+      "<project>literal-project-payload</project>",
+      "```",
+      '<project name="Private">injected-project-payload</project>',
+    ].join("\n");
+    const result = format(makeThread(), [ai(content, { id: "public-answer" })]);
+    expect(result).toContain("<project>literal-project-payload</project>");
+    expect(result).not.toContain("injected-project-payload");
+  });
+});
+
 describe("formatThreadAsMarkdown", () => {
   it("includes plain user and assistant text", () => {
     const md = formatThreadAsMarkdown(makeThread(), [

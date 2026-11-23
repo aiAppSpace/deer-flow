@@ -8,9 +8,8 @@
                    `data-spacing` 都是选择器合同的一部分，子项靠 `data-spacing=0`
                    把自己拼成一条无缝的分段条。
 
-                   变体不走 provide/inject（上游用的是 React context），因为本仓只有
-                   一个调用点、且 L2 不许持有产品状态。调用点把 variant/size 同时传给
-                   外框和每个子项即可，两边渲染出来的 data-* 一样。
+                   组级 variant/size/spacing 通过本层 context 传递，和 React 的样式
+                   context 对齐；选择状态仍由 Reka 持有，不包含产品状态。
 -->
 
 <script setup lang="ts">
@@ -22,6 +21,7 @@ import {
 } from "reka-ui";
 
 import { cn } from "@/lib/utils";
+import { provideToggleGroupStyle } from "./context";
 
 const props = withDefaults(
   defineProps<
@@ -32,7 +32,7 @@ const props = withDefaults(
       spacing?: number;
     }
   >(),
-  { variant: "default", size: "default", spacing: 0 },
+  { variant: undefined, size: undefined, spacing: 0, class: undefined },
 );
 const emits = defineEmits<{ "update:modelValue": [value: unknown] }>();
 const delegated = computed(() => {
@@ -50,6 +50,13 @@ const delegated = computed(() => {
   return rest;
 });
 const forwarded = useForwardPropsEmits(delegated, emits);
+provideToggleGroupStyle(
+  computed(() => ({
+    variant: props.variant,
+    size: props.size,
+    spacing: props.spacing,
+  })),
+);
 </script>
 
 <template>

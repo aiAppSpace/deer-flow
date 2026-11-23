@@ -12,6 +12,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
+// Prepare the real lazy renderer before measuring its mounted behavior, not Vite transforms.
+import "@/components/chat/MessageMarkdownContent.vue";
+import "@/components/markdown/StreamMarkdown.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import {
   createWorkspaceToastStore,
@@ -172,6 +175,47 @@ describe("MessageList MarkdownLink integration", () => {
 });
 
 describe("MessageList on-demand history", () => {
+  it("keeps the focused Load more button available after a failed page instead of replacing it with an inline retry", async () => {
+    const wrapper = mount(MessageList, {
+      attachTo: document.body,
+      props: {
+        messages: [],
+        streaming: false,
+        loading: false,
+        threadId: "thread-1",
+        hasMoreHistory: true,
+        historyLoadingMore: false,
+        historyError: undefined,
+      },
+      global: {
+        provide: { [workspaceToastKey as symbol]: toastStore },
+        plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
+      },
+    });
+    const button = wrapper.get('[data-testid="load-earlier-messages"]');
+    const element = button.element as HTMLButtonElement;
+    element.focus();
+    await button.trigger("click");
+    await wrapper.setProps({ historyLoadingMore: true });
+    expect(element.disabled).toBe(true);
+    await wrapper.setProps({
+      historyLoadingMore: false,
+      historyError: new Error("History storage unavailable."),
+    });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="load-earlier-messages"]').element).toBe(
+      element,
+    );
+    expect(document.activeElement).toBe(element);
+    expect(element.disabled).toBe(false);
+    expect(button.text()).toBe(enUS.common.loadMore);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("History storage unavailable.");
+    await button.trigger("click");
+    expect(wrapper.emitted("loadMoreHistory")).toHaveLength(2);
+    wrapper.unmount();
+  });
+
   it("does not auto-fetch, coalesces requests and preserves the viewport after prepend", async () => {
     const wrapper = mount(MessageList, {
       props: {

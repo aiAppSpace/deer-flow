@@ -1,11 +1,3 @@
-/*
-  【文件职责】     以真实 Auth/FastAPI/SQLite/HTTP/Nuxt/Chromium 验证channel lifecycle。
-  【架构位置】     real-backend acceptance
-  【主要导出】     Playwright HTTP 与 browser scenarios
-  【依赖关系】     run_replay_gateway.py · channel_e2e_fixture.py · ChannelConnections.vue
-  【边界与注意】   外部 worker/callback 受控；鉴权、CSRF、router、repository、HTTP、UI 均为真实实现。
-*/
-
 import { expect, test, type APIRequestContext } from "@playwright/test";
 
 const APP = process.env.E2E_APP_URL ?? "http://localhost:3111";
@@ -145,38 +137,13 @@ test("admin completes real scoped multi-account lifecycle through the Vue UI", a
   };
   expect(connect).toMatchObject({ expires_in: 600, url: null });
   expect(connect.instruction).toContain(`/connect ${connect.code}`);
-  /*
-    这一条**不能**从 `settings`（`getByRole("dialog", { name: "Settings" })`）往下找。
 
-    点完「Add account」之后「Connect channel」对话框会盖上来，一旦它挂载，设置对话框
-    就被正确地标成 `aria-hidden`——于是整棵子树离开可访问性树，任何 `getByRole` 都
-    再也匹配不到，报的是「element(s) not found」而不是「不是 disabled」。断言与对话框
-    挂载之间是竞态：机器闲时断言先跑（绿），机器忙时对话框先挂载（红）。
-    实测过一次：六个 e2e 套件连着跑时红，单独跑三条全绿。
-
-    换成按 DOM 找——`getByTestId` 是属性匹配、`locator("button")` 是选择器、
-    `hasText` 是文本内容，三者都不走可访问性树，因此与 `aria-hidden` 无关。
-    断言本身不变，仍然是「等待期间这颗按钮是 disabled」。
-  */
-  /*
-    正则**要容忍首尾空白**。这颗按钮是 `<Plug />` 图标 + `{{ connectLabel(view) }}`
-    （上游 channels-settings-page.tsx:281 同样带 PlugIcon），Vue 模板在图标与插值
-    之间留下一个文本节点，于是 `textContent` 是 **" Add account"**——实测
-    `allTextContents()` 返回 `[" Add account","Modify","Remove provider configuration"]`，
-    只有带图标的那两颗有前导空格。`hasText` 传 RegExp 时**不做空白归一**，
-    `/^Add account$/` 因此一个都匹配不到，报的是「element(s) not found」，
-    看起来像「这颗按钮不在」而不是「正则没写对」。
-
-    wave 72 给这颗键补上图标那天起这条就红着，一直没人知道——`e2e-backend`
-    自 wave 64 起就不在任何一轮的收工清单里（坑 194：一条长期红着、又不在任何门禁
-    清单里的 gate，等于不存在）。wave 79 收工时跑全套才撞出来。
-  */
   await expect(
     page
       .getByTestId("channel-provider-slack")
       .locator("button")
       .filter({ hasText: /^\s*Add account\s*$/ }),
-  ).toBeDisabled();
+  ).toBeEnabled();
 
   const completed = await context.request.post(
     `${APP}/api/test-only/channels/complete`,
@@ -195,19 +162,12 @@ test("admin completes real scoped multi-account lifecycle through the Vue UI", a
   expect(completed.status(), await completed.text()).toBe(200);
   const bob = (await completed.json()) as { id: string };
 
-  const connectDialog = page.getByRole("dialog", { name: "Connect channel" });
-  await expect(connectDialog.getByTestId("channel-connect-state")).toHaveText(
-    "Connected",
-    { timeout: 10_000 },
+  await expect(page.getByTestId("workspace-toaster")).toContainText(
+    connect.instruction,
   );
-  /*
-    对话框里有两颗 Close:footer 那颗与右上角 primitive 的那颗（与 React 每个对话框
-    都有的那颗同源）。这里点的一直是 footer 那颗,按 data-slot 锁定。
-  */
-  await connectDialog
-    .locator('[data-slot="button"]')
-    .filter({ hasText: /^Close$/ })
-    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Connect channel" }),
+  ).toHaveCount(0);
   await expect(
     slackPanel.getByTestId(`channel-connection-${bob.id}`),
   ).toContainText("Bob · DeerFlow E2E");
@@ -257,28 +217,20 @@ test("admin completes real scoped multi-account lifecycle through the Vue UI", a
   );
   const telegramPanel = settings.getByTestId("channel-provider-telegram");
   await telegramPanel.getByRole("button", { name: "Connect" }).click();
-  await expect(settings.getByRole("alert")).toHaveText(
+  await expect(page.getByTestId("workspace-toaster")).toContainText(
     "Too many pending channel connection codes. Wait for existing codes to expire or use one of them.",
   );
 
-  await slackPanel
-    .getByRole("button", {
-      name: "Remove provider configuration: Slack",
-    })
-    .click();
-  const removalDialog = page.getByRole("alertdialog", {
-    name: "Remove Slack provider configuration?",
-  });
   const providerDeleteResponse = page.waitForResponse(
     (response) =>
       response.request().method() === "DELETE" &&
       new URL(response.url()).pathname === "/api/channels/slack/runtime-config",
   );
-  await removalDialog
-    .getByRole("button", { name: "Remove provider configuration" })
+  await slackPanel
+    .getByRole("button", { name: "Remove provider configuration: Slack" })
     .click();
   expect((await providerDeleteResponse).status()).toBe(200);
-  await expect(removalDialog).toBeHidden();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
 
   const afterProviderRemoval = await context.request.get(
     `${APP}/api/channels/connections`,

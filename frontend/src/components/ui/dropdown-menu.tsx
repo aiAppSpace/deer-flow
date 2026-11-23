@@ -1,9 +1,10 @@
 "use client";
 
-import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
+import * as React from "react";
 
+import { useOpenMenuAnchorRetention } from "@/hooks/use-open-menu-anchor-retention";
 import { cn } from "@/lib/utils";
 
 function DropdownMenu({
@@ -52,12 +53,24 @@ function DropdownMenuContent({
   sideOffset = 4,
   sticky = "always",
   collisionPadding = 8,
+  ref: forwardedRef,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const [content, setContent] = React.useState<HTMLDivElement | null>(null);
+  useOpenMenuAnchorRetention(content);
+  const ref = React.useCallback<React.RefCallback<HTMLDivElement>>(
+    (element) => {
+      setContent(element);
+      if (typeof forwardedRef === "function") return forwardedRef(element);
+      if (forwardedRef) forwardedRef.current = element;
+    },
+    [forwardedRef],
+  );
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
+        ref={ref}
         sideOffset={sideOffset}
         sticky={sticky}
         collisionPadding={collisionPadding}

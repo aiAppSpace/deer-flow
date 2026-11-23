@@ -19,7 +19,7 @@
                    而不是在这里开口子。
 */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -27,6 +27,10 @@ import { describe, expect, it } from "vitest";
 import { KNOWN_IDS } from "../../e2e-parity/support/capture";
 
 const SOURCES = [
+  "../../../shared/showcase.ts",
+  ...readdirSync(new URL("../../e2e-parity/support/", import.meta.url))
+    .filter((name) => name.endsWith("-scenarios.ts"))
+    .map((name) => `../../e2e-parity/support/${name}`),
   "../../e2e-parity/support/scenarios.ts",
   "../../e2e-parity/support/fixture-thread.ts",
   "../../e2e/utils/mock-api.ts",

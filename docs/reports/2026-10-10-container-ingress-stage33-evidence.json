@@ -1,0 +1,229 @@
+{
+  "date": "2026-10-10",
+  "stage": 33,
+  "recordedAt": "2026-10-09T17:04:57.522727+00:00",
+  "status": "PASS_FOR_RECORDED_CHECKPOINT",
+  "productionFreeze": "2026-10-10 00:41:44 CST",
+  "fullProjectCompletionClaimed": false,
+  "futureProductionSourcePassClaimed": false,
+  "project": "deerflow-vue-ingress-00aff39027",
+  "images": {
+    "frontend-vue": "sha256:e637fb28e3ade92b2902f813af8d34fc59f5844473d5f3e549675215df8b4f38",
+    "frontend": "sha256:0aa7a012d34ce4c3545599fcbf5d452b193986482b4e92d15d302ea46e9fbe9f"
+  },
+  "sourceFingerprint": "docs/reports/2026-10-10-container-stage33-source-fingerprint.json",
+  "sourceSummary": [
+    {
+      "frontend": "frontend-vue",
+      "files": 898,
+      "sha256": "dcc9defc3f20049847f350c695a620b67b26d9057659241821f65864b68294f2"
+    },
+    {
+      "frontend": "frontend",
+      "files": 810,
+      "sha256": "307599f295f43f9e9116deb948c85aff7942b65a7d4dc517cd735707c7f508f4"
+    }
+  ],
+  "sourceVerification": {
+    "currentDrift": [],
+    "snapshotDrift": []
+  },
+  "canonicalBuildExitCodes": {
+    "vue": 0,
+    "react": 0
+  },
+  "checks": {
+    "public-replay": {
+      "project": "deerflow-vue-ingress-00aff39027",
+      "phase": "replay",
+      "origin": "http://vue.localhost:2326",
+      "status": "PASS",
+      "checks": [
+        "Vue hostname HTML and real UI login/HttpOnly/CSRF/expected-owner",
+        "default and unknown hostname retain React",
+        "2 MiB multipart upload and exact download/range through nginx -> Gateway",
+        "incremental uncompressed SSE rewrite and replay-produced exact artifact"
+      ],
+      "sse": {
+        "chunks": 17,
+        "firstMs": 378.2000000178814,
+        "totalMs": 2772.5
+      },
+      "observedBrowserApiPaths": [
+        "GET /api/channels/providers",
+        "GET /api/features",
+        "GET /api/models",
+        "GET /api/plugins",
+        "GET /api/skills",
+        "GET /api/suggestions/config",
+        "GET /api/thread-activity",
+        "GET /api/threads/106fb1ae-31f5-4171-815c-a411aa4bf061/artifacts/mnt/user-data/outputs/note.txt",
+        "GET /api/threads/b93a1096-dda9-4b73-9805-dcf098a1a905/artifacts/mnt/user-data/uploads/ingress.txt",
+        "GET /api/threads/c9eef217-19f0-4549-9914-60b4297c3399/uploads/limits",
+        "GET /api/v1/auth/me",
+        "GET /api/v1/auth/preferences",
+        "GET /api/v1/auth/providers",
+        "GET /api/v1/auth/setup-status",
+        "PATCH /api/v1/auth/preferences",
+        "POST /api/langgraph/threads",
+        "POST /api/langgraph/threads/106fb1ae-31f5-4171-815c-a411aa4bf061/runs/stream",
+        "POST /api/langgraph/threads/search",
+        "POST /api/threads/b93a1096-dda9-4b73-9805-dcf098a1a905/uploads",
+        "POST /api/threads/search",
+        "POST /api/v1/auth/login/local"
+      ]
+    },
+    "private-nuxt": {
+      "status": "PASS",
+      "path": "private Nuxt -> real Gateway",
+      "checks": [
+        "real register/login/HttpOnly/owner",
+        "CSRF and expected-owner",
+        "models",
+        "LangGraph thread rewrite",
+        "2 MiB multipart upload",
+        "exact download and range",
+        "incremental replay SSE and exact produced artifact"
+      ],
+      "sse": {
+        "chunks": 17,
+        "firstMs": 84.4390840000001,
+        "totalMs": 2300.823293
+      },
+      "ws": "public nginx -> Gateway is validated separately; no Nuxt WS claim"
+    },
+    "public-browser": {
+      "project": "deerflow-vue-ingress-00aff39027",
+      "phase": "browser",
+      "origin": "http://vue.localhost:2326",
+      "status": "PASS",
+      "checks": [
+        "Vue hostname HTML and real UI login/HttpOnly/CSRF/expected-owner",
+        "default and unknown hostname retain React",
+        "same-origin Cookie/Origin WS upgrade and real Chromium binary frame through nginx -> Gateway"
+      ],
+      "ws": {
+        "opened": true,
+        "bytes": 77491,
+        "closeCode": 1000
+      },
+      "observedBrowserApiPaths": [
+        "GET /api/channels/providers",
+        "GET /api/features",
+        "GET /api/models",
+        "GET /api/plugins",
+        "GET /api/skills",
+        "GET /api/suggestions/config",
+        "GET /api/thread-activity",
+        "GET /api/threads/c95a6d17-5a32-4ec1-a085-0b8dc80c804f/uploads/limits",
+        "GET /api/v1/auth/me",
+        "GET /api/v1/auth/preferences",
+        "GET /api/v1/auth/providers",
+        "GET /api/v1/auth/setup-status",
+        "PATCH /api/v1/auth/preferences",
+        "POST /api/langgraph/threads",
+        "POST /api/langgraph/threads/search",
+        "POST /api/threads/9a6bb43d-71db-40b8-903d-2c4faa4f1fe6/browser/navigate",
+        "POST /api/threads/search",
+        "POST /api/v1/auth/login/local"
+      ]
+    }
+  },
+  "checkCommandExitCode": 0,
+  "runtime": [
+    {
+      "service": "frontend-vue",
+      "containerId": "2c74d910f61e1853dbcf5666573d8c76a1c9cd1a6bd5af1806ff57799987b8ee",
+      "image": "deerflow-ingress-vue:stage33-final",
+      "imageId": "sha256:e637fb28e3ade92b2902f813af8d34fc59f5844473d5f3e549675215df8b4f38",
+      "running": true,
+      "health": "healthy",
+      "user": "node",
+      "publishedPorts": {},
+      "authDisabled": false
+    },
+    {
+      "service": "frontend",
+      "containerId": "295b4fe1b247edff15d91cd065030473b6f65c4f3efdeb5ee6288c6f0547b5b2",
+      "image": "deerflow-ingress-react:stage33-final",
+      "imageId": "sha256:0aa7a012d34ce4c3545599fcbf5d452b193986482b4e92d15d302ea46e9fbe9f",
+      "running": true,
+      "health": "healthy",
+      "user": "node",
+      "publishedPorts": {},
+      "authDisabled": false
+    },
+    {
+      "service": "gateway",
+      "containerId": "28662d20af63ccf67c173823f154e97e649a0220ce28f1e7114ea70b89752d21",
+      "image": "deerflow-ingress-gateway-browser:stage25",
+      "imageId": "sha256:eabda78a6c905d45bd1030262ef935ad75559b4e361e86cad03ed01a5b703206",
+      "running": true,
+      "health": "healthy",
+      "user": "",
+      "publishedPorts": {},
+      "authDisabled": false
+    },
+    {
+      "service": "nginx",
+      "containerId": "bef370a6ec86a7f593d97ebe592da2503fa64a1a9a4ccddc7d1e84a55e5834a1",
+      "image": "nginx:alpine",
+      "imageId": "sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752",
+      "running": true,
+      "health": null,
+      "user": "",
+      "publishedPorts": {
+        "2026/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "2326"
+          }
+        ]
+      },
+      "authDisabled": null
+    }
+  ],
+  "formalContainerSmoke": {
+    "status": "PASS",
+    "container": "deer-flow-frontend-vue-m0-49610",
+    "signal": 15,
+    "exitCode": 0,
+    "destroyed": true,
+    "sigkillObserved": false,
+    "scriptExitCode": 0,
+    "checks": [
+      "non-root",
+      "health",
+      "minimum runtime output",
+      "real Showcase and allowlisted resources",
+      "unlisted/unknown/traversal 404",
+      "actual graceful termination events"
+    ]
+  },
+  "pngReview": [
+    {
+      "path": "docs/reports/evidence/container-ingress-stage33/public-replay.png",
+      "reviewedWith": "view_image",
+      "status": "PASS"
+    },
+    {
+      "path": "docs/reports/evidence/container-ingress-stage33/public-browser.png",
+      "reviewedWith": "view_image",
+      "status": "PASS"
+    }
+  ],
+  "gatewayRebuilt": false,
+  "backendProductionSourceCheck": "docs/reports/2026-10-10-container-stage33-backend-source-check.json",
+  "probeSourceSha256": {
+    "frontend-vue/tests/support/probe_container_ingress.mjs": "6adde9c7e748ead739494ea0a4661ad8f78f6c3c19492b39e00febce51c419ac",
+    "frontend-vue/tests/support/probe_nuxt_container_proxy.mjs": "1f601fa49e2982beb294c4da9734ac1ded2ca1148bea476dc90c2e21d2a5bd0f",
+    "frontend-vue/scripts/container-smoke.sh": "6f6dd87f796efe52f0b60aa8bc711fc16f2647c42f530b1f9fd5c505303b1e46"
+  },
+  "runtimeConfigurationTrackedFilesTouched": false,
+  "externalDNS_TLS_IdP_MCP_IM_claimed": false,
+  "cleanup": {
+    "uniqueSmokeContainerDestroyed": true,
+    "dedicatedComposeRetainedForIncrementalSourceRevalidation": true,
+    "otherContainersTouched": false
+  }
+}

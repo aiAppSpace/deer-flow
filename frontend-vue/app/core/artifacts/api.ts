@@ -30,14 +30,17 @@ export async function updateArtifactContent({
   filepath,
   content,
   expectedSha256,
+  signal,
 }: {
   threadId: string;
   filepath: string;
   content: string;
   expectedSha256: string;
+  signal?: AbortSignal;
 }): Promise<ArtifactUpdateResponse> {
   const response = await fetch(urlOfArtifact({ filepath, threadId }), {
     method: "PUT",
+    signal,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       content,

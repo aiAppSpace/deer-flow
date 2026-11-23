@@ -4,6 +4,7 @@ import {
   QueryClient,
   QueryClientProvider as TanStackQueryClientProvider,
 } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { isRetryableTransportError } from "@/core/api/retry";
 
@@ -26,21 +27,27 @@ const TRANSPORT_RETRY_LIMIT = 3;
  * `TypeError` when the connection fails, and nothing else does. The predicate
  * lives in `core/api/errors.ts` and is kept verbatim in both apps.
  */
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error) =>
-        failureCount < TRANSPORT_RETRY_LIMIT &&
-        isRetryableTransportError(error),
+function createQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: (failureCount, error) =>
+          failureCount < TRANSPORT_RETRY_LIMIT &&
+          isRetryableTransportError(error),
+      },
     },
-  },
-});
+  });
+}
 
 export function QueryClientProvider({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Each provider owns its cache, including each independent SSR render.
+  // Account boundaries remount this provider; late continuations retain only
+  // the retired client they captured. TanStack owns observer cancellation/GC.
+  const [queryClient] = useState(createQueryClient);
   return (
     <TanStackQueryClientProvider client={queryClient}>
       {children}

@@ -11,6 +11,10 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  createWorkspaceToastStore,
+  workspaceToastKey,
+} from "@/core/workspace-shell/toast";
 import BrowserPanel from "@/components/workspace/browser-view/BrowserPanel.vue";
 import type { BrowserViewFrame } from "@/core/browser/frame";
 
@@ -66,11 +70,15 @@ function mountPanel(
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
+  const toast = createWorkspaceToastStore();
   const wrapper = mount(BrowserPanel, {
     props: { threadId: "thread-a", active: true, frame },
-    global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    global: {
+      plugins: [[VueQueryPlugin, { queryClient }]],
+      provide: { [workspaceToastKey as symbol]: toast },
+    },
   });
-  return { wrapper, queryClient };
+  return { wrapper, queryClient, toast };
 }
 
 /** 发出去的输入帧：形状由协议定，这里只要能按键名取值。 */
@@ -189,7 +197,31 @@ describe("BrowserPanel behavior", () => {
     wrapper.unmount();
   });
 
-  it("maps click/move/wheel to content pixels and forwards keydown/IME once", async () => {
+  it("accumulates fine wheel deltas before applying the React deadzone", async () => {
+    const { wrapper } = mountPanel();
+    sockets[0]!.open();
+    await nextTick();
+    const stage = wrapper.get('[data-testid="browser-stage"]');
+    for (let index = 0; index < 2; index += 1)
+      stage.element.dispatchEvent(
+        new WheelEvent("wheel", {
+          bubbles: true,
+          cancelable: true,
+          deltaY: 0.15,
+        }),
+      );
+    animationFrames.shift()?.(16);
+    expect(parsedInputs().at(-1)).toEqual({
+      type: "wheel",
+      dx: 0,
+      dy: 0.6,
+      nx: 0.5,
+      ny: 0.5,
+    });
+    wrapper.unmount();
+  });
+
+  it("maps click/wheel to content pixels and follows React keyboard/IME forwarding", async () => {
     const { wrapper } = mountPanel();
     sockets[0]?.open();
     await nextTick();
@@ -208,10 +240,7 @@ describe("BrowserPanel behavior", () => {
     await image.trigger("click", { clientX: 500, clientY: 250 });
     await image.trigger("mousemove", { clientX: 500, clientY: 250 });
     animationFrames.shift()?.(16);
-    expect(parsedInputs()).toEqual([
-      { type: "click", nx: 0.5, ny: 0.5 },
-      { type: "move", nx: 0.5, ny: 0.5 },
-    ]);
+    expect(parsedInputs()).toEqual([{ type: "click", nx: 0.5, ny: 0.5 }]);
 
     const stage = wrapper.get('[data-testid="browser-stage"]');
     const wheel = new WheelEvent("wheel", {
@@ -257,7 +286,8 @@ describe("BrowserPanel behavior", () => {
       cancelable: true,
     });
     panel.element.dispatchEvent(localShortcut);
-    expect(localShortcut.defaultPrevented).toBe(false);
+    expect(localShortcut.defaultPrevented).toBe(true);
+    expect(parsedInputs().at(-1)).toEqual({ type: "key", key: "Meta+L" });
 
     panel.element.dispatchEvent(
       new CompositionEvent("compositionstart", { bubbles: true }),
@@ -265,6 +295,7 @@ describe("BrowserPanel behavior", () => {
     panel.element.dispatchEvent(
       new KeyboardEvent("keydown", {
         key: "Enter",
+        isComposing: true,
         bubbles: true,
         cancelable: true,
       }),
@@ -274,18 +305,17 @@ describe("BrowserPanel behavior", () => {
     });
     Object.defineProperty(compositionEnd, "data", { value: "你" });
     panel.element.dispatchEvent(compositionEnd);
-    expect(parsedInputs().at(-1)).toEqual({ type: "text", text: "你" });
+    expect(parsedInputs().at(-1)).toEqual({ type: "key", key: "Meta+L" });
     wrapper.unmount();
   });
 
-  it("falls back to REST after bounded WS failure, exposes errors, and retries", async () => {
+  it("leaves live control after exhausting reconnection and retries REST navigation through the same URL form", async () => {
     vi.useFakeTimers();
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ detail: "Browser navigation failed" }), {
           status: 502,
-          statusText: "Bad Gateway",
         }),
       )
       .mockResolvedValueOnce(
@@ -296,48 +326,118 @@ describe("BrowserPanel behavior", () => {
             url: "https://rest.example/final",
             title: "REST title",
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
+          { headers: { "Content-Type": "application/json" } },
         ),
       );
     vi.stubGlobal("fetch", fetchMock);
-    const { wrapper } = mountPanel(null);
-    await wrapper
-      .get('input[placeholder="Enter a URL and press Enter"]')
-      .setValue("https://fallback.example");
+    const { wrapper, toast } = mountPanel(null);
+    await wrapper.get("input").setValue("https://retry.example");
     await wrapper.get("form").trigger("submit");
-
-    const delays = [800, 1600, 3200, 6400, 10_000, 10_000];
-    for (const delay of delays) {
+    for (const delay of [800, 1600, 3200, 6400, 10000, 10000]) {
       sockets.at(-1)?.serverClose(4501);
       await vi.advanceTimersByTimeAsync(delay);
     }
     sockets.at(-1)?.serverClose(4501);
     await nextTick();
     await flushPromises();
-
-    expect(fetchMock).toHaveBeenCalledOnce();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "/api/threads/thread-a/browser/navigate",
-    );
-    expect(wrapper.get('[role="alert"]').text()).toContain(
-      "Browser navigation failed",
-    );
-    const staticMode = wrapper.get('[data-testid="browser-mode"]');
-    expect(staticMode.text()).toBe("Live");
-    expect(staticMode.attributes("data-variant")).toBe("ghost");
-    expect(staticMode.attributes("title")).toBe("Take live control");
-
-    await wrapper.get('button[aria-label="Retry navigation"]').trigger("click");
+    expect(fetchMock).not.toHaveBeenCalled();
+    const mode = wrapper.get('[data-testid="browser-mode"]');
+    expect(mode.attributes("title")).toBe("Take live control");
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(
+      toast.toasts.value.some(
+        (item) => item.message === "Browser navigation failed",
+      ),
+    ).toBe(true);
+    await wrapper.get("form").trigger("submit");
     await flushPromises();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(wrapper.emitted("frame")?.at(-1)?.[0]).toEqual({
-      screenshot: "/mnt/user-data/outputs/.browser-frames/rest-success.png",
-      url: "https://rest.example/final",
+    expect(wrapper.emitted("frame")?.at(-1)?.[0]).toMatchObject({
       title: "REST title",
     });
-    // 页面标题唯一的出口：上游 `alt={frame?.title ?? "Browser view"}`。
-    expect(wrapper.get("img").attributes("alt")).toBe("REST title");
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it("reports rejected live navigations with a toast and ends the navigation spinner", async () => {
+    const { wrapper, toast } = mountPanel();
+    sockets[0]?.open();
+    await nextTick();
+    await wrapper.get("input").setValue("rejected.example");
+    await wrapper.get("form").trigger("submit");
+    sockets[0]?.message(
+      JSON.stringify({
+        type: "nav_rejected",
+        url: "https://rejected.example",
+        message: "Error: Blocked navigation",
+      }),
+    );
+    await nextTick();
+    expect(
+      toast.toasts.value.some((item) => item.message === "Blocked navigation"),
+    ).toBe(true);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.get("form").find(".animate-spin").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("uses the upstream fallback when a rejected navigation has no server message", async () => {
+    const { wrapper, toast } = mountPanel();
+    sockets[0]?.open();
+    sockets[0]?.message(
+      JSON.stringify({ type: "nav_rejected", url: "https://rejected.example" }),
+    );
+    await nextTick();
+    expect(toast.toasts.value.at(-1)?.message).toBe(
+      "Cannot open https://rejected.example",
+    );
+    sockets[0]?.message(JSON.stringify({ type: "nav_rejected" }));
+    await nextTick();
+    expect(toast.toasts.value.at(-1)?.message).toBe("Cannot open that URL");
+    wrapper.unmount();
+  });
+  it("presents an authoritative blank page as an empty URL like React", async () => {
+    const { wrapper } = mountPanel();
+    sockets[0]!.open();
+    sockets[0]!.message(JSON.stringify({ type: "url", url: "about:blank" }));
+    await flushPromises();
+    expect(wrapper.get("input").element.value).toBe("");
+    wrapper.unmount();
+  });
+
+  it.each(["mode", "disconnect", "deactivate"] as const)(
+    "retires queued wheel input when live ownership ends through %s",
+    async (departure) => {
+      const { wrapper } = mountPanel();
+      sockets[0]!.open();
+      await nextTick();
+      const stage = wrapper.get('[data-testid="browser-stage"]');
+      stage.element.dispatchEvent(
+        new WheelEvent("wheel", { deltaY: 2, bubbles: true, cancelable: true }),
+      );
+      expect(animationFrames.length).toBe(1);
+      if (departure === "mode") {
+        await wrapper.get('[data-testid="browser-mode"]').trigger("click");
+        await wrapper.get('[data-testid="browser-mode"]').trigger("click");
+      } else if (departure === "deactivate") {
+        await wrapper.setProps({ active: false });
+        await wrapper.setProps({ active: true });
+      } else {
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        sockets[0]!.serverClose();
+        vi.advanceTimersByTime(800);
+      }
+      sockets.at(-1)!.open();
+      await nextTick();
+      for (const callback of animationFrames.splice(0)) callback(0);
+      expect(
+        sockets
+          .flatMap((socket) => parsedInputs(socket))
+          .filter((input) => input.type === "wheel"),
+      ).toEqual([]);
+      expect(cancelAnimationFrame).toHaveBeenCalled();
+      wrapper.unmount();
+    },
+  );
 });

@@ -6,7 +6,7 @@
   【依赖关系】     Gateway auth/account APIs
   【边界与注意】   保留 HttpOnly/CSRF 边界，不进入 L2。
 */
-import { onMounted, ref } from "vue";
+import { computed, onScopeDispose, ref, watch } from "vue";
 import { useQueryClient } from "@tanstack/vue-query";
 
 import { LogOut } from "lucide-vue-next";
@@ -16,31 +16,44 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { performLogout } from "@/core/auth/logout";
-import type { User } from "@/core/auth/types";
+import { AUTH_DISABLED_USER } from "@/core/auth/auth-disabled-user";
+import { useSettingsPermissions } from "@/composables/useSettingsPermissions";
+import { useWorkspaceAsyncOwner } from "@/composables/useWorkspaceAsyncOwner";
+import { parseAuthError } from "@/core/auth/types";
 
 const { $i18n } = useNuxtApp();
 const queryClient = useQueryClient();
-const user = ref<User | null>(null);
+const captureOwner = useWorkspaceAsyncOwner();
+const { session, authDisabled } = useSettingsPermissions();
+const user = computed(() =>
+  session.value?.tag === "authenticated"
+    ? session.value.user
+    : authDisabled
+      ? AUTH_DISABLED_USER
+      : null,
+);
 const currentPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
 const busy = ref(false);
 const message = ref("");
 const error = ref("");
-
-onMounted(async () => {
-  try {
-    const response = await fetchWithAuth("/api/v1/auth/me");
-    if (response.ok) user.value = (await response.json()) as User;
-  } catch (cause) {
-    error.value =
-      cause instanceof Error
-        ? cause.message
-        : $i18n.t.value.settings.account.loadFailed;
-  }
-});
+let passwordRequest: AbortController | undefined;
+function clearPassword() {
+  passwordRequest?.abort();
+  passwordRequest = undefined;
+  currentPassword.value = "";
+  newPassword.value = "";
+  confirmPassword.value = "";
+  busy.value = false;
+  error.value = "";
+  message.value = "";
+}
+watch(() => user.value?.id, clearPassword, { flush: "sync" });
+onScopeDispose(clearPassword);
 
 async function changePassword() {
+  if (busy.value || user.value?.oauth_provider) return;
   error.value = "";
   message.value = "";
   if (newPassword.value !== confirmPassword.value) {
@@ -52,48 +65,44 @@ async function changePassword() {
     return;
   }
   busy.value = true;
+  const controller = new AbortController();
+  passwordRequest = controller;
+  const ownsPage = captureOwner();
+  const isCurrent = () => ownsPage() && !controller.signal.aborted;
   try {
     const response = await fetchWithAuth("/api/v1/auth/change-password", {
       method: "POST",
+      signal: controller.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         current_password: currentPassword.value,
         new_password: newPassword.value,
       }),
     });
+    if (!isCurrent()) return;
     if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as {
-        detail?: string | { message?: string };
-      };
-      throw new Error(
-        typeof body.detail === "string"
-          ? body.detail
-          : (body.detail?.message ??
-              $i18n.t.value.settings.account.changePasswordFailed),
-      );
+      const body: unknown = await response.json();
+      if (isCurrent()) error.value = parseAuthError(body).message;
+      return;
     }
     currentPassword.value = "";
     newPassword.value = "";
     confirmPassword.value = "";
     message.value = $i18n.t.value.settings.account.passwordChangedSuccess;
-  } catch (cause) {
-    error.value =
-      cause instanceof Error
-        ? cause.message
-        : $i18n.t.value.settings.account.changePasswordFailed;
+  } catch {
+    if (isCurrent()) error.value = $i18n.t.value.settings.account.networkError;
   } finally {
-    busy.value = false;
+    if (passwordRequest === controller) {
+      passwordRequest = undefined;
+      if (isCurrent()) busy.value = false;
+    }
   }
 }
 
-/*
-  失败也要走得掉：判据与端口说明写在 `core/auth/logout.ts` 的文件头。
-  此前这里是 `if (!response.ok) { error = signOutFailed; return; }`——
-  「会话坏了 + Gateway 连不上」正是最需要退出的那一刻，那时候人被留在原地。
-  `signOutFailed` 仍然会念出来，只是不再拦住退出本身。
-*/
+// Shared logout owns state retirement and navigation, including transport failure.
 async function logout() {
-  const outcome = await performLogout({
+  clearPassword();
+  await performLogout({
     post: () => fetchWithAuth("/api/v1/auth/logout", { method: "POST" }),
     navigate: (to) => navigateTo(to),
     hardNavigate: (to) => {
@@ -101,9 +110,6 @@ async function logout() {
     },
     queryClient,
   });
-  if (outcome === "forced-out") {
-    error.value = $i18n.t.value.settings.account.signOutFailed;
-  }
 }
 </script>
 

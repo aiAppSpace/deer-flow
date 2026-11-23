@@ -75,7 +75,7 @@ describe("lark integration api", () => {
       sandbox_runtime_mode: "init-container",
       sandbox_runtime_ready: false,
     });
-    // signal 一路透传：调用方要能取消一次在飞的状态回读（见 IntegrationsSettings 的 beginFlow）。
+    // signal 一路透传：调用方要能取消一次在飞的状态回读（见 useLarkIntegrationFlow 的 beginFlow）。
     expect(mockedFetch).toHaveBeenCalledWith(
       "/backend/api/integrations/lark/status",
       { signal: undefined },
@@ -391,4 +391,39 @@ describe("lark integration api", () => {
       },
     );
   });
+});
+
+test("normalizes omitted probe state for status and every status-bearing mutation", async () => {
+  mockedFetch.mockResolvedValueOnce(jsonResponse(200, { installed: false }));
+  expect((await loadLarkIntegrationStatus()).sandbox_runtime_probed).toBe(
+    false,
+  );
+  const mutations = [
+    () => installLarkIntegration(),
+    () =>
+      completeLarkConfiguration({
+        device_code: "device",
+        generation: "generation",
+        brand: "feishu",
+        interval: null,
+        expires_in: null,
+      }),
+    () =>
+      setLarkAppCredentials({
+        app_id: "id",
+        app_secret: "synthetic-test-secret",
+        brand: "feishu",
+      }),
+    () =>
+      completeLarkAuthorization({
+        device_code: "device",
+        generation: "generation",
+      }),
+  ];
+  for (const mutate of mutations) {
+    mockedFetch.mockResolvedValueOnce(
+      jsonResponse(200, { success: true, status: { installed: true } }),
+    );
+    expect((await mutate()).status.sandbox_runtime_probed).toBe(false);
+  }
 });

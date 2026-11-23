@@ -1276,12 +1276,23 @@ class TestJudgeHotReload:
 
     @pytest.fixture(autouse=True)
     def _isolate(self, monkeypatch, tmp_path):
+        from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+        import deerflow.agents.memory.manager as manager_module
+        import deerflow.config.app_config as app_config
         import deerflow.config.runtime_paths as runtime_paths
         from deerflow.agents.memory.manager import reset_memory_manager
         from deerflow.config.memory_config import get_memory_config, set_memory_config
         from deerflow.config.typesafe_config import reset_typesafe_config
 
         monkeypatch.setattr(runtime_paths, "runtime_home", lambda: tmp_path)
+        # These tests exercise in-memory judging edits. A cached file-backed
+        # AppConfig from another test must not reload over set_memory_config().
+        monkeypatch.setattr(app_config, "_app_config", None)
+        # DeerMem eagerly resolves its host LLM when no model is configured.
+        # Keep that unrelated boundary offline; the real factory otherwise
+        # loads operator AppConfig and overwrites the judging config mid-build.
+        monkeypatch.setattr(manager_module, "_host_default_llm", lambda: FakeListChatModel(responses=["unused"]))
         previous = get_memory_config()
         reset_memory_manager()
         reset_typesafe_config()

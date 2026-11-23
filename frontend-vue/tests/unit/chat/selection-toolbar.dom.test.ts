@@ -30,7 +30,19 @@ import {
 } from "@/core/workspace-shell/toast";
 import { installAnimationFrameStub } from "../../support/animation-frame-stub";
 
+// Selection and positioning belong to MessageList. This suite supplies its
+// text surface directly; the real async Markdown adapter is verified separately.
+vi.mock("@/components/chat/MessageMarkdown.vue", () => ({
+  __esModule: true,
+  default: {
+    props: ["content"],
+    template: "<div>{{ content }}</div>",
+  },
+}));
+
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+const queryClients: QueryClient[] = [];
 
 class ResizeObserverStub {
   observe() {}
@@ -49,7 +61,10 @@ beforeEach(() => {
   animationFrames = installAnimationFrameStub();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+  queryClients.splice(0).forEach((client) => client.clear());
+  await flushPromises();
   animationFrames.cleanup();
   vi.unstubAllGlobals();
   // 坑 130：工具条是 fixed 的，留在 body 上会遮住下一条用例。
@@ -64,7 +79,9 @@ const CONVERSATION: Message[] = [
 type ListProps = InstanceType<typeof MessageList>["$props"];
 
 function mountList(props: Partial<ListProps> = {}) {
-  return mount(MessageList, {
+  const queryClient = new QueryClient();
+  queryClients.push(queryClient);
+  const wrapper = mount(MessageList, {
     props: {
       messages: CONVERSATION,
       // 坑 121：Vue 把「没传」的 Boolean prop 变成 false，所以全部显式传。
@@ -80,9 +97,11 @@ function mountList(props: Partial<ListProps> = {}) {
     attachTo: document.body,
     global: {
       provide: { [workspaceToastKey as symbol]: toastStore },
-      plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
+      plugins: [[VueQueryPlugin, { queryClient }]],
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 type SelectionStub = {
@@ -281,6 +300,30 @@ describe("selection toolbar contents", () => {
     ]);
     expect(toolbar(wrapper).exists()).toBe(false);
   });
+});
+
+describe("selection ownership", () => {
+  it.each(["threadId", "editOwnerKey"] as const)(
+    "retires the old quote when %s changes without remounting the list",
+    async (owner) => {
+      const wrapper = mountList({ editOwnerKey: "user-1/default-agent" });
+      await flushPromises();
+      await selectInTurn(wrapper, { text: "I am DeerFlow" });
+      expect(toolbar(wrapper).exists()).toBe(true);
+
+      await wrapper.setProps({ [owner]: "next-owner" });
+      await flushPromises();
+      expect(toolbar(wrapper).exists()).toBe(false);
+      expect(wrapper.emitted("selectionAsk")).toBeUndefined();
+      expect(wrapper.emitted("selectionAdd")).toBeUndefined();
+
+      await selectInTurn(wrapper, { text: "Fresh owner quote" });
+      await toolbar(wrapper).findAll("button")[0]!.trigger("click");
+      expect(wrapper.emitted("selectionAdd")?.[0]?.[0]).toMatchObject({
+        selectedText: "Fresh owner quote",
+      });
+    },
+  );
 });
 
 describe("when the toolbar must not appear", () => {

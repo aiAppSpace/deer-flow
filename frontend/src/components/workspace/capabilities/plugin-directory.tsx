@@ -32,9 +32,9 @@ export function PluginRow({
   children: ReactNode;
 }) {
   return (
-    <article className="hover:bg-muted/40 group flex min-w-0 items-center gap-4 rounded-xl px-3 py-5 transition-colors">
+    <article className="hover:bg-muted/40 group flex min-w-0 flex-wrap items-center gap-4 rounded-xl px-3 py-5 transition-colors">
       {icon}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-48 wrap-anywhere">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <h3 className="text-sm font-semibold">
             {onDetails ? (
@@ -59,7 +59,9 @@ export function PluginRow({
           {description}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-1">{children}</div>
+      <div className="flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-1 wrap-anywhere">
+        {children}
+      </div>
     </article>
   );
 }

@@ -48,18 +48,104 @@ afterEach(() => {
 });
 
 describe("WorkspaceToaster", () => {
+  it("renders plain retry notices without an icon and keeps separate valid events with identical text", async () => {
+    const { wrapper, toast } = mountWithToast(WorkspaceToaster);
+    toast.message("Retrying the model");
+    toast.message("Retrying the model");
+    await flushPromises();
+    const items = wrapper.findAll("ol > li");
+    expect(items).toHaveLength(2);
+    for (const item of items) {
+      expect(item.text()).toBe("Retrying the model");
+      expect(item.attributes("aria-live")).toBeUndefined();
+      expect(item.attributes("role")).toBeUndefined();
+      expect(item.find("svg").exists()).toBe(false);
+    }
+    wrapper.unmount();
+    toast.clear();
+  });
+
+  it("keeps toast items in native tab order, respects outside focus and restores on removal", async () => {
+    const trigger = document.createElement("button");
+    const next = document.createElement("button");
+    document.body.append(trigger, next);
+    trigger.focus();
+    const { wrapper, toast } = mountWithToast(WorkspaceToaster);
+    toast.error("Toggle rejected");
+    await flushPromises();
+    const list = wrapper.get("ol").element as HTMLElement;
+    const item = wrapper.get("li").element as HTMLElement;
+    expect(item.tabIndex).toBe(0);
+    list.focus();
+    item.focus();
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape" }));
+    expect(document.activeElement).toBe(item);
+    const restore = vi.spyOn(trigger, "focus");
+    next.focus();
+    expect(document.activeElement).toBe(next);
+    expect(restore).not.toHaveBeenCalled();
+    trigger.focus();
+    list.focus();
+    toast.clear();
+    await flushPromises();
+    expect(document.activeElement).toBe(trigger);
+    wrapper.unmount();
+  });
+
   it("renders live success/error toasts", async () => {
     const { wrapper, toast } = mountWithToast(WorkspaceToaster);
     toast.success("Copied");
     toast.error("Denied");
     await flushPromises();
-    expect(document.querySelector('[role="status"]')?.textContent).toContain(
+    const region = wrapper.get("section");
+    expect(region.attributes("aria-live")).toBe("polite");
+    expect(wrapper.findAll("ol > li").map((item) => item.text())).toEqual([
       "Copied",
-    );
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
       "Denied",
-    );
+    ]);
+    for (const item of wrapper.findAll("ol > li")) {
+      expect(item.attributes("role")).toBeUndefined();
+      expect(item.attributes("aria-live")).toBeUndefined();
+    }
     wrapper.unmount();
+    toast.clear();
+  });
+
+  it("forwards hover, pointer, hotkey and document visibility to the one lifetime owner", async () => {
+    const { wrapper, toast } = mountWithToast(WorkspaceToaster);
+    const pause = vi.spyOn(toast, "setPaused");
+    toast.message("Notice");
+    await flushPromises();
+    const list = wrapper.get("ol");
+    await list.trigger("mouseenter");
+    expect(pause).toHaveBeenLastCalledWith(true);
+    await list.trigger("pointerdown");
+    await list.trigger("mouseleave");
+    expect(pause).toHaveBeenLastCalledWith(true);
+    await list.trigger("pointerup");
+    await list.trigger("mouseleave");
+    expect(pause).toHaveBeenLastCalledWith(false);
+    const visibility = vi
+      .spyOn(document, "hidden", "get")
+      .mockReturnValue(true);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    visibility.mockReturnValue(false);
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+    expect(pause).toHaveBeenLastCalledWith(false);
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { altKey: true, code: "KeyT" }),
+    );
+    await flushPromises();
+    expect(pause).toHaveBeenLastCalledWith(true);
+    document.dispatchEvent(new KeyboardEvent("keydown", { code: "Escape" }));
+    await flushPromises();
+    expect(pause).toHaveBeenLastCalledWith(false);
+    wrapper.unmount();
+    visibility.mockRestore();
+    expect(pause).toHaveBeenLastCalledWith(false);
     toast.clear();
   });
 

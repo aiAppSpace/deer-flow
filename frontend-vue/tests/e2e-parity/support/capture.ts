@@ -15,18 +15,23 @@
                    比顺序，由 diff.spec.ts 里的自一致性用例实测回答——在有测量结果
                    之前不加这条判据。
 
-                   同理，归一化规则只能因为实测而增加：每一条都在抹掉信息。
-                   目前只有一条，来自第一次测量：`/workspace/chats/new` 上两个应用
-                   各自**在客户端生成**一个新线程 id，于是 `uploads/limits` 的路径
-                   每次都不同，而且两边必然不同。它不是产品差异，是这个页面的定义。
-
-                   但不能把所有 UUID 一律抹掉：那样「React 打开的是线程 1、Vue 打开
-                   的是线程 2」也会一起消失，而那是货真价实的差异。所以判据是
-                   **白名单**——场景自己声明它认识哪些 id，其余 UUID 形状的段才算
-                   客户端生成。
+                   API 观察保留 URL、JSON 与请求头/请求体/响应的同一请求关系。
+                   ID 不再按 UUID 形状折叠；只有后续明确 producer provenance 才可投影。
+                   完整事实多重集参与判据，原始观察另存附件。采集缺证独立失败。
 */
 
-import type { Page, Request } from "@playwright/test";
+import { DEMO_THREAD_IDS } from "../../../shared/showcase";
+
+import { test, type Page } from "@playwright/test";
+import {
+  recordNetwork,
+  projectNetwork,
+  type NetworkSnapshot,
+} from "./capture-network";
+import { projectBody, projectUrl } from "./wire-values";
+import { installIdentityCapture } from "./capture-identities";
+import { claimCapturePage } from "./capture-page";
+import type { IdentitySnapshot } from "./identity-receipts";
 
 import { waitForDomQuiet, waitForFiniteAnimations } from "./settle";
 import {
@@ -72,6 +77,10 @@ export type ParityCapture = {
    * 抹掉它等于假装它不存在，而硬规则 2 说归一化只能因为实测而增加。
    */
   requestBodies: { key: string; body: string }[];
+  /** Complete, correlated request facts; multiplicity is part of the verdict. */
+  requestFacts: string[];
+  /** Invalid evidence is never accepted, including when both sides fail alike. */
+  observationErrors: string[];
   /** 场景锚点的盒模型与关键计算样式。 */
   geometry: Record<string, GeometrySample | null>;
   /** 取样时刻的 `document.activeElement`，归一成一句话。见 describeFocus。 */
@@ -149,15 +158,16 @@ export type GeometrySample = {
     第九轮把那块外壳挂成锚点、12 维零差异——**但那个「零」不包括形状**，
     判词里写明了这条边界，这一档就是来补它的。
 
-    **只取 `borderRadius` 一个属性，不取 `boxShadow` / `backdropFilter`**：
-    后两者的计算值里带颜色与长度的组合写法，浏览器归一化之后噪声比信号多
-    （`rgba(0,0,0,0.05) 0px 1px 2px 0px` 这种串两边一个空格的差别就报一行）。
-    真要加，先按同一条判据单独论证。
+    阴影、backdropFilter 与 filter 也采集；同一浏览器的 computed style 统一空白后
+    逐值比较，用负向变异测试证明这些视觉差异会被发现。
 
     四个角各不相同时 `getComputedStyle` 返回的是四段（`8px 8px 0px 0px`），
     所以这一档天然覆盖「只有上面两个角是圆的」这类写法，不需要分别取四个属性。
   */
   borderRadius: string;
+  boxShadow: string;
+  backdropFilter: string;
+  filter: string;
   /*
     元素**自己**的 opacity。
 
@@ -217,11 +227,12 @@ export type GeometrySample = {
   after: string;
 };
 
-const UUID_SEGMENT =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** 场景认识的 id。不在这里面的 UUID 形状路径段视为客户端生成。 */
-export const KNOWN_IDS = new Set([
+/** Declared fixed fixtures. Shape alone never grants dynamic identity. */
+export const KNOWN_IDS = new Set<string>([
+  ...DEMO_THREAD_IDS,
+  // Current composer reference and knowledge fixtures remain distinguishable.
+  "00000000-0000-0000-0000-000000000028",
+  "00000000-0000-0000-0000-000000000025",
   MOCK_THREAD_ID,
   MOCK_THREAD_ID_2,
   MOCK_SIDECAR_THREAD_ID,
@@ -236,101 +247,41 @@ export const KNOWN_IDS = new Set([
   ARCHIVE_LEGACY_THREAD_ID,
 ]);
 
-/**
- * 把一个请求归一成 `METHOD /path?sorted-query`；不是产品 API 请求则返回 null。
- */
+/** Public diagnostic formatter; an app origin alias requires explicit appBase. */
 export function normalizeRequest(
   method: string,
   url: string,
-  knownIds: ReadonlySet<string> = KNOWN_IDS,
+  _knownIds: ReadonlySet<string> = KNOWN_IDS,
+  appBase?: string,
 ): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  if (!parsed.pathname.startsWith("/api/")) return null;
-
-  const pathname = parsed.pathname
-    .split("/")
-    .map((segment) =>
-      UUID_SEGMENT.test(segment) && !knownIds.has(segment)
-        ? "«generated»"
-        : segment,
-    )
-    .join("/");
-
-  /*
-    **这里原来还有一张 `VOLATILE_QUERY_KEYS = {_, t, ts, cacheBust}` 的丢弃表**，
-    wave 121 量掉了：给这段装探针跑一整轮，**116 次查询参数观测，`DROPPED` 0 次**
-    ——四条一条都没响过。而那个 0 是**算出来的**：同一轮的控制组打印了实际出现的
-    参数（`include_files` 48 / `include_diff` 48 / `limit` 8 / `task_id`、`offset`、
-    `event_types` 各 4），证明探针在跑（线索 195）。
-
-    删掉的理由不是「没用」，是**它在抹信息而没有证据**（硬规则 2：归一化规则只能
-    因为实测而增加）——`t` / `ts` 完全可能是产品自己的参数名，真出现时会被静默丢掉，
-    与 wave 120 那三个夹具 id 是同一类失效。
-
-    **真需要再加时的做法**：先让台账把那个抖动的参数报出来（它会作为一条
-    requests 差异出现），拿着那条读数再加，别凭「看起来像缓存参数」加。
-  */
-  const params = [...parsed.searchParams.entries()]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([key, value]) => `${key}=${value}`);
-  const query = params.length ? `?${params.join("&")}` : "";
-  return `${method.toUpperCase()} ${pathname}${query}`;
+  const value = projectUrl(url, appBase);
+  return value ? JSON.stringify([method.toUpperCase(), value]) : null;
 }
 
-/**
- * 把一个 JSON 值归一成**稳定可比**的字符串。
- *
- * 只做两件事，一件都不多：
- * 1. 对象按 key 排序——两个应用序列化字段的顺序天然可能不同，而那不是差异；
- * 2. UUID 形状且不在 `KNOWN_IDS` 里的字符串抹成 `«generated»`——与
- *    `normalizeRequest` 对路径段用的**同一条规则、同一份名单**，
- *    理由也一样（客户端生成的 id 两边必然不同）。
- *
- * **没有第三条**。时间戳、随机 nonce 这类看起来"显然该抹"的东西一律不抹：
- * 硬规则 2 说归一化只能因为实测而增加——真出现了，它会作为一条 body 差异
- * 报出来，拿着那条读数再加（`normalizeRequest` 里那张被删掉的
- * `VOLATILE_QUERY_KEYS` 表就是这么量掉的）。
- */
+/** Sort own JSON keys without changing strings or interpreting identity. This
+ * helper receives already-parsed values; wire bodies use the lossless reader. */
 export function canonicalJson(
   value: unknown,
-  knownIds: ReadonlySet<string> = KNOWN_IDS,
+  _knownIds: ReadonlySet<string> = KNOWN_IDS,
 ): unknown {
-  if (typeof value === "string")
-    return UUID_SEGMENT.test(value) && !knownIds.has(value)
-      ? "«generated»"
-      : value;
-  if (Array.isArray(value))
-    return value.map((item) => canonicalJson(item, knownIds));
+  if (Array.isArray(value)) return value.map((item) => canonicalJson(item));
   if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).sort())
-      out[key] = canonicalJson(
-        (value as Record<string, unknown>)[key],
-        knownIds,
-      );
-    return out;
+    const result: Record<string, unknown> = Object.create(null);
+    for (const key of Object.keys(value).sort())
+      result[key] = canonicalJson((value as Record<string, unknown>)[key]);
+    return result;
   }
   return value;
 }
 
-/**
- * 请求体归一成一行。**解析不了 JSON 就原样留着**——
- * 静默丢掉一个"不认识"的体，与 wave 120 那三个夹具 id 是同一类失效。
- */
+/** Diagnostic helper for known JSON by default; real capture always supplies the
+ * observed media type to projectBody, including when it is absent. */
 export function normalizeRequestBody(
-  raw: string,
-  knownIds: ReadonlySet<string> = KNOWN_IDS,
+  raw: string | Uint8Array,
+  _knownIds: ReadonlySet<string> = KNOWN_IDS,
+  contentType = "application/json",
 ): string {
-  try {
-    return JSON.stringify(canonicalJson(JSON.parse(raw), knownIds));
-  } catch {
-    return raw;
-  }
+  return JSON.stringify(projectBody(Buffer.from(raw), contentType).body);
 }
 
 /**
@@ -361,7 +312,9 @@ export function targetLabel(target: ParityTarget): string {
  *
  * 所以把祖先链上每一层的 scrollLeft/scrollTop 加回去：容器滚多少，元素的视口坐标
  * 就少多少，两者相加恒等于未滚动布局里的文档坐标。页面级滚动也在这条链上
- * （documentElement.scrollTop 就是 scrollY），不用另外加。
+ * （documentElement.scrollTop 就是 scrollY），不用另外加。viewport-fixed host
+ * 的外部滚动不会移动它，必须在该边界停止累加；有真实 containing block 的 fixed
+ * 子节点仍沿它的祖先链补偿。真实 Chromium 的两种 fixed/滚动/20px 位移负控守住此边界。
  *
  * **不是**「相对最近可滚动祖先的内容原点」。那个写法量过，它换来的东西更糟：
  * 参照系变成各应用自己的 DOM。实测同一次取样里，mermaid 锚点 React 的最近可滚动
@@ -430,13 +383,21 @@ export async function sampleGeometry(
             const rect = element.getBoundingClientRect();
             let scrolledLeft = 0;
             let scrolledTop = 0;
-            for (
-              let ancestor = element.parentElement;
-              ancestor;
-              ancestor = ancestor.parentElement
-            ) {
+            for (let current: Element | null = element; current;) {
+              // A viewport-fixed host is unaffected by scroll outside itself.
+              // Chromium exposes a real containing block via offsetParent when
+              // fixed content is inside a transform; retain that ancestor chain.
+              if (
+                current instanceof HTMLElement &&
+                getComputedStyle(current).position === "fixed" &&
+                current.offsetParent === null
+              )
+                break;
+              const ancestor: HTMLElement | null = current.parentElement;
+              if (!ancestor) break;
               scrolledLeft += ancestor.scrollLeft;
               scrolledTop += ancestor.scrollTop;
+              current = ancestor;
             }
             return {
               x: rect.x + scrolledLeft,
@@ -563,6 +524,9 @@ export async function sampleGeometry(
             fontWeight: style.fontWeight,
             fontFamily: style.fontFamily,
             borderRadius: style.borderRadius,
+            boxShadow: style.boxShadow.replace(/\s+/g, " ").trim(),
+            backdropFilter: style.backdropFilter.replace(/\s+/g, " ").trim(),
+            filter: style.filter.replace(/\s+/g, " ").trim(),
             opacity: style.opacity,
             hit,
             before: pseudo("::before"),
@@ -698,7 +662,9 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
         ② **但放宽成「generic 标签就补」之后会制造伪差异**：CI 上当场多出 30 行
         `tabbablesOnlyReact: div(separator)[resizable-handle]` 对
         `tabbablesOnlyVue: div(separator)`——上游用 shadcn 的 Resizable primitive、
-        手柄自带那颗属性，本仓用 splitpanes、**根本不存在这个 primitive**。
+        手柄自带那颗属性，**当时**本仓用 splitpanes，没有这个 primitive。
+        当前 Vue 已使用本仓 ResizablePanels；这段保留的是当轮修正尺子的历史依据，
+        不是当前依赖说明，也不改变下面基于语义身份消歧的规则。
         两边那个元素的角色、几何、可达性完全一样，差的只是一颗内部样式钩子。
         我当时往 Vue 里塞了一颗 `data-slot` 去迎合尺子，被
         `tests/guards/invariant-ownership.test.ts` 当场拦下——**那条不变量是对的：
@@ -740,63 +706,16 @@ export async function sampleTabbables(page: Page): Promise<string[]> {
   });
 }
 
-/*
-  取样前把指针挪开，**让「谁被悬停着」不再是取样面的一部分**。
-
-  Playwright 的指针停在上一步操作留下的坐标，而台账比的是**静置渲染**。
-  两个应用的布局本来就有差（A 组那 4px），同一个坐标可能一边落在按钮上、
-  另一边落在按钮外——于是一边读到 hover 态、另一边读到常态。
-
-  **这条判据是逐行量出来的，不是从总数看出来的**（2026-09-17 第三十七轮，
-  run 35186315711 对比 35183780602）。加上它之后台账总数从 16 涨到 29，
-  **总数骗人**——逐行比才是结论：
-
-    · **消掉 7 行伪差异**：`Docs background React=rgba(0,0,0,230) Vue=rgba(0,0,0,255)`
-      那一族。`230/255 = 90%`，而两边 `Button variant="default"` 基类逐字相同、
-      都写着 `hover:bg-primary/90`——那是 hover 态，不是样式差异。
-    · **照出 20 行真差异**，两个根因，都是「指针移开之后谁该收起来」：
-        - React 的 tooltip 还开着、Vue 已关
-          （`ariaOnlyReact: tooltip "Branch conversation"` +
-           `tooltip-trigger[data-state="delayed-open"]` 只有 React 有）；
-        - Vue 的导出子菜单还开着、React 已关
-          （`ariaOnlyVue: menu "Export" / menuitem "Export as JSON"/"…Markdown"`）。
-      **它们此前一直被「指针停在触发器上」掩盖着**——两边都开着，比不出来。
-
-  **所以这不是给尺子打补丁，是把取样面修正到该在的位置**：
-  交互态应当由场景的 steps 显式驱动，而不是由上一步残留的指针位置决定。
-
-  **场景自己声明了要悬停的，不归位**（`kind: "hover"` 的步骤）。
-  那种场景里「指针停在哪」是**判据本身**，不是残留状态——
-  `branch-thread#turn-actions` 的最后一步就是 hover 那颗分支键，为的正是取 tooltip
-  打开的样子。第一版没有这个条件，于是它把场景自己摆好的姿势撤销了，
-  报出 6 行「React 的 tooltip 还开着、Vue 已关」——那不是产品差异，是我造的。
-
-  **`steps: 12` 不是保险，是判据的一部分。** Playwright 的 `mouse.move` 默认
-  `steps: 1`——指针**瞬移**，中间不产生任何 `pointermove`。而菜单库（Radix 与 reka
-  都一样）判「要不要收起子菜单」靠的正是指针经过父菜单时的那串 `pointermove`
-  与「安全三角」宽限区。瞬移把那条路径整个跳过，于是两边各自停在不同的中间态。
-
-  实测（本机 `PARITY_ONLY=thread-history`，2.2 分钟一次）：
-  `steps: 1` 时 `thread-history` 报 **14 行**（`ariaOnlyVue: menu "Export" /
-  menuitem "Export as JSON" / …[expanded]`，看起来像「Vue 的子菜单不收」）；
-  改成 `steps: 12` 之后 **只剩 2 行**。
-  **那 12 行是尺子造的**——真实用户的指针有轨迹，两个应用都会收起子菜单。
-
-  挪到 (0,0)：视口左上角，两个应用在这一点上都没有可交互元素。
-  放在 `runScenario` 之后、静置之前——hover 退出的过渡因此有时间跑完，
-  再由 `waitForFiniteAnimations` 等干净。
-*/
+/**
+ * Remove residual hover before stationary capture; explicitly hovered scenarios
+ * retain their intentional pointer position. Four native movement steps let
+ * menu pointer/grace-area handlers observe the exit path instead of teleporting.
+ * This changes neither focus nor markup and is unnecessary without pointer input.
+ */
 async function parkPointer(
   page: Page,
   steps: readonly { kind: string }[],
 ): Promise<void> {
-  /*
-    **指针没动过就不用归位**：Playwright 的指针初始就在 (0,0)，而 147 个场景-维度
-    里很多是纯加载（`steps: []`）。空跑一次 `mouse.move` 对它们只是成本。
-    成本是真的：第三十七轮 `steps: 12` 无条件跑满 294 次取样，把 diff 那条用例
-    推过了 900 秒的闸门（run 35190580480 以「锚点等不到 + Test ended」的形状红，
-    正是本文件上面那段注释预言的形状）。
-  */
   if (!steps.some((s) => POINTER_STEPS.has(s.kind))) return;
   // 场景自己声明了要悬停的不归位——那种场景里「指针停在哪」是判据本身。
   if (steps.some((s) => s.kind === "hover")) return;
@@ -814,65 +733,140 @@ export async function captureScenario(
   state: ParityState,
   settleMs = 700,
 ): Promise<ParityCapture> {
-  const requests: string[] = [];
-  const requestBodies: { key: string; body: string }[] = [];
-  const onRequest = (request: Request) => {
-    const normalized = normalizeRequest(request.method(), request.url());
-    if (!normalized) return;
-    requests.push(normalized);
-    /*
-      `postData()` 对没有体的请求返回 null；对上传那类二进制体可能抛。
-      抛了就当没体——**不让取样本身变成失败源**，而漏掉的那一条会在
-      requests 档上照样看得见（它的 method/path 还在）。
-    */
-    let raw: string | null;
-    try {
-      raw = request.postData();
-    } catch {
-      raw = null;
-    }
-    if (raw !== null && raw !== "")
-      requestBodies.push({
-        key: normalized,
-        body: normalizeRequestBody(raw),
-      });
-  };
-  page.on("request", onRequest);
+  const freshPage = claimCapturePage(page);
+  let network: ReturnType<typeof recordNetwork> | undefined;
+  let snapshot: NetworkSnapshot | undefined;
+  let identity: Awaited<ReturnType<typeof installIdentityCapture>> | undefined;
+  let identitySnapshot: IdentitySnapshot | undefined;
+  let projection: ReturnType<typeof projectNetwork> | undefined;
+  let sample:
+    | Pick<
+        ParityCapture,
+        "aria" | "ariaTree" | "geometry" | "focus" | "tabbables" | "url"
+      >
+    | undefined;
+  const errors: unknown[] = [];
+  const cleanupErrors: string[] = [];
   try {
-    await runScenario(page, base, scenario, dimension, state);
+    network = recordNetwork(page, base);
+    identity = await installIdentityCapture(page, base);
+    freshPage.activate();
+    await runScenario(
+      page,
+      base,
+      scenario,
+      dimension,
+      state,
+      30_000,
+      (action) => identity!.beginAction(action),
+    );
     await parkPointer(page, [...scenario.settle, ...state.steps]);
     await page.waitForTimeout(settleMs);
     await waitForFiniteAnimations(page);
-    /*
-      动画停了不等于这一屏不动了。**固定的 `settleMs` 挡不住这一类**：
-      它只保证「等了 700ms」，不保证「等到不动了」——折叠块到点自动收起、
-      迟到的标志、接口回来才渲染的侧栏分区，都可能正好落在 700ms 之后。
-      判词与第三十八轮那次逐条扫描的读数写在 `./settle` 的 `waitForDomQuiet`。
-    */
     await waitForDomQuiet(page);
     const rawAria = await page.locator("body").ariaSnapshot();
-    const aria = normalizeAriaSnapshot(rawAria);
-    /*
-      同一份原始快照再归一一次、**这次保住缩进**：`aria` 那份把层级塌掉了
-      （见 aria-parity.mjs 里 `\s{2,}` 那段），层级比对只能从这一份来。
-    */
-    const ariaTree = normalizeAriaTree(rawAria);
-    const geometry = await sampleGeometry(page, scenario, state);
-    const focus = await describeFocus(page);
-    const tabbables = await sampleTabbables(page);
-    return {
-      aria,
-      ariaTree,
-      requests,
-      requestBodies,
-      geometry,
-      focus,
-      tabbables,
+    sample = {
+      aria: normalizeAriaSnapshot(rawAria),
+      ariaTree: normalizeAriaTree(rawAria),
+      geometry: await sampleGeometry(page, scenario, state),
+      focus: await describeFocus(page),
+      tabbables: await sampleTabbables(page),
       url: new URL(page.url()).pathname,
     };
+  } catch (error) {
+    errors.push(error);
   } finally {
-    page.off("request", onRequest);
+    // Every started observer is sealed even after a product action fails.
+    // Network cutoff precedes receipt ACK drain; its facts remain independent.
+    try {
+      if (identity)
+        identitySnapshot = await identity.seal(() => {
+          snapshot ??= network?.stop();
+        });
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      snapshot ??= network?.stop();
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      if (identity) cleanupErrors.push(...(await identity.dispose()));
+    } catch (error) {
+      cleanupErrors.push("identity disposal threw");
+      errors.push(error);
+    }
+    try {
+      freshPage.dispose();
+    } catch (error) {
+      cleanupErrors.push("fresh page guard disposal threw");
+      errors.push(error);
+    }
+    if (cleanupErrors.length)
+      errors.push(
+        new Error(
+          `Identity capture cleanup failed: ${cleanupErrors.join("; ")}`,
+        ),
+      );
+    try {
+      if (snapshot) projection = projectNetwork(snapshot, base);
+      const invalid = [
+        ...(projection?.observationErrors ?? []),
+        ...(identitySnapshot?.errors ?? []),
+        ...freshPage.snapshot().errors,
+      ];
+      if (invalid.length)
+        errors.push(
+          new Error(`Invalid capture observation: ${invalid.join("; ")}`),
+        );
+    } catch (error) {
+      errors.push(error);
+    }
+    try {
+      await test
+        .info()
+        .attach(
+          `parity-network-${scenario.id}-${state.id || "default"}-${dimension.viewport}-${dimension.theme}-${dimension.locale}-${new URL(base).port || new URL(base).hostname}`,
+          {
+            body: JSON.stringify({
+              version: 2,
+              appBase: base,
+              scenario: scenario.id,
+              state: state.id,
+              dimension,
+              completed: Boolean(sample) && errors.length === 0,
+              snapshot,
+              identity: identitySnapshot ?? null,
+              freshPage: freshPage.snapshot(),
+              cleanupErrors,
+            }),
+            contentType: "application/json",
+          },
+        );
+    } catch (error) {
+      errors.push(error);
+    }
   }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1)
+    throw new AggregateError(
+      errors,
+      "Capture failed; all observation, cleanup and evidence failures are preserved",
+      { cause: errors[0] },
+    );
+  if (!sample || !projection || !identitySnapshot)
+    throw new Error("Capture completed without a result");
+  return {
+    ...sample,
+    ...projection,
+    observationErrors: [
+      ...projection.observationErrors,
+      ...identitySnapshot.errors,
+      ...freshPage.snapshot().errors,
+      ...cleanupErrors,
+    ],
+  };
 }
 
 export { waitForDomQuiet, waitForFiniteAnimations };

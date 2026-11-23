@@ -18,8 +18,23 @@
  * `handleRunStream` from here.
  */
 
+import {
+  installProjectGatewayMock,
+  type ProjectMockOptions,
+} from "../../support/project-gateway-mock";
+import { mockCapabilityCatalog } from "../../support/capability-fixtures";
+
 import type { Agent } from "@/core/agents/types";
 import type { BrowserContext, Page, Route } from "@playwright/test";
+
+import { threadIdFromRequest } from "./thread-request";
+
+export type {
+  MockProject,
+  MockProjectDocument,
+  MockTrashDocument,
+  MockThreadFileGroup,
+} from "../../support/project-gateway-mock";
 
 // ---------------------------------------------------------------------------
 // Constants — deterministic IDs used across tests
@@ -45,6 +60,7 @@ const MOCK_AUTH_USER = {
 // ---------------------------------------------------------------------------
 
 export type MockThread = {
+  unread?: boolean;
   thread_id: string;
   title?: string;
   updated_at?: string;
@@ -52,6 +68,8 @@ export type MockThread = {
   metadata?: Record<string, unknown>;
   messages?: unknown[];
   artifacts?: string[];
+  /** Current Gateway capture registry, independent of either UI implementation. */
+  tool_artifacts?: Record<string, unknown>[];
   goal?: Record<string, unknown> | null;
   /*
     真后端的 channel values 里有 `todos`（`app/core/threads/types.ts` 的
@@ -67,12 +85,8 @@ export type MockThread = {
   }[];
 };
 
-/*
-  就是 Gateway 的 `AgentResponse`（backend/app/gateway/routers/agents.py:39），
-  不是另写一份。此前那份手抄的带着 `system_prompt`——**真后端从来不返回这个字段**，
-  于是 mock 下的 agent 比线上多一个键，谁要是读了它，只有 e2e 是绿的。
-*/
-export type MockAgent = Agent;
+/** Input fixtures may omit defaults; mockLangGraphAPI normalizes the complete Gateway response. */
+export type MockAgent = Pick<Agent, "name"> & Partial<Agent>;
 
 export type MockSkill = {
   name: string;
@@ -82,6 +96,36 @@ export type MockSkill = {
   enabled?: boolean;
 };
 
+export type MockScheduledTask = {
+  id: string;
+  thread_id: string | null;
+  context_mode?: "fresh_thread_per_run" | "reuse_thread";
+  assistant_id?: string | null;
+  last_thread_id?: string | null;
+  title: string;
+  prompt: string;
+  schedule_type: "once" | "cron" | "interval";
+  schedule_spec: Record<string, unknown>;
+  timezone: string;
+  status:
+    "enabled" | "paused" | "running" | "completed" | "failed" | "cancelled";
+  next_run_at: string | null;
+  last_run_at: string | null;
+  last_run_id: string | null;
+  last_error: string | null;
+  run_count: number;
+  goal_objective?: string | null;
+  max_runs?: number | null;
+  end_at?: string | null;
+  origin_thread_id?: string | null;
+  standing_notes?: string[] | null;
+  stop_condition?: string | null;
+  automatic_runs_used?: number;
+  active_run_status?: "queued" | "launching" | "running" | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type MockScheduledTaskRun = {
   id: string;
   task_id: string;
@@ -89,37 +133,152 @@ export type MockScheduledTaskRun = {
   run_id: string | null;
   scheduled_for: string;
   trigger: "scheduled" | "manual";
-  status: "queued" | "running" | "success" | "failed" | "skipped";
+  status:
+    | "queued"
+    | "launching"
+    | "running"
+    | "success"
+    | "unmet"
+    | "failed"
+    | "skipped"
+    | "interrupted";
   error: string | null;
+  goal_objective?: string | null;
+  goal_verdict?: Record<string, unknown> | null;
+  stop_requested_run_id?: string | null;
+  attempt_count?: number;
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  run_number?: number | null;
+  total_tokens?: number | null;
+  summary?: string | null;
 };
 
-export type MockAPIOptions = {
+/** Fill the response fields newer backends always send, so older fixtures stay valid. */
+function scheduledTaskResponse(task: MockScheduledTask) {
+  return {
+    context_mode: "fresh_thread_per_run",
+    last_thread_id: null,
+    assistant_id: null,
+    goal_objective: null,
+    max_runs: null,
+    end_at: null,
+    origin_thread_id: null,
+    standing_notes: [],
+    stop_condition: null,
+    automatic_runs_used: 0,
+    active_run_status: null,
+    ...task,
+    thread_id: task.thread_id ?? null,
+  };
+}
+
+function scheduledTaskNotFound(route: Route) {
+  return route.fulfill({
+    status: 404,
+    contentType: "application/json",
+    body: JSON.stringify({
+      detail: { code: "task_not_found", message: "Scheduled task not found" },
+    }),
+  });
+}
+
+const CLEARABLE_TASK_FIELDS = [
+  "goal_objective",
+  "max_runs",
+  "end_at",
+  "stop_condition",
+] as const;
+
+/** PATCH/resume semantics: a present key replaces the value; `null` clears the clearable fields. */
+function applyClearableTaskFields(
+  task: MockScheduledTask,
+  payload: Record<string, unknown>,
+): MockScheduledTask {
+  const next: MockScheduledTask = { ...task };
+  for (const key of CLEARABLE_TASK_FIELDS) {
+    if (!(key in payload)) continue;
+    const value = payload[key];
+    if (value === null || value === "") {
+      next[key] = null;
+    } else if (key === "max_runs" && typeof value === "number") {
+      next.max_runs = value;
+    } else if (key !== "max_runs" && typeof value === "string") {
+      next[key] = value;
+    }
+  }
+  return next;
+}
+
+export type MockScheduledTaskEvent = {
+  id: string;
+  task_id: string;
+  event: "task_stopped" | "task_paused" | "task_finished";
+  reason_code: string;
+  task_title?: string | null;
+  stop_condition?: string | null;
+  run_thread_id?: string | null;
+  run_number?: number | null;
+  run_status?: MockScheduledTaskRun["status"] | null;
+  max_runs?: number | null;
+  end_at?: string | null;
+  schedule_type?: "once" | "cron" | "interval" | null;
+  after_run_id?: string | null;
+  created_at: string;
+};
+
+function scheduledTaskEventResponse(event: MockScheduledTaskEvent) {
+  return {
+    task_title: null,
+    stop_condition: null,
+    run_thread_id: null,
+    run_number: null,
+    run_status: null,
+    max_runs: null,
+    end_at: null,
+    schedule_type: null,
+    after_run_id: null,
+    ...event,
+  };
+}
+
+/** One server-originated run change reported by the mocked `/api/thread-activity`. */
+export type MockThreadActivityEntry = {
+  thread_id: string;
+  /** Default `"schedule"`; `null` is the caller's own interactive run (never listed). */
+  origin_kind?: "schedule" | "im_channel" | "github" | "extension" | null;
+  status?: string;
+};
+
+/** Handles a spec can use to drive the mocked backend after `mockLangGraphAPI`. */
+export type MockAPIController = {
+  /** Add or replace a thread in the thread search results. */
+  upsertThread: (thread: MockThread) => void;
+  /** Record run changes; the next activity poll after the seed returns them. */
+  pushThreadActivity: (...entries: MockThreadActivityEntry[]) => void;
+  /** Simulate a read on another device (raises `read_version`). */
+  bumpReadVersion: () => void;
+  /**
+   * Replace the scheduled tasks every task route serves (the list, one task,
+   * a chat's tasks), e.g. to flip a task to paused or delete it.
+   */
+  setScheduledTasks: (tasks: MockScheduledTask[]) => void;
+  /** Replace the lifecycle events of an originating chat. */
+  setScheduledTaskEvents: (
+    threadId: string,
+    events: MockScheduledTaskEvent[],
+  ) => void;
+  /** Thread ids of every `POST /api/threads/{id}/read`, in order. */
+  readonly readRequests: readonly string[];
+};
+
+export type MockAPIOptions = ProjectMockOptions & {
   threads?: MockThread[];
   agents?: MockAgent[];
   skills?: MockSkill[];
-  scheduledTasks?: Array<{
-    id: string;
-    thread_id: string | null;
-    context_mode?: "fresh_thread_per_run" | "reuse_thread";
-    last_thread_id?: string | null;
-    title: string;
-    prompt: string;
-    schedule_type: "once" | "cron";
-    schedule_spec: Record<string, unknown>;
-    timezone: string;
-    status:
-      "enabled" | "paused" | "running" | "completed" | "failed" | "cancelled";
-    next_run_at: string | null;
-    last_run_at: string | null;
-    last_run_id: string | null;
-    last_error: string | null;
-    run_count: number;
-    created_at: string;
-    updated_at: string;
-  }>;
+  scheduledTasks?: MockScheduledTask[];
+  scheduledTaskEvents?: Record<string, MockScheduledTaskEvent[]>;
   /** 按 task id 预置的运行历史；不给就是空的，只有 trigger 才会长出一条。 */
   scheduledTaskRuns?: Record<string, MockScheduledTaskRun[]>;
   uploadLimits?: {
@@ -130,20 +289,15 @@ export type MockAPIOptions = {
   features?: {
     agentsApiEnabled?: boolean;
     browserControlEnabled?: boolean;
+    knowledgeScopeSelectionEnabled?: boolean;
+    threadActivity?: { available?: boolean };
+    scheduledTasks?: {
+      available?: boolean;
+      running?: boolean;
+      toolEnabled?: boolean;
+      minIntervalSeconds?: number;
+    };
   };
-  /**
-   * 项目列表。不给就是空数组——侧栏的项目区因此天然是空态，
-   * 与此前没有这条路由时的表现一致（那时是 404，两边都渲染成空）。
-   */
-  projects?: MockProject[];
-};
-
-export type MockProject = {
-  id: string;
-  name: string;
-  status?: "active" | "archived";
-  created_at?: string;
-  updated_at?: string;
 };
 
 const DEFAULT_SKILLS: MockSkill[] = [
@@ -289,7 +443,7 @@ function runStreamThreadId(route: Route) {
  *
  * 为什么要有这条（2026-09-08 实测）：`integrations.spec.ts` 里那条 Lark 授权流程会
  * `globalThis.open("about:blank")` 之后把弹窗导航到 `https://open.feishu.cn/...`
- * （`IntegrationsSettings.vue:345/362`）——**那是一个真实外网地址，套件里没有任何 mock
+ * （旧设置页面，当前由 BusinessPluginGallery.vue 承接）——**那是一个真实外网地址，套件里没有任何 mock
  * 盖住它**。同一批用例的耗时因此完全取决于那台服务器答不答：
  *
  *     绿的那次   1.7s / 2.6s / 3.4s / 3.8s
@@ -332,11 +486,21 @@ function blockOffMachineRequests(page: Page) {
   );
 }
 
-export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
+export function mockLangGraphAPI(
+  page: Page,
+  options?: MockAPIOptions,
+): MockAPIController {
   blockOffMachineRequests(page);
   let threads = [...(options?.threads ?? [])];
-  const agents = options?.agents ?? [];
+  const agents = (options?.agents ?? []).map((agent) => ({
+    description: "",
+    model: null,
+    tool_groups: null,
+    skills: null,
+    ...agent,
+  }));
   const skills = options?.skills ?? DEFAULT_SKILLS;
+  const scheduledTaskEvents = { ...(options?.scheduledTaskEvents ?? {}) };
   const scheduledTasks = options?.scheduledTasks ?? [];
   let mutableScheduledTasks = [...scheduledTasks];
   const mutableTaskRuns: Record<string, MockScheduledTaskRun[]> =
@@ -384,11 +548,23 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       "The provisioner has no lark-cli init image configured (LARK_CLI_INIT_IMAGE)." as
         string | null,
   };
+  mockCapabilityCatalog(page, skills, () => larkIntegrationStatus);
   const featureFlags = {
     agentsApiEnabled: options?.features?.agentsApiEnabled ?? true,
     browserControlEnabled: options?.features?.browserControlEnabled ?? true,
+    threadActivity: {
+      available: options?.features?.threadActivity?.available ?? false,
+    },
   };
 
+  // Thread activity feed: a run-change log ordered by `seq`, plus the
+  // per-user read clock. Cursors are "<seq>:<run id>".
+  const activityLog: Array<
+    Required<MockThreadActivityEntry> & { seq: number }
+  > = [];
+  let activitySeq = 100;
+  let readVersion = 0;
+  const readRequests: string[] = [];
   const upsertThread = (thread: MockThread) => {
     threads = [
       thread,
@@ -449,6 +625,7 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       metadata,
       status: "idle",
       values: { title: thread.title ?? "Untitled", goal: thread.goal ?? null },
+      unread: thread.unread ?? false,
     };
   };
 
@@ -484,6 +661,7 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         ])
       : [],
     artifacts: thread?.artifacts ?? [],
+    tool_artifacts: thread?.tool_artifacts ?? [],
     todos: thread?.todos ?? [],
   });
 
@@ -531,6 +709,103 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
   };
 
   // Auth — keep workspace tests independent from a real gateway session.
+  // Thread activity feed (`GET /api/thread-activity`): 503 when unavailable,
+  // like a memory-backed Gateway; no cursor seeds; a cursor returns the
+  // logged changes after it (deduped by thread, latest last).
+  void page.route(/\/api\/thread-activity(?:\?|$)/, (route) => {
+    if (route.request().method() !== "GET") {
+      return route.fallback();
+    }
+    if (!featureFlags.threadActivity.available) {
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "Thread activity is not available" }),
+      });
+    }
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    if (cursor === null) {
+      const head = activityLog.at(-1);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          cursor: head ? `${head.seq}:run-${head.seq}` : "0:",
+          threads: [],
+          truncated: false,
+          read_version: readVersion,
+        }),
+      });
+    }
+    const match = /^(\d+):/.exec(cursor);
+    if (!match) {
+      return route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          detail: {
+            code: "invalid_cursor",
+            message: "Invalid activity cursor",
+          },
+        }),
+      });
+    }
+    const after = Number(match[1]);
+    const changed = activityLog.filter((entry) => entry.seq > after);
+    const last = changed.at(-1);
+    const latest = new Map<string, (typeof changed)[number]>();
+    for (const entry of changed) {
+      latest.delete(entry.thread_id);
+      latest.set(entry.thread_id, entry);
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        cursor: last ? `${last.seq}:run-${last.seq}` : cursor,
+        threads: [...latest.values()]
+          .filter((entry) => entry.origin_kind !== null)
+          .map(({ thread_id, origin_kind, status }) => ({
+            thread_id,
+            origin_kind,
+            status,
+          })),
+        truncated: false,
+        read_version: readVersion,
+      }),
+    });
+  });
+
+  // Mark read (`POST /api/threads/{id}/read`): raises `read_version` only
+  // when the thread was unread, like the Gateway.
+  void page.route(/\/api\/threads\/[^/]+\/read$/, (route) => {
+    if (route.request().method() !== "POST") {
+      return route.fallback();
+    }
+    const parts = new URL(route.request().url()).pathname.split("/");
+    const threadId = decodeURIComponent(parts.at(-2) ?? "");
+    readRequests.push(threadId);
+    const thread = threads.find((item) => item.thread_id === threadId);
+    if (!thread) {
+      return route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: `Thread ${threadId} not found` }),
+      });
+    }
+    if (thread.unread) {
+      threads = threads.map((item) =>
+        item.thread_id === threadId ? { ...item, unread: false } : item,
+      );
+      readVersion += 1;
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ unread: false, read_version: readVersion }),
+    });
+  });
+
   void page.route("**/api/v1/auth/me", (route) => {
     if (route.request().method() === "GET") {
       return route.fulfill({
@@ -593,19 +868,34 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
     return route.fallback();
   });
 
+  // Lifecycle events of an originating chat. Rows outlive their task, so
+  // this route never looks at the task list.
+  void page.route(
+    /\/api\/threads\/[^/]+\/scheduled-task-events(?:\?|$)/,
+    (route) => {
+      if (route.request().method() !== "GET") {
+        return route.fallback();
+      }
+      const parts = new URL(route.request().url()).pathname.split("/");
+      const threadId = decodeURIComponent(parts.at(-2) ?? "");
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          events: (scheduledTaskEvents[threadId] ?? []).map(
+            scheduledTaskEventResponse,
+          ),
+        }),
+      });
+    },
+  );
+
   void page.route("**/api/scheduled-tasks", (route) => {
     if (route.request().method() === "GET") {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(
-          mutableScheduledTasks.map((task) => ({
-            context_mode: "fresh_thread_per_run",
-            last_thread_id: null,
-            ...task,
-            thread_id: task.thread_id ?? null,
-          })),
-        ),
+        body: JSON.stringify(mutableScheduledTasks.map(scheduledTaskResponse)),
       });
     }
     if (route.request().method() === "POST") {
@@ -616,16 +906,20 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
       const timezone =
         typeof payload.timezone === "string" ? payload.timezone : "UTC";
-      const created = {
+      const created: MockScheduledTask = {
         id: "task-created",
         thread_id: threadId || null,
         context_mode:
           (payload.context_mode as "fresh_thread_per_run" | "reuse_thread") ??
           "fresh_thread_per_run",
+        assistant_id:
+          typeof payload.assistant_id === "string"
+            ? payload.assistant_id
+            : "lead_agent",
         last_thread_id: null,
         title,
         prompt,
-        schedule_type: payload.schedule_type as "once" | "cron",
+        schedule_type: payload.schedule_type as "once" | "cron" | "interval",
         schedule_spec: (payload.schedule_spec as Record<string, unknown>) ?? {},
         timezone,
         status: "enabled" as const,
@@ -637,12 +931,13 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         created_at: "2026-07-01T00:00:00+00:00",
         updated_at: "2026-07-01T00:00:00+00:00",
       };
-      mutableScheduledTasks = [created, ...mutableScheduledTasks];
-      mutableTaskRuns[created.id] = [];
+      const stored = applyClearableTaskFields(created, payload);
+      mutableScheduledTasks = [stored, ...mutableScheduledTasks];
+      mutableTaskRuns[stored.id] = [];
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(created),
+        body: JSON.stringify(scheduledTaskResponse(stored)),
       });
     }
     return route.fallback();
@@ -654,13 +949,16 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         new URL(route.request().url()).pathname.split("/").at(-2) ?? "",
       );
       mutableScheduledTasks = mutableScheduledTasks.map((task) =>
-        task.id === taskId ? { ...task, status: "paused" as const } : task,
+        task.id === taskId
+          ? { ...task, status: "paused" as const, active_run_status: null }
+          : task,
       );
       const task = mutableScheduledTasks.find((item) => item.id === taskId);
+      if (!task) return scheduledTaskNotFound(route);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(task),
+        body: JSON.stringify(scheduledTaskResponse(task)),
       });
     }
     return route.fallback();
@@ -671,14 +969,36 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       const taskId = decodeURIComponent(
         new URL(route.request().url()).pathname.split("/").at(-2) ?? "",
       );
+      // Optional renewal body: `max_runs` / `end_at`, `null` clears that cap.
+      const renewal = (() => {
+        try {
+          return (route.request().postDataJSON() ?? {}) as Record<
+            string,
+            unknown
+          >;
+        } catch {
+          return {};
+        }
+      })();
       mutableScheduledTasks = mutableScheduledTasks.map((task) =>
-        task.id === taskId ? { ...task, status: "enabled" as const } : task,
+        task.id === taskId
+          ? {
+              ...applyClearableTaskFields(task, {
+                ...("max_runs" in renewal
+                  ? { max_runs: renewal.max_runs }
+                  : {}),
+                ...("end_at" in renewal ? { end_at: renewal.end_at } : {}),
+              }),
+              status: "enabled" as const,
+            }
+          : task,
       );
       const task = mutableScheduledTasks.find((item) => item.id === taskId);
+      if (!task) return scheduledTaskNotFound(route);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(task),
+        body: JSON.stringify(scheduledTaskResponse(task)),
       });
     }
     return route.fallback();
@@ -690,39 +1010,46 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         new URL(route.request().url()).pathname.split("/").at(-2) ?? "",
       );
       const task = mutableScheduledTasks.find((item) => item.id === taskId);
-      if (task) {
-        const runId = `run-${taskId}`;
-        mutableTaskRuns[taskId] = [
-          {
-            id: `task-run-${taskId}`,
-            task_id: taskId,
-            thread_id: task.thread_id,
-            run_id: runId,
-            scheduled_for: "2026-07-01T00:00:00+00:00",
-            trigger: "manual",
-            status: "success",
-            error: null,
-            started_at: "2026-07-01T00:00:00+00:00",
-            finished_at: "2026-07-01T00:00:00+00:00",
-            created_at: "2026-07-01T00:00:00+00:00",
-          },
-          ...(mutableTaskRuns[taskId] ?? []),
-        ];
-        mutableScheduledTasks = mutableScheduledTasks.map((item) =>
-          item.id === taskId
-            ? {
-                ...item,
-                last_run_id: runId,
-                last_run_at: "2026-07-01T00:00:00+00:00",
-                run_count: item.run_count + 1,
-              }
-            : item,
-        );
-      }
+      if (!task) return scheduledTaskNotFound(route);
+      const threadId = task.thread_id ?? `trial-thread-${taskId}`;
+      const runId = `run-${taskId}`;
+      mutableTaskRuns[taskId] = [
+        {
+          id: `task-run-${taskId}`,
+          task_id: taskId,
+          thread_id: threadId,
+          run_id: runId,
+          scheduled_for: "2026-07-01T00:00:00+00:00",
+          trigger: "manual",
+          status: "success",
+          error: null,
+          attempt_count: 1,
+          started_at: "2026-07-01T00:00:00+00:00",
+          finished_at: "2026-07-01T00:00:00+00:00",
+          created_at: "2026-07-01T00:00:00+00:00",
+        },
+        ...(mutableTaskRuns[taskId] ?? []),
+      ];
+      mutableScheduledTasks = mutableScheduledTasks.map((item) =>
+        item.id === taskId
+          ? {
+              ...item,
+              last_run_id: runId,
+              last_run_at: "2026-07-01T00:00:00+00:00",
+              run_count: item.run_count + 1,
+            }
+          : item,
+      );
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: taskId, triggered: true }),
+        body: JSON.stringify({
+          id: taskId,
+          triggered: true,
+          outcome: "launched",
+          existing: false,
+          thread_id: threadId,
+        }),
       });
     }
     return route.fallback();
@@ -730,32 +1057,16 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
 
   void page.route("**/api/scheduled-tasks/*", (route) => {
     const request = route.request();
-    /*
-      GET 也要接住。此前只处理 PATCH/DELETE，GET 走 route.fallback()——在 e2e-parity
-      里那不是「没人请求」，而是**真的发出去了**，落到同一端口上的 replay Gateway，
-      拿回一条 404 "Scheduled task not found"。共享 mock 的判据是两个应用拿到逐字节
-      相同的响应，漏掉一个方法就等于让被测应用去问别的后端。
-    */
     if (request.method() === "GET") {
       const taskId = decodeURIComponent(
         new URL(request.url()).pathname.split("/").at(-1) ?? "",
       );
-      const task = mutableScheduledTasks.find(
-        (candidate) => candidate.id === taskId,
-      );
+      const task = mutableScheduledTasks.find((item) => item.id === taskId);
+      if (!task) return scheduledTaskNotFound(route);
       return route.fulfill({
-        status: task ? 200 : 404,
+        status: 200,
         contentType: "application/json",
-        body: JSON.stringify(
-          task
-            ? {
-                context_mode: "fresh_thread_per_run",
-                last_thread_id: null,
-                ...task,
-                thread_id: task.thread_id ?? null,
-              }
-            : { detail: "Scheduled task not found" },
-        ),
+        body: JSON.stringify(scheduledTaskResponse(task)),
       });
     }
     if (request.method() === "PATCH") {
@@ -763,13 +1074,34 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         new URL(request.url()).pathname.split("/").at(-1) ?? "",
       );
       const payload = request.postDataJSON() as Record<string, unknown>;
-      let updated: (typeof mutableScheduledTasks)[number] | undefined;
+      let updated: MockScheduledTask | undefined;
       mutableScheduledTasks = mutableScheduledTasks.map((task) => {
         if (task.id !== taskId) {
           return task;
         }
         updated = {
-          ...task,
+          ...applyClearableTaskFields(task, payload),
+          ...("assistant_id" in payload
+            ? {
+                assistant_id:
+                  (payload.assistant_id as string | null) ?? "lead_agent",
+              }
+            : {}),
+          ...("context_mode" in payload
+            ? {
+                context_mode: payload.context_mode as
+                  "fresh_thread_per_run" | "reuse_thread",
+              }
+            : {}),
+          ...("thread_id" in payload
+            ? { thread_id: payload.thread_id as string | null }
+            : {}),
+          ...("schedule_type" in payload
+            ? {
+                schedule_type: payload.schedule_type as
+                  "once" | "cron" | "interval",
+              }
+            : {}),
           ...(typeof payload.title === "string"
             ? { title: payload.title }
             : {}),
@@ -788,10 +1120,11 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         };
         return updated;
       });
+      if (!updated) return scheduledTaskNotFound(route);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(updated ?? {}),
+        body: JSON.stringify(scheduledTaskResponse(updated)),
       });
     }
     if (request.method() === "DELETE") {
@@ -821,30 +1154,47 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(
-          mutableScheduledTasks
-            .filter((task) => task.thread_id === threadId)
-            .map((task) => ({
-              context_mode: "fresh_thread_per_run",
-              last_thread_id: null,
-              ...task,
-              thread_id: task.thread_id ?? null,
-            })),
+          mutableScheduledTasks.flatMap((task) => {
+            const runInThread = (mutableTaskRuns[task.id] ?? []).find(
+              (run) => run.thread_id === threadId,
+            );
+            const relation =
+              task.origin_thread_id === threadId
+                ? "origin"
+                : task.thread_id === threadId
+                  ? "reuse"
+                  : runInThread
+                    ? "run"
+                    : null;
+            if (!relation) return [];
+            return [
+              {
+                ...scheduledTaskResponse(task),
+                thread_relation: relation,
+                thread_run:
+                  relation === "run" && runInThread
+                    ? {
+                        run_number: runInThread.run_number ?? null,
+                        trigger: runInThread.trigger,
+                        scheduled_for: runInThread.scheduled_for,
+                        status: runInThread.status,
+                      }
+                    : null,
+              },
+            ];
+          }),
         ),
       });
     }
     return route.fallback();
   });
 
-  // Runs are requested with `?limit=&offset=`, and a Playwright glob matches the
-  // query string too — `**/api/scheduled-tasks/*/runs` matches nothing once the
-  // page paginates.  Anchor on `/runs` followed by `?` or end-of-string, the same
-  // way the thread-runs route below does.
-  void page.route(/\/api\/scheduled-tasks\/[^/]+\/runs(\?|$)/, (route) => {
+  void page.route(/\/api\/scheduled-tasks\/[^/]+\/runs(?:\?|$)/, (route) => {
     if (route.request().method() === "GET") {
       const url = new URL(route.request().url());
       const taskId = decodeURIComponent(url.pathname.split("/").at(-2) ?? "");
-      const limit = Number(url.searchParams.get("limit") ?? "50");
-      const offset = Number(url.searchParams.get("offset") ?? "0");
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Number(url.searchParams.get("limit") ?? 50);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -925,47 +1275,63 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
   void page.route("**/api/langgraph/threads/search", searchThreadsHandler);
   void page.route("**/api/threads/search", searchThreadsHandler);
 
-  // Thread create — called when user sends first message in a new chat
-  void page.route("**/api/langgraph/threads", (route) => {
-    if (route.request().method() === "POST") {
-      /*
-        **建出来的 thread 是空的，而且不覆写已有的。** 这里原来写的是
-        `messages: mockStreamMessages()`——没有 route 参数，走的是那对写死的
-        `Hello` / `Hello from DeerFlow!` 兜底，**等于让「建 thread」这个动作
-        凭空造出一整段对话**，而任何真实后端建完 thread 都是空的。
-
-        它造成的不是一条假数据，是一处**竞态**：新 thread 一旦被采纳，
-        `GET /api/threads/{id}/messages/page` 就会把这段假对话返回，
-        `humanMessageCount` 从 0 跳到 1，于是
-        `useThreadStream` 的「服务端 human 到了就清乐观消息」把**用户刚打的那条**
-        清掉了。跑得快的时候断言先到（绿），跑得慢的时候分页先到（红）——
-        `thread-history.spec.ts:695` 因此在整套里约 50% 概率红，
-        而它红的原因和它测的东西毫无关系。
-
-        消息由**真正跑起来的 run** 写入（下面 handleMockRunStream 的 upsertThread
-        用的是 `mockStreamMessages(route)`，会回显这次提交的内容）。
-      */
+  // One project state owner serves project mutations and create admission.
+  const projects = installProjectGatewayMock(
+    page,
+    options ?? {},
+    () => threads,
+  );
+  const createThreadHandler = (route: Route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const body = route.request().postDataJSON() as {
+      thread_id?: string;
+      project_id?: string | null;
+      metadata?: Record<string, unknown>;
+    };
+    const threadId = body.thread_id ?? crypto.randomUUID();
+    let created = threads.find((thread) => thread.thread_id === threadId);
+    // Match Gateway create_thread: idempotency precedes project admission.
+    // A repeated create neither moves a thread nor overwrites its metadata.
+    if (!created) {
+      if (body.project_id && !projects.canAssignProject(body.project_id)) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Project not found" }),
+        });
+      }
+      const metadata: Record<string, unknown> = Object.fromEntries(
+        Object.entries(body.metadata ?? {}).filter(
+          ([key]) =>
+            ![
+              "owner_id",
+              "user_id",
+              "deerflow_project_id",
+              "deerflow_origin",
+            ].includes(key),
+        ),
+      );
+      if (body.project_id) metadata.deerflow_project_id = body.project_id;
       createThreadIfAbsent({
-        thread_id: MOCK_THREAD_ID,
+        thread_id: threadId,
         title: "New Chat",
         updated_at: new Date().toISOString(),
+        metadata,
         messages: [],
       });
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          thread_id: MOCK_THREAD_ID,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          metadata: {},
-          status: "idle",
-          values: {},
-        }),
-      });
+      created = threads.find((thread) => thread.thread_id === threadId)!;
     }
-    return route.fallback();
-  });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...threadSearchResult(created),
+        values: {},
+      }),
+    });
+  };
+  void page.route("**/api/langgraph/threads", createThreadHandler);
+  void page.route("**/api/threads", createThreadHandler);
 
   // Thread update (PATCH) — metadata update after creation
   void page.route("**/api/langgraph/threads/*", (route) => {
@@ -1024,36 +1390,6 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       threads = threads.filter((thread) => thread.thread_id !== threadId);
       return route.fulfill({
         status: 204,
-      });
-    }
-    return route.fallback();
-  });
-
-  void page.route("**/api/threads", (route) => {
-    if (route.request().method() === "POST") {
-      const body = route.request().postDataJSON() as {
-        thread_id?: string;
-        metadata?: Record<string, unknown>;
-      };
-      const threadId = body.thread_id ?? MOCK_SIDECAR_THREAD_ID;
-      upsertThread({
-        thread_id: threadId,
-        title: "Side chat",
-        updated_at: new Date().toISOString(),
-        metadata: body.metadata ?? {},
-        messages: [],
-      });
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          thread_id: threadId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          metadata: body.metadata ?? {},
-          status: "idle",
-          values: {},
-        }),
       });
     }
     return route.fallback();
@@ -1289,7 +1625,9 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
     const url = route.request().url();
 
     // For threads that exist in our mock data, return history with messages
-    const matchingThread = threads.find((t) => url.includes(t.thread_id));
+    const matchingThread = threads.find(
+      (t) => t.thread_id === threadIdFromRequest(url),
+    );
     if (matchingThread) {
       return route.fulfill({
         status: 200,
@@ -1339,7 +1677,9 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
     */
     if (route.request().method() === "POST") {
       const url = route.request().url();
-      const matchingThread = threads.find((t) => url.includes(t.thread_id));
+      const matchingThread = threads.find(
+        (t) => t.thread_id === threadIdFromRequest(url),
+      );
       const body = route.request().postDataJSON() as {
         values?: { title?: unknown };
       };
@@ -1372,7 +1712,9 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
     }
     if (route.request().method() === "GET") {
       const url = route.request().url();
-      const matchingThread = threads.find((t) => url.includes(t.thread_id));
+      const matchingThread = threads.find(
+        (t) => t.thread_id === threadIdFromRequest(url),
+      );
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -1394,7 +1736,9 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
   void page.route(/\/api\/langgraph\/threads\/[^/]+\/runs(\?|$)/, (route) => {
     if (route.request().method() === "GET") {
       const url = route.request().url();
-      const matchingThread = threads.find((t) => url.includes(t.thread_id));
+      const matchingThread = threads.find(
+        (t) => t.thread_id === threadIdFromRequest(url),
+      );
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -1423,8 +1767,8 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
   void page.route(/\/api\/threads\/([^/]+)\/messages\/page/, (route) => {
     if (route.request().method() === "GET") {
       const url = route.request().url();
-      const matchingThread = threads.find((t) =>
-        url.includes(`/api/threads/${t.thread_id}/messages/page`),
+      const matchingThread = threads.find(
+        (t) => t.thread_id === threadIdFromRequest(url),
       );
       return route.fulfill({
         status: 200,
@@ -1474,6 +1818,16 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
   );
 
   // Models list — model picker dropdown
+  // Empty default catalog; feature-specific scenarios register their own later route.
+  void page.route("**/api/subagents", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ subagents: [] }),
+    });
+  });
+
   void page.route("**/api/models", (route) => {
     if (route.request().method() === "GET") {
       return route.fulfill({
@@ -1498,98 +1852,24 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
         contentType: "application/json",
         body: JSON.stringify({
           agents_api: { enabled: featureFlags.agentsApiEnabled },
+          thread_activity: { available: featureFlags.threadActivity.available },
           browser_control: { enabled: featureFlags.browserControlEnabled },
+          knowledge_base: {
+            scope_selection_enabled:
+              options?.features?.knowledgeScopeSelectionEnabled ?? false,
+          },
+          scheduled_tasks: {
+            available: options?.features?.scheduledTasks?.available ?? true,
+            running: options?.features?.scheduledTasks?.running ?? true,
+            tool_enabled:
+              options?.features?.scheduledTasks?.toolEnabled ?? true,
+            min_interval_seconds:
+              options?.features?.scheduledTasks?.minIntervalSeconds ?? 60,
+          },
         }),
       });
     }
     return route.fallback();
-  });
-
-  /*
-    项目：列表、单个详情、以及项目内的会话。
-
-    会话按 `metadata.deerflow_project_id` 归属，与真后端同一条判据——
-    夹具里只要给会话的 metadata 填上项目 id，它就会出现在那个项目下面，
-    不需要再维护一份「项目→会话」的映射（那份映射迟早和 metadata 对不上）。
-  */
-  const projects = options?.projects ?? [];
-  /*
-    形状照后端的 `ProjectResponse`（backend/app/gateway/routers/projects.py）：
-    `instructions` 与 `presentation` 两个字段少了的话，两个应用读到的都是
-    undefined——而 mock 的意义就是让它们读到与真后端**同形**的东西。
-  */
-  const normalizeProject = (project: MockProject) => ({
-    id: project.id,
-    name: project.name,
-    instructions: "",
-    presentation: {},
-    status: project.status ?? "active",
-    created_at: project.created_at ?? "2025-01-01T00:00:00Z",
-    updated_at: project.updated_at ?? "2025-01-01T00:00:00Z",
-  });
-
-  /** `GET /api/projects/{id}/threads` 的行形状：只有这五个字段。 */
-  const projectThreadRow = (thread: MockThread) => ({
-    thread_id: thread.thread_id,
-    display_name: thread.title ?? null,
-    created_at: "2025-01-01T00:00:00Z",
-    updated_at: thread.updated_at ?? "2025-01-01T00:00:00Z",
-    metadata: thread.metadata ?? {},
-  });
-  const projectThreadsOf = (projectId: string) =>
-    threads.filter(
-      (thread) => thread.metadata?.deerflow_project_id === projectId,
-    );
-
-  void page.route("**/api/projects", (route) => {
-    if (route.request().method() === "GET") {
-      const status = new URL(route.request().url()).searchParams.get("status");
-      const visible = projects.filter(
-        (project) => !status || (project.status ?? "active") === status,
-      );
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        // 后端返回的是 `{projects: [...]}`，不是裸数组。
-        body: JSON.stringify({ projects: visible.map(normalizeProject) }),
-      });
-    }
-    return route.fallback();
-  });
-
-  void page.route("**/api/projects/*", (route) => {
-    if (route.request().method() !== "GET") return route.fallback();
-    const id = decodeURIComponent(
-      new URL(route.request().url()).pathname.split("/").pop() ?? "",
-    );
-    const project = projects.find((candidate) => candidate.id === id);
-    if (!project) {
-      return route.fulfill({
-        status: 404,
-        contentType: "application/json",
-        body: JSON.stringify({ detail: "Project not found." }),
-      });
-    }
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(normalizeProject(project)),
-    });
-  });
-
-  void page.route("**/api/projects/*/threads*", (route) => {
-    if (route.request().method() !== "GET") return route.fallback();
-    const id = decodeURIComponent(
-      new URL(route.request().url()).pathname.split("/").at(-2) ?? "",
-    );
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(
-        // 项目内会话是**裸数组**（与列表不同），行形状见 projectThreadRow。
-        projectThreadsOf(id).map(projectThreadRow),
-      ),
-    });
   });
 
   // Skills list — settings page and slash autocomplete
@@ -1825,6 +2105,34 @@ export function mockLangGraphAPI(page: Page, options?: MockAPIOptions) {
       body: JSON.stringify({ detail: "Agent not found" }),
     });
   });
+  return {
+    upsertThread,
+    pushThreadActivity: (...entries) => {
+      for (const entry of entries) {
+        activitySeq += 1;
+        activityLog.push({
+          seq: activitySeq,
+          thread_id: entry.thread_id,
+          // Server-originated unless a spec passes `null` (an interactive run).
+          origin_kind:
+            entry.origin_kind === undefined ? "schedule" : entry.origin_kind,
+          status: entry.status ?? "success",
+        });
+      }
+    },
+    bumpReadVersion: () => {
+      readVersion += 1;
+    },
+    get readRequests() {
+      return readRequests;
+    },
+    setScheduledTasks(tasks: MockScheduledTask[]) {
+      mutableScheduledTasks = [...tasks];
+    },
+    setScheduledTaskEvents(threadId: string, events: MockScheduledTaskEvent[]) {
+      scheduledTaskEvents[threadId] = [...events];
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

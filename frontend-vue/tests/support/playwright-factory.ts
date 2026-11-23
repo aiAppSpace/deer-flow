@@ -94,6 +94,7 @@ export function m0Gateway(options: {
     url: `http://127.0.0.1:${options.port}/health`,
     reuseExistingServer: false,
     timeout: 180_000,
+    env: { DEER_FLOW_AUTH_DISABLED: "0" },
     ...(options.pipeOutput
       ? { stdout: "pipe" as const, stderr: "pipe" as const }
       : {}),

@@ -68,7 +68,10 @@ function ConfiguredPluginSettings({
     }
   }
   return (
-    <form className="space-y-4" onSubmit={(event) => void save(event)}>
+    <form
+      className="space-y-4 wrap-anywhere"
+      onSubmit={(event) => void save(event)}
+    >
       <p className="text-muted-foreground text-sm leading-6">
         {plugin.setup[locale] ?? plugin.setup["en-US"]}
       </p>
@@ -106,7 +109,11 @@ function ConfiguredPluginSettings({
           {error}
         </p>
       )}
-      <Button type="submit" disabled={!canManage || install.isPending}>
+      <Button
+        className="h-auto min-h-9 max-w-full wrap-anywhere whitespace-normal"
+        type="submit"
+        disabled={!canManage || install.isPending}
+      >
         {copy.save}
       </Button>
     </form>

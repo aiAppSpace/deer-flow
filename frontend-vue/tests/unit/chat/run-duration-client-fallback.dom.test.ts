@@ -31,7 +31,7 @@
 */
 import { flushPromises, mount } from "@vue/test-utils";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
@@ -42,7 +42,21 @@ import {
   workspaceToastKey,
 } from "@/core/workspace-shell/toast";
 
+// These tests own message-group and interaction state, not the Markdown renderer.
+// Mock its module boundary so the async content pipeline cannot outlive the fixture.
+vi.mock("@/components/chat/MessageMarkdown.vue", () => ({
+  default: {
+    name: "MessageMarkdown",
+    props: ["content"],
+    template: "<div data-testid='markdown'>{{ content }}</div>",
+  },
+}));
+
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+});
 
 function messages(turnDuration?: number): Message[] {
   return [
@@ -68,7 +82,7 @@ function mountList(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return mount(MessageList, {
+  const wrapper = mount(MessageList, {
     props: {
       rawMessages: props.messages,
       loading: false,
@@ -80,13 +94,14 @@ function mountList(
       provide: { [workspaceToastKey as symbol]: toastStore },
       plugins: [[VueQueryPlugin, { queryClient }]],
       stubs: {
-        StreamMarkdown: { template: "<div data-testid='markdown' />" },
         ReferenceAttachment: true,
         WorkspaceChangesBadge: true,
         SubtaskCard: true,
       },
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 describe("这一轮刚跑完、后端还没给时长", () => {
@@ -219,5 +234,74 @@ describe("这一轮刚跑完、后端还没给时长", () => {
     await wrapper.setProps({ threadId: "thread-2" });
     await flushPromises();
     expect(wrapper.find("[data-testid='run-duration']").exists()).toBe(false);
+  });
+
+  it.each(["answer", "processing", "subagent"])(
+    "binds %s duration to completed reasoning and remounts collapsed",
+    async (kind) => {
+      const reasoningMessage = {
+        ...messages(31)[1]!,
+        content: kind === "answer" ? "Answer" : "",
+        additional_kwargs: {
+          turn_duration: 31,
+          reasoning_content: "Private reasoning",
+        },
+        ...(kind === "subagent"
+          ? {
+              tool_calls: [
+                {
+                  id: "task-1",
+                  name: "task",
+                  args: { description: "Research" },
+                },
+              ],
+            }
+          : {}),
+      } as Message;
+      const rows = [messages()[0]!, reasoningMessage];
+      const wrapper = mountList({ messages: rows, streaming: false });
+      await flushPromises();
+      const duration = wrapper.get("[data-testid='run-duration']");
+      expect(wrapper.findAll("[data-testid='run-duration']")).toHaveLength(1);
+      expect(
+        duration.element.closest("button")?.getAttribute("aria-expanded"),
+      ).toBe("false");
+      expect(wrapper.text()).not.toContain("Private reasoning");
+      await wrapper
+        .findAll("button")
+        .find((button) => button.text().includes("Took 31s"))!
+        .trigger("click");
+      expect(wrapper.text()).toContain("Private reasoning");
+      wrapper.unmount();
+      const remounted = mountList({ messages: rows, streaming: false });
+      await flushPromises();
+      expect(
+        remounted
+          .get("[data-testid='run-duration']")
+          .element.closest("button")
+          ?.getAttribute("aria-expanded"),
+      ).toBe("false");
+      remounted.unmount();
+    },
+  );
+
+  it("moves the client fallback header to authoritative persisted reasoning duration once", async () => {
+    const rows = messages();
+    rows[1]!.additional_kwargs = { reasoning_content: "Private reasoning" };
+    const wrapper = mountList({ messages: rows, streaming: true });
+    await wrapper.setProps({ streaming: false });
+    await flushPromises();
+    expect(
+      wrapper.get("[data-testid='run-duration']").element.closest("button"),
+    ).not.toBeNull();
+    const persisted = messages(47);
+    persisted[1]!.additional_kwargs = {
+      reasoning_content: "Private reasoning",
+      turn_duration: 47,
+    };
+    await wrapper.setProps({ messages: persisted });
+    expect(wrapper.findAll("[data-testid='run-duration']")).toHaveLength(1);
+    expect(wrapper.get("[data-testid='run-duration']").text()).toBe("Took 47s");
+    wrapper.unmount();
   });
 });

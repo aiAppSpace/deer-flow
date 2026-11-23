@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 const props = withDefaults(
   defineProps<{ asChild?: boolean; showOnHover?: boolean; class?: string }>(),
-  { asChild: false, showOnHover: false },
+  { asChild: false, showOnHover: false, class: undefined },
 );
 </script>
 

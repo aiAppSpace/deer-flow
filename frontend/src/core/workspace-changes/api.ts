@@ -1,3 +1,4 @@
+import { throwGatewayApiError } from "@/core/api/errors";
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
@@ -25,10 +26,7 @@ export async function fetchWorkspaceChanges({
   );
 
   if (!response.ok) {
-    const error = await response
-      .json()
-      .catch(() => ({ detail: "Failed to load workspace changes." }));
-    throw new Error(error.detail ?? "Failed to load workspace changes.");
+    await throwGatewayApiError(response, "Failed to load workspace changes.");
   }
 
   return response.json();

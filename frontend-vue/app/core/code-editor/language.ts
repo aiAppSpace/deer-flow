@@ -61,19 +61,22 @@ export async function loadCodeEditorLanguage(
 ): Promise<Extension[]> {
   switch (language) {
     case "css":
-      return [(await import("@codemirror/lang-css")).css()];
+      return import("@codemirror/lang-css").then(({ css }) => [css()]);
     case "html":
-      return [(await import("@codemirror/lang-html")).html()];
+      return import("@codemirror/lang-html").then(({ html }) => [html()]);
     case "javascript":
-      return [(await import("@codemirror/lang-javascript")).javascript()];
+      return import("@codemirror/lang-javascript").then(({ javascript }) => [
+        javascript(),
+      ]);
     case "json":
-      return [(await import("@codemirror/lang-json")).json()];
+      return import("@codemirror/lang-json").then(({ json }) => [json()]);
     case "markdown": {
-      const module = await import("@codemirror/lang-markdown");
-      return [module.markdown({ base: module.markdownLanguage })];
+      const { markdown, markdownLanguage } =
+        await import("@codemirror/lang-markdown");
+      return [markdown({ base: markdownLanguage })];
     }
     case "python":
-      return [(await import("@codemirror/lang-python")).python()];
+      return import("@codemirror/lang-python").then(({ python }) => [python()]);
     case "text":
       return [];
   }

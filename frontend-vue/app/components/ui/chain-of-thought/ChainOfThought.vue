@@ -17,7 +17,7 @@ import { chainOfThoughtKey } from "./context";
 
 const props = withDefaults(
   defineProps<{ open?: boolean; defaultOpen?: boolean; class?: string }>(),
-  { defaultOpen: false },
+  { open: undefined, defaultOpen: false, class: undefined },
 );
 
 const uncontrolled = ref(props.defaultOpen);

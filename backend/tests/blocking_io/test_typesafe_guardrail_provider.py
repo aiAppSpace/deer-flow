@@ -26,6 +26,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 from blockbuster import BlockingError
+from support.loopback_http import loopback_http_proxy_environment
 
 from deerflow.guardrails.provider import GuardrailRequest
 from deerflow.guardrails.typesafe import TypeSafeGuardrailProvider
@@ -62,13 +63,14 @@ async def _answer_once(reader: asyncio.StreamReader, writer: asyncio.StreamWrite
 
 @contextlib.asynccontextmanager
 async def _typesafe_endpoint() -> AsyncIterator[str]:
-    server = await asyncio.start_server(_answer_once, host="127.0.0.1", port=0)
-    try:
-        port = server.sockets[0].getsockname()[1]
-        yield f"http://127.0.0.1:{port}"
-    finally:
-        server.close()
-        await server.wait_closed()
+    with loopback_http_proxy_environment():
+        server = await asyncio.start_server(_answer_once, host="127.0.0.1", port=0)
+        try:
+            port = server.sockets[0].getsockname()[1]
+            yield f"http://127.0.0.1:{port}"
+        finally:
+            server.close()
+            await server.wait_closed()
 
 
 def _dangerous_call() -> GuardrailRequest:

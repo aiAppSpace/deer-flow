@@ -10,7 +10,6 @@ import { expect, test } from "@playwright/test";
  * the default auto-title is local state). It asserts nothing about content —
  * it produces the fixture, it doesn't verify it.
  */
-const APP = "http://localhost:3000";
 const SCENARIO = "write_read_file";
 const MODE = "ultra";
 const PROMPT =
@@ -83,7 +82,7 @@ test("record write/read-file run through the real frontend", async ({
     "utf-8",
   );
 
-  const reg = await context.request.post(`${APP}/api/v1/auth/register`, {
+  const reg = await context.request.post("/api/v1/auth/register", {
     data: {
       email: `rec-${Date.now()}@example.com`,
       password: "very-strong-password-123",

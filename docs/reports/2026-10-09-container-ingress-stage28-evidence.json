@@ -1,0 +1,192 @@
+{
+  "date": "2026-10-09",
+  "stage": 28,
+  "recordedAt": "2026-10-09T14:20:11.142057+00:00",
+  "status": "PASS for the exact Stage28 snapshot",
+  "latestSourceFinal": false,
+  "pendingNewlyProvenProductFixes": [
+    "ChatComposer Stop run cancellation owner (root)",
+    "DropdownMenuContent native trigger reference (capabilities_acceptance)"
+  ],
+  "project": "deerflow-vue-ingress-00aff39027",
+  "images": {
+    "deerflow-ingress-vue:stage28-final": "sha256:a74909deba53ef94e32bc54040fbf0beb6ad41769dfe846d07eaad32ce1b488f",
+    "deerflow-ingress-react:stage28-final": "sha256:b30767e92c6f25d6623e3f77ecc71cdbd5e377e536ca56f8dd3b138c50b8bc0c",
+    "deerflow-ingress-gateway-browser:stage25": "sha256:eabda78a6c905d45bd1030262ef935ad75559b4e361e86cad03ed01a5b703206",
+    "nginx:alpine": "sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752"
+  },
+  "sourceFingerprint": "docs/reports/2026-10-09-container-stage28-source-fingerprint.json",
+  "realAuthentication": true,
+  "checks": {
+    "evidence-replay.json": {
+      "project": "deerflow-vue-ingress-00aff39027",
+      "phase": "replay",
+      "origin": "http://vue.localhost:2326",
+      "status": "PASS",
+      "checks": [
+        "Vue hostname HTML and real UI login/HttpOnly/CSRF/expected-owner",
+        "default and unknown hostname retain React",
+        "2 MiB multipart upload and exact download/range through nginx -> Gateway",
+        "incremental uncompressed SSE rewrite and replay-produced exact artifact"
+      ],
+      "sse": {
+        "chunks": 17,
+        "firstMs": 31.899999976158142,
+        "totalMs": 2341
+      },
+      "observedBrowserApiPaths": [
+        "GET /api/channels/providers",
+        "GET /api/features",
+        "GET /api/models",
+        "GET /api/plugins",
+        "GET /api/skills",
+        "GET /api/suggestions/config",
+        "GET /api/thread-activity",
+        "GET /api/threads/a5674b44-4b0c-4a59-9b94-c73fe7cf577d/artifacts/mnt/user-data/uploads/ingress.txt",
+        "GET /api/threads/efd46dfe-0b3b-4ceb-96f7-0d7ccff826c8/artifacts/mnt/user-data/outputs/note.txt",
+        "GET /api/threads/fccbacdb-c8bf-4069-8c45-335eceed7d06/uploads/limits",
+        "GET /api/v1/auth/me",
+        "GET /api/v1/auth/preferences",
+        "GET /api/v1/auth/providers",
+        "GET /api/v1/auth/setup-status",
+        "PATCH /api/v1/auth/preferences",
+        "POST /api/langgraph/threads",
+        "POST /api/langgraph/threads/efd46dfe-0b3b-4ceb-96f7-0d7ccff826c8/runs/stream",
+        "POST /api/langgraph/threads/search",
+        "POST /api/threads/a5674b44-4b0c-4a59-9b94-c73fe7cf577d/uploads",
+        "POST /api/threads/search",
+        "POST /api/v1/auth/login/local"
+      ]
+    },
+    "evidence-browser.json": {
+      "project": "deerflow-vue-ingress-00aff39027",
+      "phase": "browser",
+      "origin": "http://vue.localhost:2326",
+      "status": "PASS",
+      "checks": [
+        "Vue hostname HTML and real UI login/HttpOnly/CSRF/expected-owner",
+        "default and unknown hostname retain React",
+        "same-origin Cookie/Origin WS upgrade and real Chromium binary frame through nginx -> Gateway"
+      ],
+      "ws": {
+        "opened": true,
+        "bytes": 77292,
+        "closeCode": 1000
+      },
+      "observedBrowserApiPaths": [
+        "GET /api/channels/providers",
+        "GET /api/features",
+        "GET /api/models",
+        "GET /api/plugins",
+        "GET /api/skills",
+        "GET /api/suggestions/config",
+        "GET /api/thread-activity",
+        "GET /api/threads/c454d6ea-41d4-46e8-b7f0-dec5d7fc7485/uploads/limits",
+        "GET /api/v1/auth/me",
+        "GET /api/v1/auth/preferences",
+        "GET /api/v1/auth/providers",
+        "GET /api/v1/auth/setup-status",
+        "PATCH /api/v1/auth/preferences",
+        "POST /api/langgraph/threads",
+        "POST /api/langgraph/threads/search",
+        "POST /api/threads/6dcd517b-8af8-4407-9b06-92c4b414e9cd/browser/navigate",
+        "POST /api/threads/search",
+        "POST /api/v1/auth/login/local"
+      ]
+    },
+    "evidence-private-nuxt.json": {
+      "status": "PASS",
+      "path": "private Nuxt -> real Gateway",
+      "checks": [
+        "real register/login/HttpOnly/owner",
+        "CSRF and expected-owner",
+        "models",
+        "LangGraph thread rewrite",
+        "2 MiB multipart upload",
+        "exact download and range",
+        "incremental replay SSE and exact produced artifact"
+      ],
+      "sse": {
+        "chunks": 17,
+        "firstMs": 570.066125,
+        "totalMs": 2944.214377
+      },
+      "ws": "public nginx -> Gateway is validated separately; no Nuxt WS claim"
+    }
+  },
+  "containerHealth": [
+    {
+      "Service": "frontend",
+      "Image": "deerflow-ingress-react:stage28-final",
+      "Health": "healthy",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "",
+          "TargetPort": 3000,
+          "PublishedPort": 0,
+          "Protocol": "tcp"
+        }
+      ]
+    },
+    {
+      "Service": "frontend-vue",
+      "Image": "deerflow-ingress-vue:stage28-final",
+      "Health": "healthy",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "",
+          "TargetPort": 3000,
+          "PublishedPort": 0,
+          "Protocol": "tcp"
+        }
+      ]
+    },
+    {
+      "Service": "gateway",
+      "Image": "deerflow-ingress-gateway-browser:stage25",
+      "Health": "healthy",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "",
+          "TargetPort": 8001,
+          "PublishedPort": 0,
+          "Protocol": "tcp"
+        }
+      ]
+    },
+    {
+      "Service": "nginx",
+      "Image": "nginx:alpine",
+      "Health": "",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 2026,
+          "PublishedPort": 2326,
+          "Protocol": "tcp"
+        }
+      ]
+    }
+  ],
+  "pngReview": {
+    "reviewed": [
+      "ingress-replay.png",
+      "ingress-browser.png"
+    ],
+    "result": "Actual Vue workspace renders cleanly; these prove ingress/login surface only, not full cross-app visual parity or live browser panel rendering."
+  },
+  "startupTiming": {
+    "firstPrivateProbe": "FAIL 502 while Gateway still starting; strict assertion preserved",
+    "correction": "Awaited Compose --wait successful completion and verified real health before rerunning the unchanged probe",
+    "failureLog": "/private/tmp/deerflow-ingress-private-final-stage28.log",
+    "passLog": "/private/tmp/deerflow-ingress-private-final-ready-stage28.log"
+  },
+  "gatewayRebuiltForFrontendRefresh": false,
+  "privateRuntimeConfigTrackedFilesTouched": false,
+  "externalMCP_IM_IdP_DNS_TLS_Claimed": false,
+  "cleanup": "Deferred until next stable source refresh, to reuse the same dedicated Gateway and browser runtime."
+}

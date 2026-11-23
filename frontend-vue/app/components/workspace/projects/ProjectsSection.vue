@@ -16,8 +16,8 @@
                    不是分组内第一条——两者在跨项目时会给出不同的高亮。
 -->
 <script setup lang="ts">
-import { FolderTree, List, Plus } from "lucide-vue-next";
-import { computed, ref } from "vue";
+import { FolderTree, List, Plus, Trash2 } from "lucide-vue-next";
+import { computed, onScopeDispose, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,7 @@ import { useProjectMutations, useProjects } from "@/composables/useProjects";
 import { useThreads } from "@/composables/useThreads";
 import { getLocalSettings, saveLocalSettings } from "@/core/settings/local";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
+import { isRequestAborted } from "@/core/api/cancellation";
 import { projectIdOfThread } from "@/core/threads/utils";
 import type { AgentThread } from "@/core/threads/types";
 
@@ -129,6 +130,17 @@ const hasAnyProject = computed(
 
 const createDialogOpen = ref(false);
 const createName = ref("");
+let creationGeneration = 0;
+watch(
+  createDialogOpen,
+  () => {
+    creationGeneration += 1;
+  },
+  { flush: "sync" },
+);
+onScopeDispose(() => {
+  creationGeneration += 1;
+});
 const isCreating = computed(() => create.isPending.value);
 
 /** 输入法组合中按下的 Enter 是在选字，不是提交。 */
@@ -140,12 +152,15 @@ function onNameKeydown(event: KeyboardEvent) {
 
 async function submitCreate() {
   const name = createName.value.trim();
-  if (!name || isCreating.value) return;
+  if (!createDialogOpen.value || !name || isCreating.value) return;
+  const generation = creationGeneration;
   try {
     await create.mutateAsync({ name });
+    if (generation !== creationGeneration) return;
     createDialogOpen.value = false;
     createName.value = "";
   } catch (error) {
+    if (generation !== creationGeneration || isRequestAborted(error)) return;
     toast.error(
       error instanceof Error && error.message
         ? error.message
@@ -190,6 +205,19 @@ async function submitCreate() {
           @click="createDialogOpen = true"
         >
           <Plus />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-5 [&>svg]:size-3.5"
+          :title="$i18n.t.value.trash.title"
+          :aria-label="$i18n.t.value.trash.title"
+          as-child
+          data-testid="projects-trash-link"
+        >
+          <NuxtLink to="/workspace/trash">
+            <Trash2 />
+          </NuxtLink>
         </Button>
       </span>
     </SidebarGroupLabel>

@@ -11,6 +11,7 @@ import { mount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { invalidateWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
 import { useChannelConnections } from "@/composables/useChannelConnections";
 import { channelKeys } from "@/core/channels/query-keys";
 import type {
@@ -222,9 +223,9 @@ describe("useChannelConnections", () => {
     pendingConnect.resolve(connectResult());
     await first;
     await duplicate;
-    expect(owner.isProviderPending("slack")).toBe(true);
+    expect(owner.isProviderPending("slack")).toBe(false);
     await owner.connect("slack");
-    expect(api.connectChannelProvider).toHaveBeenCalledTimes(1);
+    expect(api.connectChannelProvider).toHaveBeenCalledTimes(2);
 
     const inFlightPoll = deferred<ChannelConnection[]>();
     api.listChannelConnections.mockReturnValueOnce(inFlightPoll.promise);
@@ -276,6 +277,79 @@ describe("useChannelConnections", () => {
       "slack",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    wrapper.unmount();
+    queryClient.clear();
+  });
+});
+
+describe("channel mutation account fencing", () => {
+  it("does not refresh or repopulate any cache after global account retirement", async () => {
+    api.listChannelProviders.mockResolvedValue({
+      enabled: true,
+      providers: [provider()],
+    });
+    api.listChannelConnections.mockResolvedValue([]);
+    const pending = deferred<ChannelProvider>();
+    api.configureChannelProvider.mockReturnValue(pending.promise);
+    const { owner, wrapper, queryClient } = mountOwner();
+    await vi.waitFor(() => expect(owner.loaded.value).toBe(true));
+    const operation = owner.configure("slack", {
+      bot_token: "old-account-token",
+    });
+    await Promise.resolve();
+    const reads = api.listChannelProviders.mock.calls.length;
+    invalidateWorkspaceQueryOwner(queryClient);
+    queryClient.clear();
+    pending.resolve(provider());
+    await operation;
+    expect(api.listChannelProviders).toHaveBeenCalledTimes(reads);
+    expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
+    wrapper.unmount();
+  });
+  it("does not let an old mutation finalizer clear a new user's busy state", async () => {
+    api.listChannelProviders.mockResolvedValue({
+      enabled: true,
+      providers: [provider()],
+    });
+    api.listChannelConnections.mockResolvedValue([]);
+    const a = deferred<ChannelProvider>();
+    const b = deferred<ChannelProvider>();
+    api.configureChannelProvider
+      .mockReturnValueOnce(a.promise)
+      .mockReturnValueOnce(b.promise);
+    const { owner, wrapper, queryClient, scope } = mountOwner();
+    await vi.waitFor(() => expect(owner.loaded.value).toBe(true));
+    const first = owner.configure("slack", { bot_token: "alice" });
+    await Promise.resolve();
+    scope.value = "user-b";
+    await nextTick();
+    const second = owner.configure("slack", { bot_token: "bob" });
+    await Promise.resolve();
+    a.resolve(provider());
+    await first;
+    expect(owner.isProviderPending("slack")).toBe(true);
+    b.resolve(provider());
+    await second;
+    expect(owner.isProviderPending("slack")).toBe(false);
+    wrapper.unmount();
+    queryClient.clear();
+  });
+  it("retains a successful mutation result if its background catalog refresh fails", async () => {
+    api.listChannelProviders.mockResolvedValue({
+      enabled: true,
+      providers: [provider()],
+    });
+    api.listChannelConnections.mockResolvedValue([]);
+    api.configureChannelProvider.mockResolvedValue(provider());
+    const { owner, wrapper, queryClient } = mountOwner();
+    await vi.waitFor(() => expect(owner.loaded.value).toBe(true));
+    api.listChannelProviders.mockRejectedValueOnce(
+      new Error("Catalog unavailable"),
+    );
+    await expect(
+      owner.configure("slack", { bot_token: "saved" }),
+    ).resolves.toEqual(provider());
+    expect(owner.isProviderPending("slack")).toBe(false);
     wrapper.unmount();
     queryClient.clear();
   });

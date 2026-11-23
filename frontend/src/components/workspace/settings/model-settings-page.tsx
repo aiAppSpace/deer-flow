@@ -30,6 +30,11 @@ import { SettingsSection } from "./settings-section";
 
 export function ModelSettingsPage() {
   const { user } = useAuth();
+  return <ModelSettingsForUser key={`${user?.id}:${user?.system_role}`} />;
+}
+
+function ModelSettingsForUser() {
+  const { user } = useAuth();
   const { t } = useI18n();
   const text = t.settings.models;
   const client = useQueryClient();
@@ -42,6 +47,13 @@ export function ModelSettingsPage() {
   });
   const [editing, setEditing] = useState<ManagedModel | "new" | null>(null);
   const [pending, setPending] = useState(false);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   async function refresh() {
     await Promise.all([
       client.invalidateQueries({ queryKey: ["managed-models"] }),
@@ -49,17 +61,19 @@ export function ModelSettingsPage() {
     ]);
   }
   async function toggle(model: ManagedModel) {
+    if (!canManage || pending || model.conflict) return;
     setPending(true);
     try {
       await saveManagedModel({
         config: { ...modelDraft(model), enabled: !model.enabled },
         expected_revision: model.revision,
       });
-      await refresh();
+      if (active.current) await refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : text.failed);
+      if (active.current)
+        toast.error(error instanceof Error ? error.message : text.failed);
     } finally {
-      setPending(false);
+      if (active.current) setPending(false);
     }
   }
   return (
@@ -67,12 +81,17 @@ export function ModelSettingsPage() {
       {!canManage ? (
         <p>{text.adminOnly}</p>
       ) : (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button disabled={pending} onClick={() => setEditing("new")}>
+        <div className="@container/model-controls space-y-4">
+          <div className="flex max-w-full flex-wrap gap-2">
+            <Button
+              className="@max-md/model-controls:h-auto @max-md/model-controls:min-h-9 @max-md/model-controls:max-w-full @max-md/model-controls:whitespace-normal"
+              disabled={pending}
+              onClick={() => setEditing("new")}
+            >
               {text.add}
             </Button>
             <Button
+              className="@max-md/model-controls:h-auto @max-md/model-controls:min-h-9 @max-md/model-controls:max-w-full @max-md/model-controls:whitespace-normal"
               variant="outline"
               disabled={pending || catalog.isFetching}
               onClick={() => void catalog.refetch()}
@@ -92,7 +111,7 @@ export function ModelSettingsPage() {
               key={`${model.source}:${model.name}`}
               className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"
             >
-              <div>
+              <div className="max-w-full min-w-0 [overflow-wrap:anywhere]">
                 <p className="font-medium">
                   {model.display_name || model.name}
                 </p>
@@ -109,8 +128,9 @@ export function ModelSettingsPage() {
                 )}
               </div>
               {model.source === "managed" && (
-                <div className="flex gap-2">
+                <div className="flex max-w-full flex-wrap gap-2">
                   <Button
+                    className="@max-md/model-controls:h-auto @max-md/model-controls:min-h-9 @max-md/model-controls:max-w-full @max-md/model-controls:whitespace-normal"
                     variant="outline"
                     disabled={pending || model.conflict}
                     onClick={() => setEditing(model)}
@@ -118,6 +138,7 @@ export function ModelSettingsPage() {
                     {text.edit}
                   </Button>
                   <Button
+                    className="@max-md/model-controls:h-auto @max-md/model-controls:min-h-9 @max-md/model-controls:max-w-full @max-md/model-controls:whitespace-normal"
                     variant="outline"
                     disabled={pending || model.conflict}
                     onClick={() => void toggle(model)}
@@ -186,6 +207,7 @@ function ModelEditor({
         if (active.current) setResult(text[response.message]);
       } else {
         await saveManagedModel(body());
+        if (!active.current) return;
         await saved();
         if (active.current) {
           toast.success(text.saved);
@@ -206,13 +228,13 @@ function ModelEditor({
         if (!open && !pending) close();
       }}
     >
-      <DialogContent className="flex h-[90vh] flex-col overflow-hidden">
+      <DialogContent className="flex h-[90vh] flex-col overflow-hidden max-md:overflow-y-auto">
         <DialogHeader className="shrink-0">
           <DialogTitle>{model ? text.edit : text.add}</DialogTitle>
           <DialogDescription>{text.formDescription}</DialogDescription>
         </DialogHeader>
         <form
-          className="flex min-h-0 flex-1 flex-col gap-3"
+          className="flex min-h-0 flex-1 flex-col gap-3 max-md:flex-none"
           onSubmit={(event) => {
             event.preventDefault();
             void submit(false);
@@ -220,7 +242,9 @@ function ModelEditor({
         >
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <fieldset disabled={pending} className="space-y-3">
-              <p className="text-sm">{text.provider}: OpenAI compatible</p>
+              <p className="text-sm">
+                {text.provider}: {text.providerOpenAICompatible}
+              </p>
               <label className="block space-y-1">
                 <span>{text.name}</span>
                 <Input
@@ -267,7 +291,7 @@ function ModelEditor({
                 />
               </label>
               <label className="block space-y-1">
-                <span>API Key</span>
+                <span>{text.apiKey}</span>
                 <Input
                   type="password"
                   autoComplete="new-password"

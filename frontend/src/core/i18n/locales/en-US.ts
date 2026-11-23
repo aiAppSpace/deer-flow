@@ -1831,6 +1831,8 @@ export const enUS: Translations = {
       formDescription:
         "Connect an OpenAI-compatible endpoint. Testing sends a short streaming tool-call request and may incur provider charges.",
       provider: "Provider",
+      providerOpenAICompatible: "OpenAI compatible",
+      apiKey: "API Key",
       name: "Unique name",
       displayName: "Display name",
       endpoint: "Base URL",
@@ -2368,6 +2370,26 @@ export const enUS: Translations = {
       emptyDescription: "Credits and acknowledgements will show here.",
     },
   },
+  setup: {
+    createAdminTitle: "Create admin account",
+    createAdminSubtitle: "Set up the administrator account to get started.",
+    completeAdminTitle: "Complete admin account setup",
+    completeAdminSubtitle: "Set your real email and a new password.",
+    currentPassword: "Current password",
+    password: "Password",
+    passwordPlaceholder: "Password (min. 8 characters)",
+    confirmPassword: "Confirm Password",
+    confirmPasswordPlaceholder: "Confirm password",
+    passwordMismatch: "Passwords do not match",
+    passwordTooShort: "Password must be at least 8 characters",
+    createAdmin: "Create Admin Account",
+    completeSetup: "Complete Setup",
+    emailPlaceholder: "Your email",
+    newPassword: "New password",
+    confirmNewPassword: "Confirm new password",
+    creatingAdmin: "Creating account…",
+    settingUp: "Setting up…",
+  },
   login: {
     signInTitle: "Sign in to your account",
     createAccountTitle: "Create a new account",
@@ -2398,7 +2420,14 @@ export const enUS: Translations = {
       "The Gateway is taking too long to respond. Check that it is running, then try again.",
     retry: "Try again",
     authFailed: "Authentication failed.",
+    callbackSigningIn: "Signing you in...",
+    callbackRedirecting: "Redirecting...",
+    callbackFailedRedirect: "Authentication failed. Redirecting to login...",
+    callbackUnavailableRedirect:
+      "Gateway is temporarily unavailable. Redirecting to recovery...",
     errors: {
+      gateway_unavailable:
+        "The Gateway is temporarily unavailable. Please try again.",
       sso_failed: "SSO login failed. Please try again or use email login.",
       sso_cancelled: "SSO login was cancelled.",
       sso_account_exists:

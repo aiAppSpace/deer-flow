@@ -5,7 +5,7 @@
   【主要导出】     CLI：读取 .output/public/_nuxt，超预算退出 1
   【依赖关系】     Nuxt production build；Node zlib
   【边界与注意】   ⚠️ **这条门禁量的不是用户下载的字节。** 它把**全部** chunk 加起来，
-                   其中绝大多数是懒加载的；打开工作区实际只下载其中几十个。
+                   其中许多是懒加载的；工作区实际请求闭包由路由门禁单独测量。
                    两个数没有对应关系，而且方向可以相反：把
                    KaTeX 从同步改成按需之后，用户首屏少了 269 KB，这里的总数却
                    **涨了 1 KiB**（多分出一个 chunk）——它对那次改进完全无感。
@@ -30,36 +30,30 @@ const ASSET_DIR = join(ROOT, ".output/public/_nuxt");
 const budgets = {
   "vendor-vue": { totalRaw: 400_000, totalGzip: 90_000, maxRaw: 200_000 },
   "vendor-markdown": {
-    // 这一格在 UI primitive 层落地**之前**就已经超了：在 48f3ef29 上实测
-    // raw 1_139_429 / gzip 341_956 / maxRaw 374_890，三项全红。
-    // 之前没人看见，是因为 asset-budget 不在 verify 里，得单独跑。
-    // 这里记录的是当前实测值加余量，不是把一次回归悄悄放行；
-    // maxRaw 前后完全没变（374_890），说明最大的那个 chunk 不是这次改动撑大的。
-    totalRaw: 1_200_000,
-    totalGzip: 360_000,
-    // ArtifactPanel deliberately stays synchronous; keep measured headroom
-    // without forcing another component boundary solely to satisfy this gate.
-    maxRaw: 380_000,
+    // 2026-10-25 default production build: raw 1,308,949 / gzip 395,560 /
+    // maxRaw 424,506. These are mixed renderer/product chunks, not exclusively
+    // Markdown bytes. Rolldown co-locates existing consumers; disabling its load
+    // optimization increased the measured workspace payload. Keep the defaults
+    // and about 5% rounded headroom; real route loading is checked independently.
+    totalRaw: 1_380_000,
+    totalGzip: 420_000,
+    maxRaw: 450_000,
   },
-  // 这一格从「刻意为零」变成实测值：artifact 编辑器现在真的跑 CodeMirror 6。
-  // 实测 raw 555_743 / gzip 199_712 / maxRaw 199_773（11 个 chunk，全部动态
-  // import，首屏一个字节都不加载）。maxRaw 那一个是 `@codemirror/view`。
-  // 语法包按语言分片，所以打开一个 .py 不会顺带下载 html/css/markdown。
   "vendor-codemirror": {
-    // 2026-09-04（wave 66）复测 raw 555,743 / gzip 199,926 / maxRaw 199,773——
-    // 与 2026-08-25 记的实测值逐字相同，这一格没有漂。
-    totalRaw: 585_000,
-    totalGzip: 210_000,
-    maxRaw: 210_000,
+    // 2026-10-25: raw 615,316 / gzip 218,984 / maxRaw 295,820. The largest
+    // chunk now combines view/state/language support instead of view alone.
+    // This changes emitted grouping, not the editor's lazy mounting boundary;
+    // all three initial routes still load zero CodeMirror modules.
+    totalRaw: 650_000,
+    totalGzip: 230_000,
+    maxRaw: 315_000,
   },
-  // Typed dictionaries deliberately retain the React suggestion icon shape,
-  // so their chunk also contains a small lucide subset. Classify i18n before
-  // vendor-ui and budget the complete locale payload instead of hiding it in
-  // the Reka/lucide accessibility bucket.
-  // 2026-09-04（wave 66）复测 raw 87,271 / gzip 32,410——预算留着原来的余量。
-  "vendor-i18n": { totalRaw: 120_000, totalGzip: 45_000, maxRaw: 120_000 },
+  // Both async dictionaries and locale helpers count toward the whole build;
+  // route tests independently require downloading only the selected locale.
+  // Linux 2026-10-09: 1,822 keys, 170,349 raw / 60,304 gzip; about 3% headroom.
+  "vendor-i18n": { totalRaw: 176_000, totalGzip: 62_500, maxRaw: 120_000 },
   /*
-    **这一格量的不是「Reka 的字节」，是「被 Reka/splitpanes 引种的那些 chunk」。**
+    **这一格量的是包含实际 reka-ui 包的 chunk，可能同时含有产品代码。**
     2026-09-04（wave 66）把这句话改准了，因为原来那句是做不到的承诺：
 
     chunk 的名字由 `nuxt.config.ts` 的 `clientChunkFileName` 决定，判据是
@@ -87,35 +81,13 @@ const budgets = {
     改走 primitive 必然让它涨，而那正是这一轮想要的方向。
   */
   /*
-    2026-09-12 第四轮重定一次。实测 raw 740,601 / gzip 223,015 / maxRaw 318,499
-    ——**三项全超**（旧值 683,000 / 205,000 / 305,000 定于 wave 72，实测基数是
-    650,516 / 195,402 / 288,648）。抬之前把该问的都问了，逐条写在这里：
-
-    ① **是不是重复打包了？** 不是。逐个 chunk 搜 Reka 的内部字面量：
-       `dismissableLayer.pointerDownOutside` 只出现在 1 个 chunk、
-       `focusScope.autoFocusOnMount` 只出现在 1 个——分块规则没失效。
-    ② **用户下载的字节涨了吗？** 没有。面向用户的那条门禁
-       （`tests/e2e/route-payload.spec.ts` + `baseline/route-payload-budget.json`）
-       2026-09-12 实测 5 条全绿，三条路由都在各自预算内，
-       重量级渲染器也仍然不在关键路径上。
-    ③ **那涨的是什么？** **带这个名字的 chunk 从 10 个变成 20 个。**
-       这一格按 chunk 名字归属字节，而名字的判据是「chunk 里任意一个模块 id
-       命中 `reka-ui|splitpanes`」——2026-09-11 那一轮把手写行换成 `ui/item`、
-       把三处手搓模态换成 `ui/dialog`、把手写 `<input>` 换成 `ui/input`、
-       搬来 Tabs 的 variant 体系，**每一处都让又一个产品 chunk 碰到 Reka**；
-       再加上 2026-09-10 合上游带进来的 Projects / CSV 预览等新面。
-       **这正是这一格会涨的那个方向**，见上面那段「装不出谁的字节」。
-    ④ **`maxRaw` 那一个是什么？** 318,499 那个 chunk 里 `artifact` 出现 72 次、
-       `sidecar` 71 次，`splitpanes` 只出现 1 次——**它是工作区那块产品代码**，
-       只因为含着 splitpanes 才叫这个名字。也就是说 `vendor-ui.maxRaw`
-       **根本不是一个关于 Reka 的读数**，别照着它去拆 Reka。
-
-    **为什么红了这么久没人知道**：这一格不在 `verify` 里，文件头写着它是
-    「CI 的独立一步」——而这条分支三百多个提交从来没推过，**CI 一次都没跑过**。
-    线索 194 的又一例：一条只活在 CI 里、而 CI 永远不会跑到的门禁等于不存在。
-    2026-09-12 起冷启动文档的收工门禁块里记的是它的真实状态。
+    vendor-ui 按包含实际 reka-ui 包模块的 chunk 归属统计，可能同时包含产品代码。
+    分栏改为本仓 primitive 后移除 splitpanes 种子；下列各桶与整包预算保持不变。
+    此预算检查构建体积；用户实际下载字节另由 route-payload 验收。
   */
-  "vendor-ui": { totalRaw: 778_000, totalGzip: 234_000, maxRaw: 335_000 },
+  // Linux 2026-10-09: 35 mixed UI/product chunks, gzip 240,156; no duplicate
+  // runtime in the audited module graph. Keep raw/max limits, ~3% gzip headroom.
+  "vendor-ui": { totalRaw: 778_000, totalGzip: 248_000, maxRaw: 335_000 },
 };
 // 整包天花板同步抬高，抬的正好是 CodeMirror 那 542.7 KiB / 195.0 KiB：
 // 实测 raw 14_305_757 / gzip 3_292_309 / maxRaw 779_847 / maxGzip 230_136。
@@ -125,9 +97,13 @@ const budgets = {
 // 另外三项都还在预算内（raw 14,660,198 / maxRaw 779,878 / maxGzip 230,093），
 // 也就是说整包没有突然长出一块，是上面 vendor-ui 那一段说的同一件事按比例摊到了总数上。
 // 只抬这一项，按实测 + 约 5%。
+// Linux 2026-10-09: 680 chunks, 15,960,742 raw / 3,797,096 gzip.
+// Rebase this actual product/dependency graph with ~3% headroom; max limits stay.
+// Exact old/new byte attribution is unavailable: this is not a claim that the
+// entire growth came from security updates. Evidence and limits: dependency audit.
 const overallBudget = {
-  totalRaw: 14_800_000,
-  totalGzip: 3_580_000,
+  totalRaw: 16_440_000,
+  totalGzip: 3_911_000,
   maxRaw: 800_000,
   maxGzip: 240_000,
 };

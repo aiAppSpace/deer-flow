@@ -20,10 +20,7 @@ import { expect, test, type Page } from "@playwright/test";
   because reaching a real running subtask needs a live stream, and what is under
   test is the rule, not the card.
 */
-const probe = async (
-  page: Page,
-  reducedMotion: "reduce" | "no-preference",
-) => {
+const probe = async (page: Page, reducedMotion: "reduce" | "no-preference") => {
   // Set explicitly rather than through `test.use({ reducedMotion })`: the
   // describe-level option did not reach the page here (the probe read
   // `matchMedia(...).matches === false` under `reduce`), and a preference the

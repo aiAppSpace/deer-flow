@@ -15,7 +15,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
   设置对话框里那块 subagent 访问绑定要读 subagent 目录（wave：#4887）。
   目录本身另有用例，这里只喂一份固定数据，让绑定那几条断言有东西可选。
 */
-const subagentsApi = vi.hoisted(() => ({ list: vi.fn() }));
+const subagentsApi = vi.hoisted(() => ({
+  list: vi.fn(),
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+vi.mock("@/core/workspace-shell/toast", () => ({
+  useWorkspaceToast: () => subagentsApi.toast,
+}));
+vi.mock("@/core/api/fetcher", () => ({
+  fetch: vi.fn(async () =>
+    Response.json({
+      items: [],
+      knowledge_base: { scope_selection_enabled: true },
+    }),
+  ),
+}));
+vi.mock("@/composables/useSettingsPermissions", () => ({
+  useSettingsPermissions: () => ({
+    authDisabled: true,
+    session: ref(undefined),
+  }),
+}));
 vi.mock("@/core/subagents/api", () => ({
   listSubagents: subagentsApi.list,
   createManagedSubagent: vi.fn(),
@@ -25,9 +45,21 @@ vi.mock("@/core/subagents/api", () => ({
 
 import AgentCard from "@/components/workspace/agents/AgentCard.vue";
 import AgentSettingsDialog from "@/components/workspace/agents/AgentSettingsDialog.vue";
+import AgentCapabilitySelection from "@/components/workspace/agents/AgentCapabilitySelection.vue";
+import KnowledgeScopeSelector from "@/components/workspace/KnowledgeScopeSelector.vue";
 import type { Agent } from "@/core/agents/types";
 import { enUS } from "@/core/i18n/locales/en-US";
 import type { Model } from "@/core/models/types";
+
+const wrappers: ReturnType<typeof mount>[] = [];
+const queryClients: QueryClient[] = [];
+function createQueryClient(
+  options?: ConstructorParameters<typeof QueryClient>[0],
+) {
+  const client = new QueryClient(options);
+  queryClients.push(client);
+  return client;
+}
 
 const agent: Agent = {
   name: "reviewer",
@@ -109,10 +141,16 @@ const SUBAGENT_CATALOG = [
 beforeEach(() => {
   subagentsApi.list.mockReset();
   subagentsApi.list.mockResolvedValue(SUBAGENT_CATALOG);
-  vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: ref(enUS) } }));
+  vi.stubGlobal("useNuxtApp", () => ({
+    $i18n: { t: ref(enUS), locale: ref("en-US") },
+  }));
 });
 
 afterEach(() => {
+  for (const wrapper of wrappers.splice(0)) {
+    if (wrapper.exists()) wrapper.unmount();
+  }
+  queryClients.splice(0).forEach((client) => client.clear());
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
@@ -128,12 +166,18 @@ afterEach(() => {
 */
 describe("AgentCard 的截断提示", () => {
   it("把被截断的名字与描述包进 TruncatedTooltip", () => {
-    const wrapper = mount(AgentCard, { props: { agent } });
+    const wrapper = mount(AgentCard, {
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createQueryClient() }]],
+      },
+      props: { agent },
+    });
+    wrappers.push(wrapper);
 
     const triggers = wrapper.findAll("[data-slot='tooltip-trigger']");
-    expect(triggers).toHaveLength(2);
+    expect(triggers).toHaveLength(9);
     expect(triggers[0]?.classes()).toContain("truncate");
-    expect(triggers[1]?.classes()).toContain("line-clamp-2");
+    expect(triggers[2]?.classes()).toContain("line-clamp-2");
   });
 
   /*
@@ -143,7 +187,13 @@ describe("AgentCard 的截断提示", () => {
     而不是 `text-destructive`（CSS 变量，深色主题下跟着变）。
   */
   it("页脚三颗键画的是图标，不是文字字符", () => {
-    const wrapper = mount(AgentCard, { props: { agent } });
+    const wrapper = mount(AgentCard, {
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createQueryClient() }]],
+      },
+      props: { agent },
+    });
+    wrappers.push(wrapper);
 
     expect(wrapper.find(".lucide-message-square").exists()).toBe(true);
     expect(wrapper.find(".lucide-settings-2").exists()).toBe(true);
@@ -153,7 +203,13 @@ describe("AgentCard 的截断提示", () => {
   });
 
   it("删除键用主题变量色，不是固定红", () => {
-    const wrapper = mount(AgentCard, { props: { agent } });
+    const wrapper = mount(AgentCard, {
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createQueryClient() }]],
+      },
+      props: { agent },
+    });
+    wrappers.push(wrapper);
     const remove = wrapper.get(
       `[aria-label="${enUS.agents.delete}: ${agent.name}"]`,
     );
@@ -164,7 +220,13 @@ describe("AgentCard 的截断提示", () => {
 
   it("没量到截断之前不渲染 tooltip 内容", () => {
     // happy-dom 里 scrollWidth/clientWidth 都是 0，量出来就是「没截断」。
-    const wrapper = mount(AgentCard, { props: { agent } });
+    const wrapper = mount(AgentCard, {
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createQueryClient() }]],
+      },
+      props: { agent },
+    });
+    wrappers.push(wrapper);
     expect(wrapper.html()).not.toContain("tooltip-content");
   });
 });
@@ -173,8 +235,12 @@ describe("AgentCard", () => {
   it("renders the exact model, ordered duplicate skills, and ordered duplicate groups", () => {
     const wrapper = mount(AgentCard, {
       props: { agent },
-      global: { stubs: { NuxtLink: { template: "<a><slot /></a>" } } },
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createQueryClient() }]],
+        stubs: { NuxtLink: { template: "<a><slot /></a>" } },
+      },
     });
+    wrappers.push(wrapper);
 
     expect(wrapper.get('[data-testid="agent-model"]').text()).toBe("reasoning");
     expect(
@@ -187,19 +253,19 @@ describe("AgentCard", () => {
     ).toEqual(["review", "review", "long-skill-name"]);
   });
 
-  it("keeps null and empty tool-group filters visibly distinct", async () => {
+  it("keeps the current React card presentation for unrestricted and empty filters", async () => {
     const wrapper = mount(AgentCard, {
       props: { agent: { ...agent, tool_groups: null } },
-      global: { stubs: { NuxtLink: { template: "<a><slot /></a>" } } },
+      global: {
+        plugins: [[VueQueryPlugin, { queryClient: createQueryClient() }]],
+        stubs: { NuxtLink: { template: "<a><slot /></a>" } },
+      },
     });
-    expect(wrapper.get('[data-testid="agent-tool-groups-all"]').text()).toBe(
-      "All configured tool groups",
-    );
+    wrappers.push(wrapper);
+    expect(wrapper.findAll('[data-testid="agent-tool-group"]')).toHaveLength(0);
 
     await wrapper.setProps({ agent: { ...agent, tool_groups: [] } });
-    expect(wrapper.get('[data-testid="agent-tool-groups-none"]').text()).toBe(
-      "No configured tool groups",
-    );
+    expect(wrapper.findAll('[data-testid="agent-tool-group"]')).toHaveLength(0);
   });
 });
 
@@ -240,7 +306,7 @@ async function mountSettings(
         [
           VueQueryPlugin,
           {
-            queryClient: new QueryClient({
+            queryClient: createQueryClient({
               defaultOptions: { queries: { retry: false } },
             }),
           },
@@ -248,12 +314,100 @@ async function mountSettings(
       ],
     },
   });
+  wrappers.push(wrapper);
   // portal 的内容要等一次 flush 才进 body。
   await flushPromises();
   return wrapper;
 }
 
 describe("AgentSettingsDialog", () => {
+  it("counts Unicode code points, rejects 101 and accepts 100 while retaining the stable name", async () => {
+    const wrapper = await mountSettings({ agent, models });
+    const input = inDialog<HTMLInputElement>("#agent-display-name");
+    input.value = "🚀".repeat(101);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(wrapper.emitted("save")).toBeUndefined();
+    expect(inDialog('[role="alert"]').textContent).toBe(
+      enUS.agents.settingsDisplayNameTooLong,
+    );
+    input.value = `  ${"🚀".repeat(100)}  `;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(wrapper.emitted("save")?.[0]?.[0]).toMatchObject({
+      display_name: "🚀".repeat(100),
+    });
+    expect(wrapper.props("agent").name).toBe("reviewer");
+    wrapper.unmount();
+  });
+
+  it("keeps the opening capability snapshot through background updates and omits unchanged selection fields", async () => {
+    const wrapper = await mountSettings({
+      agent: { ...agent, mcp_plugins: ["a", "b"] },
+      models,
+    });
+    wrapper
+      .getComponent(AgentCapabilitySelection)
+      .vm.$emit("update:plugins", ["b", "a"]);
+    await wrapper.setProps({
+      agent: {
+        ...agent,
+        display_name: "remote display",
+        mcp_plugins: ["other"],
+      },
+    });
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    const request = wrapper.emitted("save")?.[0]?.[0];
+    expect(request).not.toHaveProperty("mcp_plugins");
+    expect(request).not.toHaveProperty("skills");
+    expect(request).not.toHaveProperty("knowledge_scope");
+    expect(request).toHaveProperty("display_name", null);
+    wrapper.unmount();
+  });
+
+  it("only writes explicitly changed default knowledge and resets all scope with null", async () => {
+    const wrapper = await mountSettings({
+      agent: {
+        ...agent,
+        tool_groups: ["knowledge"],
+        knowledge_scope: { version: 1, mode: "disabled" },
+      },
+      models,
+    });
+    const selector = wrapper.getComponent(KnowledgeScopeSelector);
+    selector.vm.$emit("change", {
+      mode: "selected",
+      datasets: [{ id: "base", name: "Policies", documents: { mode: "all" } }],
+    });
+    await flushPromises();
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(wrapper.emitted("save")?.[0]?.[0]).toMatchObject({
+      knowledge_scope: { version: 1, mode: "selected", dataset_ids: ["base"] },
+    });
+    selector.vm.$emit("change", { mode: "all" });
+    await flushPromises();
+    inDialog<HTMLFormElement>('[role="dialog"] form').dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true }),
+    );
+    await flushPromises();
+    expect(wrapper.emitted("save")?.[1]?.[0]).toHaveProperty(
+      "knowledge_scope",
+      null,
+    );
+    wrapper.unmount();
+  });
   it("emits false, zero, reasoning effort, and max tokens without truthy fallback", async () => {
     const wrapper = await mountSettings({ agent, models });
 
@@ -262,6 +416,7 @@ describe("AgentSettingsDialog", () => {
     );
     await flushPromises();
     expect(wrapper.emitted("save")?.[0]?.[0]).toEqual({
+      display_name: null,
       model: "reasoning",
       model_settings: { temperature: 0, max_tokens: 200_000 },
       thinking_enabled: false,
@@ -312,6 +467,7 @@ describe("AgentSettingsDialog", () => {
     await flushPromises();
 
     expect(wrapper.emitted("save")?.[0]?.[0]).toEqual({
+      display_name: null,
       model: "basic",
       model_settings: { temperature: 0, max_tokens: 200000 },
       thinking_enabled: null,
@@ -325,6 +481,42 @@ describe("AgentSettingsDialog", () => {
     subagent 访问绑定（#4887）。三态与 subagent 自己的 tools/skills 同构：
     `null` 全都给、`[]` 一个都不给、`[...]` 只给这几个。
   */
+  it("keeps worker names separate from accessible native description disclosures and reveals expanded text", async () => {
+    const description = "Review delegated work. ".repeat(80);
+    subagentsApi.list.mockResolvedValue([
+      { ...SUBAGENT_CATALOG[0], description },
+    ]);
+    const wrapper = await mountSettings({
+      agent: { ...agent, allowed_subagents: ["researcher"] },
+      models,
+    });
+    const input = inDialog<HTMLInputElement>(
+      '[data-testid="subagent-access-list"] input[type="checkbox"]',
+    );
+    expect(input.closest("label")?.textContent?.trim()).toBe("Researcher");
+    const summary = inDialog<HTMLElement>(
+      'summary[aria-label="Researcher: Delegation description"]',
+    );
+    const descriptionId = summary.getAttribute("aria-describedby")!;
+    expect(document.getElementById(descriptionId)?.textContent).toBe(
+      description,
+    );
+    const details = summary.closest("details")!;
+    const paragraph = details.querySelector("p")!;
+    const scroll = vi.fn();
+    paragraph.scrollIntoView = scroll;
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+    await flushPromises();
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    expect(input.checked).toBe(true);
+    details.open = false;
+    details.dispatchEvent(new Event("toggle"));
+    await flushPromises();
+    expect(input.checked).toBe(true);
+    wrapper.unmount();
+  });
+
   it("送出 subagent 绑定的三态，并且只让能选的进列表", async () => {
     const wrapper = await mountSettings({
       agent: { ...agent, allowed_subagents: ["researcher", "deleted-one"] },
@@ -407,5 +599,24 @@ describe("AgentSettingsDialog", () => {
     expect((trigger as HTMLButtonElement).disabled).toBe(false);
     // 「在取清单」这件事仍然说得出来，只是不靠灰掉控件来说。
     expect(inDialog('[role="status"]').textContent).toBeTruthy();
+  });
+  it("saves a global default while the model catalog is empty or unavailable", async () => {
+    const wrapper = await mountSettings({
+      agent: { ...agent, model: null },
+      models: [],
+      modelError: "Model catalog unavailable",
+    });
+    const save = inDialog(
+      '[data-testid="agent-settings-save"]',
+    ) as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    save.click();
+    await flushPromises();
+    expect(wrapper.emitted("save")?.[0]?.[0]).toMatchObject({
+      model: null,
+      display_name: null,
+      thinking_enabled: null,
+      reasoning_effort: null,
+    });
   });
 });

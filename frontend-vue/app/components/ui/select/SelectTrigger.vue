@@ -30,7 +30,7 @@ const props = withDefaults(
       size?: "sm" | "default";
     }
   >(),
-  { size: "default" },
+  { size: "default", class: undefined },
 );
 const forwarded = useForwardProps(props);
 const delegated = computed(() => {

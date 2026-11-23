@@ -13,6 +13,7 @@ test.describe("Project-scoped submit staleness", () => {
     // mock races the empty-thread redirect, while a setup-seeded thread is
     // the stable pattern other specs rely on.
     mockLangGraphAPI(page, {
+      projects: [{ id: "proj-1", name: "Active project" }],
       threads: [
         {
           thread_id: MOCK_THREAD_ID,
@@ -181,18 +182,6 @@ test.describe("Streaming message actions", () => {
       });
     };
     mockLangGraphAPI(page, {
-      createdThreadMessages: [
-        {
-          type: "human",
-          id: "copy-regression-human-1",
-          content: "First question",
-        },
-        {
-          type: "ai",
-          id: "copy-regression-ai-1",
-          content: "First completed answer",
-        },
-      ],
       runStreamHandler: handleCopyRegressionStream,
     });
 
@@ -780,6 +769,10 @@ test.describe("Chat workspace", () => {
         streamCalls += 1;
     });
     await page.route("**/api/threads/*/compact", (route) => {
+      expect(route.request().method()).toBe("POST");
+      expect(new URL(route.request().url()).pathname).toBe(
+        `/api/threads/${MOCK_THREAD_ID}/compact`,
+      );
       compactCalls += 1;
       return route.fulfill({ json: { compacted: true } });
     });
@@ -788,10 +781,6 @@ test.describe("Chat workspace", () => {
     await expect(input).toBeVisible();
     for (const [index, command] of ["/compact", "/context compact"].entries()) {
       await input.fill(command);
-      if (command === "/compact") {
-        await input.press("Enter");
-        await expect(input).toHaveValue("/compact ");
-      }
       await input.press("Enter");
       await expect.poll(() => compactCalls).toBe(index + 1);
       await expect(input).toHaveValue("");
@@ -825,6 +814,9 @@ test.describe("Chat workspace", () => {
   test("goal command assigns the project before saving the goal", async ({
     page,
   }) => {
+    mockLangGraphAPI(page, {
+      projects: [{ id: "proj-1", name: "Active project" }],
+    });
     // Regression: the goal PUT endpoint materializes a missing thread row
     // itself, so the project-scoped thread create must land first — an
     // unassigned row would make the later idempotent createThread return it

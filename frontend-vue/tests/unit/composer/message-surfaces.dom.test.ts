@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
@@ -13,6 +13,7 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
 
 function mountMessages(messages: Message[], streaming = false) {
   const queryClient = new QueryClient({
@@ -33,15 +34,25 @@ function mountMessages(messages: Message[], streaming = false) {
       provide: { [workspaceToastKey as symbol]: toastStore },
       plugins: [[VueQueryPlugin, { queryClient }]],
       stubs: {
-        StreamMarkdown: { template: "<div data-testid='markdown' />" },
-        ReferenceAttachment: true,
+        MessageMarkdown: { template: "<div data-testid='markdown' />" },
+        NuxtLink: {
+          props: ["to"],
+          template: "<a :href='to'><slot /></a>",
+        },
         WorkspaceChangesBadge: true,
         SubtaskCard: true,
       },
     },
   });
+  wrappers.push(wrapper);
   return { wrapper, invalidate };
 }
+
+afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+  vi.unstubAllGlobals();
+  document.body.innerHTML = "";
+});
 
 describe("persisted message surfaces", () => {
   beforeEach(() => {
@@ -52,6 +63,125 @@ describe("persisted message surfaces", () => {
       configurable: true,
       value: { writeText: vi.fn(async () => undefined) },
     });
+  });
+
+  it("renders display-only conversation metadata as named source links for both agent owners", async () => {
+    const { wrapper } = mountMessages([
+      {
+        id: "referencing-human",
+        type: "human",
+        content: "Compare these conversations",
+        additional_kwargs: {
+          conversation_references: [
+            { thread_id: "source-default", title: "Source conversation" },
+            { thread_id: "source-agent", title: "", agent_name: "researcher" },
+            { thread_id: "source-default", title: "Duplicate" },
+          ],
+        },
+      },
+    ] as Message[]);
+    await flushPromises();
+    const group = wrapper.get(
+      "[data-testid='message-conversation-references']",
+    );
+    expect(group.attributes("role")).toBe("group");
+    expect(group.attributes("aria-label")).toBe(
+      enUS.inputBox.referencedConversations,
+    );
+    expect(
+      group.findAll("a").map((link) => [link.attributes("href"), link.text()]),
+    ).toEqual([
+      ["/workspace/chats/source-default", "Source conversation"],
+      ["/workspace/agents/researcher/chats/source-agent", enUS.pages.untitled],
+    ]);
+    for (const chip of group.findAll("a")) {
+      expect(chip.classes()).toEqual(
+        expect.arrayContaining(["h-6", "max-w-60", "shadow-xs"]),
+      );
+      expect(chip.find("button").exists()).toBe(false);
+    }
+  });
+
+  it("orders quote, conversation, file, plain text, and knowledge scope inside the same human content stack", async () => {
+    const { wrapper } = mountMessages([
+      {
+        id: "fully-referenced-human",
+        type: "human",
+        content: "Compare the evidence",
+        additional_kwargs: {
+          referenced_message_contexts: [
+            {
+              label: "Previous answer",
+              role: "assistant",
+              content: "Quoted evidence",
+            },
+          ],
+          conversation_references: [{ thread_id: "source", title: "Source" }],
+          files: [{ filename: "pending.md", size: 0, status: "uploading" }],
+          knowledge_scope: { version: 1, mode: "all" },
+        },
+      },
+    ] as Message[]);
+    await flushPromises();
+    const human = wrapper.get("[data-role='human']");
+    expect(human.classes()).not.toContain("bg-secondary");
+    const quote = human.get("[data-testid='message-reference-attachment']");
+    expect(quote.classes()).toEqual(
+      expect.arrayContaining(["self-end", "shadow-none"]),
+    );
+    expect(quote.classes()).not.toContain("shadow-sm");
+    expect(quote.classes()).not.toContain("mt-2");
+    const conversation = human.get(
+      "[data-testid='message-conversation-references']",
+    );
+    const files = human.get("[data-testid='message-attachments']");
+    const text = human.get(".wrap-break-word.whitespace-pre-wrap");
+    const knowledge = human.get("[data-testid='message-knowledge-scope']");
+    const content = quote.element.parentElement!;
+    expect(content.classList).toContain("flex-col");
+    expect(content.classList).toContain("gap-2");
+    expect(conversation.element.parentElement).toBe(content);
+    expect(files.element.parentElement).toBe(content);
+    expect(text.element.parentElement?.classList).toContain(
+      "group-[.is-user]:bg-secondary",
+    );
+    expect(knowledge.element.parentElement).toBe(content);
+    for (const [before, after] of [
+      [quote, conversation],
+      [conversation, files],
+      [files, text],
+      [text, knowledge],
+    ]) {
+      expect(
+        before!.element.compareDocumentPosition(after!.element) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    const uploading = files.get("[title='pending.md']").element.parentElement!
+      .parentElement!;
+    expect(uploading.classList).toContain("opacity-60");
+    expect(uploading.querySelector("[data-slot='badge']")?.textContent).toBe(
+      "Markdown",
+    );
+    expect(uploading.textContent).toContain(enUS.uploads.uploading);
+  });
+
+  it("renders the upload task through the collapsed primitive rather than parsing its status as Markdown", async () => {
+    const { wrapper } = mountMessages([
+      {
+        id: "upload-status",
+        type: "ai",
+        content: enUS.uploads.uploadingFiles,
+        additional_kwargs: { element: "task" },
+      },
+    ] as Message[]);
+    await flushPromises();
+    const status = wrapper.get("[data-slot='collapsible-trigger']");
+    expect(status.text()).toBe(enUS.uploads.uploadingFiles);
+    expect(status.attributes("aria-expanded")).toBe("false");
+    expect(status.classes()).toContain("cursor-default");
+    expect(status.get("svg").classes()).toContain("size-4");
+    expect(wrapper.find("[data-testid='markdown']").exists()).toBe(false);
   });
 
   it("renders modern and legacy files, image previews, source details, copy, and per-turn usage", async () => {
@@ -106,9 +236,19 @@ describe("persisted message surfaces", () => {
     expect(wrapper.get("img[alt='diagram.png']").attributes("src")).toContain(
       "/api/threads/thread-1/artifacts/mnt/user-data/uploads/diagram.png",
     );
-    expect(wrapper.get("a[href*='notes.txt']").attributes("rel")).toBe(
+    expect(wrapper.get("a:has(img[alt='diagram.png'])").attributes("rel")).toBe(
       "noopener noreferrer",
     );
+    const fileCard = wrapper.get("[title='notes.txt']").element.parentElement!
+      .parentElement!;
+    expect(fileCard.tagName).toBe("DIV");
+    expect(fileCard.classList).toContain("min-w-30");
+    expect(fileCard.classList).toContain("max-w-50");
+    expect(fileCard.querySelector("[data-slot='badge']")?.textContent).toBe(
+      "TXT",
+    );
+    expect(fileCard.textContent).toContain("0.0 KB");
+    expect(wrapper.find("a[href*='notes.txt']").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("<uploaded_files>");
     expect(wrapper.get("[data-testid='citation-sources']").text()).toContain(
       "source.example",
@@ -123,9 +263,14 @@ describe("persisted message surfaces", () => {
     expect(wrapper.find("button[aria-label='Not helpful']").exists()).toBe(
       false,
     );
-    expect(wrapper.find("[data-testid='run-duration'] svg").exists()).toBe(
-      true,
-    );
+    const duration = wrapper.get("[data-testid='run-duration']");
+    expect(duration.text()).toBe("Took 19s");
+    expect(duration.find("svg").exists()).toBe(false);
+    expect(
+      duration.element.compareDocumentPosition(
+        wrapper.get("[data-role='ai']").element,
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     const actions = wrapper.get("[data-testid='assistant-turn-actions']");
     expect(actions.classes()).toContain("gap-1");
     expect(actions.findAll("button")).toHaveLength(3);
@@ -135,13 +280,13 @@ describe("persisted message surfaces", () => {
     }
     expect(
       wrapper.get("[data-testid='message-list-content']").classes(),
-    ).toEqual(expect.arrayContaining(["px-4", "pt-8", "pb-[72px]"]));
+    ).toEqual(expect.arrayContaining(["px-4", "pt-8"]));
     expect(wrapper.get("[data-testid='message-list']").classes()).toContain(
       "gap-8",
     );
     expect(
       wrapper.get("[data-testid='message-list']").attributes("style"),
-    ).toBe("padding-top: 0px; padding-bottom: 0px;");
+    ).toBeUndefined();
     expect(
       wrapper.get("[data-testid='message-list']").element.parentElement
         ?.parentElement?.classList,
@@ -152,19 +297,18 @@ describe("persisted message surfaces", () => {
     expect(
       wrapper
         .get("[data-testid='message-list']")
-        .findAll(":scope > [data-role]")
-        .every((item) => item.attributes("data-role")),
+        .findAll(":scope > [data-message-group-index]")
+        .every((item) => item.find("[data-role]").exists()),
     ).toBe(true);
 
-    // 复制按钮没有可访问名（React 的 CopyButton 也没有），所以按位置取：
-    // 它是这一排动作里的第一颗。
+    // 同时固定当前动作顺序：复制是第一颗，复制内容必须来自当前回答。
     await actions.findAll("button")[0]!.trigger("click");
     expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith(
       expect.stringContaining("Answer"),
     );
   });
 
-  it("keeps virtual offsets on the list owner without adding non-message children", async () => {
+  it("uses measured group rows once history reaches the upstream threshold", async () => {
     const messages = Array.from({ length: 81 }, (_, index) => ({
       id: `human-${index}`,
       type: "human",
@@ -172,17 +316,18 @@ describe("persisted message surfaces", () => {
     })) as Message[];
     const { wrapper } = mountMessages(messages);
     await flushPromises();
-
     const list = wrapper.get("[data-testid='message-list']");
-    expect(list.attributes("style")).toBe(
-      "padding-top: 2480px; padding-bottom: 0px;",
-    );
-    expect(list.element.children).toHaveLength(50);
-    expect(
-      [...list.element.children].every(
-        (item) => item.tagName === "DIV" && item.getAttribute("data-role"),
-      ),
-    ).toBe(true);
+    expect(list.classes()).toContain("relative");
+    expect((list.element as HTMLElement).style.height).not.toBe("");
+    expect((list.element as HTMLElement).style.paddingTop).toBe("");
+    expect(list.element.children.length).toBeLessThan(81);
+    // Full viewport measurement and pinned streaming rows are covered in
+    // virtual-message-list.dom.test.ts with a nonzero browser-sized viewport.
+    for (const row of list.element.children) {
+      expect(row.hasAttribute("data-message-group-index")).toBe(true);
+      expect(row.querySelector("[data-role='human']")).not.toBeNull();
+    }
+    wrapper.unmount();
   });
 
   it("keeps active run status outside the semantic message list", async () => {

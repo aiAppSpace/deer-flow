@@ -2,14 +2,14 @@
   【文件职责】     真实 Gateway/SQLite 的定时任务 HTTP 与 UI 生命周期。
   【架构位置】     E2E 套件配置
   【主要导出】     Playwright config
-  【依赖关系】     tests/support/playwright-factory.ts · backend/scripts/run_replay_gateway.py · tests/e2e-scheduled/**
-  【边界与注意】   刻意**不开** TEST_SEED：定时任务要验的是自己创建的数据，不是种子数据。
+  【依赖关系】     tests/support/playwright-factory.ts · tests/support/run_m0_gateway.py · tests/e2e-scheduled/**
+  【边界与注意】   使用真实 scheduler poller；不种 task 数据，测试自行创建。
 */
 
 import {
   defineSuite,
   nuxtPreview,
-  replayGateway,
+  m0Gateway,
 } from "./tests/support/playwright-factory";
 
 const port = process.env.E2E_SCHEDULED_PORT ?? "3110";
@@ -22,13 +22,16 @@ export default defineSuite({
   serial: true,
   timeout: 120_000,
   servers: [
-    replayGateway({
-      port: gatewayPort,
-      cors: `http://localhost:${port}`,
+    {
+      ...m0Gateway({
+        port: gatewayPort,
+        cors: `http://localhost:${port}`,
+        args: ["--scheduler"],
+      }),
       env: {
         DEER_FLOW_AUTH_DISABLED: "1",
       },
-    }),
+    },
     nuxtPreview({ port, authDisabled: true, gatewayPort }),
   ],
 });

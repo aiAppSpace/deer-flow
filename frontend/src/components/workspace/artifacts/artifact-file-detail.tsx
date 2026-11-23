@@ -348,7 +348,8 @@ export function ArtifactFileDetail({
         ["artifact", filepathFromProps, threadId, isMock, fullContentRequested],
         (
           current:
-            { content?: string; url?: string; sha256?: string } | undefined,
+            | { content?: string; url?: string; sha256?: string }
+            | undefined,
         ) => ({
           ...current,
           content: savedContent,
@@ -423,7 +424,7 @@ export function ArtifactFileDetail({
   return (
     <Artifact
       className={cn(
-        "@container overflow-x-hidden overflow-y-auto [@media(max-height:360px)]:h-auto [@media(max-height:360px)]:min-h-full",
+        "@container overflow-x-hidden overflow-y-auto max-md:min-h-min",
         className,
       )}
     >
@@ -680,7 +681,7 @@ export function ArtifactFileDetail({
           </ArtifactActions>
         </div>
       </ArtifactHeader>
-      <ArtifactContent className="flex flex-col p-0">
+      <ArtifactContent className="flex flex-col p-0 @max-[28rem]:max-h-dvh @max-[28rem]:min-h-auto @max-[28rem]:overflow-visible">
         {truncated && !(isTabular && effectiveViewMode === "preview") && (
           <div className="border-border bg-muted/40 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-sm">
             <span className="text-muted-foreground">

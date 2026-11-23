@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, rs } from "@rstest/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 
 import { PromptInputProvider } from "@/components/ai-elements/prompt-input";
@@ -100,6 +107,82 @@ afterEach(() => {
 });
 
 describe("InputBox command suggestions with an empty (denied) catalog", () => {
+  it("fits commands to the native clipping ancestor and updates its layout lifecycle", async () => {
+    const observers: {
+      callback: ResizeObserverCallback;
+      targets: Element[];
+      disconnected: boolean;
+    }[] = [];
+    rs.stubGlobal(
+      "ResizeObserver",
+      class {
+        entry: (typeof observers)[number];
+        constructor(callback: ResizeObserverCallback) {
+          this.entry = { callback, targets: [], disconnected: false };
+          observers.push(this.entry);
+        }
+        observe(target: Element) {
+          this.entry.targets.push(target);
+        }
+        disconnect() {
+          this.entry.disconnected = true;
+        }
+      },
+    );
+    rs.stubGlobal("innerHeight", 800);
+    document.documentElement.style.fontSize = "32px";
+    const rendered = renderComposer();
+    const clip = rendered.container;
+    clip.style.overflowY = "auto";
+    let clipTop = 120,
+      rootTop = 300;
+    rs.spyOn(clip, "getBoundingClientRect").mockImplementation(
+      () => ({ top: clipTop, bottom: 800 }) as DOMRect,
+    );
+    Object.defineProperty(clip, "clientHeight", {
+      configurable: true,
+      get: () => 800 - clipTop,
+    });
+    const root = getComposerTextarea(clip).closest("form")!.parentElement!;
+    rs.spyOn(root, "getBoundingClientRect").mockImplementation(
+      () => ({ top: rootTop, bottom: 780 }) as DOMRect,
+    );
+    try {
+      const textarea = typeSlashQuery(clip, "/");
+      const list = screen.getByRole("listbox", { name: "Command suggestions" });
+      await waitFor(() => expect(list.style.maxHeight).toBe("156px"));
+      const active = observers.filter((item) => !item.disconnected);
+      expect(active.some((item) => item.targets.includes(clip))).toBe(true);
+      clipTop = 200;
+      void act(() => {
+        for (const observer of active.filter((item) =>
+          item.targets.includes(clip),
+        ))
+          observer.callback([], {} as ResizeObserver);
+      });
+      await waitFor(() =>
+        expect(list.parentElement!.classList.contains("relative")).toBe(true),
+      );
+      expect(list.style.maxHeight).toBe("568px");
+      rootTop = 480;
+      void act(() => {
+        window.dispatchEvent(new Event("scroll"));
+      });
+      await waitFor(() =>
+        expect(list.parentElement!.classList.contains("absolute")).toBe(true),
+      );
+      expect(list.style.maxHeight).toBe("256px");
+      fireEvent.keyDown(textarea, { key: "Escape" });
+      expect(observers.every((item) => item.disconnected)).toBe(true);
+      expect(
+        screen.queryByRole("listbox", { name: "Command suggestions" }),
+      ).toBeNull();
+    } finally {
+      rendered.unmount();
+      document.documentElement.style.removeProperty("font-size");
+      rs.unstubAllGlobals();
+    }
+  });
   it("offers the builtin commands when '/' is typed with zero visible skills", () => {
     const { container } = renderComposer();
 

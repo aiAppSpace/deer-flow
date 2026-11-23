@@ -141,3 +141,51 @@ describe("formatCitationMarkdownReference", () => {
     );
   });
 });
+
+const sampleCitation = "[citation:Code](https://example.com/code)";
+const realCitation = "[citation:Real](https://example.com/real)";
+for (const [name, markdown] of [
+  ["indented block", `    ${sampleCitation}\n\n${realCitation}`],
+  ["tab-indented block", `\t${sampleCitation}\n\n${realCitation}`],
+  ["blockquote unclosed fence", `> ~~~md\n> ${sampleCitation}`],
+  [
+    "list-contained fence",
+    `- ~~~md\n  ${sampleCitation}\n  ~~~\n\n${realCitation}`,
+  ],
+  [
+    "short inner fence",
+    `~~~~md\n~~~\n${sampleCitation}\n~~~~\n\n${realCitation}`,
+  ],
+  ["invalid info-string closer", `~~~md\n~~~ info\n${sampleCitation}`],
+] as const) {
+  it(`excludes citations in ${name}`, () => {
+    expect(
+      extractCitationSources(markdown).map((source) => source.url),
+    ).toEqual(
+      markdown.endsWith(realCitation) ? ["https://example.com/real"] : [],
+    );
+    const real = extractCitationSources(markdown)[0];
+    if (real)
+      expect(real.occurrences[0]?.index).toBe(markdown.indexOf(realCitation));
+  });
+}
+it("keeps an indented paragraph continuation as a real citation", () => {
+  expect(
+    extractCitationSources(`Paragraph\n    ${realCitation}`).map(
+      (source) => source.url,
+    ),
+  ).toEqual(["https://example.com/real"]);
+});
+it("does not close an inline code span with a shorter backtick run", () => {
+  const markdown = "``before ` " + sampleCitation + " `` " + realCitation;
+  expect(extractCitationSources(markdown).map((source) => source.url)).toEqual([
+    "https://example.com/real",
+  ]);
+});
+it("keeps a citation following an unmatched backtick delimiter", () => {
+  expect(
+    extractCitationSources("``unclosed ` " + realCitation).map(
+      (source) => source.url,
+    ),
+  ).toEqual(["https://example.com/real"]);
+});

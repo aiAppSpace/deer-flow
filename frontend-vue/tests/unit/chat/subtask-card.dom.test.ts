@@ -15,6 +15,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
+// Prepare the real lazy renderer before measuring its mounted behavior, not Vite transforms.
+import "@/components/chat/MessageMarkdownContent.vue";
+import "@/components/markdown/StreamMarkdown.vue";
 import SubtaskCard from "@/components/chat/SubtaskCard.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import type { Subtask } from "@/core/tasks/types";
@@ -124,6 +127,30 @@ describe("SubtaskCard", () => {
     expect(wrapper.find(".ambilight").exists()).toBe(true);
     expect(wrapper.find(".ambilight").classes()).not.toContain("enabled");
     wrapper.unmount();
+  });
+
+  it("retains the current tool call title when live runtime metadata has a generic placeholder", () => {
+    const wrapper = mountCard({
+      taskId: "owned-title",
+      description: "Current tool title",
+      prompt: "Current tool prompt",
+      pendingStatus: "in_progress",
+      isLoading: true,
+      liveTask: {
+        id: "owned-title",
+        description: "Subtask",
+        prompt: "stale runtime prompt",
+        subagent_type: "research",
+        status: "in_progress",
+      },
+    });
+    try {
+      expect(wrapper.get('[data-testid="subtask-toggle"]').text()).toContain(
+        "Current tool title",
+      );
+    } finally {
+      wrapper.unmount();
+    }
   });
 
   it("renders normalized terminal metadata and backfills history on expand", async () => {
@@ -342,6 +369,42 @@ describe("MessageList subtask group header", () => {
     count===1 时 `subtasks.executing` 既不插数字也不加复数。这一行以前整个不存在，
     对照台账上 `- text: Executing subtask` 就是它。
   */
+  it.each([
+    {
+      description: "  concise task  ",
+      prompt: "full task instructions",
+      expected: "concise task",
+    },
+    {
+      description: " ",
+      prompt: "  actual task prompt  ",
+      expected: "actual task prompt",
+    },
+    { description: undefined, prompt: "", expected: enUS.subtasks.subtask },
+  ])(
+    "resolves the actual tool call title: $expected",
+    ({ description, prompt, expected }) => {
+      const wrapper = mountList([
+        {
+          id: "title-call",
+          name: "task",
+          args: { description, prompt, subagent_type: "general-purpose" },
+          type: "tool_call",
+        },
+      ]);
+      try {
+        expect(wrapper.getComponent(SubtaskCard).props("description")).toBe(
+          expected,
+        );
+        expect(wrapper.get('[data-testid="subtask-toggle"]').text()).toContain(
+          expected,
+        );
+      } finally {
+        wrapper.unmount();
+      }
+    },
+  );
+
   it("labels a single subtask group without a count", () => {
     const wrapper = mountList([call("call-1", "Research one thing")]);
     expect(wrapper.text()).toContain(enUS.subtasks.executing(1));

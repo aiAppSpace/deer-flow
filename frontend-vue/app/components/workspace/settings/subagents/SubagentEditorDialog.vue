@@ -1,6 +1,6 @@
 <!--
   【文件职责】     新建/编辑托管 subagent 的表单对话框。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认组件
   【依赖关系】     ui/dialog · ui/input · ui/textarea · ui/select · composables/useSubagents
   【边界与注意】   - `name` 是**主键且进 URL 路径段**，所以编辑时禁用、新建时只收
@@ -12,7 +12,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onScopeDispose, ref, watch } from "vue";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +34,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useModels } from "@/composables/useModels";
 import { useSubagentMutations } from "@/composables/useSubagents";
+import { isRequestAborted } from "@/core/api/cancellation";
 import {
   isValidManagedSubagentName,
   optionalNameListFromDraft,
@@ -104,10 +105,15 @@ function draftFrom(subagent: Subagent): Draft {
 }
 
 const draft = ref<Draft>({ ...EMPTY_DRAFT });
+let editorGeneration = 0;
+onScopeDispose(() => {
+  editorGeneration += 1;
+});
 // 每次打开都重置：留着上一条的内容会让人以为是草稿。
 watch(
   () => props.value,
   (value) => {
+    editorGeneration += 1;
     draft.value =
       value && value !== "new" ? draftFrom(value) : { ...EMPTY_DRAFT };
   },
@@ -129,6 +135,8 @@ const canSave = computed(
 );
 
 async function save() {
+  if (!canSave.value) return;
+  const generation = editorGeneration;
   const maxTurns = positiveInteger(draft.value.maxTurns);
   const timeoutSeconds = positiveInteger(draft.value.timeoutSeconds);
   if (maxTurns === null || timeoutSeconds === null) return;
@@ -154,9 +162,11 @@ async function save() {
       await update.mutateAsync({ name: props.value.name, request: payload });
       toast.success(labels.value.saved);
     }
-    emit("close");
+    if (generation === editorGeneration) emit("close");
   } catch (cause) {
-    toast.error(cause instanceof Error ? cause.message : String(cause));
+    if (isRequestAborted(cause)) return;
+    if (generation === editorGeneration)
+      toast.error(cause instanceof Error ? cause.message : String(cause));
   }
 }
 </script>

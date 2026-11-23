@@ -1,0 +1,1115 @@
+diff --git a/dist/Dialog/DialogContentImpl.cjs b/dist/Dialog/DialogContentImpl.cjs
+index 79a5c0a564c3a4e438a9163ab8b2d0c0ad95b6d0..1ed29a278b5f0e0a2e7ebd06a115228467f9d19b 100644
+--- a/dist/Dialog/DialogContentImpl.cjs
++++ b/dist/Dialog/DialogContentImpl.cjs
+@@ -1,5 +1,4 @@
+ const require_rolldown_runtime = require('../rolldown-runtime.cjs');
+-const require_shared_getActiveElement = require('../shared/getActiveElement.cjs');
+ const require_shared_useForwardExpose = require('../shared/useForwardExpose.cjs');
+ const require_shared_useId = require('../shared/useId.cjs');
+ const require_Dialog_DialogRoot = require('./DialogRoot.cjs');
+@@ -55,7 +54,6 @@ var DialogContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE__
+ 		rootContext.descriptionId ||= require_shared_useId.useId(void 0, "reka-dialog-description");
+ 		(0, vue.onMounted)(() => {
+ 			rootContext.contentElement = contentElement;
+-			if (require_shared_getActiveElement.getActiveElement() !== document.body) rootContext.triggerElement.value = require_shared_getActiveElement.getActiveElement();
+ 		});
+ 		if (process.env.NODE_ENV !== "production") require_Dialog_utils.useWarning({
+ 			titleName: "DialogTitle",
+@@ -70,6 +68,7 @@ var DialogContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE__
+ 				"as-child": "",
+ 				loop: "",
+ 				trapped: props.trapFocus,
++                restoreFocusElement: (0, vue.unref)(rootContext).triggerElement.value,
+ 				present: props.present,
+ 				onMountAutoFocus: _cache[5] || (_cache[5] = ($event) => emits("openAutoFocus", $event)),
+ 				onUnmountAutoFocus: _cache[6] || (_cache[6] = ($event) => emits("closeAutoFocus", $event))
+@@ -105,7 +104,7 @@ var DialogContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE__
+ 					"data-state"
+ 				])]),
+ 				_: 3
+-			}, 8, ["trapped", "present"]);
++			}, 8, ["trapped", "present", "restoreFocusElement"]);
+ 		};
+ 	}
+ });
+diff --git a/dist/Dialog/DialogContentImpl.js b/dist/Dialog/DialogContentImpl.js
+index b736337776184ed0eca48ffccab881d8ca1c00ca..9e35e5edfe03fa0f77350e02cce5dc4b4ea3df43 100644
+--- a/dist/Dialog/DialogContentImpl.js
++++ b/dist/Dialog/DialogContentImpl.js
+@@ -1,4 +1,3 @@
+-import { getActiveElement } from "../shared/getActiveElement.js";
+ import { useForwardExpose } from "../shared/useForwardExpose.js";
+ import { useId } from "../shared/useId.js";
+ import { injectDialogRootContext } from "./DialogRoot.js";
+@@ -54,7 +53,6 @@ var DialogContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE__
+ 		rootContext.descriptionId ||= useId(void 0, "reka-dialog-description");
+ 		onMounted(() => {
+ 			rootContext.contentElement = contentElement;
+-			if (getActiveElement() !== document.body) rootContext.triggerElement.value = getActiveElement();
+ 		});
+ 		if (process.env.NODE_ENV !== "production") useWarning({
+ 			titleName: "DialogTitle",
+@@ -69,6 +67,7 @@ var DialogContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE__
+ 				"as-child": "",
+ 				loop: "",
+ 				trapped: props.trapFocus,
++                restoreFocusElement: unref(rootContext).triggerElement.value,
+ 				present: props.present,
+ 				onMountAutoFocus: _cache[5] || (_cache[5] = ($event) => emits("openAutoFocus", $event)),
+ 				onUnmountAutoFocus: _cache[6] || (_cache[6] = ($event) => emits("closeAutoFocus", $event))
+@@ -104,7 +103,7 @@ var DialogContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE__
+ 					"data-state"
+ 				])]),
+ 				_: 3
+-			}, 8, ["trapped", "present"]);
++			}, 8, ["trapped", "present", "restoreFocusElement"]);
+ 		};
+ 	}
+ });
+diff --git a/dist/Dialog/DialogContentModal.cjs b/dist/Dialog/DialogContentModal.cjs
+index 253a465f3440b5cd266712acfdd0abe293fa8f50..e1556cfe71a442c18fe21be61bd3853b2aede943 100644
+--- a/dist/Dialog/DialogContentModal.cjs
++++ b/dist/Dialog/DialogContentModal.cjs
+@@ -56,9 +56,6 @@ var DialogContentModal_vue_vue_type_script_setup_true_lang_default = /* @__PURE_
+ 			const { present: _,...rest } = props;
+ 			return rest;
+ 		});
+-		(0, vue.watch)(() => props.present, (isPresent, wasPresent) => {
+-			if (!isPresent && wasPresent) rootContext.triggerElement.value?.focus();
+-		});
+ 		return (_ctx, _cache) => {
+ 			return (0, vue.openBlock)(), (0, vue.createBlock)(require_Dialog_DialogContentImpl.DialogContentImpl_default, (0, vue.mergeProps)({
+ 				...forwardedProps.value,
+@@ -68,12 +65,6 @@ var DialogContentModal_vue_vue_type_script_setup_true_lang_default = /* @__PURE_
+ 				present: _ctx.present,
+ 				"trap-focus": (0, vue.unref)(rootContext).open.value,
+ 				"disable-outside-pointer-events": props.disableOutsidePointerEvents,
+-				onCloseAutoFocus: _cache[0] || (_cache[0] = (event) => {
+-					if (!event.defaultPrevented) {
+-						event.preventDefault();
+-						(0, vue.unref)(rootContext).triggerElement.value?.focus();
+-					}
+-				}),
+ 				onPointerDownOutside: _cache[1] || (_cache[1] = (event) => {
+ 					const originalEvent = event.detail.originalEvent;
+ 					const ctrlLeftClick = originalEvent.button === 0 && originalEvent.ctrlKey === true;
+diff --git a/dist/Dialog/DialogContentModal.js b/dist/Dialog/DialogContentModal.js
+index 0b8080ca73916c4f2c875e96fc9d0759a2f3a75f..9506b9ef4f346b0a9ae00975cfecac53d6dc6b69 100644
+--- a/dist/Dialog/DialogContentModal.js
++++ b/dist/Dialog/DialogContentModal.js
+@@ -3,7 +3,7 @@ import { useForwardExpose } from "../shared/useForwardExpose.js";
+ import { useHideOthers } from "../shared/useHideOthers.js";
+ import { injectDialogRootContext } from "./DialogRoot.js";
+ import { DialogContentImpl_default } from "./DialogContentImpl.js";
+-import { computed, createBlock, defineComponent, mergeProps, openBlock, renderSlot, unref, watch, withCtx } from "vue";
++import { computed, createBlock, defineComponent, mergeProps, openBlock, renderSlot, unref, withCtx } from "vue";
+ 
+ //#region src/Dialog/DialogContentModal.vue?vue&type=script&setup=true&lang.ts
+ var DialogContentModal_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ defineComponent({
+@@ -55,9 +55,6 @@ var DialogContentModal_vue_vue_type_script_setup_true_lang_default = /* @__PURE_
+ 			const { present: _,...rest } = props;
+ 			return rest;
+ 		});
+-		watch(() => props.present, (isPresent, wasPresent) => {
+-			if (!isPresent && wasPresent) rootContext.triggerElement.value?.focus();
+-		});
+ 		return (_ctx, _cache) => {
+ 			return openBlock(), createBlock(DialogContentImpl_default, mergeProps({
+ 				...forwardedProps.value,
+@@ -67,12 +64,6 @@ var DialogContentModal_vue_vue_type_script_setup_true_lang_default = /* @__PURE_
+ 				present: _ctx.present,
+ 				"trap-focus": unref(rootContext).open.value,
+ 				"disable-outside-pointer-events": props.disableOutsidePointerEvents,
+-				onCloseAutoFocus: _cache[0] || (_cache[0] = (event) => {
+-					if (!event.defaultPrevented) {
+-						event.preventDefault();
+-						unref(rootContext).triggerElement.value?.focus();
+-					}
+-				}),
+ 				onPointerDownOutside: _cache[1] || (_cache[1] = (event) => {
+ 					const originalEvent = event.detail.originalEvent;
+ 					const ctrlLeftClick = originalEvent.button === 0 && originalEvent.ctrlKey === true;
+diff --git a/dist/Dialog/DialogContentNonModal.cjs b/dist/Dialog/DialogContentNonModal.cjs
+index b7589265f7cb556bcc37d9411ba603b119827f82..3282bb65702dc7d7b7d54806b3774d8fc668a62e 100644
+--- a/dist/Dialog/DialogContentNonModal.cjs
++++ b/dist/Dialog/DialogContentNonModal.cjs
+@@ -54,13 +54,6 @@ var DialogContentNonModal_vue_vue_type_script_setup_true_lang_default = /* @__PU
+ 			const { present: _,...rest } = props;
+ 			return rest;
+ 		});
+-		(0, vue.watch)(() => props.present, (isPresent, wasPresent) => {
+-			if (!isPresent && wasPresent) {
+-				if (!hasInteractedOutsideRef.value) rootContext.triggerElement.value?.focus();
+-				hasInteractedOutsideRef.value = false;
+-				hasPointerDownOutsideRef.value = false;
+-			}
+-		});
+ 		return (_ctx, _cache) => {
+ 			return (0, vue.openBlock)(), (0, vue.createBlock)(require_Dialog_DialogContentImpl.DialogContentImpl_default, (0, vue.mergeProps)({
+ 				...forwardedProps.value,
+@@ -70,10 +63,7 @@ var DialogContentNonModal_vue_vue_type_script_setup_true_lang_default = /* @__PU
+ 				"trap-focus": false,
+ 				"disable-outside-pointer-events": false,
+ 				onCloseAutoFocus: _cache[0] || (_cache[0] = (event) => {
+-					if (!event.defaultPrevented) {
+-						if (!hasInteractedOutsideRef.value) (0, vue.unref)(rootContext).triggerElement.value?.focus();
+-						event.preventDefault();
+-					}
++					if (hasInteractedOutsideRef.value) event.preventDefault();
+ 					hasInteractedOutsideRef.value = false;
+ 					hasPointerDownOutsideRef.value = false;
+ 				}),
+diff --git a/dist/Dialog/DialogContentNonModal.js b/dist/Dialog/DialogContentNonModal.js
+index 84183ff2e30c3a173ece9e2bf7f3903a783cd0f9..97a92d424aa814f538ae8e9697f0069bf6b8aa5d 100644
+--- a/dist/Dialog/DialogContentNonModal.js
++++ b/dist/Dialog/DialogContentNonModal.js
+@@ -2,7 +2,7 @@ import { useEmitAsProps } from "../shared/useEmitAsProps.js";
+ import { useForwardExpose } from "../shared/useForwardExpose.js";
+ import { injectDialogRootContext } from "./DialogRoot.js";
+ import { DialogContentImpl_default } from "./DialogContentImpl.js";
+-import { computed, createBlock, defineComponent, mergeProps, openBlock, ref, renderSlot, unref, watch, withCtx } from "vue";
++import { computed, createBlock, defineComponent, mergeProps, openBlock, ref, renderSlot, unref, withCtx } from "vue";
+ 
+ //#region src/Dialog/DialogContentNonModal.vue?vue&type=script&setup=true&lang.ts
+ var DialogContentNonModal_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ defineComponent({
+@@ -53,13 +53,6 @@ var DialogContentNonModal_vue_vue_type_script_setup_true_lang_default = /* @__PU
+ 			const { present: _,...rest } = props;
+ 			return rest;
+ 		});
+-		watch(() => props.present, (isPresent, wasPresent) => {
+-			if (!isPresent && wasPresent) {
+-				if (!hasInteractedOutsideRef.value) rootContext.triggerElement.value?.focus();
+-				hasInteractedOutsideRef.value = false;
+-				hasPointerDownOutsideRef.value = false;
+-			}
+-		});
+ 		return (_ctx, _cache) => {
+ 			return openBlock(), createBlock(DialogContentImpl_default, mergeProps({
+ 				...forwardedProps.value,
+@@ -69,10 +62,7 @@ var DialogContentNonModal_vue_vue_type_script_setup_true_lang_default = /* @__PU
+ 				"trap-focus": false,
+ 				"disable-outside-pointer-events": false,
+ 				onCloseAutoFocus: _cache[0] || (_cache[0] = (event) => {
+-					if (!event.defaultPrevented) {
+-						if (!hasInteractedOutsideRef.value) unref(rootContext).triggerElement.value?.focus();
+-						event.preventDefault();
+-					}
++					if (hasInteractedOutsideRef.value) event.preventDefault();
+ 					hasInteractedOutsideRef.value = false;
+ 					hasPointerDownOutsideRef.value = false;
+ 				}),
+diff --git a/dist/FocusScope/FocusScope.cjs b/dist/FocusScope/FocusScope.cjs
+index 061aa6f83aff4e46ff1080b3d1e46e9cc6ad8785..00ad86c0fcb6333b1ccf491c4b9bef2d2843a3c8 100644
+--- a/dist/FocusScope/FocusScope.cjs
++++ b/dist/FocusScope/FocusScope.cjs
+@@ -16,6 +16,7 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0,
+ 			required: false,
+ 			default: false
+ 		},
++		restoreFocusElement: { type: null, required: false },
+ 		trapped: {
+ 			type: Boolean,
+ 			required: false,
+@@ -44,6 +45,8 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0,
+ 		const focusScopesStack = require_FocusScope_stack.createFocusScopesStack();
+ 		const focusScope = (0, vue.reactive)({
+ 			paused: false,
++			active: false,
++			container: null,
+ 			pause() {
+ 				this.paused = true;
+ 			},
+@@ -54,7 +57,7 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0,
+ 		(0, vue.watchEffect)((cleanupFn) => {
+ 			if (!__vueuse_shared.isClient) return;
+ 			const container = currentElement.value;
+-			if (!props.trapped) return;
++			if (!props.trapped || !props.present) return;
+ 			function handleFocusIn(event) {
+ 				if (focusScope.paused || !container) return;
+ 				const target = event.target;
+@@ -68,14 +71,14 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0,
+ 				if (!container.contains(relatedTarget)) require_FocusScope_utils.focus(lastFocusedElementRef.value, { select: true });
+ 			}
+ 			function handleMutations(mutations) {
++				if (focusScope.paused || !props.trapped || !props.present || !container?.isConnected) return;
+ 				const lastFocusedElement = lastFocusedElementRef.value;
+ 				if (lastFocusedElement === null) return;
+ 				const anyNodesRemoved = mutations.some((m) => m.removedNodes.length > 0);
+ 				if (!anyNodesRemoved) return;
+ 				const activeElement = require_shared_getActiveElement.getActiveElement();
+ 				if (activeElement && container.contains(activeElement)) return;
+-				const isLastFocusedElementExist = container.contains(lastFocusedElement);
+-				if (!isLastFocusedElementExist) require_FocusScope_utils.focus(container);
++				if (activeElement === container.ownerDocument.body) require_FocusScope_utils.focus(container);
+ 			}
+ 			document.addEventListener("focusin", handleFocusIn);
+ 			document.addEventListener("focusout", handleFocusOut);
+@@ -101,43 +104,74 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0,
+ 				if (require_shared_getActiveElement.getActiveElement() === previouslyFocusedElement) require_FocusScope_utils.focus(container);
+ 			}
+ 		}
+-		(0, vue.watchEffect)(async (cleanupFn) => {
+-			const container = currentElement.value;
+-			await (0, vue.nextTick)();
+-			if (!container) return;
+-			if (props.present !== false) focusScopesStack.add(focusScope);
+-			const previouslyFocusedElement = require_shared_getActiveElement.getActiveElement();
+-			const hasFocusedCandidate = container.contains(previouslyFocusedElement);
+-			if (!hasFocusedCandidate && props.present !== false) dispatchMountAutoFocus(container, previouslyFocusedElement);
+-			cleanupFn(() => {
+-				const unmountEvent = new CustomEvent(require_FocusScope_utils.AUTOFOCUS_ON_UNMOUNT, require_FocusScope_utils.EVENT_OPTIONS);
+-				const unmountEventHandler = (ev) => {
+-					emits("unmountAutoFocus", ev);
+-				};
+-				container.addEventListener(require_FocusScope_utils.AUTOFOCUS_ON_UNMOUNT, unmountEventHandler);
+-				container.dispatchEvent(unmountEvent);
+-				container.setAttribute("data-focus-scope-unmounting", "");
+-				setTimeout(() => {
+-					if (!unmountEvent.defaultPrevented) require_FocusScope_utils.focus(previouslyFocusedElement ?? document.body, { select: true });
+-					container.removeEventListener(require_FocusScope_utils.AUTOFOCUS_ON_UNMOUNT, unmountEventHandler);
+-					focusScopesStack.remove(focusScope);
+-					container.removeAttribute("data-focus-scope-unmounting");
+-				}, 0);
+-			});
++		let closeScope;
++		let generation = 0;
++		function activateScope(container) {
++		    const currentGeneration = ++generation;
++		    const parentContainer = focusScopesStack.activeContainer();
++		    focusScope.container = container;
++		    focusScopesStack.add(focusScope);
++		    const previouslyFocusedElement = require_shared_getActiveElement.getActiveElement();
++		    if (container.contains(previouslyFocusedElement))
++		        lastFocusedElementRef.value = previouslyFocusedElement;
++		    else
++		        dispatchMountAutoFocus(container, previouslyFocusedElement);
++		    let closed = false;
++		    const mayRestore = () => {
++		        const active = container.ownerDocument.activeElement;
++		        return generation === currentGeneration && !focusScopesStack.hasActiveScopeAbove(focusScope) &&
++		            (active === container.ownerDocument.body || container.contains(active) || active === parentContainer);
++		    };
++		    return () => {
++		        if (closed)
++		            return;
++		        closed = true;
++		        focusScopesStack.deactivate(focusScope);
++		        const event = new CustomEvent(require_FocusScope_utils.AUTOFOCUS_ON_UNMOUNT, require_FocusScope_utils.EVENT_OPTIONS);
++		        const handler = (event) => emits('unmountAutoFocus', event);
++		        container.addEventListener(require_FocusScope_utils.AUTOFOCUS_ON_UNMOUNT, handler);
++		        container.dispatchEvent(event);
++		        container.removeEventListener(require_FocusScope_utils.AUTOFOCUS_ON_UNMOUNT, handler);
++		        container.setAttribute('data-focus-scope-unmounting', '');
++		        setTimeout(() => {
++		            if (!event.defaultPrevented && mayRestore()) {
++		                const target = isReturnTarget(props.restoreFocusElement) ? props.restoreFocusElement :
++		                    isReturnTarget(previouslyFocusedElement) ? previouslyFocusedElement :
++		                        isReturnTarget(parentContainer) ? parentContainer : null;
++		                require_FocusScope_utils.focus(target, { select: true });
++		            }
++		            if (generation === currentGeneration)
++		                focusScopesStack.remove(focusScope);
++		            container.removeAttribute('data-focus-scope-unmounting');
++		        }, 0);
++		    };
++		}
++		function isReturnTarget(element) {
++		    return element?.isConnected && !element.matches(':disabled') && !element.closest('[inert], [hidden]');
++		}
++		vue.watchEffect(async (cleanupFn) => {
++		    const container = currentElement.value;
++		    let disposed = false;
++		    cleanupFn(() => { disposed = true; closeScope?.(); closeScope = undefined; });
++		    await vue.nextTick();
++		    if (!disposed && container && props.present !== false)
++		        closeScope = activateScope(container);
+ 		});
+-		(0, vue.watch)(() => props.present, async (present, prevPresent) => {
+-			if (!__vueuse_shared.isClient) return;
+-			if (present === false && prevPresent === true) {
+-				focusScopesStack.remove(focusScope);
+-				return;
+-			}
+-			if (present !== true || prevPresent !== false) return;
+-			focusScopesStack.add(focusScope);
+-			await (0, vue.nextTick)();
+-			const container = currentElement.value;
+-			if (!container) return;
+-			const previouslyFocusedElement = require_shared_getActiveElement.getActiveElement();
+-			if (!container.contains(previouslyFocusedElement)) dispatchMountAutoFocus(container, previouslyFocusedElement);
++		vue.watch(() => props.present, async (present, prevPresent) => {
++		    if (!__vueuse_shared.isClient)
++		        return;
++		    if (present === false && prevPresent === true) {
++		        closeScope?.();
++		        closeScope = undefined;
++		        lastFocusedElementRef.value = null;
++		        return;
++		    }
++		    if (present !== true || prevPresent !== false)
++		        return;
++		    await vue.nextTick();
++		    const container = currentElement.value;
++		    if (container && props.present && !closeScope)
++		        closeScope = activateScope(container);
+ 		});
+ 		function handleKeyDown(event) {
+ 			if (!props.loop && !props.trapped) return;
+diff --git a/dist/FocusScope/FocusScope.js b/dist/FocusScope/FocusScope.js
+index 85e6ff091de43dc83fcf53db454e58ec2511c8c7..3b7ee99cdfacc104973c41e3fd26481e03e01428 100644
+--- a/dist/FocusScope/FocusScope.js
++++ b/dist/FocusScope/FocusScope.js
+@@ -15,6 +15,7 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ def
+ 			required: false,
+ 			default: false
+ 		},
++		restoreFocusElement: { type: null, required: false },
+ 		trapped: {
+ 			type: Boolean,
+ 			required: false,
+@@ -43,6 +44,8 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ def
+ 		const focusScopesStack = createFocusScopesStack();
+ 		const focusScope = /*#__PURE__*/ reactive({
+ 			paused: false,
++			active: false,
++			container: null,
+ 			pause() {
+ 				this.paused = true;
+ 			},
+@@ -53,7 +56,7 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ def
+ 		watchEffect((cleanupFn) => {
+ 			if (!isClient) return;
+ 			const container = currentElement.value;
+-			if (!props.trapped) return;
++			if (!props.trapped || !props.present) return;
+ 			function handleFocusIn(event) {
+ 				if (focusScope.paused || !container) return;
+ 				const target = event.target;
+@@ -67,14 +70,14 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ def
+ 				if (!container.contains(relatedTarget)) focus(lastFocusedElementRef.value, { select: true });
+ 			}
+ 			function handleMutations(mutations) {
++				if (focusScope.paused || !props.trapped || !props.present || !container?.isConnected) return;
+ 				const lastFocusedElement = lastFocusedElementRef.value;
+ 				if (lastFocusedElement === null) return;
+ 				const anyNodesRemoved = mutations.some((m) => m.removedNodes.length > 0);
+ 				if (!anyNodesRemoved) return;
+ 				const activeElement = getActiveElement();
+ 				if (activeElement && container.contains(activeElement)) return;
+-				const isLastFocusedElementExist = container.contains(lastFocusedElement);
+-				if (!isLastFocusedElementExist) focus(container);
++				if (activeElement === container.ownerDocument.body) focus(container);
+ 			}
+ 			document.addEventListener("focusin", handleFocusIn);
+ 			document.addEventListener("focusout", handleFocusOut);
+@@ -100,43 +103,74 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ def
+ 				if (getActiveElement() === previouslyFocusedElement) focus(container);
+ 			}
+ 		}
++		let closeScope;
++		let generation = 0;
++		function activateScope(container) {
++		    const currentGeneration = ++generation;
++		    const parentContainer = focusScopesStack.activeContainer();
++		    focusScope.container = container;
++		    focusScopesStack.add(focusScope);
++		    const previouslyFocusedElement = getActiveElement();
++		    if (container.contains(previouslyFocusedElement))
++		        lastFocusedElementRef.value = previouslyFocusedElement;
++		    else
++		        dispatchMountAutoFocus(container, previouslyFocusedElement);
++		    let closed = false;
++		    const mayRestore = () => {
++		        const active = container.ownerDocument.activeElement;
++		        return generation === currentGeneration && !focusScopesStack.hasActiveScopeAbove(focusScope) &&
++		            (active === container.ownerDocument.body || container.contains(active) || active === parentContainer);
++		    };
++		    return () => {
++		        if (closed)
++		            return;
++		        closed = true;
++		        focusScopesStack.deactivate(focusScope);
++		        const event = new CustomEvent(AUTOFOCUS_ON_UNMOUNT, EVENT_OPTIONS);
++		        const handler = (event) => emits('unmountAutoFocus', event);
++		        container.addEventListener(AUTOFOCUS_ON_UNMOUNT, handler);
++		        container.dispatchEvent(event);
++		        container.removeEventListener(AUTOFOCUS_ON_UNMOUNT, handler);
++		        container.setAttribute('data-focus-scope-unmounting', '');
++		        setTimeout(() => {
++		            if (!event.defaultPrevented && mayRestore()) {
++		                const target = isReturnTarget(props.restoreFocusElement) ? props.restoreFocusElement :
++		                    isReturnTarget(previouslyFocusedElement) ? previouslyFocusedElement :
++		                        isReturnTarget(parentContainer) ? parentContainer : null;
++		                focus(target, { select: true });
++		            }
++		            if (generation === currentGeneration)
++		                focusScopesStack.remove(focusScope);
++		            container.removeAttribute('data-focus-scope-unmounting');
++		        }, 0);
++		    };
++		}
++		function isReturnTarget(element) {
++		    return element?.isConnected && !element.matches(':disabled') && !element.closest('[inert], [hidden]');
++		}
+ 		watchEffect(async (cleanupFn) => {
+-			const container = currentElement.value;
+-			await nextTick();
+-			if (!container) return;
+-			if (props.present !== false) focusScopesStack.add(focusScope);
+-			const previouslyFocusedElement = getActiveElement();
+-			const hasFocusedCandidate = container.contains(previouslyFocusedElement);
+-			if (!hasFocusedCandidate && props.present !== false) dispatchMountAutoFocus(container, previouslyFocusedElement);
+-			cleanupFn(() => {
+-				const unmountEvent = new CustomEvent(AUTOFOCUS_ON_UNMOUNT, EVENT_OPTIONS);
+-				const unmountEventHandler = (ev) => {
+-					emits("unmountAutoFocus", ev);
+-				};
+-				container.addEventListener(AUTOFOCUS_ON_UNMOUNT, unmountEventHandler);
+-				container.dispatchEvent(unmountEvent);
+-				container.setAttribute("data-focus-scope-unmounting", "");
+-				setTimeout(() => {
+-					if (!unmountEvent.defaultPrevented) focus(previouslyFocusedElement ?? document.body, { select: true });
+-					container.removeEventListener(AUTOFOCUS_ON_UNMOUNT, unmountEventHandler);
+-					focusScopesStack.remove(focusScope);
+-					container.removeAttribute("data-focus-scope-unmounting");
+-				}, 0);
+-			});
++		    const container = currentElement.value;
++		    let disposed = false;
++		    cleanupFn(() => { disposed = true; closeScope?.(); closeScope = undefined; });
++		    await nextTick();
++		    if (!disposed && container && props.present !== false)
++		        closeScope = activateScope(container);
+ 		});
+ 		watch(() => props.present, async (present, prevPresent) => {
+-			if (!isClient) return;
+-			if (present === false && prevPresent === true) {
+-				focusScopesStack.remove(focusScope);
+-				return;
+-			}
+-			if (present !== true || prevPresent !== false) return;
+-			focusScopesStack.add(focusScope);
+-			await nextTick();
+-			const container = currentElement.value;
+-			if (!container) return;
+-			const previouslyFocusedElement = getActiveElement();
+-			if (!container.contains(previouslyFocusedElement)) dispatchMountAutoFocus(container, previouslyFocusedElement);
++		    if (!isClient)
++		        return;
++		    if (present === false && prevPresent === true) {
++		        closeScope?.();
++		        closeScope = undefined;
++		        lastFocusedElementRef.value = null;
++		        return;
++		    }
++		    if (present !== true || prevPresent !== false)
++		        return;
++		    await nextTick();
++		    const container = currentElement.value;
++		    if (container && props.present && !closeScope)
++		        closeScope = activateScope(container);
+ 		});
+ 		function handleKeyDown(event) {
+ 			if (!props.loop && !props.trapped) return;
+diff --git a/dist/FocusScope/stack.cjs b/dist/FocusScope/stack.cjs
+index dda514ce1f43da6e9d5753ad0b35aec24491b9b4..1d52478d4747539d0f62d69ad8bd5bcf64a4485b 100644
+--- a/dist/FocusScope/stack.cjs
++++ b/dist/FocusScope/stack.cjs
+@@ -3,31 +3,50 @@ const vue = require_rolldown_runtime.__toESM(require("vue"));
+ const __vueuse_core = require_rolldown_runtime.__toESM(require("@vueuse/core"));
+ 
+ //#region src/FocusScope/stack.ts
+-const useFocusStackState = (0, __vueuse_core.createGlobalState)(() => {
+-	const stack = (0, vue.ref)([]);
+-	return stack;
++const useFocusStackState = __vueuse_core.createGlobalState(() => {
++    const stack = vue.ref([]);
++    return stack;
+ });
+ function createFocusScopesStack() {
+-	/** A stack of focus scopes, with the active one at the top */
+-	const stack = useFocusStackState();
+-	return {
+-		add(focusScope) {
+-			const activeFocusScope = stack.value[0];
+-			if (focusScope !== activeFocusScope) activeFocusScope?.pause();
+-			stack.value = arrayRemove(stack.value, focusScope);
+-			stack.value.unshift(focusScope);
+-		},
+-		remove(focusScope) {
+-			stack.value = arrayRemove(stack.value, focusScope);
+-			stack.value[0]?.resume();
+-		}
+-	};
++    /** A stack of focus scopes, with the active one at the top */
++    const stack = useFocusStackState();
++    return {
++        activeContainer: () => stack.value.find(scope => scope.active)?.container ?? null,
++        hasActiveScopeAbove(focusScope) {
++            const index = stack.value.indexOf(focusScope);
++            return stack.value.slice(0, index < 0 ? 0 : index).some(scope => scope.active && scope.container?.isConnected);
++        },
++        deactivate(focusScope) {
++            focusScope.active = false;
++            focusScope.pause();
++            stack.value.find(scope => scope.active)?.resume();
++        },
++        add(focusScope) {
++            // pause the currently active focus scope (at the top of the stack)
++            const activeFocusScope = stack.value.find(scope => scope.active && scope !== focusScope);
++            if (focusScope !== activeFocusScope)
++                activeFocusScope?.pause();
++            // remove in case it already exists (because we'll re-add it at the top of the stack)
++            stack.value = arrayRemove(stack.value, focusScope);
++            focusScope.active = true;
++            focusScope.resume();
++            stack.value.unshift(focusScope);
++        },
++        remove(focusScope) {
++            stack.value = arrayRemove(stack.value, focusScope);
++            stack.value.find(scope => scope.active)?.resume();
++        },
++    };
+ }
+ function arrayRemove(array, item) {
+-	const updatedArray = [...array];
+-	const index = updatedArray.indexOf(item);
+-	if (index !== -1) updatedArray.splice(index, 1);
+-	return updatedArray;
++    const updatedArray = [...array];
++    const index = updatedArray.indexOf(item);
++    if (index !== -1)
++        updatedArray.splice(index, 1);
++    return updatedArray;
++}
++function removeLinks(items) {
++    return items.filter(item => item.tagName !== 'A');
+ }
+ 
+ //#endregion
+diff --git a/dist/FocusScope/stack.js b/dist/FocusScope/stack.js
+index 40285c3c0da5fd4be276732b0628b2e986154034..9abf73c33d82a337af66fab5ccac3734f26d3134 100644
+--- a/dist/FocusScope/stack.js
++++ b/dist/FocusScope/stack.js
+@@ -3,30 +3,49 @@ import { createGlobalState } from "@vueuse/core";
+ 
+ //#region src/FocusScope/stack.ts
+ const useFocusStackState = createGlobalState(() => {
+-	const stack = ref([]);
+-	return stack;
++    const stack = ref([]);
++    return stack;
+ });
+ function createFocusScopesStack() {
+-	/** A stack of focus scopes, with the active one at the top */
+-	const stack = useFocusStackState();
+-	return {
+-		add(focusScope) {
+-			const activeFocusScope = stack.value[0];
+-			if (focusScope !== activeFocusScope) activeFocusScope?.pause();
+-			stack.value = arrayRemove(stack.value, focusScope);
+-			stack.value.unshift(focusScope);
+-		},
+-		remove(focusScope) {
+-			stack.value = arrayRemove(stack.value, focusScope);
+-			stack.value[0]?.resume();
+-		}
+-	};
++    /** A stack of focus scopes, with the active one at the top */
++    const stack = useFocusStackState();
++    return {
++        activeContainer: () => stack.value.find(scope => scope.active)?.container ?? null,
++        hasActiveScopeAbove(focusScope) {
++            const index = stack.value.indexOf(focusScope);
++            return stack.value.slice(0, index < 0 ? 0 : index).some(scope => scope.active && scope.container?.isConnected);
++        },
++        deactivate(focusScope) {
++            focusScope.active = false;
++            focusScope.pause();
++            stack.value.find(scope => scope.active)?.resume();
++        },
++        add(focusScope) {
++            // pause the currently active focus scope (at the top of the stack)
++            const activeFocusScope = stack.value.find(scope => scope.active && scope !== focusScope);
++            if (focusScope !== activeFocusScope)
++                activeFocusScope?.pause();
++            // remove in case it already exists (because we'll re-add it at the top of the stack)
++            stack.value = arrayRemove(stack.value, focusScope);
++            focusScope.active = true;
++            focusScope.resume();
++            stack.value.unshift(focusScope);
++        },
++        remove(focusScope) {
++            stack.value = arrayRemove(stack.value, focusScope);
++            stack.value.find(scope => scope.active)?.resume();
++        },
++    };
+ }
+ function arrayRemove(array, item) {
+-	const updatedArray = [...array];
+-	const index = updatedArray.indexOf(item);
+-	if (index !== -1) updatedArray.splice(index, 1);
+-	return updatedArray;
++    const updatedArray = [...array];
++    const index = updatedArray.indexOf(item);
++    if (index !== -1)
++        updatedArray.splice(index, 1);
++    return updatedArray;
++}
++function removeLinks(items) {
++    return items.filter(item => item.tagName !== 'A');
+ }
+ 
+ //#endregion
+diff --git a/dist/Tooltip/TooltipContentImpl.cjs b/dist/Tooltip/TooltipContentImpl.cjs
+index c76d4c159fc68f160e315f049faa78e2b27ce5de..6448446800933883e3bdb8a67656a908d51295cd 100644
+--- a/dist/Tooltip/TooltipContentImpl.cjs
++++ b/dist/Tooltip/TooltipContentImpl.cjs
+@@ -105,7 +105,9 @@ var TooltipContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE_
+ 				const target = event.target;
+ 				if (target?.contains(rootContext.trigger.value)) rootContext.onClose();
+ 			}, { capture: true });
+-			(0, __vueuse_core.useEventListener)(document, require_Tooltip_utils.TOOLTIP_OPEN, rootContext.onClose);
++			(0, __vueuse_core.useEventListener)(document, require_Tooltip_utils.TOOLTIP_OPEN, (event) => {
++				if (event.detail?.owner !== rootContext.open) rootContext.onClose();
++			});
+ 		});
+ 		return (_ctx, _cache) => {
+ 			return (0, vue.openBlock)(), (0, vue.createBlock)((0, vue.unref)(require_DismissableLayer_DismissableLayer.DismissableLayer_default), {
+diff --git a/dist/Tooltip/TooltipContentImpl.js b/dist/Tooltip/TooltipContentImpl.js
+index 23c910a05689ebb114fb623edcddfd3c13a909ec..39fced078acab152adea41a95eea3cf3ba5268c5 100644
+--- a/dist/Tooltip/TooltipContentImpl.js
++++ b/dist/Tooltip/TooltipContentImpl.js
+@@ -104,7 +104,9 @@ var TooltipContentImpl_vue_vue_type_script_setup_true_lang_default = /* @__PURE_
+ 				const target = event.target;
+ 				if (target?.contains(rootContext.trigger.value)) rootContext.onClose();
+ 			}, { capture: true });
+-			useEventListener(document, TOOLTIP_OPEN, rootContext.onClose);
++			useEventListener(document, TOOLTIP_OPEN, (event) => {
++				if (event.detail?.owner !== rootContext.open) rootContext.onClose();
++			});
+ 		});
+ 		return (_ctx, _cache) => {
+ 			return openBlock(), createBlock(unref(DismissableLayer_default), {
+diff --git a/dist/Tooltip/TooltipRoot.cjs b/dist/Tooltip/TooltipRoot.cjs
+index dd36a9868e992e195ad94caedf2741073b1ba05b..49a1a86b12154172121463bda53533bfeeaed97c 100644
+--- a/dist/Tooltip/TooltipRoot.cjs
++++ b/dist/Tooltip/TooltipRoot.cjs
+@@ -67,7 +67,7 @@ var TooltipRoot_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0
+ 			if (!providerContext.onClose) return;
+ 			if (isOpen) {
+ 				providerContext.onOpen();
+-				document.dispatchEvent(new CustomEvent(require_Tooltip_utils.TOOLTIP_OPEN));
++				document.dispatchEvent(new CustomEvent(require_Tooltip_utils.TOOLTIP_OPEN, { detail: { owner: open } }));
+ 			} else providerContext.onClose();
+ 		});
+ 		const wasOpenDelayedRef = (0, vue.ref)(false);
+diff --git a/dist/Tooltip/TooltipRoot.js b/dist/Tooltip/TooltipRoot.js
+index e773fb5ea0a71a2132b200f8baacdc95c39546e0..6cfac00868e4fc24fe2565a797548723b4ca2e56 100644
+--- a/dist/Tooltip/TooltipRoot.js
++++ b/dist/Tooltip/TooltipRoot.js
+@@ -66,7 +66,7 @@ var TooltipRoot_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ de
+ 			if (!providerContext.onClose) return;
+ 			if (isOpen) {
+ 				providerContext.onOpen();
+-				document.dispatchEvent(new CustomEvent(TOOLTIP_OPEN));
++				document.dispatchEvent(new CustomEvent(TOOLTIP_OPEN, { detail: { owner: open } }));
+ 			} else providerContext.onClose();
+ 		});
+ 		const wasOpenDelayedRef = ref(false);
+diff --git a/dist/index4.d.cts b/dist/index4.d.cts
+index 878b3bdea06deb145bda76ef2d72b87a546f366b..b42d4c459abb2a31fffb72892795141c3b84456c 100644
+--- a/dist/index4.d.cts
++++ b/dist/index4.d.cts
+@@ -2945,6 +2945,8 @@ interface FocusScopeProps extends PrimitiveProps {
+    * @defaultValue false
+    */
+   loop?: boolean;
++  /** Preferred return target, restored by the cancellable close lifecycle. */
++  restoreFocusElement?: HTMLElement | null;
+   /**
+    * When `true`, focus cannot escape the focus scope via keyboard,
+    * pointer, or a programmatic focus.
+diff --git a/dist/index4.d.ts b/dist/index4.d.ts
+index 3018c4b7297e116f80e0b2c635e7528521c20217..bc18d3b340cee2edfb2decce1a69af374053a599 100644
+--- a/dist/index4.d.ts
++++ b/dist/index4.d.ts
+@@ -2945,6 +2945,8 @@ interface FocusScopeProps extends PrimitiveProps {
+    * @defaultValue false
+    */
+   loop?: boolean;
++  /** Preferred return target, restored by the cancellable close lifecycle. */
++  restoreFocusElement?: HTMLElement | null;
+   /**
+    * When `true`, focus cannot escape the focus scope via keyboard,
+    * pointer, or a programmatic focus.
+diff --git a/src/Dialog/DialogContentImpl.vue b/src/Dialog/DialogContentImpl.vue
+index 5260c813fe7bc755b77cdb1e967d976b7b4f82b2..9a973c491a2d5b1607f2e0eaf36d18eefd208e80 100644
+--- a/src/Dialog/DialogContentImpl.vue
++++ b/src/Dialog/DialogContentImpl.vue
+@@ -3,7 +3,7 @@ import type {
+   DismissableLayerEmits,
+   DismissableLayerProps,
+ } from '@/DismissableLayer'
+-import { getActiveElement, useForwardExpose, useId } from '@/shared'
++import { useForwardExpose, useId } from '@/shared'
+ 
+ export type DialogContentImplEmits = DismissableLayerEmits & {
+   /**
+@@ -58,9 +58,6 @@ rootContext.descriptionId ||= useId(undefined, 'reka-dialog-description')
+ onMounted(() => {
+   rootContext.contentElement = contentElement
+ 
+-  // Preserve the `DialogTrigger` element in case it was triggered programmatically
+-  if (getActiveElement() !== document.body)
+-    rootContext.triggerElement.value = getActiveElement() as HTMLElement
+ })
+ 
+ if (process.env.NODE_ENV !== 'production') {
+@@ -80,6 +77,7 @@ if (process.env.NODE_ENV !== 'production') {
+     as-child
+     loop
+     :trapped="props.trapFocus"
++    :restore-focus-element="rootContext.triggerElement.value"
+     :present="props.present"
+     @mount-auto-focus="emits('openAutoFocus', $event)"
+     @unmount-auto-focus="emits('closeAutoFocus', $event)"
+diff --git a/src/Dialog/DialogContentModal.vue b/src/Dialog/DialogContentModal.vue
+index bdde587b1316fbf1c54c454c2cafc44edbc38546..d9a2d367dc241404115cb0ef714fafb61b30de6f 100644
+--- a/src/Dialog/DialogContentModal.vue
++++ b/src/Dialog/DialogContentModal.vue
+@@ -1,6 +1,6 @@
+ <script setup lang="ts">
+ import type { DialogContentImplEmits, DialogContentImplProps } from './DialogContentImpl.vue'
+-import { computed, watch } from 'vue'
++import { computed } from 'vue'
+ import { useEmitAsProps, useForwardExpose, useHideOthers } from '@/shared'
+ import DialogContentImpl from './DialogContentImpl.vue'
+ import { injectDialogRootContext } from './DialogRoot.vue'
+@@ -24,13 +24,6 @@ const forwardedProps = computed(() => {
+   return rest
+ })
+ 
+-// When `unmountOnHide` is `false` the content stays mounted on close, so
+-// `FocusScope` never unmounts and `close-auto-focus` never fires. Restore
+-// focus to the trigger manually once the content is no longer present.
+-watch(() => props.present, (isPresent, wasPresent) => {
+-  if (!isPresent && wasPresent)
+-    rootContext.triggerElement.value?.focus()
+-})
+ </script>
+ 
+ <template>
+@@ -40,14 +33,6 @@ watch(() => props.present, (isPresent, wasPresent) => {
+     :present="present"
+     :trap-focus="rootContext.open.value"
+     :disable-outside-pointer-events="props.disableOutsidePointerEvents"
+-    @close-auto-focus="
+-      (event) => {
+-        if (!event.defaultPrevented) {
+-          event.preventDefault();
+-          rootContext.triggerElement.value?.focus();
+-        }
+-      }
+-    "
+     @pointer-down-outside="
+       (event) => {
+         const originalEvent = event.detail.originalEvent;
+diff --git a/src/Dialog/DialogContentNonModal.vue b/src/Dialog/DialogContentNonModal.vue
+index c8de3fb0cb4b5d665d7cf2bd2ce04f5787ce67ae..dcd11c349f1c2417fd7b05798c6409d3cda32e88 100644
+--- a/src/Dialog/DialogContentNonModal.vue
++++ b/src/Dialog/DialogContentNonModal.vue
+@@ -1,6 +1,6 @@
+ <script setup lang="ts">
+ import type { DialogContentImplEmits, DialogContentImplProps } from './DialogContentImpl.vue'
+-import { computed, ref, watch } from 'vue'
++import { computed, ref } from 'vue'
+ import { useEmitAsProps, useForwardExpose } from '@/shared'
+ import DialogContentImpl from './DialogContentImpl.vue'
+ import { injectDialogRootContext } from './DialogRoot.vue'
+@@ -20,17 +20,6 @@ const forwardedProps = computed(() => {
+   return rest
+ })
+ 
+-// When `unmountOnHide` is `false` the content stays mounted on close, so
+-// `close-auto-focus` never fires. Restore focus to the trigger manually once
+-// the content is no longer present, unless the user interacted outside.
+-watch(() => props.present, (isPresent, wasPresent) => {
+-  if (!isPresent && wasPresent) {
+-    if (!hasInteractedOutsideRef.value)
+-      rootContext.triggerElement.value?.focus()
+-    hasInteractedOutsideRef.value = false
+-    hasPointerDownOutsideRef.value = false
+-  }
+-})
+ </script>
+ 
+ <template>
+@@ -41,11 +30,9 @@ watch(() => props.present, (isPresent, wasPresent) => {
+     :disable-outside-pointer-events="false"
+     @close-auto-focus="
+       (event) => {
+-        if (!event.defaultPrevented) {
+-          if (!hasInteractedOutsideRef) rootContext.triggerElement.value?.focus();
+-          // Always prevent auto focus because we either focus manually or want user agent focus
+-          event.preventDefault();
+-        }
++        // Outside interaction owns focus; otherwise FocusScope restores the
++        // declared trigger or captured opener after caller cancellation.
++        if (hasInteractedOutsideRef) event.preventDefault();
+ 
+         hasInteractedOutsideRef = false;
+         hasPointerDownOutsideRef = false;
+diff --git a/src/FocusScope/FocusScope.vue b/src/FocusScope/FocusScope.vue
+index 23851d60274b5908050ef629a0842dc315e1123a..255ff26991356171021192c5bf9552a8612ca7be 100644
+--- a/src/FocusScope/FocusScope.vue
++++ b/src/FocusScope/FocusScope.vue
+@@ -24,6 +24,9 @@ export interface FocusScopeProps extends PrimitiveProps {
+    */
+   loop?: boolean
+ 
++  /** Preferred return target, restored by the cancellable close lifecycle. */
++  restoreFocusElement?: HTMLElement | null
++
+   /**
+    * When `true`, focus cannot escape the focus scope via keyboard,
+    * pointer, or a programmatic focus.
+@@ -77,6 +80,8 @@ const focusScopesStack = createFocusScopesStack()
+ 
+ const focusScope = reactive({
+   paused: false,
++  active: false,
++  container: null as HTMLElement | null,
+   pause() {
+     this.paused = true
+   },
+@@ -89,7 +94,7 @@ watchEffect((cleanupFn) => {
+   if (!isClient)
+     return
+   const container = currentElement.value
+-  if (!props.trapped)
++  if (!props.trapped || !props.present)
+     return
+ 
+   function handleFocusIn(event: FocusEvent) {
+@@ -125,15 +130,14 @@ watchEffect((cleanupFn) => {
+       focus(lastFocusedElementRef.value, { select: true })
+   }
+ 
+-  // When the focused element gets removed from the DOM, browsers move focus
+-  // back to the document.body. In this case, we move focus to the container
+-  // to keep focus trapped correctly.
++  // Removing or disabling the focused control can orphan focus on the body.
++  // Recover only for the live, unpaused trap after a child removal; a retained
++  // disabled control is still contained, so containment alone is insufficient.
+   // -- related: https://github.com/unovue/reka-ui/issues/518
+-  // Reka UI tentative solution:
+-  // instead of leaning on document.activeElement, we use lastFocusedElementRef.value to check
+-  // if the element still exist inside the container,
+-  // if not then we focus to the container
+   function handleMutations(mutations: MutationRecord[]) {
++    if (focusScope.paused || !props.trapped || !props.present || !container?.isConnected)
++      return
++
+     const lastFocusedElement = lastFocusedElementRef.value
+ 
+     // Mutation may be triggered by something unrelated to focus, e.g. class is set on an element
+@@ -159,8 +163,9 @@ watchEffect((cleanupFn) => {
+     if (activeElement && container.contains(activeElement))
+       return
+ 
+-    const isLastFocusedElementExist = container.contains(lastFocusedElement)
+-    if (!isLastFocusedElementExist)
++    // A different live target owns its focus, even if our previous target was
++    // removed. Only the owner document body represents the orphan to recover.
++    if (activeElement === container.ownerDocument.body)
+       focus(container)
+   }
+ 
+@@ -195,87 +200,66 @@ function dispatchMountAutoFocus(container: HTMLElement, previouslyFocusedElement
+   }
+ }
+ 
+-watchEffect(async (cleanupFn) => {
+-  const container = currentElement.value
+-
+-  await nextTick()
+-  if (!container)
+-    return
+-  // A scope that mounts hidden (`present: false`, e.g. a closed Dialog with
+-  // `unmountOnHide: false`) must stay out of the scope stack: adding it would
+-  // pause the currently active scope and break its focus trap. The `present`
+-  // watcher below adds/removes it as it becomes visible.
+-  if (props.present !== false)
+-    focusScopesStack.add(focusScope)
++let closeScope: (() => void) | undefined
++let generation = 0
++function activateScope(container: HTMLElement) {
++  const currentGeneration = ++generation
++  const parentContainer = focusScopesStack.activeContainer()
++  focusScope.container = container
++  focusScopesStack.add(focusScope)
+   const previouslyFocusedElement = getActiveElement() as HTMLElement | null
+-  const hasFocusedCandidate = container.contains(previouslyFocusedElement)
+-
+-  // When force-mounted while closed (e.g. Dialog `unmountOnHide: false`), the
+-  // consumer keeps the scope mounted but flags it as not present. Skip the
+-  // mount auto-focus in that case, otherwise it fires `mountAutoFocus` and
+-  // steals focus into a hidden scope. The `present` watcher below re-runs the
+-  // auto-focus once the scope becomes present again.
+-  // NOTE: `props.present` must stay read *after* the `await` above so this
+-  // effect does not track it — re-running on `present` changes would dispatch
+-  // the unmount auto-focus cleanup below on every close.
+-  if (!hasFocusedCandidate && props.present !== false)
+-    dispatchMountAutoFocus(container, previouslyFocusedElement)
+-
+-  cleanupFn(() => {
+-    const unmountEvent = new CustomEvent(AUTOFOCUS_ON_UNMOUNT, EVENT_OPTIONS)
+-    const unmountEventHandler = (ev: Event) => {
+-      emits('unmountAutoFocus', ev)
+-    }
+-    container.addEventListener(AUTOFOCUS_ON_UNMOUNT, unmountEventHandler)
+-    container.dispatchEvent(unmountEvent)
+-
+-    // Signal that blur events fired below are system-initiated (focus trap
+-    // cleanup), not user-initiated. Consumers can use this to skip validation.
++  if (container.contains(previouslyFocusedElement)) lastFocusedElementRef.value = previouslyFocusedElement
++  else dispatchMountAutoFocus(container, previouslyFocusedElement)
++  let closed = false
++  const mayRestore = () => {
++    const active = container.ownerDocument.activeElement
++    return generation === currentGeneration && !focusScopesStack.hasActiveScopeAbove(focusScope) &&
++      (active === container.ownerDocument.body || container.contains(active) || active === parentContainer)
++  }
++  return () => {
++    if (closed) return
++    closed = true
++    focusScopesStack.deactivate(focusScope)
++    const event = new CustomEvent(AUTOFOCUS_ON_UNMOUNT, EVENT_OPTIONS)
++    const handler = (event: Event) => emits('unmountAutoFocus', event)
++    container.addEventListener(AUTOFOCUS_ON_UNMOUNT, handler)
++    container.dispatchEvent(event)
++    container.removeEventListener(AUTOFOCUS_ON_UNMOUNT, handler)
+     container.setAttribute('data-focus-scope-unmounting', '')
+-
+     setTimeout(() => {
+-      if (!unmountEvent.defaultPrevented)
+-        focus(previouslyFocusedElement ?? document.body, { select: true })
+-
+-      // we need to remove the listener after we `dispatchEvent`
+-      container.removeEventListener(AUTOFOCUS_ON_UNMOUNT, unmountEventHandler)
+-
+-      focusScopesStack.remove(focusScope)
++      if (!event.defaultPrevented && mayRestore()) {
++        const target = isReturnTarget(props.restoreFocusElement) ? props.restoreFocusElement :
++          isReturnTarget(previouslyFocusedElement) ? previouslyFocusedElement :
++          isReturnTarget(parentContainer) ? parentContainer : null
++        focus(target, { select: true })
++      }
++      if (generation === currentGeneration) focusScopesStack.remove(focusScope)
+       container.removeAttribute('data-focus-scope-unmounting')
+     }, 0)
+-  })
++  }
++}
++function isReturnTarget(element: HTMLElement | null | undefined) {
++  return element?.isConnected && !element.matches(':disabled') && !element.closest('[inert], [hidden]')
++}
++watchEffect(async (cleanupFn) => {
++  const container = currentElement.value
++  let disposed = false
++  cleanupFn(() => { disposed = true; closeScope?.(); closeScope = undefined })
++  await nextTick()
++  if (!disposed && container && props.present !== false) closeScope = activateScope(container)
+ })
+-
+-// Force-mounted scopes (e.g. Dialog `unmountOnHide: false`) stay mounted across
+-// open/close and toggle `present` instead of unmounting, so mount/unmount-keyed
+-// behavior must be re-keyed on `present`: stack membership (which pauses other
+-// scopes' traps) and the mount auto-focus (which only fires on physical mount).
+-// Awaiting `nextTick` lets the consumer's visibility change (e.g. `v-show`)
+-// apply first, so the focus targets exist. Consumers that don't pass `present`
+-// default it to `true` (see `withDefaults`); since it never changes for them,
+-// this watcher never fires and the main effect above owns their stack membership.
+ watch(() => props.present, async (present, prevPresent) => {
+-  if (!isClient)
+-    return
+-
++  if (!isClient) return
+   if (present === false && prevPresent === true) {
+-    focusScopesStack.remove(focusScope)
++    closeScope?.()
++    closeScope = undefined
++    lastFocusedElementRef.value = null
+     return
+   }
+-
+-  if (present !== true || prevPresent !== false)
+-    return
+-
+-  focusScopesStack.add(focusScope)
+-
++  if (present !== true || prevPresent !== false) return
+   await nextTick()
+   const container = currentElement.value
+-  if (!container)
+-    return
+-
+-  const previouslyFocusedElement = getActiveElement() as HTMLElement | null
+-  if (!container.contains(previouslyFocusedElement))
+-    dispatchMountAutoFocus(container, previouslyFocusedElement)
++  if (container && props.present && !closeScope) closeScope = activateScope(container)
+ })
+ 
+ function handleKeyDown(event: KeyboardEvent) {
+diff --git a/src/FocusScope/stack.ts b/src/FocusScope/stack.ts
+index 651fb3704ef730175aee3741675aa7fe04dcbd33..44a8ea307e2bba0ce8d730a0c222dec957ef146f 100644
+--- a/src/FocusScope/stack.ts
++++ b/src/FocusScope/stack.ts
+@@ -2,7 +2,9 @@ import { createGlobalState } from '@vueuse/core'
+ import { ref } from 'vue'
+ 
+ interface FocusScopeAPI {
++  container: HTMLElement | null
+   paused: boolean
++  active: boolean
+   pause: () => void
+   resume: () => void
+ }
+@@ -17,20 +19,32 @@ export function createFocusScopesStack() {
+   const stack = useFocusStackState()
+ 
+   return {
++    activeContainer: () => stack.value.find(scope => scope.active)?.container ?? null,
++    hasActiveScopeAbove(focusScope: FocusScopeAPI) {
++      const index = stack.value.indexOf(focusScope)
++      return stack.value.slice(0, index < 0 ? 0 : index).some(scope => scope.active && scope.container?.isConnected)
++    },
++    deactivate(focusScope: FocusScopeAPI) {
++      focusScope.active = false
++      focusScope.pause()
++      stack.value.find(scope => scope.active)?.resume()
++    },
+     add(focusScope: FocusScopeAPI) {
+       // pause the currently active focus scope (at the top of the stack)
+-      const activeFocusScope = stack.value[0]
++      const activeFocusScope = stack.value.find(scope => scope.active && scope !== focusScope)
+       if (focusScope !== activeFocusScope)
+         activeFocusScope?.pause()
+ 
+       // remove in case it already exists (because we'll re-add it at the top of the stack)
+       stack.value = arrayRemove(stack.value, focusScope)
++      focusScope.active = true
++      focusScope.resume()
+       stack.value.unshift(focusScope)
+     },
+ 
+     remove(focusScope: FocusScopeAPI) {
+       stack.value = arrayRemove(stack.value, focusScope)
+-      stack.value[0]?.resume()
++      stack.value.find(scope => scope.active)?.resume()
+     },
+   }
+ }

@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const python = process.platform === "win32" ? "python" : "python3";
+
+const frontendPort = process.env.E2E_RECORD_FRONTEND_PORT ?? "3212";
+const frontendURL = `http://localhost:${frontendPort}`;
+
 /**
  * RECORD-through-browser config (Plan A): drive the REAL frontend against a
  * REAL-model gateway and capture every model call so the fixture's inputs match
@@ -14,7 +19,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   timeout: 200_000,
-  use: { baseURL: "http://localhost:3000", trace: "off" },
+  use: { baseURL: frontendURL, trace: "off" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
@@ -43,11 +48,12 @@ export default defineConfig({
       },
     },
     {
-      command: "pnpm build && pnpm start",
-      url: "http://localhost:3000",
+      command: `${python} ../scripts/pnpm.py --dir frontend build && ${python} ../scripts/pnpm.py --dir frontend start`,
+      url: frontendURL,
       reuseExistingServer: false,
       timeout: 240_000,
       env: {
+        PORT: frontendPort,
         SKIP_ENV_VALIDATION: "1",
         DEER_FLOW_AUTH_DISABLED: "1",
         BETTER_AUTH_SECRET: "local-dev-secret",

@@ -19,7 +19,8 @@
     表示，保持 token 的颜色语义不变，同时让半透明像素与 React 真正一致。
   */
   --background: lab(98.3628% 0.136942 3.74554);
-  --foreground: oklch(0.145 0 0);
+  /* Production Lab form of React oklch(0.145 0 0), including ring-foreground. */
+  --foreground: lab(2.75381% 0 0);
   --card: oklch(1 0.0098 87.47);
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0.0098 87.47);
@@ -35,7 +36,8 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0.0098 87.47);
   --input: oklch(0.88 0.0098 87.47);
-  --ring: oklch(0.58 0.18 255);
+  /* Production representation of React oklch(0.58 0.18 255), as with --background. */
+  --ring: lab(49.9088% 4.02367 -61.7788);
   --radius: 0.625rem;
   --sidebar: oklch(0.965 0.0098 87.47);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -51,7 +53,8 @@
 
 .dark {
   --background: lab(11.8704% -0.349946 1.31819);
-  --foreground: oklch(0.985 0 0);
+  /* Production Lab form of React oklch(0.985 0 0). */
+  --foreground: lab(98.26% 0 0);
   --card: oklch(0.238 0.0036 106.64);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0.0036 106.64);
@@ -67,7 +70,8 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.74 0.16 255);
+  /* Production representation of React oklch(0.74 0.16 255). */
+  --ring: lab(68.931% -2.02289 -55.4816);
   --sidebar: oklch(0.245 0.0036 106.64);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -174,6 +178,38 @@
     font-family:
       ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
       "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  }
+
+  /* Match React's KaTeX-only base-layer polish. KaTeX's lazy unlayered
+     stylesheet retains its own cascade priority for overlapping properties. */
+  .katex {
+    font-size: 1.02em;
+    line-height: 1.35;
+    text-rendering: auto;
+  }
+
+  .katex-display {
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 0.35rem 0.125rem 0.45rem;
+    margin: 0.85rem 0;
+    text-align: center;
+  }
+
+  .katex-display > .katex {
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    text-align: initial;
+  }
+
+  .katex-display::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .katex-display::-webkit-scrollbar-thumb {
+    background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+    border-radius: 999px;
   }
 }
 

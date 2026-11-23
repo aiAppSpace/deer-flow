@@ -243,13 +243,17 @@ test("real Gateway owns auth, thread state, workspace changes, recovery and brow
       .getByRole("status")
       .filter({ hasText: /Gateway is temporarily unavailable/i }),
   ).toBeVisible();
-  injectAuthFailure = false;
-  await page.getByRole("button", { name: "Try again" }).click();
+  const gatewayBanner = page.locator('[data-gateway-status="unavailable"]');
+  await expect(gatewayBanner.getByRole("button")).toHaveCount(1);
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: /Gateway connection restored/i }),
+    gatewayBanner.getByRole("button", { name: "Log out" }),
   ).toBeVisible();
+  const recoveredSession = page.waitForResponse(
+    (response) => response.url().endsWith("/api/v1/auth/me") && response.ok(),
+  );
+  injectAuthFailure = false;
+  await recoveredSession;
+  await expect(gatewayBanner).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`${THREAD_ID}$`));
 
   await expect(page.getByText(ANSWER, { exact: true })).toBeVisible({
@@ -298,7 +302,7 @@ test("real Gateway owns auth, thread state, workspace changes, recovery and brow
   await row.getByRole("button", { name: "More" }).click();
   await page.getByTestId("thread-share").click();
   await expect(
-    page.getByRole("status").filter({ hasText: "Link copied" }),
+    page.getByTestId("workspace-toaster").filter({ hasText: "Link copied" }),
   ).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     `https://deer-flow-v2.vercel.app/workspace/chats/${THREAD_ID}`,

@@ -8,16 +8,50 @@
 
 import { queryOptions } from "@tanstack/vue-query";
 
-import { probeSession } from "./session";
+import { probeSession, type SessionProbe } from "./session";
 
 export const AUTH_SESSION_QUERY_KEY = ["auth", "session"] as const;
+
+// The cached query is the recovery owner. Multiple composable consumers must
+// share a streak; removing the query (logout/account change) also retires it.
+const recoveryFailures = new WeakMap<object, number>();
+const RECOVERY_AUTH_FAILURE_THRESHOLD = 3;
 
 export function authSessionQueryOptions(
   fetchImpl: typeof globalThis.fetch = globalThis.fetch,
 ) {
   return queryOptions({
     queryKey: AUTH_SESSION_QUERY_KEY,
-    queryFn: () => probeSession(fetchImpl),
+    queryFn: async ({ client }) => {
+      const query = client.getQueryCache().find({
+        queryKey: AUTH_SESSION_QUERY_KEY,
+        exact: true,
+      });
+      const current = client.getQueryData<SessionProbe>(AUTH_SESSION_QUERY_KEY);
+      const recovering = current?.tag === "unavailable";
+      const session = await probeSession(fetchImpl, current);
+      if (!query) return session;
+      if (!recovering || session.tag === "authenticated") {
+        recoveryFailures.delete(query);
+        return session;
+      }
+      const previous = recoveryFailures.get(query) ?? 0;
+      if (session.tag === "unavailable") {
+        recoveryFailures.set(query, Math.max(0, previous - 1));
+        return session;
+      }
+      const failures = previous + 1;
+      if (failures < RECOVERY_AUTH_FAILURE_THRESHOLD) {
+        recoveryFailures.set(query, failures);
+        return { tag: "unavailable" } as const;
+      }
+      recoveryFailures.delete(query);
+      // React delegates the third recovery 401 to AuthProvider.refreshUser.
+      // The final authoritative probe decides whether to retain or end session.
+      return probeSession(fetchImpl);
+    },
+    // UserPreferencesBoundary owns the throttled visibility refresh.
+    refetchOnWindowFocus: false,
     retry: false,
     staleTime: 0,
   });

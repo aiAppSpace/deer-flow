@@ -3,9 +3,14 @@
   【架构位置】     L3
   【主要导出】     deleteThreadCascade · findSidecarThreadIdsForParent · error
   【依赖关系】     sidecar/thread · api/errors
-  【边界与注意】   sidecar 全成功后才删除主 thread；404 按幂等成功处理。
+  【边界与注意】   sidecar 清理失败按当前 React 报告警告并继续删除主 thread；404 幂等成功。
 */
-import { isGatewayResponseError } from "@/core/api/errors";
+import { fetch } from "@/core/api/fetcher";
+import { getBackendBaseURL } from "@/core/config";
+import {
+  isGatewayResponseError,
+  throwGatewayResponseError,
+} from "@/core/api/errors";
 import { SIDECAR_METADATA_KEY, isSidecarThread } from "@/core/sidecar/thread";
 import type { AgentThread, AgentThreadState } from "@/core/threads/types";
 import type { ThreadSearchQuery } from "@/core/types/message";
@@ -29,10 +34,12 @@ export class ThreadCascadeDeleteError extends Error {
     deletedThreadIds: string[];
     causes: unknown[];
   }) {
+    const messages = options.causes.flatMap((cause) =>
+      cause instanceof Error && cause.message ? [cause.message] : [],
+    );
     super(
-      `Failed to delete ${options.failedThreadIds.length} conversation ${
-        options.failedThreadIds.length === 1 ? "thread" : "threads"
-      }: ${options.failedThreadIds.join(", ")}. Try again.`,
+      messages.join("; ") ||
+        `Failed to delete ${options.failedThreadIds.length} conversation thread(s). Try again.`,
     );
     this.name = "ThreadCascadeDeleteError";
     this.parentThreadId = options.parentThreadId;
@@ -76,6 +83,19 @@ export async function findSidecarThreadIdsForParent(
   return [...ids];
 }
 
+/** The integrated Gateway may already remove local data: only 404 is idempotent success. */
+async function deleteLocalThreadData(threadId: string) {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok && response.status !== 404)
+    await throwGatewayResponseError(
+      response,
+      "Failed to delete local thread data.",
+    );
+}
+
 async function deleteIdempotently(
   client: ThreadCascadeClient,
   threadId: string,
@@ -83,20 +103,26 @@ async function deleteIdempotently(
   try {
     await client.threads.delete(threadId);
   } catch (error) {
-    if (isGatewayResponseError(error) && error.status === 404) return;
-    throw error;
+    if (!(isGatewayResponseError(error) && error.status === 404)) throw error;
   }
+  await deleteLocalThreadData(threadId);
 }
 
-/** Delete all sidecars concurrently, then the main thread only after success. */
+/** Mirror React hooks.ts: sidecar cleanup is best effort; parent/local cleanup must succeed. */
 export async function deleteThreadCascade(
   apiClient: ThreadCascadeClient,
   parentThreadId: string,
 ): Promise<string[]> {
-  const sidecarIds = await findSidecarThreadIdsForParent(
-    apiClient,
-    parentThreadId,
-  );
+  let sidecarIds: string[];
+  try {
+    sidecarIds = await findSidecarThreadIdsForParent(apiClient, parentThreadId);
+  } catch (error) {
+    console.warn(
+      `Failed to look up sidecar threads for parent ${parentThreadId}; skipping cascade cleanup. Orphaned sidecar threads may remain.`,
+      error,
+    );
+    sidecarIds = [];
+  }
   const results = await Promise.allSettled(
     sidecarIds.map((threadId) => deleteIdempotently(apiClient, threadId)),
   );
@@ -112,12 +138,13 @@ export async function deleteThreadCascade(
     }
   });
   if (failedThreadIds.length > 0) {
-    throw new ThreadCascadeDeleteError({
-      parentThreadId,
-      failedThreadIds,
-      deletedThreadIds,
-      causes,
-    });
+    console.warn(
+      `Failed to delete ${failedThreadIds.length} sidecar thread(s) for parent ${parentThreadId}; orphaned sidecar threads may remain.`,
+      failedThreadIds.map((threadId, index) => ({
+        threadId,
+        reason: causes[index],
+      })),
+    );
   }
   try {
     await deleteIdempotently(apiClient, parentThreadId);

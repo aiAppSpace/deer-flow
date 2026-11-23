@@ -6,7 +6,7 @@
   【边界与注意】   写请求共用保真 Gateway 错误；compact 固定 force 并支持 abort。
 */
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
-import { throwGatewayResponseError } from "@/core/api/errors";
+import { readGatewayResponseError } from "@/core/api/errors";
 import { getBackendBaseURL } from "@/core/config";
 
 import type { AgentThread, ThreadTokenUsageResponse } from "./types";
@@ -55,6 +55,19 @@ export type ThreadMetadataPatchResponse = Pick<
   "thread_id" | "status" | "created_at" | "updated_at" | "metadata"
 >;
 
+async function throwThreadResponseError(
+  response: Response,
+  fallback: string,
+): Promise<never> {
+  const error = await readGatewayResponseError(response, fallback);
+  const detail =
+    typeof error.body === "object" && error.body !== null
+      ? Reflect.get(error.body, "detail")
+      : undefined;
+  error.message = typeof detail === "string" && detail ? detail : fallback;
+  throw error;
+}
+
 export async function fetchThreadTokenUsage(
   threadId: string,
 ): Promise<ThreadTokenUsageResponse | null> {
@@ -95,7 +108,7 @@ export async function branchThreadFromTurn(
   );
 
   if (!response.ok) {
-    await throwGatewayResponseError(response, "Failed to branch conversation.");
+    await throwThreadResponseError(response, "Failed to branch conversation.");
   }
 
   return (await response.json()) as ThreadBranchResponse;
@@ -117,7 +130,7 @@ export async function patchThreadMetadata(
   );
 
   if (!response.ok) {
-    await throwGatewayResponseError(response, "Failed to update conversation.");
+    await throwThreadResponseError(response, "Failed to update conversation.");
   }
 
   return (await response.json()) as ThreadMetadataPatchResponse;
@@ -170,7 +183,7 @@ export async function searchThreadsByArchive({
   );
 
   if (!response.ok) {
-    await throwGatewayResponseError(response, "Failed to load conversations.");
+    await throwThreadResponseError(response, "Failed to load conversations.");
   }
 
   return (await response.json()) as AgentThread[];
@@ -179,6 +192,7 @@ export async function searchThreadsByArchive({
 export async function createThread(
   threadId: string,
   projectId?: string,
+  metadata?: Record<string, unknown>,
 ): Promise<AgentThread> {
   const response = await fetchWithAuth(`${getBackendBaseURL()}/api/threads`, {
     method: "POST",
@@ -186,11 +200,12 @@ export async function createThread(
     body: JSON.stringify({
       thread_id: threadId,
       ...(projectId ? { project_id: projectId } : {}),
+      ...(metadata ? { metadata } : {}),
     }),
   });
 
   if (!response.ok) {
-    await throwGatewayResponseError(response, "Failed to create conversation.");
+    await throwThreadResponseError(response, "Failed to create conversation.");
   }
 
   return (await response.json()) as AgentThread;
@@ -199,6 +214,7 @@ export async function createThread(
 export async function moveThreadToProject(
   threadId: string,
   projectId: string | null,
+  options: { signal?: AbortSignal } = {},
 ): Promise<ThreadMetadataPatchResponse> {
   const response = await fetchWithAuth(
     `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/move`,
@@ -208,11 +224,12 @@ export async function moveThreadToProject(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ project_id: projectId }),
+      signal: options.signal,
     },
   );
 
   if (!response.ok) {
-    await throwGatewayResponseError(response, "Failed to move conversation.");
+    await throwThreadResponseError(response, "Failed to move conversation.");
   }
 
   return (await response.json()) as ThreadMetadataPatchResponse;
@@ -239,7 +256,7 @@ export async function compactThreadContext(
   );
 
   if (!response.ok) {
-    await throwGatewayResponseError(response, "Failed to compact context.");
+    await throwThreadResponseError(response, "Failed to compact context.");
   }
 
   return (await response.json()) as ThreadCompactResponse;

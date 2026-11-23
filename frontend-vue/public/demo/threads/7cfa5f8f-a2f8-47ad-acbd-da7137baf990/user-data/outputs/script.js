@@ -168,11 +168,11 @@ style.textContent = `
         opacity: 0;
         transition: opacity 0.5s ease-in;
     }
-
+    
     .fade-in {
         animation: fadeIn 0.8s ease-out forwards;
     }
-
+    
     @keyframes fadeIn {
         from {
             opacity: 0;

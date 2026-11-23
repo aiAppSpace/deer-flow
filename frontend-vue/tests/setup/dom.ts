@@ -13,6 +13,7 @@ import { beforeEach, vi } from "vitest";
 import { readonly, ref } from "vue";
 
 import { enUS } from "@/core/i18n/locales/en-US";
+import { createRouteAnnouncements } from "@/core/workspace-shell/route-announcement";
 
 beforeEach(() => {
   const $i18n = {
@@ -30,7 +31,8 @@ beforeEach(() => {
     setForcedTheme: vi.fn(),
     dispose: vi.fn(),
   };
-  vi.stubGlobal("useNuxtApp", () => ({ $i18n, $theme }));
+  const $routeAnnouncements = createRouteAnnouncements();
+  vi.stubGlobal("useNuxtApp", () => ({ $i18n, $theme, $routeAnnouncements }));
   /*
     只有 $i18n 进 globalProperties。模板里以 `$` 开头的标识符走 ctx 而不是
     setup 绑定，所以往这里塞 $theme 会盖掉那些自带 theme owner 的用例

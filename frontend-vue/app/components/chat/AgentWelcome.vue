@@ -13,7 +13,7 @@
                    agent 的新会话，上游告诉你「这是 test-agent，它做什么」，
                    本仓只说「👋 Hello, again!」。
 
-                   名字取 `agent?.name ?? agentName`：agent 还没取回来时先用路由段，
+                   名字优先取非空 display_name，再取稳定 name；还没取回来时用路由段，
                    而不是先显示一个空标题再跳变。描述取不到就整段不渲染
                    （上游的 `{description && …}`），不要退回通用介绍——那会让
                    「这个 agent 没写描述」和「还没加载完」看起来一样。
@@ -26,13 +26,16 @@ import { computed } from "vue";
 import { Bot } from "lucide-vue-next";
 
 import type { Agent } from "@/core/agents/types";
+import { displayNameOfAgent } from "@/core/agents/presentation";
 
 const props = defineProps<{
   agent: Agent | null | undefined;
   agentName: string;
 }>();
 
-const displayName = computed(() => props.agent?.name ?? props.agentName);
+const displayName = computed(() =>
+  displayNameOfAgent(props.agent, props.agentName),
+);
 const description = computed(() => props.agent?.description);
 </script>
 

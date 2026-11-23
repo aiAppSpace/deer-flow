@@ -58,12 +58,33 @@ describe("artifact draft reducer", () => {
       baselineSha256: A,
       conflict: true,
     });
-    expect(completeArtifactSave(dirty, C)).toMatchObject({
+    expect(
+      completeArtifactSave(dirty, { content: "saved text", sha256: C }),
+    ).toMatchObject({
       baselineContent: "saved text",
       remoteContent: "saved text",
       draftContent: "saved text",
       baselineSha256: C,
       remoteSha256: C,
+      conflict: false,
+    });
+  });
+
+  it("acknowledges the submitted snapshot without marking a later draft as saved", () => {
+    const current = editArtifactDraft(
+      reconcileArtifactRemote(createArtifactDraftRecord("/report.txt"), {
+        content: "server",
+        sha256: A,
+      }),
+      "edited after submit",
+    );
+    expect(
+      completeArtifactSave(current, { content: "submitted", sha256: B }),
+    ).toMatchObject({
+      baselineContent: "submitted",
+      remoteContent: "submitted",
+      draftContent: "edited after submit",
+      baselineSha256: B,
       conflict: false,
     });
   });

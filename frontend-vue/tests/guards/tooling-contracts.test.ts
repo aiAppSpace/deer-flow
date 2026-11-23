@@ -254,8 +254,7 @@ describe("跑用例必须经过保存失败现场的包装器", () => {
   const commandLines = makefile
     .split("\n")
     .filter((line) => !line.trimStart().startsWith("#"));
-  // 字面量 `playwright test` 只该出现在两处：`E2E_RUN` 的定义，和只列用例的
-  // `--list`。真正跑用例的 target 行里出现的是展开前的 `$(E2E_RUN)`。
+  // 真正执行用例只从 E2E_RUN 进入；收集由独立 list-e2e.mjs 处理。
   const invocations = commandLines.filter((line) =>
     line.includes("playwright test"),
   );
@@ -263,9 +262,9 @@ describe("跑用例必须经过保存失败现场的包装器", () => {
 
   it("形状先断言：两边都扫到了东西", () => {
     expect(
-      invocations.length,
-      "一条 playwright 调用都没扫到——这条守卫在空转",
-    ).toBeGreaterThanOrEqual(2);
+      invocations.some((line) => line.includes(WRAPPER)),
+      "没有找到通过包装器执行的 Playwright 命令",
+    ).toBe(true);
     expect(
       wrapped.length,
       "一条 $(E2E_RUN) 都没扫到——这条守卫在空转",
@@ -274,6 +273,12 @@ describe("跑用例必须经过保存失败现场的包装器", () => {
 
   it("包装器脚本存在", () => {
     expect(existsSync(join(makefileDir, WRAPPER))).toBe(true);
+  });
+
+  it("收集命令使用保留失败退出码的独立入口", () => {
+    const target = /^e2e-list:\n((?:\t[^\n]*\n)+)/m.exec(makefile)?.[1];
+    expect(target).toContain("node scripts/list-e2e.mjs");
+    expect(target).not.toContain("| grep");
   });
 
   it("除了包装器定义与 --list，没有别的地方直接跑 playwright", () => {
@@ -374,12 +379,15 @@ const NEEDS_GATEWAY = [
   "e2e-browser",
   // 也起 replay Gateway（playwright.parity.config.ts 的 servers[0]）。
   "e2e-parity",
+  "e2e-parity-ci",
   "e2e-parity-auth",
+  "e2e-parity-session",
+  "e2e-cross-app",
 ];
 /** 起真 Gateway 就必须有的两行。 */
 const GATEWAY_SETUP = [
-  "uv sync --group dev --extra browser",
-  "uv run playwright install --with-deps chromium",
+  /uv sync(?=[^\n]*--group dev)(?=[^\n]*--extra browser)[^\n]*/,
+  /uv run playwright install --with-deps chromium/,
 ];
 
 /**
@@ -389,7 +397,13 @@ const GATEWAY_SETUP = [
  * `test.skip(!reactAppPresent)` 会让整组跳过、退出 0——CI 一片绿而一条都没量。
  * 理由全文在 tests/e2e-parity/support/react-preview.ts 的注释里。
  */
-const NEEDS_REACT_REQUIRED = ["e2e-parity", "e2e-parity-auth"];
+const NEEDS_REACT_REQUIRED = [
+  "e2e-parity",
+  "e2e-parity-ci",
+  "e2e-parity-auth",
+  "e2e-parity-session",
+  "e2e-cross-app",
+];
 const REACT_REQUIRED_LINE = 'PARITY_REQUIRE_REACT: "1"';
 
 /** 按两格缩进的 `<name>:` 切 job。 */
@@ -458,7 +472,7 @@ describe("起真 Gateway 的 CI job 装配一致", () => {
     const missing: string[] = [];
     for (const [name, body] of jobsRunning(NEEDS_GATEWAY))
       for (const line of GATEWAY_SETUP)
-        if (!body.includes(line)) missing.push(`${name} 缺：${line}`);
+        if (!line.test(body)) missing.push(`${name} 缺：${line}`);
     expect(
       missing,
       "这个 job 会起真的 Gateway，而 Gateway 启动要 Playwright——" +
@@ -490,5 +504,73 @@ describe("起真 Gateway 的 CI job 装配一致", () => {
       "没有它，`../frontend` 不在 checkout 里时四份 spec 整组 skip、退出 0——" +
         "一条量不到任何东西的绿，而它和真绿长得一模一样。",
     ).toEqual([]);
+  });
+});
+
+function preservesStandaloneFailures(job: string): boolean {
+  const steps = job.split(/^ {6}- /m).slice(1);
+  return steps.some(
+    (step) =>
+      /^ {8}uses: actions\/upload-artifact@v4\s*$/m.test(step) &&
+      /^ {8}if: failure\(\)\s*$/m.test(step) &&
+      /^ {10}include-hidden-files: true\s*$/m.test(step) &&
+      /^ {12}frontend-vue\/\.cache\/standalone-failures\/run-\*\/\*\*\s*$/m.test(
+        step,
+      ),
+  );
+}
+
+describe("独立运行失败现场的 CI 归档", () => {
+  const jobs = existsSync(ciRoot)
+    ? [...allWorkflowJobs()].filter(([, body]) =>
+        /\bmake standalone-sim\b/.test(body),
+      )
+    : null;
+
+  it("执行独立副本的 job 上传每次 run-* 的日志、报告及嵌套浏览器现场", () => {
+    if (jobs === null) return;
+    expect(jobs.length, "独立运行 CI job 不能静默消失").toBeGreaterThan(0);
+    expect(
+      jobs
+        .filter(([, body]) => !preservesStandaloneFailures(body))
+        .map(([name]) => name),
+      ".cache 是隐藏目录；upload-artifact 需要精确 run-* 路径及 include-hidden-files，不能只上传普通 test-results",
+    ).toEqual([]);
+  });
+
+  it.each([
+    ["漏掉独立副本路径", "frontend-vue/test-results/**", true],
+    ["只写总目录而未保留逐次现场", "frontend-vue/.cache/**", true],
+    [
+      "隐藏目录仍被 upload-artifact 排除",
+      "frontend-vue/.cache/standalone-failures/run-*/**",
+      false,
+    ],
+  ] as const)("拒绝 %s", (_name, path, hidden) => {
+    const job = `    steps:
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          include-hidden-files: ${hidden}
+          path: |
+            ${path}
+`;
+    expect(preservesStandaloneFailures(job)).toBe(false);
+  });
+
+  it("认可保留 run-* 层级并显式包含隐藏目录的上传", () => {
+    expect(
+      preservesStandaloneFailures(`    steps:
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          include-hidden-files: true
+          path: |
+            frontend-vue/test-results/**
+            frontend-vue/.cache/standalone-failures/run-*/**
+`),
+    ).toBe(true);
   });
 });

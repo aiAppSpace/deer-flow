@@ -15,7 +15,7 @@
                    这种看起来更整齐的写法。
 
                    **钉的是行为不是源码串**：上一轮那条
-                   `welcome-yields-to-goal` 只能扫源码（夹具喂不出那个组合），
+                   `agent-chat-consumer-contracts` 覆盖父组件的目标/待办让位，
                    这一条可以真挂上去点，所以就真挂上去。
 */
 import { readFileSync } from "node:fs";
@@ -23,7 +23,7 @@ import { resolve } from "node:path";
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
@@ -35,6 +35,8 @@ import {
 } from "@/core/workspace-shell/toast";
 
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
 
 /** 一个完整回合：人类一条（带 id）+ 助手一条，三颗键的前提条件都满足。 */
 const TURN = [
@@ -53,7 +55,7 @@ function mountList(extra: Record<string, unknown>) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return mount(MessageList, {
+  const wrapper = mount(MessageList, {
     props: {
       messages: TURN,
       rawMessages: TURN,
@@ -67,13 +69,23 @@ function mountList(extra: Record<string, unknown>) {
       provide: { [workspaceToastKey as symbol]: toastStore },
       plugins: [[VueQueryPlugin, { queryClient }]],
       stubs: {
-        StreamMarkdown: { template: "<div data-testid='markdown' />" },
+        // The action contracts use the real list and controls, not the renderer.
+        MessageMarkdown: {
+          props: ["content"],
+          template: "<div data-testid='markdown'>{{ content }}</div>",
+        },
         ReferenceAttachment: true,
-        WorkspaceChangesBadge: true,
+        WorkspaceChangesBadge: {
+          props: { runId: String, disabled: Boolean },
+          template:
+            '<button :data-run-id="runId" :disabled="disabled">View changes</button>',
+        },
         SubtaskCard: true,
       },
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 function byLabel(wrapper: ReturnType<typeof mountList>, label: string) {
@@ -109,15 +121,9 @@ describe("调用点把这两样真传进去了", () => {
     expect(source).toContain(':branch-pending="branchPending"');
   });
 
-  /*
-    **分支那个 pending 位必须在请求两侧都被动过。** 只声明不置位、
-    或者只在成功那一支清掉（catch 里有 `return`），都会让按钮永远停在禁用上
-    或者永远点得动——两种都和「写对了」长得一模一样。
-  */
-  it("分支请求两侧都动了那个 pending 位", () => {
-    expect(source).toContain("branchPending.value = true;");
-    expect(source).toMatch(/finally \{[\s\S]*?branchPending\.value = false;/);
-  });
+  // The production operation owner is mounted in chat-conversation-actions:
+  // pending spans the request, clears before navigation/on error, rejects
+  // direct reentry and discards results after an account/conversation change.
 });
 
 /*
@@ -145,23 +151,16 @@ describe("agent 会话上的分支入口", () => {
 
   it("canBranch 关掉时整颗不画，而另外两颗照常", async () => {
     const wrapper = mountList({ canBranch: false });
+    expect(
+      wrapper.findAll("[data-testid='markdown']").map((node) => node.text()),
+    ).toContain("Hello from DeerFlow!");
     await flushPromises();
-
     expect(byLabel(wrapper, BRANCH)).toHaveLength(0);
     expect(byLabel(wrapper, REGENERATE)).toHaveLength(1);
     expect(byLabel(wrapper, EDIT)).toHaveLength(1);
   });
 
-  it("调用点按 agentName 关掉它", () => {
-    const source = stripComments(
-      readFileSync(
-        resolve(process.cwd(), "app/components/chat/AgentChat.vue"),
-        "utf8",
-      ),
-    );
-
-    expect(source).toContain(':can-branch="!agentName"');
-  });
+  // The ordinary/Agent prop transition is exercised through the actual parent in agent-chat-consumer-contracts.dom.test.ts.
 });
 
 describe("上传中 / 分支在飞时的回合操作", () => {
@@ -209,6 +208,64 @@ describe("上传中 / 分支在飞时的回合操作", () => {
     // 「三颗一起禁掉」那种看起来更整齐的写法。
     expect(
       byLabel(wrapper, REGENERATE)[0]?.attributes("disabled"),
+    ).toBeUndefined();
+  });
+});
+
+describe("workspace changes belong to their own completed turn", () => {
+  beforeEach(() => {
+    vi.stubGlobal("useNuxtApp", () => ({
+      $i18n: { t: ref(enUS), locale: ref("en-US") },
+    }));
+  });
+  it("a new streaming turn keeps the earlier run's change action available", async () => {
+    const messages = [
+      ...TURN,
+      { id: "human-2", type: "human", content: "Next request" },
+      {
+        id: "ai-2",
+        type: "ai",
+        run_id: "run-2",
+        content: "Still working",
+        additional_kwargs: {},
+        feedback: null,
+      },
+    ] as Message[];
+    const wrapper = mountList({
+      messages,
+      rawMessages: messages,
+      streaming: true,
+    });
+    await flushPromises();
+    expect(
+      wrapper.get('button[data-run-id="run-1"]').attributes("disabled"),
+    ).toBeUndefined();
+    // Unresolved streaming text belongs to the processing panel, so it has no
+    // change card yet. Reasoning plus answer text becomes a real assistant bubble.
+    expect(wrapper.find('button[data-run-id="run-2"]').exists()).toBe(false);
+    const answering = messages.map((message) =>
+      message.id === "ai-2"
+        ? {
+            ...message,
+            additional_kwargs: { reasoning_content: "Checked the output" },
+          }
+        : message,
+    );
+    await wrapper.setProps({ messages: answering, rawMessages: answering });
+    await flushPromises();
+    expect(
+      wrapper.get('button[data-run-id="run-1"]').attributes("disabled"),
+    ).toBeUndefined();
+    expect(
+      wrapper.get('button[data-run-id="run-2"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.setProps({ streaming: false });
+    await flushPromises();
+    expect(
+      wrapper.get('button[data-run-id="run-1"]').attributes("disabled"),
+    ).toBeUndefined();
+    expect(
+      wrapper.get('button[data-run-id="run-2"]').attributes("disabled"),
     ).toBeUndefined();
   });
 });

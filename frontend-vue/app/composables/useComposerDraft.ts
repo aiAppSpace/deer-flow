@@ -9,12 +9,19 @@
 import {
   computed,
   nextTick,
+  ref,
   onScopeDispose,
   toValue,
   watch,
   type MaybeRefOrGetter,
   type Ref,
 } from "vue";
+
+import type { ConversationReference } from "@/core/conversation-references";
+import {
+  inlineReferences,
+  referenceToken,
+} from "@/core/mentions/inline-references";
 
 import {
   buildComposerDraftKey,
@@ -25,6 +32,13 @@ import {
   writeComposerDraft,
 } from "@/core/threads/composer-draft";
 
+export type ComposerDraftSnapshot = {
+  key: string;
+  text: string;
+  skillName: string | null;
+  conversationReferences?: ConversationReference[];
+};
+
 export function useComposerDraft(options: {
   userId: MaybeRefOrGetter<string | null | undefined>;
   agentName: MaybeRefOrGetter<string | null | undefined>;
@@ -32,8 +46,10 @@ export function useComposerDraft(options: {
   ready: MaybeRefOrGetter<boolean>;
   enabledSkillNames: MaybeRefOrGetter<ReadonlySet<string>>;
   text: Ref<string>;
-  skillName: Ref<string | null>;
+  skillName?: Ref<string | null>;
+  conversationReferences?: Ref<ConversationReference[]>;
 }) {
+  const skillName = options.skillName ?? ref<string | null>(null);
   const storage = getSessionComposerDraftStorage();
   const key = computed(() =>
     buildComposerDraftKey({
@@ -46,17 +62,16 @@ export function useComposerDraft(options: {
   let restored = false;
   let applying = false;
   let dirtyBeforeRestore = false;
-  let pendingSubmission: {
-    key: string;
-    text: string;
-    skillName: string | null;
-  } | null = null;
+  let restoreGeneration = 0;
+  let pendingSubmission: ComposerDraftSnapshot | null = null;
 
   function matchesCurrent(snapshot: NonNullable<typeof pendingSubmission>) {
     return (
       snapshot.key === key.value &&
       snapshot.text === options.text.value &&
-      snapshot.skillName === options.skillName.value
+      snapshot.skillName === skillName.value &&
+      JSON.stringify(snapshot.conversationReferences ?? []) ===
+        JSON.stringify(options.conversationReferences?.value ?? [])
     );
   }
 
@@ -68,6 +83,7 @@ export function useComposerDraft(options: {
           writeComposerDraft(storage, pendingSubmission.key, {
             text: pendingSubmission.text,
             skillName: pendingSubmission.skillName,
+            conversationReferences: pendingSubmission.conversationReferences,
           });
           pendingSubmission = null;
         }
@@ -77,11 +93,13 @@ export function useComposerDraft(options: {
     }
     writeComposerDraft(storage, activeKey, {
       text: options.text.value,
-      skillName: options.skillName.value,
+      skillName: skillName.value,
+      conversationReferences: options.conversationReferences?.value,
     });
   }
 
   async function restore() {
+    const generation = ++restoreGeneration;
     if (!toValue(options.ready)) return;
     if (dirtyBeforeRestore) {
       activeKey = key.value;
@@ -95,20 +113,40 @@ export function useComposerDraft(options: {
     const draft = raw
       ? resolveComposerDraft(raw, toValue(options.enabledSkillNames))
       : null;
-    options.text.value = draft?.text ?? "";
-    options.skillName.value = draft?.skillName ?? null;
+    const text = draft?.text ?? "";
+    // Legacy saved skills join the current inline-reference owner on restore.
+    // Preserve an existing token, and let resolveComposerDraft keep disabled
+    // names as editable slash text instead of activating an unavailable skill.
+    options.text.value =
+      draft?.skillName &&
+      !inlineReferences(text).some(
+        (reference) =>
+          reference.kind === "skill" && reference.id === draft.skillName,
+      )
+        ? referenceToken("skill", draft.skillName, draft.skillName) +
+          (text ? ` ${text}` : "")
+        : text;
+    skillName.value = null;
+    if (options.conversationReferences)
+      options.conversationReferences.value =
+        draft?.conversationReferences ?? [];
     await nextTick();
+    if (generation !== restoreGeneration) return;
     applying = false;
     restored = true;
     flush();
   }
 
-  watch(key, () => {
-    flush({ restorePending: true });
-    restored = false;
-    dirtyBeforeRestore = false;
-    void restore();
-  });
+  watch(
+    key,
+    () => {
+      flush({ restorePending: true });
+      restored = false;
+      dirtyBeforeRestore = false;
+      void restore();
+    },
+    { flush: "sync" },
+  );
   watch(
     () => toValue(options.ready),
     (ready) => {
@@ -116,19 +154,30 @@ export function useComposerDraft(options: {
     },
     { immediate: true },
   );
-  watch([options.text, options.skillName], () => {
-    if (!restored && !applying) {
-      dirtyBeforeRestore = true;
-      return;
-    }
-    flush();
-  });
+  watch(
+    [options.text, skillName, () => options.conversationReferences?.value],
+    () => {
+      if (!restored && !applying) {
+        dirtyBeforeRestore = true;
+        return;
+      }
+      flush();
+    },
+  );
 
-  function clearIfUnchanged(snapshot: {
-    key: string;
-    text: string;
-    skillName: string | null;
-  }) {
+  function clearIfUnchanged(snapshot: ComposerDraftSnapshot) {
+    if (snapshot.key !== key.value) {
+      const stored = readComposerDraft(storage, snapshot.key);
+      if (
+        stored?.text === snapshot.text &&
+        stored.skillName === snapshot.skillName &&
+        JSON.stringify(stored.conversationReferences ?? []) ===
+          JSON.stringify(snapshot.conversationReferences ?? [])
+      )
+        clearComposerDraft(storage, snapshot.key);
+      if (pendingSubmission?.key === snapshot.key) pendingSubmission = null;
+      return false;
+    }
     if (!matchesCurrent(snapshot)) {
       return false;
     }
@@ -136,45 +185,56 @@ export function useComposerDraft(options: {
     clearComposerDraft(storage, snapshot.key);
     applying = true;
     options.text.value = "";
-    options.skillName.value = null;
+    skillName.value = null;
+    if (options.conversationReferences)
+      options.conversationReferences.value = [];
     applying = false;
     return true;
   }
 
-  function beginSubmission(snapshot: {
-    key: string;
-    text: string;
-    skillName: string | null;
-  }) {
+  function beginSubmission(snapshot: ComposerDraftSnapshot) {
     if (!matchesCurrent(snapshot)) return false;
-    pendingSubmission = { ...snapshot };
+    pendingSubmission = JSON.parse(JSON.stringify(snapshot));
     clearComposerDraft(storage, snapshot.key);
     return true;
   }
 
-  function cancelSubmission(snapshot: {
-    key: string;
-    text: string;
-    skillName: string | null;
-  }) {
+  function cancelSubmission(snapshot: ComposerDraftSnapshot) {
     if (pendingSubmission?.key !== snapshot.key) return;
     pendingSubmission = null;
     if (snapshot.key === key.value) {
       writeComposerDraft(storage, snapshot.key, {
         text: options.text.value,
-        skillName: options.skillName.value,
+        skillName: skillName.value,
+        conversationReferences: options.conversationReferences?.value,
       });
       return;
     }
     writeComposerDraft(storage, snapshot.key, {
       text: snapshot.text,
       skillName: snapshot.skillName,
+      conversationReferences: snapshot.conversationReferences,
     });
   }
 
   const restorePendingSubmission = () => {
     if (pendingSubmission) flush({ restorePending: true });
   };
+  function adoptThread(threadId: string) {
+    const nextKey = buildComposerDraftKey({
+      userId: toValue(options.userId) || "anonymous",
+      agentName: toValue(options.agentName),
+      threadId,
+    });
+    if (nextKey === key.value) return;
+    writeComposerDraft(storage, nextKey, {
+      text: options.text.value,
+      skillName: skillName.value,
+      conversationReferences: options.conversationReferences?.value,
+    });
+    clearComposerDraft(storage, key.value);
+    restored = false;
+  }
   // Ordinary edits are persisted synchronously by the value watcher. Only an
   // accepted-pending submission needs an unload fallback because beginSubmission
   // intentionally removed its stored copy. This also respects an explicit
@@ -182,6 +242,7 @@ export function useComposerDraft(options: {
   const pageHide = () => restorePendingSubmission();
   globalThis.addEventListener?.("pagehide", pageHide);
   onScopeDispose(() => {
+    restoreGeneration += 1;
     restorePendingSubmission();
     globalThis.removeEventListener?.("pagehide", pageHide);
   });
@@ -193,5 +254,6 @@ export function useComposerDraft(options: {
     beginSubmission,
     cancelSubmission,
     clearIfUnchanged,
+    adoptThread,
   };
 }

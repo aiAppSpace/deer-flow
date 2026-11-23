@@ -80,30 +80,19 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - name: Use pinned pnpm version
-        run: corepack prepare pnpm@10.26.2 --activate
-
       - name: Install frontend dependencies
-        run: |
-          cd frontend
-          pnpm install --frozen-lockfile
+        run: python3 scripts/pnpm.py --dir frontend install --frozen-lockfile
 
       - name: Check frontend formatting
-        run: |
-          cd frontend
-          pnpm format
+        run: python3 scripts/pnpm.py --dir frontend format
 
       - name: Run frontend linting
-        run: |
-          cd frontend
-          pnpm lint
+        run: python3 scripts/pnpm.py --dir frontend lint
 
       - name: Check TypeScript types
-        run: |
-          cd frontend
-          pnpm typecheck
+        run: python3 scripts/pnpm.py --dir frontend typecheck
 
       - name: Build frontend
-        run: |
-          cd frontend
-          BETTER_AUTH_SECRET=local-dev-secret pnpm build
+        run: python3 scripts/pnpm.py --dir frontend build
+        env:
+          BETTER_AUTH_SECRET: local-dev-secret

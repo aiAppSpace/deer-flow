@@ -131,7 +131,7 @@ export default function SkillExportDialog({
           </DialogTitle>
           <DialogDescription>{text.exportDescription}</DialogDescription>
         </DialogHeader>
-        <div className="min-w-0 space-y-5">
+        <div className="@container/skill-export min-w-0 space-y-5">
           <div className="font-mono text-base font-medium break-all">
             {name}.skill
           </div>
@@ -146,7 +146,7 @@ export default function SkillExportDialog({
           )}
           {manifest && (
             <>
-              <dl className="bg-muted/50 grid grid-cols-3 gap-3 rounded-lg p-3 text-sm">
+              <dl className="bg-muted/50 grid grid-cols-1 gap-3 rounded-lg p-3 text-sm @sm/skill-export:grid-cols-3">
                 {[
                   [text.exportFiles, manifest.file_count],
                   [text.exportDirectories, manifest.directory_count],

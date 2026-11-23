@@ -4,6 +4,7 @@ import { act, renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
+import type { ObservationPacket } from "@/core/diagnostics/parity-observation";
 import { I18nContext } from "@/core/i18n/context";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { DEFAULT_LOCAL_SETTINGS } from "@/core/settings/local";
@@ -212,3 +213,247 @@ test("reports a text-only send before the run is submitted", async () => {
 
   expect(mocks.events).toEqual(["onSent", "submit"]);
 });
+
+test("observes the actual new human producer without claiming additional input identities", async () => {
+  const capability = "__deerflow_parity_capture_v1__";
+  const eventName = "deerflow:parity-identity:v1";
+  const packets: ObservationPacket[] = [];
+  const receive = (event: Event) =>
+    packets.push((event as CustomEvent<(typeof packets)[number]>).detail);
+  Object.defineProperty(window, capability, {
+    configurable: true,
+    value: { version: 1, token: "human-capture", action: "send:0" },
+  });
+  window.addEventListener(eventName, receive);
+  stubUploadFetch(async () => {
+    throw new Error("no upload expected");
+  });
+  const view = await renderThreadStream();
+  try {
+    await act(async () => {
+      await view.result.current.sendMessage(
+        "thread-1",
+        { text: "Hello", files: [] },
+        undefined,
+        {
+          additionalInputMessages: [
+            {
+              type: "human",
+              id: "historical-context",
+              content: "Additional context",
+            },
+          ],
+        },
+      );
+    });
+    expect(packets).toHaveLength(3);
+    expect(packets[2]).toMatchObject({
+      event: "run.bind",
+      instance: packets[0]!.instance,
+      values: { thread: "thread-1", assistant: "lead_agent" },
+    });
+    expect(packets[0]).toMatchObject({
+      event: "human.allocate",
+      values: {
+        thread: "thread-1",
+        raw: expect.stringMatching(/^local-human-/),
+      },
+    });
+    expect(mocks.submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            id: packets[0]?.values.raw,
+            type: "human",
+          }),
+          expect.objectContaining({ id: "historical-context", type: "human" }),
+        ]),
+      }),
+      expect.objectContaining({ threadId: "thread-1" }),
+    );
+    expect(packets[1]).toMatchObject({
+      event: "human.submission",
+      values: {
+        raw: packets[0]!.values.raw,
+        thread: "thread-1",
+        index: 1,
+        messageCount: 2,
+        keySource: "none",
+        key: null,
+      },
+    });
+    expect(packets[1]).toMatchObject({
+      instance: packets[0]!.instance,
+    });
+  } finally {
+    view.unmount();
+    window.removeEventListener(eventName, receive);
+    Reflect.deleteProperty(window, capability);
+  }
+});
+
+test("a failed upload retains human allocation evidence without pretending a run was submitted", async () => {
+  const capability = "__deerflow_parity_capture_v1__";
+  const eventName = "deerflow:parity-identity:v1";
+  const packets: { event: string; values: Record<string, unknown> }[] = [];
+  const receive = (event: Event) =>
+    packets.push((event as CustomEvent<(typeof packets)[number]>).detail);
+  Object.defineProperty(window, capability, {
+    configurable: true,
+    value: { version: 1, token: "human-failed", action: "send:0" },
+  });
+  window.addEventListener(eventName, receive);
+  stubUploadFetch(
+    async () =>
+      new Response(JSON.stringify({ detail: "disk full" }), { status: 500 }),
+  );
+  const view = await renderThreadStream();
+  try {
+    await act(async () => {
+      await expect(
+        view.result.current.sendMessage("thread-1", MESSAGE_WITH_FILE),
+      ).rejects.toThrow();
+    });
+    expect(packets.map((packet) => packet.event)).toEqual(["human.allocate"]);
+    expect(mocks.submit).not.toHaveBeenCalled();
+  } finally {
+    view.unmount();
+    window.removeEventListener(eventName, receive);
+    Reflect.deleteProperty(window, capability);
+  }
+});
+
+test.each(["same-capture", "replacement", "enabled-late"])(
+  "preserves the original send source across an awaited upload: %s",
+  async (mode) => {
+    const capability = "__deerflow_parity_capture_v1__";
+    const eventName = "deerflow:parity-identity:v1";
+    const packets: ObservationPacket[] = [];
+    const receive = (event: Event) =>
+      packets.push((event as CustomEvent<ObservationPacket>).detail);
+    const scope = { version: 1, token: "send-origin", action: "send:0" };
+    if (mode !== "enabled-late")
+      Object.defineProperty(window, capability, {
+        configurable: true,
+        value: scope,
+      });
+    window.addEventListener(eventName, receive);
+    let resolveUpload!: (response: Response) => void;
+    stubUploadFetch(
+      () =>
+        new Promise((resolve) => {
+          resolveUpload = resolve;
+        }),
+    );
+    const view = await renderThreadStream();
+    try {
+      let pending!: Promise<unknown>;
+      act(() => {
+        pending = view.result.current.sendMessage(
+          "thread-1",
+          MESSAGE_WITH_FILE,
+        );
+      });
+      await flushFrames();
+      expect(mocks.submit).not.toHaveBeenCalled();
+      scope.action = "later-step";
+      if (mode !== "same-capture")
+        Object.defineProperty(window, capability, {
+          configurable: true,
+          value: { ...scope, token: "replacement" },
+        });
+      resolveUpload(Response.json(UPLOAD_RESPONSE));
+      await act(async () => {
+        await pending;
+      });
+      expect(mocks.submit).toHaveBeenCalledTimes(1);
+      expect(mocks.events).toEqual(["upload", "submit"]);
+      if (mode === "same-capture") {
+        expect(packets.map((packet) => packet.event)).toEqual([
+          "human.allocate",
+          "human.submission",
+          "run.bind",
+        ]);
+        expect(packets[2]).toMatchObject({
+          action: "later-step",
+          values: { sourceAction: "send:0" },
+        });
+        expect(packets[1]).toMatchObject({
+          action: "send:0",
+          at: packets[0]!.at,
+          instance: packets[0]!.instance,
+        });
+      } else
+        expect(packets.map((packet) => packet.event)).toEqual(
+          mode === "enabled-late" ? [] : ["human.allocate"],
+        );
+    } finally {
+      view.unmount();
+      window.removeEventListener(eventName, receive);
+      Reflect.deleteProperty(window, capability);
+    }
+  },
+);
+
+test.each(["onSent", "messages", "context", "transport"])(
+  "preserves %s errors and distinguishes submission attempts from acceptance",
+  async (failure) => {
+    const capability = "__deerflow_parity_capture_v1__";
+    const eventName = "deerflow:parity-identity:v1";
+    const packets: ObservationPacket[] = [];
+    const receive = (event: Event) =>
+      packets.push((event as CustomEvent<ObservationPacket>).detail);
+    Object.defineProperty(window, capability, {
+      configurable: true,
+      value: { version: 1, token: "send-failure", action: "send:0" },
+    });
+    window.addEventListener(eventName, receive);
+    stubUploadFetch(async () => {
+      throw new Error("unexpected upload");
+    });
+    const view = await renderThreadStream();
+    const cause = new Error(failure);
+    if (failure === "transport") mocks.submit.mockRejectedValueOnce(cause);
+    let caught: unknown;
+    try {
+      await act(async () => {
+        await view.result.current
+          .sendMessage(
+            "thread-1",
+            { text: "Hello", files: [] },
+            {
+              get detail() {
+                if (failure === "context") throw cause;
+                return "kept";
+              },
+            },
+            {
+              onSent() {
+                if (failure === "onSent") throw cause;
+              },
+              get additionalInputMessages() {
+                if (failure === "messages") throw cause;
+                return [];
+              },
+            },
+          )
+          .catch((error: unknown) => {
+            caught = error;
+          });
+      });
+      expect(caught).toBe(cause);
+      expect(packets.map((packet) => packet.event)).toEqual(
+        failure === "transport"
+          ? ["human.allocate", "human.submission", "run.bind"]
+          : ["human.allocate"],
+      );
+      expect(mocks.submit).toHaveBeenCalledTimes(
+        failure === "transport" ? 1 : 0,
+      );
+    } finally {
+      view.unmount();
+      window.removeEventListener(eventName, receive);
+      Reflect.deleteProperty(window, capability);
+    }
+  },
+);

@@ -31,6 +31,7 @@ const LABELS: MemoryDocumentLabels = {
   work: "Work",
   personal: "Personal",
   topOfMind: "Top of mind",
+  cognitiveStyle: "Thinking style",
   historyBackground: "History",
   recentMonths: "Recent months",
   earlierContext: "Earlier context",
@@ -51,6 +52,7 @@ function makeMemory(overrides: Partial<UserMemory> = {}): UserMemory {
       workContext: section("Works on parity."),
       personalContext: section("", ""),
       topOfMind: section("Ship wave 22."),
+      cognitiveStyle: section("", ""),
     },
     history: {
       recentMonths: section("Shipped waves."),
@@ -108,6 +110,7 @@ describe("buildMemorySectionGroups", () => {
       "Work",
       "Personal",
       "Top of mind",
+      "Thinking style",
       "Recent months",
       "Earlier context",
       "Long-term background",
@@ -152,24 +155,25 @@ describe("summariesToMarkdown", () => {
     expect(text).toContain(
       '<span class="text-muted-foreground">(empty)</span>',
     );
-    expect(text.match(/\(empty\)/g)).toHaveLength(2);
+    expect(text.match(/\(empty\)/g)).toHaveLength(3);
   });
 
   it("quotes the updated-at line only for sections that have one", () => {
     const text = markdown();
-    // 四个有内容的小节各一条；两个空小节的 updatedAt 也是空的，所以没有。
+    // 四个有内容的小节各一条；三个空小节的 updatedAt 也是空的，所以没有。
     expect(text.match(/^> Updated at: `/gm)).toHaveLength(4);
   });
 });
 
 describe("isMemorySummaryEmpty", () => {
-  it("is true only when all six summaries are blank", () => {
+  it("is true only when all seven summaries are blank", () => {
     expect(isMemorySummaryEmpty(makeMemory())).toBe(false);
     const blank = makeMemory();
     for (const key of [
       "workContext",
       "personalContext",
       "topOfMind",
+      "cognitiveStyle",
     ] as const) {
       blank.user[key].summary = "   ";
     }
@@ -181,6 +185,8 @@ describe("isMemorySummaryEmpty", () => {
       blank.history[key].summary = "";
     }
     expect(isMemorySummaryEmpty(blank)).toBe(true);
+    blank.user.cognitiveStyle.summary = "Prefers concrete examples";
+    expect(isMemorySummaryEmpty(blank)).toBe(false);
   });
 });
 

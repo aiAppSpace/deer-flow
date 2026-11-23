@@ -30,7 +30,7 @@
   `TRIPLE_OVERLAY_ONLY` 只用于定位，默认必须走完双端全部终态。
 */
 
-import { expect, test, type Browser, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
@@ -394,8 +394,18 @@ const PICK_TYPEAHEAD_CANDIDATE = (index: number): TypeaheadCandidate => {
       .replace(/\s+/g, " "),
   );
   if (overlay.getAttribute("role") === "listbox") {
+    // MentionPicker's fixed upload command is keyboard-operable, not a search result.
+    const uploadIndex = items.findIndex(
+      (item) =>
+        !!overlay.closest('[data-testid="mention-picker"]') &&
+        item.tagName === "BUTTON" &&
+        item.parentElement?.getAttribute("role") === "group" &&
+        !!overlay.id &&
+        item.id === `${overlay.id}-upload`,
+    );
     const tokenOwners = new Map<string, Set<number>>();
     labels.forEach((label, itemIndex) => {
+      if (itemIndex === uploadIndex) return;
       const tokens = new Set(
         (
           label.toLocaleLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}-]*/gu) ?? []
@@ -515,7 +525,13 @@ const PICK_REPEATED_TYPEAHEAD_CANDIDATE = (
   };
 };
 
-const READ_FILTER_RESULT = ({ token }: { token: string }) => {
+const READ_FILTER_RESULT = ({
+  index,
+  token,
+}: {
+  index: number;
+  token: string;
+}) => {
   const visible = (element: HTMLElement) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
@@ -526,36 +542,73 @@ const READ_FILTER_RESULT = ({ token }: { token: string }) => {
       rect.height > 0
     );
   };
-  const labels = Array.from(
-    document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]'),
-  )
-    .filter(
-      (item) =>
-        visible(item) &&
-        item.closest('[role="listbox"]') instanceof HTMLElement &&
-        visible(item.closest<HTMLElement>('[role="listbox"]')!),
+  const overlay = document.querySelector<HTMLElement>(
+    `[data-wave69-overlay="${index}"]`,
+  );
+  const items = Array.from(
+    overlay?.querySelectorAll<HTMLElement>('[role="option"]') ?? [],
+  ).filter(
+    (item) =>
+      visible(item) &&
+      item.closest('[role="listbox"]') === overlay &&
+      visible(overlay!),
+  );
+  const uploadCommands = items.filter(
+    (item) =>
+      !!overlay?.closest('[data-testid="mention-picker"]') &&
+      item.tagName === "BUTTON" &&
+      item.parentElement?.getAttribute("role") === "group" &&
+      !!overlay.id &&
+      item.id === `${overlay.id}-upload`,
+  );
+  const labels = items.map((item) =>
+    (
+      item.getAttribute("aria-label") ??
+      item.innerText ??
+      item.textContent ??
+      ""
     )
-    .map((item) =>
-      (
-        item.getAttribute("aria-label") ??
-        item.innerText ??
-        item.textContent ??
-        ""
-      )
-        .trim()
-        .replace(/\s+/g, " "),
-    );
+      .trim()
+      .replace(/\s+/g, " "),
+  );
+  const references = labels.filter(
+    (_, itemIndex) => !uploadCommands.includes(items[itemIndex]!),
+  );
   const needle = token.toLocaleLowerCase();
   return {
     labels,
-    matching: labels.filter((label) =>
+    commandId: uploadCommands[0]?.id ?? "",
+    commandRequired: !!overlay?.closest('[data-testid="mention-picker"]'),
+    commandPresent: uploadCommands.length === 1,
+    matching: references.filter((label) =>
       label.toLocaleLowerCase().includes(needle),
     ),
-    foreign: labels.filter(
+    foreign: references.filter(
       (label) => !label.toLocaleLowerCase().includes(needle),
     ),
   };
 };
+
+/** Playwright's US key map inserts non-US text without keydown. Menus need keys. */
+async function pressTypeaheadKey(page: Page, key: string) {
+  if ([...key].length !== 1)
+    throw new Error("Typeahead requires one character");
+  if (/^[\x20-\x7e]$/.test(key)) {
+    await page.keyboard.press(key);
+    return;
+  }
+  const session = await page.context().newCDPSession(page);
+  try {
+    await session.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key,
+      text: key,
+    });
+    await session.send("Input.dispatchKeyEvent", { type: "keyUp", key });
+  } finally {
+    await session.detach();
+  }
+}
 
 type SubmenuRelation = {
   parentIndex: number;
@@ -1157,7 +1210,35 @@ async function exerciseRovingNavigation(page: Page, index: number) {
     await page.waitForTimeout(100);
     await waitForDomQuiet(page);
     const filter = await page.evaluate(READ_FILTER_RESULT, {
+      index,
       token: candidate.key,
+    });
+    let uploadCommandWorked = !filter.commandRequired;
+    if (filter.commandRequired && filter.commandPresent) {
+      // Keep the fixed command in the original navigation contract as well.
+      for (let step = 0; step <= filter.labels.length; step += 1) {
+        const command = await page.evaluate(READ_OVERLAY, index);
+        const activeId = await page.evaluate(
+          () =>
+            document.activeElement?.getAttribute("aria-activedescendant") ??
+            document.activeElement?.id ??
+            "",
+        );
+        if (activeId === filter.commandId && command.activeVisible) {
+          uploadCommandWorked = true;
+          break;
+        }
+        await page.keyboard.press("ArrowDown");
+      }
+    }
+    // A constant remote response can accidentally match the positive token.
+    const noMatchToken = `${candidate.key}-wave69-no-reference`;
+    await page.keyboard.type("-wave69-no-reference");
+    await page.waitForTimeout(100);
+    await waitForDomQuiet(page);
+    const noMatchFilter = await page.evaluate(READ_FILTER_RESULT, {
+      index,
+      token: noMatchToken,
     });
     return {
       role: before.role,
@@ -1170,13 +1251,19 @@ async function exerciseRovingNavigation(page: Page, index: number) {
       afterTypeahead: null,
       candidate,
       filter,
+      noMatchFilter,
+      uploadCommandWorked,
       arrowUpWorked,
       homeWorked: null,
       endWorked: null,
       typeaheadWorked:
         candidate.key.length > 0 &&
         filter.matching.length > 0 &&
-        filter.foreign.length === 0,
+        filter.foreign.length === 0 &&
+        noMatchFilter.matching.length === 0 &&
+        noMatchFilter.foreign.length === 0 &&
+        (!filter.commandRequired || noMatchFilter.commandPresent) &&
+        uploadCommandWorked,
     };
   }
 
@@ -1195,7 +1282,7 @@ async function exerciseRovingNavigation(page: Page, index: number) {
   await page.waitForTimeout(50);
   const afterArrowUp = await page.evaluate(READ_OVERLAY, index);
   await page.evaluate(FOCUS_MENU_ITEM, { index, itemIndex: 0 });
-  await page.keyboard.type(candidate.key);
+  await pressTypeaheadKey(page, candidate.key);
   await page.waitForTimeout(50);
   const afterTypeahead = await page.evaluate(READ_OVERLAY, index);
   return {
@@ -1244,7 +1331,7 @@ async function exerciseRepeatedTypeahead(page: Page, index: number) {
   const observed: number[] = [];
   const visible: boolean[] = [];
   for (let press = 0; press < candidate.indices.length; press += 1) {
-    await page.keyboard.press(candidate.key);
+    await pressTypeaheadKey(page, candidate.key);
     await page.waitForTimeout(50);
     const state = await page.evaluate(READ_OVERLAY, index);
     observed.push(state.activeIndex);
@@ -1580,6 +1667,111 @@ test("三轴浮层量具能分别抓住激活、关闭、roving-focus 与 submen
       await page.locator(":focus").getAttribute("id"),
       `${name}[ArrowLeft-focus]`,
     ).toBe("second");
+  }
+
+  // Calibrate reference filtering separately from the always-present upload command.
+  for (const broken of [
+    "",
+    "foreign",
+    "wrong-id",
+    "missing-command",
+    "unreachable-command",
+  ]) {
+    await page.setContent(`
+      <div data-testid="mention-picker">
+        <input aria-controls="references" role="combobox" />
+        <div id="references" role="listbox"></div>
+      </div>
+      <script>
+        (() => {
+          const broken = ${JSON.stringify(broken)};
+          const input = document.querySelector('input');
+          const list = document.querySelector('[role=listbox]');
+          const refs = [{id:'file',label:'report.pdf'},{id:'conversation',label:'Quarterlyresearch'}];
+          let active = -1;
+          const render = () => {
+            const candidates = refs.filter(ref => broken === 'foreign' || ref.label.toLowerCase().includes(input.value.toLowerCase()));
+            if (broken !== 'missing-command') candidates.push({id:broken === 'wrong-id' ? 'fake-upload' : 'upload',label:'Upload a file'});
+            list.innerHTML = candidates.map(ref => '<div role="group"><button role="option" id="references-' + ref.id + '">' + ref.label + '</button></div>').join('');
+            active = -1;
+            input.removeAttribute('aria-activedescendant');
+          };
+          input.addEventListener('input', render);
+          input.addEventListener('keydown', event => {
+            if (!['ArrowDown','ArrowUp'].includes(event.key)) return;
+            event.preventDefault();
+            const items = [...list.querySelectorAll('[role=option]')].filter(item => broken !== 'unreachable-command' || item.id !== 'references-upload');
+            active = (active + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+            input.setAttribute('aria-activedescendant', items[active].id);
+          });
+          render();
+          input.focus();
+        })();
+      </script>
+    `);
+    const result = await exerciseRovingNavigation(page, 0);
+    expect(
+      result.typeaheadWorked,
+      `reference-filter ${broken || "valid"}`,
+    ).toBe(!broken);
+    if (!broken) {
+      expect(result.candidate.key).toBe("pdf");
+      expect(result.filter?.labels).toEqual(["report.pdf", "Upload a file"]);
+      expect(result.uploadCommandWorked).toBe(true);
+      await page
+        .locator('[data-testid="mention-picker"]')
+        .evaluate((element) => element.removeAttribute("data-testid"));
+      const wrongOwner = await page.evaluate(READ_FILTER_RESULT, {
+        index: 0,
+        token: "pdf",
+      });
+      expect(wrongOwner.foreign).toEqual(["Upload a file"]);
+    }
+  }
+
+  for (const broken of [false, true]) {
+    await page.setContent(`
+      <div role="menu"><button role="menuitem">最低</button><button role="menuitem">低</button></div>
+      <script>
+        (() => {
+        window.typeaheadKeys = [];
+        const items = [...document.querySelectorAll('[role=menuitem]')];
+        for (const type of ['keydown','keyup']) document.querySelector('[role=menu]').addEventListener(type, event => {
+          window.typeaheadKeys.push({type:event.type,key:event.key,trusted:event.isTrusted});
+          if (event.type === 'keydown' && event.key === '低' && !${broken}) items[1].focus();
+        });
+        items[0].focus();
+        })();
+      </script>
+    `);
+    // insertText is correct for IME/text input, but cannot stand in for a menu key.
+    await page.keyboard.type("低");
+    expect(
+      await page
+        .locator('[role="menuitem"]')
+        .first()
+        .evaluate((item) => document.activeElement === item),
+    ).toBe(true);
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { typeaheadKeys: unknown[] }).typeaheadKeys,
+      ),
+    ).toEqual([]);
+    await pressTypeaheadKey(page, "低");
+    expect(
+      await page
+        .locator('[role="menuitem"]')
+        .nth(1)
+        .evaluate((item) => document.activeElement === item),
+    ).toBe(!broken);
+    expect(
+      await page.evaluate(
+        () => (window as unknown as { typeaheadKeys: unknown[] }).typeaheadKeys,
+      ),
+    ).toEqual([
+      { type: "keydown", key: "低", trusted: true },
+      { type: "keyup", key: "低", trusted: true },
+    ]);
   }
 });
 

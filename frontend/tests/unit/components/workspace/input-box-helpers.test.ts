@@ -345,9 +345,10 @@ describe("getMatchingSlashCommands", () => {
   });
 
   it("keeps both builtin commands available independently of the skills catalog", () => {
-    expect(getMatchingSlashCommands("", builtins).map(({ name }) => name)).toEqual(["goal", "compact"]);
+    expect(
+      getMatchingSlashCommands("", builtins).map(({ name }) => name),
+    ).toEqual(["goal", "compact"]);
   });
-
 });
 
 describe("isCompleteBuiltinCommand", () => {

@@ -1,3 +1,10 @@
+import { CAPABILITY_PARITY_SCENARIOS } from "./capability-scenarios";
+import { PREFERENCES_PARITY_SCENARIOS } from "./preferences-scenarios";
+import { COMPOSER_PARITY_SCENARIOS } from "./composer-scenarios";
+import { SCHEDULED_PARITY_SCENARIOS } from "./scheduled-scenarios";
+import { PROJECT_PARITY_SCENARIOS } from "./project-scenarios";
+import { THREAD_LIFECYCLE_PARITY_SCENARIOS } from "./thread-lifecycle-scenarios";
+import { DEMO_THREAD_IDS } from "../../../shared/showcase";
 /*
   【文件职责】     用**与框架无关的数据**描述对照场景：打开哪里、做什么、等到什么。
   【架构位置】     对照测试基础设施
@@ -24,8 +31,8 @@
 import type { Page } from "@playwright/test";
 
 import { waitForDomQuiet, waitForFiniteAnimations } from "./settle";
+import { tooltipPresentationVisible } from "./tooltip-presentation";
 import { CHANNEL_PROVIDERS } from "../../support/channel-providers";
-import { MCP_CONFIG } from "../../support/settings-fixtures";
 
 import type { Agent } from "@/core/agents/types";
 
@@ -187,8 +194,12 @@ export type ParityTarget =
     （**2026-09-11 起不是这样了**：`make typecheck-tests` 已接进 `make verify`，
     同样的错误今天会当场报出来。门禁：tests/guards/stale-coverage-claims.test.ts。）
   */
-  | { role: Parameters<Page["getByRole"]>[0]; name?: string | RegExp }
-  | { text: string | RegExp };
+  | {
+      role: Parameters<Page["getByRole"]>[0];
+      name?: string | RegExp;
+      exact?: boolean;
+    }
+  | { text: string | RegExp; exact?: boolean };
 
 /** 一个具名终态：`id` 进台账的键，`steps` 是走到它的交互。 */
 export type ParityState = {
@@ -236,8 +247,17 @@ export type ParityState = {
   path?: string;
 };
 
-export type ParityStep =
+export type ParityStep = (
+  | { kind: "reload" }
+  | { kind: "visibility-change" }
+  | {
+      kind: "set-input-files";
+      target: ParityTarget;
+      file: { name: string; mimeType: string; base64: string };
+    }
+  | { kind: "download"; target: ParityTarget; suggestedFilename: string }
   | { kind: "visible"; target: ParityTarget }
+  | { kind: "tooltip-visible"; target: ParityTarget }
   | { kind: "hidden"; target: ParityTarget }
   | { kind: "click"; target: ParityTarget }
   /*
@@ -271,7 +291,11 @@ export type ParityStep =
 
     两个应用共用这段代码，因为它只碰浏览器 API，不碰任何一边的实现细节。
   */
-  | { kind: "select-text"; scope: ParityTarget; text: string };
+  | { kind: "select-text"; scope: ParityTarget; text: string }
+) & {
+  /** Responsive entry points differ by viewport, never by implementation. */
+  viewports?: readonly ParityViewport[];
+};
 
 /**
  * 额外的路由覆盖，写成数据。
@@ -285,6 +309,8 @@ export type ParityRouteOverride = {
   pattern: string;
   status?: number;
   json: unknown;
+  /** Authoritative search responses filter this fixed data by the request query. */
+  queryFilter?: { requestField: string; fields: readonly string[] };
   /*
     artifact 的**正文**不是 JSON。用 application/json 端上去，两个应用都会渲染一串
     带引号的 JSON 字面量——比出来的仍然一致，但比的是夹具而不是产品。
@@ -324,6 +350,8 @@ export type ParityRouteOverride = {
  * 而是在页面跑起来之前把 `Notification` 与 `document.hasFocus` 换掉。
  */
 export type ParityStubs = {
+  /** Framework-neutral persistent browser state, installed identically before navigation. */
+  localStorage?: Record<string, string>;
   /**
    * 用一个假的 `Notification` 替换 `window.Notification`，并选定初始权限。
    *
@@ -344,8 +372,10 @@ export type ParityStubs = {
 };
 
 export type ParityScenario = {
-  /** 与 React spec 文件同名（去掉 .spec.ts），覆盖率棘轮靠它对齐。 */
+  /** Stable scenario identity; coverage is declared explicitly for multi-state product flows. */
   id: string;
+  /** Current React E2E specs whose observable flows this scenario actually exercises. */
+  upstreamSpecs?: readonly string[];
   title: string;
   backend: "mock" | "gateway";
   /** 两个应用打开同一个路径。 */
@@ -382,27 +412,73 @@ export function locateTarget(page: Page, target: ParityTarget) {
   if ("testId" in target) return page.getByTestId(target.testId);
   if ("selector" in target) return page.locator(target.selector);
   if ("role" in target)
-    return page.getByRole(target.role, { name: target.name });
-  return page.getByText(target.text);
+    return page.getByRole(target.role, {
+      name: target.name,
+      exact: target.exact,
+    });
+  return page.getByText(target.text, { exact: target.exact });
 }
 
 /** 装一组路由覆盖。后注册者优先，所以调用顺序就是优先级顺序。 */
+function waitForRouteOwner(page: Page, delayMs: number) {
+  return new Promise<boolean>((resolve) => {
+    const finish = (alive: boolean) => {
+      clearTimeout(timer);
+      page.off("close", onClose);
+      resolve(alive);
+    };
+    const onClose = () => finish(false);
+    const timer = setTimeout(() => finish(true), delayMs);
+    page.once("close", onClose);
+    if (page.isClosed()) onClose();
+  });
+}
+
 async function installRoutes(
   page: Page,
   overrides: ParityRouteOverride[] | undefined,
 ) {
   for (const override of overrides ?? []) {
     await page.route(override.pattern, async (route) => {
-      if (override.delayMs)
-        await new Promise((resolve) => setTimeout(resolve, override.delayMs));
+      if (override.delayMs) {
+        if (!(await waitForRouteOwner(page, override.delayMs))) return;
+        if (page.isClosed()) return;
+      }
+      let json = override.json;
+      if (override.queryFilter) {
+        const { requestField, fields } = override.queryFilter;
+        const body: unknown = route.request().postDataJSON();
+        const query =
+          body && typeof body === "object"
+            ? (body as Record<string, unknown>)[requestField]
+            : undefined;
+        if (typeof query !== "string" || !Array.isArray(json)) {
+          throw new Error(
+            "Query-filter routes require a string query and array response",
+          );
+        }
+        const needle = query.trim().normalize("NFKC").toLocaleLowerCase();
+        json = json.filter(
+          (item: unknown) =>
+            !!item &&
+            typeof item === "object" &&
+            fields.some((field) => {
+              const value = (item as Record<string, unknown>)[field];
+              return (
+                typeof value === "string" &&
+                value.normalize("NFKC").toLocaleLowerCase().includes(needle)
+              );
+            }),
+        );
+      }
       return route.fulfill({
         status: override.status ?? 200,
         contentType: override.contentType ?? "application/json",
         headers: override.headers,
         body:
-          typeof override.json === "string" && override.contentType
-            ? override.json
-            : JSON.stringify(override.json),
+          typeof json === "string" && override.contentType
+            ? json
+            : JSON.stringify(json),
       });
     });
   }
@@ -429,6 +505,12 @@ export async function applyScenarioBackend(
 export async function applyScenarioStubs(page: Page, scenario: ParityScenario) {
   const stubs = scenario.stubs;
   if (!stubs) return;
+  if (stubs.localStorage) {
+    await page.addInitScript((entries) => {
+      for (const [key, value] of Object.entries(entries))
+        localStorage.setItem(key, value);
+    }, stubs.localStorage);
+  }
   if (stubs.notification !== undefined) {
     await page.addInitScript((permission) => {
       const record: { title: string; body?: string }[] = [];
@@ -496,6 +578,27 @@ export async function applyDimension(
 }
 
 async function runStep(page: Page, step: ParityStep, timeout: number) {
+  if (step.kind === "reload") {
+    await page.reload();
+    return;
+  }
+  if (step.kind === "visibility-change") {
+    // Both workspaces refresh their real session when a tab becomes visible.
+    // Browser route fixtures cannot replace React's server-rendered initial user.
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.request().method() === "GET" &&
+          new URL(response.url()).pathname === "/api/v1/auth/me",
+        { timeout },
+      ),
+      page.evaluate(() =>
+        document.dispatchEvent(new Event("visibilitychange")),
+      ),
+    ]);
+    await waitForDomQuiet(page);
+    return;
+  }
   if (step.kind === "press") return page.keyboard.press(step.key);
   if (step.kind === "select-text") {
     const scope = locateTarget(page, step.scope).first();
@@ -530,6 +633,39 @@ async function runStep(page: Page, step: ParityStep, timeout: number) {
   }
   const locator = locateTarget(page, step.target).first();
   switch (step.kind) {
+    case "set-input-files":
+      return locator.setInputFiles(
+        {
+          name: step.file.name,
+          mimeType: step.file.mimeType,
+          buffer: Buffer.from(step.file.base64, "base64"),
+        },
+        { timeout },
+      );
+    case "download": {
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout }),
+        locator.click({ timeout }),
+      ]);
+      if (download.suggestedFilename() !== step.suggestedFilename)
+        throw new Error(
+          `Unexpected download filename: ${download.suggestedFilename()}`,
+        );
+      if (await download.failure()) throw new Error("Download failed");
+      return;
+    }
+    case "tooltip-visible": {
+      const trigger = await locator.elementHandle({ timeout });
+      if (!trigger) throw new Error("The tooltip trigger is missing");
+      try {
+        await page.waitForFunction(tooltipPresentationVisible, trigger, {
+          timeout,
+        });
+      } finally {
+        await trigger.dispose();
+      }
+      return;
+    }
     case "visible":
       return locator.waitFor({ state: "visible", timeout });
     case "hidden":
@@ -539,29 +675,10 @@ async function runStep(page: Page, step: ParityStep, timeout: number) {
     case "fill":
       return locator.fill(step.value, { timeout });
     case "hover":
-      /*
-        **移三次，不是一次**（坑 237 的同族，wave 91 实测）。
-
-        两组读数，都如实记下来：
-
-        - 探针里「`hover()` 一次 + 等 1.5 秒」：**Vue 侧动作条已经 `opacity: 1`
-          且 tooltip 开了，React 侧仍然是 `opacity: 0`、一个 tooltip 都没有**；
-          随手再抖一次鼠标，React 立刻也开了。
-        - 场景里「`hover()` 一次 + 后续 `visible` 轮询（最多 30 秒）」：
-          **两个应用都到不了**。等待时间不是变量——多等 30 秒也没用。
-
-        **机制没查到底，就不写死。** 能确定的只有一条：一次鼠标移动之后，
-        指针最终**不在**它该在的位置上（Playwright 的 hover 会先
-        `scrollIntoViewIfNeeded`，而这一屏的消息容器确实会被滚动——
-        同一次取样里 React 那个容器 scrollTop=60、Vue=0）。
-        再移一次就对了，两边都对。
-
-        修的是**测量方式不是契约**：往元素里的三个不同位置各移一次，每次之间
-        有 Playwright 自己的 auto-wait。这与坑 237 的「滚到它真的动为止」是同一条
-        ——别拿一次输入去赌一个还在动的界面。
-      */
-      await locator.hover({ timeout, position: { x: 3, y: 3 } });
-      await locator.hover({ timeout, position: { x: 5, y: 5 } });
+      // Finish native scrolling before hover resolves its actionable point.
+      // Otherwise ongoing scrolling can move the target after pointer dispatch.
+      // Fixed corner offsets can hit adjacent controls such as the sidebar rail.
+      await locator.scrollIntoViewIfNeeded({ timeout });
       return locator.hover({ timeout });
   }
 }
@@ -591,12 +708,18 @@ export async function runScenario(
   dimension: ParityDimension = DEFAULT_DIMENSION,
   state: ParityState = scenarioStates(scenario)[0]!,
   timeout = 30_000,
+  beforeAction?: (action: string) => Promise<void>,
 ) {
   await applyScenarioBackend(page, scenario, state);
   await applyScenarioStubs(page, scenario);
   await applyDimension(page, base, dimension);
+  await beforeAction?.("entry");
   await page.goto(`${base}${state.path ?? scenario.path}`);
-  for (const step of scenario.settle) await runStep(page, step, timeout);
+  for (const [index, step] of scenario.settle.entries())
+    if (!step.viewports || step.viewports.includes(dimension.viewport)) {
+      await beforeAction?.(`settle:${index}`);
+      await runStep(page, step, timeout);
+    }
   /*
     **交互步骤之前先等开场动画跑完**（第三十八轮）。
 
@@ -632,7 +755,11 @@ export async function runScenario(
     第三十八轮逐条扫出 3 条在 settle 之后还会自己变的场景。
   */
   await waitForDomQuiet(page);
-  for (const step of state.steps) await runStep(page, step, timeout);
+  for (const [index, step] of state.steps.entries())
+    if (!step.viewports || step.viewports.includes(dimension.viewport)) {
+      await beforeAction?.(`steps:${index}`);
+      await runStep(page, step, timeout);
+    }
   return page;
 }
 
@@ -1145,7 +1272,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           */
           {
             kind: "visible",
-            target: { text: /^(Completed in|本次任务耗时) / },
+            target: { text: /^(Took|用时) / },
           },
         ],
       },
@@ -1192,32 +1319,22 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
         id: "default",
         steps: [{ kind: "fill", target: { selector: "textarea" }, value: "/" }],
       },
-      /*
-        **选中之后那颗胶囊**（第四十四轮新增）。
-
-        这一屏此前**一次都没被取样过**——`ChatComposer.vue` 里那句
-        「取样发生在无 chip 的稳定态」就是这块盲区的自白。一打开就是两处缺口：
-        上游 `SlashSkillChip`（`border-primary/20 bg-primary/10` + X 图标 +
-        `aria-label="Remove /<name>"`）在本仓是一个**没有移除入口**的
-        `<span class="bg-secondary …">`；会话流那颗只读胶囊本仓则一个字都没画。
-
-        **用 `press: Tab` 接受建议，不用 `click`**：这条场景的注释早写过
-        「不能有 click 步骤」——虚拟指针会留在点过的地方，而活动项跟着指针走。
-        `Tab` 与 `Enter` 在两个应用里都是接受键（input-box.tsx:1669 与
-        ChatComposer.vue:1164 逐字同形），而按键不移动指针。
-
-        终态断言钉在那颗移除键上：**它只在胶囊里存在**，所以「零差异」不可能
-        是「压根没采到」。名字两种语言同一串（上游写死英文，见 primitives
-        的 `removeSlashSkill`），所以这个锚点天生语言无关。
-      */
+      // Skills now enter through Add a reference; preserve an actual selected inline chip state.
       {
         id: "slash-selected",
         steps: [
-          { kind: "fill", target: { selector: "textarea" }, value: "/" },
-          { kind: "press", key: "Tab" },
+          {
+            kind: "click",
+            target: { role: "button", name: /^(Add a reference|添加引用)$/ },
+          },
+          {
+            kind: "click",
+            target: { role: "option", name: /^data-analysis\b/ },
+          },
+          { kind: "press", key: "Escape" },
           {
             kind: "visible",
-            target: { role: "button", name: "Remove /data-analysis" },
+            target: { testId: "inline-skill-reference" },
           },
         ],
       },
@@ -1278,7 +1395,11 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     backend: "mock",
     path: "/workspace/agents/test-agent/chats/new",
     mock: {
-      agents: MOCK_AGENTS,
+      agents: MOCK_AGENTS.map((agent) =>
+        agent.name === "test-agent"
+          ? { ...agent, display_name: "Review Assistant" }
+          : agent,
+      ),
       threads: [
         {
           thread_id: MOCK_THREAD_ID,
@@ -1307,19 +1428,40 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       触发器按可访问名点，两个应用都渲染 selectedModel.display_name。
     */
     routes: [MODELS_ROUTE_BASIC_FIRST],
-    settle: [{ kind: "visible", target: { selector: "textarea" } }],
+    settle: [
+      { kind: "visible", target: { selector: "textarea" } },
+      {
+        kind: "visible",
+        target: { selector: 'header span:text-is("Review Assistant")' },
+        viewports: ["desktop", "tablet"],
+      },
+      {
+        kind: "visible",
+        target: { role: "button", name: /^(Toggle Sidebar|切换侧边栏)$/ },
+        viewports: ["mobile"],
+      },
+    ],
     states: [
       {
         id: "model-picker",
         steps: [
+          {
+            kind: "visible",
+            target: {
+              selector: 'main :text-is("Review Assistant"):not(header *)',
+            },
+          },
           { kind: "click", target: { role: "button", name: "Parity Basic" } },
           {
             kind: "visible",
-            target: { role: "dialog", name: "Model Selector" },
+            target: { role: "dialog", name: /^(Choose a model|选择模型)$/ },
           },
           {
             kind: "visible",
-            target: { role: "option", name: /Parity Thinker/ },
+            target: {
+              role: "button",
+              name: /^Parity Thinker \(parity-thinker\)$/,
+            },
           },
         ],
       },
@@ -1394,35 +1536,116 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     title: "公开 showcase 的只读会话",
     backend: "mock",
     path: "/showcase/21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
-    /*
-      与 `streaming-reasoning-order` 同一类：消息列表出现之后，推理折叠块还会
-      自己收起一次，取样落在一个还在变的相位上。等那次收起真的发生。
-      （夹具里有九段 `reasoning_content`，扫出来还展开着的是 messages[8] 那段。）
-    */
+    // Inspect the real saved reasoning through its disclosure. A loaded static
+    // transcript starts collapsed; it has no streaming-open phase to wait for.
+    settle: [{ kind: "visible", target: { testId: "main-message-list" } }],
+    steps: [
+      {
+        kind: "click",
+        target: { role: "button", name: /^(Reasoning|思考过程)$/ },
+      },
+      {
+        kind: "visible",
+        target: { text: /So MOE in AI context likely means/ },
+      },
+      {
+        kind: "click",
+        target: { role: "button", name: /^(Reasoning|思考过程)$/ },
+      },
+      { kind: "hidden", target: { text: /So MOE in AI context likely means/ } },
+    ],
+    dimensions: (["desktop", "mobile"] as const).flatMap((viewport) =>
+      (["light", "dark"] as const).flatMap((theme) =>
+        (["en-US", "zh-CN"] as const).map((locale) => ({
+          viewport,
+          theme,
+          locale,
+        })),
+      ),
+    ),
+  },
+  ...DEMO_THREAD_IDS.filter(
+    (id) => id !== "21cfea46-34bd-4aa6-9e1f-3009452fbeb9",
+  ).map((id) => ({
+    id: `showcase-${id}`,
+    title: `公开案例 ${id}`,
+    backend: "mock" as const,
+    path: `/showcase/${id}`,
     settle: [
       {
-        kind: "visible",
+        kind: "visible" as const,
         target: { selector: "[data-testid='main-message-list']" },
       },
-      /*
-        **`visible` 这一条不能省。** `locateTarget(...).first()` 在匹配不到时
-        是个空 locator，而 `waitFor({ state: "hidden" })` 对不存在的元素
-        **立刻通过**——只写 `hidden` 的话，它会在推理那段还没渲染出来时凭空通过，
-        然后那段文字照样在取样之后才收起。
-        （这正是同一轮在 `background-tasks#disabled` 上查出来的空断言，
-        我第一版在这里原样又写了一遍。）
-      */
-      {
-        kind: "visible",
-        target: { text: /So MOE in AI context likely means/ },
-      },
-      {
-        kind: "hidden",
-        target: { text: /So MOE in AI context likely means/ },
-      },
     ],
-    dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
-  },
+    dimensions: [
+      "7cfa5f8f-a2f8-47ad-acbd-da7137baf990",
+      "ad76c455-5bf9-4335-8517-fc03834ab828",
+      "3823e443-4e2b-4679-b496-a9506eae462b",
+      "4f3e55ee-f853-43db-bfb3-7d1a411f03cb",
+      "fe3f7974-1bcb-4a01-a950-79673baafefd",
+    ].includes(id)
+      ? (["desktop", "mobile"] as const).flatMap((viewport) =>
+          (["light", "dark"] as const).flatMap((theme) =>
+            (["en-US", "zh-CN"] as const).map((locale) => ({
+              viewport,
+              theme,
+              locale,
+            })),
+          ),
+        )
+      : [DEFAULT_DIMENSION, ZH_DIMENSION],
+    ...(id === "fe3f7974-1bcb-4a01-a950-79673baafefd"
+      ? {
+          states: [
+            { id: "", steps: [] },
+            {
+              id: "report-preview",
+              steps: [
+                {
+                  kind: "click" as const,
+                  target: {
+                    text: "research_deerflow_20260201.md",
+                    exact: true,
+                  },
+                },
+                {
+                  kind: "visible" as const,
+                  target: {
+                    role: "radio" as const,
+                    name: /^(Preview|预览)$/,
+                    exact: true,
+                  },
+                },
+                {
+                  kind: "visible" as const,
+                  target: {
+                    role: "heading" as const,
+                    name: "DeerFlow Deep Research Report",
+                    exact: true,
+                  },
+                },
+                {
+                  kind: "hover" as const,
+                  target: { selector: '[data-streamdown="mermaid-block"]' },
+                },
+                {
+                  kind: "visible" as const,
+                  target: {
+                    role: "img" as const,
+                    name: "Mermaid chart",
+                    exact: true,
+                  },
+                },
+                {
+                  kind: "visible" as const,
+                  target: { role: "table" as const },
+                },
+              ],
+            },
+          ],
+        }
+      : {}),
+  })),
   {
     id: "agent-create-name-step",
     title: "建 agent 的名字步",
@@ -1606,7 +1829,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           },
           {
             kind: "click",
-            target: { role: "button", name: /^(Model settings|模型设置)/ },
+            target: { role: "button", name: /^(Agent settings|智能体设置)/ },
           },
           { kind: "visible", target: { selector: "[role=dialog]" } },
         ],
@@ -1898,59 +2121,6 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
-  },
-  {
-    id: "mcp-settings",
-    title: "设置里的 MCP server 列表与编辑对话框",
-    backend: "mock",
-    path: "/workspace/chats/new?settings=tools",
-    routes: [
-      // 与 settings-narrow-screen.spec.ts 共用一份，见 support/settings-fixtures.ts 的文件头。
-      { pattern: "**/api/mcp/config", json: MCP_CONFIG },
-    ],
-    /*
-      两边的编辑模型是同一个：**粘一段 JSON**，不是一堆字段输入框
-      （上游 `mcp-settings.spec.ts` 也是 `JSON.parse(await textbox.inputValue())`）。
-      所以这一屏可以直接对照——列表行的开关/描述/编辑删除入口，以及编辑对话框
-      里那个带着 `routing` 这种「这一屏不认识的字段」的 JSON。
-
-      上游那条用例真正断言的是 **PUT body 里没丢 advanced 字段、也没动到兄弟条目**，
-      而对照台账只比 method + path + query，比不到请求体——这条场景补的是**取样面**：
-      在它之前，MCP 这一屏连同它的编辑对话框一行台账都没有。
-    */
-    settle: [{ kind: "visible", target: { text: "Local tools" } }],
-    steps: [
-      {
-        kind: "click",
-        target: { role: "button", name: /^(Edit|编辑) remote$/ },
-      },
-      {
-        kind: "visible",
-        target: {
-          role: "dialog",
-          name: /^(Edit MCP server|编辑 MCP 服务器)$/,
-        },
-      },
-    ],
-    /*
-      **补 `mobile` 这一维的理由**（2026-09-16 第二十七轮）：设置对话框在窄屏上
-      **已经真红过一次**——第二十一轮量出 integrations 那张卡 `CardHeader` 的第 1 列
-      卡在自己的 min-content 上（grid/flex 子项默认 `min-width: auto`），375px 下
-      Linux 溢出 9px、macOS 恰好 0 余量。那一轮只修了 integrations 自己那条收缩链，
-      **同一个形状在别的设置页上没有任何机器看着**。
-
-      挑这一屏而不是别的 desktop-only 场景，是因为它**用 URL 直达**
-      （`?settings=tools`）：移动端侧栏是抽屉，靠点击导航的场景补窄屏维要先解决
-      抽屉那一层，而这一屏不用——一维的成本就只是这三行。
-
-      照既有纪律**只补一维**（断点轴与语言/主题轴正交），所以不给 zh-CN 配窄屏孪生。
-    */
-    dimensions: [
-      DEFAULT_DIMENSION,
-      ZH_DIMENSION,
-      DARK_DIMENSION,
-      { viewport: "mobile", theme: "light", locale: "en-US" },
-    ],
   },
   {
     id: "thread-title-sync",
@@ -2432,6 +2602,20 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
           selector: 'a:not([data-sidebar]):has-text("Archived 00")',
         },
       },
+      // Finish this finite 55-row archive through the actual pagination UI.
+      // Reset to the first row so capture and keyboard start from the same view.
+      {
+        kind: "hover",
+        target: { selector: 'a:not([data-sidebar]):has-text("Archived 49")' },
+      },
+      {
+        kind: "visible",
+        target: { selector: 'a:not([data-sidebar]):has-text("Archived 54")' },
+      },
+      {
+        kind: "hover",
+        target: { selector: 'a:not([data-sidebar]):has-text("Archived 00")' },
+      },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
@@ -2553,343 +2737,6 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
       },
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION],
-  },
-  {
-    id: "integrations",
-    title: "设置里的集成页",
-    backend: "mock",
-    path: "/workspace/chats/new?settings=integrations",
-    /*
-      喂一份**混合**状态,而不是 replay Gateway 那份全 Pending 的默认值。
-
-      默认值只走得到「什么都没装」这一支:四格全 Pending、下一步是「先装技能包」、
-      权限面板与换应用面板都不渲染、安装按钮写 Install。这个域真正长代码的地方
-      全在另一侧——已装/CLI 就绪/已授权之后才出现的那些分支。台账对它们一行都报不出来,
-      不是因为两边一致,是因为取样根本走不到。
-
-      这一份同时点亮:已装版本行 + 可更新提示 + 运行时版本不匹配、权限面板(22 个域
-      按钮与自定义 scope)、换应用按钮、连接成功的下一步 Alert、授权格的 **verified**
-      分支(念账号名而不是「已为 X 配置」)、以及 sandbox runtime 格**没有就绪**时的
-      Pending 徽标——四格里另外三格都是 Ready,只有它是 Pending,一格漏了徽标就会显出来。
-
-      注意这里量的是「两个应用拿同一份响应会不会渲染成同一个样子」,所以不能把状态
-      写成两边各自的期望值;它就是 Gateway 契约里的一种真实状态。
-    */
-    routes: [
-      {
-        pattern: "**/api/integrations/lark/status",
-        json: {
-          installed: true,
-          version: "v1.0.65",
-          manifest_version: "v1.0.65",
-          latest_available_version: "v1.0.70",
-          runtime_version_mismatch: true,
-          app_configured: true,
-          app_id: "cli_parity_mock",
-          app_brand: "feishu",
-          skills_expected: 27,
-          skills_installed: 4,
-          installed_skills: [
-            "lark-doc",
-            "lark-im",
-            "lark-shared",
-            "lark-sheets",
-          ],
-          enabled_skills: ["lark-doc", "lark-im", "lark-shared", "lark-sheets"],
-          install_path: "/mock/integrations/skills/lark-cli",
-          cli: {
-            available: true,
-            path: "/usr/bin/lark-cli",
-            version: "lark-cli version v1.0.65",
-            error: null,
-          },
-          auth: {
-            status: "authenticated",
-            message: "Lark authorization is live-verified.",
-            user: "Alice",
-            verified: true,
-          },
-          sandbox_runtime_mode: "init-container",
-          sandbox_runtime_ready: false,
-          sandbox_runtime_detail:
-            "The provisioner has no lark-cli init image configured (LARK_CLI_INIT_IMAGE).",
-        },
-      },
-    ],
-    /*
-      锚点必须与语言无关,否则加不了 zh-CN 维度:对话框标题在中文下是「设置」,
-      卡片标题是「Lark / 飞书 CLI」(两个应用的词典里都翻译了,不是漏翻)。
-      改用两边都有的结构锚点——`[data-slot=card-title]` 是 shadcn CardTitle 的合同,
-      本仓的 CardTitle 逐行照抄了它。
-    */
-    settle: [
-      { kind: "visible", target: { selector: "[role=dialog]" } },
-      { kind: "visible", target: { selector: '[data-slot="card-title"]' } },
-    ],
-    /*
-      这个面板上「点一下才出现」的东西只有四样，而它们全都挂在两个互斥的终态上：
-      权限面板里选中的域 + 自定义 scope（选了之后连接键会改写成「申请新权限」），
-      以及「切换飞书 Bot」展开出来的整块表单（品牌二选一 + 两个输入 + 两颗动作键）。
-      `useState` 数一遍就是这四个：selectedAuthDomains / customAuthScope /
-      showChangeApp / changeAppBrand，其余状态都要真的授权流程才走得到。
-
-      三个终态而不是两个：`default` 保住此前那一份样本（那一屏本身仍然要比），
-      另外两个各自把一块此前从来没进过取样面的表面接上来。
-
-      **锚点为什么写成跨语言正则**：这个场景跑 en-US 与 zh-CN 两个维度，
-      而域名与按钮文案两边词典里都翻译了（坑 234）。只有 `App ID` 两种语言
-      逐字相同，才敢直接按名字找。
-    */
-    states: [
-      { id: "default", steps: [] },
-      /*
-        **后端失败那一支**（wave 128，第⑥类第一次进取样面）。
-
-        这一屏的错误态只有让 `/api/integrations/lark/status` 真的失败才走得到——
-        场景自己的 `routes` 是一份「正常」的响应，而一个场景只有一份后端，
-        所以这一支挂在 `states` 上（`ParityState.routes`，装在场景的之后、优先级更高）。
-
-        锚点用 `settings.integrations.loadFailed` 的两种译文：**两边词典都有这一条**
-        （上游 `en-US.ts:885`），所以它是一条真正共有的表面，不是本仓独有的分支。
-      */
-      {
-        id: "load-failed",
-        routes: [
-          {
-            pattern: "**/api/integrations/lark/status",
-            status: 500,
-            json: { detail: "boom" },
-          },
-        ],
-        steps: [
-          {
-            kind: "visible",
-            target: {
-              text: /(Failed to load integration status|加载集成状态失败)/,
-            },
-          },
-        ],
-      },
-      /*
-        **设置对话框里另一个域的失败分支**（wave 133）。
-
-        为什么挂在 `integrations` 上：技能设置页在上游**没有对应的 spec 文件**，
-        而场景 id 受覆盖率棘轮约束、编不出新的来；夹具与步骤不受约束，
-        所以按交接文档里那条既定做法「直接挂现成场景」。这个场景本来就是
-        **设置对话框**那一屏（`?settings=integrations`），导航到「技能」只是一次点击。
-
-        两边都有这一支（判据是 wave 129 订正过的**「grep 渲染点、不是词典」**）：
-        上游 `frontend/src/components/workspace/settings/skill-settings-page.tsx:50`
-        的 `) : error ? (` 那一档，本仓 `SkillSettings.vue:124` 的 `v-if="skills.error.value"`。
-        两边的 `isAdminRequired` 都是 `status === 403`，所以 500 走的是 error 那一支
-        而不是「需要管理员」那一支。
-
-        锚点用夹具喂进去的那个词（`boom`）而不是任何一边的措辞：
-        上游画的是 `<div>Error: {message}</div>`（硬编码英文前缀、没有 role），
-        本仓画的是 `<p role="alert">{message}</p>`——**措辞与角色都不一样，
-        那正是要量的东西，不能拿它当锚点。**
-      */
-      {
-        id: "skills-load-failed",
-        routes: [
-          {
-            pattern: "**/api/skills",
-            status: 500,
-            json: { detail: "boom" },
-          },
-        ],
-        steps: [
-          {
-            kind: "click",
-            target: { role: "button", name: /^(Skills|技能)$/ },
-          },
-          { kind: "visible", target: { text: /boom/ } },
-        ],
-      },
-      /*
-        **技能清单画出来的那一屏**（wave 144）。
-
-        wave 133/134 只取了这一页的「失败」与「加载中」两支，那两支里筛选标签是被
-        挡掉的；`integrations#default` 又停在集成面板上。**结果是这一页真正长东西的
-        那一屏——两个筛选标签 + 技能行——一个样本都没有**（第⑦类）。
-
-        接它的直接理由：上游用的是 `<TabsList variant="line">`，而本仓的
-        `TabsList` / `TabsTrigger` 是另写的一套、**连 variant 这个 prop 都没有**
-        （上游那套靠 `group/tabs-list` 标记 + `group-data-[variant=*]/tabs-list:`
-        选择器联动）。**这一处两边长得不一样，而台账此前看不见。**
-      */
-      {
-        id: "skills",
-        routes: [
-          {
-            pattern: "**/api/skills",
-            json: {
-              skills: [
-                {
-                  name: "review",
-                  description: "Review a skill package",
-                  category: "public",
-                  enabled: true,
-                },
-                {
-                  name: "draft",
-                  description: "Draft a document",
-                  category: "custom",
-                  enabled: false,
-                },
-              ],
-            },
-          },
-        ],
-        steps: [
-          {
-            kind: "click",
-            target: { role: "button", name: /^(Skills|技能)$/ },
-          },
-          { kind: "visible", target: { role: "tablist" } },
-          {
-            kind: "visible",
-            target: { role: "tab", name: /^(Public|公共)$/ },
-          },
-          /*
-            **锚点用开关的可访问名，不是 `skill-review` 这个 testid**：那是本仓独有的
-            （上游的技能行一个 testid 都没有），第一版就用它，**React 侧当场等不到**
-            ——wave 131 立的那条规矩（锚点必须两边都有）第一次被自己违反。
-          */
-          { kind: "visible", target: { role: "switch", name: "review" } },
-        ],
-      },
-      /*
-        **「还在转」那一档**（wave 134）——取样面此前一个这样的样本都没有。
-
-        与 `skills-load-failed` 同一处代码的另一支：上游
-        `skill-settings-page.tsx:44` 是 `isLoading ? 只画一句 Loading : …`，
-        整块清单让位；本仓原来把 `Loading…` 加在筛选标签**下面**。
-        wave 133 只对齐了 error 那一支，**loading 这一支当时没量过、所以没动**，
-        这一轮补上。
-
-        锚点用 `t.common.loading` 的两种译文——**两边词典都有这一条**，
-        而且这一屏上只有它一处（判据见 wave 131 那三问）。
-      */
-      {
-        id: "skills-loading",
-        routes: [
-          {
-            pattern: "**/api/skills",
-            delayMs: 15_000,
-            json: { skills: [] },
-          },
-        ],
-        steps: [
-          {
-            kind: "click",
-            target: { role: "button", name: /^(Skills|技能)$/ },
-          },
-          {
-            kind: "visible",
-            target: { text: /^(Loading\.\.\.|加载中\.\.\.)$/ },
-          },
-        ],
-      },
-      {
-        id: "permission-request",
-        steps: [
-          {
-            kind: "click",
-            target: { role: "button", name: /^(Calendar|日历)$/ },
-          },
-          { kind: "click", target: { role: "button", name: /^(Docs|文档)$/ } },
-          {
-            kind: "fill",
-            target: { role: "textbox", name: /OAuth scope/ },
-            value: "calendar:calendar.event:read",
-          },
-          {
-            kind: "visible",
-            target: { role: "button", name: /^(Calendar|日历)$/ },
-          },
-          {
-            kind: "visible",
-            target: { role: "button", name: /^(Docs|文档)$/ },
-          },
-          /*
-            一颗**没被选中**的相邻域也要取样：选中与未选中的色板是这一块唯一
-            会变的量，只取选中的那些，「两边都把整排画成选中」也一样是 0。
-          */
-          {
-            kind: "visible",
-            target: { role: "button", name: /^(Drive|云空间)$/ },
-          },
-          /*
-            连接键改写成「申请新权限」才说明这次交互真的落到了状态上——
-            没有它，三颗按钮的颜色可以只是主题色相同而已。
-          */
-          {
-            kind: "visible",
-            target: {
-              role: "button",
-              name: /^(Request permissions|申请新权限)$/,
-            },
-          },
-        ],
-      },
-      {
-        id: "change-app",
-        steps: [
-          {
-            kind: "click",
-            target: {
-              role: "button",
-              name: /^(Change Lark app|切换飞书 Bot)$/,
-            },
-          },
-          // 品牌是单选：点掉默认的 feishu，两颗按钮的状态必须一起翻过来。
-          { kind: "click", target: { role: "button", name: /^Lark$/ } },
-          {
-            kind: "visible",
-            target: {
-              text: /^(Switch to a different Lark app|切换到其他飞书 App)$/,
-            },
-          },
-          {
-            kind: "visible",
-            target: { role: "button", name: /^(Feishu|飞书)$/ },
-          },
-          { kind: "visible", target: { role: "button", name: /^Lark$/ } },
-          // 两种语言下都是 "App ID"，这是这一块唯一不用写正则的锚点。
-          { kind: "visible", target: { role: "textbox", name: "App ID" } },
-          {
-            kind: "visible",
-            target: { role: "button", name: /^(Switch app|切换 App)$/ },
-          },
-          {
-            kind: "visible",
-            target: {
-              role: "button",
-              name: /^(Re-register in browser|在浏览器重新注册)$/,
-            },
-          },
-        ],
-      },
-    ],
-    dimensions: [
-      DEFAULT_DIMENSION,
-      { viewport: "desktop", theme: "light", locale: "zh-CN" },
-      /*
-        这个场景有两支错误态（`load-failed` / `skills-load-failed`），
-        而错误态正是「固定红 vs destructive token」的高发区——见 DARK_DIMENSION
-        的说明。加这一维，是为了让 2026-09-11 那一轮的修法有机器守着。
-      */
-      DARK_DIMENSION,
-      /*
-        **窄屏的设置对话框此前没有任何机器看过。** 122 个场景-维度里 110 个是
-        desktop，非 desktop 的只有 `chat`（跑满矩阵）、`thread-list-pin#mobile-drawer`
-        与 `ui-polish-mobile` 三个——而设置对话框在上游是
-        `md:grid-cols-[220px_minmax(0,1fr)]`，**窄屏下导航与内容要叠起来**，
-        两个应用各写各的。这一维就是去看那一叠对不对得上。
-      */
-      { viewport: "mobile", theme: "light", locale: "en-US" },
-    ],
   },
   {
     id: "branch-thread",
@@ -3028,31 +2875,14 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             },
           },
           { kind: "visible", target: { selector: "[data-assistant-turn]" } },
-          /*
-            证明 tooltip 真的开了，用的是**触发器自己的 `data-state`**，
-            不是那块浮层。两条理由，都是量出来的：
-
-            ① **`[role=tooltip]` 不能用**：Radix 与 Reka 都把它挂在一个
-            1×1、`clip: rect(0,0,0,0)` 的**隐藏播报节点**上，等它「可见」会
-            30 秒超时，报出来是「Vue 没能到达场景」，看着像产品缺陷。
-
-            ② **`[data-slot="tooltip-content"]` 能等到，但它的坐标不能比**：
-            浮层是 portal 到 body 的 `position: fixed` 元素，`sampleGeometry`
-            那套「把祖先链的 scrollTop 加回去」对它无效（它的祖先只有 body/html，
-            scrollTop 都是 0），于是量到的 y 里**原样带着触发器所在容器的滚动**。
-            实测：分支键的**文档**坐标两边都是 y=208，而**视口**坐标 React=148、
-            Vue=207——差的 59px 全是滚动（React 那个消息容器 scrollTop=60，
-            Vue=0，两边 scrollHeight 都是 1042）。台账里会表现成
-            `tooltip-content y Δ44`，看着像 side 反了，其实与布局无关
-            （capture.ts 文件头里 mermaid 那条 Δ69 是同一件事的第一次）。
-
-            触发器是普通的在流元素，滚动补偿对它成立，所以它的几何可比。
-          */
+          // Verify this button's painted tooltip and description relationship.
+          // Both native open timing states are valid; the visible button above
+          // remains the same geometry anchor used by cross-app capture.
           {
-            kind: "visible",
+            kind: "tooltip-visible",
             target: {
-              selector:
-                '[data-slot="tooltip-trigger"][data-state="delayed-open"]',
+              role: "button",
+              name: /^(Branch conversation|分叉|创建对话分支)$/,
             },
           },
         ],
@@ -3309,228 +3139,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
     ],
     dimensions: [DEFAULT_DIMENSION, ZH_DIMENSION, TABLET_DIMENSION],
   },
-  {
-    id: "scheduled-tasks",
-    title: "定时任务列表",
-    backend: "mock",
-    path: "/workspace/scheduled-tasks",
-    /*
-      夹具刻意不是「一个全新的任务」。这一页有好几支只由**数据**决定的分叉，一次
-      页面加载就能全部走到，不需要任何交互，也就不引入任何时序：
-
-      - `context_mode: reuse_thread` 走详情里 `Thread:` 那一支（fresh 模式走的是
-        `Last thread:`，两者二选一）；
-      - `last_run_at` / `last_run_id` / `last_error` 都不为空，于是时间戳格式、id
-        与失败原因都进树，而不是三个 `—`；
-      - 第二个任务是 `once` + `paused`，列表行的措辞「One-time · Paused」才有样本；
-      - 预置两条运行（一条成功一条失败），运行列表、`trigger · status` 的措辞、
-        run id、计划时刻与错误行才有样本——否则永远只比得到「No runs yet」。
-
-      再跑一份 zh-CN：这一页的词典两边逐字相同，但「用的是不是同一个 key」只有
-      换一种语言才看得出来，时间戳的 locale 分支同理。
-    */
-    mock: {
-      threads: [],
-      scheduledTasks: [
-        {
-          id: "task-1",
-          thread_id: "thread-1",
-          context_mode: "reuse_thread",
-          last_thread_id: "thread-9",
-          title: "Daily summary",
-          prompt: "Summarize thread",
-          schedule_type: "cron",
-          schedule_spec: { cron: "0 9 * * *" },
-          timezone: "UTC",
-          status: "enabled",
-          next_run_at: "2026-07-02T01:00:00+00:00",
-          last_run_at: "2026-07-01T01:00:00+00:00",
-          last_run_id: "run-42",
-          last_error: "Upstream model timed out",
-          run_count: 2,
-          created_at: "2026-07-01T00:00:00+00:00",
-          updated_at: "2026-07-01T00:00:00+00:00",
-        },
-        {
-          id: "task-2",
-          thread_id: null,
-          title: "One-off cleanup",
-          prompt: "Clean up the workspace",
-          schedule_type: "once",
-          schedule_spec: { run_at: "2026-08-01T09:00:00+00:00" },
-          timezone: "UTC",
-          status: "paused",
-          next_run_at: "2026-08-01T09:00:00+00:00",
-          last_run_at: null,
-          last_run_id: null,
-          last_error: null,
-          run_count: 0,
-          created_at: "2026-07-01T00:00:00+00:00",
-          updated_at: "2026-07-01T00:00:00+00:00",
-        },
-      ],
-      scheduledTaskRuns: {
-        "task-1": [
-          {
-            id: "run-b",
-            task_id: "task-1",
-            thread_id: "thread-1",
-            run_id: "run-42",
-            scheduled_for: "2026-07-01T01:00:00+00:00",
-            trigger: "scheduled",
-            status: "failed",
-            error: "Upstream model timed out",
-            started_at: "2026-07-01T01:00:01+00:00",
-            finished_at: "2026-07-01T01:00:30+00:00",
-            created_at: "2026-07-01T01:00:00+00:00",
-          },
-          {
-            id: "run-a",
-            task_id: "task-1",
-            thread_id: "thread-1",
-            run_id: null,
-            scheduled_for: "2026-06-30T01:00:00+00:00",
-            trigger: "manual",
-            status: "success",
-            error: null,
-            started_at: "2026-06-30T01:00:01+00:00",
-            finished_at: "2026-06-30T01:00:20+00:00",
-            created_at: "2026-06-30T01:00:00+00:00",
-          },
-        ],
-      },
-    },
-    /*
-      **`settle` 必须在这个场景的每一个终态下都成立。** 它跑在 `state.steps`
-      之前，而下面新增的终态是「列表请求失败」——原来这里等的「Daily summary」
-      那颗任务按钮，恰恰是失败态里唯一不会出现的东西（列表为空）。
-      改等创建表单里的 schedule input：它挂在页面顶部，与列表查询无关，
-      两个终态、两种语言下都在（testid 两边逐字相同）。
-      「Daily summary」那一等原样挪进 `default` 终态的第一步，先后顺序不变。
-    */
-    settle: [
-      { kind: "visible", target: { testId: "schedule-preset" } },
-      { kind: "visible", target: { testId: "schedule-timezone" } },
-    ],
-    /*
-      **详情里的编辑表单此前一行都没进过取样面。** 这个场景的夹具刻意只走
-      「由数据决定」的分叉（见上面那段注释），而编辑态是纯交互态：点一下
-      「Edit」才存在。里面是标题输入框 + 提示词文本域 +
-      `ScheduledTaskScheduleInput`（`scheduleTypeLocked`）+ 「Save edit」，
-      两边结构本来就该一样，所以任何差异都是真差异。
-
-      ~~锚点选「Save edit」这颗按钮，加上 schedule input 里面的两个 testid
-      （`schedule-preset` / `schedule-timezone`，两边逐字相同）：只钉外壳的话，
-      那一整块换了位置也看不见。~~ **⚠ 这句话是错的，wave 129 实测推翻。**
-
-      那两个 testid 在**创建表单**里也各有一份，而且是页面一打开就在的
-      （两个应用的创建草稿默认都是 `schedule_type: "cron"`，
-      `frontend-vue/app/core/scheduled-tasks/form.ts:64` /
-      `frontend/src/app/workspace/scheduled-tasks/page.tsx:84`）。
-      `runStep` 与 `sampleGeometry` 都对 locator 取 `.first()`，
-      于是这两步**永远落在创建表单那一份上**：它们在点「Edit」之前就已经满足，
-      既没有等编辑表单里的 schedule 块出现，几何档里那两行量的也是创建表单
-      的控件——**而注释写的是编辑表单**。这是坑 266 的同一形状：
-      一个看起来很具体的锚点，落到了另一个层级上。
-
-      改法分两处，各自说清在钉什么：
-      - 创建表单那两份挪去 `settle`（它们本来就是页面加载态的控件，见上面）；
-      - 编辑表单那两份用 `>> nth=1` 显式取第二份。两个应用的 DOM 顺序都是
-        「创建表单在上、详情/编辑在下」，所以 index 1 在两边指的是同一个东西；
-        万一某天不是，几何档会当场报出一行离谱的差异（自证的锚点，不需要豁免表）。
-
-      **两次锚点都先量错了，都记在这里**：
-
-      ① 第一版内层锚点写成 `text: "Timezone"`，**两边都到不了**——
-         `fields.timezone` 这条词条在两个应用的 schedule input 里都没有被渲染成
-         可见文字（它只是个 Select，标签没画出来）。照着词典猜锚点会猜到一条
-         从来没被渲染的 key 上（坑 214 的同一条）。
-      ② 第二版按可访问名找「Edit」/「Save edit」，**en-US 过、zh-CN 当场超时**——
-         这个场景**有两个语言维度**，而按名字找的锚点天生只在一种语言下成立。
-         这一页两边的按钮都没有共用的 testid（本仓多了几个，上游没有），
-         所以名字写成覆盖两种语言的正则；内层两个锚点用两边逐字相同的 testid，
-         不受语言影响。
-
-      **判据：一个锚点在加进来之前，要问它在这个场景的每一个维度上都成立吗**
-      ——wave 129 补上第二问：**它在这一屏上只有一份吗**。
-    */
-    states: [
-      {
-        id: "default",
-        steps: [
-          {
-            kind: "visible",
-            target: { role: "button", name: /Daily summary/i },
-          },
-          { kind: "click", target: { role: "button", name: /^(Edit|编辑)$/ } },
-          {
-            kind: "visible",
-            target: { role: "button", name: /^(Save edit|保存编辑)$/ },
-          },
-          {
-            kind: "visible",
-            target: { selector: '[data-testid="schedule-preset"] >> nth=1' },
-          },
-          {
-            kind: "visible",
-            target: { selector: '[data-testid="schedule-timezone"] >> nth=1' },
-          },
-        ],
-      },
-      /*
-        **列表请求失败那一支**（wave 129，第⑥类的第二处）。
-
-        判据与 wave 128 的 `integrations#load-failed` 同一条，但**收紧了一格**：
-        不只问「那条 i18n key 上游词典里有没有」，还要问「上游真的把它渲染出来
-        了吗」。这一条两问都过——`scheduledTasks.detail.loadFailed` 在上游词典
-        `frontend/src/core/i18n/locales/en-US.ts:381`，渲染在
-        `frontend/src/app/workspace/scheduled-tasks/page.tsx:339`，
-        而且两边挂的是**同一个 testid** `scheduled-task-load-error`。
-
-        另外三个候选（`agents` / `account` / `artifact` 的 loadFailed）**这一轮
-        没接**，理由逐条量过、写在提交说明里：上游要么没有这一支，要么
-        把 error 整个丢掉了，量出来必然是「本仓有、上游没有」，没有对照意义。
-
-        两边都从 `{ detail }` 里取错误文案（`throwGatewayApiError`），
-        所以文案本身是夹具喂进去的，比出来的是结构不是措辞。
-      */
-      {
-        id: "load-failed",
-        routes: [
-          {
-            pattern: "**/api/scheduled-tasks",
-            status: 500,
-            json: { detail: "boom" },
-          },
-        ],
-        steps: [
-          { kind: "visible", target: { testId: "scheduled-task-load-error" } },
-        ],
-      },
-    ],
-    /*
-      **窄屏这一维给的是「整页」这个形状。** 2026-09-11 给 `integrations` 开 mobile
-      当场量出上游一颗手机上点不到的控件，但那是**对话框**里的叠放；
-      窄屏取样此前一个**整页**样本都没有（非 desktop 的只有 `chat`、`artifact-preview`、
-      `thread-list-pin#mobile-drawer`、`ui-polish-mobile` 与 `integrations`）。
-      这一页是这个仓库里表单最密的一屏——预设、时区、cron、上下文模式四组控件
-      加一张任务列表加一块运行历史，两个应用各写各的窄屏排布。
-
-      与 ZH/DARK 同一条纪律：**一个场景补一维就够**（断点轴与语言/主题轴正交）。
-
-      **深色那一维给的是 `load-failed`**：它是这一页唯一一支**真的把错误画出来**
-      的终态（`scheduled-task-load-error`），而两边都写的是 `text-destructive`
-      ——浅色下 `--destructive` 与 `red-600` 同值、看不出谁用的是 token，
-      只有深色才现形（见 `DARK_DIMENSION` 的说明）。这一维报 0 行是**算出来的 0**：
-      锚点是那个 testid，几何档会把它的 `color` 一起取走。
-    */
-    dimensions: [
-      DEFAULT_DIMENSION,
-      { viewport: "desktop", theme: "light", locale: "zh-CN" },
-      { viewport: "mobile", theme: "light", locale: "en-US" },
-      DARK_DIMENSION,
-    ],
-  },
+  ...CAPABILITY_PARITY_SCENARIOS,
+  ...PREFERENCES_PARITY_SCENARIOS,
+  ...SCHEDULED_PARITY_SCENARIOS,
+  ...COMPOSER_PARITY_SCENARIOS,
+  ...PROJECT_PARITY_SCENARIOS,
+  ...THREAD_LIFECYCLE_PARITY_SCENARIOS,
   {
     /*
       通知设置面板。这一条**从目录建起来就待在 pending 里**，理由是它要的不是一次
@@ -3614,10 +3228,9 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
 
       **触发器为什么这么定位**：两个应用**没有共用的 testid**（本仓的按钮上有
       `channel-provider-*`，上游没有），而按钮文案两边都是 "Connect"/"Connected"
-      的翻译，一屏上有好几颗。唯一两边都成立、又与语言无关的坐标是
-      **夹具自己给的 `display_name`**——它不进词典，两种语言下逐字相同。
-      所以按 `[data-sidebar="menu-item"]`（两个应用都写死的 data-* 选择器）
-      加 `:has-text(<display_name>)` 收窄到那一行，再取行内那颗按钮。
+      的翻译，一屏上有好几颗。两个应用都先按 provider identity 取本地化名字，未知 provider 才使用
+      后端 display_name。这里保留同一 provider 的精确英/中文名字，并按
+      `[data-sidebar="menu-item"]` 收窄到那一行，再取行内那颗按钮。
 
       对话框里的锚点同理：字段标签 `Token` 来自夹具的 `credential_fields`，
       两种语言下也逐字相同，所以 `role: textbox` + `name: "Token"` 不用写正则。
@@ -3631,7 +3244,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { selector: "[data-sidebar='sidebar']" },
           },
           { kind: "visible", target: { text: "Telegram" } },
-          { kind: "visible", target: { text: "DingTalk" } },
+          { kind: "visible", target: { text: /^(DingTalk|钉钉)$/ } },
         ],
       },
       {
@@ -3642,11 +3255,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { selector: "[data-sidebar='sidebar']" },
           },
           { kind: "visible", target: { text: "Telegram" } },
-          { kind: "visible", target: { text: "DingTalk" } },
+          { kind: "visible", target: { text: /^(DingTalk|钉钉)$/ } },
           {
             kind: "click",
             target: {
-              selector: '[data-sidebar="menu-item"]:has-text("Feishu") button',
+              selector:
+                '[data-sidebar="menu-item"]:has-text("Feishu") button, [data-sidebar="menu-item"]:has-text("飞书") button',
             },
           },
           { kind: "visible", target: { selector: "[role=dialog]" } },
@@ -3673,12 +3287,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { selector: "[data-sidebar='sidebar']" },
           },
           { kind: "visible", target: { text: "Telegram" } },
-          { kind: "visible", target: { text: "DingTalk" } },
+          { kind: "visible", target: { text: /^(DingTalk|钉钉)$/ } },
           {
             kind: "click",
             target: {
               selector:
-                '[data-sidebar="menu-item"]:has-text("DingTalk") button',
+                '[data-sidebar="menu-item"]:has-text("DingTalk") button, [data-sidebar="menu-item"]:has-text("钉钉") button',
             },
           },
           { kind: "visible", target: { selector: "[role=dialog]" } },
@@ -3728,7 +3342,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { selector: "[data-sidebar='sidebar']" },
           },
           { kind: "visible", target: { text: "Telegram" } },
-          { kind: "visible", target: { text: "DingTalk" } },
+          { kind: "visible", target: { text: /^(DingTalk|钉钉)$/ } },
           {
             kind: "click",
             target: {
@@ -3815,7 +3429,7 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             target: { selector: "[data-sidebar='sidebar']" },
           },
           { kind: "visible", target: { text: "Telegram" } },
-          { kind: "visible", target: { text: "DingTalk" } },
+          { kind: "visible", target: { text: /^(DingTalk|钉钉)$/ } },
           {
             kind: "click",
             target: {
@@ -3915,11 +3529,12 @@ export const PARITY_SCENARIOS: ParityScenario[] = [
             },
           },
           { kind: "visible", target: { text: "Telegram" } },
-          { kind: "visible", target: { text: "DingTalk" } },
+          { kind: "visible", target: { text: /^(DingTalk|钉钉)$/ } },
           {
             kind: "click",
             target: {
-              selector: '[data-sidebar="menu-item"]:has-text("Feishu") button',
+              selector:
+                '[data-sidebar="menu-item"]:has-text("Feishu") button, [data-sidebar="menu-item"]:has-text("飞书") button',
             },
           },
           /*

@@ -11,6 +11,8 @@ import path from "node:path";
 
 import type { Page, Route } from "@playwright/test";
 
+import { threadIdFromRequest } from "./thread-request";
+
 // ---------------------------------------------------------------------------
 // Constants — deterministic IDs used across tests
 // ---------------------------------------------------------------------------
@@ -122,8 +124,6 @@ export type MockAPIOptions = {
   projectDocuments?: MockProjectDocument[];
   trashDocuments?: MockTrashDocument[];
   threadFileGroups?: MockThreadFileGroup[];
-  createdThreadMessages?: unknown[];
-  honorRequestedThreadId?: boolean;
   agents?: MockAgent[];
   skills?: MockSkill[];
   scheduledTasks?: MockScheduledTask[];
@@ -429,32 +429,47 @@ function branchMessagesFromTurn(messages: unknown[], targetIds: Set<string>) {
   return targetEndIndex >= 0 ? messages.slice(0, targetEndIndex + 1) : messages;
 }
 
+function withMessageIdentity(message: unknown): unknown {
+  if (
+    typeof message === "object" &&
+    message !== null &&
+    messageId(message) === undefined
+  )
+    return { ...message, id: crypto.randomUUID() };
+  return message;
+}
+
+// Ordinary run writes use add_messages identity semantics: retain earlier
+// messages, replace an explicit matching ID in place, append new identities.
+function mergeThreadMessages(previous: unknown[], incoming: unknown[]) {
+  const merged = previous.map(withMessageIdentity);
+  const positions = new Map<string, number>();
+  merged.forEach((message, index) => {
+    const id = messageId(message);
+    if (id !== undefined) positions.set(id, index);
+  });
+  for (const message of incoming.map(withMessageIdentity)) {
+    const id = messageId(message);
+    const position = id === undefined ? undefined : positions.get(id);
+    if (position !== undefined) merged[position] = message;
+    else {
+      if (id !== undefined) positions.set(id, merged.length);
+      merged.push(message);
+    }
+  }
+  return merged;
+}
+
 function mockStreamMessages(
-  route?: Route,
-  inputMessages?: unknown[],
-  responseMessage: Record<string, unknown> = {
-    type: "ai",
-    id: "msg-ai-1",
-    content: "Hello from DeerFlow!",
-  },
+  route: Route,
+  inputMessages: unknown[] | undefined,
+  responseMessage: Record<string, unknown>,
 ) {
   const submittedMessages = inputMessages
     ? visibleInputMessages(inputMessages)
-    : route
-      ? visibleRunInputMessages(route)
-      : [];
-  if (submittedMessages.length > 0) {
-    return [...submittedMessages, responseMessage];
-  }
-
-  return [
-    {
-      type: "human",
-      id: "msg-human-1",
-      content: [{ type: "text", text: "Hello" }],
-    },
-    responseMessage,
-  ];
+    : visibleRunInputMessages(route);
+  // An input-less run does not invent a human turn.
+  return [...submittedMessages, responseMessage].map(withMessageIdentity);
 }
 
 function runStreamThreadId(route: Route) {
@@ -598,6 +613,36 @@ export function mockLangGraphAPI(
       ...threads.filter((existing) => existing.thread_id !== thread.thread_id),
     ];
   };
+
+  // Run attribution belongs to the same persisted-message owner. It is REST
+  // row metadata, not an extra field invented inside checkpoint messages.
+  const messageRunIds = new Map<string, Map<string, string>>();
+  streamRecorders.set(page, (threadId, messages, checkpointBase) => {
+    const existing = threads.find((thread) => thread.thread_id === threadId);
+    const merged = mergeThreadMessages(
+      checkpointBase ?? existing?.messages ?? [],
+      messages,
+    );
+    const retainedIds = new Set(merged.map(messageId));
+    const runs = new Map(
+      [...(messageRunIds.get(threadId) ?? [])].filter(([id]) =>
+        retainedIds.has(id),
+      ),
+    );
+    for (const message of messages) {
+      const id = messageId(message);
+      if (id !== undefined) runs.set(id, MOCK_RUN_ID);
+    }
+    messageRunIds.set(threadId, runs);
+    upsertThread({
+      ...existing,
+      thread_id: threadId,
+      title: existing?.title ?? "New Chat",
+      updated_at: new Date().toISOString(),
+      messages: merged,
+    });
+    return merged;
+  });
 
   const threadSearchResult = (thread: MockThread) => ({
     thread_id: thread.thread_id,
@@ -1203,35 +1248,68 @@ export function mockLangGraphAPI(
     });
   });
 
-  // Thread create — called when user sends first message in a new chat
-  void page.route("**/api/langgraph/threads", (route) => {
-    if (route.request().method() === "POST") {
-      const threadId =
-        (options?.honorRequestedThreadId
-          ? (route.request().postDataJSON() as { thread_id?: string } | null)
-              ?.thread_id
-          : undefined) ?? MOCK_THREAD_ID;
-      upsertThread({
+  // The first server-generated UUID stays deterministic for sidecar fixtures;
+  // omitted IDs still allocate distinct records, as the Gateway does.
+  let generatedThreadSequence = 0;
+  const createThreadHandler = (route: Route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const body = route.request().postDataJSON() as {
+      thread_id?: string;
+      project_id?: string | null;
+      metadata?: Record<string, unknown>;
+    };
+    const threadId =
+      body.thread_id ??
+      (generatedThreadSequence++ === 0 &&
+      !threads.some((thread) => thread.thread_id === MOCK_SIDECAR_THREAD_ID)
+        ? MOCK_SIDECAR_THREAD_ID
+        : crypto.randomUUID());
+    let created = threads.find((thread) => thread.thread_id === threadId);
+    // Idempotency precedes project admission; create is never a hidden move.
+    if (!created) {
+      if (
+        body.project_id &&
+        !projectsList.some(
+          (project) =>
+            project.id === body.project_id && project.status === "active",
+        )
+      ) {
+        return route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Project not found" }),
+        });
+      }
+      const metadata: Record<string, unknown> = Object.fromEntries(
+        Object.entries(body.metadata ?? {}).filter(
+          ([key]) =>
+            ![
+              "owner_id",
+              "user_id",
+              THREAD_PROJECT_METADATA_KEY,
+              "deerflow_origin",
+            ].includes(key),
+        ),
+      );
+      if (body.project_id)
+        metadata[THREAD_PROJECT_METADATA_KEY] = body.project_id;
+      created = {
         thread_id: threadId,
         title: "New Chat",
         updated_at: new Date().toISOString(),
-        messages: options?.createdThreadMessages ?? mockStreamMessages(),
-      });
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          thread_id: threadId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          metadata: {},
-          status: "idle",
-          values: {},
-        }),
-      });
+        metadata,
+        messages: [],
+      };
+      upsertThread(created);
     }
-    return route.fallback();
-  });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ...threadSearchResult(created), values: {} }),
+    });
+  };
+  void page.route("**/api/langgraph/threads", createThreadHandler);
+  void page.route("**/api/threads", createThreadHandler);
 
   // Thread update (PATCH) — metadata update after creation
   void page.route("**/api/langgraph/threads/*", (route) => {
@@ -1279,63 +1357,6 @@ export function mockLangGraphAPI(
       threads = threads.filter((thread) => thread.thread_id !== threadId);
       return route.fulfill({
         status: 204,
-      });
-    }
-    return route.fallback();
-  });
-
-  void page.route("**/api/threads", (route) => {
-    if (route.request().method() === "POST") {
-      const body = route.request().postDataJSON() as {
-        thread_id?: string;
-        metadata?: Record<string, unknown>;
-        project_id?: string;
-      };
-      const threadId = body.thread_id ?? MOCK_SIDECAR_THREAD_ID;
-      // The backend stamps `metadata.deerflow_project_id` from the assigned
-      // project_id column; mirror that so project membership is readable.
-      const metadata = {
-        ...body.metadata,
-        ...(body.project_id
-          ? { [THREAD_PROJECT_METADATA_KEY]: body.project_id }
-          : {}),
-      };
-      // Mirror the backend idempotency contract: a repeat POST for an
-      // existing thread_id returns the record unchanged (goal and other
-      // state intact) instead of resetting it.
-      const existing = threads.find((thread) => thread.thread_id === threadId);
-      if (existing) {
-        return route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            thread_id: threadId,
-            created_at: existing.updated_at ?? new Date().toISOString(),
-            updated_at: existing.updated_at ?? new Date().toISOString(),
-            metadata: existing.metadata ?? {},
-            status: "idle",
-            values: {},
-          }),
-        });
-      }
-      upsertThread({
-        thread_id: threadId,
-        title: "Side chat",
-        updated_at: new Date().toISOString(),
-        metadata: metadata,
-        messages: [],
-      });
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          thread_id: threadId,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          metadata: metadata,
-          status: "idle",
-          values: {},
-        }),
       });
     }
     return route.fallback();
@@ -2026,7 +2047,9 @@ export function mockLangGraphAPI(
     const url = route.request().url();
 
     // For threads that exist in our mock data, return history with messages
-    const matchingThread = threads.find((t) => url.includes(t.thread_id));
+    const matchingThread = threads.find(
+      (t) => t.thread_id === threadIdFromRequest(url),
+    );
     if (matchingThread) {
       return route.fulfill({
         status: 200,
@@ -2141,7 +2164,9 @@ export function mockLangGraphAPI(
   void page.route(/\/api\/langgraph\/threads\/[^/]+\/runs(\?|$)/, (route) => {
     if (route.request().method() === "GET") {
       const url = route.request().url();
-      const matchingThread = threads.find((t) => url.includes(t.thread_id));
+      const matchingThread = threads.find(
+        (t) => t.thread_id === threadIdFromRequest(url),
+      );
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -2170,18 +2195,21 @@ export function mockLangGraphAPI(
   void page.route(/\/api\/threads\/([^/]+)\/messages\/page/, (route) => {
     if (route.request().method() === "GET") {
       const url = route.request().url();
-      const matchingThread = threads.find((t) =>
-        url.includes(`/api/threads/${t.thread_id}/messages/page`),
-      );
+      const threadId = threadIdFromRequest(url);
+      const matchingThread = threads.find((t) => t.thread_id === threadId);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           data: (matchingThread?.messages ?? []).map((message, index) => ({
-            run_id: mockMessageRunId(
-              message,
-              `run-${matchingThread?.thread_id ?? "unknown"}`,
-            ),
+            run_id:
+              messageRunIds
+                .get(threadId ?? "")
+                ?.get(messageId(message) ?? "") ??
+              mockMessageRunId(
+                message,
+                `run-${matchingThread?.thread_id ?? "unknown"}`,
+              ),
             seq: index + 1,
             content: message,
             metadata: { caller: "lead_agent" },
@@ -2205,14 +2233,6 @@ export function mockLangGraphAPI(
       );
       const fallbackGoal = threads.find((thread) => thread.goal)?.goal ?? null;
       const goal = existingThread?.goal ?? fallbackGoal;
-      upsertThread({
-        thread_id: threadId,
-        title: threadId === MOCK_SIDECAR_THREAD_ID ? "Side chat" : "New Chat",
-        updated_at: new Date().toISOString(),
-        goal,
-        metadata: existingThread?.metadata,
-        messages: mockStreamMessages(route),
-      });
       return handleRunStream(route, { goal });
     });
 
@@ -2223,6 +2243,16 @@ export function mockLangGraphAPI(
   );
 
   // Models list — model picker dropdown
+  // Empty default catalog; feature-specific scenarios register their own later route.
+  void page.route("**/api/subagents", (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ subagents: [] }),
+    });
+  });
+
   void page.route("**/api/models", (route) => {
     if (route.request().method() === "GET") {
       return route.fulfill({
@@ -2603,6 +2633,16 @@ export function mockLangGraphAPI(
  * Build a minimal SSE stream that the LangGraph SDK can parse.
  * The stream returns a single AI message: "Hello from DeerFlow!".
  */
+// Actual mock runs own message persistence, including caller-supplied streams.
+const streamRecorders = new WeakMap<
+  Page,
+  (
+    threadId: string,
+    messages: unknown[],
+    checkpointBase?: unknown[],
+  ) => unknown[]
+>();
+
 export function handleRunStream(
   route: Route,
   values: Record<string, unknown> = {},
@@ -2610,14 +2650,41 @@ export function handleRunStream(
   options?: {
     responseMessage?: Record<string, unknown>;
     messageMetadata?: Record<string, unknown>;
+    checkpointBase?: { checkpointId: string; messages: unknown[] };
   },
 ) {
   const threadId = runStreamThreadId(route);
-  const responseMessage = options?.responseMessage ?? {
-    type: "ai",
-    id: "msg-ai-1",
-    content: "Hello from DeerFlow!",
-  };
+  if (options?.checkpointBase) {
+    const request = route.request().postDataJSON() as {
+      checkpoint?: { checkpoint_id?: string };
+    };
+    if (
+      request.checkpoint?.checkpoint_id !== options.checkpointBase.checkpointId
+    )
+      throw new Error(
+        "Replay checkpoint does not match the supplied checkpoint base.",
+      );
+  }
+  const responseMessage = withMessageIdentity(
+    options?.responseMessage ?? {
+      type: "ai",
+      content: "Hello from DeerFlow!",
+    },
+  ) as Record<string, unknown>;
+  const streamedMessages = mockStreamMessages(
+    route,
+    inputMessages,
+    responseMessage,
+  );
+  const persistedMessages =
+    streamRecorders.get(route.request().frame().page())?.(
+      threadId,
+      streamedMessages,
+      options?.checkpointBase?.messages,
+    ) ??
+    (options?.checkpointBase
+      ? mergeThreadMessages(options.checkpointBase.messages, streamedMessages)
+      : streamedMessages);
   const events = [
     {
       event: "metadata",
@@ -2635,7 +2702,7 @@ export function handleRunStream(
       event: "values",
       data: {
         ...values,
-        messages: mockStreamMessages(route, inputMessages, responseMessage),
+        messages: persistedMessages,
       },
     },
     { event: "end", data: {} },

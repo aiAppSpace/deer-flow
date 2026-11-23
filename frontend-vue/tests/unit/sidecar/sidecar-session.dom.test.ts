@@ -99,17 +99,21 @@ describe("useSidecarSession", () => {
 
   function setup() {
     const parentThreadId = ref<string | null>("parent-1");
+    const ownerKey = ref("alice:agent-a");
     const parentMessages = ref([]);
     const sidecarThreadId = ref<string | null>(null);
     const references = ref([reference()]);
     const context = ref({ model_name: "reasoner", mode: "pro" });
+    const readonly = ref(false);
     const session = scope.run(() =>
       useSidecarSession({
         parentThreadId,
+        ownerKey,
         parentMessages,
         sidecarThreadId,
         references,
         context,
+        readonly,
         onReferencesAccepted(accepted) {
           const acceptedIds = new Set(accepted.map((item) => item.id));
           references.value = references.value.filter(
@@ -120,12 +124,43 @@ describe("useSidecarSession", () => {
     )!;
     return {
       parentThreadId,
+      ownerKey,
+      readonly,
       sidecarThreadId,
       references,
       session,
       stream: mocks.stream!,
     };
   }
+
+  it("retires a late restore and isolates drafts when the same parent changes Agent", async () => {
+    const oldRestore = deferred<{ thread_id: string } | null>();
+    mocks.findLatestSidecarThread
+      .mockReturnValueOnce(oldRestore.promise)
+      .mockResolvedValueOnce({ thread_id: "sidecar-agent-b" })
+      .mockResolvedValueOnce({ thread_id: "sidecar-agent-a" });
+    const { session, ownerKey, parentThreadId, sidecarThreadId } = setup();
+    const oldSignal = mocks.findLatestSidecarThread.mock.calls[0]![0]
+      .signal as AbortSignal;
+    session.input.value = "Agent A draft";
+    const file = new File(["Agent A"], "a.txt");
+    session.addFiles([file]);
+    ownerKey.value = "alice:agent-b";
+    expect(oldSignal.aborted).toBe(true);
+    expect(parentThreadId.value).toBe("parent-1");
+    expect(session.input.value).toBe("");
+    expect(session.selectedFiles.value).toEqual([]);
+    await flushPromises();
+    expect(sidecarThreadId.value).toBe("sidecar-agent-b");
+    oldRestore.resolve({ thread_id: "sidecar-old" });
+    await flushPromises();
+    expect(sidecarThreadId.value).toBe("sidecar-agent-b");
+    ownerKey.value = "alice:agent-a";
+    expect(session.input.value).toBe("Agent A draft");
+    expect(session.selectedFiles.value).toEqual([file]);
+    await flushPromises();
+    expect(sidecarThreadId.value).toBe("sidecar-agent-a");
+  });
 
   it("uploads selected files to the restored-or-created thread and clears only on acceptance", async () => {
     const file = new File(["hello"], "notes.txt");
@@ -318,14 +353,78 @@ describe("useSidecarSession", () => {
       "restored-sidecar",
       { text: expect.stringContaining("false") },
       undefined,
-      {
-        additionalKwargs: {
+      expect.objectContaining({
+        additionalInputMessages: [
+          expect.objectContaining({
+            additional_kwargs: expect.objectContaining({
+              sidecar_context: true,
+              parent_thread_id: "parent-1",
+            }),
+          }),
+        ],
+        additionalKwargs: expect.objectContaining({
+          sidecar_visible_message: true,
+          referenced_message_count: 1,
           hide_from_ui: true,
           human_input_response: response,
-        },
+        }),
         onAccepted: expect.any(Function),
-      },
+      }),
     );
+  });
+
+  it("blocks sidecar mutation handlers in read-only mode while allowing restored history", async () => {
+    mocks.findLatestSidecarThread.mockResolvedValue({
+      thread_id: "restored-sidecar",
+    });
+    const { session, stream, readonly } = setup();
+    await flushPromises();
+    readonly.value = true;
+    session.setInput("Forbidden");
+    session.addFiles([new File(["x"], "read-only.txt")]);
+    expect(session.selectedFiles.value).toEqual([]);
+    await expect(session.submit()).resolves.toBe(false);
+    await expect(
+      session.submitHumanInput(
+        {
+          kind: "human_input_request",
+          id: "read-only",
+          title: "Question",
+          questions: [],
+        } as never,
+        {
+          kind: "human_input_response",
+          request_id: "read-only",
+          answers: [],
+        } as never,
+      ),
+    ).resolves.toBe(false);
+    await expect(session.ensureThread([reference()])).resolves.toBeNull();
+    await expect(session.deleteThread()).resolves.toBe(false);
+    expect(stream.sendMessage).not.toHaveBeenCalled();
+    expect(mocks.fetchWithAuth).not.toHaveBeenCalled();
+    expect(session.threadId.value).toBe("restored-sidecar");
+  });
+
+  it("resets delete ownership on a parent switch and ignores the old completion", async () => {
+    mocks.findLatestSidecarThread.mockResolvedValue({
+      thread_id: "restored-sidecar",
+    });
+    const deletion = deferred<Response>();
+    mocks.fetchWithAuth.mockReturnValueOnce(deletion.promise);
+    const { session, parentThreadId } = setup();
+    await flushPromises();
+    const pending = session.deleteThread();
+    expect(session.deleting.value).toBe(true);
+    parentThreadId.value = "parent-2";
+    expect(session.deleting.value).toBe(false);
+    expect(mocks.fetchWithAuth.mock.calls[0]![1].signal.aborted).toBe(true);
+    await nextTick();
+    expect(session.deleting.value).toBe(false);
+    session.setInput("New parent draft");
+    deletion.resolve(new Response(null, { status: 204 }));
+    await expect(pending).resolves.toBe(false);
+    expect(session.input.value).toBe("New parent draft");
   });
 
   /*

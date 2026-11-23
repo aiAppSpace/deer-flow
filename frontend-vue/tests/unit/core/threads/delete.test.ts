@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
+const http = vi.hoisted(() => ({
+  fetch: vi.fn(async () => new Response(null, { status: 204 })),
+}));
+vi.mock("@/core/api/fetcher", () => ({ fetch: http.fetch }));
+vi.mock("@/core/config", () => ({ getBackendBaseURL: () => "" }));
+
 import { GatewayResponseError } from "@/core/api/errors";
 import {
-  ThreadCascadeDeleteError,
   deleteThreadCascade,
   findSidecarThreadIdsForParent,
 } from "@/core/threads/delete";
@@ -68,33 +73,83 @@ describe("main-thread cascade deletion", () => {
     expect(order.at(-1)).toBe("main-1");
   });
 
-  it("keeps the main thread when a sidecar partially fails and exposes retry ids", async () => {
+  it("matches React: reports failed sidecars and still deletes the requested parent", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const deleted: string[] = [];
+    const failure = new GatewayResponseError("delete failed", 503, null, "");
     const client = {
       threads: {
         search: vi
           .fn()
           .mockResolvedValue([sidecar("side-ok"), sidecar("side-bad")]),
         delete: vi.fn(async (id: string) => {
-          if (id === "side-bad") {
-            throw new GatewayResponseError("delete failed", 503, null, "");
-          }
+          if (id === "side-bad") throw failure;
           deleted.push(id);
         }),
       },
     };
+    try {
+      await expect(deleteThreadCascade(client, "main-1")).resolves.toEqual([
+        "side-ok",
+        "main-1",
+      ]);
+      expect(deleted).toEqual(["side-ok", "main-1"]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("orphaned sidecar threads may remain"),
+        [{ threadId: "side-bad", reason: failure }],
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
 
-    const error = await deleteThreadCascade(client, "main-1").catch(
-      (cause: unknown) => cause,
+  it("matches React: reports sidecar discovery failure and still deletes the parent", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const failure = new Error("search unavailable");
+    const client = {
+      threads: {
+        search: vi.fn().mockRejectedValue(failure),
+        delete: vi.fn().mockResolvedValue(undefined),
+      },
+    };
+    try {
+      await expect(deleteThreadCascade(client, "main-1")).resolves.toEqual([
+        "main-1",
+      ]);
+      expect(client.threads.delete).toHaveBeenCalledExactlyOnceWith("main-1");
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("skipping cascade cleanup"),
+        failure,
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does not complete while local cleanup failed and retries cleanup after a remote 404", async () => {
+    const remote = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        new GatewayResponseError("not found", 404, null, ""),
+      );
+    const client = {
+      threads: { search: vi.fn().mockResolvedValue([]), delete: remote },
+    };
+    http.fetch.mockResolvedValueOnce(
+      Response.json({ detail: "Cleanup failed" }, { status: 500 }),
     );
-    expect(error).toBeInstanceOf(ThreadCascadeDeleteError);
-    expect(error).toMatchObject({
-      parentThreadId: "main-1",
-      failedThreadIds: ["side-bad"],
-      deletedThreadIds: ["side-ok"],
+    await expect(deleteThreadCascade(client, "main-1")).rejects.toMatchObject({
+      failedThreadIds: ["main-1"],
+      message: "Cleanup failed",
     });
-    expect(deleted).toEqual(["side-ok"]);
-    expect(client.threads.delete).not.toHaveBeenCalledWith("main-1");
+    await expect(deleteThreadCascade(client, "main-1")).resolves.toEqual([
+      "main-1",
+    ]);
+    expect(remote).toHaveBeenCalledTimes(2);
+    expect(http.fetch).toHaveBeenLastCalledWith("/api/threads/main-1", {
+      method: "DELETE",
+    });
   });
 
   it("treats a raced 404 sidecar delete as the desired idempotent result", async () => {

@@ -10,7 +10,6 @@
 */
 
 import { expect, test, type Page } from "@playwright/test";
-import { openSettingsDialog } from "../support/settings-dialog";
 
 import { mockLangGraphAPI, MOCK_THREAD_ID } from "./utils/mock-api";
 
@@ -197,10 +196,12 @@ test("skill source is a tablist and the enable control is a switch", async ({
   await page.route(/\/api\/skills$/, (route) =>
     route.fulfill({ json: { skills: [SKILL] } }),
   );
-  await openSettingsDialog(page, "/workspace/chats/new?settings=skills");
+  await page.goto("/workspace/capabilities?tab=skills");
 
-  const tabs = page.getByRole("tab");
-  await expect(tabs).toHaveCount(2);
+  const tabs = page
+    .getByRole("tablist", { name: "Skills", exact: true })
+    .getByRole("tab");
+  await expect(tabs).toHaveCount(4);
   await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true");
   await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "false");
 
@@ -217,7 +218,7 @@ test("skill source is a tablist and the enable control is a switch", async ({
   await expect(toggle).toBeChecked();
 });
 
-test("composer model selector is a searchable dialog whose current model is announced", async ({
+test("composer model directory announces the current model and restores trigger focus", async ({
   page,
 }) => {
   await openWorkspace(page, "/workspace/chats/new", async () => {
@@ -249,11 +250,7 @@ test("composer model selector is a searchable dialog whose current model is anno
     );
   });
 
-  /*
-    上游 ModelSelector 就是 Dialog + Command（ai-elements/model-selector.tsx），
-    不是下拉菜单：一个带搜索框的命令面板。这条用例过去断言 aria-haspopup=menu，
-    锁的是本仓自己长出来的 DropdownMenu 形状。
-  */
+  // Current React input uses a nonmodal model directory anchored to its trigger.
   const trigger = page.getByTestId("composer-model-selector");
   await expect(trigger).toBeVisible({ timeout: 15_000 });
   await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
@@ -261,21 +258,24 @@ test("composer model selector is a searchable dialog whose current model is anno
 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  // sr-only 的标题给对话框一个可访问名，上游默认文案是写死的 "Model Selector"。
-  await expect(dialog).toHaveAccessibleName("Model Selector");
-
-  const options = dialog.getByRole("option");
-  await expect(options).toHaveCount(2);
-  await expect(options.first()).toContainText("Basic Model");
-  await expect(options.nth(1)).toContainText("Reasoning Model");
-
-  // 搜索框是这个形状的全部意义：`inputBox.searchModels` 靠它才有消费者。
-  const search = dialog.getByPlaceholder("Search models...");
-  await expect(search).toBeFocused();
-  await search.fill("reasoning");
-  await expect(options).toHaveCount(1);
-  await expect(options.first()).toContainText("Reasoning Model");
-
+  await expect(dialog).toHaveAccessibleName("Choose a model");
+  const basic = dialog.getByRole("button", {
+    name: "Basic Model (basic)",
+    exact: true,
+  });
+  const reasoning = dialog.getByRole("button", {
+    name: "Reasoning Model (reasoning)",
+    exact: true,
+  });
+  await expect(basic).toBeVisible();
+  await expect(reasoning).toBeVisible();
+  await expect(basic).toHaveAttribute("aria-current", "true");
+  await expect(reasoning).not.toHaveAttribute("aria-current", "true");
+  await reasoning.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(trigger).toContainText("Reasoning Model");
+  await trigger.click();
+  await expect(reasoning).toHaveAttribute("aria-current", "true");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(trigger).toBeFocused();

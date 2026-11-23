@@ -1,145 +1,184 @@
-/*
-  【文件职责】     验证Vue Query 在 task 切换与 scope dispose 后拒绝 stale 回写并停止轮询。
-  【架构位置】     Vue DOM/composable test
-  【主要导出】     无；Vitest cases
-  【依赖关系】     @tanstack/vue-query · composables/useScheduledTasks
-  【边界与注意】   不使用组件级 timer；poll 归 query observer，unmount 后必须停止。
-                   轮询是**固定 15 秒、与运行状态无关**的，与 React 的
-                   `refetchInterval: 15000` 同一个值——此前只在有 queued/running 的运行时
-                   才以 2 秒轮询，那是 Vue 独有的一套节奏。
-*/
-import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
-import { mount } from "@vue/test-utils";
-import { defineComponent, h, nextTick, ref } from "vue";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { useScheduledTaskRuns } from "@/composables/useScheduledTasks";
-import type { ScheduledTaskRun } from "@/core/scheduled-tasks/types";
-
-const api = vi.hoisted(() => ({
-  fetchScheduledTaskRuns: vi.fn(),
+import {
+  QueryClient,
+  VueQueryPlugin,
+  focusManager,
+  onlineManager,
+} from "@tanstack/vue-query";
+import { mount, flushPromises } from "@vue/test-utils";
+import { defineComponent, ref, nextTick } from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  useScheduledTaskRunHistory,
+  useScheduledTaskMutations,
+} from "@/composables/useScheduledTasks";
+import { resetWorkspaceQueries } from "@/core/auth/workspace-queries";
+import { scheduledTaskKeys } from "@/core/scheduled-tasks/query-keys";
+import { task, run } from "./fixtures";
+const api = vi.hoisted(() => ({ runs: vi.fn(), create: vi.fn() }));
+vi.mock("@/core/scheduled-tasks/api", async (original) => ({
+  ...(await original<typeof import("@/core/scheduled-tasks/api")>()),
+  fetchScheduledTaskRuns: api.runs,
+  createScheduledTask: api.create,
 }));
-
-vi.mock("@/core/scheduled-tasks/api", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  fetchScheduledTaskRuns: api.fetchScheduledTaskRuns,
-}));
-
-type Deferred<T> = {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-};
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
+const wrappers: ReturnType<typeof mount>[] = [];
+const clients: QueryClient[] = [];
+function host(setup: () => void) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
   });
-  return { promise, resolve };
+  clients.push(client);
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        setup();
+        return () => null;
+      },
+    }),
+    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+  );
+  wrappers.push(wrapper);
+  return client;
 }
-
-afterEach(() => {
-  vi.useRealTimers();
+beforeEach(() => {
   vi.clearAllMocks();
+  focusManager.setFocused(true);
+  onlineManager.setOnline(true);
 });
-
-describe("useScheduledTaskRuns", () => {
-  it("does not write task A's late runs into task B", async () => {
-    const first = deferred<unknown[]>();
-    const second = deferred<unknown[]>();
-    api.fetchScheduledTaskRuns.mockImplementation((taskId: string) =>
-      taskId === "task-a" ? first.promise : second.promise,
+afterEach(() => {
+  wrappers.splice(0).forEach((w) => w.unmount());
+  clients.splice(0).forEach((c) => c.clear());
+  vi.useRealTimers();
+  focusManager.setFocused(undefined);
+});
+describe("page-owned scheduled run history", () => {
+  it("requests 51, renders 50 and replaces rather than accumulates older pages", async () => {
+    api.runs.mockImplementation((_id, options) =>
+      Promise.resolve(
+        Array.from({ length: options.offset ? 2 : 51 }, (_, i) =>
+          run({ id: `run-${options.offset + i}` }),
+        ),
+      ),
     );
-    const taskId = ref<string | null>("task-a");
-    let state!: ReturnType<typeof useScheduledTaskRuns>;
-    const Host = defineComponent({
-      setup() {
-        state = useScheduledTaskRuns(taskId);
-        return () => h("div", state.runs.value.map((run) => run.id).join(","));
-      },
+    let state!: ReturnType<typeof useScheduledTaskRunHistory>;
+    host(() => {
+      state = useScheduledTaskRunHistory(ref("task"));
     });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
+    await vi.waitFor(() => expect(state.runs.value).toHaveLength(50));
+    expect(api.runs.mock.calls[0]?.[1]).toMatchObject({
+      limit: 51,
+      offset: 0,
+      signal: expect.any(AbortSignal),
     });
-    const wrapper = mount(Host, {
-      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
-    });
-
-    taskId.value = "task-b";
-    await nextTick();
-    second.resolve([{ id: "run-b", status: "success", task_id: "task-b" }]);
-    await vi.waitFor(() => expect(wrapper.text()).toBe("run-b"));
-    first.resolve([{ id: "run-a", status: "success", task_id: "task-a" }]);
-    await Promise.resolve();
-    await nextTick();
-
-    expect(wrapper.text()).toBe("run-b");
-    wrapper.unmount();
-    queryClient.clear();
+    state.older();
+    state.older();
+    await flushPromises();
+    expect(state.page.value).toBe(1);
+    expect(state.runs.value.map((r) => r.id)).toEqual(["run-50", "run-51"]);
+    expect(state.hasOlder.value).toBe(false);
+    state.newer();
+    await flushPromises();
+    expect(state.runs.value).toHaveLength(50);
   });
-
-  it("keeps one in-flight loadMore instead of queueing a second page", async () => {
-    const pages: Record<number, ScheduledTaskRun[]> = {
-      0: Array.from({ length: 50 }, (_, index) => ({
-        id: `run-${index}`,
-      })) as ScheduledTaskRun[],
-      50: [{ id: "run-50" }] as ScheduledTaskRun[],
-    };
-    const offsets: number[] = [];
-    api.fetchScheduledTaskRuns.mockImplementation(
-      (_taskId: string, options: { offset?: number }) => {
-        offsets.push(options.offset ?? 0);
-        return Promise.resolve(pages[options.offset ?? 0] ?? []);
-      },
+  it("resets page and rejects late A results after switching tasks", async () => {
+    let resolve!: (value: ReturnType<typeof run>[]) => void;
+    api.runs.mockImplementation((id) =>
+      id === "A"
+        ? new Promise((done) => (resolve = done))
+        : Promise.resolve([run({ id: "B-run", task_id: "B" })]),
     );
-    let state!: ReturnType<typeof useScheduledTaskRuns>;
-    const Host = defineComponent({
-      setup() {
-        state = useScheduledTaskRuns(ref("task-a"));
-        return () => h("div", String(state.runs.value.length));
-      },
+    const id = ref<string | null>("A");
+    let state!: ReturnType<typeof useScheduledTaskRunHistory>;
+    host(() => {
+      state = useScheduledTaskRunHistory(id);
     });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    const wrapper = mount(Host, {
-      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
-    });
-    await vi.waitFor(() => expect(wrapper.text()).toBe("50"));
-
-    await Promise.all([state.loadMore(), state.loadMore()]);
-    await vi.waitFor(() => expect(wrapper.text()).toBe("51"));
-    expect(offsets).toEqual([0, 50]);
-
-    wrapper.unmount();
-    queryClient.clear();
+    id.value = "B";
+    await nextTick();
+    await vi.waitFor(() => expect(state.runs.value[0]?.id).toBe("B-run"));
+    resolve([run({ id: "A-run" })]);
+    await flushPromises();
+    expect(state.runs.value[0]?.id).toBe("B-run");
+    expect(state.page.value).toBe(0);
+    expect(api.runs.mock.calls[0]?.[1].signal.aborted).toBe(true);
   });
-
-  it("polls every 15s even with no active run, and stops after unmount", async () => {
+  it("polls only the visible latest page and stops focus/reconnect refresh on older pages", async () => {
     vi.useFakeTimers();
-    // 全部已结束：旧实现在这种数据上根本不轮询。
-    api.fetchScheduledTaskRuns.mockResolvedValue([
-      { id: "run-done", task_id: "task-a", status: "success" },
-    ]);
-    const Host = defineComponent({
-      setup() {
-        useScheduledTaskRuns(ref("task-a"));
-        return () => h("div");
-      },
-    });
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    const wrapper = mount(Host, {
-      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
-    });
-    await vi.waitFor(() =>
-      expect(api.fetchScheduledTaskRuns).toHaveBeenCalledTimes(1),
+    api.runs.mockResolvedValue(
+      Array.from({ length: 51 }, (_, i) =>
+        run({ id: `run-${i}`, status: i === 0 ? "running" : "success" }),
+      ),
     );
-    await vi.advanceTimersByTimeAsync(15_000);
-    expect(api.fetchScheduledTaskRuns).toHaveBeenCalledTimes(2);
-
-    wrapper.unmount();
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(api.fetchScheduledTaskRuns).toHaveBeenCalledTimes(2);
-    queryClient.clear();
+    let state!: ReturnType<typeof useScheduledTaskRunHistory>;
+    host(() => {
+      state = useScheduledTaskRunHistory(ref("task"));
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(api.runs).toHaveBeenCalledTimes(2);
+    state.older();
+    await flushPromises();
+    const calls = api.runs.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(30000);
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+    onlineManager.setOnline(false);
+    onlineManager.setOnline(true);
+    await flushPromises();
+    expect(api.runs).toHaveBeenCalledTimes(calls);
+    expect(api.runs.mock.calls.at(-1)?.[1].offset).toBe(50);
+  });
+  it("invalidates task summaries when an observed active occurrence reaches a terminal state", async () => {
+    api.runs.mockResolvedValue([run({ status: "running" })]);
+    let state!: ReturnType<typeof useScheduledTaskRunHistory>;
+    const client = host(() => {
+      state = useScheduledTaskRunHistory(ref("task"));
+    });
+    client.setQueryData(scheduledTaskKeys.list(), [task()]);
+    await flushPromises();
+    api.runs.mockResolvedValue([run({ status: "success" })]);
+    await state.refetch();
+    await flushPromises();
+    expect(client.getQueryState(scheduledTaskKeys.list())?.isInvalidated).toBe(
+      true,
+    );
+  });
+  it("stops polling when the history owner unmounts", async () => {
+    vi.useFakeTimers();
+    api.runs.mockResolvedValue([run()]);
+    host(() => {
+      useScheduledTaskRunHistory(ref("task"));
+    });
+    await flushPromises();
+    wrappers[0]!.unmount();
+    const calls = api.runs.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(api.runs).toHaveBeenCalledTimes(calls);
+  });
+  it("does not invalidate new account queries after an old account mutation returns", async () => {
+    let resolve!: (value: ReturnType<typeof task>) => void;
+    api.create.mockImplementation(
+      () => new Promise((done) => (resolve = done)),
+    );
+    let mutation!: ReturnType<typeof useScheduledTaskMutations>;
+    const client = host(() => {
+      mutation = useScheduledTaskMutations();
+    });
+    const pending = mutation.create.mutateAsync({
+      title: "old",
+      prompt: "Summarize",
+      context_mode: "fresh_thread_per_run",
+      schedule_type: "cron",
+      schedule_spec: { cron: "0 9 * * *" },
+      timezone: "UTC",
+    });
+    await flushPromises();
+    await resetWorkspaceQueries(client);
+    client.setQueryData(scheduledTaskKeys.list(), [
+      task({ id: "new-account" }),
+    ]);
+    resolve(task());
+    await pending;
+    expect(client.getQueryState(scheduledTaskKeys.list())?.isInvalidated).toBe(
+      false,
+    );
   });
 });

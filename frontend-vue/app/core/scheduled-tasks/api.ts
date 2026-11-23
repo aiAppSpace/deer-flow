@@ -3,13 +3,19 @@
   【架构位置】     L3 scheduled-task API boundary
   【主要导出】     ScheduledTaskCreatePayload · ScheduledTaskUpdatePayload · scheduled-task API functions
   【依赖关系】     core api fetcher/errors/config · scheduled-task types
-  【边界与注意】   Gateway 只支持 once/cron；PATCH 不发送 schedule_type；runs 走 limit/offset。
+  【边界与注意】   Gateway 支持 once/cron/interval；PATCH 仅发送变化字段；runs 走 limit/offset。
 */
 import { throwGatewayApiError } from "@/core/api/errors";
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
-import type { ScheduledTask, ScheduledTaskRun } from "./types";
+import type {
+  ScheduledTask,
+  ScheduledTaskRun,
+  ScheduledTaskRenewal,
+  ScheduledTaskTriggerResult,
+  ThreadScheduledTask,
+} from "./types";
 
 type RequestOptions = {
   signal?: AbortSignal;
@@ -18,17 +24,23 @@ type RequestOptions = {
 export type ScheduledTaskCreatePayload = {
   context_mode: "fresh_thread_per_run" | "reuse_thread";
   thread_id?: string | null;
+  assistant_id?: string | null;
   title: string;
   prompt: string;
-  schedule_type: "once" | "cron";
+  schedule_type: "once" | "cron" | "interval";
   schedule_spec: Record<string, unknown>;
   timezone: string;
+  goal_objective?: string | null;
+  max_runs?: number | null;
+  end_at?: string | null;
+  stop_condition?: string | null;
 };
 
-/** PATCH 不带 thread_id / schedule_type：与 React 的同名类型同一份取舍。 */
-export type ScheduledTaskUpdatePayload = Partial<
-  Omit<ScheduledTaskCreatePayload, "thread_id" | "schedule_type">
->;
+/**
+ * PATCH accepts changed context/thread/schedule fields. Explicit null clears
+ * goal, stop condition and safety caps; the page locks schedule_type on edit.
+ */
+export type ScheduledTaskUpdatePayload = Partial<ScheduledTaskCreatePayload>;
 
 /** Kept for callers that only need the create contract. */
 export type ScheduledTaskPayload = ScheduledTaskCreatePayload;
@@ -55,7 +67,7 @@ export async function fetchScheduledTasks(
 export async function fetchThreadScheduledTasks(
   threadId: string,
   options: RequestOptions = {},
-): Promise<ScheduledTask[]> {
+): Promise<ThreadScheduledTask[]> {
   const response = await fetch(
     `${getBackendBaseURL()}/api/threads/${encodeURIComponent(threadId)}/scheduled-tasks`,
     { signal: options.signal },
@@ -146,10 +158,17 @@ export async function pauseScheduledTask(
 
 export async function resumeScheduledTask(
   taskId: string,
+  renewal?: ScheduledTaskRenewal,
 ): Promise<ScheduledTask> {
   const response = await fetch(
     scheduledTasksUrl(`/${encodeURIComponent(taskId)}/resume`),
-    { method: "POST" },
+    renewal
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(renewal),
+        }
+      : { method: "POST" },
   );
   if (!response.ok) {
     await throwGatewayApiError(
@@ -162,7 +181,7 @@ export async function resumeScheduledTask(
 
 export async function triggerScheduledTask(
   taskId: string,
-): Promise<{ id: string; triggered: boolean }> {
+): Promise<ScheduledTaskTriggerResult> {
   const response = await fetch(
     scheduledTasksUrl(`/${encodeURIComponent(taskId)}/trigger`),
     { method: "POST" },
@@ -191,5 +210,21 @@ export async function deleteScheduledTask(
       `Failed to delete scheduled task: ${response.statusText}`,
     );
   }
+  return response.json();
+}
+
+export async function fetchScheduledTask(
+  taskId: string,
+  options: RequestOptions = {},
+): Promise<ScheduledTask> {
+  const response = await fetch(
+    scheduledTasksUrl(`/${encodeURIComponent(taskId)}`),
+    { signal: options.signal },
+  );
+  if (!response.ok)
+    await throwGatewayApiError(
+      response,
+      `Failed to load scheduled task: ${response.statusText}`,
+    );
   return response.json();
 }

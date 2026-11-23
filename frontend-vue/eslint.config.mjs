@@ -15,6 +15,7 @@ import withNuxt from "./.nuxt/eslint.config.mjs";
 export default withNuxt(
   {
     ignores: [
+      ".cache/**",
       ".nuxt/**",
       ".output/**",
       "playwright-report/**",
@@ -27,6 +28,15 @@ export default withNuxt(
   {
     rules: {
       "vue/multi-word-component-names": "off",
+      // Vue SFC templates use Prettier's self-closing void-element syntax.
+      "vue/html-self-closing": [
+        "warn",
+        {
+          html: { void: "always", normal: "always", component: "always" },
+          svg: "always",
+          math: "always",
+        },
+      ],
     },
   },
   {

@@ -162,7 +162,24 @@ test.describe("Agent chat", () => {
   test("an agent thread greets with the agent, not the generic welcome", async ({
     page,
   }) => {
-    mockLangGraphAPI(page, { agents: MOCK_AGENTS });
+    const agentReads: string[] = [];
+    page.on("request", (request) => {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith("/api/agents/")) agentReads.push(path);
+    });
+    mockLangGraphAPI(page, {
+      agents: MOCK_AGENTS.map((agent) =>
+        agent.name === "test-agent"
+          ? { ...agent, display_name: "Review Assistant" }
+          : agent,
+      ),
+    });
+    let currentAgent = { ...MOCK_AGENTS[0]!, display_name: "Review Assistant" };
+    let detailReads = 0;
+    await page.route("**/api/agents/test-agent", (route) => {
+      detailReads += 1;
+      return route.fulfill({ json: currentAgent });
+    });
     await page.goto("/workspace/agents/test-agent/chats/new");
 
     // 页头面包屑上也写着 agent 名，所以要锚在欢迎区本身；用 testid 而不是
@@ -170,10 +187,44 @@ test.describe("Agent chat", () => {
     const welcome = page.getByTestId("agent-welcome");
     await expect(welcome).toBeVisible({ timeout: 15_000 });
     await expect(
-      welcome.getByText("test-agent", { exact: true }),
+      welcome.getByText("Review Assistant", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator("header").getByText("Review Assistant", { exact: true }),
     ).toBeVisible();
     await expect(welcome.getByText("A test agent for E2E tests")).toBeVisible();
     await expect(page.getByText("Hello, again!")).toHaveCount(0);
+    expect(agentReads).toContain("/api/agents/test-agent");
+    expect(agentReads).not.toContain("/api/agents/Review%20Assistant");
+    expect(detailReads).toBe(1);
+    currentAgent = {
+      ...currentAgent,
+      display_name: "Updated Review Assistant",
+    };
+    const visibilityReachedWindow = await page.evaluate(() => {
+      let received = false;
+      window.addEventListener(
+        "visibilitychange",
+        () => {
+          received = true;
+        },
+        { once: true },
+      );
+      // Native visibilitychange bubbles from document to the query manager's
+      // window listener; an Event without bubbles never reaches that owner.
+      document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+      return received;
+    });
+    expect(visibilityReachedWindow).toBe(true);
+    await expect(
+      welcome.getByText("Updated Review Assistant", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator("header")
+        .getByText("Updated Review Assistant", { exact: true }),
+    ).toBeVisible();
+    expect(detailReads).toBe(2);
   });
 
   test("agent gallery page loads and shows agents", async ({ page }) => {
@@ -208,8 +259,13 @@ test.describe("Agent chat", () => {
     await expect(
       page
         .getByTestId("agent-card-second-agent")
-        .getByTestId("agent-tool-groups-none"),
-    ).toHaveText("No configured tool groups");
+        .getByTestId("agent-tool-group"),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .getByTestId("agent-card-second-agent")
+        .getByText("No configured tool groups", { exact: true }),
+    ).toHaveCount(0);
   });
 
   test("settings use real capabilities, send exact PUT, and re-read the list", async ({
@@ -273,7 +329,7 @@ test.describe("Agent chat", () => {
 
     await page.goto("/workspace/agents");
     await page
-      .getByRole("button", { name: "Model settings: test-agent" })
+      .getByRole("button", { name: "Agent settings: test-agent" })
       .click();
     // 模型选择器从原生 <select> 换成了 ui/select：触发器是 combobox，
     // 选项是 portal 出去的 option。
@@ -289,6 +345,7 @@ test.describe("Agent chat", () => {
       .poll(() => ({ putBody, agentRequests }))
       .toEqual({
         putBody: {
+          display_name: null,
           model: "basic",
           model_settings: { temperature: 0, max_tokens: 200000 },
           thinking_enabled: null,
@@ -340,7 +397,7 @@ test.describe("Agent chat", () => {
 
     await page.goto("/workspace/agents");
     await page
-      .getByRole("button", { name: "Model settings: test-agent" })
+      .getByRole("button", { name: "Agent settings: test-agent" })
       .click();
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -366,13 +423,15 @@ test.describe("Agent chat", () => {
 
     await page.goto("/workspace/agents");
     await page
-      .getByRole("button", { name: "Model settings: test-agent" })
+      .getByRole("button", { name: "Agent settings: test-agent" })
       .click();
     await expect(
       page.getByRole("alert").filter({ hasText: "model catalog unavailable" }),
     ).toBeVisible();
     await page.waitForTimeout(300);
-    expect(modelReads).toBe(1);
+    // Both current useModels owners retry one non-401 failure. This alert is
+    // terminal after that retry; an exact count also rejects retry storms.
+    expect(modelReads).toBe(2);
   });
 
   test("creation requires a successful setup_agent ToolMessage, hides save input, and deduplicates save", async ({
@@ -466,6 +525,18 @@ test.describe("Agent chat", () => {
     await expect(page.getByTestId("agent-created")).toBeVisible({
       timeout: 15_000,
     });
+    await expect(
+      page.getByText(
+        "Save requested. DeerFlow is generating and saving an initial version now.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Start chatting", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Back to Gallery", exact: true }),
+    ).toBeVisible();
     expect(hiddenRuns).toBe(1);
     expect(lastInput).toEqual(
       expect.arrayContaining([
@@ -479,11 +550,11 @@ test.describe("Agent chat", () => {
     ).toHaveCount(0);
   });
 
-  test("assistant success prose cannot mask a setup_agent error and explicit retry creates one new run", async ({
+  test("assistant success prose cannot mask unavailable persistence and completed save asks for refresh without re-submitting", async ({
     page,
   }) => {
     let hiddenRuns = 0;
-    let created = false;
+    let agentReads = 0;
     mockLangGraphAPI(page, { agents: [] });
     await page.route("**/api/agents/check?*", (route) =>
       route.fulfill({
@@ -492,23 +563,14 @@ test.describe("Agent chat", () => {
         body: JSON.stringify({ available: true, name: "reviewer" }),
       }),
     );
-    await page.route("**/api/agents/reviewer", (route) =>
-      route.fulfill({
-        status: created ? 200 : 404,
+    await page.route("**/api/agents/reviewer", (route) => {
+      agentReads += 1;
+      return route.fulfill({
+        status: 404,
         contentType: "application/json",
-        body: JSON.stringify(
-          created
-            ? {
-                name: "reviewer",
-                description: "Reviews code",
-                model: null,
-                tool_groups: null,
-                skills: null,
-              }
-            : { detail: "Agent not found" },
-        ),
-      }),
-    );
+        body: JSON.stringify({ detail: "Agent not found" }),
+      });
+    });
     await page.route("**/api/langgraph/threads/*/runs/stream", (route) => {
       const body = route.request().postDataJSON() as {
         input?: {
@@ -520,9 +582,7 @@ test.describe("Agent chat", () => {
       );
       if (!hidden) return handleRunStream(route);
       hiddenRuns += 1;
-      if (hiddenRuns === 1) return setupAgentStream(route, "error");
-      created = true;
-      return setupAgentStream(route, "success");
+      return setupAgentStream(route, "error");
     });
 
     await page.goto("/workspace/agents/new");
@@ -530,14 +590,18 @@ test.describe("Agent chat", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await page.getByTestId("agent-more").click();
     await page.getByTestId("agent-save").click();
-    await expect(page.getByTestId("agent-creation-error")).toContainText(
-      "storage permission denied",
-    );
+    await expect(
+      page.getByText(
+        "The agent was created, but DeerFlow could not load it yet. Please refresh this page in a moment.",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await expect(page.getByTestId("agent-created")).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Try again" }).click();
-    await expect(page.getByTestId("agent-created")).toBeVisible();
-    expect(hiddenRuns).toBe(2);
+    await page.getByTestId("agent-more").click();
+    await expect(page.getByTestId("agent-save")).toHaveText("Save agent");
+    await expect(page.getByTestId("agent-save")).toBeDisabled();
+    expect(hiddenRuns).toBe(1);
+    expect(agentReads).toBe(5);
   });
 
   test("agent chat page loads with input box and AI disclaimer", async ({
@@ -965,8 +1029,9 @@ test.describe("Agent chat", () => {
     await humanTurn.hover();
     await page.getByRole("button", { name: "Edit and rerun" }).click();
 
-    const editor = page.locator("textarea").first();
+    const editor = page.locator(".is-user textarea");
     await expect(editor).toHaveValue("Original agent question");
+    await expect(editor).toBeFocused();
     await editor.fill("Edited agent question");
     await page.getByRole("button", { name: "Update and rerun" }).click();
 

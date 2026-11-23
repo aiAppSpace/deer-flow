@@ -15,6 +15,22 @@ import {
   type ComposerReasoningEffort,
 } from "../models/capabilities";
 import type { Model } from "../models/types";
+import { reasoningEffortForMode } from "../models/reasoning";
+
+export interface ThreadSubmitSnapshot {
+  threadId: string;
+  humanMessageId: string;
+  messages: readonly Message[];
+}
+
+export function clientTimezoneContext(): Record<string, string> {
+  try {
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return timezone ? { client_timezone: timezone } : {};
+  } catch {
+    return {};
+  }
+}
 
 export function hasToolResult(messages: Message[], toolName: string): boolean {
   const matchingToolCallIds = new Set<string>();
@@ -39,29 +55,38 @@ export function hasToolResult(messages: Message[], toolName: string): boolean {
 
 export function buildThreadSubmitMessages({
   text,
+  humanMessageId,
   additionalKwargs,
   additionalInputMessages = [],
   filesForSubmit = [],
 }: {
   text: string;
+  humanMessageId?: string;
   additionalKwargs?: Record<string, unknown>;
   additionalInputMessages?: Message[];
   filesForSubmit?: FileInMessage[];
 }): Message[] {
+  const stagedFiles = Array.isArray(additionalKwargs?.files)
+    ? additionalKwargs.files
+    : [];
+  const files = [...stagedFiles, ...filesForSubmit];
   return [
     ...additionalInputMessages,
     {
       type: "human",
+      id: humanMessageId ?? globalThis.crypto.randomUUID(),
       content: [
         {
           type: "text",
           text,
         },
       ],
-      additional_kwargs: {
-        ...additionalKwargs,
-        ...(filesForSubmit.length > 0 ? { files: filesForSubmit } : {}),
-      },
+      additional_kwargs: JSON.parse(
+        JSON.stringify({
+          ...additionalKwargs,
+          ...(files.length > 0 ? { files } : {}),
+        }),
+      ),
     } as Message,
   ];
 }
@@ -110,7 +135,16 @@ export function buildRunContext(
     subagent_enabled: mode === "ultra",
     reasoning_effort:
       normalized.reasoning_effort ??
-      (mode === undefined ? undefined : REASONING_EFFORT_BY_MODE[mode]),
+      (model
+        ? reasoningEffortForMode((mode ?? "pro") as ComposerMode, model)
+        : mode === undefined
+          ? undefined
+          : REASONING_EFFORT_BY_MODE[mode]),
   };
-  return result;
+  const {
+    conversation_references: _persistedGrants,
+    thread_id: _serverOwnedThreadId,
+    ...perRunContext
+  } = result;
+  return perRunContext;
 }

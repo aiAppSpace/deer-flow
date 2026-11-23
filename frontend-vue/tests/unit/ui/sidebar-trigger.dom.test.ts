@@ -141,6 +141,14 @@ describe("侧栏触发器的唯一实现", () => {
         "app/components/workspace/WorkspaceContainer.vue",
         ':open="sidebarMobileOpen"',
       ],
+      [
+        "app/components/workspace/extensions/PluginPage.vue",
+        ':open="mobileOpen"',
+      ],
+      [
+        "app/components/workspace/capabilities/CapabilityCenter.vue",
+        ':open="mobileOpen"',
+      ],
       // 侧栏自己的头部：桌面与抽屉里都渲染，所以要问视口。
       [
         "app/components/workspace/ThreadSidebar.vue",

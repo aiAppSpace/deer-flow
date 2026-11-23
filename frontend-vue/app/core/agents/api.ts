@@ -13,7 +13,12 @@ import {
 import { fetch } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from "./types";
+import type {
+  Agent,
+  AgentPackage,
+  CreateAgentRequest,
+  UpdateAgentRequest,
+} from "./types";
 
 export { fetchAgentsApiEnabled } from "@/core/features/api";
 
@@ -53,12 +58,19 @@ async function agentResponseError(
   res: Response,
   fallback: string,
 ): Promise<GatewayResponseError> {
-  return readGatewayResponseError(res, fallback);
+  const error = await readGatewayResponseError(res, fallback);
+  const detail =
+    typeof error.body === "object" && error.body !== null
+      ? Reflect.get(error.body, "detail")
+      : undefined;
+  error.message = typeof detail === "string" ? detail : fallback;
+  return error;
 }
 
 async function throwAgentResponseError(
   res: Response,
   fallback: string,
+  useDetail = true,
 ): Promise<never> {
   const error = await agentResponseError(res, fallback);
   const detail =
@@ -68,6 +80,7 @@ async function throwAgentResponseError(
   if (isAgentsApiDisabledDetail(detail)) {
     throw new AgentsApiDisabledError(detail);
   }
+  if (!useDetail) error.message = fallback;
   throw error;
 }
 
@@ -78,7 +91,11 @@ export async function listAgents(
     signal: options.signal,
   });
   if (!res.ok) {
-    await throwAgentResponseError(res, "Failed to load agents.");
+    await throwAgentResponseError(
+      res,
+      `Failed to load agents: ${res.statusText}`,
+      false,
+    );
   }
   const data = (await res.json()) as { agents: Agent[] };
   return data.agents;
@@ -93,7 +110,7 @@ export async function getAgent(
     { signal: options.signal },
   );
   if (!res.ok) {
-    await throwAgentResponseError(res, `Failed to load agent '${name}'.`);
+    await throwAgentResponseError(res, `Agent '${name}' not found`, false);
   }
   return res.json() as Promise<Agent>;
 }
@@ -105,7 +122,10 @@ export async function createAgent(request: CreateAgentRequest): Promise<Agent> {
     body: JSON.stringify(request),
   });
   if (!res.ok) {
-    await throwAgentResponseError(res, "Failed to create agent.");
+    await throwAgentResponseError(
+      res,
+      `Failed to create agent: ${res.statusText}`,
+    );
   }
   return res.json() as Promise<Agent>;
 }
@@ -125,9 +145,69 @@ export async function updateAgent(
     },
   );
   if (!res.ok) {
-    await throwAgentResponseError(res, `Failed to update agent '${name}'.`);
+    await throwAgentResponseError(
+      res,
+      `Failed to update agent: ${res.statusText}`,
+    );
   }
   return res.json() as Promise<Agent>;
+}
+
+export async function exportAgentPackage(
+  name: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<AgentPackage> {
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/agents/${encodeURIComponent(name)}/export`,
+    { signal: options.signal },
+  );
+  if (!response.ok)
+    await throwAgentResponseError(
+      response,
+      `Failed to export agent: ${response.statusText}`,
+    );
+  return response.json() as Promise<AgentPackage>;
+}
+
+/** Package JSON is untrusted input; only Gateway validation can create an Agent. */
+export async function importAgentPackage(
+  agentPackage: unknown,
+  name?: string,
+): Promise<Agent> {
+  const suffix = name ? `?name=${encodeURIComponent(name)}` : "";
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/agents/import${suffix}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(agentPackage),
+    },
+  );
+  if (!response.ok) {
+    const error = await agentResponseError(
+      response,
+      `Failed to import agent: ${response.statusText}`,
+    );
+    const detail =
+      error.body && typeof error.body === "object"
+        ? Reflect.get(error.body, "detail")
+        : undefined;
+    if (isAgentsApiDisabledDetail(detail))
+      throw new AgentsApiDisabledError(detail);
+    if (Array.isArray(detail)) {
+      const messages = detail.flatMap((issue) =>
+        typeof issue === "object" &&
+        issue !== null &&
+        typeof issue.msg === "string" &&
+        issue.msg.trim()
+          ? [issue.msg]
+          : [],
+      );
+      if (messages.length) error.message = messages.join("; ");
+    }
+    throw error;
+  }
+  return response.json() as Promise<Agent>;
 }
 
 export async function deleteAgent(
@@ -142,7 +222,11 @@ export async function deleteAgent(
     },
   );
   if (!res.ok) {
-    await throwAgentResponseError(res, `Failed to delete agent '${name}'.`);
+    await throwAgentResponseError(
+      res,
+      `Failed to delete agent: ${res.statusText}`,
+      false,
+    );
   }
 }
 

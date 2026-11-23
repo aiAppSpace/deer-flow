@@ -19,7 +19,15 @@ interface Shortcut {
 export function useGlobalShortcuts(shortcuts: Shortcut[]) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (typeof event.key !== "string" || event.key.length === 0) {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        event.altKey ||
+        (event.metaKey && event.ctrlKey) ||
+        typeof event.key !== "string" ||
+        event.key.length === 0
+      ) {
         return;
       }
 
@@ -40,6 +48,7 @@ export function useGlobalShortcuts(shortcuts: Shortcut[]) {
             if (
               tag === "INPUT" ||
               tag === "TEXTAREA" ||
+              tag === "SELECT" ||
               target.isContentEditable
             ) {
               continue;

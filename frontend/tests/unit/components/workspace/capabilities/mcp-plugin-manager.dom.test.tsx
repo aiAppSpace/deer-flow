@@ -324,6 +324,54 @@ describe("MCPPluginManager add server", () => {
 });
 
 describe("MCPPluginManager edit server", () => {
+  it("keeps the bounded editor native and preserves the complete draft through resize", () => {
+    const server = {
+      ...DURABLE_TASK_SERVER,
+      description: "完整配置 🙂",
+      headers: Object.fromEntries(
+        Array.from({ length: 80 }, (_, index) => [
+          `X-Field-${index}`,
+          `完整值-${index}`,
+        ]),
+      ),
+    };
+    setServers({ remote: server });
+    render(<MCPPluginManager />);
+    openEditDialog("remote");
+    const textbox = definitionTextbox();
+    expect(JSON.parse(textbox.value)).toEqual({
+      mcpServers: { remote: server },
+    });
+    // DOM tests guard the actual primitive's capacity policy and value owner;
+    // browser reflow tests alone establish physical geometry and native pan.
+    expect(textbox.classList.contains("h-96")).toBe(true);
+    expect(textbox.classList.contains("min-h-0")).toBe(true);
+    expect(textbox.classList.contains("max-h-[calc(100dvh-4rem-2px)]")).toBe(
+      true,
+    );
+    expect(textbox.classList.contains("sm:max-h-[calc(100dvh-5rem-2px)]")).toBe(
+      true,
+    );
+    expect(textbox.classList.contains("overflow-auto")).toBe(true);
+    expect(textbox.closest('[role="dialog"]')?.classList).toContain(
+      "overflow-y-auto",
+    );
+    const draft = JSON.stringify({
+      mcpServers: { remote: { ...server, description: "编辑后 🙂" } },
+    });
+    fireEvent.change(textbox, { target: { value: draft } });
+    fireEvent(window, new Event("resize"));
+    expect(definitionTextbox()).toBe(textbox);
+    expect(textbox.value).toBe(draft);
+    expect(mcpMockState.updateMutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(lastMutation()).toEqual({
+      operation: "update",
+      serverName: "remote",
+      server: { ...server, description: "编辑后 🙂" },
+    });
+    expect(mcpMockState.updateMutate).toHaveBeenCalledTimes(1);
+  });
   it("prefills the complete server definition", () => {
     twoServers();
 

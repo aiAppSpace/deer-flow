@@ -45,7 +45,7 @@ help:
 	@echo "  make setup-sandbox   - Pre-pull sandbox container image (recommended)"
 	@echo "  make dev             - Start all services in development mode (with hot-reloading)"
 	@echo "  make dev-vue         - Start Gateway + Vue/Nuxt frontend on localhost:3100"
-	@echo "  make dev-dual        - Start Gateway + React:3000 + Vue:3100 directly (not production ingress)"
+	@echo "  make dev-dual        - Start Gateway + React:3200 + Vue:3100 directly (not production ingress)"
 	@echo "  make dev-daemon      - Start dev services in background (daemon mode)"
 	@echo "  make start           - Start all services in production mode (optimized, no hot-reloading)"
 	@echo "  make start-daemon    - Start prod services in background (daemon mode)"
@@ -157,11 +157,11 @@ dev:
 	@$(RUN_SHELL_SCRIPT) ./scripts/serve.sh --dev
 
 dev-vue:
-	@$(PYTHON) ./scripts/check.py
+	@$(PYTHON) ./scripts/check.py --frontend vue
 	@$(RUN_SHELL_SCRIPT) ./scripts/serve.sh --dev --vue
 
 dev-dual:
-	@$(PYTHON) ./scripts/check.py
+	@$(PYTHON) ./scripts/check.py --frontend dual
 	@$(RUN_SHELL_SCRIPT) ./scripts/serve.sh --dev --dual
 
 # Start all services in production mode (with optimizations).

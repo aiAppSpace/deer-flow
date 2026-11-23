@@ -10,9 +10,9 @@
                    replay gap 要假 Gateway 制造断流、分支失败要后端拒收、发送失败要
                    线程创建抛异常——没有一个对照场景会走到，判据写歪了不会有门禁变红。
 
-                   分界线本身写在 `failedSend` 的声明上，与 BrowserPanel 文件头第 3 条
-                   是同一条：**带着操作的提示是 UI 状态，留在页面里；纯播报走 toaster。**
-                   toast 五秒后自己走掉，「再试一次」不能跟着一起消失。
+                   当前 React 的发送失败走 toast，Vue 采用相同出口。失败后可重试的
+                   文本、附件和引用保留在 composer 原位置；提交成功回调才清理它们。
+                   composer-workflow.dom.test.ts 覆盖保留与重试，本文件只约束播报接线。
 */
 
 import { readFileSync } from "node:fs";
@@ -27,6 +27,7 @@ function sourceOf(relative: string) {
 }
 
 const agentChat = sourceOf("../../../app/components/chat/AgentChat.vue");
+const messageList = sourceOf("../../../app/components/chat/MessageList.vue");
 
 describe("流的两条播报走 workspace toaster", () => {
   /*
@@ -53,49 +54,10 @@ describe("流的两条播报走 workspace toaster", () => {
   });
 });
 
-describe("发送失败留在页面里", () => {
-  /*
-    唯一留在页面里的那条：它带着「再试一次」，而重试要用到原始的 text/files。
-    上游同一处只有 `toast.error(getStreamErrorMessage(error))`，没有重试入口。
-  */
-  it("keeps the retry banner inline with the text and files it needs", () => {
-    expect(agentChat).toContain('v-if="failedSend"');
-    expect(agentChat).toContain('data-testid="send-failure"');
-    expect(agentChat).toContain("{{ failedSend.message }}");
-    for (const field of ["text,", "files,", "message:"]) {
-      expect(
-        agentChat.slice(
-          agentChat.indexOf("failedSend.value = {"),
-          agentChat.indexOf("failedSend.value = {") + 260,
-        ),
-        `failedSend 少了 ${field}`,
-      ).toContain(field);
-    }
-  });
-});
-
-describe("留在页面里的三处状态", () => {
-  /*
-    判据是**时长**不是「有没有按钮」：在某一刻发生的事走 toaster，在一段时间里为真的
-    事留在页面里。`llmRetry` 是后者——正在重试，流恢复或出错时自己消失，
-    上游那边则是每个 llm_retry 事件一条 toast（hooks.ts:1835）。
-  */
-  it("keeps the retry-in-progress banner on the page", () => {
-    expect(agentChat).toContain('v-if="stream.llmRetry.value"');
-    expect(agentChat).toContain('data-testid="llm-retry-status"');
-  });
-
-  /*
-    判据本身要留在源码里。它是这一簇唯一说得清「为什么这条走 toast、那条不走」的
-    东西，删掉之后下一个人只会看到三处不一致的写法。
-  */
-  it("writes the ownership rule down where the exception lives", () => {
-    const source = readFileSync(
-      new URL("../../../app/components/chat/AgentChat.vue", import.meta.url),
-      "utf8",
-    );
-    expect(source).toContain(
-      "在某一刻发生的事 → workspace toaster；在一段时间里为真的事 → 页面里的状态",
+describe("LLM retry toast host", () => {
+  it("connects the stream's plain message callback to the workspace toast owner", () => {
+    expect(agentChat).toContain(
+      "message: (message) => toast.message(message),",
     );
   });
 });
@@ -108,9 +70,11 @@ describe("留在页面里的三处状态", () => {
 */
 describe("编辑并重跑的提醒", () => {
   it("warns about the consequence before the two buttons", () => {
-    const box = agentChat.slice(
-      agentChat.indexOf('v-if="editState"'),
-      agentChat.indexOf("$i18n.t.value.common.updateAndRerun"),
+    const box = messageList.slice(
+      messageList.indexOf(
+        'v-if="editState && editState.messageId === message.id"',
+      ),
+      messageList.indexOf("$i18n.t.value.common.updateAndRerun"),
     );
     expect(box).toContain("$i18n.t.value.common.editRerunWarning");
     // 要在两颗按钮**之前**，与上游同序：看到警告再决定按哪一颗。
@@ -120,25 +84,16 @@ describe("编辑并重跑的提醒", () => {
   });
 });
 
-describe("分支的两条播报", () => {
-  /*
-    上游 `chat-page.tsx:225` 把整段包在 try/catch 里。本仓此前一个 catch 都没有——
-    `branchThreadFromTurn` 一抛就是一条未处理的 rejection：不跳转、不提示，
-    用户点完「分支」屏幕纹丝不动。
-  */
-  it("announces both outcomes and never leaves the rejection unhandled", () => {
-    const branch = agentChat.slice(
-      agentChat.indexOf("async function branch("),
-      agentChat.indexOf("async function regenerate("),
+describe("分支通知的生产接线", () => {
+  // chat-conversation-actions.dom.test.ts executes the real command owner:
+  // rejection keeps its message/fallback and success is announced before navigation.
+  it("connects conversation commands to the workspace toast and page navigation", () => {
+    const commands = agentChat.slice(
+      agentChat.indexOf("} = useChatConversationActions({"),
+      agentChat.indexOf("async function adoptPreparedThread("),
     );
-    expect(branch).toContain("} catch (error) {");
-    expect(branch).toContain("$i18n.t.value.conversation.branchFailed");
-    expect(branch).toContain(
-      "toast.success($i18n.t.value.conversation.branchCreated);",
-    );
-    // 成功那条要在跳转**之前**播报，否则新路由把它冲掉。
-    expect(branch.indexOf("toast.success")).toBeLessThan(
-      branch.indexOf("await router.push(path)"),
-    );
+    expect(commands).toContain("  toast,");
+    expect(commands).toContain("navigate: (path) => router.push(path)");
+    expect(agentChat).toContain('@branch="branch"');
   });
 });

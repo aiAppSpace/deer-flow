@@ -43,7 +43,19 @@ Language-map membership checks only own properties; inherited names such as
 4. Stop actions call the LangGraph SDK stream stop path; `core/threads/hooks.ts` invalidates current-thread, thread-history, token-usage, and sidebar/search caches immediately and schedules one follow-up refetch because SDK stop may finish via abort + fire-and-forget cancel before backend title finalization commits
 5. TanStack Query manages server state. `UserPreferencesBoundary` preserves
    workspace SSR and initializes the account cache before browser paint; only
-   subsequent account switches gate consumers until the new cache is active. Four allowlisted
+   subsequent account switches gate consumers until the new cache is active.
+   It owns the workspace QueryClient provider keyed by the authenticated user ID
+   (including distinct signed-out and auth-disabled identities). Same-account
+   session refreshes retain the cache, including transport/JSON failures (which
+   keep AuthProvider's console error and loading cleanup). Only authoritative
+   401, explicit logout or a successful different-account response retire it.
+   Switching accounts remounts this owner, so old query and mutation completions
+   can only write to their retired client. `auth-refresh-owner.dom.test.tsx` pins
+   the real auth context, QueryClient and edited input node across these paths.
+   Query clients are created per provider, never as a module singleton shared
+   across independent server renders. Preserve SSR HTML, hydration and StrictMode
+   behavior; `workspace-query-owner.dom.test.tsx` and the preference tests cover
+   these boundaries. Four allowlisted
    settings sync through `/api/v1/auth/preferences`; confirmed caches are
    account-scoped in localStorage and pending patches are account-scoped in
    tab-local sessionStorage. A stopped account cannot apply late responses, and
@@ -201,6 +213,12 @@ detailed in `frontend/docs/conversation-ui-ownership.md`.
 - `src/core/threads/hooks.ts` owns pre-submit upload state and thread submission. The optimistic human bubble (before and after upload) and the submitted message all build `additional_kwargs` through `buildHumanMessageAdditionalKwargs`, so quote/reference metadata and staged project files survive the upload; never replace them with only the uploaded files.
 - `src/components/workspace/chats/chat-box.tsx` owns the desktop right-panel layout, and **all three** right panels (artifacts, sidecar, browser) share one `ResizablePanelGroup` — do not fork a non-resizable branch per panel kind, which is how the artifacts divider silently lost its drag handle (#4465). Open/close is `collapse()` / `resize()` on the side panel's imperative handle, not conditional rendering, so the width can animate. Three constraints hold that together: the size transition is applied from the group as `[&>[data-panel]]:transition-[flex-grow]` because the sized flex item is the library's own `[data-panel]` element rather than the child `className` lands on; it is applied only while an open/close is in flight, so a drag is not interpolated frame by frame; and during the animation the panel content is held at its final width in `cqw` and clipped, because a reflowing message list re-runs its scroll-to-bottom (pinned by `tests/e2e/sidecar-chat.spec.ts`'s no-animated-scroll test) and a re-wrapping composer changes which responsive labels it shows. Because the panel is `collapsible`, the library can also collapse it to `0%` on its own when a drag crosses `minSize`, without going through the state that owns it. `onResize` records the last positive size while the pointer moves, but the owning `sidecar` / `browserView` / `artifactsOpen` state must only mirror a final `0%` layout from `onLayoutChanged`, after pointer release; closing on the first `0%` resize frame breaks a continuous drag that reaches the edge and then reverses before release.
 
+Panel presentation completion observes the public panel `elementRef` and its own
+`flex-grow`/aside `opacity` animations, or the mobile Sheet host's exit animation.
+Keep content and width pinning through actual completion rather than an effect-time
+duration timer. Recheck cancelled animations and retire pending callbacks on reopen,
+breakpoint change and unmount; descendant animations cannot hold the panel open.
+
 `ask_clarification` ToolMessages delimit runs despite hidden human replies; skill
 usage splits after the clarification group. Keep the tool call in its processing
 group and render accompanying text outside the execution panel, including mixed
@@ -210,35 +228,35 @@ clarification references from full grouping.
 
 ### Knowledge source citations
 
-`KnowledgeSourcesProvider` scopes source records to the current message list.
-Only versioned native `knowledge_search`/`task` tool artifacts supply evidence;
-AI/human text and metadata cannot create a source. `CitationLink` resolves
-`#knowledge-…` citations through that context and renders unavailable text when
-there is no matching record. `KnowledgeSourcesPanel` lists only sources cited
-outside code/images. Dialog excerpts render as plain text, never HTML or nested
-Markdown. Source records retain retrieval-time evidence, not live documents.
-Resolve knowledge destinations before testing the label in message and artifact
-link renderers: Sources lists use ordinary titles without a `citation:` prefix.
+Read the knowledge citations, MCP ownership and plugin mention contracts in
+[workspace-behavior-contracts.md](../docs/workspace-behavior-contracts.md) before
+changing those sources or their consumers.
 
-Custom-agent settings persist `knowledge_scope` as an optional retrieval default.
-Use `knowledgeScopeToSelection` to restore all execution IDs, falling back to IDs
-where the bounded display snapshot lacks names. Only dirty knowledge settings
-are sent on save. Custom-agent chat derives its initial selection from the saved
-binding; explicit page-local overrides survive new-thread route replacement and
-reset on conversation changes. Gateway supplies defaults for clients without a
-selector; frontend visibility must not become a runtime enforcement boundary.
+### Parity source observation
 
-MCP hooks and the editor default to personal scope. Mutation-option builders require an explicit scope. MCP control accessible names include the localized ownership section, so same-named shared and personal connections remain distinct without region context. Query keys include scope and authenticated user ID; remount each editor when that ID changes. Platform provided uses the deployment editor only for administrators outside static mode, restoring add, edit, toggle and delete through the existing admin-only MCP API. Ordinary users see shared entries read-only. My plugins contains personal configuration templates, Lark account authorization and the personal MCP editor; a deployment installation must not mark a personal template configured.
+`core/diagnostics` is a default-off, versioned test observation channel. Thread
+allocation becomes evidence only after actual selection; Memory facts belong to
+the chosen import. Replay reads identity fields at its existing JSON consumption,
+adoption and final submission points, retaining the originating action through
+async completion and object cloning. It never reads content or a second stream.
+Response receipts and submit attempts do not establish backend admission; the
+wire response owns that claim. Preserve literal unknown IDs, capacity failures,
+actual UUID counts, request bodies, error contracts and owner retirement.
+Replay snapshot `sourcesType` distinguishes an absent own source list from an
+array (including an empty one), null, invalid data and unreadable descriptors.
+Read that descriptor once without invoking accessors; own undefined is invalid,
+not absent. Old snapshots lacking the field cannot supply the new proof. This
+observation does not change React's caller-owned superseded-message selection or
+Vue's existing nullish fallback, and it does not establish HTTP ownership.
 
-Plugin mention providers extend the existing composer picker via
-`core/extensions/use-mentions.ts`. Keep provider queries bounded and fenced by
-viewer, thread, query, and installed snapshot.
-Provider and page-surface IDs must be strings before slug validation; JavaScript
-coercion is not validation. A settled snapshot with no enabled, viewer-visible
-mention providers returns an empty result immediately without a search timer.
-Settled results may remain visible during query/retry refreshes only within the
-same viewer, thread, locale and installed snapshot; stale responses stay fenced.
-Inline plugin references serialize into human-message
-`additional_kwargs.extension_mentions`; these IDs and labels
-are untrusted input, never a routing or permission grant. Built-in mentions must
-remain usable when a provider fails or times out.
+上传限额旁观记录来自真实 Query 的 queryFn；主聊天、Agent composer 和侧聊的
+parent fallback 传递实际 owner 的只读 consumption handle。已创建侧聊不能借
+parent handle。候选在 render/setup 本地建立，exact commit/select 才认领；
+实际 consumer 立即记录，即使该 render 最终未被采用也不能消失。queryKey、
+enabled、retry、staleTime、参数、缓存共享和原错误路径保持原样；无 handle
+或观察失败有明确未认领/invalid 证据，不能默认匹配“最近的”聊天。
+
+CodeMirror grammar/style tests wait for the complete visible token and its
+computed style within the existing assertion budget. Mounting `.cm-editor`
+alone does not establish that the asynchronous parse worker finished. Do not
+force parsing, extend timeouts, or replace actual grammar/theme assertions.

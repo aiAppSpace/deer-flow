@@ -44,6 +44,38 @@ async function panelWidth(panel: Locator): Promise<number> {
   return box?.width ?? 0;
 }
 
+async function expectNoPaneGeometryTransition(page: Page) {
+  const metrics = await page.evaluate(() => {
+    const pane = document.querySelector("#artifacts")?.closest("[data-panel]");
+    if (!(pane instanceof HTMLElement))
+      throw new Error("The physical resizable pane was not found.");
+    const style = getComputedStyle(pane);
+    const properties = style.transitionProperty
+      .split(",")
+      .map((value) => value.trim());
+    const durations = style.transitionDuration.split(",").map((value) => {
+      const duration = Number.parseFloat(value);
+      return value.trim().endsWith("ms") ? duration : duration * 1000;
+    });
+    return {
+      property: style.transitionProperty,
+      duration: style.transitionDuration,
+      activeGeometryTransitions: properties.filter(
+        (property, index) =>
+          /^(all|width|height|flex-grow|flex-basis)$/.test(property) &&
+          (durations[index % durations.length] ?? 0) > 0,
+      ),
+    };
+  });
+  await test.info().attach("resize-pane-transition", {
+    body: JSON.stringify(metrics),
+    contentType: "application/json",
+  });
+  expect(metrics.activeGeometryTransitions, JSON.stringify(metrics)).toEqual(
+    [],
+  );
+}
+
 async function dragPanel(handle: Locator, ...deltas: number[]): Promise<void> {
   // hover() waits for a stable bounding box: the open animation moves the
   // 1px-wide divider, so coordinates read any earlier miss it entirely.
@@ -57,13 +89,17 @@ async function dragPanel(handle: Locator, ...deltas: number[]): Promise<void> {
 
   const mouse = handle.page().mouse;
   await mouse.down();
-  await expect(handle).toHaveAttribute("data-separator", "active");
-  let currentX = x;
-  for (const delta of deltas) {
-    currentX += delta;
-    await mouse.move(currentX, y, { steps: 10 });
+  try {
+    await expect(handle).toHaveAttribute("data-separator", "active");
+    let currentX = x;
+    for (const delta of deltas) {
+      currentX += delta;
+      await mouse.move(currentX, y, { steps: 10 });
+      await expectNoPaneGeometryTransition(handle.page());
+    }
+  } finally {
+    await mouse.up();
   }
-  await mouse.up();
 }
 
 /** Drag the divider left by `distance` px, widening the right panel. */
@@ -227,19 +263,23 @@ test.describe("Artifacts panel resize", () => {
       const box = await handle.boundingBox();
       const mouse = page.mouse;
       await mouse.down();
-      await mouse.move(box!.x - 120, box!.y + box!.height / 2, { steps: 5 });
-      const transition = await page.evaluate(() => {
-        // `[data-panel]` is the element the library sizes; the child that
-        // `className` lands on is not the flex item.
-        const panel = document
-          .querySelector("#artifacts")
-          ?.closest("[data-panel]");
-        return panel
-          ? window.getComputedStyle(panel).transitionProperty
-          : "missing";
-      });
-      await mouse.up();
-      return transition;
+      try {
+        await mouse.move(box!.x - 120, box!.y + box!.height / 2, { steps: 5 });
+        await expectNoPaneGeometryTransition(page);
+        const transition = await page.evaluate(() => {
+          // `[data-panel]` is the element the library sizes; the child that
+          // `className` lands on is not the flex item.
+          const panel = document
+            .querySelector("#artifacts")
+            ?.closest("[data-panel]");
+          return panel
+            ? window.getComputedStyle(panel).transitionProperty
+            : "missing";
+        });
+        return transition;
+      } finally {
+        await mouse.up();
+      }
     })();
 
     expect(transitionDuringDrag).not.toContain("flex-grow");

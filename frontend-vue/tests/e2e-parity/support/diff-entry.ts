@@ -116,6 +116,9 @@ export function diffGeometry(
       "fontWeight",
       "fontFamily",
       "borderRadius",
+      "boxShadow",
+      "backdropFilter",
+      "filter",
       "opacity",
       "hit",
     ] as const) {
@@ -179,10 +182,31 @@ export function diffRequestBodies(
 
 /** 一个取样点上，两个应用之间所有档的差异。 */
 export function buildDiffEntry(react: ParityCapture, vue: ParityCapture) {
+  for (const [app, capture] of [
+    ["React", react],
+    ["Vue", vue],
+  ] as const) {
+    if (
+      !Array.isArray(capture.requestFacts) ||
+      !Array.isArray(capture.observationErrors)
+    )
+      throw new Error(`${app}: missing complete capture observations`);
+    if (capture.requestFacts.length !== capture.requests.length)
+      throw new Error(`${app}: incomplete correlated capture observations`);
+    if (capture.observationErrors.length)
+      throw new Error(
+        `${app}: invalid capture observation: ${capture.observationErrors.join("; ")}`,
+      );
+  }
+  const facts = diffMultiset(react.requestFacts, vue.requestFacts);
   const aria = diffAriaLines(react.aria, vue.aria);
   const requests = diffMultiset(react.requests, vue.requests);
   const tabbables = diffMultiset(react.tabbables, vue.tabbables);
   return {
+    requestFacts: [
+      ...facts.onlyReact.map((fact) => `React ${fact}`),
+      ...facts.onlyVue.map((fact) => `Vue ${fact}`),
+    ],
     ariaOnlyReact: aria.onlyReact,
     ariaOnlyVue: aria.onlyVue,
     requestsOnlyReact: requests.onlyReact,

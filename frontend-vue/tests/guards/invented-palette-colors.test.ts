@@ -3,6 +3,7 @@
   【架构位置】     门禁测试
   【主要导出】     无；Vitest 用例
   【依赖关系】     app/**（本仓用到的固定色）· ../frontend/src/**（上游用到的，缺席则整组跳过）
+                   · scripts/lib/strip-comments.mjs（保留字符串和源码位置的词法扫描）
   【边界与注意】   **这条规则本来只写在 `AgentCard.vue` 的一句注释里**
                    （「破坏性动作一律走 `text-destructive`，固定红只留给 diff 增删与状态色」），
                    全仓生效、却没有任何门禁在守——2026-09-12 第十三轮按
@@ -46,10 +47,13 @@
 */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
+
+import { stripComments } from "../../scripts/lib/strip-comments.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const vueApp = join(here, "../../app");
@@ -64,12 +68,36 @@ const SKIPPED = new Set(["node_modules", ".nuxt", ".output", "dist", "public"]);
 
 /** 注释剥成等长空白：行号不漂，剩下的才是真的类串。 */
 function strip(source: string): string {
-  const blank = (match: string) => match.replaceAll(/[^\n]/g, " ");
-  return source
-    .replaceAll(/<!--[\s\S]*?-->/g, blank)
-    .replaceAll(/\/\*[\s\S]*?\*\//g, blank)
-    .replaceAll(/\/\/[^\n]*/g, blank);
+  return stripComments(source, ["html", "block", "line"]);
 }
+
+describe("palette scanner comment boundaries", () => {
+  it.each([
+    'const url = "https://example.test"; const color = "bg-lime-900";',
+    'const glob = "/workspace/**"; const color = "bg-lime-900"; /* real */',
+    '<a href="https://example.test" class="bg-lime-900">link</a>',
+    '<p title="<!-- literal -->" class="bg-lime-900">text</p>',
+  ])(
+    "preserves real palette tokens after comment-like string data: %s",
+    (source) => {
+      expect(
+        [...strip(source).matchAll(PALETTE)].map((match) => match[0]),
+      ).toEqual(["bg-lime-900"]);
+      expect(strip(source).length).toBe(source.length);
+    },
+  );
+
+  it("removes actual comments without hiding the following class or moving its position", () => {
+    const source =
+      '<!-- bg-red-600 -->\n/* text-blue-700 */\nconst color = "bg-lime-900"; // bg-amber-50\n';
+    const stripped = strip(source);
+    expect([...stripped.matchAll(PALETTE)].map((match) => match[0])).toEqual([
+      "bg-lime-900",
+    ]);
+    expect(stripped.length).toBe(source.length);
+    expect(stripped.indexOf("bg-lime-900")).toBe(source.indexOf("bg-lime-900"));
+  });
+});
 
 function walk(dir: string, exts: string[], out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -111,6 +139,21 @@ describe.skipIf(!upstreamPresent)("本仓不自造固定调色板颜色", () => 
   const theirs = upstreamPresent
     ? scan(upstream, [".tsx", ".ts", ".css"])
     : new Map<string, Set<string>>();
+
+  // React delegates Markdown UI to Streamdown. Its installed dist is the
+  // upstream source for error/loading states absent from frontend/src.
+  if (upstreamPresent) {
+    const require = createRequire(join(upstream, "../package.json"));
+    const streamdown = scan(
+      join(dirname(require.resolve("streamdown/styles.css")), "dist"),
+      [".js"],
+    );
+    for (const [color, files] of streamdown) {
+      const occurrences = theirs.get(color) ?? new Set<string>();
+      for (const file of files) occurrences.add(`streamdown/${file}`);
+      theirs.set(color, occurrences);
+    }
+  }
 
   /* 形状断言：正则写坏、目录写错都会让下面两条静默全绿（坑 176/195）。 */
   it("两边都扫到了固定色，而且共用的那几个确实在", () => {

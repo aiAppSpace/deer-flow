@@ -1,5 +1,6 @@
 import { INTERNAL_MARKER_TAGS } from "@/core/messages/utils";
 
+import { FENCE_MARKER_RE, INDENTED_CODE_RE, isClosingFence } from "./fences";
 import { normalizeMermaidMarkdown } from "./mermaid";
 
 const MERMAID_BLOCK_HINT_RE = /mermaid/i;
@@ -18,7 +19,6 @@ const DEEP_BLOCKQUOTE_HINT_RE = new RegExp(
 // indented code block, where ">" runs are literal content.
 const BLOCKQUOTE_PREFIX_RE = /^ {0,3}(?:[ \t]*>)+/;
 const CODE_FENCE_RE = /^ {0,3}(?:```|~~~)/;
-const INDENTED_CODE_RE = /^(?: {4}|\t)/;
 
 // marked's list tokenizer recurses once per nesting level too (list ->
 // blockTokens -> list -> ...). In the browser's tighter stack a deeply nested
@@ -326,10 +326,6 @@ const _INTERNAL_TAG_RE = new RegExp(
   "g",
 );
 
-// Regex matching the start/end of a fenced code block (3+ backticks or tildes).
-// Captures the marker string so we can compare character and length.
-const FENCE_MARKER_RE = /^ {0,3}(`{3,}|~{3,})/;
-
 /**
  * Strip leaked system-internal HTML tags from markdown content.
  *
@@ -361,11 +357,8 @@ export function stripLeakedSystemTags(markdown: string): string {
         if (fenceMarker === null) {
           // Opening a fenced code block
           fenceMarker = marker;
-        } else if (
-          marker.startsWith(fenceMarker.charAt(0)) &&
-          marker.length >= fenceMarker.length
-        ) {
-          // Closing fence: same character and at least as long as opener
+        } else if (isClosingFence(line, fenceMarker)) {
+          // Closing fence: same character, at least as long, no info string
           fenceMarker = null;
         }
         // Otherwise: different fence type or shorter run inside a fence

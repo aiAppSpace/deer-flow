@@ -1,0 +1,36 @@
+diff --git a/dist/index.js b/dist/index.js
+index bd21e898f431298b70e941833c78819a1eb53a36..bf0b82693087e0632de3d08c65e950bba7bbba37 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1116,12 +1116,7 @@ const Toaster = /*#__PURE__*/ React__default.default.forwardRef(function Toaster
+             onBlur: (event)=>{
+                 if (isFocusWithinRef.current && !event.currentTarget.contains(event.relatedTarget)) {
+                     isFocusWithinRef.current = false;
+-                    if (lastFocusedElementRef.current) {
+-                        lastFocusedElementRef.current.focus({
+-                            preventScroll: true
+-                        });
+-                        lastFocusedElementRef.current = null;
+-                    }
++                    lastFocusedElementRef.current = null;
+                 }
+             },
+             onFocus: (event)=>{
+diff --git a/dist/index.mjs b/dist/index.mjs
+index d0c7a5a1fa1ed8b19c27bea968bb404f2437a07e..210d7db548546a9e0e65437ab948786c322c732f 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1109,12 +1109,7 @@ const Toaster = /*#__PURE__*/ React.forwardRef(function Toaster(props, ref) {
+             onBlur: (event)=>{
+                 if (isFocusWithinRef.current && !event.currentTarget.contains(event.relatedTarget)) {
+                     isFocusWithinRef.current = false;
+-                    if (lastFocusedElementRef.current) {
+-                        lastFocusedElementRef.current.focus({
+-                            preventScroll: true
+-                        });
+-                        lastFocusedElementRef.current = null;
+-                    }
++                    lastFocusedElementRef.current = null;
+                 }
+             },
+             onFocus: (event)=>{

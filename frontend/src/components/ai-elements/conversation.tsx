@@ -49,15 +49,15 @@ export const ConversationEmptyState = ({
 }: ConversationEmptyStateProps) => (
   <div
     className={cn(
-      "flex size-full flex-col items-center justify-center gap-3 p-8 text-center",
+      "flex size-full flex-col items-center justify-center-safe gap-3 overflow-y-auto p-8 text-center",
       className,
     )}
     {...props}
   >
     {children ?? (
       <>
-        {icon && <div className="text-muted-foreground">{icon}</div>}
-        <div className="space-y-1">
+        {icon && <div className="text-muted-foreground shrink-0">{icon}</div>}
+        <div className="shrink-0 space-y-1">
           <h3 className="text-sm font-medium">{title}</h3>
           {description && (
             <p className="text-muted-foreground text-sm">{description}</p>

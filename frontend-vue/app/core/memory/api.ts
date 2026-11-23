@@ -10,6 +10,8 @@ import { readGatewayResponseError } from "../api/errors";
 import { fetch } from "../api/fetcher";
 import { getBackendBaseURL } from "../config";
 
+import { normalizeMemoryPayload } from "./schema";
+
 import type {
   MemoryFactInput,
   MemoryFactPatchInput,
@@ -83,13 +85,16 @@ async function readMemoryResponse(
         ? Reflect.get(error.body, "detail")
         : undefined;
     const detailMessage = formatErrorDetail(detail);
-    if (detailMessage && detailMessage !== error.message) {
-      error.message = detailMessage;
-    }
+    error.message =
+      detailMessage ?? `${fallbackMessage}: ${response.statusText}`;
     throw error;
   }
 
-  return response.json() as Promise<UserMemory>;
+  const normalized = normalizeMemoryPayload(await response.json(), {
+    invalidFactStrategy: "drop",
+  });
+  if (!normalized) throw new Error("Invalid memory payload");
+  return normalized;
 }
 
 export async function loadMemory(
@@ -132,18 +137,31 @@ export async function exportMemory(
   return readMemoryResponse(response, "Failed to export memory");
 }
 
+/** Only observes the original memory object at the native fetch-call boundary. */
+export type MemoryImportDispatchObserver = (
+  memory: UserMemory,
+  preAborted: boolean,
+) => void;
+
 export async function importMemory(
   memory: UserMemory,
   options: { signal?: AbortSignal } = {},
+  observeDispatch?: MemoryImportDispatchObserver,
 ): Promise<UserMemory> {
-  const response = await fetch(`${getBackendBaseURL()}/api/memory/import`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${getBackendBaseURL()}/api/memory/import`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(memory),
+      signal: options.signal,
     },
-    body: JSON.stringify(memory),
-    signal: options.signal,
-  });
+    observeDispatch
+      ? (preAborted) => observeDispatch(memory, preAborted)
+      : undefined,
+  );
   return readMemoryResponse(response, "Failed to import memory");
 }
 

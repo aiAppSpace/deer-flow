@@ -1,0 +1,2610 @@
+{
+  "date": "2026-10-09",
+  "scope": "Current Vue/React dictionaries and production consumers; stage12 reviewed baseline refresh, earlier snapshots preserved",
+  "initialCLI": {
+    "keys": 1866,
+    "unused": 105
+  },
+  "auditedSnapshot": {
+    "keys": 1866,
+    "unused": 106
+  },
+  "afterOwnCleanup": {
+    "keys": 1830,
+    "unused": 66
+  },
+  "finalAgentCreationCleanup": {
+    "keys": 1827,
+    "unused": 65,
+    "deleted": [
+      "agents.creationLoadFailed",
+      "agents.creationMissingToolResult",
+      "agents.creationVisibilityUnavailable"
+    ],
+    "reason": "当前 React 无同名键；Vue 创建页已按 React 改为保存反馈与有限可见性读取，旧 inline error/retry/verifying UI 已退役，三个键在 app/tests 中无消费者。仅精确删除两种 locale 与 Translations 声明，不改扫描器或 baseline。",
+    "restoredConsumers": {
+      "agents.saveRequested": "frontend-vue/app/components/chat/AgentChat.vue:619; frontend/src/app/workspace/agents/new/page.tsx:275",
+      "agents.agentCreatedPendingRefresh": "frontend-vue/app/components/chat/AgentChat.vue:621; frontend/src/app/workspace/agents/new/page.tsx:116"
+    },
+    "unusedCLIExitCode": 1,
+    "unusedCLILimitation": "采集时 baseline 仍列三个删除键；未将漂移当作通过，最终刷新与整套门禁由 root 执行。",
+    "validation": "本域 46 files / 331 tests PASS；app/test vue-tsc 和 scoped eslint exit 0。生产 stage10 E2E 与双端 parity 尚待 root 统一执行。"
+  },
+  "concurrencyNote": "Between the initial CLI and exact AST snapshot, searchModels became unused; during cleanup composer restored 4 real consumers. Counts are snapshots, not cumulative suite proof.",
+  "decisionCounts": {
+    "deleted": 36,
+    "retain-consumer-restored": 4,
+    "retain-current-react-consumer-handoff": 4,
+    "retain-current-react-dictionary-contract": 26,
+    "retain-current-react-excluded-surface": 2,
+    "retain-dynamic-consumer": 34
+  },
+  "rows": [
+    {
+      "key": "agents.agentCreatedPendingRefresh",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-consumer-handoff",
+      "reason": "当前 React 有实际生产调用。已向 root/composer 交接对应 UI 接线审核；保留字典，不能用删除键来掩盖功能/操作文案差异。尚未把交接当完成。",
+      "source": "frontend/src/app/workspace/agents/new/page.tsx:116; frontend-vue/app/components/chat/AgentChat.vue:619"
+    },
+    {
+      "key": "agents.cardModel",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "agents.cardSkills",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "agents.cardSkillsNone",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "agents.cardToolGroups",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "agents.cardToolGroupsAll",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "agents.cardToolGroupsNone",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "agents.saveRequested",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-consumer-handoff",
+      "reason": "当前 React 有实际生产调用。已向 root/composer 交接对应 UI 接线审核；保留字典，不能用删除键来掩盖功能/操作文案差异。尚未把交接当完成。",
+      "source": "frontend/src/app/workspace/agents/new/page.tsx:275; frontend-vue/app/components/chat/AgentChat.vue:619"
+    },
+    {
+      "key": "agents.settingsInvalidModel",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue card 文本标签/过度 model 校验已由当前 React badges 与 nullable/catalog-external model 行为取代；capability owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/agents; frontend/src/components/workspace/agents"
+    },
+    {
+      "key": "browser.navigationFailedFallback",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "当前 React BrowserViewPanel 用错误 toast 并重新提交 URL；没有独立 Retry navigation/Retry live UI 或此错误 fallback。Vue 已按此链实现。",
+      "source": "frontend-vue/app/components/workspace/browser-view/BrowserPanel.vue; frontend/src/components/workspace/browser-view/browser-view-panel.tsx"
+    },
+    {
+      "key": "browser.retryLive",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "当前 React BrowserViewPanel 用错误 toast 并重新提交 URL；没有独立 Retry navigation/Retry live UI 或此错误 fallback。Vue 已按此链实现。",
+      "source": "frontend-vue/app/components/workspace/browser-view/BrowserPanel.vue; frontend/src/components/workspace/browser-view/browser-view-panel.tsx"
+    },
+    {
+      "key": "browser.retryNavigation",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "当前 React BrowserViewPanel 用错误 toast 并重新提交 URL；没有独立 Retry navigation/Retry live UI 或此错误 fallback。Vue 已按此链实现。",
+      "source": "frontend-vue/app/components/workspace/browser-view/BrowserPanel.vue; frontend/src/components/workspace/browser-view/browser-view-panel.tsx"
+    },
+    {
+      "key": "capabilities.availablePlugins",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.directory.guideHint",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.directory.native",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.directory.nativeHint",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.directory.unknownStatus",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.larkDescription",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.larkName",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.larkTag",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.mcpLabel",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.pluginHint",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "capabilities.pluginSettings",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "channels.connectLinkOpened",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧通用连接/移除弹窗已退役；当前按 React 各 provider 的真实连接、微信 QR 与凭证流程；channel owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/channels/ChannelConnections.vue; frontend/src/components/workspace/channels"
+    },
+    {
+      "key": "channels.connectTitle",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧通用连接/移除弹窗已退役；当前按 React 各 provider 的真实连接、微信 QR 与凭证流程；channel owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/channels/ChannelConnections.vue; frontend/src/components/workspace/channels"
+    },
+    {
+      "key": "channels.removeProviderDescription",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧通用连接/移除弹窗已退役；当前按 React 各 provider 的真实连接、微信 QR 与凭证流程；channel owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/channels/ChannelConnections.vue; frontend/src/components/workspace/channels"
+    },
+    {
+      "key": "channels.removeProviderTitle",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧通用连接/移除弹窗已退役；当前按 React 各 provider 的真实连接、微信 QR 与凭证流程；channel owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/channels/ChannelConnections.vue; frontend/src/components/workspace/channels"
+    },
+    {
+      "key": "channels.waitingForConnection",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧通用连接/移除弹窗已退役；当前按 React 各 provider 的真实连接、微信 QR 与凭证流程；channel owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/channels/ChannelConnections.vue; frontend/src/components/workspace/channels"
+    },
+    {
+      "key": "conversation.startConversation",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "home.blog",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-excluded-surface",
+      "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+      "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+    },
+    {
+      "key": "inputBox.mentionExtensionsLimit",
+      "inCurrentReact": true,
+      "decision": "retain-consumer-restored",
+      "reason": "审查已转交 composer owner；当前生产已恢复真实使用（插件16条限额 toast / 角色拒绝 aria/title / 项目附件移除标签）。因此最终 unused 扫描已不再报告。",
+      "source": "frontend-vue/app/components/chat/ChatComposer.vue; frontend/src/components/workspace/input-box.tsx"
+    },
+    {
+      "key": "inputBox.referenceConversations",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "inputBox.referenceConversationsEmpty",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "inputBox.referenceConversationsRemove",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "inputBox.referenceConversationsSearch",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "inputBox.referencedConversations",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-consumer-handoff",
+      "reason": "当前 React 有实际生产调用。已向 root/composer 交接对应 UI 接线审核；保留字典，不能用删除键来掩盖功能/操作文案差异。尚未把交接当完成。",
+      "source": "frontend/src/components/workspace/messages/message-list-item.tsx:526"
+    },
+    {
+      "key": "inputBox.removeProjectAttachment",
+      "inCurrentReact": true,
+      "decision": "retain-consumer-restored",
+      "reason": "审查已转交 composer owner；当前生产已恢复真实使用（插件16条限额 toast / 角色拒绝 aria/title / 项目附件移除标签）。因此最终 unused 扫描已不再报告。",
+      "source": "frontend-vue/app/components/chat/ChatComposer.vue; frontend/src/components/workspace/input-box.tsx"
+    },
+    {
+      "key": "inputBox.searchModels",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧模型搜索 dialog 已由真实 model 目录/ModelPicker 替代；composer owner 确认旧键无人消费。",
+      "source": "frontend-vue/app/components/chat/ComposerModelSelector.vue; frontend/src/components/workspace/input-box.tsx"
+    },
+    {
+      "key": "inputBox.startTurnUnavailable",
+      "inCurrentReact": true,
+      "decision": "retain-consumer-restored",
+      "reason": "审查已转交 composer owner；当前生产已恢复真实使用（插件16条限额 toast / 角色拒绝 aria/title / 项目附件移除标签）。因此最终 unused 扫描已不再报告。",
+      "source": "frontend-vue/app/components/chat/ChatComposer.vue; frontend/src/components/workspace/input-box.tsx"
+    },
+    {
+      "key": "inputBox.stopStreamingUnavailable",
+      "inCurrentReact": true,
+      "decision": "retain-consumer-restored",
+      "reason": "审查已转交 composer owner；当前生产已恢复真实使用（插件16条限额 toast / 角色拒绝 aria/title / 项目附件移除标签）。因此最终 unused 扫描已不再报告。",
+      "source": "frontend-vue/app/components/chat/ChatComposer.vue; frontend/src/components/workspace/input-box.tsx"
+    },
+    {
+      "key": "inputBox.voiceInputStop",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "scheduledTasks.actions.cancelEdit",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.actions.duplicateTitleSuffix",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.endAtBeforeFirstRun",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.endAtInPast",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.frequentRequiresLimit",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.goalRequiresFreshThread",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.intervalTooLong",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.intervalTooShort",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidAssistant",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidContextMode",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidGoal",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidSchedule",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidScheduleType",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidStopCondition",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.invalidTimezone",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.maxRunsNotAboveUsed",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.onceInPast",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.onceTimePassed",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.onceTooSoon",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.reuseThreadRequiresThread",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.runQueued",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.schedulerNotRunning",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.schedulerUnavailable",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.taskChanged",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.taskFinished",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.taskQuotaExceeded",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.taskRunning",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.threadNotFound",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.triggerFailed",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.apiErrors.unknownAssistant",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+      "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+    },
+    {
+      "key": "scheduledTasks.context.reuse",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.context.threadIdPlaceholder",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.create.fillRequired",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.create.taskTitle",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.detail.filteredByThread",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "scheduledTasks.detail.lastError",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.detail.lastRun",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.detail.lastRunId",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.detail.lastThread",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.detail.nextRun",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.detail.noSelection",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "scheduledTasks.edit.promptPlaceholder",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.edit.titlePlaceholder",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.filters.allStatuses",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.filters.allTypes",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧任务表单/列表字段；精确路径既无 Vue 生产调用，也不存在当前 React 词典，当前表单/详情已使用新的 form/page/detail/action 名称；composer owner 同意清理。动态 apiErrors 和实际 recipe 字段完整保留。",
+      "source": "frontend-vue/app/components/workspace/scheduled-tasks; frontend/src/components/workspace/scheduled-tasks"
+    },
+    {
+      "key": "scheduledTasks.recipes.issues.desc",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "scheduledTasks.recipes.news.desc",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "scheduledTasks.recipes.trending.desc",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "scheduledTasks.recipes.weekly.desc",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "settings.account.changePasswordFailed",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "已退役的旧 Vue session/password 错误 copy；现有认证/账户链使用当前服务端错误与统一 owner，account owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/settings/AccountSettings.vue; frontend-vue/app/composables/useSettingsPermissions.ts"
+    },
+    {
+      "key": "settings.integrations.lark.alreadyConnected",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "settings.memory.importDuplicateContentWarning",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue 自定义 schema/额外字段/重复内容警告没有 UI 消费者；当前导入按 React normalize +统一 invalid-file 错误和确认框，六文件58条 memory 回归通过。",
+      "source": "frontend-vue/app/components/workspace/settings/MemorySettings.vue; frontend/src/components/workspace/settings/memory-settings-page.tsx"
+    },
+    {
+      "key": "settings.memory.importExtraWarning",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue 自定义 schema/额外字段/重复内容警告没有 UI 消费者；当前导入按 React normalize +统一 invalid-file 错误和确认框，六文件58条 memory 回归通过。",
+      "source": "frontend-vue/app/components/workspace/settings/MemorySettings.vue; frontend/src/components/workspace/settings/memory-settings-page.tsx"
+    },
+    {
+      "key": "settings.memory.importSchemaIssue",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "旧 Vue 自定义 schema/额外字段/重复内容警告没有 UI 消费者；当前导入按 React normalize +统一 invalid-file 错误和确认框，六文件58条 memory 回归通过。",
+      "source": "frontend-vue/app/components/workspace/settings/MemorySettings.vue; frontend/src/components/workspace/settings/memory-settings-page.tsx"
+    },
+    {
+      "key": "settings.memory.rawJson",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "settings.notification.disableNotification",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-dictionary-contract",
+      "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+      "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+    },
+    {
+      "key": "settings.sessionUnavailable",
+      "inCurrentReact": false,
+      "decision": "deleted",
+      "reason": "已退役的旧 Vue session/password 错误 copy；现有认证/账户链使用当前服务端错误与统一 owner，account owner 确认无消费者。",
+      "source": "frontend-vue/app/components/workspace/settings/AccountSettings.vue; frontend-vue/app/composables/useSettingsPermissions.ts"
+    },
+    {
+      "key": "sidebar.demoChats",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-excluded-surface",
+      "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+      "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+    },
+    {
+      "key": "threads.origin.providers.buzz",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+      "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+    },
+    {
+      "key": "threads.origin.providers.dingtalk",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+      "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+    },
+    {
+      "key": "threads.origin.providers.discord",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+      "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+    },
+    {
+      "key": "threads.origin.providers.telegram",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+      "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+    },
+    {
+      "key": "threads.origin.providers.wechat",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+      "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+    },
+    {
+      "key": "threads.origin.providers.wecom",
+      "inCurrentReact": true,
+      "decision": "retain-dynamic-consumer",
+      "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+      "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+    },
+    {
+      "key": "uploads.uploadingFiles",
+      "inCurrentReact": true,
+      "decision": "retain-current-react-consumer-handoff",
+      "reason": "当前 React 有实际生产调用。已向 root/composer 交接对应 UI 接线审核；保留字典，不能用删除键来掩盖功能/操作文案差异。尚未把交接当完成。",
+      "source": "frontend/src/core/threads/hooks.ts:2720"
+    }
+  ],
+  "guardsNotChanged": [
+    "frontend-vue/baseline/upstream-i18n-map.json",
+    "frontend-vue/scripts/i18n-manager.mjs"
+  ],
+  "verification": [
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vitest run tests/unit/i18n/upstream-key-coverage.test.ts tests/unit/ui/code-editor.dom.test.ts tests/unit/artifacts/artifact-panel.dom.test.ts tests/unit/memory tests/unit/sidecar/sidecar-panel.dom.test.ts --project node --project dom",
+      "exit": 0,
+      "files": 4,
+      "passed": 56,
+      "note": "tests/unit/memory path did not exist and contributed no tests; memory was then run separately with real files."
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vitest run tests/unit/core/memory tests/unit/settings/memory-schema.test.ts tests/unit/settings/memory-view-model.test.ts tests/unit/settings/memory-document.dom.test.ts tests/unit/settings/memory-normalize.test.ts --project node --project dom",
+      "exit": 0,
+      "files": 6,
+      "passed": 58
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vitest run tests/unit/i18n --project node",
+      "exit": 1,
+      "filesPassed": 4,
+      "filesFailed": 2,
+      "passed": 36,
+      "failed": 2,
+      "note": "Same before/after: source inventory 338 expected vs342; Vue-only baseline consumers contain dead navigation alias and 2 already-removed primitives."
+    },
+    {
+      "command": "node frontend-vue/scripts/i18n-manager.mjs unused",
+      "exit": 1,
+      "note": "Expected unrefreshed key/unused baseline drift; baseline update belongs to root after review."
+    },
+    {
+      "command": "scoped prettier --write / eslint CodeEditor + its tests + three locale files",
+      "exit": 0
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vue-tsc --noEmit -p tests/tsconfig.json",
+      "exit": 1,
+      "note": "Mistaken config path, not a type diagnostic; corrected command below."
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vue-tsc --noEmit -p tsconfig.tests.json",
+      "exit": 2,
+      "note": "Concurrent composer RED fixtures canCreateRuns/canStopStreaming TS2353, no own-scope diagnostics; parent informed, rerun pending composer stable."
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vitest run tests/unit/scheduled-tasks/protocol-regressions.test.ts tests/unit/core/channels/provider-state.test.ts tests/unit/threads/origin.test.ts --project node",
+      "exit": 0,
+      "files": 3,
+      "passed": 21
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vue-tsc --noEmit -p tsconfig.tests.json",
+      "exit": 0,
+      "log": "/private/tmp/deerflow-code-editor-i18n-types-recheck.log",
+      "note": "Recheck after composer props production landed; actually awaited process exit0."
+    },
+    {
+      "command": "python3 scripts/pnpm.py --dir frontend-vue exec vitest run tests/guards/doc-facts.test.ts tests/unit/i18n",
+      "exit": 0,
+      "files": 8,
+      "passed": 58,
+      "log": "/private/tmp/deerflow-i18n-doc-facts-stage12.log"
+    },
+    {
+      "command": "make -C frontend-vue i18n-check i18n-diff i18n-unused i18n-source-check",
+      "exit": 0,
+      "log": "/private/tmp/deerflow-i18n-gates-stage12.log"
+    }
+  ],
+  "finalStage12": {
+    "keys": 1827,
+    "unused": 63,
+    "productSfc": 344,
+    "fixtureSfc": 2,
+    "totalSfc": 346,
+    "before": {
+      "keys": 1830,
+      "unused": 68
+    },
+    "keysRemoved": [
+      "agents.creationLoadFailed",
+      "agents.creationMissingToolResult",
+      "agents.creationVisibilityUnavailable",
+      "navigation.tryAgain"
+    ],
+    "keysAdded": [
+      "chats.tryAgain"
+    ],
+    "restoredProductionConsumers": {
+      "agents.saveRequested": "frontend-vue/app/components/chat/AgentChat.vue:601",
+      "agents.agentCreatedPendingRefresh": "frontend-vue/app/components/chat/AgentChat.vue:604",
+      "inputBox.referencedConversations": "frontend-vue/app/components/chat/MessageList.vue:1442",
+      "uploads.uploadingFiles": "frontend-vue/app/components/chat/AgentChat.vue:1094"
+    },
+    "newlyUnused": [],
+    "retainedUnused": [
+      {
+        "key": "capabilities.availablePlugins",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.guideHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.native",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.nativeHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.unknownStatus",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkDescription",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkName",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkTag",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.mcpLabel",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.pluginHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.pluginSettings",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "chats.deleteChatFailed",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 同名保留；旧 Vue navigation.deleteConversationFailed 别名已退役，使用同名字典合同，不能改成文案不同的 chats.deleteFailed。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts"
+      },
+      {
+        "key": "conversation.startConversation",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "home.blog",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-excluded-surface",
+        "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+        "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+      },
+      {
+        "key": "inputBox.referenceConversations",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsEmpty",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsRemove",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsSearch",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.voiceInputStop",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtBeforeFirstRun",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtInPast",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.frequentRequiresLimit",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.goalRequiresFreshThread",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooLong",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooShort",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidAssistant",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidContextMode",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidGoal",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidSchedule",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidScheduleType",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidStopCondition",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidTimezone",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.maxRunsNotAboveUsed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceInPast",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTimePassed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTooSoon",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.reuseThreadRequiresThread",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.runQueued",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerNotRunning",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerUnavailable",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskChanged",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskFinished",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskQuotaExceeded",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskRunning",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.threadNotFound",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.triggerFailed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.unknownAssistant",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.detail.filteredByThread",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.detail.noSelection",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.issues.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.news.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.trending.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.weekly.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.integrations.lark.alreadyConnected",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.memory.rawJson",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.notification.disableNotification",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "sidebar.demoChats",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-excluded-surface",
+        "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+        "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+      },
+      {
+        "key": "threads.origin.providers.buzz",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.dingtalk",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.discord",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.telegram",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.wechat",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.wecom",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      }
+    ],
+    "review": "4 obsolete Vue keys removed, 1 same-name React key added; 3 removed keys leave unused and 2 live production consumers leave unused; no newly unused entries. All 63 retained candidates still exist by identical path in current React; 34 have dynamic production consumers. No scanner exemption added."
+  },
+  "finalStage14": {
+    "keys": 1822,
+    "unused": 64,
+    "productSfc": 344,
+    "fixtureSfc": 2,
+    "totalSfc": 346,
+    "keysRemoved": [
+      "messages.loadEarlierFailed",
+      "messages.tryAgain",
+      "workspace.gatewayRecovered",
+      "workspace.retryNow",
+      "workspace.retrying"
+    ],
+    "keysAdded": [],
+    "newlyUnused": [
+      "chats.tryAgain"
+    ],
+    "retainedUnused": [
+      {
+        "key": "capabilities.availablePlugins",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.guideHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.native",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.nativeHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.unknownStatus",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkDescription",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkName",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkTag",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.mcpLabel",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.pluginHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.pluginSettings",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "chats.deleteChatFailed",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 同名保留；旧 Vue navigation.deleteConversationFailed 别名已退役，使用同名字典合同，不能改成文案不同的 chats.deleteFailed。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts"
+      },
+      {
+        "key": "chats.tryAgain",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 同名词典合同；历史分页失败 UI 改为同上游 toast 后不再静态消费，保留键并显式审计新增 unused。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/app/components/chat/MessageList.vue"
+      },
+      {
+        "key": "conversation.startConversation",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "home.blog",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-excluded-surface",
+        "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+        "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+      },
+      {
+        "key": "inputBox.referenceConversations",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsEmpty",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsRemove",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsSearch",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.voiceInputStop",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtBeforeFirstRun",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtInPast",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.frequentRequiresLimit",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.goalRequiresFreshThread",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooLong",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooShort",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidAssistant",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidContextMode",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidGoal",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidSchedule",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidScheduleType",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidStopCondition",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidTimezone",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.maxRunsNotAboveUsed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceInPast",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTimePassed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTooSoon",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.reuseThreadRequiresThread",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.runQueued",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerNotRunning",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerUnavailable",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskChanged",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskFinished",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskQuotaExceeded",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskRunning",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.threadNotFound",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.triggerFailed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.unknownAssistant",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.detail.filteredByThread",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.detail.noSelection",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.issues.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.news.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.trending.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.weekly.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.integrations.lark.alreadyConnected",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.memory.rawJson",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.notification.disableNotification",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "sidebar.demoChats",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-excluded-surface",
+        "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+        "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+      },
+      {
+        "key": "threads.origin.providers.buzz",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.dingtalk",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.discord",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.telegram",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.wechat",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.wecom",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      }
+    ],
+    "review": "当前 Vue/React AST 同路径核对；34 条动态消费保留；未改扫描器、pending 或豁免；Stage12 为历史快照。",
+    "verification": {
+      "gates": "make i18n-refresh i18n-check i18n-diff i18n-unused i18n-source-check: PASS",
+      "log": "/private/tmp/deerflow-i18n-final-stage14.log"
+    }
+  },
+  "finalStage26": {
+    "keys": 1821,
+    "unused": 64,
+    "productSfc": 344,
+    "fixtureSfc": 2,
+    "totalSfc": 346,
+    "keysRemoved": [
+      "primitives.removeSlashSkill"
+    ],
+    "keysAdded": [],
+    "newlyUnused": [],
+    "retainedUnused": [
+      {
+        "key": "capabilities.availablePlugins",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.guideHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.native",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.nativeHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.directory.unknownStatus",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkDescription",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkName",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.larkTag",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.mcpLabel",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.pluginHint",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "capabilities.pluginSettings",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "chats.deleteChatFailed",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 同名保留；旧 Vue navigation.deleteConversationFailed 别名已退役，使用同名字典合同，不能改成文案不同的 chats.deleteFailed。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts"
+      },
+      {
+        "key": "chats.tryAgain",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 同名词典合同；历史分页失败 UI 改为同上游 toast 后不再静态消费，保留键并显式审计新增 unused。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/app/components/chat/MessageList.vue"
+      },
+      {
+        "key": "conversation.startConversation",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "home.blog",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-excluded-surface",
+        "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+        "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+      },
+      {
+        "key": "inputBox.referenceConversations",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsEmpty",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsRemove",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.referenceConversationsSearch",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "inputBox.voiceInputStop",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtBeforeFirstRun",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtInPast",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.frequentRequiresLimit",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.goalRequiresFreshThread",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooLong",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooShort",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidAssistant",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidContextMode",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidGoal",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidSchedule",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidScheduleType",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidStopCondition",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidTimezone",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.maxRunsNotAboveUsed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceInPast",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTimePassed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTooSoon",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.reuseThreadRequiresThread",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.runQueued",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerNotRunning",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerUnavailable",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskChanged",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskFinished",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskQuotaExceeded",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskRunning",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.threadNotFound",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.triggerFailed",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.apiErrors.unknownAssistant",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "SCHEDULED_TASK_ERROR_KEYS 将后端 detail.code 映射为字符串键，describeScheduledTaskError 使用 labels[key]；叶子访问扫描无法识别局部别名。删除会破坏实际错误展示。",
+        "source": "frontend-vue/app/core/scheduled-tasks/errors.ts:12; frontend-vue/app/core/scheduled-tasks/errors.ts:160"
+      },
+      {
+        "key": "scheduledTasks.detail.filteredByThread",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.detail.noSelection",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.issues.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.news.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.trending.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "scheduledTasks.recipes.weekly.desc",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.integrations.lark.alreadyConnected",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.memory.rawJson",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "settings.notification.disableNotification",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-dictionary-contract",
+        "reason": "当前 React 词典仍保留同名键，Vue 无生产使用；upstream-key-coverage 要求每个上游键同名覆盖或精确同字别名。此轮只清 Vue 独有历史字段，不新增 pending/豁免或删除共享合同来过门禁。capability owner 确认其中旧入口文案已无计划接回。",
+        "source": "frontend/src/core/i18n/locales/en-US.ts; frontend-vue/tests/unit/i18n/upstream-key-coverage.test.ts:173"
+      },
+      {
+        "key": "sidebar.demoChats",
+        "inCurrentReact": true,
+        "decision": "retain-current-react-excluded-surface",
+        "reason": "React 当前实际使用；Vue 首页/docs/blog 和整站静态回放已由用户明确排除本期同步。保留现有同名字典合同，不声称 Vue 已支持这些排除场景。",
+        "source": "frontend/src/components/landing/header.tsx; frontend/src/components/workspace/recent-chat-list.tsx"
+      },
+      {
+        "key": "threads.origin.providers.buzz",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.dingtalk",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.discord",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.telegram",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.wechat",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      },
+      {
+        "key": "threads.origin.providers.wecom",
+        "inCurrentReact": true,
+        "decision": "retain-dynamic-consumer",
+        "reason": "providers 先赋给 Record<string,string> localized，再按 provider 索引；当前 React 与 Vue 均实际显示这些提供商名称，扫描器没有别名追踪。",
+        "source": "frontend-vue/app/core/channels/provider-state.ts:22; frontend-vue/app/core/threads/utils.ts:181"
+      }
+    ],
+    "reactDictionaryLeafKeys": 1692,
+    "review": "当前React AST重新核实64条同路径合同全部存在；removeSlashSkill为Vue独有旧可移除chip退役字段，当前SlashSkillChip仅历史只读，不存在动态消费。未改扫描器/pending/豁免。Stage14为历史快照。",
+    "verification": {
+      "gates": "make i18n-refresh i18n-check i18n-diff i18n-unused i18n-source-check: PASS",
+      "log": "/private/tmp/deerflow-i18n-refresh-stage26.log",
+      "focusedTests": {
+        "files": 10,
+        "passed": 68,
+        "log": "/private/tmp/deerflow-artifacts-focused-green-stage26.log"
+      }
+    }
+  },
+  "finalStage28": {
+    "keys": 1821,
+    "unused": 64,
+    "productSfc": 345,
+    "fixtureSfc": 2,
+    "totalSfc": 347,
+    "reactSamePathRetainedKeys": 64,
+    "dynamicConsumersRetained": 34,
+    "scannerAndExemptionsChanged": false,
+    "dictionaryChangesFromStage26": [],
+    "verification": {
+      "gates": "make i18n-check i18n-diff i18n-unused i18n-source-check: PASS",
+      "log": "/private/tmp/deerflow-i18n-check-stage28.log",
+      "docFacts": {
+        "files": 2,
+        "passed": 22,
+        "log": "/private/tmp/deerflow-doc-facts-collector-green-stage28.log"
+      },
+      "parityCollection": {
+        "tests": 823,
+        "files": 25,
+        "exitCode": 0,
+        "log": "/private/tmp/deerflow-parity-collected-stage28.log"
+      }
+    }
+  },
+  "finalStage30": {
+    "keys": 1828,
+    "unused": 64,
+    "reactDictionaryLeafKeys": 1715,
+    "retainedUnused": [
+      {
+        "key": "capabilities.availablePlugins",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.directory.guideHint",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.directory.native",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.directory.nativeHint",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.directory.unknownStatus",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.larkDescription",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.larkName",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.larkTag",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.mcpLabel",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.pluginHint",
+        "inCurrentReact": true
+      },
+      {
+        "key": "capabilities.pluginSettings",
+        "inCurrentReact": true
+      },
+      {
+        "key": "chats.deleteChatFailed",
+        "inCurrentReact": true
+      },
+      {
+        "key": "chats.tryAgain",
+        "inCurrentReact": true
+      },
+      {
+        "key": "conversation.startConversation",
+        "inCurrentReact": true
+      },
+      {
+        "key": "home.blog",
+        "inCurrentReact": true
+      },
+      {
+        "key": "inputBox.referenceConversations",
+        "inCurrentReact": true
+      },
+      {
+        "key": "inputBox.referenceConversationsEmpty",
+        "inCurrentReact": true
+      },
+      {
+        "key": "inputBox.referenceConversationsRemove",
+        "inCurrentReact": true
+      },
+      {
+        "key": "inputBox.referenceConversationsSearch",
+        "inCurrentReact": true
+      },
+      {
+        "key": "inputBox.voiceInputStop",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtBeforeFirstRun",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.endAtInPast",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.frequentRequiresLimit",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.goalRequiresFreshThread",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooLong",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.intervalTooShort",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidAssistant",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidContextMode",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidGoal",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidSchedule",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidScheduleType",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidStopCondition",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.invalidTimezone",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.maxRunsNotAboveUsed",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceInPast",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTimePassed",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.onceTooSoon",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.reuseThreadRequiresThread",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.runQueued",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerNotRunning",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.schedulerUnavailable",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskChanged",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskFinished",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskQuotaExceeded",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.taskRunning",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.threadNotFound",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.triggerFailed",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.apiErrors.unknownAssistant",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.detail.filteredByThread",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.detail.noSelection",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.recipes.issues.desc",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.recipes.news.desc",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.recipes.trending.desc",
+        "inCurrentReact": true
+      },
+      {
+        "key": "scheduledTasks.recipes.weekly.desc",
+        "inCurrentReact": true
+      },
+      {
+        "key": "settings.integrations.lark.alreadyConnected",
+        "inCurrentReact": true
+      },
+      {
+        "key": "settings.memory.rawJson",
+        "inCurrentReact": true
+      },
+      {
+        "key": "settings.notification.disableNotification",
+        "inCurrentReact": true
+      },
+      {
+        "key": "sidebar.demoChats",
+        "inCurrentReact": true
+      },
+      {
+        "key": "threads.origin.providers.buzz",
+        "inCurrentReact": true
+      },
+      {
+        "key": "threads.origin.providers.dingtalk",
+        "inCurrentReact": true
+      },
+      {
+        "key": "threads.origin.providers.discord",
+        "inCurrentReact": true
+      },
+      {
+        "key": "threads.origin.providers.telegram",
+        "inCurrentReact": true
+      },
+      {
+        "key": "threads.origin.providers.wechat",
+        "inCurrentReact": true
+      },
+      {
+        "key": "threads.origin.providers.wecom",
+        "inCurrentReact": true
+      }
+    ],
+    "missingReactUnusedPaths": [],
+    "productSfc": 345,
+    "fixtureSfc": 2,
+    "totalSfc": 347,
+    "keysAdded": [
+      "login.errors.gateway_unavailable",
+      "setup.completeAdminSubtitle",
+      "setup.confirmNewPassword",
+      "setup.creatingAdmin",
+      "setup.emailPlaceholder",
+      "setup.newPassword",
+      "setup.settingUp"
+    ],
+    "keysRemoved": [],
+    "newlyUnused": [],
+    "dynamicConsumersRetained": 34,
+    "scannerAndExemptionsChanged": false,
+    "setupClassification": "React now has the setup namespace; remove setup from Vue-only classification but retain its explicit per-key production-consumer check.",
+    "verification": {
+      "i18nGates": {
+        "exitCode": 0,
+        "targets": [
+          "i18n-check",
+          "i18n-diff",
+          "i18n-unused",
+          "i18n-source-check"
+        ]
+      },
+      "red": {
+        "filesFailed": 1,
+        "testsFailed": 1,
+        "testsPassed": 63,
+        "cause": "setup incorrectly classified Vue-only after React setup dictionary was added"
+      },
+      "green": {
+        "files": 9,
+        "passed": 64,
+        "exitCode": 0
+      },
+      "lint": {
+        "exitCode": 0
+      },
+      "format": {
+        "exitCode": 0
+      }
+    },
+    "productionBoundary": "Auth dictionary stable; root/composer MarkdownPre compiler fix pending for final image and Linux refresh."
+  }
+}

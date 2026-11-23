@@ -47,7 +47,7 @@ describe("model defaults and capabilities", () => {
     );
   });
 
-  it("forces flash while preserving the React submission context", () => {
+  it("forces flash and omits unsupported effort from the React submission context", () => {
     const normalized = normalizeComposerContext(
       {
         model_name: "basic",
@@ -59,7 +59,6 @@ describe("model defaults and capabilities", () => {
     expect(normalized).toEqual({
       model_name: "basic",
       mode: "flash",
-      reasoning_effort: "high",
     });
 
     const payload = buildRunContext(normalized, undefined, models[0]);
@@ -69,11 +68,10 @@ describe("model defaults and capabilities", () => {
       thinking_enabled: false,
       is_plan_mode: false,
       subagent_enabled: false,
-      reasoning_effort: "high",
     });
   });
 
-  it("keeps the explicit effort in the wire context for a thinking-only model", () => {
+  it("omits effort in the wire context for a thinking-only model", () => {
     expect(
       buildRunContext(
         { model_name: "think-only", mode: "pro", reasoning_effort: "high" },
@@ -87,11 +85,10 @@ describe("model defaults and capabilities", () => {
       thinking_enabled: true,
       is_plan_mode: true,
       subagent_enabled: false,
-      reasoning_effort: "high",
     });
   });
 
-  it("derives the React-equivalent effort from mode for every model", () => {
+  it("derives effort from mode only when the model supports effort", () => {
     expect(
       buildRunContext(
         { model_name: "reasoner", mode: "ultra" },
@@ -119,7 +116,6 @@ describe("model defaults and capabilities", () => {
       thinking_enabled: true,
       is_plan_mode: true,
       subagent_enabled: false,
-      reasoning_effort: "medium",
     });
   });
 });

@@ -6,26 +6,14 @@ The backend runs a LangGraph-based super agent with sandbox execution, persisten
 
 **Architecture**:
 - **Gateway API** (port 8001): REST API plus embedded LangGraph-compatible agent runtime
-- **Frontend** (port 3000): Next.js web interface
+- **Frontend** (local port 3200; container port 3000): Next.js web interface
 - **Nginx** (port 2026): Unified reverse proxy entry point
 - **Provisioner** (port 8002, optional in Docker dev): Started only when sandbox is configured for provisioner/Kubernetes mode
 
-**Runtime**:
-- `make dev`, Docker dev, and production all run the agent runtime in Gateway via `RunManager` + `run_agent()` + `StreamBridge` (`packages/harness/deerflow/runtime/`). Nginx exposes that runtime at `/api/langgraph/*` and rewrites it to Gateway's native `/api/*` routers.
-- Gateway streams `write_file` and `str_replace` argument deltas in bounded batches for multi-mode `messages-tuple` consumers; single-mode message consumers retain the original per-chunk contract. Non-message frames flush pending batches, and `values` remains an optional complete-state snapshot rather than a prerequisite for batching.
-- With `stream_subgraphs`, subgraph frames keep their namespace in the SSE event name (`values|<ns>`, LangGraph Platform style) instead of impersonating root frames — a delegated subagent inherits the parent checkpoint namespace, so publishing its `values` snapshot as bare `values` replaces the whole thread view in SDK clients (#4399). Root-only consumers (file-tool chunk batcher, subagent event persistence, LLM error-fallback detection) ignore namespaced frames. The web frontend does not request subgraph streaming; subtask progress rides root-namespace `task_*` custom events.
-- Background subagent identity is deliberately split: the provider `tool_call_id` remains the correlation key for `ToolMessage`, `task_*` SSE events, persisted lifecycle events, frontend cards, and the public `ExtensionData.scope_id` contract (stored as `SubagentResult.external_task_id`), while `SubagentExecutor.execute_async()` generates a full server-side `execution_id` for `SubagentResult.task_id`, the process-wide registry, polling, cancellation, timeout handling, and cleanup. Provider IDs are not globally unique across parent runs, so they must never become registry ownership keys; scheduler closures retain their own `SubagentResult` rather than resolving ownership again through the mutable registry. Terminal subagent token usage travels in the current run's `ToolMessage.additional_kwargs` and is attributed from message state, never through a process-global provider-ID cache.
-- Scheduled tasks dispatch through the normal Gateway run path. `launch_scheduled_thread_run` reads `get_app_config()` at dispatch and passes `scheduler.recursion_limit` (default 1000, matching the web UI; clamped by `max_recursion_limit`), so YAML changes apply on the next run without restarting Gateway.
-- Run-history `status` filters are occurrence states, not task states. `ScheduledTaskRunStatus` in `persistence/scheduled_tasks/model.py` is the shared API/repository vocabulary and must match the active and terminal occurrence-status sets. Keep owner lookup before reading history, and apply SQL task/status predicates before pagination; omitted status preserves the existing response.
-- The background scheduler is single-instance by default. `scheduler.multi_instance=true` opts into lease-aware recovery across Gateway instances and requires shared Postgres, `run_ownership.heartbeat_enabled=true`, and `run_events.backend=db`; otherwise startup rejects the configuration. Live scheduled runs are preserved when a peer starts; expired launch claims return to the durable queue, expired run leases are atomically taken over, stale launch writes are fenced by lease ownership, and the Postgres advisory-locked budget makes `max_concurrent_runs` a shared global cap for `launching`/`running` rows.
-- The multi-process startup gate also fires on `deployment.multi_instance: true`; contract in `docs/CONFIGURATION.md`.
-- Long-running MCP work uses a separate durable task runtime (`McpTaskService` + `mcp_tasks`, lease-based recovery) rather than keeping remote task IDs or status polling inside the Agent loop; only submit remains Agent-visible, the database is the source of truth, and `ThreadState` receives only a bounded current-thread projection. Full contract (leases, cancellation fencing, delivery idempotency, management-tool exposure): [packages/harness/deerflow/mcp/AGENTS.md](packages/harness/deerflow/mcp/AGENTS.md).
-- MCP task notification retries, dead-lettering, and the cancel endpoint's worker-stopped 503 are part of that same contract — see [packages/harness/deerflow/mcp/AGENTS.md](packages/harness/deerflow/mcp/AGENTS.md).
-- Scheduled-task dispatch permits one active occurrence per task via `uq_scheduled_task_run_active` (`task_id WHERE status IN ('queued','launching','running')`). Durable `queued` rows survive restarts; only lease-fenced `launching` may call Gateway launch; `running` references the durable run. Stable admission idempotency keys reuse that run after recovery. Reused-thread `ConflictError` returns `launching` to `queued`; other launch errors become `failed`. Atomic queue claims enforce `max_concurrent_runs` and the per-owner cap, excluding waiting rows; the budget count and its UPDATE are separate statements, so writers must serialize before the count (Postgres advisory lock; SQLite `BEGIN IMMEDIATE`, whose deferred transaction otherwise reserves the writer only at the UPDATE) or claims on distinct rows overshoot the cap. Repeated triggers coalesce; same-thread FIFO blocks behind older active rows. Queue admission, PATCH/resume, pause and delete lock the parent before the occurrence, freezing active task definitions. Pause/delete atomically cancel `queued` work but reject `launching`/`running`; PATCH/resume reject all active states. Only queued conflicts offer pause cancellation. Manual triggers may queue/run while paused.
-- Scheduled-task lifecycle, recovery and queue timeout: [persistence guide](packages/harness/deerflow/persistence/AGENTS.md#scheduled-task-lifecycle).
-- `POST /api/scheduled-tasks/preview-cron` requires authenticated `threads:read`. Bounded cron previews call the shared scheduler calculator in `asyncio.to_thread`, preserving its DST semantics. Capture the optional aware reference once; return UTC and offset-bearing local occurrences without acquiring task/thread/run stores or dispatching work. This advisory API does not reserve execution.
-- Gateway MCP/skill updates write `extensions_config.json` at runtime. Production Compose mounts it read-write (`config.yaml` stays `:ro`); Helm seeds a writable home-volume copy. Hold both `extensions_config_write_lock` and the sidecar advisory `extensions_config_file_lock` during read-modify-write to prevent lost updates across workers. `atomic_write_extensions_config` uses temp-file replacement; only mount-point `EBUSY` permits a non-atomic in-place overwrite (crashes can truncate). Warn about this fallback once per target; propagate other errors. `get_extensions_config()` revalidates reads by file signature; see [config caching](packages/harness/deerflow/config/AGENTS.md). Tests: `tests/test_compose_extensions_config_writable.py`, `tests/test_extensions_config_atomic_write.py`, `tests/test_helm_extensions_config_writable.py`.
-- MCP cache reset scope and discovery fencing: [MCP guide](packages/harness/deerflow/mcp/AGENTS.md).
+Before changing Gateway runtime, streaming/subagents, scheduling, or MCP and
+extension configuration, **read [Runtime contracts](RUNTIME_CONTRACTS.md)** and
+the nearest subsystem guide. Its lifecycle, ownership, persistence and admission
+rules remain mandatory.
 
 **Project Structure**:
 ```
@@ -239,12 +227,19 @@ float filters accept integer or real JSON numbers through `json_value_matches`.
 
 ### Gateway Run-Context Trust Boundary
 
-Gate server-owned run context on both client feeds (`body.context` and
-`body.config`): `merge_run_context_overrides` admits it only for `internal=True`,
-while `strip_internal_context_keys` scrubs both destinations. Treat
-`disable_clarification` like `non_interactive`. Before run/state writes,
-`_normalize_input_messages` rejects canonical external system/developer roles;
-only `AUTH_SOURCE_INTERNAL` run input may retain them.
+Read the mandatory [run-context admission rules](RUNTIME_CONTRACTS.md#gateway-run-context-trust-boundary)
+before changing request or message admission.
+
+## Container build mirror configuration
+
+The four Debian-based build entries accept `APT_MIRROR` as a host (preserving the
+existing source scheme) or an explicit `http://` / `https://` base URI. Explicit
+HTTPS overrides both Debian source formats; invalid/credential-bearing values
+fail before writing sources. The two bare Debian Lark builders copy only public
+CA roots from the existing pinned Python base before accessing HTTPS, then install
+their existing `ca-certificates` package normally. Never disable TLS verification
+to recover a restricted build network. Regression tests execute the actual shell
+blocks: `tests/test_apt_mirror_source_rewrite.py`.
 
 ## Development Workflow
 
@@ -275,6 +270,21 @@ PYTHONPATH=. uv run pytest tests/test_<feature>.py -v
 Keep live tests opt-in via `DEER_FLOW_RUN_LIVE_TESTS=1`; guard POSIX-only
 markers with `os.name` for Windows collection.
 
+`tests/channel_e2e_fixture.py` replaces external IM workers only for the Vue
+channel acceptance runner. Its `get_channel()` returns None because no real
+adapter runs; the production scheduled-notification worker must still start and
+park durable deliveries rather than lose its outbox. `test_channel_e2e_fixture.py`
+checks real worker startup/shutdown and SQL parking. Controlled binding callbacks
+are not evidence of external IM delivery.
+
+`scripts/run_replay_gateway.py` selects an empty dotenv, temporary project/home,
+SQL store and fixed fixture JWT before importing production configuration.
+It drops ambient operator/provider/proxy variables and keeps OS/browser paths,
+explicit `DEERFLOW_ENABLE_*` suite switches, auth mode and settings fixture
+controls. `test_replay_gateway_environment.py` checks real config/auth loading
+in separate processes for default, seed, Agent, channel and settings modes;
+it stops at the uvicorn serving boundary rather than claiming browser coverage.
+
 Jina logging tests use dummy keys (`tests/test_jina_client.py`).
 Jina/Browserless/InfoQuest resolve URLs without rebuilding HTML.
 InfoQuest connect/read timeout is 30s, separate from crawl timeouts (`tests/test_infoquest_http_timeout.py`).
@@ -298,7 +308,7 @@ Run `make dev` from the repo root to start all services at `http://localhost:202
 **Nginx routing**:
 - `/api/langgraph/*` → Gateway embedded runtime (8001), rewritten to `/api/*`
 - `/api/*` (other) → Gateway API (8001)
-- `/` (non-API) → Frontend (3000)
+- `/` (non-API) → Frontend (3200 locally; 3000 inside Docker)
 
 ### Running Backend Services Separately
 

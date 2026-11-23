@@ -6,8 +6,9 @@ import {
 import type { Skill } from "./type";
 
 /**
- * Composer control commands that own the leading slash. They must never be
- * shown as skill activations. Both this set and {@link SLASH_SKILL_RE} come from
+ * Composer control names that may own the leading slash when their command
+ * syntax matches. `/context compact` is a command; other `/context` input
+ * can activate the enabled context skill, as in the current backend. Both this set and {@link SLASH_SKILL_RE} come from
  * `contracts/slash_skill_contract.json`, which the backend gate in
  * `deerflow/skills/slash.py` is pinned to as well — so the reserved list and the
  * name grammar have exactly one source of truth across both languages.
@@ -17,6 +18,7 @@ export const RESERVED_SLASH_SKILL_NAMES: ReadonlySet<string> = new Set(
 );
 
 export const SLASH_SKILL_RE = new RegExp(SLASH_SKILL_PATTERN_SOURCE);
+const CONTEXT_COMPACT_ARGUMENT = "compact";
 
 export type SlashSkillReference = {
   name: string;
@@ -36,12 +38,16 @@ export function parseSlashSkillReference(
     return null;
   }
   const name = match[1];
-  if (!name || RESERVED_SLASH_SKILL_NAMES.has(name)) {
+  const remainingText = text.slice(match[0].length).replace(/^\s+/, "");
+  const isContextSkillTask =
+    name === "context" &&
+    remainingText.trim().toLowerCase() !== CONTEXT_COMPACT_ARGUMENT;
+  if (!name || (RESERVED_SLASH_SKILL_NAMES.has(name) && !isContextSkillTask)) {
     return null;
   }
   return {
     name,
-    remainingText: text.slice(match[0].length).replace(/^\s+/, ""),
+    remainingText,
   };
 }
 

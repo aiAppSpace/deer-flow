@@ -1,6 +1,6 @@
 <!--
   【文件职责】     一个 subagent 批次：标题、限额、进度、控制键、展开条目。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认组件
   【依赖关系】     ui/badge · ui/button · ui/progress · core/subagent-batches · SubagentBatchItems
   【边界与注意】   暂停/恢复是**同一个位置上的两颗键**，按当前状态二选一：

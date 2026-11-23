@@ -16,6 +16,7 @@ import { getMessageRunId } from "@/core/messages/run-duration";
 import { buildVisibleHistoryMessages } from "@/core/threads/message-identity";
 import {
   mergeMessages,
+  mergeTransientHistoryBridge,
   resolveTransientHistoryBridge,
 } from "@/core/threads/message-merge";
 import {
@@ -368,5 +369,38 @@ describe("插位与幂等", () => {
 
     expect(JSON.stringify(history)).toBe(historySnapshot);
     expect(JSON.stringify(live)).toBe(liveSnapshot);
+  });
+});
+
+describe("repeated compression preserves the bridge's trusted position", () => {
+  test.each([undefined, Number.NaN, 12])(
+    "keeps the earlier seq when a refreshed copy carries %s",
+    (refreshedSeq) => {
+      const previous = msg("protected", "human", "old", 4);
+      const refreshed = withKwargs(
+        msg("protected", "human", "fresh", refreshedSeq),
+        { retained: "metadata" },
+      );
+      const bridge = mergeTransientHistoryBridge([previous], [refreshed]);
+      expect(bridge[0]?.content).toBe("fresh");
+      expect(bridge[0]?.additional_kwargs?.retained).toBe("metadata");
+      expect(trustedMessageSeq(bridge[0]!)).toBe(4);
+      expect(
+        resolveTransientHistoryBridge(
+          [msg("later", "ai", "later", 5), msg("last", "ai", "last", 6)],
+          bridge,
+        ).map((message) => message.id),
+      ).toEqual(["protected", "later", "last"]);
+      expect(trustedMessageSeq(previous)).toBe(4);
+      expect(refreshed.additional_kwargs?.[MESSAGE_SEQ_KEY]).toBe(refreshedSeq);
+    },
+  );
+  test("accepts a newly learned earlier position without mutating either snapshot", () => {
+    const previous = msg("protected", "human", "old", 8);
+    const refreshed = msg("protected", "human", "fresh", 3);
+    const bridge = mergeTransientHistoryBridge([previous], [refreshed]);
+    expect(bridge[0]).toBe(refreshed);
+    expect(trustedMessageSeq(previous)).toBe(8);
+    expect(trustedMessageSeq(bridge[0]!)).toBe(3);
   });
 });

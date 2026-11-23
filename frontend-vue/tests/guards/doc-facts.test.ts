@@ -15,16 +15,19 @@
                    - `openapi.snapshot.README.md` 说其余 24 个 router 无条件挂载，实际 22。
                    没有一条会让任何门禁变红，因为在此之前没有门禁读过文档。
 
-                   只钉**能从签入产物直接算出来**的数字。测试条数、lint warning 条数
-                   这类每次改动都会变的量，正确做法是不写进散文，而不是在这里追着它跑。
+                   台账与词典数字从签入产物计算；明确保留的 collected 数从实际
+                   Playwright --list 获取，不能由静态调用点推断动态循环展开。
+                   历史 passed 记录保留轮次，不作为当前浏览器通过证据。
 */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { summarizeCollection } from "../../scripts/list-e2e.mjs";
 import { readBackendSource } from "../../scripts/lib/backend-source.mjs";
 import { readPlanDoc } from "../../scripts/lib/plan-docs.mjs";
 import { productVueInventory } from "../../scripts/lib/i18n-source-guard.mjs";
@@ -52,9 +55,9 @@ const VERIFY_STEPS: Record<string, string[]> = {
   类型: ["typecheck", "typecheck-tests", "typecheck-core"],
   单测: ["test"],
   i18n: ["i18n-check", "i18n-source-check"],
-  OpenAPI: ["gen-api-types-check"],
+  生成类型: ["gen-api-types-check"],
   契约常量: ["gen-contract-constants-check"],
-  独立性: ["standalone-check"],
+  静态独立性: ["standalone-check"],
   build: ["build"],
 };
 
@@ -62,18 +65,18 @@ const VERIFY_STEPS: Record<string, string[]> = {
 const VERIFY_PROSE: [string, string][] = [
   [
     "ARCHITECTURE.md",
-    "lint、格式、类型、单测、i18n、OpenAPI、契约常量、独立性、build",
+    "lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build",
   ],
   [
     "README_zh.md",
-    "lint、格式、类型、单测、i18n、OpenAPI、契约常量、独立性、build",
+    "lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build",
   ],
   [
     "README.md",
-    "lint, format, types, unit, i18n, OpenAPI, contracts, standalone, build",
+    "lint, format, types, unit, i18n, generated types, contracts, static independence, build",
   ],
-  ["Makefile", "lint + format + types + unit + i18n + OpenAPI"],
-  ["Makefile", "+ contracts + standalone + build"],
+  ["Makefile", "lint + format + types + unit + i18n + generated types"],
+  ["Makefile", "+ contracts + static independence + build"],
 ];
 
 describe("make verify 的步骤表", () => {
@@ -275,10 +278,9 @@ describe("文档里的数字和代码一致", () => {
   为此必须同时断言**匹配到的处数不为 0**：全称量词在空集上恒真，
   改了措辞让正则一处都匹配不上，这条用例会静默变成永远绿的。
 
-  **全称判据的代价，写明白省得下一个人困惑**：冷启动文档里从此**不能**再写出
-  「<旧数> 个场景-维度」这样的历史值——正则不区分「现状」和「引述」，会把它判红。
-  要讲某个数以前是错的，绕开这几个词组（本文档第十九轮那段就是这么写的）。
-  这是刻意的取舍：宁可措辞受限，也不要一个能被「我这是在引述」绕过去的门禁。
+  当前读数必须放在唯一的 CURRENT_PARITY_FACTS 区域。历史读数只能留在显式日期、
+  可见「历史记录」说明的 PARITY_FACTS_HISTORY 区域；其余全文仍扫描受控措辞，
+  不能在区域外再写一份无人校验的现状。历史 passed 不变成当前 scope 通过证据。
 
   `parityTests` 那一条的量法另外核过一遍（**2026-09-23 实测**）：
   `npx playwright test -c playwright.parity.config.ts --list` 报
@@ -300,6 +302,8 @@ type LedgerMeasures = {
   uniqueRows: number;
   multiset: number;
   desktopDimensions: number;
+  tabletDimensions: number;
+  mobileDimensions: number;
   nonDesktopFamilies: string[];
   i18nKeys: number;
   i18nUnused: number;
@@ -307,58 +311,46 @@ type LedgerMeasures = {
   distinctRows: number;
 };
 
-/*
-  `PARITY_FIXED_SPECS` 那几份 spec 里的固定用例数（**不随场景目录变**的那些）。
-  为什么 38 > 27 个 `test(` 调用点：十一处包在两项的 `for` 里——`topology.spec`
-  最后那条（vue / react 各一条）、`keyboard-trap.spec` 整份、
-  `content-reachable.spec` 整份、`overlay-survives-resize.spec` 整份，
-  `viewport-fit.spec` 整份（第五十六轮加），以及
-  `narrow-screen-overflow.spec` 的两个调用点（wave 63 改为双端，各多一条）、
-  `low-height-reachability.spec` 整份（wave 65 加），以及
-  `combined-reflow.spec` 的 61 终态用例（wave 66 加；另一条是单独的阳性对照），
-  以及 `triple-reflow.spec` 的 61 终态用例（wave 67 加；另一条验证七种非三轴组合都不响），
-  以及 `triple-keyboard.spec` 的 61 终态用例（wave 68 加；另一条是吞键阳性对照）。
-  `triple-overlay-keyboard.spec`（wave 69 加）的产品用例在一个 Playwright test 内部遍历
-  两端 61 终态，连同 Arrow / Enter / Escape 阳性对照共新增两个普通固定调用点。
-  下面那条用例钉住「调用点还是 27 个」——有人加一条用例，调用点数变了就红，
-  逼着这个常量和文档一起跟进。
-  **不去解析循环**：解析比硬编码更脆，而硬编码配一条调用点断言，
-  失效时会明确报出来。
+/** Playwright evaluates actual loops/specs without starting servers or a browser.
+ * One collection per guard file; inherited suite selection must not truncate it.
+ */
+function collectParityTests() {
+  return summarizeCollection(
+    spawnSync(
+      process.execPath,
+      [
+        "scripts/with-loopback-no-proxy.mjs",
+        "--",
+        process.env.PYTHON ?? "python3",
+        "../scripts/pnpm.py",
+        "--dir",
+        "frontend-vue",
+        "exec",
+        "playwright",
+        "test",
+        "-c",
+        "playwright.parity.config.ts",
+        "--list",
+        "--reporter=line",
+      ],
+      {
+        cwd: ROOT,
+        encoding: "utf8",
+        timeout: 60_000,
+        maxBuffer: 8 * 1024 * 1024,
+        env: {
+          ...process.env,
+          PARITY_REQUIRE_REACT: "0",
+          PARITY_ONLY: "",
+          E2E_PARITY_BROWSER_CHANNEL: "",
+        },
+      },
+    ),
+  );
+}
 
-  **加新 spec 要同时改三处**：这张表、这个常量、下面那条调用点断言。
-  第二十四轮加 `sidebar-collapsed-affordance.spec.ts` 时走的就是这条
-  （8 → 9 / 7 → 8 个调用点）。
-
-  ⚠ **这张表漏过两份 spec，而门禁看不见**（2026-09-18 第四十四轮实测）。
-  `narrow-screen-overflow`（2 条）与 `interaction-settles-first`（1 条）
-  加进套件时没人同步这张表，于是常量算出 173、而实跑是 178——
-  **门禁一直是绿的，因为它拿自己的残缺模型去对文档，两边一起错**。
-  第四十四轮加 `keyboard-trap` 时才因为实跑读数（181）对不上而现形。
-  **判据：这张表要对得上 `tests/e2e-parity/*.spec.ts` 的实际清单**，
-  而不只是对得上文档里那个数——下面那条用例现在也钉住了「表里没漏 spec」。
-*/
-const PARITY_FIXED_SPECS = [
-  "diff",
-  "topology",
-  "sidebar-collapsed-affordance",
-  "animation-settle",
-  "narrow-screen-overflow",
-  "interaction-settles-first",
-  "keyboard-trap",
-  "keyboard-order",
-  "content-reachable",
-  "overlay-survives-resize",
-  "low-height-reachability",
-  "combined-reflow",
-  "triple-reflow",
-  "triple-keyboard",
-  "triple-overlay-keyboard",
-  "viewport-fit",
-] as const;
-const PARITY_FIXED_TESTS = 38;
-
-/** 全部读数只从签入基线算，一个字都不从散文里读。 */
-function measureLedger(): LedgerMeasures {
+/** 基线量台账；实际 Playwright 收集量用例；不从散文反推。 */
+function measureLedger(parityTests: number): LedgerMeasures {
   const entries = JSON.parse(read("baseline/parity-diff.json"))
     .entries as Record<string, Record<string, unknown>>;
   const rows: string[] = [];
@@ -391,13 +383,13 @@ function measureLedger(): LedgerMeasures {
     distinctRows: distinct.size,
     i18nKeys: i18n.total,
     i18nUnused: i18n.unusedTotal,
-    // e2e-parity 的用例数**是算得出来的**，不是只能跑出来的：
-    // `scenarios.spec` 每个场景-维度一条，另加两份 spec 里的固定用例。
-    parityTests: keys.length + PARITY_FIXED_TESTS,
+    parityTests,
     scenarioDimensions: keys.length,
     uniqueRows: new Set(rows).size,
     multiset: rows.length,
     desktopDimensions: keys.filter((k) => k.includes("/desktop/")).length,
+    tabletDimensions: keys.filter((k) => k.includes("/tablet/")).length,
+    mobileDimensions: keys.filter((k) => k.includes("/mobile/")).length,
     // 键形是 `场景[#终态]/断点/主题/语言`；按**场景族**去重（去掉 `#终态`）。
     nonDesktopFamilies: [
       ...new Set(
@@ -422,6 +414,16 @@ const PLAN_CLAIMS: PlanClaim[] = [
     actual: (m) => m.desktopDimensions,
     label: "desktop 档",
   },
+  {
+    pattern: /tablet (\d+) 个/g,
+    actual: (m) => m.tabletDimensions,
+    label: "tablet 档",
+  },
+  {
+    pattern: /mobile (\d+) 个/g,
+    actual: (m) => m.mobileDimensions,
+    label: "mobile 档",
+  },
   /*
     **`N 条不同的差异` 这个措辞保留给台账总数**，因为这条是全称判据：
     文档里每一处这样写的都会被拿去和实测总数比。
@@ -442,7 +444,7 @@ const PLAN_CLAIMS: PlanClaim[] = [
   },
   {
     /*
-      `parityTests` 来自用例目录，不来自一次执行结果。措辞故意钉成 `collected`：
+      `parityTests` 来自真实 Playwright --list，不来自浏览器执行结果。措辞钉成 `collected`：
       浏览器中途退出时目录数仍然可信，但不能把它写成整套 `passed`。
     */
     pattern: /e2e-parity[^\n]*?\*\*(\d+) collected\*\*/g,
@@ -451,18 +453,51 @@ const PLAN_CLAIMS: PlanClaim[] = [
   },
 ];
 
-/*
-  ⚠ 这里原来有个 `leadBlockquote(doc)`：按结构取文档开头那个 blockquote，
-  专给 `vue-parity-handoff.md` 用——那篇整篇都是历史读数
-  （`137 → 154 唯一行`、`131 → 133 场景-维度`），整篇扫会把历史判成现状，
-  只有抬头那段是活的。那份文档 2026-09-21 已删（取回见本文件上方那段注释），
-  于是这个取法也一并删了，**别照着旧版本把它加回来**：
-  下一份「整篇历史、只有抬头活着」的文档要是又出现，
-  `git show 52f61c0d:frontend-vue/tests/guards/doc-facts.test.ts` 里有原文。
-*/
+/** Separate explicitly dated history without leaving unguarded live claims elsewhere. */
+function currentParityFacts(doc: string): string {
+  const start = "<!-- CURRENT_PARITY_FACTS:START -->";
+  const end = "<!-- CURRENT_PARITY_FACTS:END -->";
+  if (doc.split(start).length !== 2 || doc.split(end).length !== 2)
+    throw new Error("当前事实区必须完整且唯一");
+  const begin = doc.indexOf(start) + start.length;
+  const finish = doc.indexOf(end);
+  if (finish < begin) throw new Error("当前事实区标记顺序错误");
+  const current = doc.slice(begin, finish);
+  const outside = (
+    doc.slice(0, begin - start.length) + doc.slice(finish + end.length)
+  ).replace(
+    /<!-- PARITY_FACTS_HISTORY:(\d{4}-\d{2}-\d{2}):START -->([\s\S]*?)<!-- PARITY_FACTS_HISTORY:\1:END -->/g,
+    (_block, date: string, history: string) => {
+      if (history.includes("PARITY_FACTS_HISTORY:"))
+        throw new Error("历史事实区不允许嵌套");
+      if (!history.includes(`历史记录（${date}）`))
+        throw new Error("历史事实区必须有可见的日期与历史记录说明");
+      return "";
+    },
+  );
+  if (outside.includes("PARITY_FACTS_HISTORY:"))
+    throw new Error("历史事实区标记缺失、嵌套或日期不一致");
+  for (const claim of PLAN_CLAIMS) {
+    if ([...outside.matchAll(claim.pattern)].length)
+      throw new Error(`当前事实区外存在未标历史的活读数：${claim.label}`);
+  }
+  return current;
+}
+
+function wrongPlanClaims(text: string, measures: LedgerMeasures): string[] {
+  return PLAN_CLAIMS.flatMap((claim) =>
+    [...text.matchAll(claim.pattern)]
+      .filter((match) => Number(match[1]) !== claim.actual(measures))
+      .map(
+        (match) =>
+          `${claim.label}: 文档 ${match[1]} ≠ 实测 ${claim.actual(measures)}`,
+      ),
+  );
+}
 
 describe("计划文档里的台账读数和签入基线一致", () => {
-  const measures = measureLedger();
+  const parityCollection = collectParityTests();
+  const measures = measureLedger(parityCollection.count);
 
   /*
     先钉住量法本身，否则下面的全称断言在退化的读数上照样绿。
@@ -494,70 +529,81 @@ describe("计划文档里的台账读数和签入基线一致", () => {
     }
   });
 
-  it("e2e-parity 的固定用例数常量还对得上调用点", () => {
-    const sites = PARITY_FIXED_SPECS.reduce(
-      (n, f) =>
-        n +
-        (read(`tests/e2e-parity/${f}.spec.ts`).match(/^\s*test\(/gm) ?? [])
-          .length,
-      0,
+  it("e2e-parity 实际收集成功、非空，不用静态调用点推算循环", () => {
+    expect(parityCollection.ok, parityCollection.output.slice(-12000)).toBe(
+      true,
     );
-    // 27 个调用点 → 38 条用例（topology 最后一条、整份 keyboard-trap、
-    // 整份 content-reachable、整份 overlay-survives-resize、整份 viewport-fit，
-    // narrow-screen-overflow 的两个调用点、整份 low-height-reachability
-    // combined-reflow、triple-reflow 与 triple-keyboard 的终态调用点；
-    // triple-overlay-keyboard 在一个固定调用点内部扫描双端，
-    // 共十一处包在两项 for 里）。
-    expect({ 调用点: sites, 常量: PARITY_FIXED_TESTS }).toEqual({
-      调用点: 27,
-      常量: 38,
-    });
-
-    /*
-      **表里不许漏 spec**（第四十四轮补的，见常量那段注释里的读数）。
-      `scenarios.spec` 是唯一随场景目录变的那份，所以它不在固定表里；
-      其余每一份都必须登记，否则算出来的用例数会和实跑对不上，
-      而上面那条断言**照样绿**——它只对得上这张表自己。
-    */
-    const onDisk = readdirSync(join(ROOT, "tests/e2e-parity"))
-      .filter((name) => name.endsWith(".spec.ts"))
-      .map((name) => name.replace(/\.spec\.ts$/, ""))
-      .filter((name) => name !== "scenarios")
-      .sort();
-    expect(
-      onDisk,
-      "e2e-parity 下新增/删除 spec 时，PARITY_FIXED_SPECS 与 PARITY_FIXED_TESTS 要一起跟进",
-    ).toEqual([...PARITY_FIXED_SPECS].sort());
+    expect(parityCollection.count).toBeGreaterThan(0);
   });
 
-  const SCOPES = [["vue-parity-cold-start.md", (d: string) => d]] as const;
+  const SCOPES = [["vue-parity-cold-start.md", currentParityFacts]] as const;
+
+  it("当前区与历史区的边界守卫会拒绝遗漏、旧数和区域外活读数", () => {
+    const current = `<!-- CURRENT_PARITY_FACTS:START -->${measures.scenarioDimensions} 个场景-维度<!-- CURRENT_PARITY_FACTS:END -->`;
+    const history =
+      "<!-- PARITY_FACTS_HISTORY:2026-09-21:START -->历史记录（2026-09-21）：195 个场景-维度<!-- PARITY_FACTS_HISTORY:2026-09-21:END -->";
+    expect(currentParityFacts(current + history)).toContain(
+      `${measures.scenarioDimensions} 个场景-维度`,
+    );
+    expect(wrongPlanClaims(currentParityFacts(current), measures)).toEqual([]);
+    expect(
+      wrongPlanClaims(
+        currentParityFacts(
+          current.replace(
+            `${measures.scenarioDimensions} 个场景-维度`,
+            "999999 个场景-维度",
+          ),
+        ),
+        measures,
+      ),
+    ).not.toEqual([]);
+    expect(() => currentParityFacts(history)).toThrow("完整且唯一");
+    expect(() => currentParityFacts(current + current)).toThrow("完整且唯一");
+    expect(() => currentParityFacts(current + "当前 195 个场景-维度")).toThrow(
+      "未标历史的活读数",
+    );
+    expect(() =>
+      currentParityFacts(
+        current + history.replace("历史记录（2026-09-21）", "当前数据"),
+      ),
+    ).toThrow("可见的日期");
+    expect(() =>
+      currentParityFacts(
+        current + history.replace("2026-09-21:END", "2026-09-22:END"),
+      ),
+    ).toThrow("日期不一致");
+    expect(() =>
+      currentParityFacts(
+        current +
+          history.replace(
+            "195 个场景-维度",
+            history.replaceAll("2026-09-21", "2026-09-22"),
+          ),
+      ),
+    ).toThrow("不允许嵌套");
+  });
 
   /** 每一类断言在整组文档里命中了几处。 */
   const hits = new Map(PLAN_CLAIMS.map((c) => [c.label, 0]));
 
   for (const [name, scope] of SCOPES) {
-    it(`${name} 里每一处台账数字都是实测值`, () => {
+    it(`${name} 当前区的目标基线与实际收集数字都准确`, () => {
       const doc = readPlanDoc(name);
       // `../docs/plans` 整个不在 checkout 里（模块被单独移走）→ 明确跳过。
       if (doc === null) return;
       const text = scope(doc);
-      const wrong: string[] = [];
       let matched = 0;
       for (const claim of PLAN_CLAIMS) {
-        for (const m of text.matchAll(claim.pattern)) {
-          matched += 1;
-          hits.set(claim.label, (hits.get(claim.label) ?? 0) + 1);
-          const want = claim.actual(measures);
-          if (Number(m[1]) !== want)
-            wrong.push(`${claim.label}: 文档 ${m[1]} ≠ 实测 ${want}`);
-        }
+        const count = [...text.matchAll(claim.pattern)].length;
+        matched += count;
+        hits.set(claim.label, (hits.get(claim.label) ?? 0) + count);
       }
       // 空集上恒真的陷阱：措辞一改，上面的循环一次都不跑，而这条用例仍然绿。
       expect({ doc: name, matched: matched > 0 }).toEqual({
         doc: name,
         matched: true,
       });
-      expect(wrong).toEqual([]);
+      expect(wrongPlanClaims(text, measures)).toEqual([]);
     });
   }
 
@@ -651,7 +697,9 @@ describe("计划文档里的台账读数和签入基线一致", () => {
   it("冷启动文档列的非 desktop 场景族就是基线里的那几族", () => {
     const doc = readPlanDoc("vue-parity-cold-start.md");
     if (doc === null) return;
-    const m = /非 desktop 的 (\d+) 族逐字是：([\s\S]*?)。/.exec(doc);
+    const m = /非 desktop 的 (\d+) 族逐字是：([\s\S]*?)。/.exec(
+      currentParityFacts(doc),
+    );
     // 措辞被改掉 → 这里必须红，而不是静默跳过。
     expect({ 找到名单: m !== null }).toEqual({ 找到名单: true });
     const listed = [...m![2]!.matchAll(/`([a-z0-9-]+)`/g)]

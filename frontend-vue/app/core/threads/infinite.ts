@@ -11,10 +11,9 @@
                    `QueryClient` 就能跑，上游 `infinite.test.ts`（594 行）正是
                    直接 `new QueryClient()` 测的，搬过来不用改测试形状。
 
-                   `getInfiniteThreadsNextPageParam` 的 Symbol 标注不是优化。
-                   sidecar 过滤会让一页的**返回条数少于取回条数**，此时
-                   「页满 = 还有下一页」不成立；真实 offset 由取数函数写在页上。
-                   删掉标注、退回按长度推导，表现是长列表在某个位置永远翻不动。
+                   每页显式拥有 threads 与 nextOffset（null 表示服务端已耗尽）。
+                   sidecar 过滤、删除和本地插入都不能用可见条数反推服务端进度。
+                   普通对象字段经过 TanStack structural sharing 后仍保持同一合同。
 */
 
 import type { InfiniteData, QueryClient } from "@tanstack/vue-query";
@@ -35,9 +34,12 @@ export const INFINITE_THREADS_QUERY_KEY_PREFIX = [
   "searchInfinite",
 ] as const;
 
-const INFINITE_THREADS_NEXT_PAGE_PARAM = Symbol(
-  "deerflow.infiniteThreads.nextPageParam",
-);
+/** Server progress belongs to the page, independently of its mutable visible rows. */
+export interface InfiniteThreadsPage {
+  threads: AgentThread[];
+  nextOffset: number | null;
+}
+export type InfiniteThreadsData = InfiniteData<InfiniteThreadsPage>;
 
 export type InfiniteThreadsParams = Omit<
   ThreadSearchParams,
@@ -60,29 +62,15 @@ type InfiniteThreadsSearchClient = {
   };
 };
 
-type InfiniteThreadsPageWithNextParam = AgentThread[] & {
-  [INFINITE_THREADS_NEXT_PAGE_PARAM]?: number;
-};
-
-function annotateInfiniteThreadsPage(
-  page: AgentThread[],
-  nextPageParam: number | undefined,
-): AgentThread[] {
-  if (nextPageParam !== undefined) {
-    Reflect.set(page, INFINITE_THREADS_NEXT_PAGE_PARAM, nextPageParam);
-  }
-  return page;
-}
-
 export async function fetchInfiniteThreadsPage(
   apiClient: InfiniteThreadsSearchClient,
   params: InfiniteThreadsParams,
   pageParam: number,
   pageSize: number = INFINITE_THREADS_PAGE_SIZE,
-): Promise<AgentThread[]> {
+): Promise<InfiniteThreadsPage> {
   const threads: AgentThread[] = [];
   let offset = pageParam;
-  let nextPageParam: number | undefined;
+  let nextOffset: number | null = null;
 
   while (threads.length < pageSize) {
     const currentLimit = pageSize - threads.length;
@@ -94,6 +82,7 @@ export async function fetchInfiniteThreadsPage(
             offset,
           })
         : await searchThreadsByArchive({
+            ...params,
             archived: params.archived,
             metadata: params.metadata ?? undefined,
             limit: currentLimit,
@@ -104,58 +93,51 @@ export async function fetchInfiniteThreadsPage(
     offset += response.length;
 
     if (response.length < currentLimit) {
-      nextPageParam = undefined;
+      nextOffset = null;
       break;
     }
 
-    nextPageParam = offset;
+    nextOffset = offset;
   }
 
-  return annotateInfiniteThreadsPage(threads, nextPageParam);
+  return { threads, nextOffset };
 }
 
 export function getInfiniteThreadsNextPageParam(
-  lastPage: AgentThread[],
-  allPages: AgentThread[][],
-  pageSize: number = INFINITE_THREADS_PAGE_SIZE,
+  lastPage: InfiniteThreadsPage,
 ): number | undefined {
-  const annotatedNextPageParam = Reflect.get(
-    lastPage as InfiniteThreadsPageWithNextParam,
-    INFINITE_THREADS_NEXT_PAGE_PARAM,
-  );
-  if (typeof annotatedNextPageParam === "number") {
-    return annotatedNextPageParam;
-  }
-
-  if (lastPage.length < pageSize) {
-    return undefined;
-  }
-  return allPages.reduce((sum, page) => sum + page.length, 0);
+  return lastPage.nextOffset ?? undefined;
 }
 
 export function mapInfiniteThreadsCache(
-  oldData: InfiniteData<AgentThread[]> | undefined,
+  oldData: InfiniteThreadsData | undefined,
   mapper: (thread: AgentThread) => AgentThread,
-): InfiniteData<AgentThread[]> | undefined {
+): InfiniteThreadsData | undefined {
   if (!oldData) {
     return oldData;
   }
   return {
     ...oldData,
-    pages: oldData.pages.map((page) => page.map(mapper)),
+    pages: oldData.pages.map((page) => ({
+      ...page,
+      threads: page.threads.map(mapper),
+    })),
   };
 }
 
 export function filterInfiniteThreadsCache(
-  oldData: InfiniteData<AgentThread[]> | undefined,
+  oldData: InfiniteThreadsData | undefined,
   predicate: (thread: AgentThread) => boolean,
-): InfiniteData<AgentThread[]> | undefined {
+): InfiniteThreadsData | undefined {
   if (!oldData) {
     return oldData;
   }
   return {
     ...oldData,
-    pages: oldData.pages.map((page) => page.filter(predicate)),
+    pages: oldData.pages.map((page) => ({
+      ...page,
+      threads: page.threads.filter(predicate),
+    })),
   };
 }
 
@@ -199,68 +181,43 @@ export function upsertThreadInInfiniteCache(
   queryClient: QueryClient,
   thread: AgentThread,
 ) {
-  queryClient.setQueriesData(
-    {
-      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
-      exact: false,
-    },
-    (oldData: InfiniteData<AgentThread[]> | undefined) => {
-      if (!oldData) {
-        return oldData;
-      }
-
-      const merged = oldData.pages.map((page) =>
-        page.map((t) =>
-          t.thread_id === thread.thread_id ? mergeExistingThread(thread, t) : t,
-        ),
-      );
-
-      const exists = merged.some((page) =>
-        page.some((t) => t.thread_id === thread.thread_id),
-      );
-      if (exists) {
-        return { ...oldData, pages: merged };
-      }
-
-      const firstPage = merged[0] ?? [];
-      const restPages = merged.slice(1);
-      return {
-        ...oldData,
-        pages: [[thread, ...firstPage], ...restPages],
-      };
-    },
-  );
-  /*
-    插完还要问一次服务端：本地这一条是**猜**的成员关系（见 hasArchiveFilter）。
-    上游在这里只失效、**不**乐观插入（`hooks.ts:1281`）。
-
-    **本仓不能照抄那一半**，实测过：`useThreads` 的 `upsert()` 是靠「这条在不在
-    当前视图里」来分「新行 / 已有行」的——不插进本地缓存，视图里就永远没有它，
-    于是这一轮 run 里后面每一次 `upsert` 都再判一次「新行」、再失效一次，级联出去。
-    单场景实测：只失效那版 React 4 次 / 本仓 **6 次**，方向反了过来。
-    插 + 失效之后是 React 4 次 / 本仓 4 次。
-
-    ⚠ **这里原来写着「走到这个函数的只有『刚建出来的 thread』那条路」——那句话是错的**
-    （第四十八轮订正）。`useThreads.upsert()` 的 else 支真正的含义是「**这条线程不在
-    我当前这份列表里**」：列表首取还在飞时 `threads.value` 是空的，于是**每一条既有
-    线程都会走到那里**（`AgentChat.vue` 那条 metadata watcher 每开一屏都调一次）。
-
-    这句话写错的代价是实打实的：它让人以为下面这次失效只会落在新建线程上，
-    于是调用方那边「先把这条放进空缓存、再调这个函数」看起来无害。
-    **而对空缓存来说，上面的 `setQueriesData` 本来就是空操作
-    （`infinite.test.ts` 第一条用例钉着），唯一实际发生的就是下面这次失效**——
-    放进缓存那一步已经让查询变成「idle 且有数据」，失效于是不再与在飞的首取合并，
-    **另发一次体逐字相同的 `POST /api/threads/search`**。对照台账上那两行
-    `requestsOnlyVue: POST /api/threads/search` 就是它。
-    **`useThreads.upsert()` 现在在空缓存那一支放完就 `return`，不再走到这里**，
-    完整读数与判词写在那里。
-
-    走到这里的（列表已经有数据、但没有这条）仍然不会猜错成员关系：
-    新建的 thread 不可能已归档；既有线程只会被**合并**进已有页（`exists` 分支）
-    或插到第一页最前，紧跟着这次失效带回来的服务端那一份会纠正它。
-  */
+  // A run snapshot does not establish archive membership. Only the server
+  // may admit a new row into those filtered lists.
   void queryClient.invalidateQueries({
     queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
     predicate: hasArchiveFilter,
   });
+  queryClient.setQueriesData(
+    {
+      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+      exact: false,
+      predicate: (query) => !hasArchiveFilter(query),
+    },
+    (oldData: InfiniteThreadsData | undefined) => {
+      if (!oldData) {
+        return oldData;
+      }
+
+      const merged = mapInfiniteThreadsCache(oldData, (t) =>
+        t.thread_id === thread.thread_id ? mergeExistingThread(thread, t) : t,
+      )!;
+
+      const exists = merged.pages.some((page) =>
+        page.threads.some((t) => t.thread_id === thread.thread_id),
+      );
+      if (exists) {
+        return merged;
+      }
+
+      const firstPage = merged.pages[0] ?? { threads: [], nextOffset: null };
+      const restPages = merged.pages.slice(1);
+      return {
+        ...oldData,
+        pages: [
+          { ...firstPage, threads: [thread, ...firstPage.threads] },
+          ...restPages,
+        ],
+      };
+    },
+  );
 }

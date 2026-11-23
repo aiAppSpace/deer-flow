@@ -29,7 +29,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
-import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
+import ThreadOriginIcon from "@/components/workspace/ThreadOriginIcon.vue";
+import ThreadUnreadDot from "@/components/workspace/ThreadUnreadDot.vue";
+import { threadOriginOf, unreadLabelOfThread } from "@/core/threads/origin";
 import VirtualThreadList from "@/components/workspace/VirtualThreadList.vue";
 import WorkspaceContainer from "@/components/workspace/WorkspaceContainer.vue";
 import { useThreadArchiveAction } from "@/composables/useThreadArchiveAction";
@@ -114,12 +116,20 @@ onUnmounted(() => observer?.disconnect());
 </script>
 
 <template>
-  <WorkspaceContainer>
-    <Tabs v-model="view" class="flex size-full flex-col">
+  <WorkspaceContainer
+    class="[container-type:size] overflow-y-auto [container-name:chat-list-page]"
+  >
+    <Tabs
+      v-model="view"
+      class="flex size-full flex-col [@container_chat-list-page_(height<28rem)]:h-auto"
+    >
       <header
-        class="mx-auto flex w-full max-w-[var(--container-width-md)] shrink-0 flex-col gap-3 pt-8 [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:pt-[8px]"
+        class="@container/chat-tabs mx-auto flex w-full max-w-[var(--container-width-md)] shrink-0 flex-col gap-3 pt-8 [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:pt-[8px]"
       >
-        <TabsList :aria-label="$i18n.t.value.pages.chats">
+        <TabsList
+          :aria-label="$i18n.t.value.pages.chats"
+          class="@max-md/chat-tabs:max-w-full @max-md/chat-tabs:flex-wrap @max-md/chat-tabs:group-data-[orientation=horizontal]/tabs:h-auto"
+        >
           <TabsTrigger value="active">
             {{ $i18n.t.value.chats.activeChats }}
           </TabsTrigger>
@@ -143,11 +153,16 @@ onUnmounted(() => observer?.disconnect());
           class="h-12 max-w-[var(--container-width-md)] text-xl [@media(max-height:360px)]:h-[48px]"
         />
       </header>
-      <TabsContent :value="view" class="min-h-0 flex-1">
+      <TabsContent
+        :value="view"
+        class="min-h-0 flex-1 [@container_chat-list-page_(height<28rem)]:h-dvh [@container_chat-list-page_(height<28rem)]:flex-none"
+      >
         <main class="h-full">
-          <ScrollArea class="size-full py-4">
+          <ScrollArea
+            class="size-full py-4 [@container_chat-list-page_(height<28rem)]:py-0"
+          >
             <div
-              class="mx-auto flex size-full max-w-[var(--container-width-md)] flex-col"
+              class="@container/chat-list mx-auto flex size-full max-w-[var(--container-width-md)] flex-col [@container_chat-list-page_(height<28rem)]:py-4"
             >
               <!--
                 加载失败要给一条出路。此前这一屏对失败**完全没有表示**：列表就是
@@ -194,22 +209,43 @@ onUnmounted(() => observer?.disconnect());
                     <NuxtLink
                       class="min-w-0 flex-1 max-[361px]:basis-full"
                       :to="pathOfThread(thread)"
+                      :aria-label="
+                        thread.unread === true
+                          ? unreadLabelOfThread(
+                              displayThreadTitle(thread),
+                              $i18n.t.value,
+                              threadOriginOf(thread),
+                            )
+                          : undefined
+                      "
+                      :aria-describedby="
+                        thread.unread === true && thread.updated_at
+                          ? `thread-time-${thread.thread_id}`
+                          : undefined
+                      "
+                      :data-unread="thread.unread === true ? 'true' : undefined"
                     >
                       <div class="flex flex-col gap-2 p-4">
                         <div class="flex min-w-0 items-center gap-2">
-                          <ThreadChannelIcon
-                            :source="channelSourceOfThread(thread)"
+                          <ThreadOriginIcon
+                            :origin="threadOriginOf(thread)"
+                            class="text-muted-foreground"
                           />
-                          <div class="min-w-0 flex-1 truncate">
+                          <div class="min-w-0 truncate">
                             {{ displayThreadTitle(thread) }}
                           </div>
+                          <ThreadUnreadDot v-if="thread.unread === true" />
+                          <div class="flex-1" />
                           <ThreadChannelBadge
-                            :source="channelSourceOfThread(thread)"
+                            :source="
+                              channelSourceOfThread(thread, $i18n.t.value)
+                            "
                             class="hidden sm:inline-flex"
                           />
                         </div>
                         <div
                           v-if="thread.updated_at"
+                          :id="`thread-time-${thread.thread_id}`"
                           class="text-muted-foreground text-sm"
                         >
                           {{ updatedTime(thread.updated_at) }}

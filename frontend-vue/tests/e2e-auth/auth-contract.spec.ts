@@ -39,12 +39,16 @@ test("local login uses the Gateway form contract and stores no secret", async ({
   mockLangGraphAPI(page);
   await mockLoginShell(page);
   let loginRequest: Request | undefined;
+  let authenticated = false;
   await page.route("**/api/v1/auth/login/local", (route) => {
     loginRequest = route.request();
+    authenticated = true;
     return route.fulfill({ json: USER });
   });
   await page.route("**/api/v1/auth/me", (route) =>
-    route.fulfill({ json: USER }),
+    authenticated
+      ? route.fulfill({ json: USER })
+      : route.fulfill({ status: 401, json: { detail: "Unauthorized" } }),
   );
 
   await page.goto("/login?next=https://evil.example/phish");
@@ -139,7 +143,9 @@ test("logout and a new login never reuse the previous user's query cache", async
   await expect(page.getByText("ADMIN PRIVATE THREAD")).toBeVisible();
   await page.getByRole("button", { name: "Account", exact: true }).click();
   await page.getByRole("button", { name: "Sign Out", exact: true }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/$/);
+  await page.getByTestId("landing-workspace-cta").click();
+  await expect(page).toHaveURL(/\/login/);
 
   await page.getByLabel("Email", { exact: true }).fill("user@example.com");
   await page
@@ -364,9 +370,16 @@ test("password setup echoes the CSRF cookie and preserves field names", async ({
   });
 
   await page.goto("/setup");
+  await page
+    .getByLabel("Your email", { exact: true })
+    .fill("admin@example.com");
   await page.getByLabel("Current password").fill("temporary-password");
-  await page.getByLabel("Password", { exact: true }).fill("new-password-123");
-  await page.getByLabel("Confirm Password").fill("new-password-123");
+  await page
+    .getByLabel("New password", { exact: true })
+    .fill("new-password-123");
+  await page
+    .getByLabel("Confirm new password", { exact: true })
+    .fill("new-password-123");
   await page.getByRole("button", { name: "Complete Setup" }).click();
   await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
   expect(request?.headers()["x-csrf-token"]).toBe("m7-csrf-token");
@@ -394,11 +407,13 @@ test("workspace keeps Gateway unavailability visible and recovers in place", asy
 }) => {
   mockLangGraphAPI(page);
   let unavailable = true;
-  await page.route("**/api/v1/auth/me", (route) =>
-    unavailable
+  let probes = 0;
+  await page.route("**/api/v1/auth/me", (route) => {
+    probes += 1;
+    return unavailable
       ? route.fulfill({ status: 503, json: { detail: "Unavailable" } })
-      : route.fulfill({ json: USER }),
-  );
+      : route.fulfill({ json: USER });
+  });
   await page.goto("/workspace");
   await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
   await expect(
@@ -407,18 +422,24 @@ test("workspace keeps Gateway unavailability visible and recovers in place", asy
       .filter({ hasText: /Gateway is temporarily unavailable/i }),
   ).toBeVisible();
 
+  await expect(
+    page.getByRole("button", { name: "Log out", exact: true }),
+  ).toBeVisible();
+  const unavailableProbes = probes;
   unavailable = false;
-  await page.getByRole("button", { name: "Try again" }).click();
+  // Both current frontends recover via their real ten-second background probe.
+  // The former manual Retry/restored-toast controls no longer exist in React.
+  await expect
+    .poll(() => probes, { timeout: 15_000 })
+    .toBeGreaterThan(unavailableProbes);
   await expect(
     page
       .getByRole("status")
       .filter({ hasText: /Gateway is temporarily unavailable/i }),
   ).toBeHidden();
   await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: /Gateway connection restored/i }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Submit", exact: true }),
+  ).toBeEnabled();
   await expect(page).toHaveURL(/\/workspace\/chats\/new$/);
 });
 
@@ -484,7 +505,7 @@ test("the offline banner can sign the user out even while the gateway is down", 
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
+  await expect(page).toHaveURL(/\/$/, { timeout: 15_000 });
 });
 
 test("OIDC callback keeps 401 and Gateway failure distinct", async ({

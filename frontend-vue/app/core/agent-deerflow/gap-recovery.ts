@@ -51,7 +51,7 @@ export const MAX_STREAM_GAP_RECOVERIES = 5;
 
 type Options = Omit<
   RunSessionOptions<DeerFlowRunInput, DeerFlowRunHandle>,
-  "protocol"
+  "protocol" | "initialHandle" | "initialCursor"
 >;
 
 export interface GapRecoveryOptions {
@@ -60,35 +60,15 @@ export interface GapRecoveryOptions {
   session: Options;
   /**
    * 08 硬规则 6 的「先 reload durable state」。返回 thread 的 `values` 载荷；
-   * 返回 undefined 表示这一次没拿到，恢复继续——durable state 落后一点，
-   * 总比因为一次读取失败把整个 run 判死好。
+   * 返回 undefined 表示没有 values；请求失败必须抛错，不能当作空状态。
    */
   loadDurableState: (
     handle: DeerFlowRunHandle,
+    signal: AbortSignal,
   ) => Promise<Record<string, unknown> | undefined>;
   maxRejoins?: number;
-}
-
-/**
- * 把 `resume` 伪装成 `create` 的一次性协议。
- *
- * 内核只从 `create()` 开一条流，而 rejoin 要走 GET + `Last-Event-ID`。
- * 与其给内核加一个「从游标开始」的入口（那会把重连语义泄进 L1），
- * 不如在这里换一个 protocol：内核那边什么都不用知道，08 硬规则 3
- * 「重连必须调 resume」也仍然成立——真正发出去的就是 resume。
- */
-function joinProtocol(
-  protocol: DeerFlowProtocol,
-  handle: DeerFlowRunHandle,
-  cursor: string,
-): DeerFlowProtocol {
-  return {
-    ...protocol,
-    async create(_input, signal) {
-      const response = await protocol.resume(handle, cursor, signal);
-      return { handle, response };
-    },
-  };
+  /** Observe an existing run, hydrating its submitted input before replay. */
+  initialHandle?: DeerFlowRunHandle;
 }
 
 export interface GapAwareRun {
@@ -108,114 +88,179 @@ export function createGapAwareRun(options: GapRecoveryOptions): GapAwareRun {
     session: sessionOptions,
     loadDurableState,
     maxRejoins = MAX_STREAM_GAP_RECOVERIES,
+    initialHandle,
   } = options;
 
   let active: RunSession<DeerFlowRunInput, DeerFlowRunHandle> | undefined;
   let stopped = false;
   let aborted = false;
   let rejoins = 0;
+  const recoveryController = new AbortController();
 
   async function* runInternal(
     input: DeerFlowRunInput,
   ): AsyncGenerator<SessionOutput<DeerFlowRunHandle>> {
-    let current = protocol;
-    let usedReconnects = 0;
-
-    while (true) {
-      const remaining = Math.max(
-        0,
-        sessionOptions.maxReconnects - usedReconnects,
-      );
-      const session = createRunSession<DeerFlowRunInput, DeerFlowRunHandle>({
-        ...sessionOptions,
-        maxReconnects: remaining,
-        protocol: current,
-      });
-      active = session;
-      // stop()/abort() 可能在上一段与这一段之间到达，补一次转发。
-      if (aborted) session.abort();
-      else if (stopped) session.stop();
-
-      let gap: StreamReplayGapData | undefined;
-      let finalState: RunSessionState<DeerFlowRunHandle> | undefined;
-
-      for await (const output of session.run(input)) {
-        if (output.kind === "state") {
-          finalState = output.state;
-          if (output.state.status === "reconnecting") {
-            usedReconnects = Math.max(usedReconnects, output.state.attempt);
+    try {
+      let handleForJoin = initialHandle;
+      let cursor: string | undefined;
+      let usedReconnects = 0;
+      if (initialHandle) {
+        yield {
+          kind: "state",
+          state: { status: "streaming", handle: initialHandle },
+        };
+        try {
+          const values = await loadDurableState(
+            initialHandle,
+            recoveryController.signal,
+          );
+          if (aborted) return;
+          if (values !== undefined && !stopped) {
+            yield {
+              kind: "event",
+              event: { event: "values", data: JSON.stringify(values) },
+            };
           }
-          // gap 态本身不外发：这一段还没结束，外面看到 `gap` 会以为流停了。
-          // 预算用尽时下面会补一个 failed。
-          if (output.state.status === "gap") continue;
+        } catch (cause) {
+          if (aborted) return;
+          if (!stopped) {
+            yield failure(
+              initialHandle,
+              new AgentStreamError(
+                "http",
+                "Could not load the existing run state.",
+                { cause },
+              ),
+            );
+            return;
+          }
         }
-        if (output.kind === "event" && isGapEvent(output.event)) {
-          gap = parseGapEvent(output.event);
+      }
+
+      while (true) {
+        if (aborted) return;
+        const remaining = Math.max(
+          0,
+          sessionOptions.maxReconnects - usedReconnects,
+        );
+        const session = createRunSession<DeerFlowRunInput, DeerFlowRunHandle>({
+          ...sessionOptions,
+          maxReconnects: remaining,
+          protocol,
+          ...(handleForJoin ? { initialHandle: handleForJoin } : {}),
+          ...(cursor === undefined ? {} : { initialCursor: cursor }),
+        });
+        active = session;
+        // stop()/abort() 可能在上一段与这一段之间到达，补一次转发。
+        if (aborted) session.abort();
+        else if (stopped) session.stop();
+
+        let gap: StreamReplayGapData | undefined;
+        let finalState: RunSessionState<DeerFlowRunHandle> | undefined;
+        let segmentReconnects = 0;
+
+        for await (const output of session.run(input)) {
+          if (output.kind === "state") {
+            finalState = output.state;
+            if (output.state.status === "reconnecting") {
+              segmentReconnects = output.state.attempt;
+            }
+            // gap 态本身不外发：这一段还没结束，外面看到 `gap` 会以为流停了。
+            // 预算用尽时下面会补一个 failed。
+            if (output.state.status === "gap") continue;
+          }
+          if (output.kind === "event" && isGapEvent(output.event)) {
+            gap = parseGapEvent(output.event);
+          }
+          yield output;
         }
-        yield output;
-      }
 
-      if (finalState?.status !== "gap") return;
-      const handle = finalState.handle;
+        active = undefined;
+        usedReconnects += segmentReconnects;
+        if (finalState?.status !== "gap") return;
+        const handle = finalState.handle;
 
-      if (!gap) {
-        // 内核判成 gap，载荷却读不出来：不能当正常结束（A6）。
-        yield failure(
-          handle,
-          new AgentStreamError(
-            "replay_gap",
-            "The stream reported a replay gap without a readable payload.",
-          ),
-        );
-        return;
-      }
-      if (gap.run_id !== handle.runId) {
-        yield failure(
-          handle,
-          new AgentStreamError(
-            "replay_gap",
-            `Stream replay gap for run ${gap.run_id} does not match the active run ${handle.runId}.`,
-          ),
-        );
-        return;
-      }
-      if (rejoins >= maxRejoins) {
-        // 预算用尽落 failed 而不是 completed（A6）。此处**不发 cancel**：
-        // 后端那个 run 很可能还在跑，取消它就是丢掉正在进行的任务。
-        yield failure(handle, replayGapError(gap));
-        return;
-      }
-      if (stopped || aborted) return;
+        if (!gap) {
+          // 内核判成 gap，载荷却读不出来：不能当正常结束（A6）。
+          yield failure(
+            handle,
+            new AgentStreamError(
+              "replay_gap",
+              "The stream reported a replay gap without a readable payload.",
+            ),
+          );
+          return;
+        }
+        if (gap.run_id !== handle.runId) {
+          yield failure(
+            handle,
+            new AgentStreamError(
+              "replay_gap",
+              `Stream replay gap for run ${gap.run_id} does not match the active run ${handle.runId}.`,
+            ),
+          );
+          return;
+        }
+        if (rejoins >= maxRejoins) {
+          // 预算用尽落 failed 而不是 completed（A6）。此处**不发 cancel**：
+          // 后端那个 run 很可能还在跑，取消它就是丢掉正在进行的任务。
+          yield failure(handle, replayGapError(gap));
+          return;
+        }
+        if (aborted) return;
 
-      rejoins += 1;
-      // A7 的触发信号。**M4a 补的，M2 漏了。**
-      //
-      // 06 §M4a 写的是「M2 已把接口留好：gap 恢复合成的那帧 `values`，
-      // UI 侧的清空与警告挂在这一帧上」——接线时发现这句话不成立：
-      // 合成的 `values` 在消费方眼里与正常的 `values` **完全同形**，
-      // 没有任何字段能区分，挂不上去。上游 `api-client.ts:282` 正是在
-      // 同一个位置先发一帧 `custom`，React 侧靠 `onCustomEvent` 里的
-      // `type === "stream_replay_gap"` 分支做那一整套清空。
-      //
-      // 顺序不能反：`custom` 必须在 `values` **之前**。反过来的话，
-      // 清空动作会把刚落地的 durable state 一起抹掉。
-      yield {
-        kind: "event",
-        event: {
-          event: "custom",
-          data: JSON.stringify({ type: "stream_replay_gap", ...gap }),
-        },
-      };
-      const values = await loadDurableState(handle).catch(() => undefined);
-      if (values !== undefined) {
-        // 合成一帧 `values` 交给 reducer：全量替换正是 gap 之后要的语义
-        // （A7 要清空的乐观/瞬态状态由 UI 层在 M4a 接手，这里只管 durable）。
+        rejoins += 1;
+        // A7 的触发信号。**M4a 补的，M2 漏了。**
+        //
+        // 06 §M4a 写的是「M2 已把接口留好：gap 恢复合成的那帧 `values`，
+        // UI 侧的清空与警告挂在这一帧上」——接线时发现这句话不成立：
+        // 合成的 `values` 在消费方眼里与正常的 `values` **完全同形**，
+        // 没有任何字段能区分，挂不上去。上游 `api-client.ts:282` 正是在
+        // 同一个位置先发一帧 `custom`，React 侧靠 `onCustomEvent` 里的
+        // `type === "stream_replay_gap"` 分支做那一整套清空。
+        //
+        // 顺序不能反：`custom` 必须在 `values` **之前**。反过来的话，
+        // 清空动作会把刚落地的 durable state 一起抹掉。
         yield {
           kind: "event",
-          event: { event: "values", data: JSON.stringify(values) },
+          event: {
+            event: "custom",
+            data: JSON.stringify({ type: "stream_replay_gap", ...gap }),
+          },
         };
+        let values: Record<string, unknown> | undefined;
+        try {
+          values = await loadDurableState(handle, recoveryController.signal);
+        } catch (cause) {
+          if (aborted) return;
+          if (!stopped) {
+            yield failure(
+              handle,
+              new AgentStreamError(
+                "replay_gap",
+                "Could not reload durable state after a stream replay gap.",
+                { cause },
+              ),
+            );
+            return;
+          }
+        }
+        if (aborted) return;
+        if (values !== undefined) {
+          // 合成一帧 `values` 交给 reducer：全量替换正是 gap 之后要的语义
+          // （A7 要清空的乐观/瞬态状态由 UI 层在 M4a 接手，这里只管 durable）。
+          yield {
+            kind: "event",
+            event: { event: "values", data: JSON.stringify(values) },
+          };
+        }
+        handleForJoin = handle;
+        cursor = gap.latest_available_event_id ?? undefined;
       }
-      current = joinProtocol(protocol, handle, gap.latest_available_event_id);
+    } finally {
+      recoveryController.abort();
+      active?.abort();
+      active = undefined;
     }
   }
 
@@ -223,10 +268,12 @@ export function createGapAwareRun(options: GapRecoveryOptions): GapAwareRun {
     run: runInternal,
     stop() {
       stopped = true;
+      recoveryController.abort();
       active?.stop();
     },
     abort() {
       aborted = true;
+      recoveryController.abort();
       active?.abort();
     },
     getRejoinCount: () => rejoins,

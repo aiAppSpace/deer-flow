@@ -16,6 +16,7 @@ import {
 import { enableSkill } from "@/core/skills/api";
 import type { Skill } from "@/core/skills/type";
 import { SettingsPermissionError } from "@/core/settings/permissions";
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
 
 export function useSkillSettings(options: {
   canManage: MaybeRefOrGetter<boolean>;
@@ -24,6 +25,7 @@ export function useSkillSettings(options: {
   const queryClient = useQueryClient();
   const catalog = useSkillsCatalog({ enabled: options.enabled ?? true });
   const mutation = useMutation({
+    onMutate: () => captureWorkspaceQueryOwner(queryClient),
     mutationFn: ({
       skillName,
       enabled,
@@ -33,7 +35,8 @@ export function useSkillSettings(options: {
       enabled: boolean;
       signal: AbortSignal;
     }) => enableSkill(skillName, enabled, { signal }),
-    onSuccess: async (updated) => {
+    onSuccess: async (updated, _variables, isCurrent) => {
+      if (!isCurrent?.()) return;
       queryClient.setQueryData<Skill[]>(SKILLS_QUERY_KEY, (rows) =>
         (rows ?? []).map((row) => (row.name === updated.name ? updated : row)),
       );

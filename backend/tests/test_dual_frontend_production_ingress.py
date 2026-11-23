@@ -72,7 +72,11 @@ def test_production_compose_builds_secondary_vue_without_publishing_a_port() -> 
     assert "ports" not in vue
     assert vue["networks"] == ["deer-flow"]
     assert vue["restart"] == "unless-stopped"
-    assert set(services["nginx"]["depends_on"]) >= {"frontend", "frontend-vue", "gateway"}
+    assert set(services["nginx"]["depends_on"]) >= {
+        "frontend",
+        "frontend-vue",
+        "gateway",
+    }
 
 
 def test_production_compose_keeps_one_loopback_nginx_entry_and_private_gateway() -> None:
@@ -166,6 +170,16 @@ def test_development_compose_uses_one_watch_path_for_both_frontends() -> None:
     assert all("CHOKIDAR" not in item for item in vue["environment"])
     assert react["develop"]["watch"]
     assert vue["develop"]["watch"]
+
+
+def test_react_dependency_patch_changes_rebuild_instead_of_syncing_over_installed_dependencies() -> None:
+    services = yaml.safe_load(DEV_COMPOSE_PATH.read_text(encoding="utf-8"))["services"]
+    watch = services["frontend"]["develop"]["watch"]
+    source_sync = [rule for rule in watch if rule["action"] == "sync" and rule["path"] == "../frontend"]
+
+    assert len(source_sync) == 1
+    assert "patches/" in source_sync[0]["ignore"]
+    assert {"action": "rebuild", "path": "../frontend/patches"} in watch
 
 
 def test_production_compose_has_no_development_watch_configuration() -> None:

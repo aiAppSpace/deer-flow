@@ -57,13 +57,37 @@ describe("Agent settings model resolution", () => {
     );
   });
 
-  it("rejects an unknown explicit model", () => {
+  it("preserves a persisted model missing from the current catalog while editing other fields", () => {
     expect(
       buildAgentSettingsUpdatePayload(models, {
         ...baseDraft,
         model: "removed-model",
       }),
-    ).toEqual({ ok: false, error: "model" });
+    ).toEqual({
+      ok: true,
+      request: {
+        model: "removed-model",
+        model_settings: null,
+        thinking_enabled: null,
+        reasoning_effort: null,
+      },
+    });
+  });
+  it("saves an inherited global default without requiring a configured model catalog", () => {
+    expect(
+      buildAgentSettingsUpdatePayload([], {
+        ...baseDraft,
+        model: DEFAULT_AGENT_MODEL_VALUE,
+      }),
+    ).toEqual({
+      ok: true,
+      request: {
+        model: null,
+        model_settings: null,
+        thinking_enabled: null,
+        reasoning_effort: null,
+      },
+    });
   });
 });
 

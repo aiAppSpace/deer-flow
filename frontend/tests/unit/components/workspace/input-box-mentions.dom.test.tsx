@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, rs } from "@rstest/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -228,6 +229,7 @@ afterEach(() => {
   cleanup();
   window.sessionStorage.clear();
   rs.restoreAllMocks();
+  rs.unstubAllGlobals();
 });
 function enterMention(
   container: HTMLElement,
@@ -257,6 +259,91 @@ function enterMention(
 }
 
 describe("unified composer mentions", () => {
+  it("repositions references within the native clipping region on font-only layout changes", async () => {
+    const observers: {
+      callback: ResizeObserverCallback;
+      targets: Element[];
+      disconnected: boolean;
+    }[] = [];
+    rs.stubGlobal(
+      "ResizeObserver",
+      class {
+        entry: (typeof observers)[number];
+        constructor(callback: ResizeObserverCallback) {
+          this.entry = { callback, targets: [], disconnected: false };
+          observers.push(this.entry);
+        }
+        observe(target: Element) {
+          this.entry.targets.push(target);
+        }
+        disconnect() {
+          this.entry.disconnected = true;
+        }
+      },
+    );
+    rs.stubGlobal("innerHeight", 800);
+    const rendered = renderComposer("geometry-thread");
+    const clip = rendered.container;
+    clip.style.overflowY = "auto";
+    rs.spyOn(clip, "getBoundingClientRect").mockReturnValue({
+      top: 120,
+      bottom: 800,
+    } as DOMRect);
+    Object.defineProperty(clip, "clientHeight", {
+      configurable: true,
+      value: 680,
+    });
+    const button = screen.getByTestId("mention-button");
+    const root = button.closest("form")!.parentElement!;
+    let top = 300;
+    rs.spyOn(root, "getBoundingClientRect").mockImplementation(
+      () => ({ top, bottom: 780 }) as DOMRect,
+    );
+    fireEvent.click(button);
+    const popup = (await screen.findByTestId("mention-picker")).parentElement!;
+    popup.style.marginBottom = "8px";
+    void act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    await waitFor(() => expect(popup.style.maxHeight).toBe("168px"));
+    top = 220;
+    popup.style.marginBottom = "16px";
+    void act(() => {
+      for (const observer of observers.filter((item) =>
+        item.targets.includes(root),
+      ))
+        observer.callback([], {} as ResizeObserver);
+    });
+    await waitFor(() => expect(popup.style.maxHeight).toBe("80px"));
+    const picker = popup.firstElementChild!;
+    const option = picker.querySelector<HTMLElement>("button[role=option]")!;
+    Object.defineProperty(option, "offsetHeight", {
+      configurable: true,
+      value: 104,
+    });
+    void act(() => {
+      for (const observer of observers.filter((item) =>
+        item.targets.includes(picker),
+      ))
+        observer.callback([], {} as ResizeObserver);
+    });
+    await waitFor(() => expect(popup.style.maxHeight).toBe("672px"));
+    expect(popup.classList.contains("relative")).toBe(true);
+    expect(popup.classList.contains("absolute")).toBe(false);
+    top = 300;
+    void act(() => {
+      for (const observer of observers.filter((item) =>
+        item.targets.includes(root),
+      ))
+        observer.callback([], {} as ResizeObserver);
+    });
+    await waitFor(() => expect(popup.style.maxHeight).toBe("160px"));
+    expect(popup.classList.contains("absolute")).toBe(true);
+    expect(popup.classList.contains("relative")).toBe(false);
+    rendered.unmount();
+    expect(observers.every((item) => item.disconnected)).toBe(true);
+    rs.unstubAllGlobals();
+  });
   it("submits a plugin selection as readable text and structured metadata", async () => {
     pluginSearch.mockResolvedValue([{ id: "alice", label: "Alice" }]);
     const submit = rs.fn();
@@ -952,4 +1039,42 @@ describe("reference discovery failures and polish round trips", () => {
       "research",
     ]);
   });
+});
+
+it("reference highlight follows actual pointer movement without surrendering to stationary reflow", () => {
+  renderComposer("pointer-highlight");
+  fireEvent.click(screen.getByTestId("mention-button"));
+  const search = screen.getByRole("combobox");
+  const research = screen.getByRole("option", {
+    name: "research Research a topic",
+  });
+  const file = screen.getByRole("option", { name: "report.pdf" });
+  fireEvent.keyDown(search, { key: "ArrowDown" });
+  expect(search.getAttribute("aria-activedescendant")).toBe(file.id);
+  fireEvent.mouseEnter(research);
+  fireEvent.pointerMove(research, {
+    pointerType: "mouse",
+    movementX: 0,
+    movementY: 0,
+  });
+  expect(search.getAttribute("aria-activedescendant")).toBe(file.id);
+  fireEvent.pointerMove(research, {
+    pointerType: "mouse",
+    movementX: 2,
+    movementY: 0,
+  });
+  expect(search.getAttribute("aria-activedescendant")).toBe(research.id);
+  fireEvent.pointerMove(file, {
+    pointerType: "touch",
+    movementX: 2,
+    movementY: 0,
+  });
+  expect(search.getAttribute("aria-activedescendant")).toBe(research.id);
+  fireEvent.pointerMove(file, {
+    pointerType: "pen",
+    movementX: 0,
+    movementY: 2,
+  });
+  expect(search.getAttribute("aria-activedescendant")).toBe(file.id);
+  expect(file.getAttribute("aria-selected")).toBe("false");
 });

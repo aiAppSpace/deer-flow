@@ -74,9 +74,10 @@
                    375 宽的页面。**探针里凡是「全都红」，先怀疑探针。**
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import { surveyHorizontalReflow, surveyReflow } from "./support/reflow-survey";
 import {
   DEFAULT_DIMENSION,
   PARITY_SCENARIOS,
@@ -107,8 +108,8 @@ const WIDTH = 360;
 const DELIBERATE_HORIZONTAL_SCROLL = `
   装着表格的滚动区（列宽由数据决定，窄屏横滚就是这一屏本来的交互——
   实测 artifact-table-preview 在 360px 下 sw=588 cw=317）；
-  以及 <pre>（代码/差异块，长行横滚是它的本分——实测
-  workspace-changes#changes-panel 的 pre sw=291 cw=288）。
+  以及 <pre> 和有界的真实 PRE/CODE Streamdown owner（代码/差异块，长行横滚
+  是它的本分）；精确内容判据与 combined-reflow 共用 surveyReflow。
 `;
 
 /*
@@ -187,26 +188,6 @@ function countDialogs() {
  * 「用户得横着拖才能看全」的地方：能滚（`overflow-x` 是 auto/scroll）
  * **而且**真的溢出了。两条用例共用同一把尺子，见文件头的判词。
  */
-function findHorizontalScrollers() {
-  return Array.from(document.querySelectorAll("*"))
-    .filter((element) => {
-      const overflowX = getComputedStyle(element).overflowX;
-      if (overflowX !== "auto" && overflowX !== "scroll") return false;
-      if (element.scrollWidth <= element.clientWidth + 1) return false;
-      // 见 DELIBERATE_HORIZONTAL_SCROLL。
-      if (element.tagName === "PRE") return false;
-      if (element.querySelector("table")) return false;
-      return true;
-    })
-    .slice(0, 4)
-    .map(
-      (element) =>
-        `${element.tagName.toLowerCase()} ` +
-        `sw=${element.scrollWidth} cw=${element.clientWidth} ` +
-        `cls=${(element.className?.toString?.() ?? "").slice(0, 55)}`,
-    );
-}
-
 type Case = {
   key: string;
   scenario: (typeof PARITY_SCENARIOS)[number];
@@ -226,6 +207,70 @@ const CASES: Case[] = PARITY_SCENARIOS.flatMap((scenario) =>
     state,
   })),
 );
+
+test("窄屏横滚量具共用有界代码 owner，普通内容与原完整控件量具仍严格", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: WIDTH, height: 812 });
+  const code = `<pre><code><span>${"long_code_token ".repeat(50)}</span></code></pre>`;
+  const show = async (content: string) => {
+    await page.setContent(
+      "<style>body{margin:0}.host{width:180px}.owner{overflow-x:auto}pre{margin:0;white-space:pre}</style>" +
+        content,
+    );
+    const horizontal = await page.evaluate(
+      surveyHorizontalReflow,
+      "horizontal" as const,
+    );
+    const full = await page.evaluate(surveyReflow, 24);
+    expect(horizontal).toEqual({
+      width: full.width,
+      height: full.height,
+      rootPx: full.rootPx,
+      documentOverflowX: full.documentOverflowX,
+      nonDeliberateHorizontalScrollers: full.nonDeliberateHorizontalScrollers,
+    });
+    expect(horizontal).not.toHaveProperty("lostControls");
+    return horizontal;
+  };
+  const legal = await show(
+    `<div class="host"><div class="owner" data-streamdown="code-block-body">${code}</div></div>`,
+  );
+  expect(legal.nonDeliberateHorizontalScrollers).toEqual([]);
+  const owner = page.locator('[data-streamdown="code-block-body"]');
+  await owner.hover();
+  await page.mouse.wheel(1000, 0);
+  await expect
+    .poll(() => owner.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  for (const content of [
+    '<div style="width:700px">ordinary content</div>',
+    `${code}<button style="width:700px">beside code</button>`,
+    '<pre><code><button style="width:700px">interactive code</button></code></pre>',
+    '<pre><code><button disabled style="width:700px">disabled interactive code</button></code></pre>',
+    '<pre><code><input disabled style="width:700px"></code></pre>',
+    '<pre><code><span role="button" tabindex="0" style="display:block;width:700px">fake token</span></code></pre>',
+    `<div>${code}</div>`,
+    '<pre><span style="display:block;width:700px">not code</span></pre>',
+  ]) {
+    const rejected = await show(
+      `<div class="host"><div class="owner" data-streamdown="code-block-body">${content}</div></div>`,
+    );
+    expect(rejected.nonDeliberateHorizontalScrollers.length).toBeGreaterThan(0);
+  }
+  const unbounded = await show(
+    `<div class="owner" style="width:700px" data-streamdown="code-block-body">${code}</div>`,
+  );
+  expect(unbounded.documentOverflowX).toBeGreaterThan(0);
+  expect(unbounded.nonDeliberateHorizontalScrollers.length).toBeGreaterThan(0);
+
+  await page.setContent(
+    '<style>body{margin:0}.port{height:100px;width:220px;overflow:auto}button{height:120px;width:200px}</style><div class="port"><button>Full control</button></div>',
+  );
+  const full = await page.evaluate(surveyReflow, 24);
+  expect(full.lostControls).toHaveLength(1);
+  expect(full.oversizedRecovered).toBe(0);
+});
 
 for (const app of APPS) {
   test(`${app.name}: 每个终态在 360px 上都不把东西推出视口`, async ({
@@ -249,7 +294,11 @@ for (const app of APPS) {
           page,
           app.baseUrl,
           scenario,
-          { viewport: "mobile", theme: "light", locale: "en-US" },
+          {
+            viewport: "mobile",
+            theme: "light",
+            locale: state.dimensions?.[0]?.locale ?? "en-US",
+          },
           state,
           // 预期到不了的给短超时：它们就是来证明「仍然到不了」的。
           expectedUnreachable ? 4_000 : 30_000,
@@ -262,7 +311,8 @@ for (const app of APPS) {
         await page.setViewportSize({ width: WIDTH, height: 812 });
         await page.waitForTimeout(600);
         void DELIBERATE_HORIZONTAL_SCROLL;
-        const escaped = await page.evaluate(findHorizontalScrollers);
+        const { nonDeliberateHorizontalScrollers: escaped } =
+          await page.evaluate(surveyHorizontalReflow, "horizontal" as const);
         if (escaped.length > 0)
           overflowing.push(`${key}: ${escaped.join(" | ")}`);
       } catch (error) {
@@ -341,7 +391,8 @@ for (const app of APPS) {
         const dropped = dialogsBefore > dialogsAfter;
         if (dropped) unexpectedDrops.push(key);
 
-        const escaped = await page.evaluate(findHorizontalScrollers);
+        const { nonDeliberateHorizontalScrollers: escaped } =
+          await page.evaluate(surveyHorizontalReflow, "horizontal" as const);
         if (escaped.length > 0)
           overflowing.push(`${key}: ${escaped.join(" | ")}`);
       } catch (error) {

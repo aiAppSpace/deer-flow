@@ -116,11 +116,15 @@ class Handler(BaseHTTPRequestHandler):
                 }
                 # The Gate reads this to assert which callback origin the
                 # Gateway derived for this entry.
-                _authorize_log.append({"redirect_uri": redirect_uri, "state": query.get("state", "")})
+                _authorize_log.append(
+                    {"redirect_uri": redirect_uri, "state": query.get("state", "")}
+                )
                 del _authorize_log[:-20]
 
             separator = "&" if "?" in redirect_uri else "?"
-            params = urllib.parse.urlencode({"code": code, "state": query.get("state", "")})
+            params = urllib.parse.urlencode(
+                {"code": code, "state": query.get("state", "")}
+            )
             self._redirect(f"{redirect_uri}{separator}{params}")
             return
 
@@ -138,7 +142,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         length = int(self.headers.get("content-length") or 0)
-        form = {k: v[0] for k, v in urllib.parse.parse_qs(self.rfile.read(length).decode()).items()}
+        form = {
+            k: v[0]
+            for k, v in urllib.parse.parse_qs(self.rfile.read(length).decode()).items()
+        }
 
         with _lock:
             record = _codes.pop(form.get("code", ""), None)
@@ -146,7 +153,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "invalid_grant"}, status=400)
             return
         if form.get("redirect_uri") != record["redirect_uri"]:
-            self._json({"error": "invalid_grant", "error_description": "redirect_uri mismatch"}, status=400)
+            self._json(
+                {
+                    "error": "invalid_grant",
+                    "error_description": "redirect_uri mismatch",
+                },
+                status=400,
+            )
             return
 
         # Real S256 verification so the Gateway's PKCE path is actually exercised.
@@ -155,7 +168,10 @@ class Handler(BaseHTTPRequestHandler):
             verifier = form.get("code_verifier", "")
             expected = _b64url(hashlib.sha256(verifier.encode()).digest())
             if not secrets.compare_digest(expected, challenge):
-                self._json({"error": "invalid_grant", "error_description": "PKCE mismatch"}, status=400)
+                self._json(
+                    {"error": "invalid_grant", "error_description": "PKCE mismatch"},
+                    status=400,
+                )
                 return
 
         now = int(time.time())
@@ -172,22 +188,34 @@ class Handler(BaseHTTPRequestHandler):
         if record["nonce"]:
             claims["nonce"] = record["nonce"]
 
-        id_token = jwt.encode(claims, _private_key, algorithm="RS256", headers={"kid": KEY_ID})
-        self._json({"access_token": secrets.token_urlsafe(16), "token_type": "Bearer", "id_token": id_token})
+        id_token = jwt.encode(
+            claims, _private_key, algorithm="RS256", headers={"kid": KEY_ID}
+        )
+        self._json(
+            {
+                "access_token": secrets.token_urlsafe(16),
+                "token_type": "Bearer",
+                "id_token": id_token,
+            }
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8013)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--issuer", default=None)
     parser.add_argument("--client-id", default="deerflow-m0")
     parser.add_argument("--client-secret", default="m0-idp-secret")
     args = parser.parse_args()
 
-    Handler.issuer = f"http://127.0.0.1:{args.port}"
+    # The external gate keeps its original loopback defaults. Container ingress
+    # supplies one identical public issuer for the browser and internal DNS.
+    Handler.issuer = (args.issuer or f"http://127.0.0.1:{args.port}").rstrip("/")
     Handler.client_id = args.client_id
     Handler.client_secret = args.client_secret
 
-    ThreadingHTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
     return 0
 
 

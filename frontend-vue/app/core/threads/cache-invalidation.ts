@@ -26,15 +26,15 @@
                    本地化警告文案同理走 `notify` 端口，不在 core 里选 toast 实现。
 */
 
-import type { InfiniteData, QueryClient } from "@tanstack/vue-query";
+import type { QueryClient } from "@tanstack/vue-query";
 
 import { threadHistoryQueryKey } from "./history";
 import { threadMetadataQueryKey } from "./metadata";
 import {
   filterInfiniteThreadsCache,
   INFINITE_THREADS_QUERY_KEY_PREFIX,
+  type InfiniteThreadsData,
 } from "./infinite";
-import type { AgentThread } from "./types";
 import { threadTokenUsageQueryKey } from "./token-usage";
 
 /**
@@ -137,7 +137,7 @@ export function removeDeletedThreadCaches(
   if (deleted.size === 0) return;
   queryClient.setQueriesData(
     { queryKey: [...INFINITE_THREADS_QUERY_KEY_PREFIX], exact: false },
-    (oldData: InfiniteData<AgentThread[]> | undefined) =>
+    (oldData: InfiniteThreadsData | undefined) =>
       filterInfiniteThreadsCache(
         oldData,
         (thread) => !deleted.has(thread.thread_id),

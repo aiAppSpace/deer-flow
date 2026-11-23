@@ -21,7 +21,8 @@
                    className="text-muted-foreground hover:text-foreground size-6 rounded-full">`。
 */
 import { MessageSquareQuote, X } from "lucide-vue-next";
-import { computed } from "vue";
+import { computed, type HTMLAttributes } from "vue";
+import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ const props = defineProps<{
   references: SidecarReference[];
   testId?: string;
   clearable?: boolean;
+  class?: HTMLAttributes["class"];
 }>();
 const emit = defineEmits<{ clear: [] }>();
 const { $i18n } = useNuxtApp();
@@ -54,7 +56,12 @@ function previewText(content: string): string {
   <div
     v-if="references.length"
     :data-testid="testId"
-    class="border-border bg-muted/40 text-foreground inline-flex max-w-[min(18rem,100%)] items-center gap-1.5 rounded-full border px-2.5 py-1.5 shadow-sm"
+    :class="
+      cn(
+        'border-border bg-muted/40 text-foreground inline-flex max-w-[min(18rem,100%)] items-center gap-1.5 rounded-full border px-2.5 py-1.5 shadow-sm',
+        props.class,
+      )
+    "
   >
     <Tooltip>
       <TooltipTrigger>

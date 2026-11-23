@@ -1,3 +1,6 @@
+import remarkParse from "remark-parse";
+import { unified } from "unified";
+
 export type CitationOccurrence = {
   index: number;
   title: string;
@@ -27,7 +30,7 @@ export function extractCitationSources(markdown: string): CitationSource[] {
     return [];
   }
 
-  const searchable = maskCode(markdown);
+  const searchable = maskCitationCode(markdown);
   const sourcesByUrl = new Map<string, CitationSource>();
 
   for (const match of searchable.matchAll(CITATION_LINK_RE)) {
@@ -96,28 +99,38 @@ function extractDomain(url: string): string {
   }
 }
 
-// Blanks out code regions so example citations inside code aren't scraped as
-// real sources, while preserving string length (and newlines) so occurrence
-// indices stay aligned with the original markdown.
-function maskCode(markdown: string): string {
-  return maskInlineCode(maskFencedCodeBlocks(markdown));
-}
-
-function maskFencedCodeBlocks(markdown: string): string {
-  // Match a fenced block up to its matching closing fence, or — while the
-  // message is still streaming — to end of input when the fence is unclosed.
-  return markdown.replace(
-    /(^|\n)(`{3,}|~{3,})[^\n]*(?:\n[\s\S]*?\n\2[^\n]*(?=\n|$)|[\s\S]*$)/g,
-    maskKeepingNewlines,
-  );
-}
-
-function maskInlineCode(markdown: string): string {
-  // Only mask closed spans: an unclosed backtick run renders as literal text,
-  // so a citation after it is a real, rendered link and must not be masked.
-  return markdown.replace(/(`+)[\s\S]*?\1/g, maskKeepingNewlines);
-}
-
-function maskKeepingNewlines(block: string): string {
-  return block.replace(/[^\n]/g, " ");
+// Use the renderer's CommonMark parser for fenced, indented and inline code,
+// including list/blockquote containers. Keep UTF-16 offsets and line breaks so
+// citation occurrence positions still address the unchanged message source.
+const codeProcessor = unified().use(remarkParse);
+type CodeNode = {
+  type: string;
+  position?: { start: { offset?: number }; end: { offset?: number } };
+  children?: CodeNode[];
+};
+export function maskCitationCode(markdown: string): string {
+  // Without delimiters or line-leading whitespace, Markdown cannot contain code.
+  if (!/[`~]|(?:^|\n)[ \t]/.test(markdown)) return markdown;
+  const pending: CodeNode[] = [codeProcessor.parse(markdown) as CodeNode];
+  const parts: string[] = [];
+  let offset = 0;
+  while (pending.length) {
+    const node = pending.pop()!;
+    if (node.type === "code" || node.type === "inlineCode") {
+      const start = node.position?.start.offset;
+      const end = node.position?.end.offset;
+      if (start !== undefined && end !== undefined) {
+        parts.push(
+          markdown.slice(offset, start),
+          markdown.slice(start, end).replace(/[^\r\n]/g, " "),
+        );
+        offset = end;
+      }
+    } else if (node.children) {
+      for (let index = node.children.length - 1; index >= 0; index--)
+        pending.push(node.children[index]!);
+    }
+  }
+  parts.push(markdown.slice(offset));
+  return parts.join("");
 }

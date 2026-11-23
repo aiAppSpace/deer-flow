@@ -22,7 +22,7 @@
                    同一形状：缺席时那条用例 `skipIf` 跳过，BLOCKING 仍是 0。
                    不登记就会把 BLOCKING 从 0 打成 1——那是平替判据本身。
 
-                   **为什么只守这 8 个块**：它们是上游词典里没有的，所以「上游也没人用」
+                   **为什么守这些块**：独有块是上游词典里没有的，所以「上游也没人用」
                    这条辩解在这里不成立——一条没人用就是死的。共有块里同样有遮蔽问题，
                    但那要靠别名解析（`= computed(() => copy.value.settings.integrations.lark)`
                    这类跨行别名），实测用正则做不准（一版判据在共有块上误报 122 条），
@@ -46,14 +46,12 @@ import { describe, expect, it } from "vitest";
   「这种文件类型无法在浏览器里预览。」与 iframe 的 `title` 都是写死的英文字面量，
   中文界面上照样是英文。两边同改之后上游也有了这个块（只是本仓这一份更全，
   上游只用到其中四条）。
+
+  `setup` 在 2026-10-09 修复两端 setup/change-password 中文页面后也成为共享块。
+  仅从独有块清单归位；下方逐键消费者守卫仍显式覆盖它，不降低原扫描范围。
 */
-const VUE_ONLY_BLOCKS = [
-  "marketing",
-  "messages",
-  "navigation",
-  "primitives",
-  "setup",
-];
+const VUE_ONLY_BLOCKS = ["marketing", "messages", "navigation", "primitives"];
+const CONSUMER_BLOCKS = [...VUE_ONLY_BLOCKS, "setup"];
 
 const appDir = fileURLToPath(new URL("../../../app", import.meta.url));
 const upstreamDictionary = fileURLToPath(
@@ -181,9 +179,9 @@ describe("本仓独有的词典块", () => {
     ).toBe(read("en-US"));
   });
 
-  it("每一条都有消费者（上游没有这些块，所以「上游也没人用」不成立）", () => {
+  it("独有块与现行共享 setup 的每一条都有消费者", () => {
     const dead: string[] = [];
-    for (const block of VUE_ONLY_BLOCKS) {
+    for (const block of CONSUMER_BLOCKS) {
       const aliases = aliasesOf(block);
       for (const key of baselineKeys.filter((key) =>
         key.startsWith(`${block}.`),
@@ -202,7 +200,7 @@ describe("本仓独有的词典块", () => {
     }
     expect(
       dead,
-      "这些 key 没有任何消费者，而且上游也没有它们：要么接上 UI，要么从三个 locale 文件里删掉。",
+      "这些受控 key 没有生产消费者：先审核实际 UI 与上游合同，再接上消费或清理死键。",
     ).toEqual([]);
   });
 });

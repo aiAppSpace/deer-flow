@@ -21,19 +21,7 @@ const collapsed = ref(true);
 
 <template>
   <!--
-    **根类串照抄上游 `todo-list.tsx:42`**（2026-09-12 第十八轮）。
-    本仓此前是 `border-border bg-background overflow-hidden rounded-xl border`
-    ——四角都圆、有下边框、不透明、没有过渡；上游是
-    `rounded-t-xl border border-b-0`（**只圆上面两角、没有下边框**，因为它贴着
-    composer 顶边坐）＋ `origin-bottom translate-y-4`（向下压 16px 与 composer 叠住）
-    ＋ `backdrop-blur-sm` ＋ `transition-all duration-200 ease-out`
-    ＋ `flex h-fit w-full flex-col`。
-    上游那句 `bg-white` 被调用点的 `bg-background/5` 顶掉（twMerge 同组后者胜），
-    所以本仓不抄 `bg-white`——抄了也是死的，而且深色下它是真白。
-
-    `<section>` 换成 `<div>`：上游是 div，而一个没有可访问名的 section
-    在可访问性树里本来就退化成 generic，两边等价——但**深度档按结构算**，
-    标签名不同不影响，层数相同才影响。这里保持与上游同层。
+    面板贴住输入框上沿，只保留顶部圆角与边框。背景由调用点按主题设置。
   -->
   <div
     v-if="todos.length"
@@ -60,23 +48,16 @@ const collapsed = ref(true);
       @click="collapsed = !collapsed"
     >
       <!--
-        **标题那串字要单独一层**（上游 `todo-list.tsx:62`）：外层
-        `<div class="text-muted-foreground">`，里层
-        `<div class="flex items-center justify-center gap-2">`，文字自己再一个 `<div>`。
-        本仓此前把图标与文字挤在同一个 span 里——对照台账当场报
-        `text:To-dos x Δ-24 / width Δ+24`，**正好是图标 16 + gap 8**：
-        `getByText` 解析到的是包着这段文字的元素，图标被一起框了进去
-        （2026-09-12 第十八轮）。
+        标题文字单独成盒，避免把图标与间距计入文字区域。
       -->
       <div class="text-muted-foreground">
         <div class="flex items-center justify-center gap-2">
-          <ListTodo :size="16" />
+          <ListTodo class="size-4" />
           <div>{{ $i18n.t.value.primitives.todos }}</div>
         </div>
       </div>
       <ChevronUp
-        :size="16"
-        class="text-muted-foreground transition-transform duration-300 ease-out"
+        class="text-muted-foreground size-4 transition-transform duration-300 ease-out"
         :class="collapsed ? '' : 'rotate-180'"
       />
     </button>
@@ -117,21 +98,9 @@ const collapsed = ref(true);
             >
               <div class="flex items-center gap-2">
                 <!--
-          **指示器是一颗 CSS 圆点，不是图标**：上游 `ai-elements/queue.tsx` 的
-          `QueueItemIndicator`（`mt-0.5 inline-block size-2.5 rounded-full border`
-          ＋ 完成态 `border-muted-foreground/20 bg-muted-foreground/10`、
-          未完成 `border-muted-foreground/50`），进行中由调用点补 `bg-primary/70`
-          （`todo-list.tsx:88`）。本仓原来画的是两颗 lucide 图标，完成那颗还写死
-          `text-emerald-600`——**上游全仓没用过这个 utility，它也没有 `dark:` 变体**
-          （2026-09-12 第十三轮）。文字同理走 `QueueItemContent`：
-          `line-clamp-1 grow break-words` ＋ 完成 `text-muted-foreground/50 line-through`、
-          未完成 `text-muted-foreground`，进行中调用点补 `text-primary/70`。
-
-          **容器那一层还没对齐**，是一张单独的账（见 vue-parity-open-accounts.md
-          第十三轮那节）：上游的列表体是定高 `h-28` ＋ 高度过渡 ＋ ScrollArea ＋
-          条目 `hover:bg-muted`，本仓是 `v-if` 整块摘掉、`space-y-1 p-3`。
-          那一层改动会动到折叠动画，且这一屏**至今没有任何对照锚点**。
-        -->
+                  状态指示器使用 CSS 圆点；颜色与文字样式由 pending/in_progress/completed 决定。
+                  列表体由上方常驻 main、固定展开高度与 ScrollArea 管理折叠和滚动。
+                -->
                 <span
                   class="mt-0.5 inline-block size-2.5 shrink-0 rounded-full border"
                   :class="[

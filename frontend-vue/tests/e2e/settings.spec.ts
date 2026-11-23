@@ -187,7 +187,7 @@ test.describe("Vue settings", () => {
     await expect(page.getByTestId("memory-empty")).toHaveCount(0);
   });
 
-  test("invalid import is zero-request; valid import previews warnings and confirms once", async ({
+  test("invalid import is zero-request; valid import previews its normalized document and confirms once", async ({
     page,
   }) => {
     mockLangGraphAPI(page);
@@ -201,7 +201,9 @@ test.describe("Vue settings", () => {
       buffer: Buffer.from("{oops"),
     });
     await expect(
-      page.getByRole("alert").filter({ hasText: "malformed-json" }),
+      page
+        .getByTestId("workspace-toaster")
+        .filter({ hasText: "Failed to read the selected memory file" }),
     ).toBeVisible();
     expect(gateway.requests).toHaveLength(0);
 
@@ -220,12 +222,14 @@ test.describe("Vue settings", () => {
     });
     const preview = page.getByRole("dialog", { name: "Import memory?" });
     await expect(preview).toContainText("memory.json");
-    await expect(preview).toContainText("2.0");
+    await expect(preview).toContainText("Facts: 2");
     await expect(preview).toContainText("2");
-    await expect(page.getByTestId("memory-import-extra-warning")).toBeVisible();
+    await expect(page.getByTestId("memory-import-extra-warning")).toHaveCount(
+      0,
+    );
     await expect(
       page.getByTestId("memory-import-duplicate-warning"),
-    ).toBeVisible();
+    ).toHaveCount(0);
     expect(gateway.requests).toHaveLength(0);
     await preview.getByRole("button", { name: "Import", exact: true }).click();
     await expect(preview).toHaveCount(0);
@@ -252,7 +256,7 @@ test.describe("Vue settings", () => {
     await preview
       .getByRole("button", { name: "Import", exact: true })
       .dblclick();
-    await expect(preview.getByRole("alert")).toContainText(
+    await expect(page.getByTestId("workspace-toaster")).toContainText(
       "Memory changed concurrently",
     );
     expect(
@@ -262,7 +266,7 @@ test.describe("Vue settings", () => {
     ).toHaveLength(1);
   });
 
-  test("fact create and PATCH preserve explicit zero and omitted fields", async ({
+  test("fact create and PATCH preserve explicit zero and current full form fields", async ({
     page,
   }) => {
     mockLangGraphAPI(page);
@@ -299,7 +303,11 @@ test.describe("Vue settings", () => {
       .click();
     expect(
       gateway.requests.find((request) => request.method === "PATCH")?.body,
-    ).toEqual({ confidence: 0 });
+    ).toEqual({
+      content: memoryDocument().facts[0]!.content,
+      category: memoryDocument().facts[0]!.category,
+      confidence: 0,
+    });
     // 0 落在 normal 档：上游只念档位，不念这个数字。
     await expect(page.getByTestId("memory-fact-fact-a")).toContainText(
       "Confidence: Normal",
@@ -315,7 +323,7 @@ test.describe("Vue settings", () => {
     await page
       .getByRole("button", { name: /Delete: Explicit zero confidence/ })
       .click();
-    const removal = page.getByRole("alertdialog", {
+    const removal = page.getByRole("dialog", {
       name: "Delete this fact?",
     });
     await expect(removal).toContainText("Explicit zero confidence is valid");
@@ -327,7 +335,7 @@ test.describe("Vue settings", () => {
       gateway.requests.filter((request) => request.method === "DELETE"),
     ).toHaveLength(1);
     await page
-      .getByRole("alertdialog", { name: "Clear all memory?" })
+      .getByRole("dialog", { name: "Clear all memory?" })
       .getByRole("button", { name: "Clear all memory" })
       .click();
     await expect(page.getByTestId("memory-empty")).toBeVisible();
@@ -378,16 +386,36 @@ test.describe("Vue settings", () => {
       return route.fulfill({ json: config });
     });
 
-    await openSettings(page, "skills");
-    await page.getByRole("switch", { name: "review" }).click();
+    await page.route(/\/api\/capabilities\/catalog$/, (route) =>
+      route.fulfill({ json: [] }),
+    );
+    await page.route(/\/api\/mcp\/personal\/config$/, (route) =>
+      route.fulfill({ json: { mcp_servers: {} } }),
+    );
+    await page.goto("/workspace/capabilities?tab=skills");
+    await page
+      .getByRole("switch", { name: "Enable skill review", exact: true })
+      .click();
     await expect(
-      page.getByRole("switch", { name: "review" }),
+      page.getByRole("switch", { name: "Enable skill review", exact: true }),
     ).not.toBeChecked();
     expect(skillBody).toEqual({ enabled: false });
     expect(skillReads).toBeGreaterThanOrEqual(2);
-    await page.getByRole("button", { name: "Tools", exact: true }).click();
-    await page.getByRole("switch", { name: "docs" }).click();
-    await expect(page.getByRole("switch", { name: "docs" })).not.toBeChecked();
+    await page
+      .getByRole("tab", { name: "Tools & integrations", exact: true })
+      .click();
+    await page
+      .getByRole("switch", {
+        name: "Enabled docs (Platform provided)",
+        exact: true,
+      })
+      .click();
+    await expect(
+      page.getByRole("switch", {
+        name: "Enabled docs (Platform provided)",
+        exact: true,
+      }),
+    ).not.toBeChecked();
     expect(mcpBody).toEqual({ server_name: "docs", enabled: false });
     expect(mcpReads).toBeGreaterThanOrEqual(2);
   });

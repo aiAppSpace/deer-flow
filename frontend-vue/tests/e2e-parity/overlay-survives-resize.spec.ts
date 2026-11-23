@@ -11,23 +11,12 @@
                        把窗口缩过断点之后，凡是还开着的浮层，
                        都必须整个在视口里，并且仍贴着一个可见的触发器。
 
-                   ⚠ **它故意不断言「浮层还在不在」**，因为两个应用在这一点上
-                   **合理地不同**，而这个差异第五十三轮量清楚了：
-
-                       缩过断点后浮层还开着吗    本仓 5 个终态留着    上游 5 个全关
-                       本仓留着的那 5 条         出视口 0 · 触发器可见 · 间距 0/4/37
-
-                   上游关掉是 `chat-box.tsx` 的 `if (isMobile)` 分支**整棵换树**的
-                   副作用（第四十轮判过同一形状：「上游那次『关掉』是重挂的副作用，
-                   不是它处理了这件事」）；本仓 `WorkspacePanels.vue` **故意不换树**
-                   （文件头有判词：换树会让聊天区连同 query 一起重挂载，
-                   实测多打一次 `/api/skills`）。
-
-                   **所以这条门禁守的是「还开着的话，还能不能用」**——
-                   上游靠「关掉」平凡满足，本仓靠「贴着」满足。
-                   两边都过，而哪天本仓的浮层真飘了它会红。
-                   ⚠ **别把它改成「必须关掉」**：那等于照抄一个副作用，
-                   而且会和 `WorkspacePanels.vue` 那条既有判词打架。
+                   React ChatBox 与 Vue WorkspacePanels 都保持聊天子树的稳定 owner。
+                   旧 React mobile early return 引发的重挂和浮层丢失已由
+                   chat-box-responsive-owner DOM 回归及 chat-state-resize 双端回归
+                   覆盖，不能再把自动关闭写成允许的端差异。
+                   本量具继续验证已经打开的浮层几何，并对两个应用分别要求实际
+                   命中过断点后仍打开的浮层；dialog 的数量另由 combined-reflow 守卫。
 
                    ⚠ **量之前要先确认缩到位了**：`runScenario` → `applyDimension`
                    会 `setViewportSize(VIEWPORTS[...])`，所以缩窗口必须放在
@@ -49,9 +38,10 @@
                    所以这里记的是**每一格缩前缩后的数**，不是只记变化。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import { surveyOverlayGeometry as survey } from "./support/overlay-survey";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";
 import {
   DEFAULT_DIMENSION,
@@ -81,55 +71,16 @@ const MAX_GAP_PX = 64;
   `page.evaluate` 里够不到模块作用域（第五十三轮踩过——把内联的 64 "整理"成
   具名常量之后，每个终态都抛 `ReferenceError`，是反空转断言把它抓出来的）。
 */
-function survey(maxGapPx: number) {
-  const visible = (el: Element) => {
-    const cs = getComputedStyle(el);
-    if (cs.display === "none" || cs.visibility === "hidden") return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 1 && r.height > 1;
-  };
-  const overlays = Array.from(
-    document.querySelectorAll(
-      '[role="dialog"],[role="menu"],[role="listbox"],[role="tooltip"]',
-    ),
-  ).filter(visible);
-  return {
-    innerWidth,
-    count: overlays.length,
-    bad: overlays.flatMap((el) => {
-      const r = el.getBoundingClientRect();
-      const outside = Math.round(
-        Math.max(0, -r.x, -r.y, r.right - innerWidth, r.bottom - innerHeight),
-      );
-      const id = el.getAttribute("id");
-      const trigger = id
-        ? document.querySelector(`[aria-controls="${id}"]`)
-        : null;
-      const label =
-        `${el.getAttribute("role")} ` +
-        `${el.tagName.toLowerCase()}.${(el.className?.toString?.() ?? "").split(/\s+/).slice(0, 2).join(".").slice(0, 28)}` +
-        `"${(el as HTMLElement).innerText?.trim().replace(/\s+/g, " ").slice(0, 20) ?? ""}"`;
-      const problems: string[] = [];
-      if (outside > 1) problems.push(`跑出视口 ${outside}px`);
-      if (trigger) {
-        if (!visible(trigger)) problems.push("触发器不可见了");
-        else {
-          const t = trigger.getBoundingClientRect();
-          const gap = Math.round(
-            Math.max(0, Math.max(t.left - r.right, r.left - t.right)) +
-              Math.max(0, Math.max(t.top - r.bottom, r.top - t.bottom)),
-          );
-          if (gap > maxGapPx) problems.push(`离触发器 ${gap}px`);
-        }
-      }
-      return problems.length ? [`${label} —— ${problems.join(" / ")}`] : [];
-    }),
-  };
-}
 
 for (const [name, base] of APPS) {
   test(`${name}: 缩过断点后还开着的浮层仍然可用`, async ({ browser }) => {
-    test.setTimeout(900_000);
+    // Every registered terminal state must finish before the global deadline.
+    // Stage19 exhausted the old 15-minute cap; preserve all per-step assertions.
+    const registeredStates = PARITY_SCENARIOS.reduce(
+      (count, scenario) => count + scenarioStates(scenario).length,
+      0,
+    );
+    test.setTimeout(Math.max(900_000, registeredStates * 15_000));
     const broken: string[] = [];
     const unreachable: string[] = [];
     /** 反空转之一：至少有一格在缩完之后**真的还开着浮层**，否则这条门禁什么都没验。 */
@@ -192,16 +143,9 @@ for (const [name, base] of APPS) {
       [...widths],
       `缩窗口没落地：缩完读回的 innerWidth 应当只有 ${NARROW.width}`,
     ).toEqual([NARROW.width]);
-    /*
-      ⚠ 这一条对**上游**天然为 0——它把浮层全关了。所以只对本仓断言：
-      本仓必须至少有一格在缩完之后仍开着浮层，否则说明本仓也开始「跟着关」了，
-      那时这条门禁就退化成了空转，而它**照样是绿的**。
-    */
-    if (name === "vue")
-      expect(
-        stillOpenSomewhere,
-        "本仓缩完之后一个浮层都没留下——这条门禁于是什么都没验到。" +
-          "要么本仓改成了「跟着关」（那要回来改这条门禁的判词），要么场景不再开浮层了",
-      ).toBeGreaterThan(0);
+    expect(
+      stillOpenSomewhere,
+      `${name} 缩完之后一个浮层都没留下，几何门禁没有验证到实际打开的浮层`,
+    ).toBeGreaterThan(0);
   });
 }

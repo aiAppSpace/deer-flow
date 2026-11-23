@@ -90,3 +90,7 @@ backend/sandbox/
 !backend/extensions/
 !backend/extensions/sources/
 !backend/extensions/sources/**
+
+# Generated caches and local failure archives never belong in an image. Keep
+# this after extension reinclusions so nested package caches stay excluded too.
+**/.cache/

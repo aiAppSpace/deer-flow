@@ -8,13 +8,13 @@
 
                    外壳的骨架逐行对照 React settings-dialog.tsx：可见的标题+描述、
                    220px 的 <nav><ul><li>、右侧 ScrollArea 里 space-y-8 p-4 sm:p-6 的容器。
-                   九个 section 共用这一个外壳，所以这里每改一处，e2e-settings、
+                   各个 section 共用这一个外壳，所以这里每改一处，e2e-settings、
                    e2e-channels 与 e2e-visual 的两张设置截图都要一起跑。
 
                    描述用裸 <p> 而不是 DialogDescription，并显式摘掉 aria-describedby：
                    React 写的就是 aria-describedby={undefined}，读屏器只念标题，正文由
                    用户自己读到。Reka 无条件把它指向一个 description id，不摘掉就是一个
-                   悬空 IDREF（同 SettingsActionDialog 的那条注释）。
+                   悬空 IDREF；没有 description 时显式移除对应引用。
 
                    正文容器不再包 <main>——每个面板自己的 SettingsSection 会包，
                    与 React 的 main 数量一一对应。
@@ -26,18 +26,17 @@ import {
   ref,
   watch,
   type Component,
+  type AsyncComponentLoader,
 } from "vue";
 import {
   Bell,
+  Bot,
   Brain,
   Cable,
   Info,
   Palette,
-  PlugZap,
-  Sparkles,
   User,
   UsersRound,
-  Wrench,
 } from "lucide-vue-next";
 import {
   Dialog,
@@ -46,16 +45,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import ChannelConnections from "@/components/workspace/channels/ChannelConnections.vue";
-import AboutSettings from "@/components/workspace/settings/AboutSettings.vue";
-import AccountSettings from "@/components/workspace/settings/AccountSettings.vue";
-import AppearanceSettings from "@/components/workspace/settings/AppearanceSettings.vue";
-import MemorySettings from "@/components/workspace/settings/MemorySettings.vue";
-import NotificationSettings from "@/components/workspace/settings/NotificationSettings.vue";
-import SettingsPageLoading from "@/components/workspace/settings/SettingsPageLoading.vue";
-import SkillSettings from "@/components/workspace/settings/SkillSettings.vue";
-import SubagentSettings from "@/components/workspace/settings/SubagentSettings.vue";
-import ToolSettings from "@/components/workspace/settings/ToolSettings.vue";
+
 import {
   useSettingsDialog,
   type SettingsSection,
@@ -67,43 +57,53 @@ import {
 } from "@/core/workspace-shell/settings-query";
 import { cn } from "@/lib/utils";
 
-/*
-  只有 Integrations 懒加载，其余八个静态引入。
+import SettingsPageLoading from "@/components/workspace/settings/SettingsPageLoading.vue";
 
-  React settings-dialog.tsx 用 next/dynamic 把九个面板全部切开。**实测这条切法搬不过来**：
-  九个都改成 defineAsyncComponent 之后 /workspace/chats/new 的关键路径反而涨了
-  994,976 -> 1,007,885 raw、286,937 -> 291,507 br、40 -> 45 files（prefetch 少了 61 KB raw，
-  但那是空闲期最低优先级的字节，拿阻塞首屏的 4.5 KB 去换不划算）。原因是 Rollup 会把九个
-  异步 chunk 的公共依赖上提，而上提出来的那批又落在入口图里。chunk 划分是构建产物而不是
-  可观察行为，所以这里按实测取更小的那一种，切分方式不跟 React 对齐；对照台账取样在稳定态，
-  两种切法的可访问性树与几何完全相同。
+// Each settings page owns its data and renderer dependencies only when selected,
+// matching React's dynamic page boundary.
+function settingsPage(loader: AsyncComponentLoader) {
+  return defineAsyncComponent({
+    loader,
+    // Nuxt owns an outer Suspense; each panel must display its own loading UI.
+    suspensible: false,
+    loadingComponent: SettingsPageLoading,
+    delay: 0,
+  });
+}
 
-  loadingComponent 保留：它渲染一个 role=status 的「Loading…」，与 React
-  `{ loading: SettingsPageLoading }` 是同一句。
-*/
-const IntegrationsSettings = defineAsyncComponent({
-  loader: () =>
-    import("@/components/workspace/settings/IntegrationsSettings.vue"),
-  loadingComponent: SettingsPageLoading,
-});
-/*
-  与 React sections 的 icon 一一对应。
+const AccountSettings = settingsPage(
+  () => import("@/components/workspace/settings/AccountSettings.vue"),
+);
+const AppearanceSettings = settingsPage(
+  () => import("@/components/workspace/settings/AppearanceSettings.vue"),
+);
+const NotificationSettings = settingsPage(
+  () => import("@/components/workspace/settings/NotificationSettings.vue"),
+);
+const ChannelConnections = settingsPage(
+  () => import("@/components/workspace/channels/ChannelConnections.vue"),
+);
+const MemorySettings = settingsPage(
+  () => import("@/components/workspace/settings/MemorySettings.vue"),
+);
+const SubagentSettings = settingsPage(
+  () => import("@/components/workspace/settings/SubagentSettings.vue"),
+);
+const ModelSettings = settingsPage(
+  () => import("@/components/workspace/settings/ModelSettings.vue"),
+);
+const AboutSettings = settingsPage(
+  () => import("@/components/workspace/settings/AboutSettings.vue"),
+);
 
-  `satisfies Record<SettingsSection, Component>` 不是装饰：少一个分区，
-  下面 `SECTION_ICONS[id]` 那处索引本来就会红；**多一个**却一直没人查——
-  `as const` 对多出来的键一声不响，于是「分区已经删了、图标还留着」
-  可以一路全绿地烂着。加上之后两个方向都由 tsc 挡住（wave 106）。
-*/
 const SECTION_ICONS = {
+  models: Bot,
   account: User,
   appearance: Palette,
   notification: Bell,
   channels: Cable,
-  integrations: PlugZap,
   memory: Brain,
-  tools: Wrench,
   subagents: UsersRound,
-  skills: Sparkles,
   about: Info,
 } as const satisfies Record<SettingsSection, Component>;
 
@@ -225,7 +225,7 @@ function onOpenChange(open: boolean) {
       data-testid="settings-dialog"
       :close-label="$i18n.t.value.primitives.close"
       :aria-describedby="undefined"
-      class="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col overflow-y-hidden! sm:max-w-5xl md:max-w-6xl [@media(max-height:360px)]:h-[calc(100dvh-32px)] [@media(max-height:360px)]:max-h-[calc(100dvh-32px)] [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:p-[8px]"
+      class="[container-type:size] flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col overflow-y-auto! [container-name:settings-dialog] sm:max-w-5xl md:max-w-6xl [@media(max-height:360px)]:h-[calc(100dvh-32px)] [@media(max-height:360px)]:max-h-[calc(100dvh-32px)] [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:p-[8px]"
       @open-auto-focus="focusInitial"
       @close-auto-focus="restoreFocus"
     >
@@ -236,34 +236,11 @@ function onOpenChange(open: boolean) {
         </p>
       </DialogHeader>
       <!--
-        **`grid-cols-[minmax(0,1fr)]` 是基础档，不是多余的**（2026-09-18 第三十九轮）。
-
-        原来只写了 `md:grid-cols-[220px_minmax(0,1fr)]`：**md 以下没有显式列模板**，
-        隐式列是 `auto`，而栅格项的 `min-width` 默认是 `auto`——于是**列被内容的
-        固有最小宽度撑开**，而不是把内容压住。设置对话框在 360px 上宽 328、
-        那一格本该是 278，装上 provider 夹具之后实测：
-
-            列宽        本仓 296.9px / 上游 500.1px
-            面板右边界  本仓 338 / 上游 541      对话框右边界 344，overflow: visible
-
-        也就是说上游那块面板**直接冲出对话框和视口 181px**。另外九个分区看不出来
-        只是因为它们的固有最小宽度本来就小于 278（integrations 241、notification 233、
-        mcp 180）——**这不是「没问题」，是「余量恰好还够」**，
-        见 settings-narrow-screen.spec.ts 文件头那段判词。
-
-        **为什么修列而不是给面板加 `min-w-0`**：md 以下 `nav` 和这块面板在**同一列**里，
-        列的固有最小宽度取两者的较大值。修列一次盖住两个，而且和 `md:` 那一档
-        写法同形。两个应用是同一行代码，按两边同改。
-
-        ⚠ **这一条是「不再撑破」的结构保证，不是当前门禁验得到的**（实测）：
-        同一轮把「移除 provider 配置」那颗按钮改成可换行之后，面板的固有最小宽度
-        掉到 278 以下，于是**撤掉这行类、门禁照样绿**（变异验证 `2 passed`）。
-        它守的是**下一条长文案**：撤掉它、同时把那颗按钮改回 `whitespace-nowrap`，
-        门禁报的就从「余量不足」变成「面板撑出了栅格格子」。
-        翻案判据：哪天有读数证明隐式列不会被撑开。
+        窄屏列显式使用 minmax(0,1fr)，避免 nav 或面板的固有宽度撑破隐式 auto 列。
+        该约束属于栅格，不在每个面板重复补偿。
       -->
       <div
-        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] [@media(max-height:360px)]:grid-rows-[minmax(1rem,1fr)_minmax(1rem,1fr)]"
+        class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 max-md:flex-none md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] [@container_settings-dialog_(height<28rem)]:flex-none [@container_settings-dialog_(height<28rem)]:grid-rows-[auto]"
       >
         <nav
           class="bg-sidebar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border p-2"
@@ -291,7 +268,7 @@ function onOpenChange(open: boolean) {
           </ul>
         </nav>
         <ScrollArea
-          class="h-full min-h-0 min-w-0 rounded-lg border [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0!"
+          class="h-full min-h-0 min-w-0 rounded-lg border max-md:h-auto max-md:[&_[data-slot=scroll-area-viewport]]:h-auto max-md:[&_[data-slot=scroll-area-viewport]]:max-h-[100cqh] [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0! [@container_settings-dialog_(height<28rem)]:h-auto [@container_settings-dialog_(height<28rem)]:[&_[data-slot=scroll-area-viewport]]:h-auto [@container_settings-dialog_(height<28rem)]:[&_[data-slot=scroll-area-viewport]]:max-h-[100cqh]"
         >
           <!--
             窄屏（<sm）下对话框只有 343px 宽，这一层自己的内边距再加上集成页那张卡的
@@ -299,24 +276,20 @@ function onOpenChange(open: boolean) {
             小屏降一档；sm 以上仍是桌面那一版量过的 24px。
           -->
           <div class="w-full max-w-full min-w-0 space-y-8 p-4 sm:p-6">
-            <AccountSettings v-if="settings.section.value === 'account'" />
+            <ModelSettings v-if="settings.section.value === 'models'" />
+            <AccountSettings v-else-if="settings.section.value === 'account'" />
             <AppearanceSettings
               v-else-if="settings.section.value === 'appearance'"
             />
             <NotificationSettings
               v-else-if="settings.section.value === 'notification'"
             />
-            <IntegrationsSettings
-              v-else-if="settings.section.value === 'integrations'"
-            />
             <ChannelConnections
               v-else-if="settings.section.value === 'channels'"
             />
-            <ToolSettings v-else-if="settings.section.value === 'tools'" />
             <SubagentSettings
               v-else-if="settings.section.value === 'subagents'"
             />
-            <SkillSettings v-else-if="settings.section.value === 'skills'" />
             <MemorySettings v-else-if="settings.section.value === 'memory'" />
             <AboutSettings v-else-if="settings.section.value === 'about'" />
           </div>

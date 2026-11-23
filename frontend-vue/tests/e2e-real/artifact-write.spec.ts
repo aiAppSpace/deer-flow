@@ -48,7 +48,7 @@ async function selectPresentedArtifact(
   await expect(page.locator("#artifacts")).toBeVisible({ timeout: 30_000 });
 }
 
-test("real Gateway streams a write-file draft into the artifact panel", async ({
+test("real Gateway writes a file that the user can open and edit", async ({
   page,
   context,
 }) => {
@@ -72,6 +72,20 @@ test("real Gateway streams a write-file draft into the artifact panel", async ({
   await textarea.fill(fixture.prompt);
   await textarea.press("Enter");
 
+  // A write that returns before the 100ms pending-selection delay need not
+  // open automatically. Open its actual tool step through the public UI;
+  // the long-pending stream suite separately verifies live draft auto-open.
+  await expect(
+    page
+      .locator('[data-role="ai"]')
+      .getByText("hi from replay.", { exact: true }),
+  ).toBeVisible({ timeout: 60_000 });
+  await page.getByRole("button", { name: /^\d+ more steps?$/ }).click();
+  await page
+    .getByText("Create the requested output file with exact content", {
+      exact: true,
+    })
+    .click();
   const artifacts = page.locator("#artifacts");
   await expect(artifacts).toBeVisible({ timeout: 60_000 });
   await expect(artifacts.getByText("note.txt", { exact: true })).toBeVisible();
@@ -81,20 +95,8 @@ test("real Gateway streams a write-file draft into the artifact panel", async ({
 
   await expect(page).toHaveURL(/\/workspace\/chats\/[0-9a-f-]+$/);
 
-  /*
-    产物出现**不等于** run 结束——write-file 在流式中途就落盘，模型还会继续输出。
-    下面的 PUT 直接打 Gateway，而 Gateway 对同一 thread 有硬约束：run 在飞就拒绝
-    保存（`Thread has a run in flight. Save after the run finishes.`）。此前这里
-    没有任何等待，靠的是「PUT 发出去时 run 通常已经结束」——机器空闲时确实如此，
-    整套 `make e2e-backend` 连跑 8 个套件时红过一次。
-
-    Stop 按钮只在 `streaming` 为真时渲染，是产品自己的在飞信号。实测确认过它
-    确实会出现（run 期间轮询到 `true`），所以这不是一条永远立即通过的空断言；
-    只是空闲机器上 run 早已结束，等待通常是零成本。
-
-    `toBeHidden` 有一个「等得太早」的洞：run 还没开始时 Stop 也是 hidden。这里
-    不受影响——上面已经断言产物内容流出来了，run 必然已经开始。
-  */
+  // The rendered replay answer proves the run started. Wait for its own Stop
+  // control to retire before issuing PUT: Gateway rejects saves during a run.
   await expect(page.getByLabel("Stop")).toBeHidden({ timeout: 60_000 });
 
   const threadId = page.url().split("/").at(-1)!;
@@ -157,6 +159,7 @@ test("real Gateway streams a write-file draft into the artifact panel", async ({
   const browserLoad = await browserLoadPromise;
   expect(browserLoad.status()).toBe(206);
   expect(browserLoad.request().headers().range).toBe("bytes=0-1048575");
+  expect(await browserLoad.finished()).toBeNull();
   expect(new TextDecoder().decode(await browserLoad.body())).toBe(
     "server baseline",
   );
@@ -193,6 +196,28 @@ test("real Gateway streams a write-file draft into the artifact panel", async ({
     "vue draft survives",
   );
   await formalPanel.getByLabel("Discard changes", { exact: true }).click();
+
+  // The Query focus lifecycle reads document visibility. A window focus event
+  // alone is not the React/TanStack visibility-restoration contract.
+  expect(await page.evaluate(() => document.visibilityState)).toBe("visible");
+  const restoredReadPromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "GET" &&
+      response.url().includes("/artifacts/mnt/user-data/outputs/note.txt"),
+  );
+  await page.evaluate(() => {
+    document.dispatchEvent(new Event("visibilitychange", { bubbles: true }));
+  });
+  const restoredRead = await restoredReadPromise;
+  expect(restoredRead.status()).toBe(206);
+  expect(restoredRead.request().headers().range).toBe("bytes=0-1048575");
+  expect(await restoredRead.finished()).toBeNull();
+  expect(new TextDecoder().decode(await restoredRead.body())).toBe(
+    "remote winner",
+  );
+  await expect(
+    formalPanel.getByText("remote winner", { exact: true }),
+  ).toBeVisible();
 
   const uploads = [
     {

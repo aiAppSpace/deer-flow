@@ -67,7 +67,7 @@ describe("getGatewayConfig", () => {
     const cfg = getGatewayConfig();
 
     expect(cfg.internalGatewayUrl).toBe("http://127.0.0.1:8001");
-    expect(cfg.trustedOrigins).toEqual(["http://localhost:3000"]);
+    expect(cfg.trustedOrigins).toEqual(["http://localhost:3200"]);
   });
 
   test("returns localhost defaults when env is unset in production (regression: issue #2705)", async () => {
@@ -78,7 +78,7 @@ describe("getGatewayConfig", () => {
     expect(() => getGatewayConfig()).not.toThrow();
     const cfg = getGatewayConfig();
     expect(cfg.internalGatewayUrl).toBe("http://127.0.0.1:8001");
-    expect(cfg.trustedOrigins).toEqual(["http://localhost:3000"]);
+    expect(cfg.trustedOrigins).toEqual(["http://localhost:3200"]);
   });
 
   test("uses env values verbatim when set, regardless of NODE_ENV", async () => {

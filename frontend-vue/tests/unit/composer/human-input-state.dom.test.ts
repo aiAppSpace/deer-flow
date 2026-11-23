@@ -1,6 +1,6 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import HumanInputCard from "@/components/chat/HumanInputCard.vue";
@@ -16,7 +16,21 @@ import {
   workspaceToastKey,
 } from "@/core/workspace-shell/toast";
 
+// These tests own message-group and interaction state, not the Markdown renderer.
+// Mock its module boundary so the async content pipeline cannot outlive the fixture.
+vi.mock("@/components/chat/MessageMarkdown.vue", () => ({
+  default: {
+    name: "MessageMarkdown",
+    props: ["content"],
+    template: "<div data-testid='markdown'>{{ content }}</div>",
+  },
+}));
+
 const toastStore = createWorkspaceToastStore();
+const wrappers: ReturnType<typeof mount>[] = [];
+afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+});
 
 const request: HumanInputRequest = {
   version: 1,
@@ -62,7 +76,7 @@ function mountHumanInput(
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return mount(MessageList, {
+  const wrapper = mount(MessageList, {
     props: {
       messages: [requestMessage],
       rawMessages: [requestMessage],
@@ -77,13 +91,14 @@ function mountHumanInput(
       provide: { [workspaceToastKey as symbol]: toastStore },
       plugins: [[VueQueryPlugin, { queryClient }]],
       stubs: {
-        StreamMarkdown: { template: "<div />" },
         ReferenceAttachment: true,
         WorkspaceChangesBadge: true,
         SubtaskCard: true,
       },
     },
   });
+  wrappers.push(wrapper);
+  return wrapper;
 }
 
 /*
@@ -103,6 +118,40 @@ describe("Human Input state machine", () => {
       $i18n: { t: ref(enUS), locale: ref("en-US") },
     }));
   });
+
+  it.each(["threadId", "editOwnerKey"] as const)(
+    "retires the old %s response without clearing a newer pending response",
+    async (ownerProp) => {
+      let rejectOld!: (error: Error) => void;
+      let resolveNew!: (accepted: boolean) => void;
+      const submit = vi
+        .fn<() => Promise<boolean>>()
+        .mockImplementationOnce(
+          () => new Promise<boolean>((_, reject) => (rejectOld = reject)),
+        )
+        .mockImplementationOnce(
+          () => new Promise<boolean>((resolve) => (resolveNew = resolve)),
+        );
+      const wrapper = mountHumanInput(submit, {
+        editOwnerKey: "user-1/agent-1",
+      });
+      await wrapper.get("textarea").setValue("Executive team");
+      await submitCard(wrapper);
+      expect(wrapper.getComponent(HumanInputCard).props("pending")).toBe(true);
+      await wrapper.setProps({ [ownerProp]: "new-owner" });
+      expect(wrapper.getComponent(HumanInputCard).props("pending")).toBe(false);
+      await submitCard(wrapper);
+      expect(submit).toHaveBeenCalledTimes(2);
+      expect(wrapper.getComponent(HumanInputCard).props("pending")).toBe(true);
+      rejectOld(new Error("Retired request failed"));
+      await flushPromises();
+      expect(wrapper.getComponent(HumanInputCard).props("pending")).toBe(true);
+      expect(toastStore.toasts.value).toEqual([]);
+      resolveNew(false);
+      await flushPromises();
+      expect(wrapper.getComponent(HumanInputCard).props("pending")).toBe(false);
+    },
+  );
 
   /*
     提交**抛异常**（不是 resolve(false)）时上游 `message-list.tsx:590` 会

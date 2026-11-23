@@ -6,6 +6,11 @@
   【边界与注意】   只豁免动态 backend/user/code/file/URL/协议值和明确测试 fixture。
 */
 
+import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,6 +18,35 @@ import {
   scanProductVueFiles,
   scanVueSource,
 } from "../../../scripts/lib/i18n-source-guard.mjs";
+
+const checkoutRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const testFixtureFiles = [
+  "app/pages/__m0/splitpanes.vue",
+  "app/pages/__m0/visual.vue",
+  // A compiled stable-slot caller is required to exercise real Presence ref lifetime.
+  "tests/unit/ui/fixtures/stable-overlay.fixture.vue",
+];
+
+// 从 Git 的实际 checkout 独立枚举，不借用扫描器的目录白名单或 fixture 前缀。
+// 新增 SFC 自动进入集合；漏扫、重复、等数量替换都必须失败。
+function checkoutVueFiles() {
+  return execFileSync(
+    "git",
+    [
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+      "--",
+      "*.vue",
+    ],
+    { cwd: checkoutRoot, encoding: "utf8" },
+  )
+    .split("\0")
+    .filter((file) => file && existsSync(join(checkoutRoot, file)))
+    .sort();
+}
 
 describe("i18n source guard", () => {
   it("detects template text, accessible attributes and UI-bound script fallbacks", () => {
@@ -61,6 +95,8 @@ const errorCode = "permission_denied"
 </script>
 <template>
   <pre>{{ code }}</pre>
+  <span>SKILL.md</span><span>.skill</span><span>1 MiB</span>
+  <input placeholder="https://api.example.com/v1" />
   <p>{{ backendError.detail }}</p>
   <p>{{ user.content }}</p>
   <span :title="file.name">{{ file.name }}</span>
@@ -74,8 +110,13 @@ const errorCode = "permission_denied"
 
   it("keeps the full product Vue surface free of untranslated core English", () => {
     const inventory = productVueInventory();
-    expect(inventory.checked).toHaveLength(275);
+    expect(inventory.checked).toEqual(
+      checkoutVueFiles().filter((file) => !testFixtureFiles.includes(file)),
+    );
     expect(inventory.checked).toContain("app/app.vue");
+    expect(inventory.checked).toContain(
+      "app/components/workspace/ProjectAffiliationBadge.vue",
+    );
     expect(inventory.checked).toContain(
       "app/components/chat/AssistantTurnActions.vue",
     );
@@ -91,6 +132,7 @@ const errorCode = "permission_denied"
     expect(inventory.checked).toEqual(
       expect.arrayContaining([
         "app/components/chat/ProcessingMessageGroup.vue",
+        "app/components/chat/ProcessingTokenSummary.vue",
         "app/components/chat/ProcessingToolStep.vue",
         "app/components/chat/ReasoningDisclosure.vue",
         "app/components/chat/RunActivity.vue",
@@ -102,6 +144,7 @@ const errorCode = "permission_denied"
     expect(inventory.checked).toEqual(
       expect.arrayContaining([
         "app/components/ui/alert-dialog/AlertDialogContent.vue",
+        "app/components/ui/code-block/CodeBlock.vue",
         "app/components/ui/command/CommandInput.vue",
         "app/components/ui/dialog/DialogContent.vue",
         "app/components/ui/dropdown-menu/DropdownMenuContent.vue",
@@ -113,26 +156,17 @@ const errorCode = "permission_denied"
         "app/components/ui/tooltip/TooltipContent.vue",
       ]),
     );
-    expect(inventory.excludedTestFixtures).toEqual([
-      "app/pages/__m0/splitpanes.vue",
-      "app/pages/__m0/visual.vue",
-    ]);
+    expect(inventory.excludedTestFixtures).toEqual(testFixtureFiles);
     expect(scanProductVueFiles()).toEqual([]);
     /*
-      **显式超时，不吃 5 秒的默认值。** 这一条要把 243 份产品 SFC 全部过一遍
-      AST，成本随 SFC 数线性涨；wave 148 加了一份外壳组件之后，它在整套并发
-      跑的时候实测 6689ms 撞上默认上限，而**单独跑是 2.2~5.3 秒**（连测三次）。
-      也就是说红的是负载不是断言——与 wave 108 把 expect 预算 5s 抬到 10s 同一类。
-      留三倍余量；哪天它真的慢到 15 秒，那是扫描面出了问题，值得当成信号去查。
+      全量产品 SFC 都必须经过 AST 文案扫描，成本随实际文件数增长。
+      保留原有 15 秒预算；集合比较不代替文案扫描，也不扩大扫描豁免。
     */
   }, 15_000);
 
   /*
-    `PRODUCT_ROOTS` 是白名单，而只从白名单出发的门禁看不见「不在名单目录下」
-    的那些（线索 186）。**上面那条 `toHaveLength(243)` 挡不住它**：一个
-    `app/error.vue` 不进 `checked`，217 一动不动。wave 84 实测过——四道门禁
-    （i18n-source-check / i18n-check / 本文件 / doc-facts）**全绿**，
-    而那份 SFC 里四条硬编码英文会照常发给用户。
+    目录白名单之外的 SFC 也必须有明确扫描归属。
+    独立 checkout 集合校验之外，保留生产 inventory 的 unscanned 诊断合同。
   */
   it("checkout 里没有任何 .vue 落在扫描面之外", () => {
     expect(

@@ -1,37 +1,7 @@
-/*
-  【文件职责】     mermaid 槽位的行为验收：成功出图、失败保持代码块、晚到结果不覆盖新内容。
-  【架构位置】     门禁测试
-  【主要导出】     无
-  【依赖关系】     app/components/markdown/*（mermaid 包在模块级被 mock）
-  【边界与注意】   ⚠️ **夹具录不到这一屏。** `tests/fixtures/react-markdown-dom.json` 的
-                   `mermaid-block` 一条记的是**代码块回退**，不是图：录制脚本
-                   `scripts/record-react-markdown.mjs` 只把上游的 remark/rehype 插件
-                   转译进来，没有传 `plugins`，于是上游 `de()` 拿不到 mermaid 插件、
-                   走的是 `ss` 里的代码块分支。加上 mermaid 只在浏览器里渲染、
-                   React SSR 本来也出不了图——这一屏没有可签入的上游 SSR 夹具。
-
-                   所以下面「上游形状」那一组的判据来源是**跑起来的 React 应用**：
-                   2026-08-31 用一次性 probe 在 e2e-parity 的
-                   `thread-history-mermaid` 场景上，把两个应用的 mermaid 块、
-                   下载下拉、复制按钮、缩放 transform、全屏遮罩逐段抓下来对比，
-                   除 Vue 的 `v-if` 注释锚点外**逐字符相同**。这里把当时量到的形状
-                   固化下来，让它以后不能被悄悄改掉。probe 本身不签入——它要两个应用
-                   同时在跑，而这个门禁必须能单独跑。
-
-                   台账（`baseline/parity-diff.json`）看不见这一组里除第一条以外的
-                   任何一条：下拉、全屏、缩放都要先交互；全屏还会 portal 出去把整棵
-                   树遮掉。这正是它们要在这里有断言的原因。
-
-                   mermaid 包在模块级 mock 掉：真包数百 KB、要注册全局 config，
-                   在 happy-dom 里跑一遍既慢又和别的用例互相污染。这里要验的是**分派与容错**，
-                   不是 mermaid 自己画得对不对。
-
-                   最要紧的一条是「解析失败是常态」：`graph TD; A--` 这样的中间态在流式
-                   期间每个 chunk 都会出现，把它当异常处理会让每条含图的消息闪烁。
-*/
+/* Mermaid loading/error/success interactions mirror the installed React Streamdown. */
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import StreamMarkdown from "@/components/markdown/StreamMarkdown.vue";
 import { richContentComponents } from "@/components/markdown/components";
@@ -51,7 +21,10 @@ const PIPELINE = {
   components: richContentComponents as unknown as Record<string, unknown>,
 };
 
+afterEach(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
+  vi.stubGlobal("IntersectionObserver", undefined);
   mermaidMock.initialize.mockReset();
   mermaidMock.parse.mockReset();
   mermaidMock.render.mockReset();
@@ -74,7 +47,7 @@ describe("mermaid 槽位", () => {
     wrapper.unmount();
   });
 
-  it("解析失败（流式中间态的常态）保持代码块，不清空也不抛", async () => {
+  it("initial parse failure exposes the upstream error and original code", async () => {
     mermaidMock.parse.mockRejectedValue(new Error("incomplete"));
 
     const wrapper = mount(StreamMarkdown, {
@@ -83,9 +56,8 @@ describe("mermaid 槽位", () => {
     await flushPromises();
 
     expect(wrapper.find('[data-streamdown="mermaid"]').exists()).toBe(false);
-    expect(wrapper.find('[data-streamdown="code-block"]').text()).toContain(
-      "graph TD; A--",
-    );
+    expect(wrapper.get("details pre").text()).toContain("graph TD; A--");
+    expect(wrapper.text()).toContain("Mermaid Error: incomplete");
     expect(mermaidMock.render).not.toHaveBeenCalled();
     wrapper.unmount();
   });

@@ -6,8 +6,8 @@
   【边界与注意】   mutation 不乐观伪装成功；scope dispose 中止在途 I/O，完整 Gateway 响应原样进入同一缓存。
 */
 
-import { onScopeDispose } from "vue";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useScopedGatewayRequests } from "@/composables/useScopedGatewayRequests";
 
 import {
   clearMemory,
@@ -17,6 +17,7 @@ import {
   importMemory,
   loadMemory,
   updateMemoryFact,
+  type MemoryImportDispatchObserver,
 } from "@/core/memory/api";
 import { MEMORY_QUERY_KEY } from "@/core/memory/query-keys";
 import type {
@@ -25,69 +26,51 @@ import type {
   UserMemory,
 } from "@/core/memory/types";
 
-function useScopedRequests() {
-  const controllers = new Set<AbortController>();
-  async function run<T>(task: (signal: AbortSignal) => Promise<T>) {
-    const controller = new AbortController();
-    controllers.add(controller);
-    try {
-      const result = await task(controller.signal);
-      if (controller.signal.aborted)
-        throw new DOMException("Aborted", "AbortError");
-      return result;
-    } finally {
-      controllers.delete(controller);
-    }
-  }
-  onScopeDispose(() => {
-    for (const controller of controllers) controller.abort();
-    controllers.clear();
-  });
-  return run;
-}
-
-export function useMemory() {
+export function useMemory(observeDispatch?: MemoryImportDispatchObserver) {
   const queryClient = useQueryClient();
-  const runScoped = useScopedRequests();
+  const requests = useScopedGatewayRequests();
   const query = useQuery({
     queryKey: MEMORY_QUERY_KEY,
     queryFn: ({ signal }) => loadMemory({ signal }),
-    retry: false,
-    refetchOnWindowFocus: false,
   });
   const sync = (next: UserMemory) => {
     queryClient.setQueryData(MEMORY_QUERY_KEY, next);
   };
-  const clear = useMutation({
-    mutationFn: () => runScoped((signal) => clearMemory({ signal })),
+  const clear = requests.mutation<UserMemory>({
+    mutationFn: (_input, signal) => clearMemory({ signal }),
     onSuccess: sync,
   });
-  const create = useMutation({
-    mutationFn: (input: MemoryFactInput) =>
-      runScoped((signal) => createMemoryFact(input, { signal })),
+  const create = requests.mutation({
+    mutationFn: (input: MemoryFactInput, signal) =>
+      createMemoryFact(input, { signal }),
     onSuccess: sync,
   });
-  const remove = useMutation({
-    mutationFn: (factId: string) =>
-      runScoped((signal) => deleteMemoryFact(factId, { signal })),
+  const remove = requests.mutation({
+    mutationFn: (factId: string, signal) =>
+      deleteMemoryFact(factId, { signal }),
     onSuccess: sync,
   });
-  const importDocument = useMutation({
-    mutationFn: (input: UserMemory) =>
-      runScoped((signal) => importMemory(input, { signal })),
+  const importDocument = requests.mutation({
+    mutationFn: (input: UserMemory, signal) =>
+      observeDispatch
+        ? importMemory(input, { signal }, observeDispatch)
+        : importMemory(input, { signal }),
     onSuccess: sync,
   });
-  const exportDocument = useMutation({
-    mutationFn: () => runScoped((signal) => exportMemory({ signal })),
+  const exportDocument = requests.mutation<UserMemory>({
+    mutationFn: (_input, signal) => exportMemory({ signal }),
   });
-  const update = useMutation({
-    mutationFn: ({
-      factId,
-      input,
-    }: {
-      factId: string;
-      input: MemoryFactPatchInput;
-    }) => runScoped((signal) => updateMemoryFact(factId, input, { signal })),
+  const update = requests.mutation({
+    mutationFn: (
+      {
+        factId,
+        input,
+      }: {
+        factId: string;
+        input: MemoryFactPatchInput;
+      },
+      signal,
+    ) => updateMemoryFact(factId, input, { signal }),
     onSuccess: sync,
   });
   return {

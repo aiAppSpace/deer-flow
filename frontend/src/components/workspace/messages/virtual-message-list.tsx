@@ -35,6 +35,7 @@ type ScrollToGroupOptions = {
 type VirtualMessageListProps = {
   groups: readonly MessageGroup[];
   isLoading: boolean;
+  tailRequest?: number;
   renderGroup: (group: MessageGroup, index: number) => ReactNode;
   /**
    * Extra content rendered after a group inside its row (e.g. schedule event
@@ -60,12 +61,26 @@ export const VirtualMessageList = forwardRef<
   VirtualMessageListHandle,
   VirtualMessageListProps
 >(function VirtualMessageList(
-  { groups, isLoading, renderGroup, renderAfterGroup, onActiveGroupChange },
+  {
+    groups,
+    isLoading,
+    tailRequest,
+    renderGroup,
+    renderAfterGroup,
+    onActiveGroupChange,
+  },
   ref,
 ) {
   const { isAtBottom, scrollRef, scrollToBottom, stopScroll } =
     useStickToBottomContext();
   const listRef = useRef<HTMLDivElement | null>(null);
+  const previousTailRequest = useRef(tailRequest);
+  useLayoutEffect(() => {
+    if (tailRequest === previousTailRequest.current) return;
+    previousTailRequest.current = tailRequest;
+    if (tailRequest !== undefined)
+      void scrollToBottom({ animation: "instant" });
+  }, [tailRequest, scrollToBottom]);
   const activeIndex = isLoading ? groups.length - 1 : -1;
   const getItemKey = useCallback(
     (index: number) => groupKey(groups[index], index),
@@ -82,16 +97,18 @@ export const VirtualMessageList = forwardRef<
     },
     [activeIndex],
   );
+  const shouldVirtualize = groups.length >= VIRTUALIZATION_THRESHOLD;
   const virtualizer = useVirtualizer({
+    enabled: shouldVirtualize,
     count: groups.length,
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
     getItemKey,
     getScrollElement: () => scrollRef.current,
+    initialOffset: () => scrollRef.current?.scrollTop ?? 0,
     overscan: 8,
     rangeExtractor,
   });
   const virtualItems = virtualizer.getVirtualItems();
-  const shouldVirtualize = groups.length >= VIRTUALIZATION_THRESHOLD;
   const firstVirtualIndex = virtualItems[0]?.index ?? -1;
   const lastVirtualIndex = virtualItems.at(-1)?.index ?? -1;
   const positionedInitialVirtualWindowRef = useRef(false);
@@ -303,7 +320,11 @@ export const VirtualMessageList = forwardRef<
 
   if (!shouldVirtualize) {
     return (
-      <div ref={listRef} className="flex flex-col gap-8">
+      <div
+        ref={listRef}
+        className="flex flex-col gap-8"
+        onFocusCapture={stopScroll}
+      >
         {groups.map((group, index) => (
           <div key={getItemKey(index)} data-message-group-index={index}>
             {renderGroup(group, index)}
@@ -317,6 +338,7 @@ export const VirtualMessageList = forwardRef<
   return (
     <div
       ref={listRef}
+      onFocusCapture={stopScroll}
       className="relative w-full"
       style={{ height: `${virtualizer.getTotalSize()}px` }}
     >

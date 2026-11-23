@@ -8,7 +8,7 @@
                    如果它红了，任何跨应用比对的结论都不成立，先修这里。
 */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./support/test";
 
 import {
   FIRST_MARKER,
@@ -23,6 +23,7 @@ const REACT_APP = process.env.E2E_REACT_APP_URL ?? "http://localhost:3116";
 const GATEWAY = process.env.E2E_GATEWAY_URL ?? "http://127.0.0.1:8021";
 
 const threadPath = `/workspace/chats/${FIXTURE_THREAD_ID}`;
+const batchesPath = `/api/threads/${FIXTURE_THREAD_ID}/subagent-batches`;
 
 test.skip(
   !reactAppPresent,
@@ -34,11 +35,32 @@ test.describe.configure({ mode: "serial" });
 test.beforeAll(async ({ request }) => {
   const seeded = await seedFixtureThread(request, GATEWAY);
   expect(seeded.status(), await seeded.text()).toBe(200);
+  const features = await request.get(`${GATEWAY}/api/features`);
+  expect(features.status(), await features.text()).toBe(200);
+  await expect(features.json()).resolves.toMatchObject({
+    subagent_batches: { repository_available: true, worker_running: false },
+  });
 });
 
 /** 等到线程内容真的渲染出来，再取样。 */
 async function openFixtureThread(page: Page, base: string) {
-  await page.goto(`${base}${threadPath}`);
+  // Message text and the independently loaded batch list have different owners.
+  // Observe this navigation's actual response before asserting its empty UI.
+  const batches = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.origin === new URL(base).origin &&
+      url.pathname === batchesPath &&
+      response.request().method() === "GET"
+    );
+  });
+  const [, response] = await Promise.all([
+    page.goto(`${base}${threadPath}`),
+    batches,
+  ]);
+  expect(response.status(), await response.text()).toBe(200);
+  await expect(response.json()).resolves.toEqual([]);
+  await expect(page.getByTestId("subagent-batches-trigger")).toHaveCount(0);
   await expect(
     page.getByText(FIRST_MARKER, { exact: false }).first(),
   ).toBeVisible({
@@ -112,7 +134,52 @@ for (const [name, base] of [
   test(`${name} renders the same accessibility tree on two loads`, async ({
     page,
   }) => {
-    await openFixtureThread(page, base);
+    // Hold only the real first batch response until message content is visible.
+    // A text-only readiness check must fail here, without a timing-based sleep.
+    const matchesBatches = (url: URL) =>
+      url.origin === new URL(base).origin && url.pathname === batchesPath;
+    let releaseResponse!: () => void;
+    const released = new Promise<void>((resolve) => {
+      releaseResponse = resolve;
+    });
+    await page.route(
+      matchesBatches,
+      async (route) => {
+        const response = await route.fetch();
+        await released;
+        await route.fulfill({ response });
+      },
+      { times: 1 },
+    );
+    let samplingReady = false;
+    let loadingError: unknown;
+    const firstLoad = openFixtureThread(page, base).then(
+      () => {
+        samplingReady = true;
+      },
+      (error: unknown) => {
+        loadingError = error;
+      },
+    );
+    try {
+      await expect(
+        page.getByText(FIRST_MARKER, { exact: false }).first(),
+      ).toBeVisible({ timeout: 60_000 });
+      await expect(
+        page.getByText(SECOND_MARKER, { exact: false }).first(),
+      ).toBeVisible();
+      await expect(page.getByTestId("subagent-batches-trigger")).toBeVisible();
+      expect(
+        samplingReady,
+        "pending batch data cannot authorize a whole-page sample",
+      ).toBe(false);
+    } finally {
+      releaseResponse();
+      await firstLoad;
+    }
+    // Cleanup always releases the real response; preserve an earlier assertion
+    // failure instead of replacing it with a later loading rejection.
+    if (loadingError !== undefined) throw loadingError;
     const first = await page.locator("body").ariaSnapshot();
 
     await page.goto("about:blank");

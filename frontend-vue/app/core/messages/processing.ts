@@ -2,10 +2,11 @@
   【文件职责】     把 assistant processing 消息组投影成稳定的推理、文本、工具步骤视图。
   【架构位置】     L3 DeerFlow 消息展示模型（纯 TS）
   【主要导出】     deriveProcessingMessageView 及 ProcessingStep 类型
-  【依赖关系】     core/messages/utils · core/types/message
+  【依赖关系】     core/messages/utils · core/types/message · core/threads/types
   【边界与注意】   只解释一个消息组；工具结果/browser frame 索引每组只构建一次，组件不得重扫。
 */
 
+import type { ArtifactEntry } from "@/core/threads/types";
 import type { Message } from "@/core/types/message";
 
 import {
@@ -38,7 +39,9 @@ export interface ProcessingToolCallStep extends ProcessingStepBase<"toolCall"> {
   name: string;
   args: Record<string, unknown>;
   result?: unknown;
+  resultMessage?: Extract<Message, { type: "tool" }>;
   browserView?: BrowserViewMeta;
+  artifacts?: ArtifactEntry[];
 }
 
 export type ProcessingStep =
@@ -86,11 +89,13 @@ function readBrowserView(message: Message): BrowserViewMeta | undefined {
 
 function indexToolCallData(messages: readonly Message[]) {
   const results = new Map<string, unknown>();
+  const resultMessages = new Map<string, Extract<Message, { type: "tool" }>>();
   const browserViews = new Map<string, BrowserViewMeta>();
 
   for (const message of messages) {
     if (message.type !== "tool" || !message.tool_call_id) continue;
     const id = message.tool_call_id;
+    if (!resultMessages.has(id)) resultMessages.set(id, message);
     if (!results.has(id)) {
       const text = extractTextFromMessage(message);
       if (text) results.set(id, parseToolResult(text));
@@ -101,12 +106,21 @@ function indexToolCallData(messages: readonly Message[]) {
     }
   }
 
-  return { browserViews, results };
+  return { browserViews, results, resultMessages };
 }
 
-function deriveSteps(messages: readonly Message[]): ProcessingStep[] {
+function deriveSteps(
+  messages: readonly Message[],
+  toolArtifacts: readonly ArtifactEntry[],
+): ProcessingStep[] {
   const steps: ProcessingStep[] = [];
-  const { browserViews, results } = indexToolCallData(messages);
+  const { browserViews, results, resultMessages } = indexToolCallData(messages);
+  const artifactsByToolCallId = new Map<string, ArtifactEntry[]>();
+  for (const entry of toolArtifacts) {
+    const entries = artifactsByToolCallId.get(entry.tool_call_id) ?? [];
+    entries.push(entry);
+    artifactsByToolCallId.set(entry.tool_call_id, entries);
+  }
 
   for (const [messageIndex, message] of messages.entries()) {
     if (message.type !== "ai") continue;
@@ -138,10 +152,12 @@ function deriveSteps(messages: readonly Message[]): ProcessingStep[] {
         messageId: message.id,
         type: "toolCall",
         name: toolCall.name,
-        args: toolCall.args,
+        args: toolCall.args ?? {},
       };
       if (toolCall.id) {
         if (results.has(toolCall.id)) step.result = results.get(toolCall.id);
+        step.resultMessage = resultMessages.get(toolCall.id);
+        step.artifacts = artifactsByToolCallId.get(toolCall.id);
         const browserView = browserViews.get(toolCall.id);
         if (browserView) step.browserView = browserView;
       }
@@ -159,8 +175,9 @@ function deriveSteps(messages: readonly Message[]): ProcessingStep[] {
  */
 export function deriveProcessingMessageView(
   messages: readonly Message[],
+  toolArtifacts: readonly ArtifactEntry[] = [],
 ): ProcessingMessageView {
-  const steps = deriveSteps(messages);
+  const steps = deriveSteps(messages, toolArtifacts);
   const lastToolCall = [...steps]
     .reverse()
     .find((step): step is ProcessingToolCallStep => step.type === "toolCall");

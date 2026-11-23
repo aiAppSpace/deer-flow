@@ -1,5 +1,5 @@
 {
-  "$comment": "React 与 Vue 在**开着鉴权**才到得了的那几屏上的双向差异（登录、安装向导）。主对照套件用的是关掉鉴权的构建，那两屏在它那里会直接跳走——wave 189 实测。这份清单与 parity-diff.json 同一条纪律：只能缩短，刷新用 make parity-auth-accept。",
+  "$comment": "React 与 Vue 在**开着鉴权**才到得了的那几屏上的双向差异（登录、安装向导）。主对照套件用的是关掉鉴权的构建，那两屏在它那里会直接跳走——wave 189 实测。这份清单与 parity-diff.json 同一条纪律：只能缩短，刷新用 make parity-auth-accept。 2026-11-01: requestFacts 新增完整请求关系的零差异目标；这是新增验收期望，未运行、未接受任何新观测差异，也不表示浏览器通过。",
   "entries": {
     "login-screen/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -15,7 +15,8 @@
       "depth": [],
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": []
+      "tabOrder": [],
+      "requestFacts": []
     },
     "login-screen/desktop/light/zh-CN": {
       "ariaOnlyReact": [],
@@ -31,7 +32,8 @@
       "depth": [],
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": []
+      "tabOrder": [],
+      "requestFacts": []
     },
     "auth-callback/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -45,15 +47,12 @@
       "depth": [],
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": []
+      "tabOrder": [],
+      "requestFacts": []
     },
     "auth-callback/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- paragraph: Signing you in..."
-      ],
-      "ariaOnlyVue": [
-        "- paragraph: 正在登录..."
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [],
       "requestBodies": [],
@@ -63,7 +62,8 @@
       "depth": [],
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": []
+      "tabOrder": [],
+      "requestFacts": []
     },
     "setup-screen/desktop/light/en-US": {
       "ariaOnlyReact": [],
@@ -79,35 +79,12 @@
       "depth": [],
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": []
+      "tabOrder": [],
+      "requestFacts": []
     },
     "setup-screen/desktop/light/zh-CN": {
-      "ariaOnlyReact": [
-        "- /placeholder: Confirm password",
-        "- /placeholder: Password (min. 8 characters)",
-        "- button \"Create Admin Account\"",
-        "- paragraph: Create admin account",
-        "- paragraph: Set up the administrator account to get started.",
-        "- text: Confirm Password",
-        "- text: Email",
-        "- text: Password",
-        "- textbox \"Confirm Password\":",
-        "- textbox \"Email\":",
-        "- textbox \"Password\":"
-      ],
-      "ariaOnlyVue": [
-        "- /placeholder: 再输入一次密码",
-        "- /placeholder: 密码（至少 8 个字符）",
-        "- button \"创建管理员账号\"",
-        "- paragraph: 先创建管理员账号再开始使用。",
-        "- paragraph: 创建管理员账号",
-        "- text: 密码",
-        "- text: 确认密码",
-        "- text: 邮箱",
-        "- textbox \"密码\":",
-        "- textbox \"确认密码\":",
-        "- textbox \"邮箱\":"
-      ],
+      "ariaOnlyReact": [],
+      "ariaOnlyVue": [],
       "requestsOnlyReact": [],
       "requestsOnlyVue": [
         "GET /api/v1/auth/me"
@@ -119,7 +96,8 @@
       "depth": [],
       "tabbablesOnlyReact": [],
       "tabbablesOnlyVue": [],
-      "tabOrder": []
+      "tabOrder": [],
+      "requestFacts": []
     }
   }
 }

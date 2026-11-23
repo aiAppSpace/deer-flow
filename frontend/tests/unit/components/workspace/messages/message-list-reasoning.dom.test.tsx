@@ -1,12 +1,27 @@
 import type { Message } from "@langchain/langgraph-sdk";
-import { afterEach, expect, it, rs } from "@rstest/core";
-import { cleanup, render } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, rs } from "@rstest/core";
+import {
+  cleanup,
+  render,
+  fireEvent,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
 
 import { MessageList } from "@/components/workspace/messages/message-list";
 import { I18nContext } from "@/core/i18n/context";
 import { enUS } from "@/core/i18n/locales/en-US";
 import type { MessageGroup } from "@/core/messages/utils";
+
+const clipboard = {
+  writeText: rs.fn<Clipboard["writeText"]>(() => Promise.resolve()),
+};
+beforeEach(() => {
+  rs.spyOn(navigator.clipboard, "writeText").mockImplementation(
+    clipboard.writeText,
+  );
+});
 
 const selectReasoning = rs.hoisted(() =>
   rs.fn((messages: Message[]) =>
@@ -50,7 +65,9 @@ rs.mock("@/components/workspace/messages/subtask-card", () => ({
 
 afterEach(() => {
   cleanup();
+  rs.restoreAllMocks();
   selectReasoning.mockClear();
+  clipboard.writeText.mockClear();
 });
 
 function reasoningMessage(kind: "processing" | "subagent", duration?: number) {
@@ -78,7 +95,16 @@ function reasoningMessage(kind: "processing" | "subagent", duration?: number) {
 }
 
 const getMessagesMetadata = () => undefined;
-function view(messages: Message[], isLoading: boolean, revision = 0) {
+function view(
+  messages: Message[],
+  isLoading: boolean,
+  revision = 0,
+  metadata: (
+    message: Message,
+  ) =>
+    | { streamMetadata: Record<string, unknown> }
+    | undefined = getMessagesMetadata,
+) {
   return (
     <I18nContext.Provider
       value={{ locale: "en-US", setLocale: () => undefined, t: enUS }}
@@ -92,7 +118,7 @@ function view(messages: Message[], isLoading: boolean, revision = 0) {
             isLoading,
             isThreadLoading: false,
             values: {},
-            getMessagesMetadata,
+            getMessagesMetadata: metadata,
           } as unknown as React.ComponentProps<typeof MessageList>["thread"]
         }
       />
@@ -149,3 +175,92 @@ it("reuses historical targets across actual streaming message updates", () => {
   }
   expect(selectReasoning).toHaveBeenCalledTimes(1);
 });
+
+const copyHuman: Message = {
+  type: "human",
+  id: "human-copy",
+  content: "Question",
+};
+const copyCompleted: Message = {
+  type: "ai",
+  id: "completed-copy",
+  content: "Completed answer",
+  additional_kwargs: { reasoning_content: "Completed thought" },
+};
+const copyLive: Message = {
+  type: "ai",
+  id: "live-copy",
+  content: "Streaming answer",
+  additional_kwargs: { reasoning_content: "Live thought" },
+};
+const copyHidden: Message = {
+  type: "human",
+  id: "hidden-copy",
+  content: "Save agent",
+  additional_kwargs: { hide_from_ui: true },
+};
+const copyOptimistic: Message = {
+  type: "human",
+  id: "optimistic-copy",
+  content: "Continue",
+};
+const copyTool: Message = {
+  type: "ai",
+  id: "tool-copy",
+  content: "",
+  tool_calls: [{ id: "call", name: "bash", args: {} }],
+};
+for (const [name, messages, liveIds] of [
+  ["new run waiting", [copyHuman, copyCompleted], []],
+  ["hidden control", [copyHuman, copyCompleted, copyHidden], []],
+  ["visible optimistic input", [copyHuman, copyCompleted, copyOptimistic], []],
+  [
+    "later live processing",
+    [copyHuman, copyCompleted, copyTool],
+    ["tool-copy"],
+  ],
+  [
+    "live answer before optimistic input",
+    [copyHuman, copyCompleted, copyLive, copyOptimistic],
+    ["live-copy"],
+  ],
+] as const) {
+  it(`reference copy ownership: ${name}`, async () => {
+    render(
+      view([...messages], true, 0, (message) =>
+        liveIds.some((id) => id === message.id)
+          ? { streamMetadata: { langgraph_node: "agent" } }
+          : undefined,
+      ),
+    );
+    expect(
+      screen.getAllByRole("button", { name: "Copy to clipboard" }),
+    ).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+    await waitFor(() =>
+      expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(
+        "Completed answer",
+      ),
+    );
+  });
+}
+for (const hidden of [false, true]) {
+  it(`reference live answer has no copy until settled, hidden=${hidden}`, async () => {
+    const messages = [copyHuman, copyLive, ...(hidden ? [copyHidden] : [])];
+    const metadata = (message: Message) =>
+      message.id === "live-copy"
+        ? { streamMetadata: { langgraph_node: "agent" } }
+        : undefined;
+    const subject = render(view(messages, true, 0, metadata));
+    expect(
+      screen.queryByRole("button", { name: "Copy to clipboard" }),
+    ).toBeNull();
+    subject.rerender(view(messages, false, 1, metadata));
+    fireEvent.click(screen.getByRole("button", { name: "Copy to clipboard" }));
+    await waitFor(() =>
+      expect(clipboard.writeText).toHaveBeenCalledExactlyOnceWith(
+        "Streaming answer",
+      ),
+    );
+  });
+}

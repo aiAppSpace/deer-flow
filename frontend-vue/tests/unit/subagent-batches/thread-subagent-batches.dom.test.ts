@@ -306,7 +306,9 @@ describe("ThreadSubagentBatches", () => {
     await openDrawer(wrapper);
     buttonWithText(enUS.subagentBatches.pause)!.click();
     await flushPromises();
-    expect(api.control).toHaveBeenCalledWith("thread-1", "b1", "pause");
+    expect(api.control).toHaveBeenCalledWith("thread-1", "b1", "pause", {
+      signal: expect.any(AbortSignal),
+    });
     expect(toastStore.toasts.value.at(-1)?.message).toBe("worker gone");
     wrapper.unmount();
   });

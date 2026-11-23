@@ -63,6 +63,49 @@ describe("classifyArtifact", () => {
     }
   });
 
+  it.each([
+    ["settings.conf", "text"],
+    ["component.mts", "typescript"],
+    ["entry.cts", "typescript"],
+    ["theme.less", "less"],
+    ["page.astro", "astro"],
+    ["types.pyi", "python"],
+    ["app.kt", "kotlin"],
+    ["entry.cxx", "cpp"],
+    ["app.cs", "csharp"],
+    ["shell.zsh", "zsh"],
+    ["data.json5", "json5"],
+    [".env", "dotenv"],
+    ["guide.mdx", "mdx"],
+    ["main.swift", "swift"],
+    ["module.clj", "clojure"],
+    ["Dockerfile", "dockerfile"],
+    ["Makefile", "makefile"],
+    [".gitignore", "git-commit"],
+    ["schema.graphql", "graphql"],
+    ["module.wasm", "wasm"],
+  ])("recognizes React's current text language for %s", (name, language) => {
+    expect(classifyArtifact(`/mnt/user-data/outputs/${name}`)).toMatchObject({
+      kind: "text",
+      language,
+    });
+  });
+
+  it("shows unknown write-file content as a transient text draft without promoting the stored file", () => {
+    expect(
+      classifyArtifact(
+        "write-file:/mnt/user-data/outputs/README?tool_call_id=call-1",
+      ),
+    ).toMatchObject({
+      kind: "text",
+      language: "text",
+      source: "write-file-draft",
+    });
+    expect(classifyArtifact("/mnt/user-data/outputs/README")).toMatchObject({
+      kind: "download-only",
+    });
+  });
+
   it("keeps streaming drafts, formal artifacts, skills, and mock artifacts on separate capabilities", () => {
     const formal = classifyArtifact("/mnt/user-data/outputs/report.md");
     const draft = classifyArtifact(
@@ -84,5 +127,42 @@ describe("classifyArtifact", () => {
     expect(canSaveArtifactText(upload, { hasRevision: true })).toBe(false);
     expect(canInstallSkillArtifact(skill, { isAdmin: true })).toBe(true);
     expect(canInstallSkillArtifact(skill, { isAdmin: false })).toBe(false);
+  });
+
+  it("only edits complete, revisioned text in formal outputs", () => {
+    const path = "/mnt/user-data/outputs/report.md";
+    for (const [target, metadata, state, allowed] of [
+      [path, {}, { hasRevision: true, fullContentLoaded: true }, true],
+      [path, {}, { hasRevision: false, fullContentLoaded: true }, false],
+      [path, {}, { hasRevision: true, fullContentLoaded: false }, false],
+      [
+        path,
+        { isMock: true },
+        { hasRevision: true, fullContentLoaded: true },
+        false,
+      ],
+      [
+        "/mnt/user-data/workspace/report.md",
+        {},
+        { hasRevision: true, fullContentLoaded: true },
+        false,
+      ],
+      [
+        "write-file:/mnt/user-data/outputs/report.md",
+        {},
+        { hasRevision: true, fullContentLoaded: true },
+        false,
+      ],
+      [
+        "/mnt/user-data/outputs/report.png",
+        {},
+        { hasRevision: true, fullContentLoaded: true },
+        false,
+      ],
+    ] as const) {
+      expect(
+        canSaveArtifactText(classifyArtifact(target, metadata), state),
+      ).toBe(allowed);
+    }
   });
 });

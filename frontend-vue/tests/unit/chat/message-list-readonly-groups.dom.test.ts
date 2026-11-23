@@ -15,6 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import MessageList from "@/components/chat/MessageList.vue";
+import "@/components/chat/MessageMarkdownContent.vue";
+import "@/components/markdown/StreamMarkdown.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import type { Message } from "@/core/types/message";
 import {
@@ -75,6 +77,12 @@ afterEach(() => {
 type ListProps = InstanceType<typeof MessageList>["$props"];
 
 function mountList(props: Partial<ListProps> & Pick<ListProps, "messages">) {
+  const queryClient = new QueryClient();
+  // This rendering suite supplies the catalog consumed by real SubtaskCard.
+  queryClient.setQueryData(["models"], {
+    models: [],
+    token_usage: { enabled: false },
+  });
   return mount(MessageList, {
     props: {
       streaming: false,
@@ -83,7 +91,7 @@ function mountList(props: Partial<ListProps> & Pick<ListProps, "messages">) {
       ...props,
     },
     global: {
-      plugins: [[VueQueryPlugin, { queryClient: new QueryClient() }]],
+      plugins: [[VueQueryPlugin, { queryClient }]],
       provide: { [workspaceToastKey as symbol]: toastStore },
     },
   });
@@ -95,6 +103,69 @@ const completedTurn: Message[] = [
   { id: "human-2", type: "human", content: [{ type: "text", text: "More" }] },
   { id: "ai-2", type: "ai", content: "Second answer" },
 ];
+
+describe("terminal-group tool ownership", () => {
+  for (const previous of ["human", "ai"] as const) {
+    it(`renders a late orphan tool body after ${previous} without an invented disclosure`, async () => {
+      const wrapper = mountList({
+        messages: [
+          { id: "previous", type: previous, content: "Earlier message" },
+          {
+            id: "orphan",
+            type: "tool",
+            name: "bash",
+            tool_call_id: "unloaded-call",
+            content: "Late **tool body**",
+          },
+        ],
+      });
+      await flushPromises();
+      expect(wrapper.find("details").exists()).toBe(false);
+      await vi.waitFor(() =>
+        expect(wrapper.get('[data-streamdown="strong"]').text()).toBe(
+          "tool body",
+        ),
+      );
+      wrapper.unmount();
+    });
+  }
+
+  it("leaves a mixed subagent call's non-task work to the processing owner", async () => {
+    const wrapper = mountList({
+      messages: [
+        { id: "human", type: "human", content: "Delegate this" },
+        {
+          id: "delegate",
+          type: "ai",
+          content: "",
+          tool_calls: [
+            {
+              id: "task-1",
+              type: "tool_call",
+              name: "task",
+              args: {
+                description: "Investigate",
+                prompt: "Read the files",
+                subagent_type: "general-purpose",
+              },
+            },
+            {
+              id: "read-1",
+              type: "tool_call",
+              name: "read_file",
+              args: { path: "private-diagnostic-marker.txt" },
+            },
+          ],
+        },
+      ],
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Investigate");
+    expect(wrapper.text()).not.toContain("Read File");
+    expect(wrapper.text()).not.toContain("private-diagnostic-marker.txt");
+    wrapper.unmount();
+  });
+});
 
 /*
   只读态：对照台账里**一个 isMock 场景都没有**——每个对照场景都是可写的工作区会话

@@ -159,8 +159,17 @@ function withStableWordKeys(
       !Array.isArray(props.children)
         ? [props.children]
         : props.children;
-    const normalized =
-      children === props.children ? props : { ...props, children };
+    // HAST supplies children eagerly; Vue components consume function slots.
+    // Keep native elements and Fragments on their normal children path.
+    const isComponent =
+      typeof type === "function" || (typeof type === "object" && type !== null);
+    const normalized = {
+      ...props,
+      children:
+        isComponent && children !== undefined
+          ? { default: () => children }
+          : children,
+    };
     const offset = props[WORD_OFFSET_ATTRIBUTE];
     return create(
       type,

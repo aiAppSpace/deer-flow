@@ -48,6 +48,8 @@ const EMPTY_RUN_MESSAGES: RunMessage[] = [];
 export interface UseThreadHistoryOptions {
   enabled?: MaybeRefOrGetter<boolean>;
   pendingSupersededRunIds?: MaybeRefOrGetter<ReadonlySet<string>>;
+  /** Query failures stay observable; the application owns the user notification. */
+  onError?: (error: Error) => void;
 }
 
 export function useThreadHistory(
@@ -89,6 +91,14 @@ export function useThreadHistory(
     },
     getNextPageParam: getThreadHistoryNextPageParam,
   });
+
+  watch(
+    historyQuery.error,
+    (error) => {
+      if (error) options.onError?.(error);
+    },
+    { immediate: true },
+  );
 
   let loadMorePromise: ReturnType<typeof historyQuery.fetchNextPage> | null =
     null;

@@ -1,0 +1,38 @@
+diff --git a/dist/index.js b/dist/index.js
+index ce328f1bc67710ca5c3bf303d552ba7be0b87a2e..aea82d12a46b0dae48a084213800dab68c8b94b0 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -196,8 +196,12 @@ var DialogContentModal = React.forwardRef(
+         trapFocus: context.open,
+         disableOutsidePointerEvents: true,
+         onCloseAutoFocus: (0, import_primitive.composeEventHandlers)(props.onCloseAutoFocus, (event) => {
+-          event.preventDefault();
+-          context.triggerRef.current?.focus();
++          // Without a declarative trigger, FocusScope owns the captured opener.
++          const trigger = context.triggerRef.current;
++          if (trigger?.isConnected && !trigger.matches(":disabled") && !trigger.closest("[inert], [hidden]")) {
++            event.preventDefault();
++            trigger.focus();
++          }
+         }),
+         onPointerDownOutside: (0, import_primitive.composeEventHandlers)(props.onPointerDownOutside, (event) => {
+           const originalEvent = event.detail.originalEvent;
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 13581033b5a5635796d4cf492f0828e853d011c4..e9c756e3f8220df8231b46770466fdfdd3f9151d 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -144,8 +144,12 @@ var DialogContentModal = React.forwardRef(
+         trapFocus: context.open,
+         disableOutsidePointerEvents: true,
+         onCloseAutoFocus: composeEventHandlers(props.onCloseAutoFocus, (event) => {
+-          event.preventDefault();
+-          context.triggerRef.current?.focus();
++          // Without a declarative trigger, FocusScope owns the captured opener.
++          const trigger = context.triggerRef.current;
++          if (trigger?.isConnected && !trigger.matches(":disabled") && !trigger.closest("[inert], [hidden]")) {
++            event.preventDefault();
++            trigger.focus();
++          }
+         }),
+         onPointerDownOutside: composeEventHandlers(props.onPointerDownOutside, (event) => {
+           const originalEvent = event.detail.originalEvent;

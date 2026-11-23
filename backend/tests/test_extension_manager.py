@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from support.loopback_http import loopback_http_proxy_environment
 from support.symlinks import symlink_or_skip
 
 from deerflow.extensions.cli import find_project_root
@@ -164,17 +165,18 @@ class _QuietFileHandler(http.server.SimpleHTTPRequestHandler):
 
 @contextmanager
 def _serve_directory(directory: Path) -> Iterator[str]:
-    handler = functools.partial(_QuietFileHandler, directory=str(directory))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        host, port = server.server_address[:2]
-        yield f"http://{host}:{port}"
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=5)
+    with loopback_http_proxy_environment():
+        handler = functools.partial(_QuietFileHandler, directory=str(directory))
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            host, port = server.server_address[:2]
+            yield f"http://{host}:{port}"
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
 
 def _assert_demo_entry_point_loads(backend: Path) -> None:

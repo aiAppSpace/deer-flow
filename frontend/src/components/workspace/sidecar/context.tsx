@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 
+import type { ThreadConsumptionObservation } from "@/core/diagnostics/parity-observation";
 import {
   appendSidecarReference,
   buildMessageSidecarContext,
@@ -29,6 +30,7 @@ type SidecarContextValue = {
   activeReferences: SidecarReference[];
   conversationQuotes: SidecarReference[];
   parentThreadId: string;
+  consumptionObservation?: ThreadConsumptionObservation | null;
   context: ThreadStreamOptions["context"];
   setContext: (context: ThreadStreamOptions["context"]) => void;
   isMock?: boolean;
@@ -55,11 +57,13 @@ const SidecarContextObject = createContext<SidecarContextValue | null>(null);
 export function SidecarProvider({
   children,
   parentThreadId,
+  consumptionObservation,
   context,
   isMock,
 }: {
   children: ReactNode;
   parentThreadId: string;
+  consumptionObservation?: ThreadConsumptionObservation | null;
   context: ThreadStreamOptions["context"];
   isMock?: boolean;
 }) {
@@ -78,6 +82,7 @@ export function SidecarProvider({
   const sidecarThreadIdRef = useRef<string | null>(null);
   const restoreRequestRef = useRef<{
     parentThreadId: string;
+    consumptionObservation?: ThreadConsumptionObservation | null;
     promise: Promise<string | null>;
   } | null>(null);
 
@@ -232,6 +237,7 @@ export function SidecarProvider({
       activeReferences,
       conversationQuotes,
       parentThreadId,
+      consumptionObservation,
       context: sidecarContext,
       setContext: setSidecarContext,
       isMock,
@@ -259,6 +265,7 @@ export function SidecarProvider({
       openSelectedText,
       openSidecar,
       parentThreadId,
+      consumptionObservation,
       restoreSidecarThread,
       sidecarContext,
       sidecarThreadId,

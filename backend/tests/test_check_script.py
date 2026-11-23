@@ -153,6 +153,37 @@ def test_check_status_labels_corepack_fallback(monkeypatch, capsys):
     assert "OK pnpm 10.26.2 (via Corepack)" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("frontend", ["vue", "dual"])
+def test_frontend_modes_without_nginx_check_only_the_services_they_launch(monkeypatch, capsys, frontend):
+    script = _load_script(CHECK_SCRIPT_PATH, f"check_without_nginx_{frontend}")
+    monkeypatch.setattr(script.shutil, "which", lambda name: None if name == "nginx" else f"/fake/{name}")
+    monkeypatch.setattr(script, "run_command", lambda command: {"node": "v22.0.0", "uv": "uv 0.11.3"}[command[0]])
+    monkeypatch.setattr(script, "run_pnpm_version", lambda: ("10.26.2", False, None))
+
+    assert script.main(["--frontend", frontend]) == 0
+    assert "nginx not required" in capsys.readouterr().out
+
+
+def test_default_react_frontend_still_requires_nginx(monkeypatch, capsys):
+    script = _load_script(CHECK_SCRIPT_PATH, "check_react_requires_nginx")
+    monkeypatch.setattr(script.shutil, "which", lambda name: None if name == "nginx" else f"/fake/{name}")
+    monkeypatch.setattr(script, "run_command", lambda command: {"node": "v22.0.0", "uv": "uv 0.11.3"}[command[0]])
+    monkeypatch.setattr(script, "run_pnpm_version", lambda: ("10.26.2", False, None))
+
+    assert script.main() == 1
+    assert "FAIL nginx not found" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("frontend", ["vue", "dual"])
+def test_non_nginx_frontends_still_reject_missing_runtime_dependencies(monkeypatch, frontend):
+    script = _load_script(CHECK_SCRIPT_PATH, f"check_missing_node_{frontend}")
+    monkeypatch.setattr(script.shutil, "which", lambda name: None if name in {"node", "nginx"} else f"/fake/{name}")
+    monkeypatch.setattr(script, "run_command", lambda command: "uv 0.11.3")
+    monkeypatch.setattr(script, "run_pnpm_version", lambda: ("10.26.2", False, None))
+
+    assert script.main(["--frontend", frontend]) == 1
+
+
 def test_old_node_check_suggests_a_version_manager_command(monkeypatch, capsys):
     check_script = _load_script(CHECK_SCRIPT_PATH, "deerflow_check_script_old_node")
     monkeypatch.setattr(check_script.shutil, "which", lambda name: f"/fake/{name}")

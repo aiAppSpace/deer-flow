@@ -24,7 +24,7 @@ export function getGatewayConfig(): GatewayConfig {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean)
-    : ["http://localhost:3000"];
+    : ["http://localhost:3200"];
 
   _cached = gatewayConfigSchema.parse({ internalGatewayUrl, trustedOrigins });
   return _cached;

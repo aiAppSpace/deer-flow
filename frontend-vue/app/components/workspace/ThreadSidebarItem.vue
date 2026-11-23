@@ -2,7 +2,7 @@
   【文件职责】     侧栏里的一条会话行：链接 + 渠道图标/徽标 + 固定标记 + 操作菜单。
   【架构位置】     L3 product UI
   【主要导出】     默认 ThreadSidebarItem 组件
-  【依赖关系】     ui/sidebar(MenuItem/MenuButton) · ThreadChannelIcon/Badge · ThreadActionsMenu
+  【依赖关系】     ui/sidebar(MenuItem/MenuButton) · ThreadChannelBadge · ThreadActionsMenu
   【边界与注意】   **从 `ThreadSidebar.vue` 的内联标记抽出来的**，一字不改地保留原有取舍：
 
                    标题包在 `min-w-0 truncate` 的 span 里、链接本身是 `h-8 ... p-2 pr-8` 的行。
@@ -36,7 +36,9 @@ import { Pin } from "lucide-vue-next";
 
 import ThreadActionsMenu from "@/components/workspace/ThreadActionsMenu.vue";
 import ThreadChannelBadge from "@/components/workspace/ThreadChannelBadge.vue";
-import ThreadChannelIcon from "@/components/workspace/ThreadChannelIcon.vue";
+import ThreadOriginIcon from "@/components/workspace/ThreadOriginIcon.vue";
+import ThreadUnreadDot from "@/components/workspace/ThreadUnreadDot.vue";
+import { threadOriginOf, unreadLabelOfThread } from "@/core/threads/origin";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import {
   channelSourceOfThread,
@@ -62,6 +64,17 @@ const props = defineProps<{
 }>();
 
 const { $i18n } = useNuxtApp();
+const origin = computed(() => threadOriginOf(props.thread));
+const unread = computed(() => props.thread.unread === true && !props.isActive);
+const rowLabel = computed(() =>
+  unread.value
+    ? unreadLabelOfThread(
+        branchLabel.value ?? props.title,
+        $i18n.t.value,
+        origin.value,
+      )
+    : branchLabel.value,
+);
 
 /*
   只有真的知道父会话是谁才给这个名字——只有 depth 没有 parentThread 时
@@ -97,7 +110,8 @@ defineEmits<{
     <SidebarMenuButton :is-active="props.isActive" as-child>
       <NuxtLink
         :to="pathOfThread(props.thread)"
-        :aria-label="branchLabel"
+        :aria-label="rowLabel"
+        :data-unread="unread ? 'true' : undefined"
         :title="branchLabel"
         :data-branch-depth="
           props.branchEntry && props.branchEntry.depth > 0
@@ -115,17 +129,23 @@ defineEmits<{
           :style="{ marginLeft: `${branchIndentPx}px` }"
           >{{ props.branchEntry?.isLastSibling ? "└─" : "├─" }}</span
         >
-        <ThreadChannelIcon :source="channelSourceOfThread(props.thread)" />
+        <ThreadOriginIcon :origin="origin" />
         <Pin
           v-if="props.pinned"
           aria-hidden="true"
           class="text-muted-foreground size-3.5 shrink-0"
         />
         <span class="min-w-0 truncate">{{ props.title }}</span>
-        <ThreadChannelBadge
-          :source="channelSourceOfThread(props.thread)"
-          class="ml-auto h-5 max-w-14 shrink-0 px-1.5 text-[10px]"
-        />
+        <span
+          v-if="channelSourceOfThread(props.thread, $i18n.t.value) || unread"
+          class="ml-auto inline-flex shrink-0 items-center gap-1.5"
+        >
+          <ThreadChannelBadge
+            :source="channelSourceOfThread(props.thread, $i18n.t.value)"
+            class="h-5 max-w-14 shrink-0 px-1.5 text-[10px]"
+          />
+          <ThreadUnreadDot v-if="unread" />
+        </span>
       </NuxtLink>
     </SidebarMenuButton>
     <ThreadActionsMenu

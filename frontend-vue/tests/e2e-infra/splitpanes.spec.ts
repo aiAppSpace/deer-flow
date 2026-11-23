@@ -1,5 +1,5 @@
 /*
-  【文件职责】     用真实浏览器手势验证 splitpanes H1/H2/H6 可行性。
+  【文件职责】     用真实浏览器手势验证分栏基础组件 H1/H2/H6。
   【架构位置】     测试
   【主要导出】     @splitpanes case
   【依赖关系】     使用 /__m0/splitpanes
@@ -14,9 +14,7 @@ test("@splitpanes one group supports three right panes, declarative collapse and
 }) => {
   await page.goto("/__m0/splitpanes");
   await expect(page.locator("[data-pane^=right-]")).toHaveCount(3);
-  await expect(page.locator("[data-pane-group] .splitpanes__pane")).toHaveCount(
-    4,
-  );
+  await expect(page.locator("[data-pane-group] > [data-panel]")).toHaveCount(4);
 
   await page.locator("[data-collapse]").click();
   await expect
@@ -45,7 +43,7 @@ test("@splitpanes one group supports three right panes, declarative collapse and
     )
     .toBe(true);
 
-  const splitter = page.locator(".splitpanes__splitter").first();
+  const splitter = page.locator("[data-resize-handle]").first();
   /*
     Restore animates the layout back, so the box has to be read **after** it
     stops moving.
@@ -61,16 +59,19 @@ test("@splitpanes one group supports three right panes, declarative collapse and
   );
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 5 });
-  await expect
-    .poll(async () =>
-      Number(await page.locator("[data-resize-count]").textContent()),
-    )
-    .toBeGreaterThan(0);
-  expect(Number(await page.locator("[data-resized-count]").textContent())).toBe(
-    resizedBefore,
-  );
-  await page.mouse.up();
+  try {
+    await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 5 });
+    await expect
+      .poll(async () =>
+        Number(await page.locator("[data-resize-count]").textContent()),
+      )
+      .toBeGreaterThan(0);
+    expect(
+      Number(await page.locator("[data-resized-count]").textContent()),
+    ).toBe(resizedBefore);
+  } finally {
+    await page.mouse.up();
+  }
   await expect
     .poll(async () =>
       Number(await page.locator("[data-resized-count]").textContent()),

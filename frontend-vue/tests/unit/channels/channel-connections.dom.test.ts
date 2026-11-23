@@ -1,16 +1,10 @@
-/*
-  【文件职责】     固定settings UI 的多账号、删除边界、connect 指引与 Gateway 错误展示。
-  【架构位置】     Vue DOM test
-  【主要导出】     无；Vitest cases
-  【依赖关系】     ChannelConnections.vue · i18n · mocked composable owner
-  【边界与注意】   provider runtime 删除与 connection instance 删除必须保持为两个明确动作。
-*/
-
-import { mount } from "@vue/test-utils";
+import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
+import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ChannelConnections from "@/components/workspace/channels/ChannelConnections.vue";
+import { invalidateWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
 import { buildChannelProviderViews } from "@/core/channels/state";
 import type {
   ChannelConnectResponse,
@@ -18,6 +12,11 @@ import type {
   ChannelProvider,
 } from "@/core/channels/types";
 import { enUS } from "@/core/i18n/locales/en-US";
+
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock("@/core/workspace-shell/toast", () => ({
+  useWorkspaceToast: () => toast,
+}));
 
 const ownerFactory = vi.hoisted(() => vi.fn());
 const connectWindow = vi.hoisted(() => ({
@@ -112,23 +111,30 @@ function createOwner(
 
 function mountSettings(owner = createOwner()) {
   ownerFactory.mockReturnValue(owner);
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   const wrapper = mount(ChannelConnections, {
     attachTo: document.body,
     global: {
-      stubs: { ChannelProviderIcon: true },
+      plugins: [
+        [
+          VueQueryPlugin,
+          {
+            queryClient,
+          },
+        ],
+      ],
+      stubs: {
+        ChannelProviderIcon: true,
+        WechatQRLogin: true,
+        WechatQRCompletion: true,
+      },
     },
   });
-  return { owner, wrapper };
+  return { owner, wrapper, queryClient };
 }
 
-/*
-  连接按钮的三档文案。第三档「重新连接」是本仓 wave 35 之前缺的：上游
-  channels-settings-page.tsx:284 在连接被吊销时把「连接」换成「重新连接」，
-  本仓对已吊销的连接照样写「连接」，用户看不出这次是首次接入还是接回一条断掉的。
-
-  三档一起断言，缺一不可：只测「重新连接」那一档的话，把判据写成恒返回 reconnect
-  也是绿的。
-*/
 beforeEach(() => {
   vi.stubGlobal("useNuxtApp", () => ({
     $i18n: { t: ref(enUS) },
@@ -140,16 +146,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.body.innerHTML = "";
 });
-
-/**
- * 对话框现在由 ui/dialog · ui/alert-dialog 提供，内容 portal 到 body，
- * 所以断言从 wrapper 子树移到 document。破坏性确认是 alertdialog，其余是 dialog。
- */
-function openDialog(role: "dialog" | "alertdialog" = "dialog") {
-  const element = document.querySelector<HTMLElement>(`[role="${role}"]`);
-  expect(element, `no [role="${role}"] in the document`).not.toBeNull();
-  return element!;
-}
 
 describe("ChannelConnections settings UI", () => {
   it("renders every account and keeps instance/provider deletion explicit", async () => {
@@ -177,20 +173,13 @@ describe("ChannelConnections settings UI", () => {
       .get('button[aria-label="Remove provider configuration: Slack"]')
       .trigger("click");
     await nextTick();
-    const removalDialog = openDialog("alertdialog");
-    expect(removalDialog.textContent).toContain(
-      "revokes every active connection",
-    );
-    [...removalDialog.querySelectorAll<HTMLElement>("button")]
-      .find(
-        (button) =>
-          button.textContent?.trim() === "Remove provider configuration",
-      )!
-      .click();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     expect(owner.disconnectProvider).toHaveBeenCalledWith("slack");
+    await flushPromises();
+    expect(toast.success).toHaveBeenCalledWith(enUS.channels.revoked);
   });
 
-  it("opens deep links and keeps instruction plus waiting state visible", async () => {
+  it("opens deep links without an extra instruction dialog or success toast", async () => {
     const telegram = provider({
       provider: "telegram",
       display_name: "Telegram",
@@ -221,12 +210,8 @@ describe("ChannelConnections settings UI", () => {
       response.url,
       expect.any(Object),
     );
-    expect(openDialog().textContent).toContain(response.instruction);
-    expect(
-      document
-        .querySelector('[data-testid="channel-connect-state"]')
-        ?.textContent?.trim(),
-    ).toBe("Waiting for the channel account to connect…");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -242,43 +227,38 @@ describe("ChannelConnections settings UI", () => {
       instruction: "Send /connect instruction-only",
       visible: "Send /connect instruction-only",
     },
-  ])(
-    "supports a $label connect response",
-    async ({ url, instruction, visible }) => {
-      const telegram = provider({
-        provider: "telegram",
-        display_name: "Telegram",
-        auth_mode: "deep_link",
-        credential_fields: [],
-      });
-      const owner = createOwner([telegram], []);
-      const response: ChannelConnectResponse = {
-        provider: "telegram",
-        mode: "deep_link",
-        url,
-        code: "code",
-        instruction,
-        expires_in: 600,
+  ])("supports a $label connect response", async ({ url, instruction }) => {
+    const telegram = provider({
+      provider: "telegram",
+      display_name: "Telegram",
+      auth_mode: "deep_link",
+      credential_fields: [],
+    });
+    const owner = createOwner([telegram], []);
+    const response: ChannelConnectResponse = {
+      provider: "telegram",
+      mode: "deep_link",
+      url,
+      code: "code",
+      instruction,
+      expires_in: 600,
+    };
+    owner.connect.mockImplementation(async () => {
+      owner.connectFlows.value = {
+        telegram: { provider: "telegram", status: "waiting", response },
       };
-      owner.connect.mockImplementation(async () => {
-        owner.connectFlows.value = {
-          telegram: { provider: "telegram", status: "waiting", response },
-        };
-        return response;
-      });
-      const { wrapper } = mountSettings(owner);
+      return response;
+    });
+    const { wrapper } = mountSettings(owner);
 
-      await wrapper.get("button").trigger("click");
-      await nextTick();
-      expect(openDialog().textContent).toContain(visible);
-      if (url)
-        expect(connectWindow.open).toHaveBeenCalledWith(
-          url,
-          expect.any(Object),
-        );
-      else expect(connectWindow.close).toHaveBeenCalledWith(expect.any(Object));
-    },
-  );
+    await wrapper.get("button").trigger("click");
+    await nextTick();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    if (!url) expect(toast.success).toHaveBeenCalledWith(instruction);
+    if (url)
+      expect(connectWindow.open).toHaveBeenCalledWith(url, expect.any(Object));
+    else expect(connectWindow.close).toHaveBeenCalledWith(expect.any(Object));
+  });
 
   it.each([
     "Authentication required",
@@ -292,7 +272,81 @@ describe("ChannelConnections settings UI", () => {
 
     await wrapper.get("button").trigger("click");
     await nextTick();
-    expect(wrapper.get('[role="alert"]').text()).toBe(message);
+    expect(toast.error).toHaveBeenCalledWith(message);
+  });
+});
+
+describe("channel UI lifecycle and WeChat entry", () => {
+  it.each(["account", "unmount"])(
+    "does not open a URL or toast a late connect result after %s",
+    async (boundary) => {
+      let resolve!: (value: ChannelConnectResponse) => void;
+      const owner = createOwner(
+        [provider({ auth_mode: "deep_link", credential_fields: [] })],
+        [],
+      );
+      owner.connect.mockReturnValue(
+        new Promise((done) => {
+          resolve = done;
+        }),
+      );
+      const { wrapper, queryClient } = mountSettings(owner);
+      await wrapper.get("button").trigger("click");
+      if (boundary === "account") invalidateWorkspaceQueryOwner(queryClient);
+      else wrapper.unmount();
+      resolve({
+        provider: "slack",
+        mode: "deep_link",
+        code: "old",
+        url: "https://old-account.example.test",
+        instruction: "Old instruction",
+        expires_in: 60,
+      });
+      await flushPromises();
+      expect(connectWindow.open).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(connectWindow.close).toHaveBeenCalled();
+    },
+  );
+  it("routes configured WeChat Connect to binding, while Modify starts credential setup", async () => {
+    const owner = createOwner(
+      [provider({ provider: "wechat", display_name: "WeChat" })],
+      [],
+    );
+    const { wrapper } = mountSettings(owner);
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === enUS.channels.connect)!
+      .trigger("click");
+    await flushPromises();
+    expect(document.querySelector("wechat-q-r-completion-stub")).not.toBeNull();
+    expect(owner.connect).not.toHaveBeenCalled();
+    const dialog = wrapper.findComponent({
+      name: "ChannelRuntimeConfigDialog",
+    });
+    await dialog.vm.$emit("update:open", false);
+    await flushPromises();
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === enUS.channels.modify)!
+      .trigger("click");
+    await flushPromises();
+    expect(document.querySelector("input")?.getAttribute("id")).toBe(
+      "channel-wechat-bot_token",
+    );
+    expect(document.querySelector("wechat-q-r-completion-stub")).toBeNull();
+  });
+  it("uses unavailable query text and waits for initial loading instead of flashing disabled", async () => {
+    const owner = createOwner([], []);
+    owner.loaded.value = false;
+    const { wrapper } = mountSettings(owner);
+    expect(wrapper.text()).toContain(enUS.common.loading);
+    expect(wrapper.text()).not.toContain(enUS.settings.channels.disabled);
+    owner.loaded.value = true;
+    owner.error.value = new Error("internal transport error");
+    await flushPromises();
+    expect(wrapper.text()).toContain(enUS.channels.unavailable);
+    expect(wrapper.text()).not.toContain("internal transport error");
   });
 });
 
@@ -315,32 +369,13 @@ describe("connect button label", () => {
     expect(mountSettings().wrapper.text()).toContain(enUS.channels.addAccount);
   });
 
-  /*
-    **一行 binding row 都没有、但 provider 自己说已连接**——这正是
-    `DEER_FLOW_AUTH_DISABLED=1`（本仓默认的本地跑法）下的形状：每条渠道消息都路由到
-    默认用户，配好且跑起来的 provider 没有也不需要 binding row，后端直接回
-    `connection_status="connected"`（理由原文在 core/channels/state.ts 的文件头）。
-
-    只看 `connections` 的那一版在这里让同一行自相矛盾：状态图标画绿勾「已连接」，
-    按钮却写「连接」。对照台账 `channels#settings-panel` 上
-    `ariaOnlyVue: button "Connect" ×3` 报的就是它。
-    **侧栏那次已经踩过同一条**，这一页是第二次。
-  */
   it("provider 说已连接、却一行账号都没有时，主操作键根本不渲染", () => {
     const owner = createOwner(
       [provider({ connection_status: "connected" })],
       [],
     );
     const { wrapper } = mountSettings(owner);
-    /*
-      断言落在**按钮本身**，不是整屏文字：面板标题里就有 "Connect IM accounts…"，
-      状态词又是 "Connected"，拿整屏做 `not.toContain("Connect")` 永远为假
-      （第一版就是这么写的，报的是标题那一句）。
 
-      三档文案**都不许出现**：只把「连接」换成「添加账号」不算修好——
-      上游在已连接态压根不渲染这颗键，换名字只会让台账上那几行换个名字继续在
-      （对照工厂的 accept 门禁当场拒写，那一版就是这么被挡回来的）。
-    */
     const labels = wrapper.findAll("button").map((button) => button.text());
 
     expect(labels).not.toContain(enUS.channels.connect);
@@ -350,13 +385,6 @@ describe("connect button label", () => {
     expect(labels).toContain(enUS.channels.modify);
   });
 
-  /*
-    **「为什么连不上」必须写在描述里**，不能只挂在按钮的 title 上——
-    悬停才出现的东西在触摸设备上根本看不到，读屏器读到这一行时也不会念。
-    上游 `channels-settings-page.tsx:189` 把它拼进 `ItemDescription`；
-    对照台账 `channels#settings-panel` 上那条 `ariaOnlyReact: - paragraph: … 原因`
-    报的就是本仓少了这一截。
-  */
   it("不可用时把原因拼进描述，不只放在按钮 title 里", () => {
     const owner = createOwner(
       [
@@ -372,12 +400,6 @@ describe("connect button label", () => {
     );
   });
 
-  /*
-    **只拼后端明说的原因，不拼「未配置 / 停用」**——上游那一行是裸字段，
-    回落那套只喂按钮 title。第一版我把回落也拼进描述，单场景实测当场多出一行
-    （Feishu 是 `configured: false`，本仓给它拼上「未配置」而上游没有）。
-    状态本身在名字旁边那颗徽标里已经说过一次。
-  */
   it("没有后端原因时描述里不拼状态词", () => {
     const owner = createOwner(
       [provider({ configured: false, connection_status: "not_connected" })],
@@ -390,10 +412,6 @@ describe("connect button label", () => {
     expect(description).toBe(enUS.channels.descriptions.slack);
   });
 
-  /*
-    有 binding row 时这颗键要留着——多账号是本仓设置页独有的能力，
-    「添加账号」在那种形状下是真操作，不能被上面那条一起砍掉。
-  */
   it("已连接且有账号行时，仍然给「添加账号」", () => {
     const owner = createOwner(
       [provider({ connection_status: "connected" })],
@@ -407,16 +425,6 @@ describe("connect button label", () => {
   });
 });
 
-/*
-  账号列表是本仓设置页独有的一块（上游一个 provider 只认一条 connection，
-  没有列表这个概念）。留着是对的，但它**只在真有 binding row 时才该存在**。
-
-  原来是无条件渲染：7 个 provider 每个都挂一句「尚无渠道账号。」——对一个连配都没配的
-  provider 说「它还没有账号」是零信息的噪音；`DEER_FLOW_AUTH_DISABLED=1` 下更糟，
-  provider 明明已连接（每条渠道消息都路由到默认用户，本来就不会有 binding row），
-  同一张卡片上边徽标写「已连接」、下边写「尚无渠道账号」。
-  对照台账 `channels#settings-panel` 上那 21 行 `ariaOnlyVue` 报的就是这一块。
-*/
 describe("账号列表", () => {
   it("一行 binding row 都没有时，整块不渲染", () => {
     const owner = createOwner(
@@ -438,3 +446,98 @@ describe("账号列表", () => {
     ).toBeGreaterThan(0);
   });
 });
+
+for (const outcome of ["success", "failure"] as const) {
+  it(`a closed and reopened settings configuration retires its old ${outcome}`, async () => {
+    let resolve!: (value: ChannelProvider) => void,
+      reject!: (reason: Error) => void;
+    const item = provider({ configured: false });
+    const owner = createOwner([item], []);
+    owner.configure.mockReturnValue(
+      new Promise((yes, no) => {
+        resolve = yes;
+        reject = no;
+      }),
+    );
+    const { wrapper } = mountSettings(owner);
+    try {
+      const open = async () => {
+        await wrapper
+          .findAll("button")
+          .find((b) => b.text() === enUS.channels.connect)!
+          .trigger("click");
+        await flushPromises();
+      };
+      await open();
+      const dialog = wrapper.findComponent({
+        name: "ChannelRuntimeConfigDialog",
+      });
+      const submit = dialog.props("submit")! as (
+        provider: ChannelProvider,
+        values: Record<string, string>,
+      ) => Promise<unknown>;
+      const pending = submit(item, { bot_token: "test-only-token" });
+      await dialog.vm.$emit("update:open", false);
+      await flushPromises();
+      await open();
+      if (outcome === "success") resolve({ ...item, configured: true });
+      else reject(new Error("Old configuration failed"));
+      await pending;
+      await flushPromises();
+      expect(dialog.props("open")).toBe(true);
+      expect(owner.connect).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+    } finally {
+      wrapper.unmount();
+    }
+  });
+}
+for (const outcome of ["success", "failure"] as const) {
+  it(`a later settings configuration retires the old binding ${outcome}`, async () => {
+    let resolve!: (value: Partial<ChannelConnectResponse>) => void,
+      reject!: (reason: Error) => void;
+    const item = provider({ configured: false });
+    const owner = createOwner([item], []);
+    owner.configure.mockResolvedValue({ ...item, configured: true });
+    owner.connect.mockReturnValue(
+      new Promise((yes, no) => {
+        resolve = yes;
+        reject = no;
+      }),
+    );
+    const { wrapper } = mountSettings(owner);
+    try {
+      const open = async () => {
+        await wrapper
+          .findAll("button")
+          .find((b) => b.text() === enUS.channels.connect)!
+          .trigger("click");
+        await flushPromises();
+      };
+      await open();
+      const dialog = wrapper.findComponent({
+        name: "ChannelRuntimeConfigDialog",
+      });
+      const submit = dialog.props("submit")! as (
+        provider: ChannelProvider,
+        values: Record<string, string>,
+      ) => Promise<unknown>;
+      const pending = submit(item, {});
+      await flushPromises();
+      expect(owner.connect).toHaveBeenCalledOnce();
+      await open();
+      if (outcome === "success")
+        resolve({ url: "https://example.test/old-binding" });
+      else reject(new Error("Old binding failed"));
+      await pending;
+      await flushPromises();
+      expect(dialog.props("open")).toBe(true);
+      expect(connectWindow.open).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+    } finally {
+      wrapper.unmount();
+    }
+  });
+}

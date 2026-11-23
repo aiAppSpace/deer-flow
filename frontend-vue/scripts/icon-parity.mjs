@@ -8,7 +8,9 @@
   也够得着登录后的屏。
 */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, basename, extname } from "node:path";
+import { join, basename, extname, resolve } from "node:path";
+
+import { directVueComponentPaths } from "./lib/icon-parity-components.mjs";
 
 /*
   **把两边的图标名都解析成 lucide 的规范名再比。**
@@ -180,9 +182,11 @@ const load = (root, alias) => {
   const map = new Map();
   for (const f of walk(root)) {
     const key = f;
-    const src = stripComments(readFileSync(f, "utf8"));
+    const source = readFileSync(f, "utf8");
+    const src = stripComments(source);
     map.set(key, {
       file: f,
+      source,
       src,
       icons: icons(src, alias),
       glyphs: glyphs(src),
@@ -235,6 +239,9 @@ for (const [label, map, probe, want] of [
 
 const R = load(reactRoot, REACT_ALIAS);
 const V = load(vueRoot, VUE_ALIAS);
+const vueByPath = new Map(
+  [...V.values()].map((entry) => [resolve(entry.file), entry]),
+);
 
 /*
   逐文件配对用 basename 索引，**只在两边各自唯一时才配**。
@@ -292,17 +299,14 @@ for (const key of unique) {
     文件里的内部函数。不跟委托的话这三条永远红着，而**一条长期红着的线索
     等于没有**（线索 194）——真差异会被它们淹掉。
 
-    只跟一层：够消掉这一类，又不至于把整棵子树的 tooltip 都算成自己的。
+    只跟一层实际模板使用的 SFC import，按完整路径定位；未渲染导入和同名的
+    无关组件不能提供 marker，不递归到孙组件。
   */
-  const vueMarkers = (k) => {
-    let total = v[k];
-    for (const m of v.src.matchAll(/from\s+"@\/(components\/[^"]+\.vue)"/g)) {
-      const children =
-        VB.get(basename(m[1], ".vue").toLowerCase().replace(/[-_]/g, "")) ?? [];
-      for (const child of children) total += child[k];
-    }
-    return total;
-  };
+  const children = directVueComponentPaths(v.file, v.source, vueRoot)
+    .map((path) => vueByPath.get(path))
+    .filter(Boolean);
+  const vueMarkers = (k) =>
+    children.reduce((total, child) => total + child[k], v[k]);
   for (const [k, label] of [
     ["tooltip", "Tooltip"],
     ["ariaLive", "aria-live"],
@@ -379,9 +383,6 @@ const VERIFIED = {
   ThumbsUp:
     "message-list-item.tsx 的点赞；渲染条件 feedback!==undefined，没有一处传它",
   ThumbsDown: "同 ThumbsUp",
-  // —— 两边 primitive 实现不同，不是产品面差异 ——
-  Bookmark: "ai-elements/ 的内部件，本仓那一层用 reka 自己的结构",
-  GripVertical: "ui/ 的 resizable 手柄，本仓走 splitpanes",
   // —— 改动面板那三条（FileMinus / FilePlus / FilePenLine）wave 111 删掉了 ——
   // wave 69 记的是「本仓那一屏结构不同」，而 wave 87 重做改动面板之后**两边都用了**
   // （上游是 `FileMinusIcon` 等别名，本仓是裸名，canonical 之后同一颗）。
@@ -391,9 +392,6 @@ const VERIFIED = {
   Github:
     "上游画的是**本地组件** `components/workspace/github-icon.tsx`（手写 svg），" +
     "不是 lucide 的 Github；本仓用 lucide 的同名图标，两边都画 GitHub 标志",
-  Maximize2:
-    "本仓 MarkdownTable 的全屏键；上游那一颗由 streamdown 内部渲染" +
-    "（`dist/chunk-BO2N2NFS.js` 的 `Maximize2Icon`），扫不到它的源码",
 };
 
 const ri = allIcons(R, REACT_ALIAS),

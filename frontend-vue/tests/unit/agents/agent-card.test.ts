@@ -22,6 +22,14 @@ function agent(toolGroups: string[] | null): Agent {
 }
 
 describe("Agent card presentation", () => {
+  it("uses the Unicode display name without replacing the stable routing name", () => {
+    const value = { ...agent(null), display_name: "审查助手 🚀" };
+    expect(buildAgentCardViewModel(value).name).toBe("审查助手 🚀");
+    expect(value.name).toBe("reviewer");
+    expect(buildAgentCardViewModel({ ...value, display_name: "" }).name).toBe(
+      "reviewer",
+    );
+  });
   it("represents null as an unrestricted configured-group filter", () => {
     expect(buildAgentCardViewModel(agent(null))).toMatchObject({
       model: "reasoning-model",

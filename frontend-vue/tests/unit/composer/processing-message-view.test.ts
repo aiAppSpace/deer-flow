@@ -95,3 +95,40 @@ describe("processing message view", () => {
     ]);
   });
 });
+
+it("associates registry entries by tool call without leaking other calls", () => {
+  const artifact = {
+    handle: "art_one",
+    tool_name: "make_report",
+    tool_call_id: "make-1",
+    call_index: 0,
+    artifact_type: "file",
+    display_name: "report.csv",
+    real_ref: "/outputs/report.csv",
+  };
+  const view = deriveProcessingMessageView(
+    [
+      {
+        id: "ai",
+        type: "ai",
+        content: "",
+        tool_calls: [{ id: "make-1", name: "make_report", args: {} }],
+      },
+    ],
+    [artifact, { ...artifact, handle: "unrelated", tool_call_id: "other" }],
+  );
+  expect(view.lastToolCall?.artifacts).toEqual([artifact]);
+});
+it("normalizes omitted or null mid-stream tool arguments before rendering", () => {
+  for (const args of [null, undefined]) {
+    const view = deriveProcessingMessageView([
+      {
+        id: "ai",
+        type: "ai",
+        content: "",
+        tool_calls: [{ id: "call", name: "make_report", args }],
+      },
+    ] as unknown as Message[]);
+    expect(view.lastToolCall?.args).toEqual({});
+  }
+});

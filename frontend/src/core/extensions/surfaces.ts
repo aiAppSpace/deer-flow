@@ -42,8 +42,14 @@ export function mountSurface(
         return result;
       },
     });
-    if (typeof controller?.dispose !== "function")
+    if (typeof controller?.dispose !== "function") {
+      // Mount is synchronous. Retire a misdeclared async controller if it
+      // arrives later, and contain its rejection inside the failed host.
+      void Promise.resolve(controller)
+        .then((late) => late?.dispose?.())
+        .catch(() => undefined);
       throw new Error("Invalid surface controller");
+    }
   } catch {
     cleanup();
     onError();

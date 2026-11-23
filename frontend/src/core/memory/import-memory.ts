@@ -3,6 +3,11 @@ import type { UserMemory } from "./types";
 type ContextSection = UserMemory["user"]["workContext"];
 type MemoryFact = UserMemory["facts"][number];
 type InvalidFactStrategy = "reject" | "drop";
+export type MemoryFactIdentity = Readonly<{
+  index: number;
+  raw: string;
+  generated: boolean;
+}>;
 
 const USER_SECTION_KEYS = [
   "workContext",
@@ -44,7 +49,11 @@ function generateLegacyFactId(index: number): string {
     : `fact_legacy_${index}`;
 }
 
-function normalizeMemoryFact(value: unknown, index: number): MemoryFact | null {
+function normalizeMemoryFact(
+  value: unknown,
+  index: number,
+  onIdentity?: (identity: MemoryFactIdentity) => void,
+): MemoryFact | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -70,12 +79,10 @@ function normalizeMemoryFact(value: unknown, index: number): MemoryFact | null {
     ? Math.min(1, Math.max(0, numericConfidence))
     : 0.5;
 
+  const retainedId = typeof value.id === "string" ? value.id.trim() : "";
   const fact = {
     ...value,
-    id:
-      typeof value.id === "string" && value.id.trim()
-        ? value.id.trim()
-        : generateLegacyFactId(index),
+    id: retainedId || generateLegacyFactId(index),
     content,
     category,
     confidence,
@@ -95,6 +102,15 @@ function normalizeMemoryFact(value: unknown, index: number): MemoryFact | null {
     delete fact.sourceError;
   }
 
+  if (onIdentity) {
+    try {
+      onIdentity(
+        Object.freeze({ index, raw: fact.id, generated: !retainedId }),
+      );
+    } catch {
+      // Evidence callbacks cannot change the normalized product value.
+    }
+  }
   return fact;
 }
 
@@ -114,7 +130,10 @@ function normalizeMemoryFact(value: unknown, index: number): MemoryFact | null {
  */
 export function normalizeMemoryPayload(
   value: unknown,
-  options: { invalidFactStrategy?: InvalidFactStrategy } = {},
+  options: {
+    invalidFactStrategy?: InvalidFactStrategy;
+    onFactIdentity?: (identity: MemoryFactIdentity) => void;
+  } = {},
 ): UserMemory | null {
   if (
     !isRecord(value) ||
@@ -133,7 +152,7 @@ export function normalizeMemoryPayload(
   const facts: MemoryFact[] = [];
 
   for (const [index, factValue] of value.facts.entries()) {
-    const fact = normalizeMemoryFact(factValue, index);
+    const fact = normalizeMemoryFact(factValue, index, options.onFactIdentity);
     if (!fact) {
       if (invalidFactStrategy === "reject") {
         return null;

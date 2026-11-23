@@ -5,26 +5,10 @@
   【依赖关系】     ./types
   【边界与注意】   有 connection row 时 row 是真相；一行都没有时才回落到 provider.connection_status。
 
-                   两个字段不是「新鲜 vs 陈旧」的关系。Gateway 的 GET /providers 与
-                   GET /connections 读的是**同一次请求里同一个 owner 的同一批行**
-                   （backend/app/gateway/routers/channel_connections.py 的
-                   get_channel_providers 先 list_connections(owner)，再把每个 provider
-                   最新的那行喂给 _provider_response）。所以 connection_status 不可能
-                   比 connections 更陈。
-
-                   它反而多带一个 connections 结构上表达不了的事实：auth 关闭时
-                   （DEER_FLOW_AUTH_DISABLED=1，本仓默认的本地跑法）每条渠道消息都路由到
-                   默认用户，配好且跑起来的 provider **没有也不需要**任何 binding row，
-                   后端直接回 connection_status="connected"。只认 connections 的话，
-                   这种部署下侧栏永远显示「Connect」，点下去还会去走一遍毫无意义的绑定流程。
-
-                   React 两处都是这个规则：设置页 getStatusLabel 写的就是
-                   `connection?.status ?? provider.connection_status`
-                   （frontend/src/components/workspace/settings/channels-settings-page.tsx），
-                   侧栏直接读 provider.connection_status
-                   （frontend/src/components/workspace/channels/workspace-channels-list.tsx）。
+                   providers 与 connections 是两个独立 HTTP 查询，不保证同一时刻的快照。
+                   这里声明展示优先级，不推断哪份数据更新：已有账号行优先；没有账号行
+                   才使用 provider 汇总，包括 auth-disabled 部署无需绑定的 connected 状态。
 */
-
 import type { ChannelConnection, ChannelProvider } from "./types";
 
 export interface ChannelProviderView {
@@ -56,9 +40,12 @@ export function getChannelProviderStatusKey(view: ChannelProviderView): string {
 export function getChannelConnectionLabel(
   connection: ChannelConnection,
 ): string {
-  const identity = connection.external_account_name?.trim();
-  const workspace = connection.workspace_name?.trim();
-  return [identity, workspace].filter(Boolean).join(" · ") || connection.id;
+  const identity = connection.external_account_name;
+  const workspace = connection.workspace_name;
+  if (identity && workspace) return `${identity} · ${workspace}`;
+  return (
+    identity ?? workspace ?? connection.external_account_id ?? connection.id
+  );
 }
 
 export function buildChannelProviderViews(

@@ -41,7 +41,11 @@ export function ExtensionGallery({ query = "" }: { query?: string }) {
     </div>
   ) : null;
   const reload = (
-    <Button variant="outline" onClick={() => window.location.reload()}>
+    <Button
+      variant="outline"
+      className="max-w-full whitespace-normal max-sm:h-auto max-sm:min-h-9"
+      onClick={() => window.location.reload()}
+    >
       {t.extensions.reloadAll}
     </Button>
   );

@@ -1,6 +1,6 @@
 <!--
   【文件职责】     把 CSV/TSV 产物画成可翻页、可展开单元格的表格。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认 ArtifactTablePreview 组件
   【依赖关系】     composables/useDelimitedPreview · ui/button · ui/dialog · core/clipboard
   【边界与注意】   - 单元格一律当**字面量**渲染：`00123` 不能变成 123，

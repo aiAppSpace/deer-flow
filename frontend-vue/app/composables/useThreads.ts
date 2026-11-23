@@ -5,13 +5,10 @@
   【依赖关系】     core/threads/infinite · delete · cache-invalidation
   【边界与注意】   主列表永远走 sidecar 过滤后的 raw-offset 分页；不得另存副本。
 */
-import {
-  useInfiniteQuery,
-  useQueryClient,
-  type InfiniteData,
-} from "@tanstack/vue-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, reactive, toValue, type MaybeRefOrGetter } from "vue";
 
+import { captureWorkspaceQueryOwner } from "@/core/auth/workspace-queries";
 import { getAPIClient } from "@/core/api/api-client";
 import { projectKeys } from "@/core/projects/query-keys";
 import { removeDeletedThreadCaches } from "@/core/threads/cache-invalidation";
@@ -24,6 +21,7 @@ import {
   mapInfiniteThreadsCache,
   type InfiniteThreadsParams,
   upsertThreadInInfiniteCache,
+  type InfiniteThreadsData,
 } from "@/core/threads/infinite";
 import {
   deleteThreadCascade,
@@ -68,11 +66,12 @@ const THREAD_LIST_PARAMS: InfiniteThreadsParams = {
  * `archived` 进 query key，漏写的那个消费者会拿到**另一份缓存**，于是多打一次网络、
  * 而且 AgentChat 的 `upsert` 落不进侧栏那份。三个消费者必须是同一个 key，
  * 而"必须一致"这件事交给默认值来保证，比交给三处各写一遍可靠。
- * 想看已归档的那份，显式传 `true`。
+ * 想看已归档的那份，显式传 `true`。引用选择器传 `"all"`，允许引用活跃和
+ * 已归档的会话；它仍复用同一个分页 owner，但使用独立、不过滤归档状态的 key。
  */
 export function useThreads(
   options: {
-    archived?: MaybeRefOrGetter<boolean>;
+    archived?: MaybeRefOrGetter<boolean | "all">;
     /**
      * 这个调用点要不要**自己发请求**。缺省要。
      *
@@ -85,10 +84,13 @@ export function useThreads(
 ) {
   const queryClient = useQueryClient();
   const apiClient = getAPIClient();
-  const params = computed<InfiniteThreadsParams>(() => ({
-    ...THREAD_LIST_PARAMS,
-    archived: toValue(options.archived) ?? false,
-  }));
+  const params = computed<InfiniteThreadsParams>(() => {
+    const archived = toValue(options.archived) ?? false;
+    return {
+      ...THREAD_LIST_PARAMS,
+      archived: archived === "all" ? undefined : archived,
+    };
+  });
   const queryKey = computed(
     () => [...INFINITE_THREADS_QUERY_KEY_PREFIX, params.value] as const,
   );
@@ -111,6 +113,7 @@ export function useThreads(
   const query = useInfiniteQuery({
     queryKey,
     enabled: computed(() => toValue(options.enabled) ?? true),
+    refetchOnWindowFocus: false,
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) =>
       fetchInfiniteThreadsPage(
@@ -119,16 +122,8 @@ export function useThreads(
         Number(pageParam),
         INFINITE_THREADS_PAGE_SIZE,
       ),
-    /*
-      **只传两个参数。** 直接把函数交给 Vue Query，它会按
-      `(lastPage, allPages, lastPageParam, allPageParams)` 调用，第三个实参落进
-      本函数的 `pageSize`——于是 `pageSize` 变成上一页的 offset（首屏是 0），
-      `lastPage.length < pageSize` 永远为假，「还有下一页」永远为真。
-      表现是每次加载完列表都会再多问一页，问回来是空的，谁也看不出哪里不对。
-      React 那边写的就是显式的两参箭头函数（frontend/src/core/threads/hooks.ts）。
-    */
-    getNextPageParam: (lastPage, allPages) =>
-      getInfiniteThreadsNextPageParam(lastPage, allPages),
+    // The page owns raw server progress even after local row mutations.
+    getNextPageParam: (lastPage) => getInfiniteThreadsNextPageParam(lastPage),
   });
 
   /*
@@ -141,7 +136,7 @@ export function useThreads(
   const view = computed(() => {
     const byId = new Map<string, AgentThread>();
     for (const page of query.data.value?.pages ?? []) {
-      for (const thread of page) {
+      for (const thread of page.threads) {
         byId.set(
           thread.thread_id,
           mergeThreadSnapshot(byId.get(thread.thread_id), thread),
@@ -179,69 +174,11 @@ export function useThreads(
     return loadMorePromise;
   }
 
+  /** Mirror detail changes only into rows whose membership the list already knows. */
   function upsert(thread: AgentThread) {
-    const existing = threads.value.find(
-      (candidate) => candidate.thread_id === thread.thread_id,
+    updateCachedThread(thread.thread_id, (cached) =>
+      mergeThreadSnapshot(cached, thread),
     );
-    if (existing) {
-      const merged = mergeThreadSnapshot(existing, thread);
-      updateCachedThread(thread.thread_id, (cached) =>
-        mergeThreadSnapshot(cached, merged),
-      );
-      return;
-    }
-    /*
-      **列表缓存还是空的时候，只把这条线程放进去，不要顺手失效**（第四十八轮）。
-
-      `upsert()` 的这条 `else` 支真正的含义是「**这条线程不在我当前这份列表里**」，
-      而不是「它是新建的」：列表首取**还在飞**的时候 `threads.value` 是空的，
-      于是**每一条既有线程都会走到这里**（`AgentChat.vue` 那条 `threadMetadata.data`
-      的 watcher 每开一屏都调一次，它与列表首取是两条并行请求，谁先回来是赛跑）。
-
-      此前这里是「播一页 + 调 `upsertThreadInInfiniteCache`」。对空缓存来说，
-      那个函数的插入部分本来就是空操作（`infinite.test.ts` 第一条用例钉着），
-      **唯一实际发生的是它末尾那次 `invalidateQueries`**——而那一次在这条支上
-      要么无效、要么有害，query-core 5.90 四种组合逐个量过：
-
-          只 seed、不失效（桌面）        queryFn 1 次，最终缓存是服务端那份
-          seed + 失效（此前的写法）      queryFn 2 次   ← 多出来的那一次
-          只 seed、不失效（窄屏）        queryFn 0 次
-          seed + 失效（窄屏）            queryFn 0 次   ← 失效在这里根本不重取
-
-      窄屏侧栏是抽屉，关着时 `RecentChatList` 整棵不挂载，这个 key 没有 enabled 的
-      观察者，`invalidateQueries` 默认只重取 active 查询——所以窄屏那两行相同。
-      桌面上首取还在飞时，seed 让查询变成「idle 且有数据」，失效于是不再与在飞的
-      那次合并，**另发一次体逐字相同的 `POST /api/threads/search`**。
-      对照台账上那两行
-      `artifact-table-preview/desktop/light/en-US · workspace-changes#changes-panel/desktop/dark/en-US`
-      的 `requestsOnlyVue: POST /api/threads/search` 就是它——本机几乎总是列表先回
-      （0 行），CI 上整套跑得慢（205 条 50.9 分钟，本机同一套约 34 分钟），
-      偶尔换个相位就露出来，历轮判词一直是「复量消失」。
-      **把搜索响应推迟 300/900/2000ms 就 12/12 稳定发两次**（延迟 0 时 4/4 一次，
-      上游四档共 16/16 全是一次）。
-
-      ⚠ **seed 本身不能删**，第四十八轮试过、当场被台账按回来：
-      `AgentChat` 有四处（标题 / artifacts / goal / todos）把
-      `threads.threads.find(...)` 当作「当前线程的服务端快照」在读，而窄屏下那份
-      缓存永远是空的——删掉 seed，`subtask-card/mobile/light/en-US` 立刻掉出
-      `ariaOnlyReact: - text: Stopped subtask`（标题没了），
-      `ui-polish-mobile` 的 artifacts 抽屉也打不开了。
-      桌面上 seed 会被首取的结果覆盖（上表第一行的「最终缓存是服务端那份」）。
-
-      **更彻底的方向**（没做，留判据）：上游那四处根本不读列表缓存——标题走
-      `<ThreadTitle canonicalTitle={threadMetadata.data?.values?.title}>`，
-      其余走 stream 的 thread state。把 `AgentChat` 那四处逐一换到同样的源，
-      seed 就可以整个去掉。**翻案判据**：哪天要动 `AgentChat` 的服务端快照读取，
-      连同这四处一起换，并用 `subtask-card/mobile` 与 `ui-polish-mobile` 两处验收。
-    */
-    if (!queryClient.getQueryData(queryKey.value)) {
-      queryClient.setQueryData(queryKey.value, {
-        pages: [[thread]],
-        pageParams: [0],
-      });
-      return;
-    }
-    upsertThreadInInfiniteCache(queryClient, thread);
   }
 
   function updateCachedThread(
@@ -250,7 +187,7 @@ export function useThreads(
   ) {
     queryClient.setQueriesData(
       { queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX, exact: false },
-      (oldData: InfiniteData<AgentThread[]> | undefined) =>
+      (oldData: InfiniteThreadsData | undefined) =>
         mapInfiniteThreadsCache(oldData, (thread) =>
           thread.thread_id === threadId ? updater(thread) : thread,
         ),
@@ -263,7 +200,7 @@ export function useThreads(
     agentName?: string | null,
   ) {
     const now = new Date().toISOString();
-    upsert({
+    upsertThreadInInfiniteCache(queryClient, {
       thread_id: threadId,
       created_at: now,
       updated_at: now,
@@ -285,9 +222,11 @@ export function useThreads(
   }
 
   async function setPinned(threadId: string, pinned: boolean) {
+    const owns = captureWorkspaceQueryOwner(queryClient);
     await patchThreadMetadata(threadId, {
       [THREAD_PINNED_METADATA_KEY]: pinned,
     });
+    if (!owns()) throw new DOMException("Retired account", "AbortError");
     const existing = threads.value.find(
       (thread) => thread.thread_id === threadId,
     );
@@ -303,8 +242,10 @@ export function useThreads(
   }
 
   async function remove(threadId: string) {
+    const owns = captureWorkspaceQueryOwner(queryClient);
     try {
       const deletedIds = await deleteThreadCascade(apiClient, threadId);
+      if (!owns()) throw new DOMException("Retired account", "AbortError");
       removeDeletedThreadCaches(queryClient, deletedIds);
       for (const deletedId of deletedIds) {
         clearComposerDrafts(
@@ -315,7 +256,7 @@ export function useThreads(
         );
       }
     } catch (error) {
-      if (error instanceof ThreadCascadeDeleteError) {
+      if (owns() && error instanceof ThreadCascadeDeleteError) {
         removeDeletedThreadCaches(queryClient, error.deletedThreadIds);
         for (const deletedId of error.deletedThreadIds) {
           clearComposerDrafts(
@@ -325,53 +266,31 @@ export function useThreads(
         }
       }
       throw error;
+    } finally {
+      if (owns()) {
+        void queryClient.invalidateQueries({
+          queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+        });
+        void queryClient.invalidateQueries({ queryKey: ["threads", "search"] });
+        void queryClient.invalidateQueries({ queryKey: projectKeys.root() });
+      }
     }
   }
 
-  /*
-    改名之后要做的三件事，与上游 `useRenameThread`
-    （frontend/src/core/threads/hooks.ts:3310）同一条：
-
-    1. **先 cancel 在途的列表请求**。改名之前发出的那一个回来时会把旧标题写回缓存
-       ——界面先变对、过一会儿又变回去，而且没有任何报错。上游那行注释
-       （"Prevent pre-rename snapshot requests from restoring the stale title."）
-       说的就是它。
-    2. 本地写一遍，界面立刻更新，不等这一轮网络。
-    3. 再让**服务端存下来的那一份**成为最终事实：标题被服务端规范化（trim / 截断）、
-       或者别的设备并发改过名时，只有这一步能收敛。上游用 `invalidateQueries`；
-       本仓的列表是手动查询，只能强制重取，理由写在第 3 步那段里。
-
-    **本仓此前只有第 2 步**，也就是「改完就相信自己写进缓存的那个字符串」。
-    对照台账 `thread-title-sync` 上的 `requestsOnlyReact: POST /api/threads/search`
-    就是这一步的缺席。
-
-    **第 3 步在 wave 216 补齐了第二个端点。** 此前这里写着「本仓没有第二个查询要
-    收敛，为了对上一条请求计数去发一个没人读的请求是搬运不是对齐」——那句话当时
-    成立，但它描述的是**一个缺口**而不是一个设计：本仓那时对
-    `["thread","metadata",id]` 的三处失效（归档、移到项目、run 结束）**全是空操作**，
-    因为没有任何查询拥有这个 key。`useThreadMetadata` 把那一层补上之后，
-    这里也必须失效它，否则改完名那条线程的元数据缓存留着旧标题。
-  */
+  /** Update the current owner's rows, then refetch authoritative list/detail data. */
   async function rename(threadId: string, title: string) {
+    const owns = captureWorkspaceQueryOwner(queryClient);
     await apiClient.threads.updateState(threadId, { values: { title } });
+    if (!owns()) throw new DOMException("Retired account", "AbortError");
     await queryClient.cancelQueries({
       queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
     });
+    if (!owns()) throw new DOMException("Retired account", "AbortError");
     updateCachedThread(threadId, (thread) => ({
       ...thread,
       values: { ...thread.values, title },
     }));
-    /*
-      **列表这一份必须 `loadInitial(true)`，`invalidateQueries` 对它是空操作。**
-      本仓的列表查询是 `enabled: false` 的手动查询（见上面 `useInfiniteQuery`），
-      失效只会把它标脏，没有观察者会去重取——第一版就是这么写的，
-      对照台账那一行 `requestsOnlyReact: POST /api/threads/search` **一行没动**，
-      是它把这件事量出来的。上游那边列表是普通 enabled 查询，所以 invalidate 就够。
-
-      **不 await**：调用方（ThreadSidebar.vue 的 `confirmRename`）拿 `await` 的结果
-      去关对话框，等重取回来才关等于把一次网络往返压在用户眼前。
-      本地那一步已经把界面改对了，这一步只负责稍后收敛。
-    */
+    // Keep the dialog independent of the list refresh round trip.
     void loadInitial(true);
     /*
       项目页那张会话列表是 REST 形状（不在 updateCachedThread 的覆盖里），

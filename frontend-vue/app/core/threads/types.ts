@@ -1,7 +1,7 @@
 /*
   【文件职责】     见下方导出与 JSDoc。
   【架构位置】     L3
-  【主要导出】     GoalState / AgentThreadState / AgentThreadContext / AgentThread / RunMessage / ThreadContextUsage 等 7 个
+  【主要导出】     GoalState / AgentThreadState / AgentThreadContext / AgentThread / RunMessage / ThreadContextUsage 等 8 个
   【依赖关系】     见下方 import。
   【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
 */
@@ -37,10 +37,24 @@ export interface GoalState {
   };
 }
 
+export interface ArtifactEntry {
+  handle: string;
+  tool_name: string;
+  tool_call_id: string;
+  call_index: number;
+  artifact_type: string;
+  display_name: string;
+  real_ref: string;
+  mime_type?: string | null;
+  created_at?: string;
+  consumed_by?: string[];
+}
+
 export interface AgentThreadState extends Record<string, unknown> {
   title: string;
   messages: Message[];
   artifacts?: string[];
+  tool_artifacts?: ArtifactEntry[];
   todos?: Todo[];
   goal?: GoalState | null;
 }
@@ -51,11 +65,12 @@ export interface AgentThreadContext extends Record<string, unknown> {
   thinking_enabled: boolean;
   is_plan_mode: boolean;
   subagent_enabled: boolean;
-  reasoning_effort?: "minimal" | "low" | "medium" | "high";
+  reasoning_effort?: string;
   agent_name?: string;
 }
 
 export interface AgentThread extends Thread<AgentThreadState> {
+  unread?: boolean | null;
   context?: AgentThreadContext;
 }
 

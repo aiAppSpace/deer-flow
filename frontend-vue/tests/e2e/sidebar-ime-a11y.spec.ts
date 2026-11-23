@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectDesktopSidebarWidth } from "./utils/sidebar";
 
 import {
   mockLangGraphAPI,
@@ -48,9 +49,9 @@ test("desktop collapse persists an exact path/max-age cookie and survives reload
   // data-sidebar 而不是靠随状态变化的可访问名。
   const collapse = sidebar.locator('[data-sidebar="trigger"]');
 
-  await expect(sidebar).toHaveCSS("width", "256px");
+  await expectDesktopSidebarWidth(page, 256);
   await collapse.click();
-  await expect(sidebar).toHaveCSS("width", "48px");
+  await expectDesktopSidebarWidth(page, 48);
 
   const cookie = (await context.cookies()).find(
     (candidate) => candidate.name === "sidebar_state",
@@ -62,7 +63,7 @@ test("desktop collapse persists an exact path/max-age cookie and survives reload
   );
 
   await page.reload();
-  await expect(sidebar).toHaveCSS("width", "48px");
+  await expectDesktopSidebarWidth(page, 48);
   // 收起态下触发器是 display:none，悬停头部才出现——React 的 WorkspaceHeader
   // 在 collapsed 分支里用的就是 `hidden group-hover/workspace-header:block`
   // （frontend/src/components/workspace/workspace-header.tsx）。所以先把头部
@@ -70,7 +71,7 @@ test("desktop collapse persists an exact path/max-age cookie and survives reload
   const header = sidebar.locator('[data-sidebar="header"]');
   await header.hover();
   await sidebar.locator('[data-sidebar="trigger"]').click();
-  await expect(sidebar).toHaveCSS("width", "256px");
+  await expectDesktopSidebarWidth(page, 256);
   expect(
     (await context.cookies()).find(
       (candidate) => candidate.name === "sidebar_state",
@@ -82,18 +83,17 @@ test("Ctrl+B and Meta+B toggle on the page but never steal editable input", asyn
   page,
 }) => {
   await openWorkspace(page);
-  const sidebar = page.locator("#workspace-sidebar");
   const textarea = page.getByPlaceholder(/how can i assist you/i);
 
   await page.locator("body").click({ position: { x: 900, y: 100 } });
   await page.keyboard.press("Control+b");
-  await expect(sidebar).toHaveCSS("width", "48px");
+  await expectDesktopSidebarWidth(page, 48);
   await page.keyboard.press("Meta+b");
-  await expect(sidebar).toHaveCSS("width", "256px");
+  await expectDesktopSidebarWidth(page, 256);
 
   await textarea.focus();
   await page.keyboard.press("Control+b");
-  await expect(sidebar).toHaveCSS("width", "256px");
+  await expectDesktopSidebarWidth(page, 256);
   await expect(textarea).toBeFocused();
 });
 
@@ -213,7 +213,7 @@ test("keyboard focus is visible and the rail stays out of tab order", async ({
   await expect(rail).toHaveAttribute("aria-label", "Toggle Sidebar");
   await expect(rail).toHaveAttribute("tabindex", "-1");
   await rail.click();
-  await expect(sidebar).toHaveCSS("width", "48px");
+  await expectDesktopSidebarWidth(page, 48);
 });
 
 test("context usage stays mounted and never retains another thread's value", async ({
@@ -271,6 +271,10 @@ test("composition state and Safari keyCode 229 block Enter until composition end
   await openWorkspace(page, `/workspace/chats/${MOCK_THREAD_ID}`);
   const textarea = page.getByPlaceholder(/how can i assist you/i);
 
+  // Freeze browser time: Playwright transport and polling can take >50ms.
+  // These events must occur in the same composition-confirmation window.
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await textarea.fill("中文输入");
   await textarea.dispatchEvent("compositionstart");
   await textarea.press("Enter");
@@ -288,6 +292,10 @@ test("composition state and Safari keyCode 229 block Enter until composition end
   });
   await expect.poll(() => runPosts).toBe(0);
 
+  // Safari can also emit keyCode 13 immediately after compositionend.
+  await textarea.press("Enter");
+  expect(runPosts).toBe(0);
+  await page.clock.runFor(50);
   await textarea.press("Enter");
   await expect.poll(() => runPosts).toBe(1);
 });

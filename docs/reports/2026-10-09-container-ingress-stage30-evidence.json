@@ -1,0 +1,378 @@
+{
+  "date": "2026-10-09",
+  "stage": 30,
+  "recordedAt": "2026-10-09T15:10:18.959299+00:00",
+  "status": "PASS for the exact Stage30 frozen source",
+  "latestSourceFinal": true,
+  "project": "deerflow-vue-ingress-00aff39027",
+  "images": {
+    "deerflow-ingress-vue:stage30-final": "sha256:4b64788bb5ee055fc0892c92938cb7c72592ec2f76d41186cea8485a67bcffe6",
+    "deerflow-ingress-react:stage30-final": "sha256:e1fdc23ff45c6a368879d833a9139cc1f4e3d0cefe5e48bd1c4f5aba5e18a4eb",
+    "deerflow-ingress-gateway-browser:stage25": "sha256:eabda78a6c905d45bd1030262ef935ad75559b4e361e86cad03ed01a5b703206",
+    "nginx:alpine": "sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752"
+  },
+  "sourceFingerprint": "docs/reports/2026-10-09-container-stage30-source-fingerprint.json",
+  "sourceSummary": [
+    {
+      "frontend": "frontend-vue",
+      "files": 897,
+      "sha256": "6f3b2b392e209710ce6c4fcd2cc105167ae44a6eedf3810f9e7dfe65814c2e9f",
+      "differentFromStage29": [
+        "frontend-vue/app/components/markdown/MarkdownPre.vue",
+        "frontend-vue/app/core/i18n/locales/en-US.ts",
+        "frontend-vue/app/core/i18n/locales/types.ts",
+        "frontend-vue/app/core/i18n/locales/zh-CN.ts",
+        "frontend-vue/app/pages/auth/callback.vue",
+        "frontend-vue/app/pages/login.vue",
+        "frontend-vue/app/pages/setup.vue"
+      ]
+    },
+    {
+      "frontend": "frontend",
+      "files": 810,
+      "sha256": "0690a9bac12fd9b475eb935004f6e5f337dc9151286d1eaaac3a4472fcb90d92",
+      "differentFromStage29": [
+        "frontend/src/app/(auth)/setup/page.tsx",
+        "frontend/src/app/auth/callback/page.tsx",
+        "frontend/src/app/auth/layout.tsx",
+        "frontend/src/core/i18n/locales/en-US.ts",
+        "frontend/src/core/i18n/locales/types.ts",
+        "frontend/src/core/i18n/locales/zh-CN.ts"
+      ]
+    }
+  ],
+  "sourceVerification": {
+    "currentListedInputDrift": [],
+    "snapshotListedInputDrift": [],
+    "currentCompleteInputScan": [
+      {
+        "frontend": "frontend-vue",
+        "files": 897,
+        "added": [],
+        "missing": [],
+        "changed": []
+      },
+      {
+        "frontend": "frontend",
+        "files": 810,
+        "added": [],
+        "missing": [],
+        "changed": []
+      }
+    ]
+  },
+  "realAuthentication": true,
+  "checks": {
+    "evidence-replay.json": {
+      "project": "deerflow-vue-ingress-00aff39027",
+      "phase": "replay",
+      "origin": "http://vue.localhost:2326",
+      "status": "PASS",
+      "checks": [
+        "Vue hostname HTML and real UI login/HttpOnly/CSRF/expected-owner",
+        "default and unknown hostname retain React",
+        "2 MiB multipart upload and exact download/range through nginx -> Gateway",
+        "incremental uncompressed SSE rewrite and replay-produced exact artifact"
+      ],
+      "sse": {
+        "chunks": 16,
+        "firstMs": 157.89999997615814,
+        "totalMs": 3918.0999999940395
+      },
+      "observedBrowserApiPaths": [
+        "GET /api/channels/providers",
+        "GET /api/features",
+        "GET /api/models",
+        "GET /api/plugins",
+        "GET /api/skills",
+        "GET /api/suggestions/config",
+        "GET /api/thread-activity",
+        "GET /api/threads/33752738-df13-49ab-a184-f42157fe2c30/artifacts/mnt/user-data/outputs/note.txt",
+        "GET /api/threads/a5493d1b-ff2c-4eda-8480-f84751bfcfbf/uploads/limits",
+        "GET /api/threads/bec4e79a-585c-4912-b3fd-b8f517c44cb4/artifacts/mnt/user-data/uploads/ingress.txt",
+        "GET /api/v1/auth/me",
+        "GET /api/v1/auth/preferences",
+        "GET /api/v1/auth/providers",
+        "GET /api/v1/auth/setup-status",
+        "PATCH /api/v1/auth/preferences",
+        "POST /api/langgraph/threads",
+        "POST /api/langgraph/threads/33752738-df13-49ab-a184-f42157fe2c30/runs/stream",
+        "POST /api/langgraph/threads/search",
+        "POST /api/threads/bec4e79a-585c-4912-b3fd-b8f517c44cb4/uploads",
+        "POST /api/threads/search",
+        "POST /api/v1/auth/login/local"
+      ]
+    },
+    "evidence-browser.json": {
+      "project": "deerflow-vue-ingress-00aff39027",
+      "phase": "browser",
+      "origin": "http://vue.localhost:2326",
+      "status": "PASS",
+      "checks": [
+        "Vue hostname HTML and real UI login/HttpOnly/CSRF/expected-owner",
+        "default and unknown hostname retain React",
+        "same-origin Cookie/Origin WS upgrade and real Chromium binary frame through nginx -> Gateway"
+      ],
+      "ws": {
+        "opened": true,
+        "bytes": 77265,
+        "closeCode": 1000
+      },
+      "observedBrowserApiPaths": [
+        "GET /api/channels/providers",
+        "GET /api/features",
+        "GET /api/models",
+        "GET /api/plugins",
+        "GET /api/skills",
+        "GET /api/suggestions/config",
+        "GET /api/thread-activity",
+        "GET /api/threads/924770bf-ccac-48c5-a456-1cf4ab090533/uploads/limits",
+        "GET /api/v1/auth/me",
+        "GET /api/v1/auth/preferences",
+        "GET /api/v1/auth/providers",
+        "GET /api/v1/auth/setup-status",
+        "PATCH /api/v1/auth/preferences",
+        "POST /api/langgraph/threads",
+        "POST /api/langgraph/threads/search",
+        "POST /api/threads/a7e0a226-59d1-48d8-b392-e830fed1aee6/browser/navigate",
+        "POST /api/threads/search",
+        "POST /api/v1/auth/login/local"
+      ]
+    },
+    "evidence-private-nuxt.json": {
+      "status": "PASS",
+      "path": "private Nuxt -> real Gateway",
+      "checks": [
+        "real register/login/HttpOnly/owner",
+        "CSRF and expected-owner",
+        "models",
+        "LangGraph thread rewrite",
+        "2 MiB multipart upload",
+        "exact download and range",
+        "incremental replay SSE and exact produced artifact"
+      ],
+      "sse": {
+        "chunks": 17,
+        "firstMs": 735.667625,
+        "totalMs": 3320.048834
+      },
+      "ws": "public nginx -> Gateway is validated separately; no Nuxt WS claim"
+    }
+  },
+  "containerHealth": [
+    {
+      "Service": "frontend",
+      "Image": "deerflow-ingress-react:stage30-final",
+      "Health": "healthy",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "",
+          "TargetPort": 3000,
+          "PublishedPort": 0,
+          "Protocol": "tcp"
+        }
+      ]
+    },
+    {
+      "Service": "frontend-vue",
+      "Image": "deerflow-ingress-vue:stage30-final",
+      "Health": "healthy",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "",
+          "TargetPort": 3000,
+          "PublishedPort": 0,
+          "Protocol": "tcp"
+        }
+      ]
+    },
+    {
+      "Service": "gateway",
+      "Image": "deerflow-ingress-gateway-browser:stage25",
+      "Health": "healthy",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "",
+          "TargetPort": 8001,
+          "PublishedPort": 0,
+          "Protocol": "tcp"
+        }
+      ]
+    },
+    {
+      "Service": "nginx",
+      "Image": "nginx:alpine",
+      "Health": "",
+      "State": "running",
+      "Publishers": [
+        {
+          "URL": "127.0.0.1",
+          "TargetPort": 2026,
+          "PublishedPort": 2326,
+          "Protocol": "tcp"
+        }
+      ]
+    }
+  ],
+  "formalContainerSmoke": {
+    "command": "frontend-vue/scripts/container-smoke.sh deerflow-ingress-vue:stage30-final",
+    "exitCode": 0,
+    "checks": [
+      "non-root runtime",
+      "real health JSON",
+      "minimal production output without app/tests",
+      "actual Showcase HTML/manifest/JPG/allowlisted artifact",
+      "unlisted/unknown/traversal 404",
+      "SIGTERM lifecycle"
+    ],
+    "dockerEvents": {
+      "container": "deer-flow-frontend-vue-m0-31438",
+      "image": "deerflow-ingress-vue:stage30-final",
+      "smokeExitCode": 0,
+      "events": [
+        {
+          "action": "create",
+          "time": 1791557909,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "start",
+          "time": 1791557910,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_create: sh -c test -f /app/.output/server/index.mjs &&    test -f /app/.output/public/demo/threads/7cfa5f8f-a2f8-47ad-acbd-da7137baf990/thread.json &&    test -f /app/.output/public/demo/threads/7cfa5f8f-a2f8-47ad-acbd-da7137baf990/user-data/outputs/index.html &&    test -f /app/.output/public/images/7cfa5f8f-a2f8-47ad-acbd-da7137baf990.jpg &&    test ! -d /app/app && test ! -d /app/tests",
+          "time": 1791557913,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_start: sh -c test -f /app/.output/server/index.mjs &&    test -f /app/.output/public/demo/threads/7cfa5f8f-a2f8-47ad-acbd-da7137baf990/thread.json &&    test -f /app/.output/public/demo/threads/7cfa5f8f-a2f8-47ad-acbd-da7137baf990/user-data/outputs/index.html &&    test -f /app/.output/public/images/7cfa5f8f-a2f8-47ad-acbd-da7137baf990.jpg &&    test ! -d /app/app && test ! -d /app/tests",
+          "time": 1791557913,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_die",
+          "time": 1791557913,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": "0"
+        },
+        {
+          "action": "exec_create: node -e fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "time": 1791557915,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_start: node -e fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "time": 1791557915,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_die",
+          "time": 1791557919,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": "127"
+        },
+        {
+          "action": "exec_create: node -e fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "time": 1791557924,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_start: node -e fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "time": 1791557924,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "exec_die",
+          "time": 1791557928,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": "127"
+        },
+        {
+          "action": "kill",
+          "time": 1791557937,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": "15",
+          "exitCode": null
+        },
+        {
+          "action": "stop",
+          "time": 1791557940,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        },
+        {
+          "action": "die",
+          "time": 1791557940,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": "0"
+        },
+        {
+          "action": "destroy",
+          "time": 1791557942,
+          "name": "deer-flow-frontend-vue-m0-31438",
+          "signal": null,
+          "exitCode": null
+        }
+      ],
+      "sigterm15": true,
+      "exitZero": true,
+      "sigkill9": false,
+      "destroyed": true
+    }
+  },
+  "pngReview": {
+    "reviewed": [
+      "ingress-replay.png",
+      "ingress-browser.png"
+    ],
+    "result": "Actual Vue workspace renders cleanly. These show the ingress/login surface, not full cross-app visual parity or remote browser panel rendering.",
+    "sha256": {
+      "ingress-replay.png": "98befa609d4aec07824ca549135a806df98907110143b700e5a36526da0f3a28",
+      "ingress-browser.png": "98befa609d4aec07824ca549135a806df98907110143b700e5a36526da0f3a28"
+    }
+  },
+  "probeSourceSha256": {
+    "frontend-vue/tests/support/probe_container_ingress.mjs": "6adde9c7e748ead739494ea0a4661ad8f78f6c3c19492b39e00febce51c419ac",
+    "frontend-vue/tests/support/probe_nuxt_container_proxy.mjs": "1f601fa49e2982beb294c4da9734ac1ded2ca1148bea476dc90c2e21d2a5bd0f",
+    "frontend-vue/scripts/container-smoke.sh": "6f6dd87f796efe52f0b60aa8bc711fc16f2647c42f530b1f9fd5c505303b1e46"
+  },
+  "gatewayRebuiltForFrontendRefresh": false,
+  "privateRuntimeConfigTrackedFilesTouched": false,
+  "externalMCP_IM_IdP_DNS_TLS_Claimed": false,
+  "cleanup": {
+    "status": "deferred",
+    "reason": "Keep dedicated Gateway/runtime available while root runs final full cross-app acceptance; independent fixture/home/SQL and images/cache are preserved. Only this manifest may be cleaned."
+  },
+  "reactRebuiltAtStage30": true,
+  "backendProductionSourceVerification": {
+    "checkedAppHarnessExtensionApiAndDockerLockFiles": 892,
+    "currentVsSnapshotDrift": [],
+    "bothPackageMetadataSame": true
+  },
+  "formalGateBoundary": "This covers canonical builds, dedicated real Docker ingress and formal Vue image smoke for the recorded source. Root full cross-app/verify and composer Linux gates have independent evidence; no external IdP/DNS/TLS/MCP/IM readiness claim."
+}

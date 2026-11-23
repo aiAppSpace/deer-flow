@@ -112,6 +112,27 @@ test.describe("real backend render (replay, no API key)", () => {
       timeout: 30_000,
     });
 
+    // A short write can finish before the pending-preview delay. Inspect the
+    // real file through its tool step, then return to composing with it open.
+    await chat.getByRole("button", { name: /^\d+ more steps?$/ }).click();
+    await chat
+      .getByText("Create the requested output file with exact content", {
+        exact: true,
+      })
+      .click();
+    const artifacts = page.locator("#artifacts");
+    await expect(artifacts).toBeVisible();
+    await expect(
+      artifacts.getByText("note.txt", { exact: true }),
+    ).toBeVisible();
+    await expect(artifacts.locator(".cm-content")).toHaveText(
+      "hi from replay.",
+    );
+    await chat.getByRole("button", { name: "Less steps", exact: true }).click();
+    await textarea.click();
+    await expect(textarea).toBeFocused();
+    await expect(artifacts).toBeVisible();
+
     // Visual regression is OS-sensitive (a macOS baseline won't match CI's
     // Linux render), so it's a local dev gate only; in CI we capture the render
     // as an artifact for human review instead of hard-asserting a cross-OS

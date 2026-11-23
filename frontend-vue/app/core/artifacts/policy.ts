@@ -3,7 +3,7 @@
   【架构位置】     L3
   【主要导出】     classifyArtifact / canLoadArtifactText / canSaveArtifactText / canInstallSkillArtifact
   【依赖关系】     无
-  【边界与注意】   未知扩展名、无扩展名、SVG、Office 与归档一律 fail closed；MIME 只能收窄能力。
+  【边界与注意】   正式文件按显式扩展名白名单分类；未知类型只下载。write-file 草稿按文本呈现，.skill 读取 SKILL.md；不以 MIME 推断能力。
 */
 
 export type ArtifactSource = "formal" | "write-file-draft" | "skill-archive";
@@ -37,49 +37,108 @@ export type ArtifactPolicy =
     };
 
 const TEXT_LANGUAGES: Readonly<Record<string, string>> = {
-  bash: "bash",
-  c: "c",
-  cc: "cpp",
-  cjs: "javascript",
-  cpp: "cpp",
-  css: "css",
-  csv: "csv",
-  go: "go",
-  h: "c",
-  hpp: "cpp",
-  htm: "html",
-  html: "html",
-  java: "java",
-  js: "javascript",
-  json: "json",
-  jsonl: "json",
-  jsx: "jsx",
-  log: "text",
-  md: "markdown",
-  mdx: "markdown",
-  mjs: "javascript",
-  php: "php",
-  py: "python",
-  rb: "ruby",
-  rs: "rust",
-  scss: "scss",
-  sh: "bash",
-  sql: "sql",
-  toml: "toml",
-  ts: "typescript",
-  tsv: "tsv",
-  tsx: "tsx",
   txt: "text",
+  csv: "csv",
+  tsv: "tsv",
+  log: "text",
+  conf: "text",
+  config: "text",
+  properties: "text",
+  props: "text",
+  js: "javascript",
+  jsx: "jsx",
+  ts: "typescript",
+  tsx: "tsx",
+  mjs: "javascript",
+  cjs: "javascript",
+  mts: "typescript",
+  cts: "typescript",
+  html: "html",
+  htm: "html",
+  css: "css",
+  scss: "scss",
+  sass: "sass",
+  less: "less",
   vue: "vue",
-  xml: "xml",
+  svelte: "svelte",
+  astro: "astro",
+  py: "python",
+  pyi: "python",
+  pyw: "python",
+  java: "java",
+  kt: "kotlin",
+  kts: "kotlin",
+  scala: "scala",
+  groovy: "groovy",
+  c: "c",
+  h: "c",
+  cpp: "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  hpp: "cpp",
+  hxx: "cpp",
+  hh: "cpp",
+  cs: "csharp",
+  go: "go",
+  rs: "rust",
+  rb: "ruby",
+  rake: "ruby",
+  php: "php",
+  sh: "bash",
+  bash: "bash",
+  zsh: "zsh",
+  fish: "fish",
+  json: "json",
+  jsonc: "jsonc",
+  json5: "json5",
   yaml: "yaml",
   yml: "yaml",
+  toml: "toml",
+  xml: "xml",
+  ini: "ini",
+  env: "dotenv",
+  md: "markdown",
+  mdx: "mdx",
+  rst: "rst",
+  sql: "sql",
+  swift: "swift",
+  dart: "dart",
+  lua: "lua",
+  r: "r",
+  matlab: "matlab",
+  julia: "julia",
+  jl: "julia",
+  elm: "elm",
+  haskell: "haskell",
+  hs: "haskell",
+  elixir: "elixir",
+  ex: "elixir",
+  clj: "clojure",
+  cljs: "clojure",
+  dockerfile: "dockerfile",
+  docker: "docker",
+  tf: "terraform",
+  tfvars: "terraform",
+  hcl: "hcl",
+  makefile: "makefile",
+  cmake: "cmake",
+  gradle: "groovy",
+  gitignore: "git-commit",
+  gitattributes: "git-commit",
+  graphql: "graphql",
+  gql: "graphql",
+  proto: "protobuf",
+  prisma: "prisma",
+  wasm: "wasm",
+  zig: "zig",
+  v: "v",
 };
 
 const MEDIA_EXTENSIONS: Readonly<Record<string, ArtifactPreviewKind>> = {
   apng: "image",
   avif: "image",
   bmp: "image",
+  ico: "image",
   gif: "image",
   jpeg: "image",
   jpg: "image",
@@ -89,20 +148,17 @@ const MEDIA_EXTENSIONS: Readonly<Record<string, ArtifactPreviewKind>> = {
   flac: "audio",
   m4a: "audio",
   mp3: "audio",
-  oga: "audio",
   ogg: "audio",
   wav: "audio",
-  weba: "audio",
   m4v: "video",
   mov: "video",
   mp4: "video",
-  ogv: "video",
   webm: "video",
 };
 
 function sourceOf(filepath: string): ArtifactSource {
   if (filepath.startsWith("write-file:")) return "write-file-draft";
-  return filepath.split(/[?#]/, 1)[0]?.toLowerCase().endsWith(".skill")
+  return filepath.split(/[?#]/, 1)[0]?.endsWith(".skill")
     ? "skill-archive"
     : "formal";
 }
@@ -117,8 +173,7 @@ function extensionOf(filepath: string) {
     }
   }
   const name = normalized.slice(normalized.lastIndexOf("/") + 1);
-  const dot = name.lastIndexOf(".");
-  return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  return (name.split(".").at(-1) ?? "").toLowerCase();
 }
 
 export function classifyArtifact(
@@ -171,6 +226,10 @@ export function classifyArtifact(
       language: null,
       previewKind: "pdf",
     };
+  }
+
+  if (source === "write-file-draft") {
+    return { ...common, kind: "text", language: "text", previewKind: null };
   }
 
   return {

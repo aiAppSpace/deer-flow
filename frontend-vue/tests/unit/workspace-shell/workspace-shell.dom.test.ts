@@ -20,7 +20,6 @@ import {
   buildSettingsCloseLocation,
   readSettingsSection,
 } from "@/core/workspace-shell/settings-query";
-import { createGatewayRecoveryTracker } from "@/core/workspace-shell/gateway-recovery";
 
 describe("workspace toast owner", () => {
   it("announces success/error, dismisses explicitly, and clears timers", () => {
@@ -69,6 +68,45 @@ describe("workspace toast owner", () => {
     这里断言的是**传给 timer 的那个毫秒数**，不是常量本身：
     默认值改了但 `schedule()` 忘了用它，钉常量的写法看不出来。
   */
+  it("pauses the existing lifetime and resumes only the remaining time, including new notices while paused", () => {
+    vi.useFakeTimers();
+    try {
+      const store = createWorkspaceToastStore();
+      const first = store.message("First");
+      vi.advanceTimersByTime(1000);
+      store.setPaused(true);
+      const second = store.message("Second");
+      vi.advanceTimersByTime(10_000);
+      expect(store.toasts.value.map(({ id }) => id)).toEqual([first, second]);
+      store.setPaused(false);
+      vi.advanceTimersByTime(2999);
+      expect(store.toasts.value).toHaveLength(2);
+      vi.advanceTimersByTime(1);
+      expect(store.toasts.value.map(({ id }) => id)).toEqual([second]);
+      vi.advanceTimersByTime(1000);
+      expect(store.toasts.value).toEqual([]);
+      store.clear();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("keeps dismiss and clear authoritative while the viewport lifetime is paused", () => {
+    vi.useFakeTimers();
+    try {
+      const store = createWorkspaceToastStore();
+      const id = store.error("Rejected");
+      store.setPaused(true);
+      store.dismiss(id);
+      store.message("Updated", { id });
+      store.clear();
+      store.setPaused(false);
+      vi.advanceTimersByTime(10_000);
+      expect(store.toasts.value).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("defaults to sonner's 4000ms lifetime", () => {
     const delays: number[] = [];
     const timer: ToastTimer = {
@@ -81,16 +119,16 @@ describe("workspace toast owner", () => {
     const store = createWorkspaceToastStore({ timer });
     store.success("Export complete");
     store.warning("Careful");
-    expect(delays).toEqual([4_000, 4_000]);
+    store.message("Retrying");
+    expect(delays).toEqual([4_000, 4_000, 4_000]);
   });
 
   /*
-    四个 kind 与上游 sonner 的四种 toast 一一对应
-    （`toast.success/error/info/warning`，实测调用点 33/86/10/3 处）。
+    plain message 与四个 status kind 对应当前 React 的 sonner 调用。
     warning 此前折进 info，理由是「toaster 一个图标都不画，两档没有可观察差别」
     ——wave 73 补上图标之后那条理由不成立了。
   */
-  it("exposes the same four toast kinds sonner does", () => {
+  it("exposes a plain message and the four status toast kinds", () => {
     const store = createWorkspaceToastStore({
       timer: { set: () => 1, clear() {} },
     });
@@ -98,11 +136,13 @@ describe("workspace toast owner", () => {
     store.error("b");
     store.info("c");
     store.warning("d");
+    store.message("e");
     expect(store.toasts.value.map((toast) => toast.kind)).toEqual([
       "success",
       "error",
       "info",
       "warning",
+      "default",
     ]);
   });
 });
@@ -213,18 +253,5 @@ describe("settings query state machine", () => {
       query: { tab: "files", tag: ["a", "b"] },
       hash: "#run-2",
     });
-  });
-});
-
-describe("Gateway recovery transition", () => {
-  it("announces only an unavailable to recovered transition", () => {
-    const recovered = vi.fn();
-    const tracker = createGatewayRecoveryTracker(recovered);
-    tracker.observe("authenticated");
-    tracker.observe("unavailable");
-    tracker.observe("unavailable");
-    tracker.observe("authenticated");
-    tracker.observe("authenticated");
-    expect(recovered).toHaveBeenCalledTimes(1);
   });
 });

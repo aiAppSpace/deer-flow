@@ -139,13 +139,30 @@ describe("会话目录", () => {
   });
 
   it("点一章会滚过去，并把它标成当前", async () => {
-    const scrolled: unknown[] = [];
-    Element.prototype.scrollIntoView = function (
-      this: Element,
-      ...args: unknown[]
-    ) {
-      scrolled.push({ index: this.getAttribute("data-index"), args });
-    } as never;
+    const scrolled: ScrollToOptions[] = [];
+    const rect = vi
+      .spyOn(Element.prototype, "getBoundingClientRect")
+      .mockImplementation(function (this: Element) {
+        const index = Number(
+          this.getAttribute("data-message-group-index") ?? 0,
+        );
+        return {
+          top: index * 100,
+          bottom: index * 100 + 80,
+          left: 0,
+          right: 800,
+          width: 800,
+          height: 80,
+          x: 0,
+          y: index * 100,
+          toJSON: () => ({}),
+        };
+      });
+    const scroll = vi
+      .spyOn(Element.prototype, "scrollTo")
+      .mockImplementation((options?: ScrollToOptions | number) => {
+        if (typeof options === "object") scrolled.push(options);
+      });
     const wrapper = mountList({ messages: turns(6) });
     await flushPromises();
     trigger()!.click();
@@ -163,9 +180,9 @@ describe("会话目录", () => {
     await wrapper.vm.$nextTick();
 
     // 第三章对应第 5 组（每轮两组：human 在偶数位）。
-    expect(
-      scrolled.some((entry) => (entry as { index: string }).index === "4"),
-    ).toBe(true);
+    expect(scrolled.some((options) => options.top === 384)).toBe(true);
+    rect.mockRestore();
+    scroll.mockRestore();
     expect(
       document.body.querySelector('[aria-current="location"]')?.textContent,
     ).toContain("Question 2");

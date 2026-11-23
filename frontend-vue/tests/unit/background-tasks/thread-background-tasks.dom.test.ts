@@ -285,7 +285,9 @@ describe("ThreadBackgroundTasks", () => {
     view.click();
     await flushPromises();
     await wrapper.vm.$nextTick();
-    expect(api.detail).toHaveBeenCalledWith("thread-1", "done");
+    expect(api.detail).toHaveBeenCalledWith("thread-1", "done", {
+      signal: expect.any(AbortSignal),
+    });
     expect(document.body.textContent).toContain("42 rows");
     wrapper.unmount();
   });

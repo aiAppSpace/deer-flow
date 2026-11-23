@@ -5,7 +5,7 @@
   必须命中、移动并恢复真实控件，避免没有样本时静默绿灯。
 */
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { waitForDomQuiet, waitForFiniteAnimations } from "./support/settle";

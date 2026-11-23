@@ -147,6 +147,12 @@ export function SidecarPanel({ className }: { className?: string }) {
   } | null>(null);
   const { data: uploadLimits } = useUploadLimits(
     sidecar.sidecarThreadId ?? sidecar.parentThreadId,
+    {
+      observation:
+        sidecar.sidecarThreadId === null
+          ? sidecar.consumptionObservation
+          : null,
+    },
   );
 
   const selectedModel = useMemo(() => {
@@ -621,7 +627,7 @@ export function SidecarPanel({ className }: { className?: string }) {
               />
             </PromptInputBody>
             <PromptInputFooter className="@container flex flex-wrap gap-2">
-              <PromptInputTools className="min-w-0 grow flex-nowrap overflow-hidden">
+              <PromptInputTools className="min-w-0 grow flex-wrap">
                 <SidecarAddAttachmentsButton uploadLimits={uploadLimits} />
                 <SidecarModeMenu
                   context={sidecar.context}

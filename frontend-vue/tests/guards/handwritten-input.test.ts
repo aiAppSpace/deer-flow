@@ -2,7 +2,7 @@
   【文件职责】     钉住「哪些文件还在手写 <input> / <textarea>」这份集合，**双向**。
   【架构位置】     守卫
   【主要导出】     无；vitest 用例
-  【依赖关系】     app/components/**、app/pages/**
+  【依赖关系】     scripts/lib/strip-comments.mjs · app/components/**、app/pages/**
   【边界与注意】   这份清单是 `handwritten-button` 的同胞，判据也是同一条：
                    不是「手写输入框是缺陷」，而是 **「上游同一处走的是哪条路径」**：
 
@@ -33,6 +33,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { stripComments } from "../../scripts/lib/strip-comments.mjs";
+
 const appDir = fileURLToPath(new URL("../../app", import.meta.url));
 
 /**
@@ -57,25 +59,57 @@ const ALLOWED: Record<string, [number, string]> = {
     1,
     "布尔字段的 checkbox，上游 `workspace/messages/human-input-card.tsx:445` 同样手写",
   ],
+  "components/chat/MentionPicker.vue": [
+    1,
+    "workspace/mentions/mention-picker.tsx:294 的搜索是原生 input",
+  ],
   "components/ui/input/Input.vue": [1, "primitive 自己"],
   "components/ui/textarea/Textarea.vue": [1, "primitive 自己"],
+  "components/workspace/KnowledgeScopeSelector.vue": [
+    2,
+    "workspace/knowledge-scope-selector.tsx:370/421 的范围 radio 与资料库 checkbox 也是原生 input",
+  ],
   "components/workspace/agents/AgentSettingsDialog.vue": [
     2,
     "subagent 绑定的两组 checkbox，上游 `workspace/agents/agent-settings-dialog.tsx:385/412` " +
       "同样手写（同一个对话框里的温度 / 最大 token 已经换成 `ui/input` 了）",
+  ],
+  "components/workspace/agents/CapabilitySelectionField.vue": [
+    2,
+    "workspace/agents/agent-capability-selection.tsx:36/55 的全选及候选 checkbox 也是原生 input",
   ],
   "components/workspace/artifacts/ArtifactTablePreview.vue": [
     2,
     "「首行是表头」的 checkbox 与只读单元格的 textarea，上游 " +
       "`workspace/artifacts/artifact-table-preview.tsx:113/274` 两处都手写",
   ],
+  "components/workspace/capabilities/PluginIconPicker.vue": [
+    1,
+    "workspace/capabilities/plugin-icon-picker.tsx:118 的隐藏 file input 也是原生 input",
+  ],
+  "components/workspace/capabilities/SkillGallery.vue": [
+    1,
+    "workspace/capabilities/skill-gallery.tsx:210 的隐藏技能上传也是原生 file input",
+  ],
+  "components/workspace/knowledge/DocumentSelector.vue": [
+    3,
+    "workspace/knowledge-scope-selector.tsx:117/129/176 的文档范围 radio 及候选 checkbox 也是原生 input",
+  ],
+  "components/workspace/projects/ProjectDocumentsSection.vue": [
+    1,
+    "workspace/projects/project-documents-section.tsx:237 的文档上传也是原生 file input",
+  ],
+  "components/workspace/scheduled-tasks/ScheduledTaskRenewDialog.vue": [
+    2,
+    "workspace/scheduled-tasks/renew-limits-dialog.tsx:296 的 checkboxToggle 在 :207/233 实例化两次",
+  ],
+  "components/workspace/settings/ManagedModelEditor.vue": [
+    2,
+    "workspace/settings/model-settings-page.tsx:287/334 的清除密钥和视觉支持也是原生 checkbox",
+  ],
   "components/workspace/settings/MemorySettings.vue": [
     1,
     "隐藏的导入 file input，上游 `workspace/settings/memory-settings-page.tsx:591` 同样手写",
-  ],
-  "components/workspace/settings/SkillSettings.vue": [
-    1,
-    "sr-only 的 .skill file input，上游 `workspace/settings/skill-settings-page.tsx:167` 同样手写",
   ],
   "components/workspace/sidecar/SidecarPanel.vue": [
     2,
@@ -85,7 +119,15 @@ const ALLOWED: Record<string, [number, string]> = {
     1,
     "「记住登录」的 checkbox，上游 `auth/remember-session-option.tsx:18` 同样手写",
   ],
-  "pages/setup.vue": [1, "同 login.vue，共用同一处上游写法"],
+  "pages/setup.vue": [
+    2,
+    "初始化管理员与强制改密的互斥表单各一处 RememberSessionOption；" +
+      "上游 (auth)/setup/page.tsx 同样在两个表单分别实例化原生 checkbox",
+  ],
+  "pages/workspace/agents/index.vue": [
+    1,
+    "workspace/agents/agent-gallery.tsx:88 的 Agent 定义包导入也是隐藏的原生 file input",
+  ],
 };
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -99,11 +141,17 @@ function walk(dir: string, out: string[] = []): string[] {
 
 /** 注释剥成等长空白：行号不漂，`<input` 只剩真的开标签。 */
 function strip(source: string): string {
-  const blank = (m: string) => m.replaceAll(/[^\n]/g, " ");
-  return source
-    .replaceAll(/<!--[\s\S]*?-->/g, blank)
-    .replaceAll(/\/\*[\s\S]*?\*\//g, blank);
+  return stripComments(source, ["html", "block", "line"]);
 }
+
+it("preserves live tokens after quoted comment delimiters and ignores real comments", () => {
+  const source =
+    '<script>const glob = "/workspace/**";</script>\n<template><input</template>\n/* <input */';
+  const stripped = strip(source);
+  expect(stripped.split("<input").length - 1).toBe(1);
+  expect(stripped.indexOf("<input")).toBe(source.indexOf("<input"));
+  expect(stripped.length).toBe(source.length);
+});
 
 const counts = new Map<string, number>();
 for (const file of [

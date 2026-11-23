@@ -52,3 +52,23 @@ test("fetchWorkspaceChanges can request file metadata without diffs", async () =
     expect.objectContaining({ credentials: "include" }),
   );
 });
+
+for (const [body, message] of [
+  [{ detail: "  exact detail  " }, "  exact detail  "],
+  [{ detail: "" }, ""],
+  [{ detail: { code: "run_missing", message: "Run missing" } }, "Run missing"],
+  [{ detail: [{ msg: "Invalid field" }] }, "Failed to load workspace changes."],
+  [null, "Failed to load workspace changes."],
+] as const) {
+  test(`workspace change error presentation for ${JSON.stringify(body)}`, async () => {
+    rs.stubGlobal(
+      "fetch",
+      rs.fn().mockResolvedValue(Response.json(body, { status: 422 })),
+    );
+    const { fetchWorkspaceChanges } =
+      await import("@/core/workspace-changes/api");
+    await expect(
+      fetchWorkspaceChanges({ threadId: "t", runId: "r" }),
+    ).rejects.toMatchObject({ message, status: 422 });
+  });
+}

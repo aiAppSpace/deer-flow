@@ -520,6 +520,7 @@ function TaskForm({
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-auto min-h-8 max-w-full whitespace-normal"
                 onClick={() => applyRecipe(recipe)}
               >
                 <span aria-hidden>{recipe.icon}</span>
@@ -720,6 +721,7 @@ function TaskForm({
               <Button
                 type="button"
                 size="sm"
+                className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
                 variant={reuse ? "outline" : "default"}
                 aria-pressed={!reuse}
                 onClick={() => set("contextMode", "fresh_thread_per_run")}
@@ -729,6 +731,7 @@ function TaskForm({
               <Button
                 type="button"
                 size="sm"
+                className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
                 variant={reuse ? "default" : "outline"}
                 aria-pressed={reuse}
                 onClick={() => set("contextMode", "reuse_thread")}

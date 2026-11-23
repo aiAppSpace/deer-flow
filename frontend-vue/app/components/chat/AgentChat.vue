@@ -19,8 +19,6 @@ import {
 import { useQueryClient } from "@tanstack/vue-query";
 import {
   Bot,
-  CalendarClock,
-  Check,
   CircleCheckBig,
   Info,
   MoreHorizontal,
@@ -34,7 +32,7 @@ import AgentWelcome from "@/components/chat/AgentWelcome.vue";
 import ChatComposer from "@/components/chat/ChatComposer.vue";
 import MessageList from "@/components/chat/MessageList.vue";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,8 +40,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import AuroraText from "@/components/ui/effects/AuroraText.vue";
+import { provideFocusReveal } from "@/components/ui/scroll-area/focus-reveal";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -51,6 +49,7 @@ import {
 } from "@/components/ui/tooltip";
 import ContextUsageBadge from "@/components/workspace/ContextUsageBadge.vue";
 import ThreadArchiveStatus from "@/components/workspace/ThreadArchiveStatus.vue";
+import ProjectAffiliationBadge from "@/components/workspace/ProjectAffiliationBadge.vue";
 import ThreadBackgroundTasks from "@/components/workspace/ThreadBackgroundTasks.vue";
 import ThreadSubagentBatches from "@/components/workspace/ThreadSubagentBatches.vue";
 import GoalStatus from "@/components/workspace/GoalStatus.vue";
@@ -60,47 +59,63 @@ import TokenUsageIndicator from "@/components/chat/TokenUsageIndicator.vue";
 import WorkspacePanels from "@/components/workspace/WorkspacePanels.vue";
 import ArtifactOverview from "@/components/workspace/artifacts/ArtifactOverview.vue";
 import ArtifactTrigger from "@/components/workspace/artifacts/ArtifactTrigger.vue";
-import BrowserPanel from "@/components/workspace/browser-view/BrowserPanel.vue";
+
 import BrowserTrigger from "@/components/workspace/browser-view/BrowserTrigger.vue";
 import ExportTrigger from "@/components/workspace/ExportTrigger.vue";
-import SidecarPanel from "@/components/workspace/sidecar/SidecarPanel.vue";
+import ConversationExtensionActions from "@/components/workspace/extensions/ConversationExtensionActions.vue";
+import ThreadScheduledTasksButton from "@/components/workspace/ThreadScheduledTasksButton.vue";
+import {
+  useScheduleToolResultRefresh,
+  useThreadScheduledTaskEvents,
+} from "@/composables/useThreadScheduledTasks";
+import MessageDetailsPanel from "@/components/workspace/message-details/MessageDetailsPanel.vue";
+
 import SidecarTrigger from "@/components/workspace/sidecar/SidecarTrigger.vue";
-import { useArtifactsPanel } from "@/composables/useArtifactsPanel";
+import { useChatPanels } from "@/composables/useChatPanels";
+import { useChatConversationActions } from "@/composables/useChatConversationActions";
 import { useAgentCreationSession } from "@/composables/useAgentCreationSession";
-import { useSidecar } from "@/composables/useSidecar";
-import { useSidecarSession } from "@/composables/useSidecarSession";
+import { useChatAgent } from "@/composables/useChatAgent";
 import { useThreadStream } from "@/composables/useThreadStream";
+import { useShowcaseThreadState } from "@/composables/useShowcaseThreadState";
 import { useThreadMetadata } from "@/composables/useThreadMetadata";
+import { useMarkOpenThreadRead } from "@/composables/useThreadActivity";
+import { useActiveThreadRun } from "@/composables/useActiveThreadRun";
+import {
+  useChatThreadOwner,
+  type ChatSubmissionOwner,
+} from "@/composables/useChatThreadOwner";
+import KnowledgeScopeSelector from "@/components/workspace/KnowledgeScopeSelector.vue";
+import { provideKnowledgeSources } from "./knowledge-sources-context";
+import {
+  useBrowserControlEnabled,
+  useKnowledgeBaseEnabled,
+} from "@/composables/useWorkspaceFeatures";
+import { useConversationKnowledgeScope } from "@/composables/useConversationKnowledgeScope";
+import {
+  buildComposerUploadMessages,
+  type ComposerUploadSnapshot,
+} from "@/core/threads/composer-submit";
 import { useThreads } from "@/composables/useThreads";
 import { useNotifications } from "@/composables/useNotifications";
 import { useSuggestionsConfig } from "@/composables/useSuggestionsConfig";
-import { useBrowserControlEnabled } from "@/composables/useWorkspaceFeatures";
+import { hasPermission, PERMISSIONS } from "@/core/auth/permissions";
 import { useAuthSession } from "@/composables/useAuthSession";
 import { useWorkspaceSidebar } from "@/composables/useWorkspaceSidebar";
 import { useModels } from "@/composables/useModels";
 import { useThreadSettings } from "@/composables/useThreadSettings";
 import { useThreadTokenUsage } from "@/composables/useThreadTokenUsage";
-import { branchThreadFromTurn, createThread } from "@/core/threads/api";
+import { documentTitleOfThread, projectIdOfThread } from "@/core/threads/utils";
+import { threadMetadataQueryKey } from "@/core/threads/metadata";
 import { INFINITE_THREADS_QUERY_KEY_PREFIX } from "@/core/threads/infinite";
-import { getAPIClient } from "@/core/api/api-client";
-import { fetch as fetchWithAuth } from "@/core/api/fetcher";
-import { getBackendBaseURL } from "@/core/config";
 import { isHiddenFromUIMessage, textOfMessage } from "@/core/messages/utils";
 import { notificationBody } from "@/core/notification/body";
-import type { FileInMessage } from "@/core/messages/utils";
-import {
-  buildHumanInputResponseText,
-  type HumanInputRequest,
-  type HumanInputResponse,
-} from "@/core/messages/human-input";
 import {
   AUTH_DISABLED_USER,
   isAuthDisabledMode,
 } from "@/core/auth/auth-disabled-user";
 import { safeLocalStorage } from "@/core/settings/local";
 import { useWorkspaceToast } from "@/core/workspace-shell/toast";
-import { DEFAULT_MAX_SUGGESTIONS } from "@/core/suggestions/api";
-import type { Message, ToolCall } from "@/core/types/message";
+import type { Message } from "@/core/types/message";
 import {
   selectContextUsage,
   threadTokenUsageToTokenUsage,
@@ -110,24 +125,13 @@ import {
   type ThreadPresence,
 } from "@/core/threads/thread-presence";
 import type { AgentThread, GoalState } from "@/core/threads/types";
-import { documentTitleOfThread } from "@/core/threads/utils";
 import type { Todo } from "@/core/todos";
-import {
-  buildReferenceMessageMetadata,
-  type SidecarContext,
-} from "@/core/sidecar";
-import { buildWriteFileArtifactURL } from "@/core/artifacts/utils";
 import { getAgent } from "@/core/agents/api";
 import { buildAgentSaveSubmission } from "@/core/agents/creation-session";
+import { displayNameOfAgent } from "@/core/agents/presentation";
 import { agentKeys } from "@/core/agents/query-keys";
 import type { Agent } from "@/core/agents/types";
 import { resolveComposerModel } from "@/core/models/capabilities";
-import { createAsyncGeneration } from "@/core/async/generation";
-import {
-  latestBrowserViewFrame,
-  reconcileBrowserMessageFrame,
-  type BrowserViewFrame,
-} from "@/core/browser/frame";
 import FlipDisplay from "@/components/ui/effects/FlipDisplay.vue";
 import { cn } from "@/lib/utils";
 
@@ -164,6 +168,16 @@ const RightPanelLoading = defineComponent({
   },
 });
 
+const BrowserPanel = defineAsyncComponent({
+  loader: () => import("@/components/workspace/browser-view/BrowserPanel.vue"),
+  loadingComponent: RightPanelLoading,
+  delay: 0,
+});
+const SidecarPanel = defineAsyncComponent({
+  loader: () => import("@/components/workspace/sidecar/SidecarPanel.vue"),
+  loadingComponent: RightPanelLoading,
+  delay: 0,
+});
 const ArtifactPanel = defineAsyncComponent({
   loader: () => import("@/components/workspace/artifacts/ArtifactPanel.vue"),
   loadingComponent: RightPanelLoading,
@@ -175,7 +189,7 @@ const props = defineProps<{
   bootstrap?: boolean;
   demo?: boolean;
 }>();
-const { $i18n } = useNuxtApp();
+const { $i18n, $routeAnnouncements } = useNuxtApp();
 const route = useRoute();
 const router = useRouter();
 /* 只读缓存：与侧栏共用同一个 query key，不自己发请求（见 useThreads 的 enabled）。 */
@@ -195,17 +209,28 @@ const authDisabled = isAuthDisabledMode();
 const auth = useAuthSession({
   enabled: computed(() => !authDisabled && !isDemo.value),
 });
+const permissionUser = computed(() =>
+  auth.session.value?.tag === "authenticated" ? auth.session.value.user : null,
+);
+const canCreateRuns = computed(() =>
+  hasPermission(permissionUser.value, PERMISSIONS.RUNS_CREATE),
+);
+const canStopStreaming = computed(() =>
+  hasPermission(permissionUser.value, PERMISSIONS.RUNS_CANCEL),
+);
 const currentUserId = computed(() => {
-  if (authDisabled) return AUTH_DISABLED_USER.id;
   const session = auth.session.value;
-  return session?.tag === "authenticated" ? session.user.id : null;
+  return session?.tag === "authenticated"
+    ? session.user.id
+    : authDisabled
+      ? AUTH_DISABLED_USER.id
+      : null;
 });
 const isAdmin = computed(() => {
-  if (authDisabled) return AUTH_DISABLED_USER.system_role === "admin";
   const session = auth.session.value;
-  return (
-    session?.tag === "authenticated" && session.user.system_role === "admin"
-  );
+  return session?.tag === "authenticated"
+    ? session.user.system_role === "admin"
+    : authDisabled && AUTH_DISABLED_USER.system_role === "admin";
 });
 
 const routeThreadId = computed(() => {
@@ -217,18 +242,69 @@ const initialRouteThreadId = routeThreadId.value;
 const streamThreadId = computed(() =>
   isDemo.value ? null : routeThreadId.value,
 );
-const draftThreadId = ref(globalThis.crypto.randomUUID());
-watch(routeThreadId, (id) => {
-  if (id === null) draftThreadId.value = globalThis.crypto.randomUUID();
+const projectParam = computed(() => {
+  const raw = route.query.project;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === "string" && value.trim() ? value : null;
 });
-const settingsScope = computed(() =>
-  [
-    props.agentName ? `agent:${props.agentName}` : "lead-agent",
-    routeThreadId.value ?? draftThreadId.value,
-  ].join(":"),
+const submissionOwner = useChatThreadOwner({
+  observation: {
+    surface: props.agentName ? "agent" : "main",
+    path: () => route.path,
+    mock: isDemo,
+  },
+  threadId: routeThreadId,
+  projectId: projectParam,
+  userId: currentUserId,
+  agentName: () => props.agentName,
+  onCreated: (created) => {
+    queryClient.setQueryData(
+      threadMetadataQueryKey(created.thread_id),
+      created,
+    );
+    threads.upsert(created);
+    void queryClient.invalidateQueries({
+      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
+    });
+  },
+  onProjectUnavailable: () =>
+    toast.error($i18n.t.value.projects.projectUnavailable),
+});
+const { draftThreadId, preparedThreadId, consumptionObservation } =
+  submissionOwner;
+const { agent, resolved: agentResolved } = useChatAgent({
+  agentName: () => props.agentName,
+  bootstrap: () => props.bootstrap,
+  demo: isDemo,
+  userId: currentUserId,
+  queryClient,
+});
+const knowledgeFeature = useKnowledgeBaseEnabled();
+const knowledgeSelectorVisible = computed(
+  () => knowledgeFeature.scopeSelectionEnabled.value && !isDemo.value,
 );
-const { settings, update: updateThreadSettings } =
-  useThreadSettings(settingsScope);
+const {
+  selection: knowledgeScope,
+  snapshot: currentKnowledgeScopeSnapshot,
+  agentKnowledgeEnabled,
+} = useConversationKnowledgeScope({
+  userId: currentUserId,
+  agentName: () => props.agentName,
+  conversationId: () => routeThreadId.value ?? draftThreadId.value,
+  isNewConversation: () => routeThreadId.value === null,
+  visible: knowledgeSelectorVisible,
+  agent,
+});
+// The pre-created UUID already isolates account/agent/new-session owners.
+// Keep the real thread ID as React's persisted model-override identity.
+const settingsScope = computed(
+  () => routeThreadId.value ?? draftThreadId.value,
+);
+const {
+  settings,
+  update: updateThreadSettings,
+  resolve: resolveThreadSettings,
+} = useThreadSettings(settingsScope);
 const context = computed(() => ({
   ...settings.value.context,
   ...(props.agentName ? { agent_name: props.agentName } : {}),
@@ -254,24 +330,48 @@ const welcomeColors = computed(() =>
 /** 欢迎区的技能创建分支。判据与 skillModePrompt 的 query 部分是同一个。 */
 const skillWelcome = computed(() => route.query.mode === "skill");
 const localUploading = ref(false);
-const demoMessages = ref<Message[] | null>(null);
-const demoArtifacts = ref<string[]>([]);
-const demoTitle = ref<string>();
-const agent = ref<Agent | null>(null);
-const agentResolved = ref(!props.agentName || isDemo.value);
-let agentRequest = 0;
-const followups = ref<string[]>([]);
-const followupsLoading = ref(false);
+const uploadPreview = ref<{
+  owner: ChatSubmissionOwner;
+  snapshot: ComposerUploadSnapshot;
+} | null>(null);
+function onComposerUploading(
+  value: boolean,
+  snapshot?: ComposerUploadSnapshot,
+) {
+  localUploading.value = value;
+  stream.isUploading.value = value;
+  uploadPreview.value =
+    value && snapshot ? { owner: submissionOwner.capture(), snapshot } : null;
+}
+watch(
+  [currentUserId, () => props.agentName, routeThreadId],
+  () => {
+    if (
+      uploadPreview.value &&
+      !submissionOwner.owns(uploadPreview.value.owner)
+    ) {
+      onComposerUploading(false);
+    }
+  },
+  { flush: "sync" },
+);
+const showcaseState = useShowcaseThreadState(isDemo, routeThreadId);
+const demoMessages = computed(() =>
+  isDemo.value ? (showcaseState.value.messages ?? []) : null,
+);
+const demoArtifacts = computed(() => showcaseState.value.artifacts ?? []);
+const demoTitle = computed(() => showcaseState.value.title);
+const demoTodos = computed(() => showcaseState.value.todos ?? []);
+const authoritativeToolArtifacts = computed(() =>
+  isDemo.value
+    ? showcaseState.value.tool_artifacts
+    : stream.state.value.tool_artifacts,
+);
 /* composer 里正开着斜杠目录、或挂着一个技能 chip。见 ChatComposer 的同名 emit。 */
 const followupsSuppressed = ref(false);
 const suggestionsConfigQuery = useSuggestionsConfig({
-  enabled: computed(() => !isDemo.value),
+  enabled: computed(() => !isDemo.value && !props.bootstrap),
 });
-const maxSuggestions = computed(
-  () =>
-    suggestionsConfigQuery.data.value?.max_suggestions ??
-    DEFAULT_MAX_SUGGESTIONS,
-);
 const composer = ref<InstanceType<typeof ChatComposer> | null>(null);
 /*
   技能创建入口（设置页的「创建技能」→ /workspace/chats/new?mode=skill）要把一段
@@ -299,51 +399,14 @@ watch(
   },
   { immediate: true },
 );
-/*
-  发失败之后留在屏幕上的那条：文案 + 重试所需的原始内容。
-
-  ——————————————————————————————————————————————————————————————————————
-  **聊天面上「谁管谁」的判据（wave 31 定下，与 BrowserPanel 文件头第 3 条同源）：**
-
-  **在某一刻发生的事 → workspace toaster；在一段时间里为真的事 → 页面里的状态。**
-
-  toaster：replay gap、流错误、分支成功/失败、human input 提交失败、选区跨轮次，
-  以及 ChatComposer 那 16 条（语音、compact、goal、上传、润色、提交失败）。
-  这一档全部**一次性**，说完就该走，上游用的也都是 sonner 的 toast。
-
-  页面里的状态，共三处，都不是「说一句」而是「现在是这个样子」：
-  ① 这一条——消息**还没发出去**，重试要用到原始 text/files；
-  ② `stream.llmRetry` 的横幅——**正在重试**，流恢复或出错时自己消失
-     （`clearThreadRetryNotice`）。上游那边是每个 llm_retry 事件一条 toast，
-     一次重试风暴会堆出一摞；
-  ③ MessageList 里历史加载失败那条 `role="alert"` + 「再试一次」。
-
-  「带着一个按钮」是这一档的**后果**不是判据：一段持续为真的状态才需要提供出路，
-  而 toast 五秒后自己走掉，按钮会跟着一起消失。
-  ——————————————————————————————————————————————————————————————————————
-
-  上游这一处只有 `toast.error(getStreamErrorMessage(error))`
-  （`core/threads/hooks.ts:2390`），没有任何重试入口，所以保留本仓这一侧。
-*/
-const failedSend = ref<{
-  text: string;
-  files: FileInMessage[];
-  message: string;
-} | null>(null);
-const mainTailRequest = ref(0);
 const threadTokenUsageQuery = useThreadTokenUsage(routeThreadId, {
   enabled: computed(() => !isDemo.value),
 });
 const threadTokenUsage = threadTokenUsageQuery.usage;
 const contextUsage = computed(() => selectContextUsage(threadTokenUsage.value));
 /*
-  **不按 isDemo 关掉。** 上游 chat-page.tsx:77 是裸的 `useModels()`——只读案例页
-  照样取模型目录，因为头部的 token 用量指示器、输入框的模式与模型触发器都要靠它
-  才有名字。本仓此前把它关掉，于是案例页上那两颗触发器**一个可访问名都没有**
-  （读屏器念出来是两颗空按钮），头部的用量指示器整个消失。
-
-  代价是公开案例页会多发一次 /api/models。这是上游选的代价，两边一致比省一个
-  只读请求重要：一颗念不出名字的按钮对读屏器用户是死路。
+  Model catalog remains readable in showcase mode, matching React chat-page.tsx useModels.
+  Token indicators and composer model/mode controls need names even when runs are disabled.
 */
 const modelCatalog = useModels();
 const selectedModel = computed(() => {
@@ -359,9 +422,6 @@ const selectedModel = computed(() => {
 const persistedTokenUsage = computed(() =>
   threadTokenUsageToTokenUsage(threadTokenUsage.value),
 );
-const suggestionGeneration = createAsyncGeneration();
-let suggestionController: AbortController | null = null;
-const preparedThreadId = ref<string | null>(null);
 /**
  * `GET /threads/{id}` 的探测结果，和它属于哪个 thread 绑在一起。
  * 只带一个裸 presence 会在切换 thread 后把上一条线程的结论用在新线程上。
@@ -370,30 +430,14 @@ const threadPresence = ref<{ threadId: string; presence: ThreadPresence }>({
   threadId: initialRouteThreadId ?? "",
   presence: "unknown",
 });
-const editState = ref<{
-  messageId: string;
-  text: string;
-  original: string;
-  messageIds: string[];
-} | null>(null);
-/*
-  上游 `message-list-item.tsx:176` 的 `editSubmitDisabled` 是四条或：正在提交、
-  草稿去空白后为空、**草稿与原文逐字相同**。本仓此前一条都没有，于是可以把一条
-  human 消息改成空串再重跑，也可以一个字不改就重跑——两种都会**丢掉这一轮之后
-  的全部消息**（editRerunWarning 说的就是这件事），换来一次没有意义的运行。
-*/
-const editSubmitDisabled = computed(() => {
-  const state = editState.value;
-  if (!state) return true;
-  const draft = state.text.trim();
-  return draft.length === 0 || draft === state.original.trim();
-});
 const bootstrapConversationReady = ref(!props.bootstrap);
 const bootstrapConversationFinished = ref(!props.bootstrap);
 let finishAgentCreationRun: (messages: readonly Message[]) => void = () => {};
 let lastStartedThreadId: string | null = null;
+let completionNotificationTimer: ReturnType<typeof setTimeout> | undefined;
 
 const stream = useThreadStream({
+  assistantId: () => props.agentName ?? "lead_agent",
   threadId: streamThreadId,
   // Bootstrap creation intentionally stays on /workspace/agents/new until
   // setup_agent succeeds. Keep the prepared real thread visible without
@@ -403,14 +447,7 @@ const stream = useThreadStream({
   ),
   context,
   model: selectedModel,
-  /*
-    流的两条播报都进 workspace toaster，与上游同一条（`core/threads/hooks.ts:1805`
-    的 `toast.warning` 与 `:1846` 的 `toast.error`）。此前它们 push 进一个
-    **只增不减**的数组，渲染成 `absolute right-4 bottom-36` 的 `<p role="status">`：
-    ① 一条一次性的警告会永远挂在屏幕上；② 错误只播成 polite，而 toaster 会把
-    error 播成 assertive。**wave 73 起 warn 走 toaster 的 warning 档**——
-    补上图标之后 warning 与 info 有了可观察差别（见 workspace-shell/toast.ts 的文件头）。
-  */
+  // Replay gaps, stream errors and plain LLM retry notices share the workspace toast owner.
   notify: {
     warn: (message) =>
       toast.warning(
@@ -419,6 +456,7 @@ const stream = useThreadStream({
           : message,
       ),
     error: (message) => toast.error(message),
+    message: (message) => toast.message(message),
   },
   onStart(startedThreadId) {
     lastStartedThreadId = startedThreadId;
@@ -427,19 +465,45 @@ const stream = useThreadStream({
       $i18n.t.value.pages.newChat,
       props.agentName,
     );
-    if (routeThreadId.value === null && !props.bootstrap) {
+    // Nuxt can keep this page displayed while the router has already committed
+    // its successor. A late run may update the thread cache, but cannot take
+    // navigation back from the new page (including another project query).
+    if (
+      routeThreadId.value === null &&
+      !props.bootstrap &&
+      route.fullPath === router.currentRoute.value.fullPath
+    ) {
       const path = props.agentName
         ? `/workspace/agents/${encodeURIComponent(props.agentName)}/chats/${startedThreadId}`
         : `/workspace/chats/${startedThreadId}`;
-      void router.replace(path);
+      const owner = submissionOwner.capture();
+      // Only the accepted run's exact prepared draft continues this page.
+      // Attachment-driven navigation and opening another thread still announce.
+      const continuation =
+        startedThreadId === preparedThreadId.value &&
+        startedThreadId === owner.threadId &&
+        submissionOwner.owns(owner)
+          ? $routeAnnouncements.preservePage({
+              from: router.currentRoute.value,
+              target: router.resolve(path).fullPath,
+              owns: () => submissionOwner.owns(owner),
+            })
+          : null;
+      const replacement = router.replace(
+        continuation ? { path, state: continuation.state } : path,
+      );
+      if (continuation) void replacement.finally(continuation.cancel);
+      else void replacement;
     }
   },
   onFinish(state, completedMessages) {
+    const owner = submissionOwner.capture();
     finishAgentCreationRun(completedMessages);
     if (props.bootstrap && !bootstrapConversationReady.value) {
       bootstrapConversationFinished.value = true;
     }
     const id = routeThreadId.value ?? lastStartedThreadId;
+    if (id === routeThreadId.value) markThreadRead();
     const title = Reflect.get(state, "title");
     const stateTitle = typeof title === "string" && title.trim() ? title : null;
     if (id && typeof title === "string" && title.trim()) {
@@ -451,11 +515,15 @@ const stream = useThreadStream({
         });
       }
     }
-    queueMicrotask(() => void refreshPostRun(id, completedMessages));
+    queueMicrotask(() => {
+      if (!props.bootstrap && submissionOwner.owns(owner))
+        void refreshPostRun(id, completedMessages);
+    });
     // A new chat adopts its real route id asynchronously in onStart. The final
     // wire message can therefore become visible shortly after `onFinish`.
     // Bound the wait instead of emitting an irreversibly body-less notification.
     const notifyWhenFinalMessageIsVisible = (remainingAttempts: number) => {
+      if (!submissionOwner.owns(owner)) return;
       if (document.hasFocus()) return;
       const completedMessages = Reflect.get(state, "messages");
       const stateMessages = Array.isArray(completedMessages)
@@ -470,8 +538,8 @@ const stream = useThreadStream({
         .reverse()
         .find((message) => message.type === "ai");
       const listedTitle = id
-        ? threads.threads.find((thread) => thread.thread_id === id)?.values
-            .title
+        ? queryClient.getQueryData<AgentThread>(threadMetadataQueryKey(id))
+            ?.values.title
         : null;
       const refreshedTitle =
         typeof listedTitle === "string" &&
@@ -504,8 +572,20 @@ const stream = useThreadStream({
     );
   },
 });
+provideKnowledgeSources(() => demoMessages.value ?? stream.messages.value);
+useActiveThreadRun({
+  threadId: streamThreadId,
+  enabled: computed(
+    () => !isDemo.value && !localUploading.value && !stream.isUploading.value,
+  ),
+  streaming: stream.isStreaming,
+  currentRunId: stream.activeRunId,
+  streamError: stream.error,
+  join: stream.joinRun,
+});
 const creation = useAgentCreationSession({
   agentName: () => props.agentName ?? "",
+  ownerId: currentUserId,
   submitSave: (signal) => {
     const submission = buildAgentSaveSubmission(
       $i18n.t.value.agents.saveCommandMessage,
@@ -517,9 +597,11 @@ const creation = useAgentCreationSession({
     });
   },
   loadAgent: (name, signal) => getAgent(name, { signal }),
+  onSaveRequested: () => toast.success($i18n.t.value.agents.saveRequested),
+  onSaveError: (message) => toast.error(message),
+  onVerificationUnavailable: () =>
+    toast.error($i18n.t.value.agents.agentCreatedPendingRefresh),
   async onCreated(created) {
-    agent.value = created;
-    agentResolved.value = true;
     queryClient.setQueryData(agentKeys.detail(created.name), created);
     queryClient.setQueryData<Agent[]>(agentKeys.list(), (rows) => {
       const current = rows ?? [];
@@ -534,10 +616,7 @@ const creation = useAgentCreationSession({
   },
   copy: {
     saveNotAccepted: $i18n.t.value.agents.saveNotAccepted,
-    loadFailed: $i18n.t.value.agents.creationLoadFailed,
-    visibilityUnavailable: $i18n.t.value.agents.creationVisibilityUnavailable,
     requestFailed: $i18n.t.value.agents.creationRequestFailed,
-    missingToolResult: $i18n.t.value.agents.creationMissingToolResult,
     runFailed: $i18n.t.value.agents.creationRunFailed,
   },
 });
@@ -547,11 +626,6 @@ finishAgentCreationRun = (messages) => {
 watch(stream.error, (error) => {
   if (props.bootstrap && error) creation.onRunError(error);
 });
-const creationBusy = computed(
-  () =>
-    creation.status.value === "saving" || creation.status.value === "verifying",
-);
-
 /*
   「记得点保存」的一次性提示，与上游 new/page.tsx 的 showSaveHint 同构：
   bootstrap 会话第一次进入时出现一次，读过就不再出现（同一个 localStorage 键名，
@@ -561,11 +635,6 @@ const creationBusy = computed(
   **只在 bootstrap 时渲染**——非 bootstrap 的会话（含被对照台账覆盖的 agent-chat
   场景）一个字节都不受影响。
 
-  agents 下的 saveRequested 与 agentCreatedPendingRefresh **有意不补**（不写成
-  带点的完整 key：unused 扫描器扫全文，注释里写一次就把它算成"有人用"，坑 10）：
-  上游靠这两条 toast 报告保存进度，本仓的 useAgentCreationSession 用
-  saving/verifying/created/error 四态 + 行内错误区表达同一件事，再加两条 toast
-  等于同一件事说两遍。它们仍留在已审阅 unused 集里。
 */
 const SAVE_HINT_STORAGE_KEY = "deerflow.agent-create.save-hint-seen";
 const showSaveHint = ref(false);
@@ -579,38 +648,52 @@ function saveAgent() {
   showSaveHint.value = false;
   void creation.save();
 }
+/*
+  The reactive metadata query owns existence probing and the latest checkpoint values.
+  GET /threads/{id} already includes that snapshot; a second /state request would duplicate it.
+  The shared query key lets rename/archive/project/run invalidations refresh the active route.
+*/
+const threadMetadata = useThreadMetadata(routeThreadId, {
+  /*
+  Match React chat-page.tsx metadata admission: no query during a run.
+  Adopting the new thread URL must not read the pre-run snapshot over live state.
+*/
+  enabled: computed(() => !isDemo.value && !stream.isStreaming.value),
+});
 const authoritativeArtifacts = computed(() => {
   if (isDemo.value) return demoArtifacts.value;
   const state = stream.state.value;
   const value = Object.prototype.hasOwnProperty.call(state, "artifacts")
     ? Reflect.get(state, "artifacts")
-    : threads.threads.find((thread) => thread.thread_id === routeThreadId.value)
-        ?.values.artifacts;
+    : threadMetadata.data.value?.values.artifacts;
   if (value === undefined) return undefined;
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 });
 const authoritativeGoal = computed<GoalState | null>(() => {
+  if (isDemo.value) return showcaseState.value.goal ?? null;
   const state = stream.state.value;
   if (Object.prototype.hasOwnProperty.call(state, "goal")) {
     return (Reflect.get(state, "goal") as GoalState | null | undefined) ?? null;
   }
-  return (
-    threads.threads.find((thread) => thread.thread_id === routeThreadId.value)
-      ?.values.goal ?? null
-  );
+  return threadMetadata.data.value?.values.goal ?? null;
 });
 const localGoal = ref<GoalState | null | undefined>(undefined);
 const activeGoal = computed(() =>
-  localGoal.value !== undefined ? localGoal.value : authoritativeGoal.value,
+  isDemo.value
+    ? authoritativeGoal.value
+    : localGoal.value !== undefined
+      ? localGoal.value
+      : authoritativeGoal.value,
 );
 const authoritativeTodos = computed<Todo[]>(() => {
   const state = stream.state.value;
-  const value = Object.prototype.hasOwnProperty.call(state, "todos")
-    ? Reflect.get(state, "todos")
-    : threads.threads.find((thread) => thread.thread_id === routeThreadId.value)
-        ?.values.todos;
+  const value = isDemo.value
+    ? demoTodos.value
+    : Object.prototype.hasOwnProperty.call(state, "todos")
+      ? Reflect.get(state, "todos")
+      : threadMetadata.data.value?.values.todos;
   if (!Array.isArray(value)) return [];
   return value.filter(
     (item): item is Todo =>
@@ -628,44 +711,6 @@ watch(authoritativeGoal, () => {
 watch(routeThreadId, () => {
   localGoal.value = undefined;
 });
-const artifactPanel = useArtifactsPanel({
-  threadId: routeThreadId,
-  authoritativeArtifacts,
-  historyLoading: stream.isHistoryLoading,
-});
-/*
-  Sidecar 的父 thread 用**草稿 id**，不是 streamThreadId。
-
-  streamThreadId 在 /chats/new 上刻意是 null——后端还没有这条 thread，拉历史会 404
-  （React 用 `threadId: isNewThread ? undefined : threadId` 表达同一件事）。但 sidecar
-  的父级不是「要拉历史的那条 thread」，而是「这一页代表的那次会话」，React 传的正是
-  同一个客户端生成的 id（frontend/src/components/workspace/chats/chat-page.tsx 的
-  `<SidecarProvider parentThreadId={threadId}>`），上传限额两边也已经用的是它。
-
-  用 null 的代价不是少发一个请求，而是 sidecar 生命周期在新会话页上根本没装上：
-  父级一旦从 null 变成真 id，恢复流程才第一次跑起来，中间这段时间侧边会话的状态是
-  未定义的。
-*/
-const sidecarParentThreadId = computed(() =>
-  isDemo.value ? null : (routeThreadId.value ?? draftThreadId.value),
-);
-const sidecar = useSidecar({
-  parentThreadId: sidecarParentThreadId,
-  context,
-});
-const sidecarReady = ref(false);
-const sidecarSession = useSidecarSession({
-  parentThreadId: sidecarParentThreadId,
-  parentMessages: () => demoMessages.value ?? stream.messages.value,
-  sidecarThreadId: sidecar.sidecarThreadId,
-  references: sidecar.activeReferences,
-  context: sidecar.context,
-  onReferencesAccepted: sidecar.clearActiveReferences,
-});
-const browserOpen = ref(false);
-const browserFrame = ref<BrowserViewFrame | null>(null);
-const observedBrowserMessageFrame = ref<BrowserViewFrame | null>(null);
-const lastAutoOpenedBrowserScreenshot = ref<string | null>(null);
 const agentBrowserEnabled = computed(
   () =>
     !props.agentName ||
@@ -680,325 +725,48 @@ const browserEnabled = computed(
     features.browserControlEnabled.value &&
     agentBrowserEnabled.value,
 );
-const latestBrowserFrame = computed(() =>
-  latestBrowserViewFrame(demoMessages.value ?? stream.messages.value),
-);
-watch(routeThreadId, () => {
-  browserOpen.value = false;
-  browserFrame.value = null;
-  observedBrowserMessageFrame.value = null;
-  lastAutoOpenedBrowserScreenshot.value = null;
+const {
+  artifactPanel,
+  sidecar,
+  sidecarSession,
+  browserOpen,
+  browserFrame,
+  sidecarReconciling,
+  messageDetails,
+  activePanel,
+  panelOpen,
+  openArtifact,
+  toggleSidecar,
+  toggleBrowser,
+  acceptBrowserFrame,
+  openBrowserFrame,
+  askInSidecar,
+  showArtifacts,
+  addToConversation,
+} = useChatPanels({
+  consumptionObservation,
+  threadId: routeThreadId,
+  ownerKey: () =>
+    JSON.stringify([currentUserId.value, props.agentName ?? null]),
+  draftThreadId,
+  readonly: isDemo,
+  context,
+  messages: () => demoMessages.value ?? stream.messages.value,
+  authoritativeArtifacts,
+  browserEnabled,
+  stream,
 });
-watch(
-  [latestBrowserFrame, browserEnabled],
-  ([nextFrame, enabled]) => {
-    if (!nextFrame) return;
-    const reconciliation = reconcileBrowserMessageFrame(
-      browserFrame.value,
-      observedBrowserMessageFrame.value,
-      nextFrame,
-    );
-    observedBrowserMessageFrame.value = reconciliation.observed;
-    if (reconciliation.changed) {
-      browserFrame.value = reconciliation.display;
-    }
-    if (
-      enabled &&
-      nextFrame.screenshot !== lastAutoOpenedBrowserScreenshot.value
-    ) {
-      lastAutoOpenedBrowserScreenshot.value = nextFrame.screenshot;
-      browserOpen.value = true;
-    }
-  },
-  { immediate: true },
-);
-watch(browserEnabled, (enabled) => {
-  if (!enabled) browserOpen.value = false;
-});
-watch(
-  sidecarSession.ready,
-  (ready) => {
-    sidecarReady.value = ready;
-  },
-  { immediate: true },
-);
-/*
-  artifacts 面板开着就是开着，与「有没有选中文件」无关。
-
-  React 的 activeRightPanel 只看 artifactsOpen（frontend/src/components/workspace/chats/chat-box.tsx），
-  没选中文件时面板落在文件清单上，而不是不开。原来这里多要一个 selectedArtifact，
-  于是头部入口必须先替用户选一个文件，面板才肯出现——那正是下面 showArtifacts()
-  里那段自动选中的由来。
-*/
-const activePanel = computed<"artifacts" | "sidecar" | "browser" | null>(() => {
-  // 优先级照 React：sidecar > browser > artifacts
-  // （frontend/src/components/workspace/chats/chat-box.tsx 的 activeRightPanel）。
-  // 原来是 browser 排在 sidecar 前面：两个都开着时两个应用显示的不是同一个面板。
-  if (sidecar.open.value) return "sidecar";
-  if (browserOpen.value && browserEnabled.value) return "browser";
-  if (artifactPanel.open.value) return "artifacts";
-  return null;
-});
-const panelOpen = computed(() => activePanel.value !== null);
-
-function openArtifact(path: string, automatic = false) {
-  if (!artifactPanel.select(path, automatic)) return;
-  browserOpen.value = false;
-  sidecar.close();
-}
-/*
-  上游 `sidecar-trigger.tsx` 在这次带 force 的重查期间把触发器置灰
-  （`isReconciling`）。缓存里的 sidecar id 可能指向别处删掉的线程（#3555），
-  重查要走一次网络；不锁按钮的话连点两下就发两次 restore。
-*/
-const sidecarReconciling = ref(false);
-async function toggleSidecar() {
-  if (sidecar.open.value) {
-    sidecar.close();
-    return;
-  }
-  sidecarReconciling.value = true;
-  try {
-    const restored = await sidecarSession.restore({ force: true });
-    if (restored && artifactPanel.close()) {
-      browserOpen.value = false;
-      sidecar.open.value = true;
-    }
-  } finally {
-    sidecarReconciling.value = false;
-  }
-}
-function openBrowser() {
-  if (!artifactPanel.close()) return;
-  sidecar.close();
-  browserOpen.value = true;
-}
-function toggleBrowser() {
-  if (browserOpen.value) {
-    browserOpen.value = false;
-    return;
-  }
-  openBrowser();
-}
-function acceptBrowserFrame(frame: BrowserViewFrame) {
-  browserFrame.value = frame;
-}
-function openBrowserFrame(frame: BrowserViewFrame) {
-  acceptBrowserFrame(frame);
-  openBrowser();
-}
-function askInSidecar(payload: {
-  message: Message;
-  selectedText: string;
-  displayIndex: number;
-}) {
-  const next = sidecar.fromSelection(
-    payload.message,
-    payload.selectedText,
-    payload.displayIndex,
-  );
-  if (!next) return;
-  if (!artifactPanel.close()) return;
-  sidecar.openContext(next);
-}
-
-/*
-  只开面板，不替用户选文件——React 的 ArtifactTrigger 就只有
-  `sidecar?.close(); setArtifactsOpen(true);`
-  （frontend/src/components/workspace/artifacts/artifact-trigger.tsx）。
-  自动选中看起来省一步，代价是面板会去拉那个文件的内容，用户并没有要求它这么做。
-*/
-function showArtifacts() {
-  // React 的 ArtifactTrigger 只做这两件事：关掉 sidecar、打开 artifacts
-  // （artifacts/artifact-trigger.tsx）。**不**关浏览器面板——浏览器排在 artifacts
-  // 前面，所以它开着的时候这颗按钮只是把 artifacts 标成待展开，等浏览器关掉才生效。
-  if (!artifactPanel.setOpen(true)) return;
-  sidecar.close();
-}
-function addToConversation(payload: {
-  message: Message;
-  selectedText: string;
-  displayIndex: number;
-}) {
-  const next = sidecar.fromSelection(
-    payload.message,
-    payload.selectedText,
-    payload.displayIndex,
-  );
-  if (next) sidecar.addContextToConversation(next);
-}
-
-function quotePrompt(contexts: SidecarContext[]): Message {
-  const blocks = contexts.flatMap((item, index) => [
-    `<referenced_message index="${index + 1}" label="${item.label.replaceAll('"', "&quot;")}">`,
-    `Role: ${item.role === "user" ? "User" : "Assistant"}`,
-    item.messageId ? `Message ID: ${item.messageId}` : "",
-    "",
-    item.content,
-    "</referenced_message>",
-    "",
-  ]);
-  return {
-    type: "human",
-    content: [
-      {
-        type: "text",
-        text: [
-          contexts.length === 1
-            ? "The user added the following quoted context to this conversation."
-            : `The user added the following ${contexts.length} quoted contexts to this conversation.`,
-          "Use the referenced_message blocks as reference material for the user's next message.",
-          "",
-          ...blocks,
-        ].join("\n"),
-      },
-    ],
-    additional_kwargs: {
-      hide_from_ui: true,
-      conversation_quote_context: true,
-      referenced_message_ids: contexts.map((item) => item.messageId ?? ""),
-      referenced_message_roles: contexts.map((item) => item.role),
-      quote_context_count: contexts.length,
-    },
-  } as Message;
-}
-
-let completionNotificationTimer: ReturnType<typeof setTimeout> | undefined;
-const lastAutoOpenedArtifact = ref<string | null>(null);
-/*
-  自动打开只发生在两种情况，与 React 的 ToolCall 一一对应
-  （frontend/src/components/workspace/messages/message-group.tsx 的
-  `autoOpenArtifactUrl`）：
-
-    - 这一轮**正在流式**、最后一个工具调用是 write_file / str_replace、而且它还没
-      返回——用户在看模型现场写这个文件；
-    - 最后一个工具调用是 finalize_artifact_write 且结果成功——产物已经落地。
-
-  两条判据都少不得。原来这里扫全部消息、只要见到 write_file 就设 target，于是
-  **打开任何一条带 write_file 的历史线程都会自动展开面板并收起侧栏**，而 React 那边
-  `isLoading` 为假、`finalizedArtifactPath` 为空，什么都不会发生。
-
-  取的是最后一个**写产物**的调用，不是最后一个工具调用。React 的判据是 `isLast`
-  （每个 group 只有最后一个工具步骤带它），它靠的是「流式过程中 write_file 曾经是最后
-  一步」这一瞬间：那一刻 effect 触发、面板打开，之后再来别的工具调用也不会关掉它。
-  Vue 的渲染消息流是降频过的（useCoalescedStreamMessages，每 80ms 至多一帧），
-  那一瞬间不保证会成为独立的一帧——实测真 Gateway 回放里 write_file 与随后的 read_file
-  落在同一帧，按「最后一个工具调用」判，面板一次都不会开
-  （tests/e2e-real/artifact-write.spec.ts 当场变红）。
-*/
-const ARTIFACT_WRITE_TOOLS = new Set([
-  "write_file",
-  "str_replace",
-  "finalize_artifact_write",
-]);
-
-function artifactWriteCallIds(messages: Message[]) {
-  const ids: string[] = [];
-  for (const message of messages) {
-    if (message.type !== "ai") continue;
-    for (const call of message.tool_calls ?? []) {
-      if (ARTIFACT_WRITE_TOOLS.has(call.name) && call.id) ids.push(call.id);
-    }
-  }
-  return ids;
-}
-
-/*
-  进入这条线程时**已经在历史里**的写产物调用。
-
-  React 用 `isLoading`（这一轮还在流式）区分「模型正在写」与「翻旧账」。Vue 抄不了
-  这个信号：渲染用的消息流被降频成每 80ms 至多一帧（useCoalescedStreamMessages），
-  写文件那一帧落在流式结束之前还是之后并不确定——实测两条真 Gateway 用例一条落在
-  之前、一条落在之后，用 isStreaming 判会一条绿一条红。
-
-  换成按**来源**判：历史里就有的不开，本次运行新出现的才开。这与 React 想表达的是
-  同一件事，而且不依赖任何时序。
-*/
-const historyArtifactCallIds = ref<Set<string> | null>(null);
-/*
-  快照只在**换一条线程**时作废，不能绑在 isHistoryLoading 上。
-
-  绑在加载状态上时有这么一条路径：`/chats/new` 上发出第一条消息 → 路由拿到真 id →
-  页面为这个新 id 拉一次历史 → isHistoryLoading 变 true → 快照被清成 null →
-  加载结束时用**当时**的 messages 重新取快照，而本次流式产生的 write_file 早就在
-  里面了。于是「模型此刻正在写的这个文件」被判成「历史里本来就有」，面板永远不开。
-  开不开取决于 tool call 与历史加载谁先到——e2e-real 实测约 1/3 的运行里不开，
-  同时打挂 real-backend-render 的截图与 artifact-write 的行为断言。
-
-  `/chats/new` 拿到自己的 id **不是**换线程，是同一段对话拿到了 id，所以那一次不作废。
-*/
-watch(routeThreadId, (threadId, previousThreadId) => {
-  if (previousThreadId == null && threadId) return;
-  historyArtifactCallIds.value = null;
-});
-watch(
-  () => stream.isHistoryLoading.value,
-  (loading) => {
-    if (loading) return;
-    historyArtifactCallIds.value ??= new Set(
-      artifactWriteCallIds(stream.messages.value),
-    );
-  },
-  { immediate: true },
-);
-
-const autoOpenArtifact = computed(() => {
-  const messages = stream.messages.value;
-  let lastCall: ToolCall | undefined;
-  let lastCallMessageId: string | undefined;
-  for (const message of messages) {
-    if (message.type !== "ai") continue;
-    for (const call of message.tool_calls ?? []) {
-      if (!ARTIFACT_WRITE_TOOLS.has(call.name)) continue;
-      lastCall = call;
-      lastCallMessageId = message.id;
-    }
-  }
-  const path = lastCall?.args?.path;
-  if (!lastCall || typeof path !== "string") return null;
-
-  const result = messages.find(
-    (candidate) =>
-      candidate.type === "tool" && candidate.tool_call_id === lastCall.id,
-  );
-  if (lastCall.name === "finalize_artifact_write") {
-    // React 的 isSuccessfulToolResult：trimStart().startsWith("OK")。
-    return result && textOfMessage(result).trimStart().startsWith("OK")
-      ? path
-      : null;
-  }
-  if (lastCall.name !== "write_file" && lastCall.name !== "str_replace") {
-    return null;
-  }
-  /*
-    React 在这里还要求「工具**还没返回**」（`isLoading && url && !result`）。两条判据
-    合起来说的是「这是模型此刻正在写的那个文件」；Vue 用「它不在进入线程时的历史里」
-    表达同一件事，理由见 historyArtifactCallIds 上面那段。
-  */
-  const history = historyArtifactCallIds.value;
-  if (!history || (lastCall.id && history.has(lastCall.id))) return null;
-  return buildWriteFileArtifactURL({
-    filepath: path,
-    messageId: lastCallMessageId,
-    toolCallId: lastCall.id,
-  });
-});
-watch(
-  autoOpenArtifact,
-  (target) => {
-    if (!target) return;
-    const key = `${routeThreadId.value ?? "new"}\u0000${target}`;
-    if (key === lastAutoOpenedArtifact.value) return;
-    lastAutoOpenedArtifact.value = key;
-    openArtifact(target, true);
-  },
-  { immediate: true },
-);
 
 const visibleMessages = computed(() =>
-  (demoMessages.value ?? stream.messages.value).filter(
-    (message: Message) => !isHiddenFromUIMessage(message),
-  ),
+  [
+    ...(demoMessages.value ?? stream.messages.value),
+    ...(uploadPreview.value && submissionOwner.owns(uploadPreview.value.owner)
+      ? buildComposerUploadMessages(
+          uploadPreview.value.snapshot,
+          $i18n.t.value.uploads.uploadingFiles,
+        )
+      : []),
+  ].filter((message: Message) => !isHiddenFromUIMessage(message)),
 );
 
 /**
@@ -1052,21 +820,16 @@ const promptHistory = computed(() =>
   （React 的 ThreadTitle 在 `!thread.values?.title` 时直接 return null）。
 */
 const headerTitle = computed(() => {
-  if (isDemo.value && demoTitle.value) return demoTitle.value;
+  if (isDemo.value) return demoTitle.value ?? "";
   if (!routeThreadId.value) return "";
-  return (
-    threads.threads.find((thread) => thread.thread_id === routeThreadId.value)
-      ?.values.title ?? ""
-  );
+  const canonicalTitle = threadMetadata.data.value?.values.title;
+  return canonicalTitle?.length
+    ? canonicalTitle
+    : (stream.state.value.title ?? "");
 });
 /*
-  浏览器标签标题。上游是 ThreadTitle 里那个 useEffect 在写 document.title；
-  本仓此前会话页一个 useHead 都不设，标签页永远停在 nuxt.config 的根标题
-  "DeerFlow"——开着几个会话时分不出哪个是哪个，读屏器打开页面也念不出这条
-  会话的名字。判据在 core/threads/utils.ts 的 documentTitleOfThread。
-
-  喂给它的是 headerTitle（这条会话**真的**有的标题，没有就是空串），兜底由
-  documentTitleOfThread 按新/旧会话去挑，与上游同一条链。
+  Thread title controls the browser tab through documentTitleOfThread;
+  that helper owns the new/untitled/loading fallbacks, matching React ThreadTitle.
 */
 useHead(() => ({
   title: documentTitleOfThread({
@@ -1078,34 +841,25 @@ useHead(() => ({
     untitledLabel: $i18n.t.value.pages.untitled,
   }),
 }));
+// Export consumes the active stream, matching React ExportTrigger. Sidebar
+// search rows can be absent, stale or archived; they do not own this transcript.
 const currentThread = computed(() => {
   const threadId = routeThreadId.value;
   if (!threadId) return null;
-  const existing = threads.threads.find(
-    (thread) => thread.thread_id === threadId,
-  );
-  if (existing) return existing;
-  /*
-    列表里还没有这条会话时才自己拼一个。**不给 title 兜底**：这个对象只喂
-    ExportTrigger，而导出用的 `titleOfThread` 自己带 "Untitled" 兜底，与上游
-    `core/threads/export.ts` 是同一条链。此前这里填的是 currentTitle，而
-    currentTitle 在这一支里恒等于 `pages.newChat`——于是同一条无标题会话，
-    React 导出 `Untitled.md`、本仓导出 `New Chat.md`（中文界面下还会变成
-    `新对话.md`，导出文件名跟着界面语言走）。台账取不到它：导出要点开菜单，
-    文件名根本不在 DOM 里。
-  */
   return {
     thread_id: threadId,
-    created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    metadata: {},
-    status: "idle",
-    values: { messages: visibleMessages.value },
-    interrupts: {},
-  } as unknown as AgentThread;
+    values: {
+      ...(isDemo.value ? showcaseState.value : stream.state.value),
+      messages: visibleMessages.value,
+    },
+  } as AgentThread;
 });
 const isWelcomeMode = computed(
-  () => visibleMessages.value.length === 0 && !stream.isHistoryLoading.value,
+  () =>
+    !routeThreadId.value &&
+    visibleMessages.value.length === 0 &&
+    !stream.isHistoryLoading.value,
 );
 /*
   头部的两态。上游 chat-page.tsx 把这两支写在同一个 cn() 里，欢迎态换掉的是
@@ -1114,7 +868,7 @@ const isWelcomeMode = computed(
 */
 const headerClass = computed(() =>
   cn(
-    "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center gap-2 px-2 sm:px-4",
+    "absolute top-0 right-0 left-0 z-30 flex h-12 shrink-0 items-center gap-2 px-2 sm:px-4 @max-3xl/chat-pane:relative @max-3xl/chat-pane:h-auto @max-3xl/chat-pane:min-h-12 @max-3xl/chat-pane:flex-wrap @max-3xl/chat-pane:py-2",
     isWelcomeMode.value
       ? "bg-background/0 backdrop-blur-none"
       : "bg-background/80 shadow-xs backdrop-blur",
@@ -1122,9 +876,8 @@ const headerClass = computed(() =>
 );
 
 /*
-  触发器现在直接读写共享状态，不再往 window 上发事件：此前这里发出去就不管了，
-  组件**拿不到开合态**，图标只能写死一个 Menu。全局事件仍然保留给真正跨切面的
-  两个调用方（命令面板的 Cmd+B、artifact 面板的收起）。
+  The page trigger consumes the shared sidebar owner. Cross-surface command-palette
+  and artifact-collapse callers retain their workspace events.
 */
 const { mobileOpen: sidebarMobileOpen, toggleSidebar } = useWorkspaceSidebar();
 
@@ -1134,384 +887,58 @@ function startAgentChat() {
     `/workspace/agents/${encodeURIComponent(props.agentName)}/chats/new`,
   );
 }
-function recentConversation(
-  messages: readonly Message[] = visibleMessages.value,
-) {
-  return messages
-    .filter((message) => message.type === "human" || message.type === "ai")
-    .map((message) => ({
-      role: message.type === "human" ? "user" : "assistant",
-      content: textOfMessage(message),
-    }))
-    .filter((message) => message.content.trim())
-    .slice(-6);
-}
-
-async function refreshPostRun(
-  targetThreadId: string | null,
-  completedMessages: readonly Message[],
-) {
-  if (!targetThreadId) return;
-  // The just-completed run is the authoritative suggestion input. Capture it
-  // before metadata/token refreshes can re-read an eventually-consistent
-  // thread snapshot and temporarily replace the visible history.
-  const messages = recentConversation(completedMessages);
-  const scope = `${targetThreadId}\u0000${props.agentName ?? "lead-agent"}`;
-  const token = suggestionGeneration.begin(scope);
-  suggestionController?.abort();
-  const controller = new AbortController();
-  suggestionController = controller;
-  /*
-    **run 结束后重读线程这件事归 `useThreadMetadata`，这里不再自己打一次。**
-
-    那个查询的 `enabled` 带着 `!isStreaming`，所以 run 一落定它就自己重取，
-    结果由上面那个 watch 写回列表缓存——与上游同一条机制：上游的
-    `useThreadMetadata` 也是靠 `runInFlight` 翻假之后自动重取的
-    （`chat-page.tsx` 的 `enabled: !isNewThread && !isMock && !runInFlight`）。
-
-    此前这里还命令式打一次 `threads.get()`，于是本仓在这一屏上**发两次**、
-    上游只发一次——对照台账 `chat-thread-init-ordering` 上那条
-    `requestsOnlyVue: GET /langgraph/threads/{id}` 就是这一次重复（wave 216）。
-  */
-  if (
-    controller.signal.aborted ||
-    (routeThreadId.value ?? lastStartedThreadId) !== targetThreadId ||
-    !suggestionGeneration.isCurrent(token, scope)
-  ) {
-    return;
-  }
-  await threadTokenUsageQuery.refetch();
-  const config =
-    suggestionsConfigQuery.data.value ??
-    (await suggestionsConfigQuery.refetch({ cancelRefetch: false })).data;
-  if (
-    controller.signal.aborted ||
-    !suggestionGeneration.isCurrent(token, scope) ||
-    !config?.enabled
-  ) {
-    return;
-  }
-  if (messages.length === 0) return;
-  followupsLoading.value = true;
-  followups.value = [];
-  try {
-    const response = await fetchWithAuth(
-      `${getBackendBaseURL()}/api/threads/${encodeURIComponent(targetThreadId)}/suggestions`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages,
-          n: maxSuggestions.value,
-          model_name: context.value.model_name,
-        }),
-        signal: controller.signal,
-      },
-    );
-    if (!response.ok) return;
-    const body = (await response.json()) as { suggestions?: unknown[] };
-    if (
-      controller.signal.aborted ||
-      (routeThreadId.value ?? lastStartedThreadId) !== targetThreadId ||
-      !suggestionGeneration.isCurrent(token, scope)
-    ) {
-      return;
-    }
-    followups.value = (body.suggestions ?? [])
-      .flatMap((value) =>
-        typeof value === "string" && value.trim() ? [value.trim()] : [],
-      )
-      .slice(0, maxSuggestions.value);
-  } catch {
-    if (
-      !controller.signal.aborted &&
-      suggestionGeneration.isCurrent(token, scope)
-    ) {
-      followups.value = [];
-    }
-  } finally {
-    if (suggestionGeneration.isCurrent(token, scope)) {
-      followupsLoading.value = false;
-    }
-    if (suggestionController === controller) suggestionController = null;
-  }
-}
-
-watch(
-  [routeThreadId, () => props.agentName],
-  ([nextThreadId, nextAgentName], [previousThreadId, previousAgentName]) => {
-    // `new` adopts the same thread id produced by onStart. That URL update is
-    // not a conversation switch and must not abort the post-run suggestion
-    // request already owned by that thread.
-    const adoptingStartedThread =
-      previousThreadId === null &&
-      nextThreadId === lastStartedThreadId &&
-      nextAgentName === previousAgentName;
-    if (adoptingStartedThread) return;
-
-    suggestionGeneration.invalidate();
-    suggestionController?.abort();
-    suggestionController = null;
-    followupsLoading.value = false;
-    followups.value = [];
-  },
-);
-
-/*
-  从项目里开的新会话，要在**第一条消息发出去之前**归属到那个项目。
-
-  这是新会话进项目的唯一通道——run 请求本身不带项目字段。顺序反了或者这一步
-  失败了还照发，会话就落在项目外面，而用户是从项目里点进来的，看到的结果和
-  他做的事对不上。所以失败时抛出：这条消息不发，让用户重试。
-
-  后端按 thread_id 幂等，重试同一条消息不会建出第二行。与上游同形
-  （chat-page.tsx 的 ensureProjectThread）。
-*/
-const projectParam = computed(() => {
-  const raw = route.query.project;
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return typeof value === "string" && value.trim() ? value : null;
+const {
+  followups,
+  followupsLoading,
+  mainTailRequest,
+  branchPending,
+  refreshPostRun,
+  ensureThread,
+  captureComposerSubmission,
+  send,
+  respondHumanInput,
+  stopRun,
+  branch,
+  regenerate,
+  editAndRegenerateMessage,
+} = useChatConversationActions({
+  threadId: routeThreadId,
+  threadTitle: headerTitle,
+  agentName: () => props.agentName,
+  userId: currentUserId,
+  readonly: isDemo,
+  bootstrap: () => props.bootstrap,
+  startedThreadId: () => lastStartedThreadId,
+  context,
+  messages: visibleMessages,
+  knowledgeScope: currentKnowledgeScopeSnapshot,
+  copy: $i18n.t,
+  submissionOwner,
+  stream,
+  sidecar,
+  threads,
+  suggestions: suggestionsConfigQuery,
+  usage: threadTokenUsageQuery,
+  toast,
+  navigate: (path) => router.push(path),
+  focusComposer: () => composer.value?.focus(),
+  resetComposer: () => composer.value?.resetDraft(),
 });
 
-async function ensureProjectMembership(threadId: string) {
-  const projectId = projectParam.value;
-  if (!projectId) return;
-  try {
-    await createThread(threadId, projectId);
-    void queryClient.invalidateQueries({
-      queryKey: INFINITE_THREADS_QUERY_KEY_PREFIX,
-    });
-  } catch (error) {
-    // 项目在页面打开之后被删/归档了也走这里。
-    toast.error($i18n.t.value.projects.projectUnavailable);
-    throw error;
-  }
-}
-
-async function ensureThread() {
-  if (isDemo.value)
-    throw new Error($i18n.t.value.common.notAvailableInDemoMode);
-  if (routeThreadId.value) return routeThreadId.value;
-  if (preparedThreadId.value) return preparedThreadId.value;
-  const created = await getAPIClient().threads.create({
-    threadId: draftThreadId.value,
-    metadata: props.agentName ? { agent_name: props.agentName } : {},
-  });
-  preparedThreadId.value = created.thread_id;
-  threads.upsert(created);
-  return created.thread_id;
-}
-
-async function send(
-  text: string,
-  files: FileInMessage[],
-  options?: {
-    onAccepted?: () => void;
-    additionalKwargs?: Record<string, unknown>;
-    signal?: AbortSignal;
-    reportFailure?: boolean;
-  },
-) {
-  if (isDemo.value) return false;
-  /*
-    上游三条提交路径都是 `setFollowups([]); setFollowupsHidden(false);
-    setFollowupsLoading(false);`（input-box.tsx:1024 / 1091 / 1202）三件一起做。
-    本仓原来只清数组：上一轮建议还在取的时候再发一条，「正在生成建议」那颗 chip
-    会跟着新的流一路挂着。
-  */
-  followups.value = [];
-  followupsLoading.value = false;
-  mainTailRequest.value += 1;
-  try {
-    const targetThreadId = await ensureThread();
-    await ensureProjectMembership(targetThreadId);
-    const quotes = [...sidecar.conversationQuotes.value];
-    const contexts = quotes.map((quote) => quote.context);
-    const accepted = await stream.sendMessage(
-      targetThreadId,
-      { text, files },
-      undefined,
-      {
-        ...(contexts.length || options?.additionalKwargs
-          ? {
-              ...(contexts.length
-                ? { additionalInputMessages: [quotePrompt(contexts)] }
-                : {}),
-              additionalKwargs: {
-                ...options?.additionalKwargs,
-                ...(contexts.length
-                  ? buildReferenceMessageMetadata(contexts)
-                  : {}),
-              },
-            }
-          : {}),
-        signal: options?.signal,
-        onAccepted: () => {
-          if (quotes.length) sidecar.clearConversationQuotes();
-          options?.onAccepted?.();
-        },
-      },
-    );
-    if (!accepted) return false;
-    failedSend.value = null;
-    return true;
-  } catch (error) {
-    if (options?.reportFailure !== false) {
-      failedSend.value = {
-        text,
-        files,
-        message:
-          error instanceof Error
-            ? error.message
-            : $i18n.t.value.common.requestFailed,
-      };
-    }
-    if (options) throw error;
-    return false;
-  }
-}
-async function retrySend() {
-  const failed = failedSend.value;
-  if (failed) await send(failed.text, failed.files);
-}
-async function respondHumanInput(
-  request: HumanInputRequest,
-  response: HumanInputResponse,
-) {
-  if (isDemo.value) return false;
-  const targetThreadId = routeThreadId.value;
-  if (!targetThreadId) return false;
-  let accepted = false;
-  const dispatched = await stream.sendMessage(
-    targetThreadId,
-    { text: buildHumanInputResponseText(request, response) },
-    undefined,
-    {
-      additionalKwargs: {
-        hide_from_ui: true,
-        human_input_response: response,
-      },
-      onAccepted: () => {
-        accepted = true;
-      },
-    },
-  );
-  return dispatched && accepted;
+async function adoptPreparedThread() {
+  const id = preparedThreadId.value;
+  if (!id || routeThreadId.value !== null || props.bootstrap) return;
+  lastStartedThreadId = id;
+  const path = props.agentName
+    ? `/workspace/agents/${encodeURIComponent(props.agentName)}/chats/${id}`
+    : `/workspace/chats/${id}`;
+  await router.replace(path);
 }
 
 function updateContext(value: Record<string, unknown>) {
   updateThreadSettings("context", value);
 }
 
-async function stopRun() {
-  suggestionGeneration.invalidate();
-  suggestionController?.abort();
-  suggestionController = null;
-  followupsLoading.value = false;
-  await stream.stop();
-}
-/*
-  分支。上游 `chat-page.tsx:225` 把整段包在 try/catch 里，成功 `toast.success(
-  branchCreated)`、失败 `toast.error(error.message ?? branchFailed)`。
-
-  本仓此前**一个 catch 都没有**：`branchThreadFromTurn` 一抛，这个 async 函数就变成
-  一条未处理的 rejection——没有跳转、没有任何提示，用户点了「分支」之后屏幕纹丝不动。
-  两条词条 `conversation.branchCreated` / `branchFailed` 也因此一直躺在 unused 里。
-*/
-/*
-  **分支请求在飞的时候，分支与「编辑并重跑」都要点不动**——上游 `canBranch` /
-  `canEdit` 里那条 `!branchThread.isPending`（`chat-page.tsx:480/496`）就是它，
-  上游拿的是 react-query mutation 自带的 pending 位。
-
-  本仓此前**一个门都没有**：`branch()` 可重入，连点两下就是两个 POST、
-  两条新线程，而用户只想要一条。
-*/
-const branchPending = ref(false);
-async function branch(messageId: string, messageIds: string[]) {
-  if (isDemo.value) return;
-  if (!routeThreadId.value) return;
-  const original = threads.threads.find(
-    (thread) => thread.thread_id === routeThreadId.value,
-  );
-  let result: Awaited<ReturnType<typeof branchThreadFromTurn>>;
-  branchPending.value = true;
-  try {
-    result = await branchThreadFromTurn(routeThreadId.value, {
-      messageId,
-      messageIds,
-      title: original?.values.title,
-    });
-  } catch (error) {
-    toast.error(
-      error instanceof Error
-        ? error.message
-        : $i18n.t.value.conversation.branchFailed,
-    );
-    return;
-  } finally {
-    /*
-      **落点与上游一致：请求一回就清，不等跳转。** 上游那条
-      `branchThread.isPending` 是 react-query mutation 自带的位，
-      mutation 一 settle 就是 false，而 `router.push` 在它之后——
-      也就是说上游同样有「请求已回、页面还没换」那一拍。
-      写成 `finally` 只是为了两条出口都盖到（catch 那支里有 `return`），
-      **不是**为了把 pending 拖到跳转之后。
-    */
-    branchPending.value = false;
-  }
-  const now = new Date().toISOString();
-  threads.upsert({
-    thread_id: result.thread_id,
-    created_at: now,
-    updated_at: now,
-    metadata: props.agentName ? { agent_name: props.agentName } : {},
-    status: "idle",
-    values: {
-      title: original?.values.title ?? $i18n.t.value.pages.untitled,
-      messages: visibleMessages.value,
-    },
-    interrupts: {},
-  });
-  toast.success($i18n.t.value.conversation.branchCreated);
-  const path = props.agentName
-    ? `/workspace/agents/${encodeURIComponent(props.agentName)}/chats/${result.thread_id}`
-    : `/workspace/chats/${result.thread_id}`;
-  await router.push(path);
-}
-async function regenerate(messageId: string, messageIds: string[]) {
-  if (isDemo.value) return;
-  if (routeThreadId.value) {
-    await stream.regenerateMessage(routeThreadId.value, messageId, messageIds);
-  }
-}
-function beginEdit(messageId: string, text: string, messageIds: string[]) {
-  if (isDemo.value) return;
-  editState.value = { messageId, text, original: text, messageIds };
-}
-async function updateAndRerun() {
-  if (isDemo.value) return;
-  if (!routeThreadId.value || !editState.value) return;
-  if (editSubmitDisabled.value) return;
-  const pending = editState.value;
-  editState.value = null;
-  await stream.editAndRegenerateMessage(
-    routeThreadId.value,
-    pending.messageId,
-    pending.text,
-    pending.messageIds,
-  );
-}
-function resetNewChat() {
-  suggestionGeneration.invalidate();
-  suggestionController?.abort();
-  suggestionController = null;
-  followupsLoading.value = false;
-  followups.value = [];
-  stream.resetView();
-  preparedThreadId.value = null;
-  draftThreadId.value = globalThis.crypto.randomUUID();
-}
-onMounted(() => globalThis.addEventListener("deerflow:new-chat", resetNewChat));
 let bootstrapAgentName: string | null = null;
 watch(
   [
@@ -1558,70 +985,37 @@ watch(
   },
   { immediate: true },
 );
-onMounted(async () => {
-  if (!isDemo.value || !routeThreadId.value) return;
-  try {
-    const response = await globalThis.fetch(
-      `/demo/threads/${encodeURIComponent(routeThreadId.value)}/thread.json`,
-    );
-    if (!response.ok) return;
-    const fixture = (await response.json()) as {
-      values?: { messages?: Message[]; artifacts?: string[]; title?: string };
-    };
-    demoMessages.value = fixture.values?.messages ?? [];
-    demoArtifacts.value = fixture.values?.artifacts ?? [];
-    demoTitle.value = fixture.values?.title;
-  } catch {
-    demoMessages.value = null;
-  }
+const affiliatedProjectId = computed(() =>
+  routeThreadId.value &&
+  !isDemo.value &&
+  !props.agentName &&
+  threadMetadata.data.value
+    ? projectIdOfThread(threadMetadata.data.value)
+    : null,
+);
+const composerProjectId = computed(
+  () =>
+    projectParam.value ??
+    (threadMetadata.data.value
+      ? projectIdOfThread(threadMetadata.data.value)
+      : null),
+);
+const scheduledEvents = useThreadScheduledTaskEvents(routeThreadId, {
+  enabled: computed(() => !isDemo.value),
 });
-/*
-  **线程元数据（含存在性探测）是一个查询，不是 onMounted 里的一次性请求**（wave 216）。
-
-  只探 `GET /threads/{id}`：**它自己就带着 checkpoint 的 values**，再取一次
-  `/state` 拿到的是同一份东西。
-
-    这不是推断，是读后端加实测的结论。两个路由都走 `accessor.aget(config)` 取
-    同一个最新快照，再用同一个 `serialize_channel_values_for_api` 序列化：
-    `GET /{id}` 里的 `values=serialize_channel_values_for_api(snapshot.values)`
-    与 `GET /{id}/state` 里的那一行逐字相同，连 accessor 都是同一个——
-    `build_thread_checkpoint_state_accessor` 就是把 assistant_id 查出来再调
-    `build_checkpoint_state_accessor`，而 `GET /{id}` 是把这两步内联了。
-    实测（replay Gateway，写过一次 state 因而有 checkpoint 的线程）：两边的
-    `values` 键集与 JSON 都完全相等。
-
-    于是原先那句 `{ ...metadata.values, ...state.values }` 是拿一份值盖它自己，
-    两条分支都是 no-op：
-    - 有 checkpoint：两边同值，合并结果不变；
-    - 没有 checkpoint（上下文压缩之后）：`/state` 404，`GET /{id}` 仍然 200
-      并返回空快照的 values，合并结果同样不变。
-    删掉之后每次打开线程少一次完全重复的往返。
-
-  另外，`/state` 从来就没参与过「线程是否存在」的判断——那条判据在
-  core/threads/thread-presence.ts 里，读的只有这一次元数据探测的错误码。
-
-  **为什么要有 key**：`useThreadMetadata` 的文件头写着三处对
-  `["thread","metadata",id]` 的失效此前全是空操作——归档、移到项目、run 结束，
-  都以为自己重读了这条线程，其实什么也没发生。改名同理，对照台账
-  `thread-title-sync` 上那条 `requestsOnlyReact: GET /langgraph/threads/{id}` 就是它。
-
-  **也不再只探首次挂载那一条**：`AgentChat` 切线程时并不重建，原来的
-  `initialRouteThreadId` 让 `threadPresence` 停在上一条线程的判定上。
-*/
-const threadMetadata = useThreadMetadata(routeThreadId, {
-  /*
-    **run 在跑的时候不探**——上游同一处是
-    `enabled: !isNewThread && !isMock && !runInFlight`（`chat-page.tsx`），
-    与本仓历史查询那道门（`useThreadStream` 里的
-    `enabled: Boolean(threadId) && !isStreaming`）**是同一条理由**：
-    `/chats/new` 提交之后 threadId 由 `onStart` 交出来，那一刻 run 已经在流，
-    此时取回来的是 run 之前的世界。
-
-    少了这一半会当场多发一次请求：对照台账 `chat-thread-init-ordering` 上
-    `requestsOnlyVue: GET /langgraph/threads/{id}` 就是它（wave 216 加这个查询时
-    一次量出来的——上游那一屏一条都不发）。
-  */
-  enabled: computed(() => !isDemo.value && !stream.isStreaming.value),
+useScheduleToolResultRefresh(routeThreadId, () => stream.messages.value);
+const extensionThread = computed(() =>
+  routeThreadId.value
+    ? ({
+        thread_id: routeThreadId.value,
+        updated_at:
+          threadMetadata.data.value?.updated_at ?? new Date().toISOString(),
+        values: { ...stream.state.value, messages: stream.messages.value },
+      } as AgentThread)
+    : null,
+);
+const markThreadRead = useMarkOpenThreadRead(routeThreadId, {
+  enabled: computed(() => !isDemo.value && threadMetadata.data.value != null),
 });
 watch(
   () => threadMetadata.data.value,
@@ -1661,50 +1055,17 @@ watch(
   },
   { immediate: true },
 );
-watch(
-  [() => props.agentName, isDemo],
-  async ([agentName, demo]) => {
-    const request = ++agentRequest;
-    agent.value = null;
-    if (!agentName || demo) {
-      agentResolved.value = true;
-      return;
-    }
-    agentResolved.value = false;
-    try {
-      const resolvedAgent = await getAgent(agentName);
-      if (request === agentRequest) agent.value = resolvedAgent;
-    } catch {
-      if (request === agentRequest) agent.value = null;
-    } finally {
-      if (request === agentRequest) agentResolved.value = true;
-    }
-  },
-  { immediate: true },
-);
-onUnmounted(() =>
-  globalThis.removeEventListener("deerflow:new-chat", resetNewChat),
-);
-onUnmounted(() => {
-  agentRequest += 1;
-  clearTimeout(completionNotificationTimer);
-  suggestionGeneration.invalidate();
-  suggestionController?.abort();
-  suggestionController = null;
-});
+onUnmounted(() => clearTimeout(completionNotificationTimer));
 
-function keepTripleReflowFocusVisible(event: FocusEvent) {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  requestAnimationFrame(() => {
-    if (target.isConnected) target.scrollIntoView({ block: "nearest" });
-  });
-}
+const focusViewport = ref<HTMLElement | null>(null);
+const focusReveal = provideFocusReveal(focusViewport);
 </script>
 
 <template>
   <WorkspacePanels
     :open="panelOpen"
+    :panel-key="activePanel"
+    :owner-key="draftThreadId"
     :panel-size="artifactPanel.panelSize.value"
     :panel-padded="activePanel === 'artifacts'"
     :panel-description="$i18n.t.value.primitives.panelDescription"
@@ -1713,7 +1074,10 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
         ? $i18n.t.value.primitives.panelArtifacts
         : activePanel === 'sidecar'
           ? $i18n.t.value.primitives.panelSidecar
-          : $i18n.t.value.primitives.panelBrowser
+          : activePanel === 'details'
+            ? (messageDetails.selectedDetail.value?.title ??
+              $i18n.t.value.common.more)
+            : $i18n.t.value.primitives.panelBrowser
     "
     @update:panel-size="artifactPanel.panelSize.value = $event"
     @collapse="
@@ -1721,115 +1085,85 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
         ? sidecar.close()
         : activePanel === 'browser'
           ? (browserOpen = false)
-          : artifactPanel.close()
+          : activePanel === 'details'
+            ? messageDetails.close()
+            : artifactPanel.close()
     "
   >
     <template #main>
-      <section id="chat" class="relative flex h-full min-h-0 flex-col">
+      <section
+        id="chat"
+        class="@container/chat-pane relative flex h-full min-h-0 min-w-0 flex-col"
+      >
         <!--
-          `class` + `:class` 拼出来的冲突 Tailwind 类，赢家由样式表顺序决定而不是
-          模板顺序，所以欢迎态那三条覆盖走 cn() 的 computed（headerClass），
-          不写成第二个属性。z-index 与上游一致是 z-30：Vue 此前写的 z-40 会让头部
-          压到 artifact/sidecar 面板那一档之上。
-        -->
-        <header :class="headerClass">
-          <!--
+  Merge conditional Tailwind overrides through headerClass/cn, because stylesheet order
+  determines conflicting utilities. Keep the header at z-30, matching the panel stack.
+-->
+        <main
+          ref="focusViewport"
+          class="flex min-h-0 max-w-full min-w-0 grow flex-col @max-3xl/chat-pane:overflow-y-auto"
+          @focusin="focusReveal.reveal"
+          @focusout="focusReveal.retire"
+        >
+          <header :class="headerClass">
+            <!--
             名字与状态都照 React 的 SidebarTrigger（frontend/src/components/ui/sidebar.tsx）：
             一个 sr-only 的 "Toggle Sidebar"，**没有** aria-expanded / aria-controls。
             侧栏在移动端是一个会被卸载的抽屉，触发器指着一个此刻并不存在的 id，
             aria-controls 是断的；expanded 也只能描述抽屉，描述不了桌面端的收起态。
           -->
-          <!--
-            这颗触发器带着 `md:hidden`——它**只在窄屏出现**，而窄屏抽屉的开合是
-            `mobileOpen` 不是桌面的 `open`。此前传的是 `sidebarOpen`，于是图标恒定
-            且指反：抽屉关着，按钮却画着「收起」。上游同一处是在组件里
-            `isMobile ? openMobile : open`（已两边同改，sidebar.tsx:261）；本仓把这个
-            选择留在调用点，因为 class 已经写死了这是哪个语境，不必再问一次视口。
-          -->
-          <SidebarTrigger
-            v-if="!isDemo"
-            :open="sidebarMobileOpen"
-            :aria-label="$i18n.t.value.primitives.toggleSidebar"
-            class="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]"
-            @click="toggleSidebar"
-          />
-          <div
-            v-if="agentName"
-            class="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-2 py-1"
-          >
-            <Bot :size="14" class="text-primary" />
-            <span
-              class="hidden max-w-24 truncate text-xs font-medium sm:inline sm:max-w-none"
+            <!--
+  This md:hidden trigger operates the mobile drawer, so its state is mobileOpen.
+  React SidebarTrigger likewise chooses openMobile on mobile (sidebar.tsx).
+-->
+            <SidebarTrigger
+              v-if="!isDemo"
+              :open="sidebarMobileOpen"
+              :aria-label="$i18n.t.value.primitives.toggleSidebar"
+              class="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]"
+              @click="toggleSidebar"
+            />
+            <div
+              v-if="agentName"
+              class="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-2 py-1"
             >
-              {{ agent?.name ?? agentName }}
-            </span>
-          </div>
-          <!--
+              <Bot class="text-primary h-3.5 w-3.5" />
+              <span
+                class="hidden max-w-24 truncate text-xs font-medium sm:inline sm:max-w-none"
+              >
+                {{ displayNameOfAgent(agent, agentName) }}
+              </span>
+            </div>
+            <!--
             没有真实标题就**不渲染**任何文字，与 React 的 ThreadTitle 一致
             （frontend/src/components/workspace/thread-title.tsx 的
             `if (!thread.values?.title) return null`）。「新对话」只是标签页标题的
             兜底，不是这条会话的名字——把它画在头部，读屏器会把每一个空会话都念成
             一条叫「新对话」的记录。容器保留，占位由它负责。
           -->
-          <div class="flex min-w-0 flex-1 items-center text-sm font-medium">
-            <!--
-              标题走 FlipDisplay，与上游 ThreadTitle 同构
-              （frontend/src/components/workspace/thread-title.tsx）。换线程时标题
-              翻页式切换，而不是原地跳变。
-
-              `min-w-0 [&>div]:truncate` 是**逐字照抄上游 ThreadTitle 的 className**
-              （`cn("min-w-0 [&>div]:truncate", className)`）。两边的 FlipDisplay 本体
-              完全同构（外层 `relative overflow-hidden` + 一个内层 div），所以长标题
-              画成什么样，全由调用方传的这两个类决定：
-              `min-w-0` 让它在 flex 行里缩得下去，`[&>div]:truncate` 给内层那个
-              div（上游是 motion.div、本仓是 .flip-display__item，**同一个位置**）
-              加省略号。
-
-              ⚠ 这里原来一个类都没传，注释还写着「上游的裁剪来自 FlipDisplay 自己的
-              `relative overflow-hidden`，是直接切掉而不是省略号……不是 React 坏了」
-              ——**那句话是错的**，上游恰恰传了 `[&>div]:truncate`。第五十二轮用
-              200% 文本量出来：12 个终态上本仓标题横向溢出 17~117px（硬切），
-              上游同样 12 个终态一处都不溢出（内层 truncate 之后不再溢出）。
-              判词：**行内注释是线索不是证据**——这一条劝退过一次本该发生的修复。
-            -->
-            <FlipDisplay
-              v-if="headerTitle"
-              class="min-w-0 [&>div]:truncate"
-              :unique-key="routeThreadId ?? ''"
+            <div
+              class="flex min-w-0 flex-1 items-center text-sm font-medium"
+              :class="agentName ? undefined : 'gap-2'"
             >
-              {{ headerTitle }}
-            </FlipDisplay>
-          </div>
-          <!--
-            上游 `agents/[agent_name]/chats/[thread_id]/page.tsx:279` 是
-            `<Tooltip content={t.agents.newChat}><Button className="px-2 sm:px-3"
-            size="sm" variant="secondary">`。手写那版少的不只是焦点环：
-            字号 `text-xs`（12px）而 Button base 是 `text-sm`（14px）、
-            `gap-2`（8px）而 size-sm 是 `gap-1.5`（6px）、没有 `font-medium`、
-            没有 Tooltip——窄屏下文字被 `hidden sm:inline` 收起来，
-            那时它是一颗纯图标键，没有 Tooltip 就没有任何说明（同 wave 69 的
-            ArtifactTrigger）。图标不传 `:size`，交给 buttonVariants 里的
-            `[&_svg:not([class*='size-'])]:size-4`。
-          -->
-          <Tooltip v-if="agentName && !bootstrap" :delay-duration="500">
-            <TooltipTrigger>
-              <Button
-                :aria-label="$i18n.t.value.agents.newChat"
-                class="px-2 sm:px-3"
-                size="sm"
-                type="button"
-                variant="secondary"
-                @click="startAgentChat"
+              <!-- The caller allows title shrinkage and truncates the FlipDisplay inner item. -->
+              <FlipDisplay
+                v-if="headerTitle"
+                class="min-w-0 [&>div]:truncate"
+                :unique-key="routeThreadId ?? ''"
               >
-                <PlusSquare />
-                <span class="hidden sm:inline">{{
-                  $i18n.t.value.agents.newChat
-                }}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{{ $i18n.t.value.agents.newChat }}</TooltipContent>
-          </Tooltip>
-          <!--
+                {{ headerTitle }}
+              </FlipDisplay>
+              <ThreadArchiveStatus
+                v-if="routeThreadId && !isDemo"
+                :thread-id="routeThreadId"
+                :metadata="threadMetadata.data.value?.metadata"
+              />
+              <ProjectAffiliationBadge
+                v-if="affiliatedProjectId"
+                :project-id="affiliatedProjectId"
+              />
+            </div>
+            <!--
             右侧控件有一层分组容器，但两个上游页面并不共用同一串类：普通聊天页
             `chat-page.tsx` 是 `gap-2`，agent 页是无 gap 的 `sm:mr-4`。本组件同时服务
             两条路由，必须按 `agentName` 选择；把普通聊天的 gap 套到 agent 页，
@@ -1838,11 +1172,11 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
             两支都保留 `shrink-0`：标题是唯一的 flex-1，标题变长时缩的是标题，
             不是这排按钮。
           -->
-          <div
-            class="flex shrink-0 items-center max-[361px]:min-w-0 max-[361px]:flex-1 max-[361px]:shrink max-[361px]:flex-nowrap max-[361px]:justify-end max-[361px]:gap-[8px] max-[361px]:[&_[data-slot=button]]:size-[36px]! max-[361px]:[&_[data-slot=button]]:p-0! max-[361px]:[&_[data-slot=button]_svg]:size-[16px]!"
-            :class="agentName ? 'sm:mr-4' : 'gap-2'"
-          >
-            <!--
+            <div
+              class="flex shrink-0 items-center max-[361px]:gap-[8px] @max-3xl/chat-pane:min-w-0 @max-3xl/chat-pane:shrink @max-3xl/chat-pane:grow-0 @max-3xl/chat-pane:basis-full @max-3xl/chat-pane:flex-wrap @max-3xl/chat-pane:justify-end max-[361px]:[&_[data-slot=button]]:size-[36px]! max-[361px]:[&_[data-slot=button]]:p-0! max-[361px]:[&_[data-slot=button]_svg]:size-[16px]!"
+              :class="agentName ? 'sm:mr-4' : 'gap-2'"
+            >
+              <!--
               后台任务排在这一组的最前，与上游 chat-page.tsx 的顺序一致
               （ThreadBackgroundTasks 在 ThreadScheduledTasksLink 上面）。
 
@@ -1850,174 +1184,147 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
               案例页那边没有 Gateway。能力开关由组件自己看（mcp_tasks 没开就整块
               不渲染），不在这里重复判一次——判两处迟早会分叉。
             -->
-            <ThreadBackgroundTasks
-              v-if="routeThreadId && !isDemo"
-              :thread-id="routeThreadId"
-            />
-            <!-- 批次紧跟后台任务，与上游 chat-page.tsx 的顺序一致。 -->
-            <ThreadSubagentBatches
-              v-if="routeThreadId && !isDemo"
-              :thread-id="routeThreadId"
-            />
-            <!--
+              <ThreadBackgroundTasks
+                v-if="routeThreadId && !isDemo"
+                :thread-id="routeThreadId"
+              />
+              <!-- 批次紧跟后台任务，与上游 chat-page.tsx 的顺序一致。 -->
+              <ThreadSubagentBatches
+                v-if="routeThreadId && !isDemo"
+                :thread-id="routeThreadId"
+              />
+              <!--
+  Match agents/[agent_name]/chats/[thread_id]/page.tsx: the new-chat action uses
+  the shared small secondary Button and Tooltip; the tooltip also names its narrow icon-only state.
+-->
+              <Tooltip v-if="agentName && !bootstrap" :delay-duration="500">
+                <TooltipTrigger>
+                  <Button
+                    :aria-label="$i18n.t.value.agents.newChat"
+                    class="px-2 sm:px-3"
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                    @click="startAgentChat"
+                  >
+                    <PlusSquare />
+                    <span class="hidden sm:inline">{{
+                      $i18n.t.value.agents.newChat
+                    }}</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{{
+                  $i18n.t.value.agents.newChat
+                }}</TooltipContent>
+              </Tooltip>
+
+              <!--
               outline / sm 的按钮外观加一段 `hidden sm:inline` 的文字，不是一颗纯图标的
               方按钮：React 的 ThreadScheduledTasksLink 就是
               `<Button variant="outline" size="sm" asChild>` 包一个带同名 span 的链接
-              （frontend/src/components/workspace/thread-scheduled-tasks-link.tsx）。
+              （frontend/src/components/workspace/thread-scheduled-tasks-button.tsx）。
               两边的可访问名都来自 aria-label，所以这处差异在可访问性树上看不见——
               看得见的是宽屏上一个念得出名字的按钮 vs 一个只有图标的方块。
             -->
-            <NuxtLink
-              v-if="routeThreadId && !agentName && !isDemo"
-              :to="`/workspace/scheduled-tasks?thread_id=${encodeURIComponent(routeThreadId)}`"
-              :aria-label="$i18n.t.value.sidebar.scheduledTasks"
-              :class="
-                cn(
-                  buttonVariants({ variant: 'outline', size: 'sm' }),
-                  'max-[361px]:size-[36px]! max-[361px]:p-0! max-[361px]:[&_svg]:size-[16px]!',
-                )
-              "
-            >
-              <CalendarClock :size="16" />
-              <span class="hidden sm:inline">{{
-                $i18n.t.value.sidebar.scheduledTasks
-              }}</span>
-            </NuxtLink>
-            <!--
-              上游这一对是 `tokenUsageEnabled ? <TokenUsageIndicator/> : <ContextUsageBadge/>`
-              （chat-page.tsx:295），**没有** isMock 判据：只读案例页仍然把用量画出来，
-              只是背后的 useThreadTokenUsage 被关掉，数字落在 "-" 上。本仓此前两支都挂
-              `!isDemo`，于是案例页头部整块消失。
-            -->
-            <!--
-              归档状态条排在用量指示之前——与上游 chat-page.tsx 的顺序一致
-              （ThreadArchiveStatus 在 TokenUsageIndicator 上面）。
-              未归档时它整块不渲染，所以这里不需要 v-if。
-            -->
-            <ThreadArchiveStatus
-              v-if="routeThreadId"
-              :thread-id="routeThreadId"
-              :metadata="currentThread?.metadata"
-            />
-            <TokenUsageIndicator
-              v-if="modelCatalog.tokenUsageEnabled.value"
-              :thread-id="routeThreadId"
-              :messages="visibleMessages"
-              :pending-messages="pendingUsageMessages"
-              :backend-usage="persistedTokenUsage"
-              :context-usage="contextUsage"
-              :enabled="modelCatalog.tokenUsageEnabled.value"
-              :preferences="settings.tokenUsage"
-              @preferences-change="updateThreadSettings('tokenUsage', $event)"
-            />
-            <ContextUsageBadge v-else :context-usage="contextUsage" />
-            <!--
-              保存 agent 走**页头右上角的 ⋯ 菜单**，不是工具条上一颗可见按钮。
-
-              上游 `agents/new/page.tsx:309` 就是这个形状：header 右端一颗
-              `variant="ghost" size="icon-sm"` 的 More 触发器（`aria-label`
-              取 agents 那条 more），菜单里一个 `DropdownMenuItem` + `SaveIcon`。
-              本仓原来是工具条上一颗手写 `<button>`（`rounded-md border px-3
-              py-1.5 text-xs`）：既不是同一个位置，也不是同一个形状，还少了
-              Button/DropdownMenuItem 那一整套焦点环、hover 与禁用表现。
-
-              **决定性的证据是文案自己**：`agents.saveHint` 这句一次性提示
-              （两个应用共用同一条上游文案）写的是「You can save this agent at
-              any time from the top-right menu」——本仓照着它去找，右上角根本
-              没有菜单。这不是「本仓更好」的取舍，是界面和它自己的说明打架。
-
-              这一条同时把 agents 那条 more 词条接上：wave 28 记的「它在本仓
-              永远没有消费点」到此结束。（未引用扫描器按叶子名匹配，`more`
-              在 common 下有人用，所以它从来没进过 unused 集——数字不会变。）
-
-              禁用判据不动，仍是本仓这四条。上游只用
-              `[Boolean(agent), thread.isLoading, setupAgentStatus !== "idle"]`，
-              少了「bootstrap 会话还没就绪」这一条；本仓的 useAgentCreationSession
-              比上游多一个 verifying 态，多出来的判据是为了它。
-            -->
-            <DropdownMenu v-if="bootstrap">
-              <DropdownMenuTrigger>
-                <!--
+              <ThreadScheduledTasksButton
+                v-if="routeThreadId && !isDemo && !agentName"
+                :thread-id="routeThreadId"
+              />
+              <!--
+  React chat-page.tsx shows token/context usage in showcase mode too.
+  The backend usage query is disabled there; the visible indicator retains its empty value.
+-->
+              <TokenUsageIndicator
+                v-if="modelCatalog.tokenUsageEnabled.value"
+                :thread-id="routeThreadId"
+                :messages="visibleMessages"
+                :pending-messages="pendingUsageMessages"
+                :backend-usage="persistedTokenUsage"
+                :context-usage="contextUsage"
+                :enabled="modelCatalog.tokenUsageEnabled.value"
+                :preferences="settings.tokenUsage"
+                @preferences-change="updateThreadSettings('tokenUsage', $event)"
+              />
+              <ContextUsageBadge v-else :context-usage="contextUsage" />
+              <!--
+  Agent creation saves through the top-right ghost More menu, matching agents/new/page.tsx.
+  The one-time saveHint points to this menu; once saved, Save keeps its label and becomes disabled.
+-->
+              <DropdownMenu v-if="bootstrap">
+                <DropdownMenuTrigger>
+                  <!--
                   `data-testid` 只给 e2e 定位用，不进 aria 快照：这一屏的侧栏里
                   有一排会话行的 More 键（common 那条 more，念作 "More"），
                   裸 `getByRole("button", { name: ... })` 在这种页面上是
                   strict-mode 的定时炸弹。
                 -->
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  data-testid="agent-more"
-                  :aria-label="$i18n.t.value.agents.more"
-                >
-                  <MoreHorizontal class="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  data-testid="agent-save"
-                  :disabled="
-                    !bootstrapConversationReady ||
-                    stream.isStreaming.value ||
-                    creationBusy ||
-                    creation.status.value === 'created'
-                  "
-                  @select="saveAgent"
-                >
-                  <Save class="h-4 w-4" />
-                  {{
-                    creation.status.value === "verifying"
-                      ? $i18n.t.value.agents.verifying
-                      : creation.status.value === "created"
-                        ? $i18n.t.value.agents.agentCreated
-                        : creation.status.value === "saving" ||
-                            stream.isStreaming.value
-                          ? $i18n.t.value.agents.saving
-                          : $i18n.t.value.agents.save
-                  }}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <SidecarTrigger
-              v-if="!isDemo && sidecar.sidecarThreadId.value && sidecarReady"
-              :open="sidecar.open.value"
-              :pending="sidecarReconciling"
-              @toggle="toggleSidecar"
-            />
-            <BrowserTrigger
-              v-if="browserEnabled"
-              :open="activePanel === 'browser'"
-              @toggle="toggleBrowser"
-            />
-            <!--
-              导出**不按 isDemo 关掉**：上游是裸的 `<ExportTrigger threadId={threadId} />`
-              （chat-page.tsx:312），只读案例页照样能把这条会话导出成 Markdown/JSON——
-              导出是纯读，不写后端。本仓此前把它删掉，案例页因此少一颗按钮。
-              （它要用 workspace toast，所以 showcase layout 也得挂上 toast owner，
-              否则 useWorkspaceToast 直接抛错——这就是当初顺手删掉它的原因。）
-            -->
-            <ExportTrigger
-              v-if="routeThreadId && currentThread && !isWelcomeMode"
-              :thread-id="routeThreadId"
-              :thread="currentThread"
-              :messages="visibleMessages"
-            />
-            <ArtifactTrigger
-              :count="artifactPanel.artifacts.value.length"
-              @open="showArtifacts"
-            />
-          </div>
-        </header>
-        <!--
-          内层还有一个 main：React 的 SidebarInset 是外层 main，ChatPage 自己再开一个
-          （frontend/src/components/workspace/chats/chat-page.tsx）。头部浮在上面、
-          不属于对话本身，所以 main 从消息流开始——读屏器的「跳到主内容」应当落在对话，
-          而不是落在标题栏。
-        -->
-        <main
-          class="flex min-h-0 max-w-full grow flex-col max-[361px]:overflow-y-auto"
-          @focusin="keepTripleReflowFocusVisible"
-        >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    data-testid="agent-more"
+                    :aria-label="$i18n.t.value.agents.more"
+                  >
+                    <MoreHorizontal class="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    data-testid="agent-save"
+                    :disabled="
+                      !bootstrapConversationReady ||
+                      stream.isStreaming.value ||
+                      creation.status.value !== 'idle'
+                    "
+                    @select="saveAgent"
+                  >
+                    <Save class="h-4 w-4" />
+                    {{
+                      creation.status.value === "saving"
+                        ? $i18n.t.value.agents.saving
+                        : $i18n.t.value.agents.save
+                    }}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <SidecarTrigger
+                v-if="
+                  !isDemo &&
+                  sidecar.sidecarThreadId.value &&
+                  sidecarSession.ready.value
+                "
+                :open="sidecar.open.value"
+                :pending="sidecarReconciling"
+                @toggle="toggleSidecar"
+              />
+              <BrowserTrigger
+                v-if="browserEnabled"
+                :open="activePanel === 'browser'"
+                @toggle="toggleBrowser"
+              />
+              <!--
+  ExportTrigger is read-only and remains available in showcase, matching React chat-page.tsx.
+  Both workspace and showcase layouts provide its workspace toast owner.
+-->
+              <ExportTrigger
+                v-if="routeThreadId && currentThread && !isWelcomeMode"
+                :thread-id="routeThreadId"
+                :thread="currentThread"
+                :messages="visibleMessages"
+              />
+              <ConversationExtensionActions
+                v-if="extensionThread && !isDemo"
+                :context="{
+                  thread: extensionThread,
+                  messages: visibleMessages,
+                }"
+              />
+              <ArtifactTrigger
+                :count="artifactPanel.artifacts.value.length"
+                @open="showArtifacts"
+              />
+            </div>
+          </header>
           <div v-if="showSaveHint" class="px-4 pt-4">
             <div class="mx-auto w-full max-w-[var(--container-width-md)]">
               <Alert>
@@ -2029,13 +1336,22 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
             </div>
           </div>
           <MessageList
-            :class="isWelcomeMode ? '' : showSaveHint ? 'pt-4' : 'pt-10'"
+            :class="
+              isWelcomeMode
+                ? ''
+                : showSaveHint
+                  ? 'pt-4 @max-3xl/chat-pane:max-h-dvh @max-3xl/chat-pane:min-h-auto'
+                  : 'pt-10 @max-3xl/chat-pane:max-h-dvh @max-3xl/chat-pane:min-h-auto @max-3xl/chat-pane:pt-0'
+            "
             :messages="visibleMessages"
             :raw-messages="demoMessages ?? stream.messages.value"
+            :scheduled-events="scheduledEvents.data.value ?? []"
             :streaming="stream.isStreaming.value"
             :loading="stream.isHistoryLoading.value"
             :thread-id="routeThreadId"
+            :scroll-owner-key="draftThreadId"
             :artifact-paths="artifactPanel.artifacts.value"
+            :tool-artifacts="authoritativeToolArtifacts"
             :is-mock="isDemo"
             :has-goal="Boolean(activeGoal)"
             :uploading="localUploading"
@@ -2044,11 +1360,14 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
             :is-admin="isAdmin"
             :subtasks="stream.subtasks.value"
             :active-run-id="stream.activeRunId.value"
+            :streaming-message-ids="stream.streamingMessageIds.value"
             :has-more-history="stream.hasMoreHistory.value"
             :history-loading-more="stream.isHistoryLoadingMore.value"
             :history-error="stream.historyError.value"
             :thread-error="stream.error.value"
             :submit-human-input="respondHumanInput"
+            :edit-owner-key="JSON.stringify([currentUserId, agentName])"
+            :edit-and-regenerate-message="editAndRegenerateMessage"
             :token-usage-inline-mode="
               modelCatalog.tokenUsageEnabled.value
                 ? settings.tokenUsage.inlineMode
@@ -2065,123 +1384,11 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
             @selection-add="addToConversation"
             @branch="branch"
             @regenerate="regenerate"
-            @edit="beginEdit"
             @human-input="respondHumanInput"
             @load-more-history="stream.loadMoreHistory()"
           />
           <div
-            v-if="editState"
-            class="border-border bg-background absolute right-0 bottom-36 left-0 z-40 mx-auto w-full max-w-xl rounded-xl border p-3 shadow-lg"
-          >
-            <!--
-              走 `ui/textarea`，不要手写。上游这一处是
-              `message-list-item.tsx:525` 的 `<Textarea autoFocus className="min-h-24 resize-y">`。
-              手写那版丢掉的是焦点环（`focus-visible:ring-[3px]`）、无效态
-              （`aria-invalid:`）、禁用态样式与深色主题 token，而且**打开就自动聚焦**
-              这一条也没有：用户点「编辑」之后还得再点一次输入框才能改。
-            -->
-            <Textarea
-              v-model="editState.text"
-              autofocus
-              class="min-h-24 resize-y"
-            />
-            <!--
-              「改完重跑会丢掉这一轮之后的消息」这句提醒，上游写在输入框与两颗按钮
-              之间（message-list-item.tsx:530）。本仓此前没有——用户按下
-              「Update and rerun」之前看不到任何关于后果的说明，而这是一个**会丢内容**
-              的操作。`common.editRerunWarning` 也因此一直躺在 unused 里。
-            -->
-            <p class="text-muted-foreground mt-2 text-xs">
-              {{ $i18n.t.value.common.editRerunWarning }}
-            </p>
-            <!--
-              上游 `message-list-item.tsx:532` 两颗都是 `<Button size="sm">`，
-              各带一颗 12px 图标（`XIcon` / `CheckIcon`），间距 `gap-1`。
-              手写那版没有图标、圆角是 `rounded`（4px）而不是 size-sm 的
-              `rounded-md`（6px）、没有 hover 也没有禁用态。
-            -->
-            <div class="mt-2 flex justify-end gap-1">
-              <Button
-                size="sm"
-                type="button"
-                variant="ghost"
-                @click="editState = null"
-              >
-                <X class="size-3" />
-                {{ $i18n.t.value.common.cancel }}
-              </Button>
-              <Button
-                size="sm"
-                type="button"
-                :disabled="editSubmitDisabled"
-                @click="updateAndRerun"
-              >
-                <Check class="size-3" />
-                {{ $i18n.t.value.common.updateAndRerun }}
-              </Button>
-            </div>
-          </div>
-          <!--
-            **正在重试**是一段持续为真的状态，不是一次播报，所以它留在页面里而不是
-            走 toaster（判据写在 failedSend 的声明上）。上游是每个 llm_retry 事件
-            一条 toast（`core/threads/hooks.ts:1835`），一次重试风暴会堆出一摞，
-            而且「已经不在重试了」这件事那边没有出口。
-
-            **形态是判过的分歧，颜色不是**（2026-09-12 第十三轮）：这两块原来写的是
-            `bg-blue-50 text-blue-700` / `bg-amber-50 text-amber-700`——**上游全仓
-            从没用过这四个 utility，而且它们一个 `dark:` 变体都没有**，
-            深色主题下就是两块浅色方块浮在暗背景上。
-            改走 token：重试是中性状态，用浮层自己的 `bg-popover`（与侧栏那颗
-            CSS tooltip 同一套）；发送失败是错误，用本仓既有的错误提示写法
-            `bg-destructive/10 text-destructive`（同 `settings-session-unavailable`）。
-            门禁：tests/guards/invented-palette-colors.test.ts。
-          -->
-          <p
-            v-if="stream.llmRetry.value"
-            data-testid="llm-retry-status"
-            role="status"
-            class="bg-popover text-popover-foreground absolute right-4 bottom-48 z-40 max-w-md rounded-lg border px-4 py-2 text-sm shadow"
-          >
-            {{ stream.llmRetry.value.message }}
-          </p>
-          <!--
-            **这条只剩「发失败了，可以再试一次」一种情况**（判据写在 failedSend 的
-            声明上）。此前它还兼着 replay gap 与流错误的播报，那两条现在走 toaster。
-
-            带 data-testid 是因为它**不是** aria 上唯一的 role="status"：
-            工具条里的 ContextUsageBadge 永远在（占位态也带 role="status"），
-            流式输出期间 MessageList 还会再挂一条 RunActivity。裸
-            `getByRole("status")` 会先命中徽标、再撞上 strict mode。
-          -->
-          <p
-            v-if="failedSend"
-            data-testid="send-failure"
-            role="status"
-            class="bg-destructive/10 text-destructive absolute right-4 bottom-36 z-40 rounded-lg px-4 py-2 text-sm shadow"
-          >
-            {{ failedSend.message }}
-            <button type="button" class="ml-2 underline" @click="retrySend">
-              {{ $i18n.t.value.navigation.tryAgain }}
-            </button>
-          </p>
-          <div
-            v-if="bootstrap && creation.status.value === 'error'"
-            data-testid="agent-creation-error"
-            role="alert"
-            class="bg-destructive/10 text-destructive absolute right-4 bottom-36 left-4 z-40 mx-auto max-w-xl rounded-lg px-4 py-3 text-sm shadow"
-          >
-            <strong>{{ $i18n.t.value.agents.creationError }}:</strong>
-            {{ creation.error.value }}
-            <button
-              type="button"
-              class="ml-2 underline"
-              @click="creation.retry"
-            >
-              {{ $i18n.t.value.agents.retry }}
-            </button>
-          </div>
-          <div
-            class="right-0 bottom-0 left-0 z-30 flex justify-center px-3 sm:px-4"
+            class="right-0 bottom-0 left-0 z-30 flex justify-center px-3 has-[[contenteditable][aria-controls]]:z-50 has-[textarea[aria-controls]]:z-50 sm:px-4"
             :class="
               isWelcomeMode
                 ? 'absolute max-[361px]:relative max-[361px]:shrink-0 max-[361px]:pb-4'
@@ -2209,102 +1416,50 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                   creation.agent.value
                 "
                 data-testid="agent-created"
-                class="bg-background mx-auto w-full max-w-lg rounded-xl border p-6 text-center shadow-sm"
+                class="flex flex-col items-center gap-4 rounded-2xl border py-8 text-center"
               >
                 <!--
-                  上游 `agents/new/page.tsx:424` 画的是
-                  `<CheckCircleIcon className="text-primary h-10 w-10" />`
-                  ——lucide 里 `CheckCircleIcon` 解析到 **`CircleCheckBig`**
-                  （wave 69 在 SubtaskCard 上踩过同一对别名）。
-                  此前这里是文字字符 `✓`（U+2713）撑成 `text-3xl`：
-                  尺寸 30px 对 40px，颜色继承正文而不是 `text-primary`，
-                  字形还随系统字体变。`aria-hidden` 两边一致，所以
-                  aria 快照与对照台账都看不见这一处。
-                -->
+  React agents/new/page.tsx CheckCircleIcon resolves to CircleCheckBig.
+  Use the same primary 40px vector and decorative aria-hidden semantics.
+-->
                 <CircleCheckBig
-                  class="text-primary mx-auto h-10 w-10"
+                  class="text-primary h-10 w-10"
                   aria-hidden="true"
                 />
-                <h2 class="mt-2 text-xl font-semibold">
+                <p class="font-semibold">
                   {{ $i18n.t.value.agents.agentCreated }}
-                </h2>
-                <p class="text-muted-foreground mt-2 text-sm">
-                  {{ creation.agent.value.name }} ·
-                  {{ creation.agent.value.description }}
                 </p>
-                <!--
-                  **这两颗走 `ui/button`，不是手写的链接样式。**
-
-                  上游 `agents/new/page.tsx:427/436` 是两颗 `<Button>`
-                  （第二颗 `variant="outline"`），点下去 `router.push`。
-                  本仓这里用的是 `NuxtLink`——**导航用链接是对的**（点了就跳走的
-                  控件不该是按钮，2026-09-11 那一轮刚为此改过 agents 那一屏），
-                  所以保留链接语义、用 `as-child` 把按钮的样式与状态套上去。
-
-                  手抄那一版丢掉的（对着 `buttonVariants` 逐条）：
-                  `font-medium`、`hover:bg-primary/90`、`focus-visible:*` 那三条焦点环、
-                  `h-9`（改成了 `py-2`）、`px-4`（写的是 `px-3`）、
-                  `inline-flex items-center justify-center`、`gap-2`、
-                  `whitespace-nowrap`、`cursor-pointer`、`transition-all`、
-                  以及 `disabled:*` 与 `aria-invalid:*` 两组状态。
-                -->
-                <div class="mt-5 flex flex-wrap justify-center gap-2">
-                  <Button as-child>
-                    <NuxtLink
-                      :to="`/workspace/agents/${encodeURIComponent(creation.agent.value.name)}/chats/new`"
-                    >
-                      {{ $i18n.t.value.agents.startChatting }}
-                    </NuxtLink>
+                <div class="flex gap-2">
+                  <Button
+                    @click="
+                      navigateTo(
+                        `/workspace/agents/${encodeURIComponent(creation.agent.value.name)}/chats/new`,
+                      )
+                    "
+                  >
+                    {{ $i18n.t.value.agents.startChatting }}
                   </Button>
-                  <Button variant="outline" as-child>
-                    <NuxtLink to="/workspace/agents">
-                      {{ $i18n.t.value.agents.backToGallery }}
-                    </NuxtLink>
+                  <Button
+                    variant="outline"
+                    @click="navigateTo('/workspace/agents')"
+                  >
+                    {{ $i18n.t.value.agents.backToGallery }}
                   </Button>
                 </div>
               </section>
               <!--
-                上游 agents/new/page.tsx 整个创建流程都没有 follow-up 建议这一层
-                （见它的完整 return，没有 Suggestions 组件），不分「还没建出来」还是
-                「已建成」。原来这里只在已建成时隐藏，于是引导对话期间也会冒出建议
-                chip，而它是个死按钮：`ref="composer"` 只挂在下面的 ChatComposer 上，
-                bootstrap 时那一支不渲染，于是 `composer` 是 **null**，
-                `composer?.offerFollowup(...)` 被可选链吞掉——不是「ref 指向了没有这个
-                方法的组件」，AgentBootstrapComposer 根本没有接这个 ref。
-                bootstrap 是每个实例上的常量，所以直接并进 v-if，不留隐藏 DOM。
-              -->
+  Agent creation never shows follow-up suggestions, matching agents/new/page.tsx.
+  Its text-only bootstrap composer has no offerFollowup ref; normal chat owns that action.
+-->
               <!--
-                显示判据逐条对着上游 `showFollowups`（input-box.tsx:1981）：
-                `!disabled && !isWelcomeMode && !showSkillSuggestions &&
-                 !selectedSlashSkill && !followupsHidden && status !== "streaming" &&
-                 (followupsLoading || followups.length > 0)`。
-
-                逐条对应关系：
-                - `!disabled` → `!isDemo`（composer 拿到的 `disabled` 就是它）。
-                  本仓这一条目前**够不着**——followup 只在 refreshPostRun 里取，而
-                  它挂在 onFinish 上，只读线程从来不跑 run。留着是为了两边的判据同形，
-                  也为了以后真出现「可读不可写」的态时不会漏。
-                - `!showSkillSuggestions && !selectedSlashSkill` → `!followupsSuppressed`，
-                  由 composer 发上来（chip 画在 composer **外面**，看不见这两样）。
-                - `!followupsHidden` → 本仓的关闭键直接 `followups = []`，等价：
-                  上游留着数组只是为了下一批到达时用 `setFollowupsHidden(false)` 复位，
-                  而本仓下一批到达时本来就会重新赋值。
-                - `status !== "streaming"` → `!stream.isStreaming.value`。**这一条此前
-                  真的缺**：`send()` 只清 `followups`、不清 `followupsLoading`，所以在
-                  上一轮建议还没取回来时再发一条，「正在生成建议」那颗 chip 会一直挂在
-                  新的流上面（上游用这一条与提交时的 `setFollowupsLoading(false)` 挡了两道）。
-                - `!bootstrap` 是本仓独有的一条，理由见下面那段注释。
-              -->
+  Match React input-box.tsx showFollowups: hide suggestions in readonly/welcome/streaming
+  states and while the composer displays skills or a selected slash skill. Closing clears
+  the current suggestions; the command owner retires pending work before another send.
+-->
               <!--
-                **外面是两层容器，不是一层**（上游 `input-box.tsx:2187-2188`）：
-                外层 `flex items-center justify-center pb-1`，内层 `flex items-center gap-2`。
-                本仓此前把它压成一个带 `mb-2 flex-wrap` 的 div——`mb-2` 上游没有，
-                而 `flex-wrap` 落在了错的那一层（上游的换行发生在 `Suggestions`
-                的列表格里，外面两层都不换行）。
-
-                **加载态与建议行是互斥的两支**（上游是三元），本仓此前把它们并列，
-                于是「正在生成建议」那颗 chip 会和上一轮的建议同时挂着。
-              -->
+  React input-box.tsx gives suggestions two unwrapped flex containers; Suggestions
+  owns the scrollable list. Loading and completed suggestions are mutually exclusive.
+-->
               <div
                 v-if="
                   !bootstrap &&
@@ -2324,14 +1479,9 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                     {{ $i18n.t.value.inputBox.followupLoading }}
                   </div>
                   <!--
-                    关闭键**在 `Suggestions` 里面**（上游 `input-box.tsx:2203`），
-                    不是它的兄弟节点——它跟着建议一起进那个可滚动列表格。
-
-                    **关闭键此前画的是文字 `×`**（U+00D7 乘号），不是 lucide `X`——
-                    跟着正文字体渲染，字形、字重、光学重心都和 16px 的图标不是一回事。
-                    这条 aria 看不见（两边可访问名都是 `common.close`）。
-                    `cursor-pointer` 也照上游补上：本仓 Button 基类没有它。
-                  -->
+  Keep the close action inside Suggestions so it scrolls with the list, as in React
+  input-box.tsx. Use the shared 16px X icon and the common close accessible label.
+-->
                   <Suggestions v-else class="w-fit items-center">
                     <Suggestion
                       v-for="suggestion in followups"
@@ -2354,36 +1504,7 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                   </Suggestions>
                 </div>
               </div>
-              <!--
-                **待办面板外面有两层定位容器，欢迎态与常规态不同**
-                （上游 `chats/chat-page.tsx:517`，agent 页 `[thread_id]/page.tsx:405`
-                是同一份）：外层 `right-0 left-0 z-0` ＋ 欢迎态 `absolute -top-4`，
-                内层 `right-0 bottom-0 left-0 flex flex-col` ＋ 欢迎态 `absolute`。
-
-                本仓此前**一层包裹都没有**，只给了 `mb-2`（上游没有的外边距），
-                于是欢迎态下这块排进正常流、被 Welcome 那一块压住。
-                2026-09-12 第十八轮把这一屏接进对照取样面时，
-                **两个语言维同时卡在「点不动那颗折叠头」**：
-                Playwright 报的是 `<div class="mx-auto flex … text-center sm:px-8">
-                subtree intercepts pointer events`——那正是 Welcome 的根。
-                「名字对、位置对、尺寸对，却点不动」就是几何档 `hit` 那一格
-                想守的形状，这次它以「步骤超时」的方式先现形了。
-
-                调用点的 class 也照上游：`bg-background/5`（半透明，配
-                TodoList 自己的 `backdrop-blur-sm`），不是本仓原来的 `mb-2`。
-
-                ~~**`GoalStatus` 没有跟着搬过来**：上游把它和 TodoList 放在同一层
-                （`{activeGoal && <GoalStatus/>}`），本仓的在 `ChatComposer.vue` 里。~~
-                **第二十六轮搬过来了。** 此前它在 `ChatComposer.vue` 的最上面，
-                也就是排在这一整块**下面**；量出来是目标条 y 差 **137px**、
-                待办那四行各差 **-48px**（本仓整体高一档，因为上游那一档被目标条占着），
-                外加 `order` 档第 45 个公共节点两边不同。
-
-                **外层的 `v-if` 要跟着放宽成「有目标**或**有待办」**（上游是
-                `{(hasGoal || hasTodos) && …}`，chat-page.tsx:517）：只按待办判的话，
-                「有目标、没待办」的线程会连目标条一起不渲染——那是把一处位置差异
-                换成一处**缺失**。
-              -->
+              <!-- Goal and todos share the welcome/ordinary positioning shell; either can render it. -->
               <div
                 v-if="
                   (activeGoal || authoritativeTodos.length) &&
@@ -2405,14 +1526,9 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                 </div>
               </div>
               <!--
-                创建 agent 还没建出来的这一步，上游用的是裸的
-                `PromptInput` + `PromptInputTextarea` + `PromptInputSubmit`
-                （frontend/src/app/workspace/agents/new/page.tsx:434），没有附件、
-                语音、润色、模式/模型选择器——`onSubmit` 也只读文本，`files` 恒为
-                空数组。本仓原来这段期间用的是完整 ChatComposer，于是创建 agent 时
-                比上游多出一整排控件。AgentBootstrapComposer 补的就是这一段最简界面，
-                发送仍然经同一个 `send()`。
-              -->
+  React agents/new/page.tsx uses a text-only PromptInput for bootstrap: no attachments,
+  voice, polishing or model controls. AgentBootstrapComposer delegates to the same send command.
+-->
               <AgentBootstrapComposer
                 v-if="bootstrap && creation.status.value !== 'created'"
                 :disabled="stream.isStreaming.value"
@@ -2421,6 +1537,7 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
               <ChatComposer
                 v-else-if="!bootstrap"
                 ref="composer"
+                :consumption-observation="consumptionObservation"
                 :surface-class="
                   isWelcomeMode
                     ? '-translate-y-2 sm:-translate-y-4 max-[361px]:translate-y-0'
@@ -2428,9 +1545,12 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                 "
                 :thread-key="routeThreadId ?? 'new'"
                 :target-thread-id="routeThreadId ?? draftThreadId"
+                :project-id="composerProjectId"
                 :user-id="currentUserId"
                 :agent-name="agentName"
                 :default-model-name="agent?.model"
+                :agent-skill-names="agent?.skills"
+                :agent-skills-loading="!agentResolved"
                 :model-selection-ready="agentResolved"
                 :streaming="stream.isStreaming.value"
                 :errored="stream.error.value !== null"
@@ -2441,47 +1561,50 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                 :prompt-history="promptHistory"
                 :ensure-thread="ensureThread"
                 :submit-message="send"
+                :capture-submission="captureComposerSubmission"
                 :references="sidecar.conversationQuotes.value"
                 :context="context"
-                :disabled="isDemo"
+                :can-create-runs="canCreateRuns"
+                :can-stop-streaming="canStopStreaming"
+                :disabled="
+                  isDemo ||
+                  localUploading ||
+                  (knowledgeSelectorVisible &&
+                    Boolean(agentName) &&
+                    agent === null)
+                "
                 @send="send"
                 @stop="stopRun"
-                @uploading-change="
-                  localUploading = $event;
-                  stream.isUploading.value = $event;
-                "
+                @uploading-change="onComposerUploading"
                 @followups-suppressed-change="followupsSuppressed = $event"
                 @clear-references="sidecar.clearConversationQuotes()"
                 @context-change="updateContext"
+                @resolve-context="resolveThreadSettings"
+                @reference-file-attached="adoptPreparedThread"
                 @goal-change="localGoal = $event"
               >
+                <template #knowledgeScopeControl="{ disabled }">
+                  <KnowledgeScopeSelector
+                    v-if="knowledgeSelectorVisible && knowledgeScope"
+                    :agent-name="agentName ?? 'lead_agent'"
+                    :selection="knowledgeScope"
+                    :disabled="disabled"
+                    :unavailable-reason="
+                      agentName && !agentKnowledgeEnabled
+                        ? $i18n.t.value.knowledge.scope.agentUnavailable
+                        : undefined
+                    "
+                    @change="knowledgeScope = $event"
+                  />
+                </template>
                 <!--
-                  欢迎语浮在输入框上方、不占布局。**它必须挂在输入框内部**，
-                  上游正是这么做的（`extraHeader` 传进 PromptInput，
-                  frontend/src/components/workspace/input-box.tsx:2220）：
-                  那对 absolute 容器由 ComposerSurface 提供，外层零高度锚贴住
-                  surface 上边线、内层 bottom-0 把内容底边顶到那条线上。
-
-                  **wave 67 之前这一块是输入框的兄弟节点**，于是零高度锚贴的是外层
-                  布局容器而不是输入框，实测整块低 15px 并压进输入框（React 段落底
-                  到输入框顶 28px，本仓只有 13px），宽度也差 2px 导致段落少折一行。
-                  判据与实测都记在 ComposerSurface.vue 的注释里。
-                -->
+  Welcome content belongs inside the composer extraHeader slot, matching React
+  input-box.tsx. ComposerSurface owns the absolute anchor above the input surface.
+-->
                 <!--
-                  **有目标或有待办时，欢迎区要让位**（上游两个入口逐字相同：
-                  `chats/chat-page.tsx:559-561` 与 agent 页
-                  `[agent_name]/chats/[thread_id]/page.tsx:442-448`，
-                  都是 `isWelcomeMode && !hasGoal && !hasTodos && <Welcome…>`）。
-
-                  本仓此前两处都没有这一条。后果具体：欢迎态下敲一条
-                  `/goal …`（两个应用都支持，本仓走 `@goal-change`）之后，
-                  目标条会在同一屏上出现，而上游把「👋 Hello, again!」那一整块
-                  收起来腾地方、本仓仍然画着——**同一屏上两句主张**。
-
-                  判据取上游那一串条件本身，不是「看起来挤不挤」：
-                  这一块与目标条/待办块**共用输入框上方那一块绝对定位的区域**
-                  （见上面那段 wave 67 的注释），谁都不让位就是重叠。
-                -->
+  Welcome yields to goal/todo content: both occupy the composer extraHeader region.
+  Match the isWelcomeMode && !hasGoal && !hasTodos guards in React chat and agent pages.
+-->
                 <template
                   v-if="
                     isWelcomeMode &&
@@ -2492,15 +1615,9 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                   #extraHeader
                 >
                   <!--
-                    agent 会话页与普通聊天页的欢迎区是**两个不同的东西**，上游也是
-                    两个组件（`AgentWelcome` vs `Welcome`）。同一个 AgentChat 服务两条
-                    路由，所以这一支要显式分开；此前只有通用那一支，打开自定义 agent
-                    的新会话时读到的是「👋 Hello, again!」而不是 agent 自己的名字。
-
-                    **不带定位 class**：上游把 AgentWelcome 原样交给 extraHeader
-                    （agents/[agent_name]/chats/[thread_id]/page.tsx:417），
-                    定位由那对容器负责。
-                  -->
+  Agent and ordinary chat use different welcome content, matching React AgentWelcome/Welcome.
+  Pass AgentWelcome through extraHeader without duplicating the ComposerSurface positioning.
+-->
                   <AgentWelcome
                     v-if="agentName"
                     :agent="agent"
@@ -2514,29 +1631,17 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                     class="mx-auto flex w-full max-w-full flex-col items-center justify-center gap-2 px-4 py-4 text-center sm:px-8"
                   >
                     <!--
-                      技能创建入口（?mode=skill）整段换掉标题与说明，上游
-                      welcome.tsx:48 与 :59 是两处独立的三元。本仓原来只有通用那一支，
-                      于是从设置页点「创建技能」跳过来，屏幕上仍然写着
-                      「👋 Hello, again!」——`welcome.createYourOwnSkill` 与
-                      `welcome.createYourOwnSkillDescription` 两条词条一直零消费，
-                      缺的就是这里。
-
-                      判据只看 query，与上游一致（它读 searchParams，不看 thread_id）；
-                      欢迎区本身已经被 isWelcomeMode 那一层挡住了。
-                    -->
+  The skill query selects both the welcome title and description, matching React welcome.tsx.
+  The outer isWelcomeMode guard already limits this content to an empty conversation.
+-->
                     <div class="max-w-full text-2xl font-bold">
                       <template v-if="skillWelcome">
                         ✨ {{ $i18n.t.value.welcome.createYourOwnSkill }} ✨
                       </template>
                       <!--
-                        这个 👋 **不能** aria-hidden：React 的 Welcome 把它当成正文
-                        （welcome.tsx 里它只是一个普通 div），于是读屏器读到的是
-                        「👋 Hello, again!」。藏掉它，两边听到的欢迎语就不是同一句。
-
-                        ultra 档换成 🚀，与金色 welcomeColors 是同一个判据（上游
-                        welcome.tsx:53 的 `isUltra ? "🚀" : "👋"`）。本仓原来只换了
-                        颜色，于是 ultra 会话的欢迎语颜色变了、表情没变。
-                      -->
+  The emoji is readable greeting content, matching React welcome.tsx.
+  Ultra mode selects the rocket and gold colors together; ordinary mode uses the waving hand.
+-->
                       <div
                         v-else
                         class="flex max-w-full flex-wrap items-center justify-center gap-2"
@@ -2560,11 +1665,9 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
                       </div>
                     </div>
                     <!--
-                      说明段落也照上游分两层：外层给颜色与字号，内层 `<p>` 给折行
-                      规则（welcome.tsx:14 的 `max-w-full text-wrap break-words
-                      whitespace-pre-line`）。本仓原来把两层并成一个 `<p>` 并且漏了
-                      `text-wrap break-words`。
-                    -->
+  Match React welcome.tsx paragraph structure: outer color/size and inner
+  max-width, word wrapping and preserved line breaks.
+-->
                     <div class="text-muted-foreground max-w-full text-sm">
                       <p
                         class="max-w-full text-wrap break-words whitespace-pre-line"
@@ -2585,10 +1688,11 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
         </main>
       </section>
     </template>
-    <template #panel>
+    <template #panel="{ renderedPanel }">
+      <MessageDetailsPanel v-if="renderedPanel === 'details'" />
       <ArtifactOverview
         v-if="
-          activePanel === 'artifacts' &&
+          renderedPanel === 'artifacts' &&
           routeThreadId &&
           !artifactPanel.selectedArtifact.value
         "
@@ -2601,7 +1705,7 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
       />
       <ArtifactPanel
         v-if="
-          activePanel === 'artifacts' &&
+          renderedPanel === 'artifacts' &&
           routeThreadId &&
           artifactPanel.selectedArtifact.value
         "
@@ -2620,8 +1724,9 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
         @select="artifactPanel.select($event)"
       />
       <SidecarPanel
-        v-if="routeThreadId && activePanel === 'sidecar'"
+        v-if="routeThreadId && renderedPanel === 'sidecar'"
         :session="sidecarSession"
+        :readonly="isDemo"
         :references="sidecar.activeReferences.value"
         :context="sidecar.context"
         :active="activePanel === 'sidecar'"
@@ -2633,7 +1738,7 @@ function keepTripleReflowFocusVisible(event: FocusEvent) {
         @deleted="sidecar.clearThreadAndClose()"
       />
       <BrowserPanel
-        v-if="routeThreadId && activePanel === 'browser'"
+        v-if="routeThreadId && renderedPanel === 'browser'"
         :key="routeThreadId"
         :thread-id="routeThreadId"
         :active="activePanel === 'browser'"

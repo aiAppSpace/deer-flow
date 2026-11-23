@@ -99,10 +99,14 @@ const hasPressed = (tag: string) => /\baria-pressed\b/.test(tag);
 
 /** 状态改变动作名称（例如连接后 Done、连接前 Close）不是选择开关。 */
 function hasNamedStateAction(tag: string): boolean {
-  const label = /\baria-label=\{([^{}]+)\}/.exec(tag)?.[1];
+  const label =
+    /\baria-label=\{([^{}]+)\}/.exec(tag)?.[1] ??
+    /:aria-label="([^"]+)"/.exec(tag)?.[1];
   if (!label) return false;
-  const branches = /^(.+?)\?\s*([^?:]+)\s*:\s*([^?:]+)$/.exec(label);
-  const variantCondition = /\bvariant=\{([^?{}]+)\?/.exec(tag)?.[1];
+  const branches = /^(.+?)\?\s*([^?:]+)\s*:\s*([^?:]+)$/s.exec(label.trim());
+  const variantCondition =
+    /\bvariant=\{([^?{}]+)\?/.exec(tag)?.[1] ??
+    /:variant="([^?"]+)\?/.exec(tag)?.[1];
   const normalize = (value: string | undefined) => value?.replace(/\s+/g, "");
   return Boolean(
     branches &&
@@ -142,6 +146,18 @@ describe("选中态必须念得出来", () => {
         '<Button variant={connected ? "default" : "outline"} aria-label={connected ? done : close} onClick={onDone}>Done</Button>',
       ),
     ).toEqual([]);
+    expect(
+      offenders(
+        "fixture.vue",
+        `<Button :variant="stage === 'connected' ? 'default' : 'outline'" :aria-label="stage === 'connected' ? done : close">Done</Button>`,
+      ),
+    ).toEqual([]);
+    expect(
+      offenders(
+        "fixture.vue",
+        `<Button :variant="selected ? 'default' : 'outline'" :aria-label="other ? done : close">Done</Button>`,
+      ),
+    ).toHaveLength(1);
     expect(
       offenders(
         "fixture.tsx",

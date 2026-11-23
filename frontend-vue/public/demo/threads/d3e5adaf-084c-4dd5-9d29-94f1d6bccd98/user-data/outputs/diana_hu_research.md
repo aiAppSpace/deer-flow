@@ -2,10 +2,10 @@
 
 ## Video Overview
 
-**Title:** Tips For Technical Startup Founders | Startup School<br>
-**Speaker:** Diana Hu, Y Combinator Group Partner<br>
-**Date:** April 21, 2023<br>
-**Length:** 28 minutes<br>
+**Title:** Tips For Technical Startup Founders | Startup School  
+**Speaker:** Diana Hu, Y Combinator Group Partner  
+**Date:** April 21, 2023  
+**Length:** 28 minutes  
 **YouTube URL:** https://www.youtube.com/watch?v=rP7bpYsfa6Q
 
 ## Speaker Background

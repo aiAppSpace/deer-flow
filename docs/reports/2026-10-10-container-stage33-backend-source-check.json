@@ -1,0 +1,17 @@
+{
+  "stage": 33,
+  "checkedFiles": 894,
+  "missing": [],
+  "changed": [],
+  "gatewayRebuildNeededForFrontendOnlyRefresh": false,
+  "selection": [
+    "backend/app",
+    "backend/packages/harness/deerflow",
+    "backend/packages/extension-api/deerflow_extension_api",
+    "backend Dockerfile + lock + 3 package metadata"
+  ],
+  "excluded": [
+    "all __pycache__/.cache/.pytest_cache/.venv directories and .pyc files"
+  ],
+  "gatewayImage": "deerflow-ingress-gateway-browser:stage25"
+}

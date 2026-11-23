@@ -15,6 +15,7 @@ import {
   Command,
   CommandEmpty,
   CommandInput,
+  CommandGroup,
   CommandItem,
   CommandList,
   CommandShortcut,
@@ -23,6 +24,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useSettingsDialog } from "@/composables/useSettingsDialog";
@@ -191,8 +193,7 @@ onUnmounted(() => globalThis.removeEventListener("keydown", onGlobalKeydown));
 <template>
   <Dialog v-model:open="paletteOpen">
     <DialogContent
-      overlay-class="bg-black/40"
-      class="bg-popover text-popover-foreground top-[20%] w-[min(92vw,560px)] max-w-none translate-y-0 gap-0 overflow-hidden rounded-xl p-0 shadow-2xl sm:max-w-none"
+      class="overflow-hidden p-0"
       :close-label="$i18n.t.value.primitives.close"
       @close-auto-focus="restoreFocus"
     >
@@ -209,7 +210,9 @@ onUnmounted(() => globalThis.removeEventListener("keydown", onGlobalKeydown));
       <DialogDescription class="sr-only">
         {{ $i18n.t.value.primitives.commandPaletteDescription }}
       </DialogDescription>
-      <Command>
+      <Command
+        class="**:data-[slot=command-input-wrapper]:h-12 [&_[data-slot=command-group]]:px-2 [&_[data-slot=command-input-wrapper]_svg]:size-5 [&_[data-slot=command-item]]:px-2 [&_[data-slot=command-item]]:py-3 [&_[data-slot=command-item]_svg]:size-5"
+      >
         <!--
           可访问名走 `label`（视觉隐藏的真 <label>），不是 aria-label——
           理由写在 `ui/command/CommandInput.vue` 的文件头：aria-label 名字是有了，
@@ -230,16 +233,18 @@ onUnmounted(() => globalThis.removeEventListener("keydown", onGlobalKeydown));
           <CommandEmpty v-if="!filteredActions.length">
             {{ $i18n.t.value.shortcuts.noResults }}
           </CommandEmpty>
-          <CommandItem
-            v-for="action in filteredActions"
-            :key="action.id"
-            :value="action.id"
-            @select="runCommand(action.id)"
-          >
-            <component :is="action.icon" :size="16" />
-            <span class="flex-1">{{ action.label }}</span>
-            <CommandShortcut>{{ action.shortcut }}</CommandShortcut>
-          </CommandItem>
+          <CommandGroup :heading="$i18n.t.value.shortcuts.actions">
+            <CommandItem
+              v-for="action in filteredActions"
+              :key="action.id"
+              :value="action.id"
+              @select="runCommand(action.id)"
+            >
+              <component :is="action.icon" :size="16" />
+              <span class="flex-1">{{ action.label }}</span>
+              <CommandShortcut>{{ action.shortcut }}</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
         </CommandList>
       </Command>
     </DialogContent>
@@ -247,25 +252,31 @@ onUnmounted(() => globalThis.removeEventListener("keydown", onGlobalKeydown));
 
   <Dialog v-model:open="shortcutsOpen">
     <DialogContent
-      overlay-class="bg-black/40"
-      class="bg-popover text-popover-foreground w-[min(92vw,480px)] rounded-xl p-5 shadow-2xl"
+      class="sm:max-w-md"
       :close-label="$i18n.t.value.primitives.close"
       @close-auto-focus="restoreFocus"
     >
-      <DialogTitle>
-        {{ $i18n.t.value.shortcuts.keyboardShortcuts }}
-      </DialogTitle>
-      <DialogDescription>
-        {{ $i18n.t.value.shortcuts.keyboardShortcutsDescription }}
-      </DialogDescription>
-      <dl class="grid grid-cols-[1fr_auto] gap-x-5 gap-y-3 text-sm">
-        <template v-for="row in shortcutRows" :key="row.keys">
-          <dt>{{ row.label }}</dt>
-          <dd>
-            <kbd>{{ row.keys }}</kbd>
-          </dd>
-        </template>
-      </dl>
+      <DialogHeader
+        ><DialogTitle>
+          {{ $i18n.t.value.shortcuts.keyboardShortcuts }}
+        </DialogTitle>
+        <DialogDescription>
+          {{ $i18n.t.value.shortcuts.keyboardShortcutsDescription }}
+        </DialogDescription></DialogHeader
+      >
+      <div class="space-y-3 text-sm">
+        <div
+          v-for="row in shortcutRows"
+          :key="row.keys"
+          class="flex items-center justify-between"
+        >
+          <span class="text-muted-foreground">{{ row.label }}</span>
+          <kbd
+            class="bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-xs"
+            >{{ row.keys }}</kbd
+          >
+        </div>
+      </div>
     </DialogContent>
   </Dialog>
 </template>

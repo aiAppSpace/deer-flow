@@ -45,6 +45,14 @@ class _ExternalChannelServiceFixture:
         self.config.pop(provider, None)
         return True
 
+    def get_channel(self, name: str) -> None:
+        """No external adapter exists in this readiness/callback fixture.
+
+        Production notification delivery still starts and parks durable rows
+        while the adapter is absent; claiming readiness is not proof of send.
+        """
+        return None
+
     def get_status(self) -> dict[str, Any]:
         return {
             "service_running": self.running,

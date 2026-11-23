@@ -12,9 +12,6 @@
 
 import { describe, expect, it } from "vitest";
 
-import { enUS } from "@/core/i18n/locales/en-US";
-import { zhCN } from "@/core/i18n/locales/zh-CN";
-import { resolveTranslation } from "@/core/i18n/resolve";
 import {
   LOCALE_COOKIE_MAX_AGE_SECONDS,
   LOCALE_COOKIE_NAME,
@@ -64,27 +61,5 @@ describe("serializeLocaleCookie", () => {
     for (const locale of ["en-US", "zh-CN"] as const) {
       expect(parseLocaleCookie(serializeLocaleCookie(locale))).toBe(locale);
     }
-  });
-});
-
-describe("resolveTranslation", () => {
-  // 断言的是**取到真文案**。写成「不抛异常」的话，取不到时的静默回退
-  // （返回 key 本身）会让用例永远绿，而用户看到的是一行字典路径。
-  it("按点分路径取到 A7 的两份文案", () => {
-    for (const dictionary of [enUS, zhCN]) {
-      const text = resolveTranslation(
-        dictionary,
-        "conversation.streamReplayGap",
-      );
-      expect(text).toBeTypeOf("string");
-      expect(text).not.toBe("conversation.streamReplayGap");
-      expect((text ?? "").length).toBeGreaterThan(0);
-    }
-  });
-
-  it("路径不存在、指向对象、或词典为空时返回 undefined（交调用方决定怎么降级）", () => {
-    expect(resolveTranslation(enUS, "conversation.nope")).toBeUndefined();
-    expect(resolveTranslation(enUS, "conversation")).toBeUndefined();
-    expect(resolveTranslation(null, "a.b")).toBeUndefined();
   });
 });

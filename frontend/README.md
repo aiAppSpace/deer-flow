@@ -2,6 +2,30 @@
 
 Like the original DeerFlow 1.0, we would love to give the community a minimalistic and easy-to-use web interface with a more modern and flexible architecture.
 
+For complete editable text artifacts, **Edit** focuses the existing code editor
+and preserves its document. Later content or settings updates leave focus with
+the control the user has selected.
+Matching brackets are highlighted from the initial source view, before editing.
+Complete text artifacts retain a real content revision on HTTP LAN addresses even
+when WebCrypto or the response ETag is unavailable; saving still checks the original
+file bytes for concurrent changes. Truncated previews remain read-only.
+
+Composer text is saved after a 300 ms debounce of the last effective draft change
+in the current tab. Background query updates and unrelated renders do not postpone
+that save; changing conversations or leaving the page flushes the pending draft.
+
+Leaving a conversation retires its pending regeneration preparation. An earlier
+request finishing later cannot clear a newer conversation's submitted message or
+allow a duplicate submission. Confirming a new conversation keeps its current send.
+
+Notifications participate in ordinary Tab navigation. Alt+T opens a keyboard
+visit to notifications; crossing that visit's Tab boundary returns to its invoking
+control. Escape collapses the list without moving focus.
+
+Memory import previews follow the most recently selected file. Choosing another
+file or leaving settings prevents a slower earlier read from replacing that
+preview or showing a stale read error.
+
 ## Tech Stack
 
 - **Framework**: [Next.js 16](https://nextjs.org/) with [App Router](https://nextjs.org/docs/app)
@@ -32,8 +56,13 @@ cp .env.example .env
 # Start development server
 pnpm dev
 
-# The app will be available at http://localhost:3000
+# The app will be available at http://localhost:3200
 ```
+
+Both `pnpm dev` and `pnpm start` default to port `3200`. Explicit `PORT` or
+Next.js `--port` arguments override that default; Docker images set `PORT=3000`
+for their private container listener. Root `make dev`, `make start` and
+`make dev-dual` pin React to `3200`, with the local Nginx upstream on the same port.
 
 ### Build & Test
 
@@ -148,6 +177,7 @@ src/
 
 ## Development Notes
 
+- Mermaid diagrams export as SVG, PNG or their original MMD source. SVG/PNG exports preserve HTML line breaks, entities and Unicode labels; PNG keeps the original 5x scale. Changing the diagram or leaving its owner cancels pending downloads.
 - Uses pnpm workspaces (see `packageManager` in package.json)
 - Webpack is the default development bundler until the upstream Turbopack PostCSS worker leak is fixed in a stable Next.js release (#5132). Set `DEER_FLOW_DEV_BUNDLER=turbo` to opt in to Turbopack for local diagnosis, or `DEER_FLOW_DEV_BUNDLER=webpack` to select Webpack explicitly. Reconsider the default after the stable fix is verified on macOS arm64 and Linux.
 - Environment validation can be skipped with `SKIP_ENV_VALIDATION=1` (useful for Docker)
@@ -156,3 +186,8 @@ src/
 ## License
 
 MIT License. See [LICENSE](../LICENSE) for details.
+
+Artifact preview reads remain bounded to the existing byte limit even when a server
+ignores Range. Requesting the full file changes the request budget, not the
+completeness check: partial responses or fewer bytes than the declared total
+remain truncated and do not receive an editable revision, even with a SHA-256 ETag.

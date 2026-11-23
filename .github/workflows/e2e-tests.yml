@@ -5,6 +5,7 @@ on:
     branches: [ 'main', '*-dev' ]
     paths:
       - 'frontend/**'
+      - 'scripts/pnpm.py'
       - 'backend/app/gateway/routers/plugins.py'
       - 'backend/extension_test_fixtures/bookmark_plugin_gateway.py'
       - 'backend/extension_test_fixtures/browser_asset_gateway.py'
@@ -19,6 +20,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'frontend/**'
+      - 'scripts/pnpm.py'
       - 'backend/app/gateway/routers/plugins.py'
       - 'backend/extension_test_fixtures/bookmark_plugin_gateway.py'
       - 'backend/extension_test_fixtures/browser_asset_gateway.py'
@@ -71,26 +73,23 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - name: Use pinned pnpm version
-        run: corepack prepare pnpm@10.26.2 --activate
-
       - name: Install frontend dependencies
         working-directory: frontend
-        run: pnpm install --frozen-lockfile
+        run: python3 ../scripts/pnpm.py --dir frontend install --frozen-lockfile
 
       - name: Install Playwright Chromium
         working-directory: frontend
-        run: npx playwright install chromium --with-deps
+        run: python3 ../scripts/pnpm.py --dir frontend exec playwright install chromium --with-deps
 
       - name: Run E2E tests
         working-directory: frontend
-        run: pnpm exec playwright test
+        run: python3 ../scripts/pnpm.py --dir frontend exec playwright test
         env:
           SKIP_ENV_VALIDATION: '1'
 
       - name: Run auth recovery E2E tests
         working-directory: frontend
-        run: pnpm exec playwright test -c playwright.auth.config.ts
+        run: python3 ../scripts/pnpm.py --dir frontend exec playwright test -c playwright.auth.config.ts
         env:
           SKIP_ENV_VALIDATION: '1'
 

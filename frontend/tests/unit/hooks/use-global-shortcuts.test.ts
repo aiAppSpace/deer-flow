@@ -59,3 +59,22 @@ describe("useGlobalShortcuts", () => {
     expect(action).not.toHaveBeenCalled();
   });
 });
+
+test.each(["defaultPrevented", "repeat", "isComposing", "altKey"])(
+  "does not consume a %s shortcut",
+  async (flag) => {
+    const action = rs.fn();
+    const { getKeydownHandler, useGlobalShortcuts } =
+      await loadHookWithCapturedHandler();
+    useGlobalShortcuts([{ key: "k", meta: true, action }]);
+    getKeydownHandler()?.({
+      key: "k",
+      metaKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      [flag]: true,
+      preventDefault: rs.fn(),
+    } as unknown as KeyboardEvent);
+    expect(action).not.toHaveBeenCalled();
+  },
+);

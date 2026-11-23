@@ -49,6 +49,21 @@ function requestUrl(input: RequestInfo | URL): string {
 }
 
 describe("KnowledgeScopeSelector trigger", () => {
+  it("returns keyboard focus to its trigger after Escape closes the dialog", async () => {
+    renderSelector({ mode: "all" });
+    const trigger = screen.getByTestId("knowledge-scope-trigger");
+    act(() => trigger.focus());
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole("dialog");
+    const radio = screen.getByRole("radio", {
+      name: "All allowed knowledge bases",
+    });
+    act(() => radio.focus());
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
   it("renders only the icon and stays highlighted while retrieval is active", () => {
     renderSelector({ mode: "all" });
 

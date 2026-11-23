@@ -50,20 +50,16 @@ const CONSUMED = [
   "subagent_status_contract.json",
   "slash_skill_contract.json",
   "run_event_stream_contract.json",
+  "thread_origin_contract.json",
+  "scheduled_goal_notes_contract.json",
+  "scheduled_task_errors_contract.json",
 ];
 
 /**
  * 认得、但前端用不到的契约：键是文件名，值是**为什么用不到**。
  * 空表是正常状态；往里加一条就是在说「这份契约前端故意不跟」。
  */
-const NOT_CONSUMED = {
-  "scheduled_goal_notes_contract.json":
-    "Vue 当前任务页不解释 host goal verdict/lifecycle codes，也没有 scheduled-run prompt cards；后续迁移这些界面时须改为 CONSUMED。",
-  "scheduled_task_errors_contract.json":
-    "Vue 当前 API adapter 统一通过 GatewayResponseError 展示 detail，不按调度错误码生成专用提示；专用提示迁移时须改为 CONSUMED。",
-  "thread_origin_contract.json":
-    "Vue 当前线程行只显示 legacy channel_source，未实现新 server-owned origin icon/unread UI；迁移 origin 投影时须改为 CONSUMED。",
-};
+const NOT_CONSUMED = {};
 
 /*
   读取由 CONSUMED 驱动，不是另写三行 readContract——否则那张表会与真正读了
@@ -84,6 +80,9 @@ function contractOf(name) {
 const subagent = contractOf("subagent_status_contract.json");
 const slash = contractOf("slash_skill_contract.json");
 const runEvents = contractOf("run_event_stream_contract.json");
+const origin = contractOf("thread_origin_contract.json");
+const scheduledGoal = contractOf("scheduled_goal_notes_contract.json");
+const scheduledErrors = contractOf("scheduled_task_errors_contract.json");
 
 /*
   两张表必须恰好等于 contracts/ 顶层的 json 全集。
@@ -116,6 +115,13 @@ const aliasEntries = (runEvents.legacy_event_aliases ?? []).map(
   (alias) =>
     `  ${JSON.stringify(alias.event_type)}: ${JSON.stringify(alias.canonical_event_type)},`,
 );
+const hostRunErrors = Object.entries(scheduledGoal.host_run_errors).map(
+  ([name, value]) => `  ${name}: ${JSON.stringify(value)},`,
+);
+const lifecycleReasons = Object.entries(scheduledGoal.lifecycle_reasons).map(
+  ([event, reasons]) =>
+    `  ${event}: [${reasons.map((reason) => JSON.stringify(reason)).join(", ")}],`,
+);
 
 const body = `/*
   由 scripts/gen-contract-constants.mjs 从 <repo>/contracts/*.json 生成，勿手改。
@@ -127,7 +133,13 @@ export const BACKEND_CONTRACT_VERSIONS = {
   subagentStatus: ${JSON.stringify(subagent.version)},
   slashSkill: ${JSON.stringify(slash.version)},
   runEventStream: ${JSON.stringify(runEvents.version)},
+  threadOrigin: ${JSON.stringify(origin.version)},
+  scheduledGoalNotes: ${JSON.stringify(scheduledGoal.version)},
+  scheduledTaskErrors: ${JSON.stringify(scheduledErrors.version)},
 } as const;
+
+export const THREAD_ORIGIN_KEY = ${JSON.stringify(origin.key)};
+export const THREAD_ORIGIN_KINDS = ${tuple(origin.kinds)};
 
 /** \`ToolMessage.additional_kwargs.subagent_status\` 的合法取值。 */
 export const SUBAGENT_STATUS_VALUES = ${tuple(subagent.valid_status_values)};
@@ -151,6 +163,41 @@ export type RunEventCategory = (typeof RUN_EVENT_CATEGORIES)[number];
 export const LEGACY_RUN_EVENT_ALIASES = {
 ${aliasEntries.join("\n")}
 } as const;
+
+/** Host-owned scheduled-task notes; readers must not duplicate their text. */
+export const SCHEDULED_AGENT_STOP_LAST_ERROR_PREFIX =
+  ${JSON.stringify(scheduledGoal.agent_stop_last_error_prefix)};
+export const SCHEDULED_AUTO_PAUSE_LAST_ERROR =
+  ${JSON.stringify(scheduledGoal.auto_pause_last_error)};
+export const SCHEDULED_ORIGIN_KEY = ${JSON.stringify(scheduledGoal.scheduled_origin_key)};
+
+export const SCHEDULED_GOAL_UNMET_REASON_CODES = ${tuple(scheduledGoal.unmet_reason_codes)};
+export type BackendScheduledGoalUnmetReasonCode =
+  (typeof SCHEDULED_GOAL_UNMET_REASON_CODES)[number];
+
+export const SCHEDULED_GOAL_CHECK_FAILURE_CODES = ${tuple(scheduledGoal.check_failure_codes)};
+
+export const SCHEDULED_HOST_RUN_ERRORS = {
+${hostRunErrors.join("\n")}
+} as const;
+export type BackendScheduledHostRunError =
+  (typeof SCHEDULED_HOST_RUN_ERRORS)[keyof typeof SCHEDULED_HOST_RUN_ERRORS];
+
+export const SCHEDULED_TASK_LIFECYCLE_EVENTS = ${tuple(scheduledGoal.lifecycle_events)};
+export type BackendScheduledTaskLifecycleEvent =
+  (typeof SCHEDULED_TASK_LIFECYCLE_EVENTS)[number];
+
+export const SCHEDULED_TASK_LIFECYCLE_REASONS = {
+${lifecycleReasons.join("\n")}
+} as const satisfies Record<BackendScheduledTaskLifecycleEvent, readonly string[]>;
+export type BackendScheduledTaskLifecycleReason<
+  Event extends BackendScheduledTaskLifecycleEvent,
+> = (typeof SCHEDULED_TASK_LIFECYCLE_REASONS)[Event][number];
+
+/** Codes returned to the UI; agent-only codes have no UI consumer. */
+export const SCHEDULED_TASK_UI_ERROR_CODES = ${tuple(scheduledErrors.ui_codes)};
+export type BackendScheduledTaskErrorCode =
+  (typeof SCHEDULED_TASK_UI_ERROR_CODES)[number];
 `;
 
 if (process.argv.includes("--check")) {

@@ -44,6 +44,38 @@ async function panelWidth(panel: Locator): Promise<number> {
   return (await panel.boundingBox())?.width ?? 0;
 }
 
+async function expectNoPaneGeometryTransition(page: Page) {
+  const metrics = await page.evaluate(() => {
+    const pane = document.querySelector("#artifacts")?.closest("[data-panel]");
+    if (!(pane instanceof HTMLElement))
+      throw new Error("The physical resizable pane was not found.");
+    const style = getComputedStyle(pane);
+    const properties = style.transitionProperty
+      .split(",")
+      .map((value) => value.trim());
+    const durations = style.transitionDuration.split(",").map((value) => {
+      const duration = Number.parseFloat(value);
+      return value.trim().endsWith("ms") ? duration : duration * 1000;
+    });
+    return {
+      property: style.transitionProperty,
+      duration: style.transitionDuration,
+      activeGeometryTransitions: properties.filter(
+        (property, index) =>
+          /^(all|width|height|flex-grow|flex-basis)$/.test(property) &&
+          (durations[index % durations.length] ?? 0) > 0,
+      ),
+    };
+  });
+  await test.info().attach("resize-pane-transition", {
+    body: JSON.stringify(metrics),
+    contentType: "application/json",
+  });
+  expect(metrics.activeGeometryTransitions, JSON.stringify(metrics)).toEqual(
+    [],
+  );
+}
+
 async function dragPanel(handle: Locator, ...deltas: number[]): Promise<void> {
   const page = handle.page();
   // 停稳了才量得准——为什么、以及量到过多大的代价，见 settled-box.ts 的文件头。
@@ -53,27 +85,30 @@ async function dragPanel(handle: Locator, ...deltas: number[]): Promise<void> {
   const mouse = page.mouse;
   await mouse.move(x, y);
   await mouse.down();
-  let currentX = x;
-  for (const [index, delta] of deltas.entries()) {
-    currentX += delta;
-    await mouse.move(currentX, y, { steps: 10 });
-    /*
+  try {
+    let currentX = x;
+    for (const [index, delta] of deltas.entries()) {
+      currentX += delta;
+      await mouse.move(currentX, y, { steps: 10 });
+      /*
       **第一次移动之后就确认真的抓住了。** 没抓住时后面每一步都照跑不误，
       最后由「面板没关」这类断言在 10 秒后报出来——那条消息指着面板，
       而真正的问题在按下那一行。
 
-      判据取 splitpanes 的 `splitpanes--dragging`：它**不在 mousedown 上置位**
-      （那时只设内部的 `mouseDown`），要等按住之后的第一次 mousemove，
-      所以这条断言只能放在这里，不能放在 `mouse.down()` 后面。
+      判据取真实 captured handle 的公开 `data-state="drag"`。
+      原生 pointerdown 开始本实例手势，后续 pointermove 必须仍由该 handle 消费。
     */
-    if (index === 0) {
-      await expect(
-        page.locator(".splitpanes--dragging"),
-        `按在 (${Math.round(x)}, ${Math.round(y)}) 没抓住分隔条——它的命中区只有 16px 宽`,
-      ).toBeAttached({ timeout: 2_000 });
+      if (index === 0) {
+        await expect(
+          handle,
+          `按在 (${Math.round(x)}, ${Math.round(y)}) 没抓住分隔条——它的命中区只有 16px 宽`,
+        ).toHaveAttribute("data-state", "drag", { timeout: 2_000 });
+      }
+      await expectNoPaneGeometryTransition(page);
     }
+  } finally {
+    await mouse.up();
   }
-  await mouse.up();
 }
 
 async function ensureArtifactOpen(page: Page): Promise<Locator> {
@@ -99,9 +134,7 @@ test.describe("Vue artifacts panel resize", () => {
     await page.goto(`/workspace/chats/${THREAD_ID}`);
   });
 
-  test("the splitpanes separator resizes the artifacts panel", async ({
-    page,
-  }) => {
+  test("the native separator resizes the artifacts panel", async ({ page }) => {
     const panel = await ensureArtifactOpen(page);
     const separator = page.getByRole("separator");
     await expect(separator).toBeVisible();
@@ -128,7 +161,7 @@ test.describe("Vue artifacts panel resize", () => {
     await expect(separator).toHaveCSS("opacity", "0");
     /*
       关着的时候还要**退出 Tab 序**：它此时 `opacity: 0` 且 `pointer-events: none`，
-      鼠标用户完全感知不到，而 splitpanes 默认给的 `tabindex="0"` 会让纯键盘用户
+      鼠标用户完全感知不到，而 closed handle 的 `tabindex="0"` 会让纯键盘用户
       Tab 进一个看不见、也没有焦点环的地方（WCAG 2.4.7）。
       wave 96 给对照加上「能不能 tab 到」那一档才量出来：本仓**每一屏**都多一个
       这样的停靠点，而上游只在面板真的展开时才渲染 resizable-handle。
@@ -179,7 +212,7 @@ test.describe("Vue artifacts panel resize", () => {
       .toBeGreaterThan(widthAfterDrag - 20);
   });
 
-  test("history does not auto-open, and native splitpanes keyboard resizing works", async ({
+  test("history does not auto-open, and native keyboard resizing works", async ({
     page,
   }) => {
     /*
@@ -198,8 +231,17 @@ test.describe("Vue artifacts panel resize", () => {
 
     const separator = page.getByRole("separator");
     const widthBefore = await panelWidth(panel);
+    const sizeBefore = Number(await separator.getAttribute("aria-valuenow"));
+    expect(Number.isFinite(sizeBefore)).toBe(true);
+    expect(sizeBefore).toBeGreaterThan(
+      Number(await separator.getAttribute("aria-valuemin")),
+    );
     await separator.focus();
     await page.keyboard.press("ArrowLeft");
+    await expectNoPaneGeometryTransition(page);
+    await expect
+      .poll(async () => Number(await separator.getAttribute("aria-valuenow")))
+      .toBe(sizeBefore - 5);
     await expect.poll(() => panelWidth(panel)).toBeGreaterThan(widthBefore);
     await expect(separator).toBeFocused();
   });

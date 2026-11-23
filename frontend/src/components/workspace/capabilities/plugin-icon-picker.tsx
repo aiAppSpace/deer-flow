@@ -70,13 +70,13 @@ export function PluginIconPicker({
   }
   return (
     <div className="space-y-2">
-      <div className="bg-muted/30 flex items-center gap-4 rounded-xl border p-4">
+      <div className="bg-muted/30 flex flex-wrap items-center gap-4 rounded-xl border p-4">
         <button
           type="button"
           aria-label={copy.upload}
           disabled={disabled || busy}
           onClick={() => input.current?.click()}
-          className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4"
+          className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-4 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PluginIcon
             name={name}
@@ -86,7 +86,7 @@ export function PluginIconPicker({
             className="size-16"
           />
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-40 wrap-anywhere">
           <p className="text-sm font-medium">{copy.title}</p>
           <p className="text-muted-foreground mt-1 text-xs leading-5">
             {copy.hint}
@@ -95,6 +95,7 @@ export function PluginIconPicker({
             <Button
               type="button"
               size="sm"
+              className="h-auto min-h-8 max-w-full wrap-anywhere whitespace-normal"
               variant="outline"
               disabled={disabled || busy}
               onClick={() => input.current?.click()}
@@ -105,6 +106,7 @@ export function PluginIconPicker({
             <Button
               type="button"
               size="sm"
+              className="h-auto min-h-8 max-w-full wrap-anywhere whitespace-normal"
               variant="ghost"
               disabled={disabled || (!value && !busy)}
               onClick={reset}

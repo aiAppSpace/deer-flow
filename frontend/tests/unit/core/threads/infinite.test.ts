@@ -300,10 +300,7 @@ describe("upsertThreadInInfiniteCache", () => {
   });
 });
 
-async function waitForCalls(
-  fn: { mock: { calls: unknown[] } },
-  count: number,
-) {
+async function waitForCalls(fn: { mock: { calls: unknown[] } }, count: number) {
   for (let attempt = 0; attempt < 200; attempt += 1) {
     if (fn.mock.calls.length >= count) return;
     await new Promise((resolve) => setTimeout(resolve, 5));

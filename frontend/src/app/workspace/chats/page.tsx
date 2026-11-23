@@ -92,17 +92,20 @@ export default function ChatsPage() {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, isSearching, view]);
 
   return (
-    <WorkspaceContainer>
+    <WorkspaceContainer className="[container-type:size] overflow-y-auto [container-name:chat-list-page]">
       <WorkspaceHeader></WorkspaceHeader>
       <WorkspaceBody>
         <Tabs
           value={view}
           onValueChange={setView}
-          className="flex size-full flex-col"
+          className="flex size-full flex-col [@container_chat-list-page_(height<28rem)]:h-auto"
         >
-          <header className="mx-auto flex w-full max-w-(--container-width-md) shrink-0 flex-col gap-3 pt-8 [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:pt-[8px]">
+          <header className="@container/chat-tabs mx-auto flex w-full max-w-(--container-width-md) shrink-0 flex-col gap-3 pt-8 [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:pt-[8px]">
             {!staticWebsite && (
-              <TabsList aria-label={t.pages.chats}>
+              <TabsList
+                aria-label={t.pages.chats}
+                className="@max-md/chat-tabs:max-w-full @max-md/chat-tabs:flex-wrap @max-md/chat-tabs:group-data-[orientation=horizontal]/tabs:h-auto"
+              >
                 <TabsTrigger value="active">{t.chats.activeChats}</TabsTrigger>
                 <TabsTrigger value="archived">
                   {t.chats.archivedChats}
@@ -118,10 +121,13 @@ export default function ChatsPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </header>
-          <TabsContent value={view} className="min-h-0 flex-1">
+          <TabsContent
+            value={view}
+            className="min-h-0 flex-1 [@container_chat-list-page_(height<28rem)]:h-dvh [@container_chat-list-page_(height<28rem)]:flex-none"
+          >
             <main className="h-full">
-              <ScrollArea className="size-full py-4">
-                <div className="mx-auto flex size-full max-w-(--container-width-md) flex-col">
+              <ScrollArea className="size-full py-4 [@container_chat-list-page_(height<28rem)]:py-0">
+                <div className="@container/chat-list mx-auto flex size-full max-w-(--container-width-md) flex-col [@container_chat-list-page_(height<28rem)]:py-4">
                   {isError && (
                     <div role="alert" className="p-4 text-center">
                       <p>{t.chats.loadChatsFailed}</p>

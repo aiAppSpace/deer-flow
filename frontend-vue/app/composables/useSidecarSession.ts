@@ -16,7 +16,9 @@ import {
 } from "vue";
 
 import { useThreadStream } from "@/composables/useThreadStream";
+import type { ThreadConsumptionObservation } from "@/core/diagnostics/parity-observation";
 import { useUploadLimits } from "@/composables/useUploads";
+import { throwGatewayApiError } from "@/core/api/errors";
 import { fetch as fetchWithAuth } from "@/core/api/fetcher";
 import { getBackendBaseURL } from "@/core/config";
 import {
@@ -69,11 +71,16 @@ function errorMessage(error: unknown, fallback: string) {
 }
 
 export function useSidecarSession(options: {
+  consumptionObservation?: MaybeRefOrGetter<
+    ThreadConsumptionObservation | null | undefined
+  >;
   parentThreadId: MaybeRefOrGetter<string | null>;
+  ownerKey?: MaybeRefOrGetter<string | undefined>;
   parentMessages: MaybeRefOrGetter<Message[]>;
   sidecarThreadId: Ref<string | null>;
   references: MaybeRefOrGetter<SidecarReference[]>;
   context: MaybeRefOrGetter<ThreadRunContextInput>;
+  readonly?: MaybeRefOrGetter<boolean>;
   onReferencesAccepted?: (references: SidecarReference[]) => void;
 }) {
   /*
@@ -94,9 +101,10 @@ export function useSidecarSession(options: {
   });
   const fileCache = createSubmissionFileCache();
   const drafts = new Map<string, { text: string; files: File[] }>();
-  let activeParentThreadId: string | null = null;
+  let activeDraftKey: string | null = null;
   let lifecycle: SessionLifecycle | null = null;
   let scopeGeneration = 0;
+  let deleteController: AbortController | null = null;
 
   const stream = useThreadStream({
     threadId: options.sidecarThreadId,
@@ -108,6 +116,12 @@ export function useSidecarSession(options: {
       () =>
         options.sidecarThreadId.value ?? toValue(options.parentThreadId) ?? "",
     ),
+    {
+      observation: () =>
+        options.sidecarThreadId.value === null
+          ? toValue(options.consumptionObservation)
+          : null,
+    },
   );
 
   function setInput(value: string) {
@@ -136,28 +150,34 @@ export function useSidecarSession(options: {
   function currentScopeKey() {
     return JSON.stringify({
       parentThreadId: toValue(options.parentThreadId),
+      ownerKey: toValue(options.ownerKey),
       context: toValue(options.context),
     });
   }
 
   watch(
-    () => toValue(options.parentThreadId),
-    (parentThreadId) => {
-      if (activeParentThreadId) {
-        drafts.set(activeParentThreadId, {
+    [() => toValue(options.parentThreadId), () => toValue(options.ownerKey)],
+    ([parentThreadId, ownerKey]) => {
+      if (activeDraftKey) {
+        drafts.set(activeDraftKey, {
           text: input.value,
           files: [...selectedFiles.value],
         });
       }
       scopeGeneration += 1;
+      deleteController?.abort();
+      deleteController = null;
       submissionPending.value = false;
+      deleting.value = false;
       submissionError.value = null;
       fileError.value = "";
       lifecycle?.dispose();
       lifecycle = null;
       options.sidecarThreadId.value = null;
-      activeParentThreadId = parentThreadId;
-      const draft = parentThreadId ? drafts.get(parentThreadId) : undefined;
+      activeDraftKey = parentThreadId
+        ? JSON.stringify([ownerKey ?? null, parentThreadId])
+        : null;
+      const draft = activeDraftKey ? drafts.get(activeDraftKey) : undefined;
       input.value = draft?.text ?? "";
       selectedFiles.value = [...(draft?.files ?? [])];
       if (!parentThreadId) {
@@ -170,7 +190,7 @@ export function useSidecarSession(options: {
         if (generation === scopeGeneration) submissionError.value = error;
       });
     },
-    { immediate: true },
+    { immediate: true, flush: "sync" },
   );
 
   async function restore({ force = false } = {}) {
@@ -187,6 +207,7 @@ export function useSidecarSession(options: {
   }
 
   async function ensureThread(references: SidecarReference[]) {
+    if (toValue(options.readonly)) return null;
     const currentLifecycle = lifecycle;
     if (!currentLifecycle) return null;
     const contexts = references.map((reference) => reference.context);
@@ -200,6 +221,7 @@ export function useSidecarSession(options: {
   }
 
   function addFiles(files: File[] | FileList) {
+    if (toValue(options.readonly)) return;
     const supported = splitUnsupportedUploadFiles(files);
     const result = validateUploadLimits(
       selectedFiles.value,
@@ -242,7 +264,12 @@ export function useSidecarSession(options: {
   }
 
   async function submit(): Promise<boolean> {
-    if (submissionPending.value || stream.isStreaming.value) return false;
+    if (
+      toValue(options.readonly) ||
+      submissionPending.value ||
+      stream.isStreaming.value
+    )
+      return false;
     const text = input.value.trim();
     const files = [...selectedFiles.value];
     if (!text && files.length === 0) return false;
@@ -253,11 +280,15 @@ export function useSidecarSession(options: {
     const scopeKey = currentScopeKey();
     const references = [...toValue(options.references)];
     const parentThreadId = toValue(options.parentThreadId);
+    const parentConversation = buildParentConversationContext(
+      toValue(options.parentMessages),
+    );
     try {
       if (!parentThreadId) return false;
       const targetThreadId = await ensureThread(references);
       if (
         !targetThreadId ||
+        toValue(options.readonly) ||
         generation !== scopeGeneration ||
         scopeKey !== currentScopeKey()
       ) {
@@ -271,6 +302,7 @@ export function useSidecarSession(options: {
         cache: fileCache,
       });
       if (
+        toValue(options.readonly) ||
         generation !== scopeGeneration ||
         scopeKey !== currentScopeKey() ||
         options.sidecarThreadId.value !== targetThreadId
@@ -280,9 +312,7 @@ export function useSidecarSession(options: {
 
       const contexts = references.map((reference) => reference.context);
       const prompt = buildSidecarContextPrompt(contexts, {
-        parentConversation: buildParentConversationContext(
-          toValue(options.parentMessages),
-        ),
+        parentConversation,
       });
       let accepted = false;
       const dispatched = await stream.sendMessage(
@@ -290,9 +320,10 @@ export function useSidecarSession(options: {
         { text, files: uploaded },
         undefined,
         {
-          additionalInputMessages: [
-            hiddenContextMessage(parentThreadId, prompt),
-          ],
+          additionalInputMessages:
+            contexts.length || parentConversation.length
+              ? [hiddenContextMessage(parentThreadId, prompt)]
+              : [],
           additionalKwargs: {
             sidecar_visible_message: true,
             ...(contexts.length ? buildReferenceMessageMetadata(contexts) : {}),
@@ -336,7 +367,12 @@ export function useSidecarSession(options: {
     request: HumanInputRequest,
     response: HumanInputResponse,
   ): Promise<boolean> {
-    if (submissionPending.value || stream.isStreaming.value) return false;
+    if (
+      toValue(options.readonly) ||
+      submissionPending.value ||
+      stream.isStreaming.value
+    )
+      return false;
     const targetThreadId = options.sidecarThreadId.value;
     if (!targetThreadId) return false;
     const generation = scopeGeneration;
@@ -344,13 +380,26 @@ export function useSidecarSession(options: {
     submissionPending.value = true;
     submissionError.value = null;
     let accepted = false;
+    const references = [...toValue(options.references)];
+    const contexts = references.map((reference) => reference.context);
+    const parentThreadId = toValue(options.parentThreadId);
+    const parentConversation = buildParentConversationContext(
+      toValue(options.parentMessages),
+    );
+    const prompt = buildSidecarContextPrompt(contexts, { parentConversation });
     try {
       const dispatched = await stream.sendMessage(
         targetThreadId,
         { text: buildHumanInputResponseText(request, response) },
         undefined,
         {
+          additionalInputMessages:
+            parentThreadId && (contexts.length || parentConversation.length)
+              ? [hiddenContextMessage(parentThreadId, prompt)]
+              : [],
           additionalKwargs: {
+            sidecar_visible_message: true,
+            ...(contexts.length ? buildReferenceMessageMetadata(contexts) : {}),
             hide_from_ui: true,
             human_input_response: response,
           },
@@ -361,6 +410,7 @@ export function useSidecarSession(options: {
               options.sidecarThreadId.value === targetThreadId
             ) {
               accepted = true;
+              options.onReferencesAccepted?.(references);
             }
           },
         },
@@ -377,19 +427,31 @@ export function useSidecarSession(options: {
   async function deleteThread() {
     const targetThreadId = options.sidecarThreadId.value;
     const parentThreadId = toValue(options.parentThreadId);
-    if (!targetThreadId || !parentThreadId || deleting.value) return false;
+    if (
+      toValue(options.readonly) ||
+      !targetThreadId ||
+      !parentThreadId ||
+      deleting.value
+    )
+      return false;
     const generation = scopeGeneration;
+    const controller = new AbortController();
+    deleteController = controller;
     deleting.value = true;
     submissionError.value = null;
     try {
       const response = await fetchWithAuth(
         `${getBackendBaseURL()}/api/threads/${encodeURIComponent(targetThreadId)}`,
-        { method: "DELETE" },
+        { method: "DELETE", signal: controller.signal },
       );
-      if (!response.ok) throw new Error("Failed to delete side chat.");
+      if (!response.ok)
+        await throwGatewayApiError(
+          response,
+          $i18n.t.value.sidecar.deleteFailed,
+        );
       if (generation !== scopeGeneration) return false;
       fileCache.delete(targetThreadId);
-      drafts.delete(parentThreadId);
+      if (activeDraftKey) drafts.delete(activeDraftKey);
       input.value = "";
       selectedFiles.value = [];
       options.sidecarThreadId.value = null;
@@ -400,11 +462,14 @@ export function useSidecarSession(options: {
       return false;
     } finally {
       if (generation === scopeGeneration) deleting.value = false;
+      if (deleteController === controller) deleteController = null;
     }
   }
 
   onScopeDispose(() => {
     scopeGeneration += 1;
+    deleteController?.abort();
+    deleteController = null;
     lifecycle?.dispose();
   });
 

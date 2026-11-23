@@ -40,7 +40,11 @@ test("streamdownPlugins includes rehypeRaw", () => {
 });
 
 test("shared streamdown configs register code highlighting and Mermaid", () => {
-  expect(streamdownRenderingPlugins).toEqual({ code, mermaid });
+  expect(streamdownRenderingPlugins).toEqual({
+    code,
+    mermaid,
+    renderers: [{ language: "mermaid", component: expect.any(Object) }],
+  });
   expect(streamdownPlugins.plugins).toBe(streamdownRenderingPlugins);
   expect(reasoningPlugins.plugins).toBe(streamdownRenderingPlugins);
 });

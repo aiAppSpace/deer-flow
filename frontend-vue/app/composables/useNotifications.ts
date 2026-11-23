@@ -6,37 +6,34 @@
   【边界与注意】   N2 宿主能力，不属于 L2 公共集合。
 */
 
-import { onMounted, readonly, ref } from "vue";
+import { onMounted, onScopeDispose, readonly, ref } from "vue";
 
-import {
-  getBaseSettingsSnapshot,
-  updateLocalSettings,
-} from "@/core/settings/store";
-
-const permission = ref<NotificationPermission>("default");
-const supported = ref(false);
-let lastNotificationTime: number | null = null;
-
-function syncSupport() {
-  supported.value = typeof window !== "undefined" && "Notification" in window;
-  if (supported.value) permission.value = Notification.permission;
-}
+import { getBaseSettingsSnapshot } from "@/core/settings/store";
 
 export function useNotifications() {
+  const permission = ref<NotificationPermission>("default");
+  const supported = ref(false);
+  let lastNotificationTime: number | null = null;
+  let disposed = false;
+  function syncSupport() {
+    supported.value = typeof window !== "undefined" && "Notification" in window;
+    if (supported.value) permission.value = Notification.permission;
+  }
   onMounted(syncSupport);
+  onScopeDispose(() => {
+    disposed = true;
+  });
 
   async function requestPermission() {
     syncSupport();
     if (!supported.value) return "denied" as NotificationPermission;
     const result = await Notification.requestPermission();
-    permission.value = result;
-    if (result === "granted") {
-      updateLocalSettings("notification", { enabled: true });
-    }
+    if (!disposed) permission.value = result;
     return result;
   }
 
   function showNotification(title: string, options?: NotificationOptions) {
+    if (disposed) return;
     syncSupport();
     if (!supported.value || !getBaseSettingsSnapshot().notification.enabled)
       return;

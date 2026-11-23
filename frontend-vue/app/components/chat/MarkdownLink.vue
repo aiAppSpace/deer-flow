@@ -16,6 +16,8 @@ import {
   type VNodeChild,
 } from "vue";
 import { ExternalLink } from "lucide-vue-next";
+import KnowledgeCitationLink from "./KnowledgeCitationLink.vue";
+import { knowledgeSourceId } from "@/core/knowledge/sources";
 
 import {
   HoverCard,
@@ -138,6 +140,10 @@ const forwardedAttrs = computed(() => {
     <slot />
   </span>
 
+  <KnowledgeCitationLink v-else-if="knowledgeSourceId(href)" :href="href!">
+    {{ citationLabel ?? visibleText }}
+  </KnowledgeCitationLink>
+
   <HoverCard v-else-if="citationLabel" :open-delay="0" :close-delay="0">
     <HoverCardTrigger>
       <a
@@ -153,7 +159,7 @@ const forwardedAttrs = computed(() => {
           class="bg-secondary text-secondary-foreground hover:bg-secondary/80 mx-0.5 inline-flex cursor-pointer items-center gap-1 rounded-full px-2 py-0.5 text-xs font-normal"
         >
           {{ citationLabel }}
-          <ExternalLink :size="12" aria-hidden="true" />
+          <ExternalLink aria-hidden="true" class="size-3" />
         </span>
       </a>
     </HoverCardTrigger>

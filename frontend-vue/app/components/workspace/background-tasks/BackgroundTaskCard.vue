@@ -1,6 +1,6 @@
 <!--
   【文件职责】     后台任务列表里的一张卡片：名字、时间、状态、展开详情、取消。
-  【架构位置】     L4 产品组件
+  【架构位置】     L3 产品组件
   【主要导出】     默认组件
   【依赖关系】     ui/button · composables/useBackgroundTasks · BackgroundTaskStatusBadge · BackgroundTaskDetails
   【边界与注意】   **详情只在展开后才请求**，而且展开期间才轮询。这一份数据比列表重

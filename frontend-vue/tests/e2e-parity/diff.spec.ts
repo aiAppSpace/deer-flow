@@ -19,20 +19,18 @@
 */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "./support/test";
 
-import { captureScenario, sampleGeometry } from "./support/capture";
-import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
+import { captureScenario } from "./support/capture";
+import { createCapturePage } from "./support/capture-page";
 import { reactAppPresent } from "./support/react-preview";
 import {
   DEFAULT_DIMENSION,
   PARITY_SCENARIOS,
   type ParityState,
   scenarioStates,
-  locateTarget,
-  runScenario,
   type ParityDimension,
 } from "./support/scenarios";
 
@@ -46,32 +44,10 @@ import {
 const VUE_APP = process.env.E2E_APP_URL ?? "http://localhost:3115";
 const REACT_APP = process.env.E2E_REACT_APP_URL ?? "http://localhost:3116";
 const ACCEPT = process.env.PARITY_ACCEPT === "1";
-/**
- * 明知台账会变长、仍然要写进去时的开关。
- *
- * **「这份清单只能缩短」此前是一句纯散文**：`make parity-accept` 无条件覆盖基线，
- * 没有任何东西比对新旧（wave 85 量出来的；同一句话在
- * `baseline/parity-scenario-coverage.json` 与 `support/scenarios.ts` 里还各有一份）。
- * Makefile 里那句「否则这个目标会变成把回归洗白的按钮」说的正是这件事，
- * 而它一直只靠人记得。
- *
- * 现在把它挡在**唯一能让台账变长的那条路**上：accept 时逐行比对，
- * 有新增行就拒写并把它们打出来。真要接受（比如接上一档新尺子、量出一批
- * 此前看不见的差异），`PARITY_ACCEPT_GROW=1 make parity-accept`，
- * 并在提交说明里写清楚每一行是什么。
- */
+/** Explicit diagnostic override; formal acceptance never enables it. */
 const ACCEPT_GROW = process.env.PARITY_ACCEPT_GROW === "1";
 
-/*
-  **只跑一个场景**，用来查某一行台账。整套是 13 分钟，一个场景约 4 分钟——
-  查一条差异要反复量的时候，这个差别决定了「量一次」还是「猜一次」。
-
-  开着它就**既不比基线、也不许 accept**：过滤过的报告里其余 112 个场景全都缺席，
-  拿去比会看起来像「一大批差异一次修好了」，拿去 accept 会直接把基线写成一条。
-  下面那条伪元素样本数的断言同理跳过——它数的是整套的量。
-
-  用法：`PARITY_ONLY=chat-thread-init-ordering make e2e-parity`
-*/
+/** A filtered diagnostic records observations but cannot compare or accept a baseline. */
 const ONLY = process.env.PARITY_ONLY?.trim();
 
 const BASELINE = new URL("../../baseline/parity-diff.json", import.meta.url);
@@ -80,21 +56,7 @@ const REPORT = new URL(
   import.meta.url,
 );
 
-/**
- * 几何容差。
- *
- * 不能要求逐像素相等：两边的 primitive 各有自己的内边距与边框实现，那正是
- * ARCHITECTURE 里只对齐可观察行为的三处之一。但也不能没有判据。
- *
- * 2px 是先定后测的，数字一直没动过；下面这组事实随台账重测一次。当前 32 处位置/
- * 尺寸差异里最小的 |Δ| 是 4px（channels 的两行、browser-feature 的宽高），最大 528px，
- * **2~4px 这一档一条都没有**——也就是说这个阈值仍然没有压住任何贴边的东西，它挡掉的
- * 只会是真正的零头。哪天有差异落进这一档，要做的是回去看那一处，而不是顺手把数字调大。
- *
- * 阈值挡掉的零头现在有一处有名有姓：artifact 面板那条路径的锚点，React 的布局位置是
- * 193、Vue 是 192（React 侧那个 `overflow:hidden` 的行容器内容高 52、盒子高 50，
- * 被滚了 1px）。此前两边都量成 192，因为视口坐标把那 1px 滚动一起量了进去。
- */
+// UI remains in scope. buildDiffEntry keeps the existing 2px geometry tolerance.
 
 test.skip(
   !reactAppPresent,
@@ -117,43 +79,40 @@ function key(
   return `${scenarioId}${suffix}/${dimension.viewport}/${dimension.theme}/${dimension.locale}`;
 }
 
+// This file owns one manual recording per app/scenario. Disable automatic
+// fixture tracing at file scope so both recorders never compete for a context.
+// Capture invariants use the suite recorder in capture-invariants.spec.ts.
+test.use({ trace: "off" });
 test("每个场景的双向差异都与签入的清单一致", async ({ browser }) => {
-  /*
-    **这是整条用例的墙钟预算，不是覆盖面的上限。**
-
-    2026-09-11 给 `integrations` 加上 dark 与 mobile 两维（7 个状态 × 2 = 14 个
-    场景-维度、两侧各取一次）之后，整条用例从 ~10.0 分钟涨到超过 10 分钟，
-    **当场撞上 600s 被判超时**——报出来的是最后一个场景的锚点等不到
-    （`locator.waitFor: Test ended`），看着像产品缺陷，其实是时钟到了。
-    **再看到这条用例以「某个锚点等不到 + Test ended」的形状红，先看总用时。**
-
-    往上提而不是砍维度：超时是防挂死的闸门，不该反过来当覆盖面的天花板。
-
-    **2026-09-17 第三十七轮 900s → 1_500_000**，因为它又一次以这个形状红了
-    （run 35190580480，卡在 `artifact-table-preview` 的锚点上）。三件事同时把
-    单次取样变贵了：场景-维度 129 → 147、取样前多等一次「有限动画跑完」、
-    指针归位时的分步移动。同轮已把归位收窄成**只在指针真动过、且场景自己没有
-    hover 步骤时**才做，并把步数从 12 降到 4；1_500_000 给的是当轮实测
-    ~16 分钟的约 1.5 倍余量。
-
-    **2026-09-27 第七十一轮 1_500_000 → 2_400_000**。取样面已经从当时的
-    147 增到 195 个场景-维度，stable Chrome 最终验收在 25.1 分钟精确撞上旧墙钟，
-    另外两条 diff 用例随即全绿；这是预算先于断言耗尽，不是产品或台账差异。
-    40 分钟继续按实测保留约 1.5 倍余量，不删场景、不减维度，也不改变任何断言。
-  */
-  test.setTimeout(2_400_000);
+  // The historical calibration is 2,400,000ms for 195 samples. Scale only
+  // the whole-run budget with the live registry; per-step limits and coverage stay fixed.
+  const sampleCount = PARITY_SCENARIOS.reduce(
+    (total, scenario) =>
+      total +
+      scenarioStates(scenario).reduce(
+        (states, state) =>
+          states +
+          (state.dimensions ?? scenario.dimensions ?? [DEFAULT_DIMENSION])
+            .length,
+        0,
+      ),
+    0,
+  );
+  test.setTimeout(
+    Math.max(2_400_000, Math.ceil((2_400_000 * sampleCount) / 195)),
+  );
 
   const entries: Record<string, DiffEntry> = {};
   /*
-    伪元素那一档**取到了东西**的锚点数。
+  伪元素那一档**取到了东西**的锚点数。
 
-    这一档在干净树上是 0 行——而 0 行有两种：**算出来的 0** 和**没算的 0**。
-    `pseudo()` 里但凡写错一句（比如把 `content` 的判断写反、或者
-    `getComputedStyle` 少传第二个参数），它会永远返回 `none`，两边一致，
-    台账 0 行，**而且没有任何一条用例会红**（线索 131 的形状：
-    尺子坏了会让它守的那件事静默全绿）。
-    所以这里数一下真的采到伪元素的锚点，下面断言它不是 0。
-  */
+  这一档在干净树上是 0 行——而 0 行有两种：**算出来的 0** 和**没算的 0**。
+  `pseudo()` 里但凡写错一句（比如把 `content` 的判断写反、或者
+  `getComputedStyle` 少传第二个参数），它会永远返回 `none`，两边一致，
+  台账 0 行，**而且没有任何一条用例会红**（线索 131 的形状：
+  尺子坏了会让它守的那件事静默全绿）。
+  所以这里数一下真的采到伪元素的锚点，下面断言它不是 0。
+*/
   let pseudoSamples = 0;
   let bodySamples = 0;
   /** 只有 `PARITY_ONLY` 时才收：两边的完整请求序列。 */
@@ -166,55 +125,115 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
       for (const dimension of state.dimensions ??
         scenario.dimensions ?? [DEFAULT_DIMENSION]) {
         /*
-        一个场景一个 context，不是一个 page。
+      一个场景一个 context，不是一个 page。
 
-        起初两个 page 共用整条用例的 context，实测在 channels 上超时：那条场景
-        靠路由覆盖换掉 providers 列表，而在一个跑了几十次导航的长命 context 里
-        它偶发拿不到。取样之间必须互不影响——这跟归一化只在必要处抹信息是同一条
-        纪律：样本的差异只能来自被测应用，不能来自它排在第几个跑。
-      */
-        const vueContext = await browser.newContext(PARITY_CONTEXT_OPTIONS);
-        const reactContext = await browser.newContext(PARITY_CONTEXT_OPTIONS);
-        const vuePage: Page = await vueContext.newPage();
-        const reactPage: Page = await reactContext.newPage();
-        const vue = await captureScenario(
-          vuePage,
-          VUE_APP,
-          scenario,
-          dimension,
-          state,
+      起初两个 page 共用整条用例的 context，实测在 channels 上超时：那条场景
+      靠路由覆盖换掉 providers 列表，而在一个跑了几十次导航的长命 context 里
+      它偶发拿不到。取样之间必须互不影响——这跟归一化只在必要处抹信息是同一条
+      纪律：样本的差异只能来自被测应用，不能来自它排在第几个跑。
+    */
+        const captureDirectory = join(
+          dirname(REPORT.pathname),
+          "captures",
+          key(scenario.id, state, dimension).replaceAll("/", "--"),
         );
-        const react = await captureScenario(
-          reactPage,
-          REACT_APP,
-          scenario,
-          dimension,
-          state,
-        );
-        await vueContext.close();
-        await reactContext.close();
+        mkdirSync(captureDirectory, { recursive: true });
+        const owned: {
+          app: string;
+          capture: Awaited<ReturnType<typeof createCapturePage>>;
+          tracing: boolean;
+        }[] = [];
+        const failures: unknown[] = [];
+        let succeeded = false;
+        let vue!: Awaited<ReturnType<typeof captureScenario>>;
+        let react!: Awaited<ReturnType<typeof captureScenario>>;
+        try {
+          for (const app of ["vue", "react"]) {
+            const capture = await createCapturePage(browser);
+            const item = { app, capture, tracing: false };
+            owned.push(item);
+            await capture.context.tracing.start({
+              screenshots: true,
+              snapshots: true,
+              sources: true,
+            });
+            item.tracing = true;
+          }
+          vue = await captureScenario(
+            owned[0]!.capture.page,
+            VUE_APP,
+            scenario,
+            dimension,
+            state,
+          );
+          react = await captureScenario(
+            owned[1]!.capture.page,
+            REACT_APP,
+            scenario,
+            dimension,
+            state,
+          );
+          succeeded = true;
+        } catch (error) {
+          failures.push(error);
+        } finally {
+          // Archive each available page and attempt every owned cleanup even if
+          // another construction, trace or close operation failed.
+          for (const { app, capture, tracing } of owned) {
+            await capture.page
+              .screenshot({
+                path: join(captureDirectory, `${app}.png`),
+                fullPage: true,
+                animations: "disabled",
+              })
+              .catch(() => undefined);
+            if (tracing) {
+              try {
+                await capture.context.tracing.stop(
+                  succeeded
+                    ? {}
+                    : { path: join(captureDirectory, `${app}-trace.zip`) },
+                );
+              } catch (error) {
+                failures.push(error);
+              }
+            }
+            try {
+              await capture.close();
+            } catch (error) {
+              failures.push(error);
+            }
+          }
+        }
+        if (failures.length === 1) throw failures[0];
+        if (failures.length)
+          throw new AggregateError(
+            failures,
+            "Parity pair failed; capture and cleanup errors retained",
+            { cause: failures[0] },
+          );
 
         pseudoSamples += countPseudoSamples(react, vue);
         bodySamples += countRequestBodySamples(react, vue);
         const entryKey = key(scenario.id, state, dimension);
         entries[entryKey] = buildDiffEntry(react, vue);
         /*
-          诊断模式下把**两边的请求原样**留下来。台账那一档只报差集，
-          而查「谁多发了一次」要看的是完整序列与它们的顺序——没有这个，
-          下一步只能靠猜。
-        */
+        诊断模式下把**两边的请求原样**留下来。台账那一档只报差集，
+        而查「谁多发了一次」要看的是完整序列与它们的顺序——没有这个，
+        下一步只能靠猜。
+      */
         if (ONLY) {
           rawRequests[entryKey] = {
             react: [...react.requests],
             vue: [...vue.requests],
           };
           /*
-            **可 tab 清单也留全的。** `tabbablesOnly*` 报的是差集，
-            而查「这颗到底是谁、它在两边各排第几」要看完整序列——
-            第三十一轮查 `div[scroll-area-viewport]` 那族（64 个投影）时，
-            光看差集把人绕进了「两边 primitive 都写了 tabindex，那差异从哪来」
-            的死胡同，只能靠完整序列才看得出是**用在哪**不一样。
-          */
+          **可 tab 清单也留全的。** `tabbablesOnly*` 报的是差集，
+          而查「这颗到底是谁、它在两边各排第几」要看完整序列——
+          第三十一轮查 `div[scroll-area-viewport]` 那族（64 个投影）时，
+          光看差集把人绕进了「两边 primitive 都写了 tabindex，那差异从哪来」
+          的死胡同，只能靠完整序列才看得出是**用在哪**不一样。
+        */
           rawTabbables[entryKey] = {
             react: [...react.tabbables],
             vue: [...vue.tabbables],
@@ -224,27 +243,27 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
   }
 
   /*
-    **算出来的 0 与没算的 0 不是一回事。**
+  **算出来的 0 与没算的 0 不是一回事。**
 
-    实测这一档在整套里只被 **4** 个锚点样本碰到（技能页那颗选中的 tab 的
-    `::after`，两种语言 × 两个应用）——不是取样面漏了，是**整个仓库用伪元素的
-    地方就这么少**：本仓 4 份组件、上游 5 份用到 `before:` / `after:`。
-    数少不等于可以不守：那 4 个样本量的正是 `line` 档选中态的全部视觉主体，
-    而 wave 145 的 N2 证明过，它一塌下来别的档一行都不会报。
+  实测这一档在整套里只被 **4** 个锚点样本碰到（技能页那颗选中的 tab 的
+  `::after`，两种语言 × 两个应用）——不是取样面漏了，是**整个仓库用伪元素的
+  地方就这么少**：本仓 4 份组件、上游 5 份用到 `before:` / `after:`。
+  数少不等于可以不守：那 4 个样本量的正是 `line` 档选中态的全部视觉主体，
+  而 wave 145 的 N2 证明过，它一塌下来别的档一行都不会报。
 
-    这条断言挡的是「`pseudo()` 写坏了→永远返回 `none`→两边一致→台账 0 行→
-    没有任何用例会红」。数字变了要**看一眼再改**，不要顺手调低。
-  */
+  这条断言挡的是「`pseudo()` 写坏了→永远返回 `none`→两边一致→台账 0 行→
+  没有任何用例会红」。数字变了要**看一眼再改**，不要顺手调低。
+*/
   if (!ONLY) {
     expect(
       pseudoSamples,
       "伪元素这一档一个样本都没采到——先确认 pseudo() 还在工作，再改这个阈值",
     ).toBeGreaterThanOrEqual(4);
     /*
-      请求体这一档同理（第三十轮新加）。阈值取一个**远低于实测**的数：
-      它挡的是「采集整个坏掉→永远空数组→静默 0 行」，不是「今天恰好采到几条」。
-      数字变了要先看一眼再改，别顺手调低——与上面那条伪元素断言同一条纪律。
-    */
+    请求体这一档同理（第三十轮新加）。阈值取一个**远低于实测**的数：
+    它挡的是「采集整个坏掉→永远空数组→静默 0 行」，不是「今天恰好采到几条」。
+    数字变了要先看一眼再改，别顺手调低——与上面那条伪元素断言同一条纪律。
+  */
     expect(
       bodySamples,
       "请求体这一档一个样本都没采到——先确认 postData() 那段还在工作，再改这个阈值",
@@ -253,20 +272,20 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
 
   mkdirSync(dirname(REPORT.pathname), { recursive: true });
   /*
-    **诊断模式也要落盘**（第四十八轮修）。
+  **诊断模式也要落盘**（第四十八轮修）。
 
-    这里原来写着「不写报告」，而 `writeFileSync(REPORT, ...)` 在下面的 `return`
-    之后——于是 `PARITY_ONLY` 的那次 CI 跑**什么产物都没有**：
-    `gh run download -n parity-failures` 报 `no valid artifacts found`
-    （`if-no-files-found: ignore` 把空目录静默吞掉），结论只剩下几万行日志里的
-    一段 `console.log`。而 workflow 那一步的 `if: failure() || inputs.parity_only != ''`
-    配着一整段注释写明「PARITY_ONLY 这次跑**唯一的产物**就是这份 report」
-    ——**两处对不上，而且是「拿不到东西」和「量过、没问题」长得一模一样的那种。**
+  这里原来写着「不写报告」，而 `writeFileSync(REPORT, ...)` 在下面的 `return`
+  之后——于是 `PARITY_ONLY` 的那次 CI 跑**什么产物都没有**：
+  `gh run download -n parity-failures` 报 `no valid artifacts found`
+  （`if-no-files-found: ignore` 把空目录静默吞掉），结论只剩下几万行日志里的
+  一段 `console.log`。而 workflow 那一步的 `if: failure() || inputs.parity_only != ''`
+  配着一整段注释写明「PARITY_ONLY 这次跑**唯一的产物**就是这份 report」
+  ——**两处对不上，而且是「拿不到东西」和「量过、没问题」长得一模一样的那种。**
 
-    诊断模式多写两份：`rawRequests` / `rawTabbables` 只有 ONLY 才收，
-    而查「谁多发了一次请求」「那颗可 tab 的到底排第几」要看的正是完整序列，
-    差集看不出来。整套模式保持原来的形状（顶层就是 entries），不给读它的人换格式。
-  */
+  诊断模式多写两份：`rawRequests` / `rawTabbables` 只有 ONLY 才收，
+  而查「谁多发了一次请求」「那颗可 tab 的到底排第几」要看的正是完整序列，
+  差集看不出来。整套模式保持原来的形状（顶层就是 entries），不给读它的人换格式。
+*/
   writeFileSync(
     REPORT,
     JSON.stringify(
@@ -278,17 +297,17 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
 
   if (ONLY) {
     /*
-      诊断模式：把这一个场景的差异打出来就结束，**不比基线、不 accept**。
-      要它一条都没有匹配上也算错——`PARITY_ONLY` 拼错了不该静默地「全绿」。
-    */
+    诊断模式：把这一个场景的差异打出来就结束，**不比基线、不 accept**。
+    要它一条都没有匹配上也算错——`PARITY_ONLY` 拼错了不该静默地「全绿」。
+  */
     expect(
       Object.keys(entries),
       `PARITY_ONLY=${ONLY} 没有匹配到任何场景——检查 id 拼写`,
     ).not.toEqual([]);
     /*
-      **把两条取样计数也打出来。** 诊断模式下最容易误读的就是「某一档空着」
-      ——它有两种：两边一样，和**压根没采到**。这两个数把它们分开。
-    */
+    **把两条取样计数也打出来。** 诊断模式下最容易误读的就是「某一档空着」
+    ——它有两种：两边一样，和**压根没采到**。这两个数把它们分开。
+  */
     console.log(
       `PARITY_ONLY=${ONLY} 取样计数：伪元素 ${pseudoSamples} / 请求体 ${bodySamples}\n` +
         `${JSON.stringify(entries, null, 2)}\n` +
@@ -347,118 +366,4 @@ test("每个场景的双向差异都与签入的清单一致", async ({ browser 
     "对照差异与 baseline/parity-diff.json 不一致：修好的从清单里删掉，" +
       "新出现的先弄清楚是真差异还是取样不稳定，再决定是修代码还是 make parity-accept。",
   ).toEqual(baseline.entries);
-});
-
-/*
-  取样稳定性的**测量**，不是偏好。请求序列如果两次一致，将来就可以把判据从
-  多重集收紧成顺序；不一致的话，收紧只会得到一份随机变红的门禁。
-  这里如实把测量结果留在报告里，而不是先假设一个答案。
-*/
-test("同一应用两次取样的请求序列", async ({ browser }) => {
-  test.setTimeout(180_000);
-  const scenario = PARITY_SCENARIOS[0]!;
-  const samples: Record<string, string[][]> = {};
-
-  for (const [name, base] of [
-    ["vue", VUE_APP],
-    ["react", REACT_APP],
-  ] as const) {
-    samples[name] = [];
-    for (let round = 0; round < 2; round++) {
-      const roundContext = await browser.newContext(PARITY_CONTEXT_OPTIONS);
-      const page = await roundContext.newPage();
-      const capture = await captureScenario(
-        page,
-        base,
-        scenario,
-        DEFAULT_DIMENSION,
-        scenarioStates(scenario)[0]!,
-      );
-      samples[name]!.push(capture.requests);
-      await roundContext.close();
-    }
-  }
-
-  for (const [name, rounds] of Object.entries(samples)) {
-    expect(
-      rounds[1],
-      `${name} 两次取样的请求序列不同：顺序判据在收紧之前必须先稳定。`,
-    ).toEqual(rounds[0]);
-  }
-});
-
-/*
-  几何取样只量布局、不量滚动状态——这条判据由这里实测，不由 capture.ts 的注释保证。
-
-  这个场景是选出来的，不是随手挑的：它的锚点在 stick-to-bottom 的会话流里，是全部
-  34 个样本中取样时刻**滚动量最大**的一个——实测 React 侧那条流被滚了 32~81px 不等
-  （连跑五次量到 75/76/76/75/33），Vue 侧那条流没溢出、恒为 0；其余样本里最大的
-  滚动量只有 artifact 面板那 1px。用没滚动的场景写这条用例会恒绿，也就什么都没测。
-
-  所以还要断言这次实验真的把锚点挪动过：滚到顶与滚到底的**视口**坐标必须不同。
-  否则哪天两边都不再溢出，这条用例会安静地退化成一句空话，而不是红。
-*/
-const SCROLL_INVARIANT_SCENARIO = "thread-history-mermaid";
-
-async function scrollEverything(page: Page, where: "top" | "bottom") {
-  await page.evaluate((target) => {
-    for (const node of document.querySelectorAll("*")) {
-      if (node.scrollHeight > node.clientHeight)
-        node.scrollTop = target === "top" ? 0 : node.scrollHeight;
-      if (node.scrollWidth > node.clientWidth)
-        node.scrollLeft = target === "top" ? 0 : node.scrollWidth;
-    }
-    globalThis.scrollTo(0, target === "top" ? 0 : document.body.scrollHeight);
-  }, where);
-  // 贴底的容器会在下一帧回弹，等它落定再量。
-  await page.waitForTimeout(200);
-}
-
-test("锚点的几何与滚到哪里无关", async ({ browser }) => {
-  test.setTimeout(180_000);
-  const scenario = PARITY_SCENARIOS.find(
-    (entry) => entry.id === SCROLL_INVARIANT_SCENARIO,
-  );
-  expect(scenario, `场景目录里没有 ${SCROLL_INVARIANT_SCENARIO}`).toBeDefined();
-  const anchor = scenario!.settle.find((step) => step.kind === "visible");
-  expect(anchor, "这个场景没有可见锚点，量不了几何").toBeDefined();
-
-  let moved = false;
-  for (const [name, base] of [
-    ["vue", VUE_APP],
-    ["react", REACT_APP],
-  ] as const) {
-    const context = await browser.newContext(PARITY_CONTEXT_OPTIONS);
-    const page: Page = await context.newPage();
-    const state = scenarioStates(scenario!)[0]!;
-    await runScenario(page, base, scenario!, DEFAULT_DIMENSION, state);
-    await page.waitForTimeout(700);
-
-    const locator = locateTarget(page, anchor!.target).first();
-    const viewportY = () =>
-      locator.evaluate(
-        (element) => Math.round(element.getBoundingClientRect().y * 10) / 10,
-      );
-
-    await scrollEverything(page, "top");
-    const atTop = await sampleGeometry(page, scenario!, state);
-    const viewportAtTop = await viewportY();
-
-    await scrollEverything(page, "bottom");
-    const atBottom = await sampleGeometry(page, scenario!, state);
-    const viewportAtBottom = await viewportY();
-
-    if (viewportAtTop !== viewportAtBottom) moved = true;
-    expect(
-      atBottom,
-      `${name} 的锚点几何随滚动位置变了：取样量到的是滚动状态，不是布局。`,
-    ).toEqual(atTop);
-    await context.close();
-  }
-
-  expect(
-    moved,
-    `两个应用滚到顶与滚到底时锚点都没动过：${SCROLL_INVARIANT_SCENARIO} 已经不再有` +
-      `被滚动的容器，这条用例现在是空的，得换一个真会滚的场景。`,
-  ).toBe(true);
 });

@@ -29,10 +29,11 @@
                    要守延迟就去守那个 prop，不要守秒表。
 */
 
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./support/test";
 
 import { PARITY_CONTEXT_OPTIONS } from "./support/context-options";
 import { reactAppPresent } from "./support/react-preview";
+import { expectDesktopSidebarWidth } from "../e2e/utils/sidebar";
 import {
   DEFAULT_DIMENSION,
   PARITY_SCENARIOS,
@@ -138,4 +139,34 @@ test("收起态的四颗导航键：两个应用给出同一种悬停提示", as
     "上游收起态的悬停提示变了——它的 SidebarMenuButton 自带 tooltip 参数，" +
       "workspace 侧栏必须一直传着它（第二十四轮之前一个都没传，收起后毫无反馈）",
   ).toEqual(expected);
+});
+
+test("both desktop sidebar shells own the full width and their inner scrollers fit inside the border", async ({
+  browser,
+}) => {
+  for (const base of [REACT_APP, VUE_APP]) {
+    const context = await browser.newContext(PARITY_CONTEXT_OPTIONS);
+    try {
+      const page = await context.newPage();
+      const scenario = PARITY_SCENARIOS.find(
+        (item) => item.id === "sidebar-collapsed",
+      )!;
+      await runScenario(
+        page,
+        base,
+        scenario,
+        DEFAULT_DIMENSION,
+        scenarioStates(scenario)[0]!,
+      );
+      await expectDesktopSidebarWidth(page, 48);
+      const header = page.locator('[data-sidebar="header"]');
+      await header.hover();
+      await header.locator('[data-sidebar="trigger"]').click();
+      await expectDesktopSidebarWidth(page, 256);
+      await header.locator('[data-sidebar="trigger"]').click();
+      await expectDesktopSidebarWidth(page, 48);
+    } finally {
+      await context.close();
+    }
+  }
 });

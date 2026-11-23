@@ -613,10 +613,18 @@ function htmlScrollRestorationScript(messageKey: string) {
   });
   window.addEventListener("scroll", save, { passive: true });
   window.addEventListener("pagehide", save);
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => post("restore-request"), { once: true });
-  } else {
+  const ready = () => {
+    // An opaque-origin document with no controls is skipped by native Tab.
+    // Give the preview document its own keyboard entry without changing authored tabindex.
+    if (document.body && !document.body.hasAttribute("tabindex")) {
+      document.body.tabIndex = 0;
+    }
     post("restore-request");
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ready, { once: true });
+  } else {
+    ready();
   }
   window.addEventListener("load", () => post("restore-request"), { once: true });
 })();

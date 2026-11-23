@@ -1,9 +1,5 @@
 import { describe, expect, it } from "@rstest/core";
-import {
-  createElement,
-  type ComponentProps,
-  type ReactElement,
-} from "react";
+import { createElement, type ComponentProps, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
@@ -33,7 +29,6 @@ function render(element: ReactElement, locale: Locale = "en-US") {
     createElement(I18nProvider, providerProps, element),
   );
 }
-
 
 describe("isSafeHref", () => {
   it("allows web URLs and same-origin paths", () => {
@@ -145,9 +140,7 @@ describe("MarkdownLink rendering", () => {
   it("renders a scheme-less relative href as a navigable anchor", () => {
     const tests = ["report.md", "./report.md", "../assets/chart.png"];
     for (const href of tests) {
-      const html = render(
-        createElement(MarkdownLink, { href }, "doc"),
-      );
+      const html = render(createElement(MarkdownLink, { href }, "doc"));
       expect(html).toContain("<a");
       expect(html).toContain(`href="${href}"`);
     }

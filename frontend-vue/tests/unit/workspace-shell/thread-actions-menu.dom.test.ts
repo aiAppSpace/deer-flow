@@ -1,7 +1,7 @@
 /* thread action menu owns share/export request and visible failure state. */
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
-import { defineComponent, h, provide } from "vue";
+import { defineComponent, h, provide, ref, type Ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import ThreadActionsMenu from "@/components/workspace/ThreadActionsMenu.vue";
@@ -11,17 +11,30 @@ import {
 } from "@/core/workspace-shell/toast";
 import { enUS } from "@/core/i18n/locales/en-US";
 import type { AgentThread } from "@/core/threads/types";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 const mocks = vi.hoisted(() => ({
   clipboard: vi.fn(),
   getState: vi.fn(),
   exportThread: vi.fn(),
+  fetch: vi.fn(),
+  session: undefined as unknown as Ref<{
+    tag: "authenticated";
+    user: { permissions?: string[] | null };
+  }>,
 }));
 vi.mock("@/core/clipboard", () => ({ writeTextToClipboard: mocks.clipboard }));
 vi.mock("@/core/api/api-client", () => ({
   getAPIClient: () => ({ threads: { getState: mocks.getState } }),
 }));
 vi.mock("@/core/threads/export", () => ({ exportThread: mocks.exportThread }));
+vi.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetch }));
+vi.mock("@/composables/useCapabilities", () => ({
+  useCapabilityUser: () => ref(null),
+}));
+vi.mock("@/composables/useSettingsPermissions", () => ({
+  useSettingsPermissions: () => ({ session: mocks.session }),
+}));
 
 const thread: AgentThread = {
   thread_id: "t-1",
@@ -94,7 +107,11 @@ beforeEach(() => {
     values: { messages: [{ id: "m-1", type: "human", content: "hello" }] },
   });
   mocks.exportThread.mockReset();
-  vi.stubGlobal("useNuxtApp", () => ({ $i18n: { t: { value: enUS } } }));
+  mocks.fetch.mockReset().mockResolvedValue(Response.json({ projects: [] }));
+  mocks.session = ref({ tag: "authenticated", user: {} });
+  vi.stubGlobal("useNuxtApp", () => ({
+    $i18n: { t: ref(enUS), locale: ref("en-US") },
+  }));
   vi.stubGlobal("location", new URL("https://deer.example/workspace/chats"));
 });
 
@@ -104,6 +121,46 @@ afterEach(() => {
 });
 
 describe("ThreadActionsMenu", () => {
+  it.each([
+    [undefined, true],
+    [null, true],
+    [[], false],
+    [["runs:create"], false],
+    [["threads:delete"], true],
+  ] as const)(
+    "reflects advisory delete permission %j in the real menu",
+    async (permissions, visible) => {
+      mocks.session.value.user = {
+        permissions: permissions ? [...permissions] : permissions,
+      };
+      const { wrapper, toast } = mountMenu();
+      await openMenu(wrapper);
+      const item = [...document.querySelectorAll('[role="menuitem"]')].find(
+        (entry) => entry.textContent?.trim() === "Delete",
+      );
+      expect(!!item).toBe(visible);
+      wrapper.unmount();
+      toast.clear();
+    },
+  );
+
+  it("rejects a late select after delete permission is revoked", async () => {
+    mocks.session.value.user = { permissions: ["threads:delete"] };
+    const { wrapper, toast } = mountMenu();
+    await openMenu(wrapper);
+    const item = wrapper
+      .findAllComponents(DropdownMenuItem)
+      .find((entry) => entry.text().trim() === "Delete");
+    expect(item).toBeDefined();
+    mocks.session.value.user = { permissions: [] };
+    item!.vm.$emit("select", new Event("select"));
+    await flushPromises();
+    expect(
+      wrapper.getComponent(ThreadActionsMenu).emitted("delete"),
+    ).toBeUndefined();
+    wrapper.unmount();
+    toast.clear();
+  });
   it("shares the stable URL and surfaces clipboard rejection", async () => {
     const { wrapper, toast } = mountMenu();
     await openMenu(wrapper);

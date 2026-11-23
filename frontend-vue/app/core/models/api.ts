@@ -6,7 +6,7 @@
   【边界与注意】   本文件由本仓维护；行为由 tests/ 下的用例约束。
 */
 
-import { throwGatewayResponseError } from "@/core/api/errors";
+import { throwGatewayApiError } from "@/core/api/errors";
 import { fetch } from "@/core/api/fetcher";
 
 import { getBackendBaseURL } from "../config";
@@ -20,7 +20,10 @@ export async function loadModels(
     signal: options.signal,
   });
   if (!res.ok) {
-    await throwGatewayResponseError(res, "Failed to load models.");
+    await throwGatewayApiError(
+      res,
+      `Failed to load models: ${res.status} ${res.statusText}`.trim(),
+    );
   }
   const data = (await res.json()) as Partial<ModelsResponse>;
   return {

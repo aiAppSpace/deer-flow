@@ -24,7 +24,7 @@ const emptyMediaVariants = cva(
 
 const props = withDefaults(
   defineProps<{ variant?: "default" | "icon"; class?: string }>(),
-  { variant: "default" },
+  { variant: "default", class: undefined },
 );
 </script>
 <template>

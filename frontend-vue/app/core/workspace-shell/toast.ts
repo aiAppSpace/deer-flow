@@ -1,34 +1,10 @@
-/*
-  【文件职责】     Workspace 全局 toast 的唯一 client-state owner 与注入契约。
-  【架构位置】     L3 workspace shell
-  【主要导出】     create/provide/useWorkspaceToast
-  【依赖关系】     Vue ref/provide/inject
-  【边界与注意】   每个 workspace layout 只创建一次；卸载时 clear，避免残留 timer。
+// One workspace toast owner holds notice identity and its remaining 4000ms lifetime.
+// The viewport forwards interaction/visibility pause state; updates reuse the notice id.
 
-                   kind 与 React 用的 sonner 一一对应（success/error/info/warning）；
-                   WorkspaceToaster 只把 error 播成 assertive，其余都是 polite。
-
-                   **wave 73 把 warning 从「映到 info」改回一个独立的 kind。**
-                   原来那条理由是「warning 与 info 在可访问性上同一档，区别只有图标，
-                   而这个 toaster 一个图标都不画」——**前半句对，后半句是本仓自己的缺陷**：
-                   上游 `ui/sonner.tsx:19` 给 `<Toaster>` 传了
-                   `icons={{success, info, warning, error, loading}}`（五颗 lucide 图标），
-                   sonner 的 `[data-icon]` 是 16×16 的常驻槽位，**每一条 toast 都画**。
-                   本仓补上图标之后，warning 与 info 就有了可观察差别，
-                   继续折叠等于把上游的三处 `toast.warning` 降级成 info。
-
-                   **`durationMs` 是 4000，不是 5000**：sonner 的 `TOAST_LIFETIME`
-                   就是 4000（`sonner/dist/index.mjs`）。此前 5000 是本仓自己定的，
-                   同一条提示在两个应用里停留的时间不一样。
-
-                   show 接受一个已存在的 id 就地更新那一条，而不是再插一条：多步流程
-                   （Lark 授权轮询）会对同一句提示反复改写「还在等待 / 已完成」，各插一条
-                   会在屏幕上堆出一摞历史，读屏器也会把过期状态重播一遍。id 已经过期
-                   （超时消失或被 dismiss）时退化成新增，这样调用方不需要自己记生死。
-*/
 import { inject, provide, ref, type InjectionKey, type Ref } from "vue";
 
-export type WorkspaceToastKind = "success" | "error" | "info" | "warning";
+export type WorkspaceToastKind =
+  "default" | "success" | "error" | "info" | "warning";
 
 export type WorkspaceToast = {
   id: number;
@@ -52,11 +28,13 @@ export interface ToastTimer {
 
 export interface WorkspaceToastStore {
   toasts: Ref<WorkspaceToast[]>;
+  message(message: string, options?: WorkspaceToastOptions): number;
   success(message: string, options?: WorkspaceToastOptions): number;
   error(message: string, options?: WorkspaceToastOptions): number;
   info(message: string, options?: WorkspaceToastOptions): number;
   warning(message: string, options?: WorkspaceToastOptions): number;
   dismiss(id: number): void;
+  setPaused(paused: boolean): void;
   clear(): void;
 }
 
@@ -84,13 +62,17 @@ export function createWorkspaceToastStore(options?: {
   const timer = options?.timer ?? browserTimer;
   const durationMs = options?.durationMs ?? 4_000;
   const toasts = ref<WorkspaceToast[]>([]);
-  const timers = new Map<number, number>();
+  const timers = new Map<
+    number,
+    { timeout?: number; remaining: number; started: number }
+  >();
+  let paused = false;
   let nextId = 0;
 
   function dismiss(id: number) {
-    const timeoutId = timers.get(id);
-    if (timeoutId !== undefined) {
-      timer.clear(timeoutId);
+    const clock = timers.get(id);
+    if (clock !== undefined) {
+      if (clock.timeout !== undefined) timer.clear(clock.timeout);
       timers.delete(id);
     }
     toasts.value = toasts.value.filter((toast) => toast.id !== id);
@@ -98,11 +80,32 @@ export function createWorkspaceToastStore(options?: {
 
   function schedule(id: number) {
     const existing = timers.get(id);
-    if (existing !== undefined) timer.clear(existing);
-    timers.set(
-      id,
-      timer.set(() => dismiss(id), durationMs),
-    );
+    if (existing?.timeout !== undefined) timer.clear(existing.timeout);
+    const clock = { remaining: durationMs, started: Date.now() } as {
+      timeout?: number;
+      remaining: number;
+      started: number;
+    };
+    timers.set(id, clock);
+    if (!paused) clock.timeout = timer.set(() => dismiss(id), clock.remaining);
+  }
+
+  function setPaused(value: boolean) {
+    if (paused === value) return;
+    paused = value;
+    for (const [id, clock] of timers) {
+      if (value) {
+        clock.remaining = Math.max(
+          0,
+          clock.remaining - (Date.now() - clock.started),
+        );
+        if (clock.timeout !== undefined) timer.clear(clock.timeout);
+        clock.timeout = undefined;
+      } else {
+        clock.started = Date.now();
+        clock.timeout = timer.set(() => dismiss(id), clock.remaining);
+      }
+    }
   }
 
   function show(
@@ -145,18 +148,21 @@ export function createWorkspaceToastStore(options?: {
   }
 
   function clear() {
-    for (const timeoutId of timers.values()) timer.clear(timeoutId);
+    for (const clock of timers.values())
+      if (clock.timeout !== undefined) timer.clear(clock.timeout);
     timers.clear();
     toasts.value = [];
   }
 
   return {
     toasts,
+    message: (message, options) => show("default", message, options),
     success: (message, options) => show("success", message, options),
     error: (message, options) => show("error", message, options),
     info: (message, options) => show("info", message, options),
     warning: (message, options) => show("warning", message, options),
     dismiss,
+    setPaused,
     clear,
   };
 }

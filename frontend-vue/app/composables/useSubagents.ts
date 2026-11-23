@@ -8,8 +8,9 @@
                    由调用方决定（同 `useProjects` 的做法）。
 */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed } from "vue";
+import { useScopedGatewayRequests } from "@/composables/useScopedGatewayRequests";
 
 import {
   createManagedSubagent,
@@ -27,7 +28,7 @@ export const subagentKeys = {
 export function useSubagents() {
   const query = useQuery({
     queryKey: subagentKeys.list(),
-    queryFn: listSubagents,
+    queryFn: ({ signal }) => listSubagents({ signal }),
   });
   return {
     subagents: computed(() => query.data.value ?? []),
@@ -38,26 +39,32 @@ export function useSubagents() {
 
 export function useSubagentMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: subagentKeys.list() });
+  const requests = useScopedGatewayRequests();
+  const invalidate = () => {
+    return queryClient.invalidateQueries({ queryKey: subagentKeys.list() });
+  };
 
-  const create = useMutation({
-    mutationFn: (request: CreateManagedSubagentRequest) =>
-      createManagedSubagent(request),
+  const create = requests.mutation({
+    mutationFn: (request: CreateManagedSubagentRequest, signal) =>
+      createManagedSubagent(request, { signal }),
     onSuccess: invalidate,
   });
-  const update = useMutation({
-    mutationFn: ({
-      name,
-      request,
-    }: {
-      name: string;
-      request: UpdateManagedSubagentRequest;
-    }) => updateManagedSubagent(name, request),
+  const update = requests.mutation({
+    mutationFn: (
+      {
+        name,
+        request,
+      }: {
+        name: string;
+        request: UpdateManagedSubagentRequest;
+      },
+      signal,
+    ) => updateManagedSubagent(name, request, { signal }),
     onSuccess: invalidate,
   });
-  const remove = useMutation({
-    mutationFn: (name: string) => deleteManagedSubagent(name),
+  const remove = requests.mutation({
+    mutationFn: (name: string, signal) =>
+      deleteManagedSubagent(name, { signal }),
     onSuccess: invalidate,
   });
 

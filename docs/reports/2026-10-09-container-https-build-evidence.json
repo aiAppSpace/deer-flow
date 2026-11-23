@@ -1,0 +1,69 @@
+{
+  "stage": 25,
+  "scope": "validated HTTPS build configuration; frontend UI remains Stage23 until later stable-source refresh",
+  "canonicalGatewayImage": {
+    "tag": "deerflow-ingress-gateway-base:stage25",
+    "id": "sha256:22da4bc1a2336f93ee0b293405bb6ded120c46216b49430dbb6763617a346d12",
+    "buildStatus": "PASS"
+  },
+  "larkHttpsBootstrapPrefix": {
+    "tag": "deerflow-ingress-lark-trust:stage25",
+    "id": "sha256:0a17bf0f26a1897b843e10b4ffc945a34ec651896d52fe4223ddfa85f9d4f699",
+    "buildStatus": "PASS",
+    "fullLarkCliBuild": "UNRUN"
+  },
+  "actualShellTests": {
+    "mac": 86,
+    "linux": 86,
+    "oldLinuxFailures": 56,
+    "oldLinuxPasses": 16
+  },
+  "focusedFrontendTests": 23,
+  "transport": "HTTPS via operator APT_MIRROR argument; TLS enabled",
+  "globalProxyChanged": false,
+  "dependencyVersionsChanged": false,
+  "files": [
+    {
+      "path": "backend/Dockerfile",
+      "sha256": "5fdbf40ecea243f7364093a8d5a792ac7acf8bdaf34bd611e025848047f80cf6"
+    },
+    {
+      "path": "docker/provisioner/Dockerfile",
+      "sha256": "445d63499a87a2b1a65b2f61b6ad4d0f09726c4a1fed80d31b0e19bbe070c316"
+    },
+    {
+      "path": "docker/lark-cli-init/Dockerfile",
+      "sha256": "91d6852387582f0fd30ae235975bf17db87443cb5108a68e911dd46d105248e2"
+    },
+    {
+      "path": "docker/lark-cli-broker/Dockerfile",
+      "sha256": "afc76ffd257b1c687f251791c53c9a90a0874b34ce32ff9938767d3617f940f5"
+    },
+    {
+      "path": "backend/tests/test_apt_mirror_source_rewrite.py",
+      "sha256": "1e3ccf76655c186d7b5136f4d72596a22c70894fdeb2062a5a1b1eb8c95efaf1"
+    },
+    {
+      "path": "frontend-vue/tests/support/prepare_container_ingress.py",
+      "sha256": "4d7b5a74035e175cf4e86d9e5c43f11d5f12f1e20961bc4d86c8fd12fceb78e3"
+    }
+  ],
+  "browserRuntimeImage": {
+    "tag": "deerflow-ingress-gateway-browser:stage25",
+    "id": "sha256:eabda78a6c905d45bd1030262ef935ad75559b4e361e86cad03ed01a5b703206",
+    "buildStatus": "PASS",
+    "actualChromiumVersion": "149.0.7827.55",
+    "tlsVerificationEnabled": true
+  },
+  "finalBackendStage26": {
+    "passed": 27088,
+    "skipped": 451,
+    "shards": 4,
+    "fullLog": "/private/tmp/deerflow-backend-full-final-stage26.log",
+    "blockingIOPassed": 235,
+    "ruffCheck": "PASS",
+    "ruffFormatFiles": 1960,
+    "blockingLintLog": "/private/tmp/deerflow-backend-blocking-lint-final-stage26.log",
+    "scope": "Latest complete backend gates include APT_MIRROR regression and fixture changes; independent frontend/Compose evidence is separate."
+  }
+}

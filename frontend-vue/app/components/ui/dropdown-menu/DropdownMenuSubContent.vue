@@ -3,39 +3,9 @@
   【架构位置】     L2
   【主要导出】     DropdownMenuSubContent 组件
   【依赖关系】     Reka DropdownMenuSubContent · cn
-  【边界与注意】   **子菜单内容不 portal，这一条与 DropdownMenuContent 相反。**
-                   上游 shadcn 的 `dropdown-menu.tsx` 里，`DropdownMenuContent` 包了
-                   `DropdownMenuPrimitive.Portal`，而 `DropdownMenuSubContent` **没有**
-                   ——子菜单渲染在父菜单的子树里，靠 popper 定位。
-
-                   本仓此前照着 Content 那一条也包了 Portal，理由写的是「同样 portal
-                   到 body」——**那是抄来的假设，不是量出来的**。后果是子菜单内容被
-                   挂到 body 末尾，可访问性树里读起来是这样：
-
-                       上游：… Export ▸ → [Export as Markdown, Export as JSON] → 分隔线 → Delete
-                       本仓：… Export ▸ → 分隔线 → Delete            （整个父菜单读完）
-                             …（页面末尾）Export 子菜单的两项
-
-                   也就是**子菜单的两项与打开它的那颗触发器被拆开了**。
-                   wave 95 给对照加了「公共节点相对顺序」这一档才量出来——
-                   aria 那一档按多重集比，顺序天然测不出来（天生看不见的第④类）。
-
-                   **子菜单夹的是「视口」，不是 popper 的 available-width**，
-                   上游同一处同改（第五十八轮收尾）。这个区别是量出来的，不是风格：
-
-                       available-width   上游 174px / 本仓 375px——radix 从翻转那侧
-                                         量，**基线字号就会咬**，把上游子菜单夹到
-                                         129px、条目换行；为修 200% 弄坏基线，
-                                         还把本来一致的两边弄得不一致（第五十六轮实测，已撤）
-                       100vw - 1rem      默认字号 359px（子菜单内容 181px，不生效）；
-                                         200% 下 343px。**只在屏幕真的装不下时才咬。**
-
-                   逼出这一条的是 CI：Linux 上这颗菜单量到 `x=[0,384]`、视口 375，
-                   而 macOS 上是 344 正好装得下——**内容一样，"Export as Markdown"
-                   在 Linux 的字体回退里就是更宽**。内容撑开的浮层在手机宽度 ×
-                   200% 文本下本来就贴着边，所以它需要一个视口上界，而不是靠运气。
-
-                   `inheritAttrs: false` 留着：调用方的 data-testid 要落在内容元素上。
+  【边界与注意】   子菜单保留在父菜单子树中，不额外 portal，以保持触发器与内容的阅读顺序。
+                   宽度按视口限制，不能使用两种 primitive 计算不同的 popper available-width。
+                   inheritAttrs:false 使调用方属性落到内容元素。
 -->
 
 <script setup lang="ts">
@@ -47,6 +17,7 @@ import {
 } from "reka-ui";
 
 import { cn } from "@/lib/utils";
+import { retainMenuTab } from "./use-menu-tab-stop";
 
 defineOptions({ inheritAttrs: false });
 
@@ -72,6 +43,7 @@ const delegated = computed(() => {
         props.class,
       )
     "
+    @keydown="retainMenuTab"
   >
     <slot />
   </DropdownMenuSubContent>

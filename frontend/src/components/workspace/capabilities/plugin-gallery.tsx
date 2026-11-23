@@ -219,8 +219,12 @@ export function PluginGallery({ query }: { query: string }) {
     });
   }
   const toolbar = (
-    <Tabs value={filter} onValueChange={setFilter}>
-      <TabsList>
+    <Tabs
+      className="@container/capability-tabs"
+      value={filter}
+      onValueChange={setFilter}
+    >
+      <TabsList className="@max-sm/capability-tabs:max-w-full @max-sm/capability-tabs:flex-wrap @max-sm/capability-tabs:group-data-[orientation=horizontal]/tabs:h-auto @max-sm/capability-tabs:[&>button]:h-auto @max-sm/capability-tabs:[&>button]:max-w-full @max-sm/capability-tabs:[&>button]:min-w-0 @max-sm/capability-tabs:[&>button]:flex-auto @max-sm/capability-tabs:[&>button]:wrap-anywhere @max-sm/capability-tabs:[&>button]:whitespace-normal">
         <TabsTrigger value="all">{t.capabilities.allPlugins}</TabsTrigger>
         <TabsTrigger value="installed">{t.capabilities.installed}</TabsTrigger>
       </TabsList>
@@ -249,7 +253,7 @@ export function PluginGallery({ query }: { query: string }) {
             aria-pressed={category === key}
             onClick={() => setCategory(key)}
             className={cn(
-              "rounded-lg px-3 text-xs font-normal",
+              "h-auto min-h-8 max-w-full rounded-lg px-3 text-xs font-normal wrap-anywhere whitespace-normal",
               category === key
                 ? "bg-muted text-foreground font-medium"
                 : "text-muted-foreground",

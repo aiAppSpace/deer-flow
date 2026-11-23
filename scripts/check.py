@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -86,7 +87,10 @@ def parse_node_major(version_text: str) -> int | None:
     return int(major_str)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--frontend", choices=("react", "vue", "dual"), default="react")
+    args = parser.parse_args(argv or [])
     configure_stdio()
     print("==========================================")
     print("  Checking Required Dependencies")
@@ -155,7 +159,11 @@ def main() -> int:
 
     print()
     print("Checking nginx...")
-    if shutil.which("nginx"):
+    if args.frontend != "react":
+        print(
+            f"  OK nginx not required for {args.frontend} mode (direct frontend ports)"
+        )
+    elif shutil.which("nginx"):
         nginx_version_text = run_command(["nginx", "-v"])
         if nginx_version_text and "/" in nginx_version_text:
             nginx_version = nginx_version_text.split("/", 1)[1]
@@ -194,4 +202,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

@@ -57,11 +57,26 @@ def test_local_frontend_ignores_public_docker_port() -> None:
     """Root PORT config is public Docker ingress, not the local Next.js port."""
     serve = _read("scripts/serve.sh")
 
-    assert "env PORT=3000" in serve
+    assert "env PORT=3200" in serve
     # This fork starts React and Vue separately, so the service is named
-    # "React Frontend"; the pinned facts (port 3000, 300s budget) are the same.
+    # "React Frontend"; the local React port is 3200 and its budget stays 300s.
     assert 'run_service "React Frontend"' in serve
-    assert "3000 300" in serve
+    assert "3200 300" in serve
+
+
+def test_local_react_proxy_and_cleanup_use_the_same_port() -> None:
+    serve = _read("scripts/serve.sh")
+    assert "server 127.0.0.1:3200;" in _read("docker/nginx/nginx.local.conf")
+    assert "for port in 8001 3200 3100 2026; do" in serve
+    assert "_kill_repo_port 3200" in serve
+    assert "_kill_repo_port 3000" not in serve
+    # Container-private ports do not compete with other host applications.
+    assert "default frontend:3000;" in _read("docker/nginx/nginx.conf")
+    image = _read("frontend/Dockerfile")
+    dev = image.split("FROM dependencies AS dev", 1)[1].split("FROM dependencies AS builder", 1)[0]
+    prod = image.split("FROM node:22-alpine AS prod", 1)[1]
+    assert "ENV PORT=3000" in dev
+    assert "ENV PORT=3000" in prod
 
 
 def test_production_gateway_has_a_real_readiness_probe() -> None:

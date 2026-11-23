@@ -1,19 +1,17 @@
 <!--
-  【文件职责】     以一个 splitpanes 组承载聊天区与 artifacts/sidecar/browser 共用右侧面板。
-  【架构位置】     L3 workspace layout
-  【主要导出】     WorkspacePanels
-  【依赖关系】     splitpanes · useMediaQuery；面板业务开关仍由 AgentChat 的唯一状态路径拥有
-  【边界与注意】   使用 splitpanes 原生 width/keyboard/ARIA 行为；只在真实 release 后持久化或折叠。
-                   **窄屏是另一套实现，不是同一套加几条媒体查询。** React 在 isMobile
-                   分支把整个分栏换成 Sheet（frontend/src/components/workspace/chats/chat-box.tsx），
-                   而 Sheet 是真模态：面板之外的内容会被整体标成不可达。原来 Vue 只是把
-                   侧栏 fixed 铺满屏幕，读屏器仍然能从"抽屉"里走回背后的对话——实测窄屏
-                   取样时 React 的树里只有面板，Vue 的树里整页都在。
+  Shared workspace presentation: stable chat tree, desktop exit/pinning, and
+  the mobile Sheet. Business open/session/draft admission belongs to callers;
+  the L2 native resizable primitive owns geometry and gesture resources.
 -->
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { Pane, Splitpanes, type SplitpanesResizedPayload } from "splitpanes";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { GripVertical } from "lucide-vue-next";
+import {
+  ResizablePanels,
+  type ResizableLayoutEvent,
+  type ResizablePanel,
+} from "@/components/ui/resizable";
 
 import {
   Sheet,
@@ -32,6 +30,10 @@ const props = defineProps<{
   panelDescription?: string;
   /** artifacts 面板要多一层内边距；sidecar / browser 面板不要。 */
   panelPadded?: boolean;
+  /** Presentation identity only; business admission remains with the caller. */
+  panelKey?: string | null;
+  /** Retire an outgoing presentation immediately when its conversation changes. */
+  ownerKey?: string;
 }>();
 const emit = defineEmits<{
   "update:panelSize": [value: number];
@@ -39,10 +41,9 @@ const emit = defineEmits<{
 }>();
 
 const MIN_OPEN_SIZE = 20;
-const MAX_OPEN_SIZE = 72;
-const COLLAPSE_THRESHOLD = 8;
+const MAX_OPEN_SIZE = 70;
+const PANEL_TRANSITION_MS = 280;
 
-const root = ref<HTMLElement | null>(null);
 const mainRegion = ref<HTMLElement | null>(null);
 const panelRegion = ref<HTMLElement | null>(null);
 
@@ -63,9 +64,114 @@ const NARROW_QUERY = "(max-width: 767px)";
 const isNarrow = useMediaQuery(NARROW_QUERY);
 
 const sideSize = computed(() =>
-  props.open ? clampOpenSize(props.panelSize) : 0,
+  props.open && !isNarrow.value ? clampOpenSize(props.panelSize) : 0,
 );
 const mainSize = computed(() => 100 - sideSize.value);
+const paneSizes = computed(() => [mainSize.value, sideSize.value]);
+const panes: readonly ResizablePanel[] = [
+  { id: "main", minSize: 30, class: "workspace-panels__main-pane" },
+  {
+    id: "side",
+    minSize: MIN_OPEN_SIZE,
+    maxSize: MAX_OPEN_SIZE,
+    collapsible: true,
+    collapsedSize: 0,
+    class: "workspace-panels__side-pane",
+  },
+];
+const currentPanel = computed(() =>
+  props.open ? (props.panelKey ?? "panel") : null,
+);
+const renderedPanel = ref<string | null>(currentPanel.value);
+const renderedPadded = ref(props.panelPadded);
+const renderedLabel = ref(props.panelLabel);
+const animating = ref(false);
+const pinnedContentWidth = ref<string | null>(null);
+let lastPositiveSize = clampOpenSize(props.panelSize);
+let presentationRevision = 0;
+let exitRevision = 0;
+let disposed = false;
+let transitionTimer: ReturnType<typeof setTimeout> | undefined;
+let exitTimer: ReturnType<typeof setTimeout> | undefined;
+
+function finishSizeTransition() {
+  clearTimeout(transitionTimer);
+  transitionTimer = undefined;
+  animating.value = false;
+  pinnedContentWidth.value = null;
+}
+
+function cancelExit() {
+  exitRevision++;
+  clearTimeout(exitTimer);
+  exitTimer = undefined;
+}
+
+// React chat-box.tsx holds the final content width while only the outer pane
+// animates. Keep that presentation separate from open/active/session owners.
+watch(
+  [
+    () => props.open,
+    isNarrow,
+    () => props.ownerKey,
+    currentPanel,
+    () => props.panelSize,
+    () => props.panelPadded,
+    () => props.panelLabel,
+  ],
+  (
+    [open, narrow, owner, panel, size, padded, label],
+    [previousOpen, previousNarrow, previousOwner, previousPanel, previousSize],
+  ) => {
+    const ownerChanged = owner !== previousOwner;
+    const layoutChanged = open !== previousOpen || narrow !== previousNarrow;
+    if (ownerChanged || layoutChanged) presentationRevision++;
+    if (size !== previousSize) lastPositiveSize = clampOpenSize(size);
+    if (ownerChanged) {
+      finishSizeTransition();
+      cancelExit();
+      renderedPanel.value = panel;
+      renderedPadded.value = padded;
+      renderedLabel.value = label;
+      return;
+    }
+    if (panel !== null) {
+      cancelExit();
+      renderedPanel.value = panel;
+      renderedPadded.value = padded;
+      renderedLabel.value = label;
+    } else if (previousPanel !== null) {
+      cancelExit();
+      const revision = exitRevision;
+      exitTimer = setTimeout(() => {
+        if (disposed || revision !== exitRevision || props.open) return;
+        renderedPanel.value = null;
+        exitTimer = undefined;
+      }, PANEL_TRANSITION_MS);
+    }
+    if (narrow) {
+      finishSizeTransition();
+      return;
+    }
+    if (!layoutChanged) return;
+    finishSizeTransition();
+    if (open) lastPositiveSize = clampOpenSize(size);
+    pinnedContentWidth.value = `${lastPositiveSize}cqw`;
+    animating.value = true;
+    const revision = presentationRevision;
+    transitionTimer = setTimeout(() => {
+      if (!disposed && revision === presentationRevision)
+        finishSizeTransition();
+    }, PANEL_TRANSITION_MS);
+  },
+);
+
+onBeforeUnmount(() => {
+  disposed = true;
+  presentationRevision++;
+  finishSizeTransition();
+  cancelExit();
+});
 
 function clampOpenSize(value: number) {
   return Math.max(MIN_OPEN_SIZE, Math.min(MAX_OPEN_SIZE, value));
@@ -75,13 +181,25 @@ function sidePaneSize(payload: { panes: { size: number }[] }) {
   return payload.panes[1]?.size ?? 0;
 }
 
-function onResized(payload: SplitpanesResizedPayload) {
-  // Registration and prop changes also emit `resized`; only a user event owns
-  // a new persisted size or a collapse decision.
-  if (!payload.event) return;
+function onResize(payload: ResizableLayoutEvent) {
+  if (!payload.event || !props.open || isNarrow.value) return;
+  finishSizeTransition();
+  const size = sidePaneSize(payload);
+  if (size > 0) lastPositiveSize = clampOpenSize(size);
+}
+
+function onResized(payload: ResizableLayoutEvent) {
+  // Only a live native transaction can persist or collapse. Programmatic size
+  // changes and canceled/retired gestures never emit this completion event.
+  if (!payload.event || !props.open || isNarrow.value) return;
   const finalSize = sidePaneSize(payload);
-  if (finalSize < COLLAPSE_THRESHOLD) emit("collapse");
-  else emit("update:panelSize", clampOpenSize(finalSize));
+  if (finalSize === 0) {
+    emit("update:panelSize", lastPositiveSize);
+    emit("collapse");
+  } else {
+    lastPositiveSize = clampOpenSize(finalSize);
+    emit("update:panelSize", lastPositiveSize);
+  }
 }
 
 function keepNarrowPanelFocusVisible(event: FocusEvent) {
@@ -89,54 +207,18 @@ function keepNarrowPanelFocusVisible(event: FocusEvent) {
     event.target.scrollIntoView({ block: "nearest" });
 }
 
-/*
-  splitpanes 是在挂载后用 createElement 直接插入 splitter 的，模板上没有它，
-  aria-disabled 只能在这里补。React 那边由 react-resizable-panels 自己写
-  （dist 里的 `"aria-disabled": n || void 0`），语义一致：关着的分隔线是 disabled，
-  不是消失。
-
-  **`tabindex` 也在这里同步，理由是关着的时候它是一个「看不见、也按不动、
-  却照样占一个 Tab 停靠点」的元素。** 下面那条 `.workspace-panels--closed`
-  的样式把它设成 `opacity: 0; pointer-events: none`——鼠标用户完全感知不到它，
-  而 splitpanes 给的 `tabindex="0"` 让纯键盘用户照样会 Tab 进来，落在一个
-  没有焦点环、也没有任何可见反馈的地方（WCAG 2.4.7 焦点可见）。
-  **wave 96 给对照加上「能不能 tab 到」那一档才量出来**：本仓每一屏都多出一个
-  `div(separator)` 停靠点，而上游只在面板真的展开时才渲染 resizable-handle。
-
-  开着的时候不动它：那时它可见、可拖，`keyboard-step` 也让方向键能调宽度，
-  本来就该在 Tab 序里。
-*/
-function syncSplitterDisabled() {
-  const splitter = root.value?.querySelector(".splitpanes__splitter");
-  if (!splitter) return;
-  if (props.open) {
-    splitter.removeAttribute("aria-disabled");
-    splitter.setAttribute("tabindex", "0");
-  } else {
-    splitter.setAttribute("aria-disabled", "true");
-    splitter.setAttribute("tabindex", "-1");
-  }
-}
-onMounted(async () => {
-  await nextTick();
-  syncSplitterDisabled();
-});
-watch(() => props.open, syncSplitterDisabled, { flush: "post" });
-
+// Run after this close's DOM patch, before callers' nextTick continuations.
+// There is no asynchronous close callback left to steal a reopened panel's
+// focus; the details owner can still restore its explicit origin afterwards.
 watch(
-  () => props.open,
-  async (open) => {
-    if (open) return;
+  [() => props.open, isNarrow, () => props.ownerKey],
+  ([open, narrow, owner], [, , previousOwner]) => {
+    if (disposed || open || narrow || owner !== previousOwner) return;
     const active = document.activeElement;
-    if (
-      !(active instanceof HTMLElement) ||
-      !panelRegion.value?.contains(active)
-    ) {
-      return;
-    }
-    await nextTick();
-    mainRegion.value?.focus({ preventScroll: true });
+    if (active instanceof HTMLElement && panelRegion.value?.contains(active))
+      mainRegion.value?.focus({ preventScroll: true });
   },
+  { flush: "post" },
 );
 
 /*
@@ -152,16 +234,23 @@ function focusNarrowPanelItself(event: Event) {
 </script>
 
 <template>
-  <div ref="root" class="size-full min-h-0 min-w-0 overflow-hidden">
-    <Splitpanes
-      class="workspace-panels size-full min-h-0 min-w-0"
-      :class="{ 'workspace-panels--closed': !open }"
-      :push-other-panes="false"
-      :maximize-panes="false"
-      :keyboard-step="2"
+  <div class="size-full min-h-0 min-w-0 overflow-hidden">
+    <ResizablePanels
+      class="workspace-panels min-h-0"
+      :class="{
+        'workspace-panels--closed': !open,
+        'workspace-panels--animating': animating,
+      }"
+      :panels="panes"
+      :sizes="paneSizes"
+      :owner-key="ownerKey ?? ''"
+      :disabled="!open || isNarrow"
+      :keyboard-step="5"
+      handle-class="hidden opacity-33 transition-opacity duration-200 ease-out hover:opacity-100 motion-reduce:transition-none md:flex"
+      @resize="onResize"
       @resized="onResized"
     >
-      <Pane :size="mainSize" min-size="28" class="workspace-panels__main-pane">
+      <template #main>
         <div
           id="chat"
           ref="mainRegion"
@@ -170,13 +259,8 @@ function focusNarrowPanelItself(event: Event) {
         >
           <slot name="main" />
         </div>
-      </Pane>
-      <Pane
-        :size="sideSize"
-        min-size="0"
-        :max-size="MAX_OPEN_SIZE"
-        class="workspace-panels__side-pane"
-      >
+      </template>
+      <template #side>
         <!--
           id 挂在**共用的**面板容器上，不是挂在 artifacts 的内容组件上。
           React 的 `<aside id="artifacts">` 是右侧栏本身，sidecar 与 browser 渲染在
@@ -194,26 +278,35 @@ function focusNarrowPanelItself(event: Event) {
           ref="panelRegion"
           :aria-hidden="!open"
           :inert="!open"
-          class="size-full min-h-0 min-w-0 overflow-hidden"
-          :class="open ? '' : 'pointer-events-none'"
-          @keydown.esc="emit('collapse')"
+          class="size-full min-h-0 min-w-0 overflow-hidden transition-opacity duration-280 ease-out motion-reduce:transition-none"
+          :class="open ? 'opacity-100' : 'pointer-events-none opacity-0'"
         >
           <div
-            v-show="open"
+            v-if="renderedPanel !== null"
+            :key="ownerKey"
             class="ml-auto h-full min-w-0 overflow-hidden"
-            :class="panelPadded ? 'p-4' : 'p-0'"
+            :class="renderedPadded ? 'p-4' : 'p-0'"
+            :style="
+              pinnedContentWidth ? { width: pinnedContentWidth } : undefined
+            "
           >
-            <slot name="panel" />
+            <slot name="panel" :rendered-panel="renderedPanel" />
           </div>
         </aside>
-      </Pane>
-    </Splitpanes>
+      </template>
+      <template #handle>
+        <div
+          class="bg-border z-10 flex h-4 w-3 items-center justify-center rounded-xs border"
+        >
+          <GripVertical class="size-2.5" aria-hidden="true" />
+        </div>
+      </template>
+    </ResizablePanels>
   </div>
   <!--
     窄屏的面板是一个真 Sheet，而不是铺满屏幕的同一个 aside。**主区不换树**：
-    `isNarrow` 只有在水合之后才为真，把整棵树换掉会让聊天区连同它的 query 一起重挂载
-    ——实测多打一次 `/api/skills`。所以这里只换面板：宽屏渲染 aside，窄屏渲染 Sheet，
-    splitpanes 的骨架两边共用（窄屏由下面的样式把分隔线与侧栏收成 0）。
+    断点变化只切换面板宿主：宽屏渲染 aside，窄屏渲染 Sheet。
+    主区与分栏骨架始终共用；窄屏将侧栏声明为 0 并取消当前拖动，避免旧 release 关闭 Sheet。
   -->
   <Sheet
     v-if="isNarrow"
@@ -233,7 +326,7 @@ function focusNarrowPanelItself(event: Event) {
     >
       <!-- 标题与说明只给读屏器，与 React 的 sr-only SheetHeader 一致。 -->
       <SheetHeader class="sr-only">
-        <SheetTitle>{{ panelLabel }}</SheetTitle>
+        <SheetTitle>{{ renderedLabel }}</SheetTitle>
         <SheetDescription>{{ panelDescription }}</SheetDescription>
       </SheetHeader>
       <!--
@@ -242,85 +335,42 @@ function focusNarrowPanelItself(event: Event) {
         滚动条会把关闭键、composer 和浏览器工具条拆成三套不一致的行为。
       -->
       <div
+        :key="ownerKey"
         class="min-h-0 flex-1 overflow-y-auto p-3 pt-10"
         @focusin="keepNarrowPanelFocusVisible"
       >
-        <slot name="panel" />
+        <slot
+          v-if="renderedPanel !== null"
+          name="panel"
+          :rendered-panel="renderedPanel"
+        />
       </div>
     </SheetContent>
   </Sheet>
 </template>
 
 <style scoped>
-.workspace-panels :deep(.splitpanes__pane) {
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
+.workspace-panels {
+  container-type: inline-size;
 }
 
-.workspace-panels :deep(.splitpanes__splitter) {
-  position: relative;
-  z-index: 20;
-  width: 1px;
-  min-width: 1px;
-  /*
-    这条 1px 线用**背景色**画，不是 `border-left`——上游
-    `ui/resizable.tsx` 的 handle 是 `bg-border w-px`。
-    两种画法在屏幕上分不出来（`box-sizing: border-box`，1px 的左边框正好占满
-    1px 的盒子），但**计算样式分得出来**：wave 146 第一次把这颗分隔条挂进取样面，
-    几何档当场报 `background React=rgba(232,229,222,255) Vue=rgba(0,0,0,0)`。
-    与其在台账里留一条「看着像差异、其实不是」的账（那种账会让人不再相信这份清单），
-    不如把画法对齐——用户看到的东西一个像素都没变。
-  */
-  background: var(--border);
-  opacity: 0.33;
-  transition: opacity 200ms ease-out;
+.workspace-panels :deep([data-panel]) {
+  transition: none;
 }
 
-.workspace-panels :deep(.splitpanes__splitter::after) {
-  position: absolute;
-  inset-block: 0;
-  left: -8px;
-  width: 16px;
-  content: "";
+.workspace-panels.workspace-panels--animating :deep([data-panel]) {
+  transition: flex-grow 280ms ease-out;
 }
 
-.workspace-panels :deep(.splitpanes__splitter:hover),
-.workspace-panels :deep(.splitpanes__splitter:focus-visible) {
-  opacity: 1;
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-
-/*
-  关着的时候只是**看不见**，不是不存在：React 的 ResizableHandle 在右侧面板关闭时
-  传 disabled，元素照样留在树里，读屏器听到的是一个 disabled 的 separator
-  （frontend/src/components/workspace/chats/chat-box.tsx）。visibility: hidden 会把它
-  整个从可访问性树里摘掉，于是「这里有一条可以拖的分隔线、现在不能拖」这句话没人说得出来。
-*/
-.workspace-panels--closed :deep(.splitpanes__splitter) {
+/* Keep a disabled separator in the desktop accessibility tree. */
+.workspace-panels--closed :deep([data-resize-handle]) {
   pointer-events: none;
   opacity: 0;
 }
 
-/* 窄屏没有分栏可言：分隔线不渲染，侧栏收成 0，面板由 Sheet 承担。 */
-@media (max-width: 767px) {
-  .workspace-panels__main-pane {
-    width: 100% !important;
-  }
-
-  .workspace-panels :deep(.splitpanes__splitter) {
-    display: none;
-  }
-
-  .workspace-panels__side-pane {
-    width: 0 !important;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .workspace-panels :deep(.splitpanes__pane),
-  .workspace-panels :deep(.splitpanes__splitter) {
+  .workspace-panels :deep([data-panel]),
+  .workspace-panels.workspace-panels--animating :deep([data-panel]) {
     transition: none;
   }
 }

@@ -218,3 +218,62 @@ describe("channels api", () => {
     );
   });
 });
+
+describe("WeChat QR API", () => {
+  test("creates, verifies and cancels a session with exact routes and signal", async () => {
+    const { startWechatQRLogin, pollWechatQRLogin, cancelWechatQRLogin } =
+      await import("@/core/channels/api");
+    mockedFetch
+      .mockResolvedValueOnce(
+        jsonResponse(200, { id: "session/id", status: "pending" }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, { id: "session/id", status: "confirmed" }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const controller = new AbortController();
+    await startWechatQRLogin();
+    await pollWechatQRLogin("session/id", controller.signal, "123456");
+    await cancelWechatQRLogin("session/id");
+    expect(mockedFetch.mock.calls).toEqual([
+      ["/backend/api/channels/wechat/qr-login", { method: "POST" }],
+      [
+        "/backend/api/channels/wechat/qr-login/session%2Fid/poll",
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ verify_code: "123456" }),
+        },
+      ],
+      [
+        "/backend/api/channels/wechat/qr-login/session%2Fid",
+        { method: "DELETE" },
+      ],
+    ]);
+  });
+  test("does not send an empty verification payload and treats absent cancellation as complete", async () => {
+    const { pollWechatQRLogin, cancelWechatQRLogin } =
+      await import("@/core/channels/api");
+    mockedFetch
+      .mockResolvedValueOnce(jsonResponse(200, { status: "pending" }))
+      .mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await pollWechatQRLogin("id");
+    await expect(cancelWechatQRLogin("id")).resolves.toBeUndefined();
+    expect(mockedFetch.mock.calls[0]![1]).toEqual({ method: "POST" });
+  });
+  test.each([403, 409, 503])(
+    "preserves Gateway QR failure detail (%i)",
+    async (status) => {
+      const { startWechatQRLogin } = await import("@/core/channels/api");
+      mockedFetch.mockResolvedValueOnce(
+        jsonResponse(status, {
+          detail: "WeChat QR login requires a single Gateway worker.",
+        }),
+      );
+      await expect(startWechatQRLogin()).rejects.toThrow(
+        "WeChat QR login requires a single Gateway worker.",
+      );
+    },
+  );
+});

@@ -1828,3 +1828,27 @@ test("refresh reconstructs the same 1-to-6 order from run events without a bridg
     ),
   ).toEqual(["1", "2", "3", "4", "5", "6"]);
 });
+
+test("mergeMessages restores persisted skill snapshots without replacing an explicit live aggregate", () => {
+  const history = {
+    id: "skill-answer",
+    type: "ai",
+    content: "old",
+    additional_kwargs: {
+      skill_usages: [{ path: "/skills/a/SKILL.md", content: "captured" }],
+    },
+  } as Message;
+  const live = { id: "skill-answer", type: "ai", content: "new" } as Message;
+  expect(
+    mergeMessages([history], [live], [])[0]?.additional_kwargs?.skill_usages,
+  ).toEqual(history.additional_kwargs?.skill_usages);
+  const explicit = {
+    ...live,
+    additional_kwargs: { skill_usages: [] },
+  } as Message;
+  expect(
+    mergeMessages([history], [explicit], [])[0]?.additional_kwargs
+      ?.skill_usages,
+  ).toEqual([]);
+  expect(live.additional_kwargs).toBeUndefined();
+});

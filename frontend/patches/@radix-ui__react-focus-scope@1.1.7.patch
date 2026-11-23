@@ -1,0 +1,140 @@
+diff --git a/dist/index.js b/dist/index.js
+index c91ae9196280060974778cbb1164839d5610e7d0..de3461452656f60e934eaafbe11d3ced8f8e65a3 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -61,6 +61,8 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+   const composedRefs = (0, import_react_compose_refs.useComposedRefs)(forwardedRef, (node) => setContainer(node));
+   const focusScope = React.useRef({
+     paused: false,
++    container: null,
++    generation: 0,
+     pause() {
+       this.paused = true;
+     },
+@@ -106,6 +108,9 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+   }, [trapped, container, focusScope.paused]);
+   React.useEffect(() => {
+     if (container) {
++      const parentContainer = focusScopesStack.activeContainer();
++      const generation = ++focusScope.generation;
++      focusScope.container = container;
+       focusScopesStack.add(focusScope);
+       const previouslyFocusedElement = document.activeElement;
+       const hasFocusedCandidate = container.contains(previouslyFocusedElement);
+@@ -124,13 +129,22 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+         container.removeEventListener(AUTOFOCUS_ON_MOUNT, onMountAutoFocus);
+         setTimeout(() => {
+           const unmountEvent = new CustomEvent(AUTOFOCUS_ON_UNMOUNT, EVENT_OPTIONS);
++          // A departing scope cannot overwrite a newer control or reopened scope.
++          // Its parent host may only be the trap's automatic orphan recovery.
++          const activeElement = container.ownerDocument.activeElement;
++          const mayRestore = generation === focusScope.generation && !focusScopesStack.hasLiveScopeAbove(focusScope) &&
++            (activeElement === container.ownerDocument.body || container.contains(activeElement) ||
++             activeElement === parentContainer);
++          if (!mayRestore) unmountEvent.preventDefault();
+           container.addEventListener(AUTOFOCUS_ON_UNMOUNT, onUnmountAutoFocus);
+           container.dispatchEvent(unmountEvent);
+           if (!unmountEvent.defaultPrevented) {
+-            focus(previouslyFocusedElement ?? document.body, { select: true });
++            const target = isReturnTarget(previouslyFocusedElement) ? previouslyFocusedElement :
++              isReturnTarget(parentContainer) ? parentContainer : null;
++            focus(target, { select: true });
+           }
+           container.removeEventListener(AUTOFOCUS_ON_UNMOUNT, onUnmountAutoFocus);
+-          focusScopesStack.remove(focusScope);
++          if (generation === focusScope.generation) focusScopesStack.remove(focusScope);
+         }, 0);
+       };
+     }
+@@ -202,6 +216,9 @@ function isHidden(node, { upTo }) {
+   }
+   return false;
+ }
++function isReturnTarget(element) {
++  return element?.isConnected && !element.matches(":disabled") && !element.closest("[inert], [hidden]");
++}
+ function isSelectableInput(element) {
+   return element instanceof HTMLInputElement && "select" in element;
+ }
+@@ -217,6 +234,11 @@ var focusScopesStack = createFocusScopesStack();
+ function createFocusScopesStack() {
+   let stack = [];
+   return {
++    activeContainer() { return stack[0]?.container ?? null; },
++    hasLiveScopeAbove(focusScope) {
++      const index = stack.indexOf(focusScope);
++      return stack.slice(0, index < 0 ? 0 : index).some((scope) => scope.container?.isConnected);
++    },
+     add(focusScope) {
+       const activeFocusScope = stack[0];
+       if (focusScope !== activeFocusScope) {
+diff --git a/dist/index.mjs b/dist/index.mjs
+index e39d5c9105b3f8060d037bf5490843d20d1c859a..bbf0d0b9a5eb41919625216765bdee3359e340d5 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -25,6 +25,8 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+   const composedRefs = useComposedRefs(forwardedRef, (node) => setContainer(node));
+   const focusScope = React.useRef({
+     paused: false,
++    container: null,
++    generation: 0,
+     pause() {
+       this.paused = true;
+     },
+@@ -70,6 +72,9 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+   }, [trapped, container, focusScope.paused]);
+   React.useEffect(() => {
+     if (container) {
++      const parentContainer = focusScopesStack.activeContainer();
++      const generation = ++focusScope.generation;
++      focusScope.container = container;
+       focusScopesStack.add(focusScope);
+       const previouslyFocusedElement = document.activeElement;
+       const hasFocusedCandidate = container.contains(previouslyFocusedElement);
+@@ -88,13 +93,22 @@ var FocusScope = React.forwardRef((props, forwardedRef) => {
+         container.removeEventListener(AUTOFOCUS_ON_MOUNT, onMountAutoFocus);
+         setTimeout(() => {
+           const unmountEvent = new CustomEvent(AUTOFOCUS_ON_UNMOUNT, EVENT_OPTIONS);
++          // A departing scope cannot overwrite a newer control or reopened scope.
++          // Its parent host may only be the trap's automatic orphan recovery.
++          const activeElement = container.ownerDocument.activeElement;
++          const mayRestore = generation === focusScope.generation && !focusScopesStack.hasLiveScopeAbove(focusScope) &&
++            (activeElement === container.ownerDocument.body || container.contains(activeElement) ||
++             activeElement === parentContainer);
++          if (!mayRestore) unmountEvent.preventDefault();
+           container.addEventListener(AUTOFOCUS_ON_UNMOUNT, onUnmountAutoFocus);
+           container.dispatchEvent(unmountEvent);
+           if (!unmountEvent.defaultPrevented) {
+-            focus(previouslyFocusedElement ?? document.body, { select: true });
++            const target = isReturnTarget(previouslyFocusedElement) ? previouslyFocusedElement :
++              isReturnTarget(parentContainer) ? parentContainer : null;
++            focus(target, { select: true });
+           }
+           container.removeEventListener(AUTOFOCUS_ON_UNMOUNT, onUnmountAutoFocus);
+-          focusScopesStack.remove(focusScope);
++          if (generation === focusScope.generation) focusScopesStack.remove(focusScope);
+         }, 0);
+       };
+     }
+@@ -166,6 +180,9 @@ function isHidden(node, { upTo }) {
+   }
+   return false;
+ }
++function isReturnTarget(element) {
++  return element?.isConnected && !element.matches(":disabled") && !element.closest("[inert], [hidden]");
++}
+ function isSelectableInput(element) {
+   return element instanceof HTMLInputElement && "select" in element;
+ }
+@@ -181,6 +198,11 @@ var focusScopesStack = createFocusScopesStack();
+ function createFocusScopesStack() {
+   let stack = [];
+   return {
++    activeContainer() { return stack[0]?.container ?? null; },
++    hasLiveScopeAbove(focusScope) {
++      const index = stack.indexOf(focusScope);
++      return stack.slice(0, index < 0 ? 0 : index).some((scope) => scope.container?.isConnected);
++    },
+     add(focusScope) {
+       const activeFocusScope = stack[0];
+       if (focusScope !== activeFocusScope) {

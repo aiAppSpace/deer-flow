@@ -225,8 +225,13 @@ function ProjectDocumentShelf({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild>
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+            asChild
+          >
             <Link href="/workspace/trash">
               <Trash2 className="size-4" />
               {t.projects.viewTrash}
@@ -249,6 +254,7 @@ function ProjectDocumentShelf({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
                 disabled={isUploading}
                 onClick={() => fileInputRef.current?.click()}
               >
@@ -425,7 +431,7 @@ function ProjectDocumentRow({
     // a row whose bytes are gone renders as content missing at list render,
     // with move-to-trash as its only document action in active projects.
     return (
-      <li className="flex items-center gap-3 rounded-md border p-3">
+      <li className="flex flex-wrap items-center gap-3 rounded-md border p-3">
         {getFileIcon(document.name, "size-5 shrink-0")}
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <span className="truncate text-sm">{document.name}</span>
@@ -434,7 +440,12 @@ function ProjectDocumentRow({
           </Badge>
         </div>
         {!isArchived && (
-          <Button variant="ghost" size="sm" onClick={onTrash}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+            onClick={onTrash}
+          >
             <Trash2 className="size-4" />
             {t.projects.moveDocumentToTrash}
           </Button>
@@ -443,13 +454,16 @@ function ProjectDocumentRow({
     );
   }
   return (
-    <li className="flex items-center gap-3 rounded-md border p-3">
+    <li className="flex flex-wrap items-center gap-3 rounded-md border p-3">
       {getFileIcon(document.name, "size-5 shrink-0")}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{document.name}</span>
           {provenance && (
-            <Badge variant="secondary" className="shrink-0">
+            <Badge
+              variant="secondary"
+              className="max-w-full shrink-0 [overflow-wrap:anywhere] whitespace-normal"
+            >
               {provenance}
             </Badge>
           )}
@@ -460,11 +474,21 @@ function ProjectDocumentRow({
           {formatTimeAgo(document.updated_at)}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <Button variant="ghost" size="sm" onClick={onPreview}>
+      <div className="flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+          onClick={onPreview}
+        >
           {t.common.preview}
         </Button>
-        <Button variant="ghost" size="sm" asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+          asChild
+        >
           <a
             href={urlOfProjectDocumentContent(project.id, document.id, {
               download: true,
@@ -475,12 +499,22 @@ function ProjectDocumentRow({
             {t.common.download}
           </a>
         </Button>
-        <Button variant="ghost" size="sm" onClick={onAttach}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+          onClick={onAttach}
+        >
           <Paperclip className="size-4" />
           {t.projects.attachToThread}
         </Button>
         {!isArchived && (
-          <Button variant="ghost" size="sm" onClick={onTrash}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+            onClick={onTrash}
+          >
             <Trash2 className="size-4" />
             {t.projects.moveDocumentToTrash}
           </Button>
@@ -683,10 +717,13 @@ function AttachToThreadDialog({
   // honors ``archived`` and ``limit``/``offset``): archived chats never
   // occupy a slot, and each page keeps loading raw rows until it fills or
   // the backend is exhausted.
-  const threadsQuery = useInfiniteThreads({
-    archived:
-      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? undefined : false,
-  });
+  const threadsQuery = useInfiniteThreads(
+    {
+      archived:
+        env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ? undefined : false,
+    },
+    { enabled: document !== null },
+  );
   const writableThreads = (threadsQuery.data?.pages ?? [])
     .flatMap((page) => page)
     .filter((thread) => !isThreadArchived(thread));
@@ -831,7 +868,12 @@ function ConversationFileGroup({
   const [saveTarget, setSaveTarget] = useState<ProjectThreadFile | null>(null);
   const [shelfName, setShelfName] = useState("");
 
-  const openSaveDialog = (file: ProjectThreadFile) => {
+  const saveEntry = useRef<HTMLButtonElement | null>(null);
+  const openSaveDialog = (
+    file: ProjectThreadFile,
+    trigger: HTMLButtonElement,
+  ) => {
+    saveEntry.current = trigger;
     setSaveTarget(file);
     setShelfName(file.name);
   };
@@ -876,7 +918,7 @@ function ConversationFileGroup({
           return (
             <li
               key={`${file.kind}:${file.name}`}
-              className="flex items-center gap-3 rounded-md border p-2"
+              className="flex flex-wrap items-center gap-3 rounded-md border p-2"
             >
               {getFileIcon(file.name, "size-5 shrink-0")}
               <div className="flex min-w-0 flex-1 flex-col">
@@ -887,8 +929,13 @@ function ConversationFileGroup({
                   {formatTimeAgo(file.modified_at)}
                 </span>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button variant="ghost" size="sm" asChild>
+              <div className="flex max-w-full min-w-0 shrink-0 flex-wrap items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+                  asChild
+                >
                   <a
                     href={previewUrl}
                     target="_blank"
@@ -901,7 +948,10 @@ function ConversationFileGroup({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => openSaveDialog(file)}
+                    className="h-auto min-h-8 max-w-full [overflow-wrap:anywhere] whitespace-normal"
+                    onClick={(event) =>
+                      openSaveDialog(file, event.currentTarget)
+                    }
                   >
                     {t.projects.saveToProject}
                   </Button>
@@ -933,7 +983,17 @@ function ConversationFileGroup({
         open={saveTarget !== null}
         onOpenChange={(open) => !open && setSaveTarget(null)}
       >
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent
+          className="sm:max-w-[425px]"
+          onCloseAutoFocus={(event) => {
+            const entry = saveEntry.current;
+            saveEntry.current = null;
+            if (entry?.isConnected) {
+              event.preventDefault();
+              entry.focus();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{t.projects.saveToProject}</DialogTitle>
           </DialogHeader>

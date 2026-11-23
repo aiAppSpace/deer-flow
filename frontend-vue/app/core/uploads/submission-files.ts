@@ -18,8 +18,14 @@ export async function prepareSubmissionFiles(options: {
   threadId: string;
   files: File[];
   cache: SubmissionFileCache;
-  upload?: (threadId: string, files: File[]) => Promise<UploadResponse>;
+  signal?: AbortSignal;
+  upload?: (
+    threadId: string,
+    files: File[],
+    options?: { signal?: AbortSignal },
+  ) => Promise<UploadResponse>;
 }): Promise<FileInMessage[]> {
+  options.signal?.throwIfAborted();
   let threadCache = options.cache.get(options.threadId);
   if (!threadCache) {
     threadCache = new WeakMap<File, FileInMessage>();
@@ -28,10 +34,11 @@ export async function prepareSubmissionFiles(options: {
 
   const missing = options.files.filter((file) => !threadCache.has(file));
   if (missing.length > 0) {
-    const response = await (options.upload ?? uploadFiles)(
-      options.threadId,
-      missing,
-    );
+    const upload = options.upload ?? uploadFiles;
+    const response = options.signal
+      ? await upload(options.threadId, missing, { signal: options.signal })
+      : await upload(options.threadId, missing);
+    options.signal?.throwIfAborted();
     if (response.files.length !== missing.length) {
       throw new Error(
         response.message ||

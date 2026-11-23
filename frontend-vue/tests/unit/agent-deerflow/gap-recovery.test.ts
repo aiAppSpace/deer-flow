@@ -164,7 +164,10 @@ describe("gap 恢复（05 A4/A5/A6）", () => {
     const run = runner(recorder, { loadDurableState });
     const outputs = await drain(run);
 
-    expect(loadDurableState).toHaveBeenCalledWith(HANDLE);
+    expect(loadDurableState).toHaveBeenCalledWith(
+      HANDLE,
+      expect.any(AbortSignal),
+    );
     // 续传的游标是 gap 报的 latest_available_event_id，不是流里最后一帧的 id。
     expect(recorder.resumes).toEqual([{ cursor: "cursor-9" }]);
     expect(run.getRejoinCount()).toBe(1);
@@ -261,7 +264,7 @@ describe("gap 恢复（05 A4/A5/A6）", () => {
     expect(last?.status).toBe("failed");
   });
 
-  it("durable state 读失败不把 run 判死，继续 rejoin", async () => {
+  it("durable state failure remains visible and does not resume from a missing snapshot", async () => {
     const recorder = scriptedProtocol([GAP_SEGMENT, DONE_SEGMENT]);
     const run = runner(recorder, {
       loadDurableState: async () => {
@@ -269,8 +272,86 @@ describe("gap 恢复（05 A4/A5/A6）", () => {
       },
     });
     const outputs = await drain(run);
-    expect(recorder.resumes).toHaveLength(1);
+    expect(recorder.resumes).toHaveLength(0);
+    expect(states(outputs).at(-1)).toMatchObject({
+      status: "failed",
+      error: {
+        kind: "replay_gap",
+        cause: { message: "checkpoint read failed" },
+      },
+    });
+  });
+
+  it("a missing terminal stream accepts null cursors and rejoins until the observer end", async () => {
+    const gap = JSON.parse(gapPayload());
+    gap.earliest_available_event_id = null;
+    gap.latest_available_event_id = null;
+    const recorder = scriptedProtocol([
+      `event: gap\ndata: ${JSON.stringify(gap)}\n\n`,
+      "event: end\ndata: null\n\n",
+    ]);
+    const outputs = await drain(runner(recorder));
+    expect(recorder.resumes).toEqual([{ cursor: undefined }]);
     expect(states(outputs).at(-1)?.status).toBe("completed");
+    expect(recorder.creates).toBe(1);
+    expect(recorder.cancels).toBe(0);
+  });
+
+  it("stop during durable reload cancels the known run instead of stopping an already finished segment", async () => {
+    const recorder = scriptedProtocol([GAP_SEGMENT]);
+    recorder.protocol.cancel = async () => {
+      recorder.cancels += 1;
+      return { kind: "terminal", outcome: "cancelled" };
+    };
+    let loading!: () => void;
+    const started = new Promise<void>((resolve) => {
+      loading = resolve;
+    });
+    const run = createGapAwareRun({
+      protocol: recorder.protocol,
+      session: {
+        classifyEvent: classifyDeerFlowEvent,
+        maxBufferBytes: 1024,
+        maxReconnects: 0,
+      },
+      loadDurableState: async (_handle, signal) => {
+        loading();
+        return new Promise((_, reject) =>
+          signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true },
+          ),
+        );
+      },
+    });
+    const pending = drain(run);
+    await started;
+    run.stop();
+    const outputs = await pending;
+    expect(recorder.cancels).toBe(1);
+    expect(recorder.creates).toBe(1);
+    expect(states(outputs).at(-1)?.status).toBe("cancelled");
+  });
+
+  it("terminal durable status never skips a late error frame before end", async () => {
+    const recorder = scriptedProtocol([
+      GAP_SEGMENT,
+      'event: error\ndata: {"message":"finalization failed"}\n\n',
+    ]);
+    const outputs = await drain(
+      runner(recorder, {
+        loadDurableState: async () => ({ status: "success", messages: [] }),
+      }),
+    );
+    expect(recorder.resumes).toHaveLength(1);
+    expect(states(outputs).at(-1)).toMatchObject({
+      status: "failed",
+      error: { kind: "backend_error", message: "finalization failed" },
+    });
+    expect(states(outputs).some((state) => state.status === "completed")).toBe(
+      false,
+    );
   });
 
   it("05 L5：重连额度跨 gap 段累计，不因为新建会话而归零", async () => {
@@ -285,6 +366,24 @@ describe("gap 恢复（05 A4/A5/A6）", () => {
       "reconnect_exhausted",
     );
     expect(run.getRejoinCount()).toBe(1);
+  });
+
+  it("adds reconnect attempts across multiple gap segments instead of taking their maximum", async () => {
+    const recorder = scriptedProtocol([
+      EOF_SEGMENT,
+      GAP_SEGMENT,
+      EOF_SEGMENT,
+      GAP_SEGMENT,
+      EOF_SEGMENT,
+    ]);
+    const run = runner(recorder, { maxReconnects: 2 });
+    const last = states(await drain(run)).at(-1);
+    // Two explicit gap joins plus two network reconnects exhaust the budget.
+    expect(recorder.resumes).toHaveLength(4);
+    expect(last).toMatchObject({
+      status: "failed",
+      error: { kind: "reconnect_exhausted" },
+    });
   });
 
   it("rejoin 预算可调，用尽时报的是 replay_gap 而不是 completed", async () => {

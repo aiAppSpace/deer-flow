@@ -22,30 +22,15 @@ import {
 import AboutSettings from "@/components/workspace/settings/AboutSettings.vue";
 import AccountSettings from "@/components/workspace/settings/AccountSettings.vue";
 import AppearanceSettings from "@/components/workspace/settings/AppearanceSettings.vue";
-import ToolSettings from "@/components/workspace/settings/ToolSettings.vue";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { setDeerFlowRuntimeOptions } from "@/core/config";
 
 const mocks = vi.hoisted(() => ({
   fetchWithAuth: vi.fn(),
-  useMCPConfig: vi.fn(),
   useSettingsPermissions: vi.fn(),
-  mcpServerMutate: vi.fn(),
 }));
 
 vi.mock("@/core/api/fetcher", () => ({ fetch: mocks.fetchWithAuth }));
-vi.mock("@/composables/useMCPConfig", async () => {
-  const { ref: makeRef } = await import("vue");
-  return {
-    useMCPConfig: mocks.useMCPConfig,
-    // 增删改那份 mutation：这一组用例只看开关和空态，给个惰性替身就够。
-    useMCPServerMutations: () => ({
-      mutateAsync: mocks.mcpServerMutate,
-      isPending: makeRef(false),
-      error: makeRef(null),
-    }),
-  };
-});
 vi.mock("@/composables/useSettingsPermissions", () => ({
   useSettingsPermissions: mocks.useSettingsPermissions,
 }));
@@ -73,6 +58,13 @@ beforeEach(() => {
   mocks.fetchWithAuth.mockReset().mockResolvedValue({
     ok: true,
     json: async () => ({ email: "a@b.test", system_role: "admin" }),
+  });
+  mocks.useSettingsPermissions.mockReturnValue({
+    authDisabled: false,
+    session: ref({
+      tag: "authenticated",
+      user: { id: "account", email: "a@b.test", system_role: "admin" },
+    }),
   });
   setPreference.mockReset();
   setLocale.mockReset();
@@ -221,38 +213,6 @@ describe("AppearanceSettings", () => {
     wrapper.getComponent(Select).vm.$emit("update:modelValue", "kl-KL");
     await flushPromises();
     expect(setLocale).toHaveBeenCalledTimes(1);
-    wrapper.unmount();
-  });
-});
-
-describe("ToolSettings", () => {
-  // 空态是一段裸文本，不是带边框的卡片，也不是 `<p>`（上游 tool-settings-page.tsx:53）。
-  it("renders the empty state as bare text rather than a paragraph", async () => {
-    mocks.useMCPConfig.mockReturnValue({
-      config: ref({ mcp_servers: {} }),
-      loading: ref(false),
-      error: ref(null),
-      mutationError: ref(null),
-      pending: ref(false),
-      toggle: vi.fn(),
-    });
-    mocks.useSettingsPermissions.mockReturnValue({
-      canReadMcp: ref(true),
-      canManageMcp: ref(true),
-      permissions: ref({ state: "authenticated", role: "admin" }),
-    });
-    const wrapper = mount(ToolSettings);
-    await flushPromises();
-
-    const empty = wrapper
-      .findAll("div")
-      .filter((node) => node.text() === enUS.settings.tools.empty);
-    expect(empty.length).toBeGreaterThan(0);
-    expect(
-      wrapper
-        .findAll("p")
-        .filter((n) => n.text() === enUS.settings.tools.empty),
-    ).toHaveLength(0);
     wrapper.unmount();
   });
 });

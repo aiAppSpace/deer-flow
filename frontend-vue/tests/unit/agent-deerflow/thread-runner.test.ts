@@ -60,6 +60,86 @@ function runnerFor(
 }
 
 describe("createThreadRunner", () => {
+  it("aborting an in-flight creation allows a fresh run to notify the same subscriber", async () => {
+    const onSnapshot = vi.fn();
+    let first = true;
+    const create: DeerFlowProtocol["create"] = async (_input, signal) => {
+      if (!first) return { handle: HANDLE, response: sse(STREAM) };
+      first = false;
+      return new Promise((_, reject) =>
+        signal.addEventListener(
+          "abort",
+          () => reject(new DOMException("aborted", "AbortError")),
+          { once: true },
+        ),
+      );
+    };
+    const runner = runnerFor(STREAM, {
+      onSnapshot,
+      protocol: { ...protocolOf(STREAM), create },
+    });
+    const pending = runner.submit({ threadId: "t-1", payload: {} });
+    await vi.waitFor(() =>
+      expect(runner.getSessionState().status).toBe("creating"),
+    );
+    runner.abort();
+    await pending;
+    await runner.submit({ threadId: "t-1", payload: {} });
+    expect(runner.getWireMessages().map((message) => message.id)).toEqual([
+      "m1",
+      "m2",
+    ]);
+    expect(onSnapshot).toHaveBeenCalled();
+    expect(runner.getSessionState().status).toBe("completed");
+  });
+
+  it("joining an existing run hydrates its human input before the first replayed AI chunk", async () => {
+    const create = vi.fn();
+    const resume = vi.fn(async () =>
+      sse(
+        'event: messages\ndata: [{"id":"ai","type":"ai","content":"answer"},{}]\n\nevent: end\ndata: null\n\n',
+      ),
+    );
+    const runner = runnerFor("", {
+      protocol: { ...protocolOf(""), create, resume },
+      loadDurableState: async () => ({
+        messages: [{ id: "human", type: "human", content: "question" }],
+      }),
+    });
+    await runner.join(HANDLE);
+    expect(create).not.toHaveBeenCalled();
+    expect(resume).toHaveBeenCalledWith(
+      HANDLE,
+      undefined,
+      expect.any(AbortSignal),
+    );
+    expect(runner.getWireMessages().map((message) => message.id)).toEqual([
+      "human",
+      "ai",
+    ]);
+  });
+
+  it("abort keeps snapshot subscriptions alive for a later submission; dispose releases them", async () => {
+    const onSnapshot = vi.fn();
+    const cancel = vi.fn(async () => ({ kind: "accepted" as const }));
+    const runner = runnerFor(STREAM, {
+      onSnapshot,
+      protocol: { ...protocolOf(STREAM), cancel },
+    });
+    await runner.submit({ threadId: "t-1", payload: {} });
+    runner.abort();
+    const beforeRetry = onSnapshot.mock.calls.length;
+    await runner.submit({ threadId: "t-1", payload: {} });
+    expect(onSnapshot.mock.calls.length).toBeGreaterThan(beforeRetry);
+    expect(runner.getSessionState().status).toBe("completed");
+    expect(cancel).not.toHaveBeenCalled();
+
+    runner.dispose();
+    const afterDispose = onSnapshot.mock.calls.length;
+    runner.reset();
+    expect(onSnapshot).toHaveBeenCalledTimes(afterDispose);
+  });
+
   it("跑完一条流之后消息按协议顺序落地，delta 是追加不是覆盖", async () => {
     const runner = runnerFor(STREAM);
     await runner.submit({ threadId: "t-1", payload: {} });
@@ -311,5 +391,216 @@ describe("createThreadRunner · checkpoint 种子", () => {
     // 适配器把它们丢掉的话，换哪条路由都一样。
     expect(Reflect.get(message ?? {}, "run_id")).toBe("run-a");
     expect(message?.additional_kwargs?.turn_duration).toBe(12);
+  });
+});
+
+function controlledStream() {
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      start(value) {
+        controller = value;
+      },
+    }),
+    { headers: { "Content-Type": "text/event-stream" } },
+  );
+  return {
+    response,
+    emit(event: string, payload: unknown, id = event) {
+      controller.enqueue(
+        new TextEncoder().encode(
+          `event: ${event}\ndata: ${JSON.stringify(payload)}\nid: ${id}\n\n`,
+        ),
+      );
+    },
+    disconnect() {
+      controller.close();
+    },
+  };
+}
+
+describe("current run assistant ownership", () => {
+  it("uses normalized message actions, excludes durable values and other roles, and retires at settlement", async () => {
+    const stream = controlledStream();
+    const runner = runnerFor("", {
+      protocol: {
+        ...protocolOf(""),
+        create: async () => ({ handle: HANDLE, response: stream.response }),
+      },
+    });
+    runner.seedDurableState({
+      messages: [{ type: "ai", id: "history", content: "History" }],
+    });
+    const pending = runner.submit({ threadId: "t-1", payload: {} });
+    try {
+      await vi.waitFor(() =>
+        expect(runner.getSessionState().status).toBe("streaming"),
+      );
+      expect([...runner.getStreamingMessageIds()]).toEqual([]);
+      stream.emit("updates", {
+        agent: { messages: [{ type: "ai", id: "durable", content: "Saved" }] },
+      });
+      await vi.waitFor(() =>
+        expect(runner.getWireMessages().map((message) => message.id)).toContain(
+          "durable",
+        ),
+      );
+      expect([...runner.getStreamingMessageIds()]).toEqual([]);
+      stream.emit(
+        "messages",
+        [{ type: "ai", id: "live", content: "Part" }, {}],
+        "chunk-1",
+      );
+      await vi.waitFor(() =>
+        expect([...runner.getStreamingMessageIds()]).toEqual(["live"]),
+      );
+      const beforeNextChunk = runner.getStreamingMessageIds();
+      stream.emit(
+        "messages",
+        [{ type: "human", id: "human", content: "Question" }, {}],
+        "chunk-2",
+      );
+      stream.emit(
+        "messages",
+        [
+          { type: "tool", id: "tool", tool_call_id: "call", content: "Result" },
+          {},
+        ],
+        "chunk-3",
+      );
+      stream.emit(
+        "messages",
+        [{ type: "ai", content: "Without supplied ID" }, {}],
+        "chunk-4",
+      );
+      await vi.waitFor(() =>
+        expect([...runner.getStreamingMessageIds()]).toEqual([
+          "live",
+          "generated",
+        ]),
+      );
+      expect([...beforeNextChunk]).toEqual(["live"]);
+      stream.emit("values", {
+        messages: [{ type: "ai", id: "live", content: "Final" }],
+      });
+      await vi.waitFor(() =>
+        expect(runner.getWireMessages()[0]?.content).toBe("Final"),
+      );
+      expect(runner.getStreamingMessageIds().has("live")).toBe(true);
+      stream.emit("end", null);
+      await pending;
+      expect(runner.getSessionState().status).toBe("completed");
+      expect([...runner.getStreamingMessageIds()]).toEqual([]);
+    } finally {
+      runner.dispose();
+      await pending;
+    }
+  });
+
+  for (const ending of [
+    "abort",
+    "reset",
+    "dispose",
+    "stop",
+    "error",
+  ] as const) {
+    it(`retires current message ownership on ${ending}`, async () => {
+      const stream = controlledStream();
+      const runner = runnerFor("", {
+        protocol: {
+          ...protocolOf(""),
+          create: async () => ({ handle: HANDLE, response: stream.response }),
+        },
+      });
+      const pending = runner.submit({ threadId: "t-1", payload: {} });
+      try {
+        await vi.waitFor(() =>
+          expect(runner.getSessionState().status).toBe("streaming"),
+        );
+        stream.emit("messages", [
+          { type: "ai", id: "live", content: "Part" },
+          {},
+        ]);
+        await vi.waitFor(() =>
+          expect(runner.getStreamingMessageIds().has("live")).toBe(true),
+        );
+        if (ending === "error") stream.emit("error", { message: "Failed" });
+        else runner[ending]();
+        await pending;
+        expect([...runner.getStreamingMessageIds()]).toEqual([]);
+      } finally {
+        runner.dispose();
+        await pending;
+      }
+    });
+  }
+
+  it("keeps the same run's ownership through transport reconnect and clears it before the next run", async () => {
+    const first = controlledStream();
+    const resumed = controlledStream();
+    const next = controlledStream();
+    let creation = 0;
+    const resume = vi.fn(async () => resumed.response);
+    const runner = runnerFor("", {
+      sleep: async () => {},
+      protocol: {
+        ...protocolOf(""),
+        create: async () => ({
+          handle: creation++ === 0 ? HANDLE : { ...HANDLE, runId: "r-2" },
+          response: creation === 1 ? first.response : next.response,
+        }),
+        resume,
+        inspect: async () => ({ terminal: false }),
+      },
+    });
+    const pending = runner.submit({ threadId: "t-1", payload: {} });
+    let nextPending: Promise<void> | undefined;
+    try {
+      await vi.waitFor(() =>
+        expect(runner.getSessionState().status).toBe("streaming"),
+      );
+      first.emit(
+        "messages",
+        [{ type: "ai", id: "first", content: "Before reconnect" }, {}],
+        "cursor-1",
+      );
+      await vi.waitFor(() =>
+        expect(runner.getStreamingMessageIds().has("first")).toBe(true),
+      );
+      first.disconnect();
+      await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
+      expect(runner.getStreamingMessageIds().has("first")).toBe(true);
+      resumed.emit(
+        "messages",
+        [{ type: "ai", id: "second", content: "After reconnect" }, {}],
+        "cursor-2",
+      );
+      await vi.waitFor(() =>
+        expect([...runner.getStreamingMessageIds()]).toEqual([
+          "first",
+          "second",
+        ]),
+      );
+      resumed.emit("end", null);
+      await pending;
+      nextPending = runner.submit({ threadId: "t-1", payload: {} });
+      expect([...runner.getStreamingMessageIds()]).toEqual([]);
+      await vi.waitFor(() =>
+        expect(runner.getSessionState().status).toBe("streaming"),
+      );
+      next.emit("messages", [
+        { type: "ai", id: "third", content: "New run" },
+        {},
+      ]);
+      await vi.waitFor(() =>
+        expect([...runner.getStreamingMessageIds()]).toEqual(["third"]),
+      );
+      next.emit("end", null);
+      await nextPending;
+    } finally {
+      runner.dispose();
+      await pending;
+      await nextPending;
+    }
   });
 });

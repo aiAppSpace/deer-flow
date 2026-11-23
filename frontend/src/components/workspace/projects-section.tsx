@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -236,22 +236,36 @@ export function ProjectsSection() {
   const groupByProject = settings.projectsDisplayMode === "grouped";
   const { mutate: createProject, isPending: isCreating } = useCreateProject();
 
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpenState] = useState(false);
+  const creationGeneration = useRef(0);
+  const setCreateDialogOpen = useCallback((open: boolean) => {
+    creationGeneration.current += 1;
+    setCreateDialogOpenState(open);
+  }, []);
+  useEffect(
+    () => () => {
+      creationGeneration.current += 1;
+    },
+    [],
+  );
   const [createName, setCreateName] = useState("");
 
   const handleCreateSubmit = useCallback(() => {
     const name = createName.trim();
-    if (!name || isCreating) {
+    if (!createDialogOpen || !name || isCreating) {
       return;
     }
+    const generation = creationGeneration.current;
     createProject(
       { name },
       {
         onSuccess: () => {
+          if (generation !== creationGeneration.current) return;
           setCreateDialogOpen(false);
           setCreateName("");
         },
         onError: (error) => {
+          if (generation !== creationGeneration.current) return;
           toast.error(
             error instanceof Error && error.message
               ? error.message
@@ -260,7 +274,14 @@ export function ProjectsSection() {
         },
       },
     );
-  }, [createProject, createName, isCreating, t.projects.createFailed]);
+  }, [
+    createProject,
+    createName,
+    createDialogOpen,
+    isCreating,
+    setCreateDialogOpen,
+    t.projects.createFailed,
+  ]);
 
   // Static-demo mode has no Gateway and no projects: hide the whole section
   // (New project button, grouped toggle, and groups are all dead actions).

@@ -17,6 +17,7 @@
                    它只收 completed/cancelled/failed 三选一。
 */
 
+import { runInvocationForInput } from "@/core/diagnostics/run-observation";
 import type {
   CancelResult,
   InspectedRun,
@@ -45,6 +46,8 @@ export interface DeerFlowRunInput {
   threadId: string;
   /** 原样转发给 Gateway 的 run 请求体（assistant_id / input / context / …）。 */
   payload: Record<string, unknown>;
+  /** Reuse only when deliberately retrying the same immutable submission. */
+  idempotencyKey?: string;
 }
 
 /**
@@ -110,17 +113,27 @@ export function createDeerFlowRunProtocol(
 
   return {
     async create(input, signal): Promise<OpenedStream<DeerFlowRunHandle>> {
+      const observation = runInvocationForInput(input);
       // 05 A2：含不支持模式时必须**在 HTTP 之前**抛错，不能部分转发、
       // 也不能静默降级为 values。这两行的位置就是那条不变式。
       assertSupportedStreamModes(input.payload);
+      if (input.payload.stream_resumable === true) {
+        throw new AgentStreamError(
+          "http",
+          "Gateway does not support stream_resumable=true.",
+        );
+      }
 
       const response = await fetchImpl(runStreamUrl(baseUrl, input.threadId), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
+          ...(input.idempotencyKey
+            ? { "Idempotency-Key": input.idempotencyKey }
+            : {}),
         },
-        body: JSON.stringify(input.payload),
+        body: JSON.stringify({ on_disconnect: "continue", ...input.payload }),
         signal,
       });
       if (!response.ok) await failFromResponse(response, "Run creation");
@@ -134,6 +147,7 @@ export function createDeerFlowRunProtocol(
           "Gateway did not return a Content-Location for the new run.",
         );
       }
+      observation?.received(handle, handle.threadId, handle.runId);
       return { handle, response };
     },
 
@@ -152,7 +166,7 @@ export function createDeerFlowRunProtocol(
       return response;
     },
 
-    async cancel(handle, _cursor, signal): Promise<CancelResult> {
+    async cancel(handle, cursor, signal): Promise<CancelResult> {
       const response = await fetchImpl(runCancelUrl(baseUrl, handle), {
         method: "POST",
         signal,
@@ -169,6 +183,38 @@ export function createDeerFlowRunProtocol(
         return { kind: "drain", response };
       }
       if (response.ok) return { kind: "accepted" };
+      if (response.status === 409) {
+        const body: unknown = await response
+          .clone()
+          .json()
+          .catch(() => null);
+        const detail =
+          typeof body === "object" && body !== null
+            ? Reflect.get(body, "detail")
+            : undefined;
+        const match =
+          typeof detail === "string"
+            ? /^Run (.+) is not cancellable \(status: (success|interrupted|error|timeout)\)$/.exec(
+                detail,
+              )
+            : null;
+        const status = match?.[1] === handle.runId ? match[2] : undefined;
+        const outcome = status ? DEERFLOW_DURABLE_STATUS[status] : undefined;
+        if (status && outcome) {
+          // The run finished before cancel won the race. Drain its tail; a
+          // terminal record alone is not proof that all stream events arrived.
+          const tail = await fetchImpl(runResumeUrl(baseUrl, handle), {
+            method: "GET",
+            headers: {
+              Accept: "text/event-stream",
+              ...(cursor ? { "Last-Event-ID": cursor } : {}),
+            },
+            signal,
+          });
+          if (!tail.ok) await failFromResponse(tail, "Run cancel tail");
+          return { kind: "drain", response: tail, outcome, reason: status };
+        }
+      }
       return failFromResponse(response, "Run cancel");
     },
 

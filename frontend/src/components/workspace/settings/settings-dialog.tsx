@@ -181,7 +181,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
       onOpenChange={(open) => props.onOpenChange?.(open)}
     >
       <DialogContent
-        className="flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col overflow-y-hidden! sm:max-w-5xl md:max-w-6xl [@media(max-height:360px)]:h-[calc(100dvh-32px)] [@media(max-height:360px)]:max-h-[calc(100dvh-32px)] [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:p-[8px]"
+        className="[container-type:size] flex h-[75vh] max-h-[calc(100vh-2rem)] flex-col overflow-y-auto! [container-name:settings-dialog] sm:max-w-5xl md:max-w-6xl [@media(max-height:360px)]:h-[calc(100dvh-32px)] [@media(max-height:360px)]:max-h-[calc(100dvh-32px)] [@media(max-height:360px)]:gap-[8px] [@media(max-height:360px)]:p-[8px]"
         aria-describedby={undefined}
         onOpenAutoFocus={focusActiveSection}
       >
@@ -200,7 +200,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           edge landed at 541 while the dialog ends at 344 (`overflow: visible`),
           i.e. the panel ran 181px past the viewport. Mirrored in the Vue app.
         */}
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 [@media(max-height:360px)]:grid-rows-[minmax(1rem,1fr)_minmax(1rem,1fr)] md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 max-md:flex-none md:grid-cols-[220px_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)] [@container_settings-dialog_(height<28rem)]:flex-none [@container_settings-dialog_(height<28rem)]:grid-rows-[auto]">
           <nav className="bg-sidebar min-h-0 min-w-0 overflow-x-hidden overflow-y-auto rounded-lg border p-2">
             <ul className="min-w-0 space-y-1 pr-1">
               {sections.map(({ id, label, icon: Icon }) => {
@@ -237,7 +237,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
               })}
             </ul>
           </nav>
-          <ScrollArea className="h-full min-h-0 min-w-0 rounded-lg border [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0!">
+          <ScrollArea className="h-full min-h-0 min-w-0 rounded-lg border max-md:h-auto max-md:[&_[data-slot=scroll-area-viewport]]:h-auto max-md:[&_[data-slot=scroll-area-viewport]]:max-h-[100cqh] [&_[data-slot=scroll-area-viewport]>div]:block! [&_[data-slot=scroll-area-viewport]>div]:w-full! [&_[data-slot=scroll-area-viewport]>div]:max-w-full! [&_[data-slot=scroll-area-viewport]>div]:min-w-0! [@container_settings-dialog_(height<28rem)]:h-auto [@container_settings-dialog_(height<28rem)]:[&_[data-slot=scroll-area-viewport]]:h-auto [@container_settings-dialog_(height<28rem)]:[&_[data-slot=scroll-area-viewport]]:max-h-[100cqh]">
             {/*
               Below sm the dialog is 343px wide and this panel's own padding
               plus a nested card's px-6 left the integrations column at 167px

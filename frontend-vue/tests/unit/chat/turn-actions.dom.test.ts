@@ -31,6 +31,7 @@ describe("AssistantTurnActions", () => {
     // 名字只差一两个字母的另外两颗。
     expect(wrapper.find(".lucide-git-branch-icon").exists()).toBe(false);
     expect(wrapper.find(".lucide-refresh-cw-icon").exists()).toBe(false);
+    expect(wrapper.get(".lucide-refresh-ccw").classes()).toContain("size-4");
   });
 
   /*
@@ -54,6 +55,39 @@ describe("AssistantTurnActions", () => {
     expect(row.classes()).not.toContain("text-muted-foreground");
     expect(row.classes()).toContain("gap-1");
   });
+
+  it("keeps mobile actions visible and reveals desktop actions for focus and open menus", () => {
+    const row = mount(AssistantTurnActions, { props: assistantProps }).get(
+      "[data-testid='assistant-turn-actions']",
+    );
+    expect(row.classes()).toEqual(
+      expect.arrayContaining([
+        "opacity-100",
+        "sm:opacity-0",
+        "sm:group-hover/assistant-turn:opacity-100",
+        "focus-within:opacity-100",
+        "has-[[data-state=open]]:opacity-100",
+      ]),
+    );
+    expect(row.classes()).not.toContain("opacity-0");
+  });
+
+  it("announces the copied state with the same icon size and restores the copy label", async () => {
+    const wrapper = mount(AssistantTurnActions, {
+      props: { ...assistantProps, copiedLabel: "Copied to clipboard" },
+    });
+    await wrapper.setProps({ copied: true });
+    expect(wrapper.findAll("button")[0]?.attributes("aria-label")).toBe(
+      "Copied to clipboard",
+    );
+    expect(wrapper.get(".lucide-check").classes()).toEqual(
+      expect.arrayContaining(["size-4", "text-green-500"]),
+    );
+    await wrapper.setProps({ copied: false });
+    expect(wrapper.findAll("button")[0]?.attributes("aria-label")).toBe(
+      assistantProps.copyLabel,
+    );
+  });
 });
 
 describe("HumanTurnActions", () => {
@@ -72,6 +106,7 @@ describe("HumanTurnActions", () => {
     expect(wrapper.find(".lucide-pencil").exists()).toBe(true);
     expect(wrapper.text()).not.toContain("Edit and rerun");
     expect(buttons[1]?.attributes("aria-label")).toBe("Edit and rerun");
+    expect(wrapper.get(".lucide-pencil").classes()).toContain("size-4");
   });
 
   /*
@@ -113,5 +148,20 @@ describe("HumanTurnActions", () => {
     });
 
     expect(wrapper.findAll("button")).toHaveLength(1);
+  });
+
+  it("announces the copied state and restores the original label", async () => {
+    const wrapper = mount(HumanTurnActions, {
+      props: { ...props, copiedLabel: "Copied to clipboard" },
+    });
+    await wrapper.setProps({ copied: true });
+    expect(wrapper.findAll("button")[0]?.attributes("aria-label")).toBe(
+      "Copied to clipboard",
+    );
+    expect(wrapper.get(".lucide-check").classes()).toContain("size-4");
+    await wrapper.setProps({ copied: false });
+    expect(wrapper.findAll("button")[0]?.attributes("aria-label")).toBe(
+      props.copyLabel,
+    );
   });
 });

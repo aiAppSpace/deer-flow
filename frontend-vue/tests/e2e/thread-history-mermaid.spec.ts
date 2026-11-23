@@ -91,6 +91,17 @@ test("historical run messages preview labelled dotted Mermaid arrows", async ({
     timeout: 15_000,
   });
   await expect(page.getByText("Mermaid Error:")).toHaveCount(0);
+  const codeBlock = page.locator('[data-streamdown="code-block"]');
+  await expect(codeBlock).toHaveAttribute("data-language", "typescript");
+  await expect(
+    codeBlock.locator('[data-streamdown="code-block-copy-button"]'),
+  ).toBeVisible();
+  await expect(
+    codeBlock.locator('[data-streamdown="code-block-download-button"]'),
+  ).toBeVisible();
+  await expect(
+    codeBlock.locator('[data-streamdown="code-block-body"] code'),
+  ).toHaveClass(/\[counter-reset:line\]/);
   const highlightedTokens = page.locator(
     '[data-streamdown="code-block-body"] code > span > span',
   );
@@ -106,6 +117,12 @@ test("historical run messages preview labelled dotted Mermaid arrows", async ({
   expect(new Set(tokenStyles.map(({ style }) => style)).size).toBeGreaterThan(
     1,
   );
+  expect(tokenStyles.some(({ style }) => style?.includes("--sdm-c:"))).toBe(
+    true,
+  );
+  expect(
+    tokenStyles.some(({ style }) => style?.includes("--shiki-dark:")),
+  ).toBe(true);
   expect(new Set(tokenStyles.map(({ color }) => color)).size).toBeGreaterThan(
     1,
   );

@@ -224,7 +224,7 @@ function statusIconClass(file: WorkspaceFileChange) {
             @click="open = true"
           >
             {{ $i18n.t.value.workspaceChanges.viewChanges }}
-            <ArrowUpRight :size="12" />
+            <ArrowUpRight class="size-3" />
           </button>
         </div>
       </div>
@@ -285,7 +285,7 @@ function statusIconClass(file: WorkspaceFileChange) {
     -->
     <SheetContent
       v-if="summary"
-      class="w-[min(92vw,900px)] gap-0 p-0 sm:max-w-[900px]"
+      class="[container-type:size] w-[min(92vw,900px)] gap-0 overflow-y-auto p-0 [container-name:workspace-changes] sm:max-w-[900px]"
       :close-label="$i18n.t.value.primitives.close"
       @open-auto-focus="focusPanelItself"
     >
@@ -317,7 +317,9 @@ function statusIconClass(file: WorkspaceFileChange) {
         2026-09-12 给 diff 三行挂上锚点时当场量到 `y Δ4`，在那之前
         这一整块面板里只有一个 heading 锚点，而它在 header 里、量不到这一处。
       -->
-      <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div
+        class="min-h-0 flex-1 overflow-y-auto px-5 py-4 [@container_workspace-changes_(height<28rem)]:flex-none"
+      >
         <p
           v-if="detailOwner.loading.value"
           class="text-muted-foreground text-sm"

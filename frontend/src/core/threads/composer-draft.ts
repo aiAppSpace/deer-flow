@@ -17,6 +17,25 @@ export type ComposerDraftStorage = Pick<
   "getItem" | "setItem" | "removeItem"
 >;
 
+/** Compare persisted content, independent of render/query object identities. */
+export function isSameComposerDraft(left: ComposerDraft, right: ComposerDraft) {
+  const leftReferences = left.conversationReferences ?? [];
+  const rightReferences = right.conversationReferences ?? [];
+  return (
+    left.text === right.text &&
+    left.skillName === right.skillName &&
+    leftReferences.length === rightReferences.length &&
+    leftReferences.every((reference, index) => {
+      const other = rightReferences[index];
+      return (
+        reference.threadId === other?.threadId &&
+        reference.title === other.title &&
+        reference.agentName === other.agentName
+      );
+    })
+  );
+}
+
 export function getSessionComposerDraftStorage(): ComposerDraftStorage | null {
   try {
     if (typeof window === "undefined") {

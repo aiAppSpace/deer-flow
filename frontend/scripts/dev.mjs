@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startNextServer, withLocalPort } from "./next-server.mjs";
 
 /**
  * @param {string} _platform
@@ -46,7 +46,10 @@ export function getNextDevArgs(
   env = process.env,
 ) {
   const nextArgs = extraArgs[0] === "--" ? extraArgs.slice(1) : extraArgs;
-  const args = ["dev", `--${getDevBundler(platform, env)}`, ...nextArgs];
+  const args = withLocalPort(
+    ["dev", `--${getDevBundler(platform, env)}`, ...nextArgs],
+    env,
+  );
   // Windows reserves dynamic TCP port ranges (Hyper-V / WSL2 / winnat) that can
   // make Next's default 0.0.0.0 bind fail with EACCES while a loopback bind on
   // the same port succeeds. Bind loopback by default; an explicit
@@ -57,37 +60,9 @@ export function getNextDevArgs(
   return args;
 }
 
-function startDevServer() {
-  const frontendDir = fileURLToPath(new URL("..", import.meta.url));
-  const nextBin = fileURLToPath(
-    new URL("../node_modules/next/dist/bin/next", import.meta.url),
-  );
-  const child = spawn(
-    process.execPath,
-    [nextBin, ...getNextDevArgs(process.platform, process.argv.slice(2))],
-    {
-      cwd: frontendDir,
-      env: process.env,
-      stdio: "inherit",
-    },
-  );
-
-  child.on("error", (error) => {
-    console.error(`Failed to start Next.js: ${error.message}`);
-    process.exitCode = 1;
-  });
-  child.on("exit", (code, signal) => {
-    if (signal) {
-      process.kill(process.pid, signal);
-      return;
-    }
-    process.exitCode = code ?? 1;
-  });
-}
-
 if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  startDevServer();
+  startNextServer(getNextDevArgs(process.platform, process.argv.slice(2)));
 }

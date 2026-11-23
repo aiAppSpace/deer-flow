@@ -32,25 +32,29 @@ export function MessageDetailsPanel() {
         }
       }}
     >
-      <header className="flex shrink-0 items-center gap-2 border-b px-5 py-3">
-        <FileTextIcon className="text-muted-foreground size-4" />
-        <h2
-          ref={headingRef}
-          tabIndex={-1}
-          className="min-w-0 flex-1 truncate text-sm font-medium outline-none"
-        >
-          {selected.title}
-        </h2>
-        {selected.actions}
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label={t.common.close}
-          title={t.common.close}
-          onClick={() => details.close()}
-        >
-          <XIcon className="size-4" />
-        </Button>
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-5 py-3">
+        <div className="flex max-w-full min-w-0 flex-auto items-center gap-2">
+          <FileTextIcon className="text-muted-foreground size-4" />
+          <h2
+            ref={headingRef}
+            tabIndex={-1}
+            className="min-w-0 flex-1 truncate text-sm font-medium outline-none"
+          >
+            {selected.title}
+          </h2>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {selected.actions}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t.common.close}
+            title={t.common.close}
+            onClick={() => details.close()}
+          >
+            <XIcon className="size-4" />
+          </Button>
+        </div>
       </header>
       <div
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain"

@@ -7,17 +7,18 @@
 */
 
 import { flushPromises, mount } from "@vue/test-utils";
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AppearanceSettings from "@/components/workspace/settings/AppearanceSettings.vue";
 import { Select } from "@/components/ui/select";
-import { clientTranslations } from "@/core/i18n/client-translations";
 import { enUS } from "@/core/i18n/locales/en-US";
 import { zhCN } from "@/core/i18n/locales/zh-CN";
 import type { Locale } from "@/core/i18n/locale";
 
 let mountedHook: (() => void) | undefined;
+const wrappers: ReturnType<typeof mount>[] = [];
+const disposers: (() => void)[] = [];
 
 beforeEach(() => {
   mountedHook = undefined;
@@ -32,30 +33,64 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+  disposers.splice(0).forEach((dispose) => dispose());
+  vi.restoreAllMocks();
   vi.resetModules();
   vi.unstubAllGlobals();
 });
 
 describe("i18n plugin", () => {
+  it("loads only the browser locale for a CSR page with no server-rendered content", async () => {
+    document.cookie = "locale=zh-CN; path=/";
+    const translations = await import("@/core/i18n/translations");
+    const loaded = vi.spyOn(translations, "loadTranslations");
+    const { default: plugin } = await import("@/plugins/i18n");
+    const provided = await (
+      plugin as unknown as (app: unknown) => Promise<{
+        provide: {
+          i18n: { locale: { value: Locale }; t: { value: typeof enUS } };
+        };
+      }>
+    )({
+      payload: { serverRendered: false },
+      hook(name: string, callback: () => void) {
+        if (name === "app:mounted") mountedHook = callback;
+      },
+      vueApp: { onUnmount: (dispose: () => void) => disposers.push(dispose) },
+    });
+    expect(provided.provide.i18n.locale.value).toBe("zh-CN");
+    expect(provided.provide.i18n.t.value.settings.appearance.themeTitle).toBe(
+      zhCN.settings.appearance.themeTitle,
+    );
+    expect(loaded.mock.calls.map(([locale]) => locale)).toEqual(["zh-CN"]);
+    mountedHook?.();
+    await flushPromises();
+    expect(loaded.mock.calls.map(([locale]) => locale)).toEqual(["zh-CN"]);
+    loaded.mockRestore();
+  });
+
   it("hydrates from one serialized locale before consuming the browser cookie", async () => {
     document.cookie = "locale=zh-CN; path=/";
     const { default: plugin } = await import("@/plugins/i18n");
-    const provided = (
+    const provided = await (
       plugin as unknown as (nuxtApp: {
         hook: (name: string, callback: () => void) => void;
-      }) => {
+        vueApp: { onUnmount: (callback: () => void) => void };
+      }) => Promise<{
         provide: {
           i18n: {
             locale: { value: Locale };
             t: { value: typeof enUS };
-            setLocale: (locale: Locale) => void;
+            setLocale: (locale: Locale) => Promise<void>;
           };
         };
-      }
+      }>
     )({
       hook(name, callback) {
         if (name === "app:mounted") mountedHook = callback;
       },
+      vueApp: { onUnmount: (dispose: () => void) => disposers.push(dispose) },
     });
     const i18n = provided.provide.i18n;
     expect(i18n.t.value.settings.appearance.themeTitle).toBe(
@@ -71,8 +106,10 @@ describe("i18n plugin", () => {
       zhCN.settings.appearance.themeTitle,
     );
     expect(document.documentElement.lang).toBe("zh-CN");
+    const { getUiLocale } = await import("@/core/settings/ui-locale");
+    expect(getUiLocale()).toBe("zh-CN");
 
-    i18n.setLocale("en-US");
+    await Promise.all([i18n.setLocale("zh-CN"), i18n.setLocale("en-US")]);
     await flushPromises();
     expect(i18n.locale.value).toBe("en-US");
     expect(i18n.t.value.settings.appearance.themeTitle).toBe(
@@ -80,6 +117,7 @@ describe("i18n plugin", () => {
     );
     expect(document.documentElement.lang).toBe("en-US");
     expect(document.cookie).toContain("locale=en-US");
+    expect(getUiLocale()).toBe("en-US");
     const headFactory = vi.mocked(useHead).mock.calls[0]?.[0] as () => {
       htmlAttrs: { lang: Locale };
     };
@@ -89,20 +127,30 @@ describe("i18n plugin", () => {
 
 describe("AppearanceSettings", () => {
   it("updates an already-open panel immediately and delegates theme changes to the app owner", async () => {
-    const locale = ref<Locale>("en-US");
-    const t = computed(() => clientTranslations[locale.value]);
+    const { default: plugin } = await import("@/plugins/i18n");
+    const provided = await (
+      plugin as unknown as (app: unknown) => Promise<{
+        provide: {
+          i18n: {
+            locale: { value: Locale };
+            t: { value: typeof enUS };
+            setLocale: (locale: Locale) => Promise<void>;
+          };
+        };
+      }>
+    )({
+      payload: { serverRendered: false },
+      hook(name: string, callback: () => void) {
+        if (name === "app:mounted") mountedHook = callback;
+      },
+      vueApp: { onUnmount: (dispose: () => void) => disposers.push(dispose) },
+    });
+    const i18n = provided.provide.i18n;
     const preference = ref<"system" | "light" | "dark">("system");
     const resolved = ref<"light" | "dark">("light");
     const setPreference = vi.fn((next: typeof preference.value) => {
       preference.value = next;
     });
-    const i18n = {
-      locale,
-      t,
-      setLocale(next: Locale) {
-        locale.value = next;
-      },
-    };
     const theme = { preference, resolved, setPreference };
     vi.stubGlobal("useNuxtApp", () => ({ $i18n: i18n, $theme: theme }));
 
@@ -114,6 +162,7 @@ describe("AppearanceSettings", () => {
       */
       global: { mocks: { $i18n: i18n, $theme: theme } },
     });
+    wrappers.push(wrapper);
     expect(wrapper.text()).toContain(enUS.settings.appearance.themeTitle);
     /*
       语言选择器已经从原生 `<select>` 换成 shadcn 的 Select（与上游同一个
@@ -127,6 +176,9 @@ describe("AppearanceSettings", () => {
     await flushPromises();
     expect(wrapper.text()).toContain(zhCN.settings.appearance.themeTitle);
     expect(wrapper.text()).toContain(zhCN.settings.appearance.darkDescription);
+    expect(i18n.locale.value).toBe("zh-CN");
+    expect(document.documentElement.lang).toBe("zh-CN");
+    expect(document.cookie).toContain("locale=zh-CN");
 
     await wrapper.get('[data-theme-preference="dark"]').trigger("click");
     expect(setPreference).toHaveBeenCalledWith("dark");

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { RememberSessionOption } from "@/components/auth/remember-session-option";
 import { Button } from "@/components/ui/button";
@@ -59,6 +59,13 @@ export default function LoginPage() {
   // Nudge the user toward the SSO buttons without confirming the account exists.
   const [showSsoHint, setShowSsoHint] = useState(false);
   const [loading, setLoading] = useState(false);
+  const pageGeneration = useRef(0);
+  useLayoutEffect(() => {
+    pageGeneration.current += 1;
+    return () => {
+      pageGeneration.current += 1;
+    };
+  }, []);
 
   // Get next parameter for validated redirect
   const nextParam = searchParams.get("next");
@@ -143,6 +150,9 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
+    const generation = pageGeneration.current;
+    const current = () => generation === pageGeneration.current;
     setError("");
     setShowSsoHint(false);
     setLoading(true);
@@ -176,8 +186,10 @@ export default function LoginPage() {
         credentials: "include", // Important: include HttpOnly cookie
       });
 
+      if (!current()) return;
       if (!res.ok) {
         const data = await res.json();
+        if (!current()) return;
         const authError = parseAuthError(data);
         setError(authError.message);
         // On a failed login with SSO configured, surface a hint pointing at the
@@ -193,9 +205,9 @@ export default function LoginPage() {
       // Both login and register set a cookie — redirect to workspace
       router.push(redirectPath);
     } catch {
-      setError(t.login.networkError);
+      if (current()) setError(t.login.networkError);
     } finally {
-      setLoading(false);
+      if (current()) setLoading(false);
     }
   };
 

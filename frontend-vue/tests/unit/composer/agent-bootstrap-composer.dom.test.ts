@@ -1,9 +1,10 @@
 import { mount } from "@vue/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AgentBootstrapComposer from "@/components/chat/AgentBootstrapComposer.vue";
 
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = "";
 });
 
@@ -60,6 +61,20 @@ describe("agent bootstrap composer", () => {
     await textarea.trigger("keydown", { key: "Enter" });
     expect(wrapper.emitted("send")).toBeUndefined();
     await textarea.trigger("compositionend");
+  });
+
+  it("suppresses Safari confirmation Enter for exactly the shared 50ms boundary", async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(AgentBootstrapComposer);
+    const textarea = wrapper.get("textarea");
+    await textarea.setValue("中文输入");
+    await textarea.trigger("compositionend");
+    await textarea.trigger("keydown", { key: "Enter", keyCode: 13 });
+    expect(wrapper.emitted("send")).toBeUndefined();
+    vi.advanceTimersByTime(50);
+    await textarea.trigger("keydown", { key: "Enter", keyCode: 13 });
+    expect(wrapper.emitted("send")).toEqual([["中文输入"]]);
+    wrapper.unmount();
   });
 
   it("submits via the form and disables both controls while disabled", async () => {

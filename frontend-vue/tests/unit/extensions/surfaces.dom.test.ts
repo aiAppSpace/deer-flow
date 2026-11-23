@@ -1,0 +1,161 @@
+import { expect, vi, test } from "vitest";
+
+import { mountSurface } from "@/core/extensions/surfaces";
+
+test("surface cleanup aborts outstanding work and rejects late backend calls", async () => {
+  const container = document.createElement("div");
+  const dispose = vi.fn();
+  const backend = vi.fn(async () => ({}));
+  let callLater: (
+    name: string,
+    payload: Record<string, unknown>,
+  ) => Promise<unknown> = vi.fn();
+  let signal: AbortSignal | undefined;
+  const cleanup = mountSurface(
+    container,
+    {
+      id: "picker",
+      slot: "page",
+      title: "Picker",
+      mount(root, context) {
+        signal = context.signal;
+        callLater = context.callBackend;
+        root.textContent = "PLUGIN UI";
+        return { dispose };
+      },
+    },
+    {
+      namespace: "community.example",
+      locale: "en",
+      settings: {},
+      threadId: "a",
+      callBackend: backend,
+    },
+    vi.fn(),
+  );
+  expect(container.shadowRoot?.textContent).toBe("PLUGIN UI");
+  await callLater("search", {});
+  cleanup();
+  cleanup();
+  await expect(callLater("search", {})).rejects.toThrow();
+  expect(backend).toHaveBeenCalledTimes(1);
+  expect(signal?.aborted).toBe(true);
+  expect(dispose).toHaveBeenCalledTimes(1);
+  expect(container.shadowRoot?.textContent).toBe("");
+});
+
+test("a failed mount is isolated and cannot leave its partial UI behind", () => {
+  const error = vi.fn();
+  const container = document.createElement("div");
+  mountSurface(
+    container,
+    {
+      id: "bad",
+      slot: "page",
+      title: "Broken",
+      mount(root) {
+        root.textContent = "partial";
+        throw new Error("broken");
+      },
+    },
+    {
+      namespace: "community.example",
+      locale: "en",
+      settings: {},
+      callBackend: vi.fn(),
+    },
+    error,
+  );
+  expect(error).toHaveBeenCalledTimes(1);
+  expect(container.shadowRoot?.textContent).toBe("");
+});
+
+for (const failMount of [false, true]) {
+  test(`surface ${failMount ? "mount failure" : "cleanup"} aborts navigation and rejects stale callbacks`, async () => {
+    let openLater!: (id: string) => Promise<void>;
+    let pending!: Promise<void>;
+    let finish!: () => void;
+    const navigate = vi.fn();
+    const open = vi.fn(async (_id: string, signal: AbortSignal) => {
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      signal.throwIfAborted();
+      navigate();
+    });
+    const cleanup = mountSurface(
+      document.createElement("div"),
+      {
+        id: "library",
+        slot: "page",
+        title: "Library",
+        mount(_root, context) {
+          openLater = context.openConversation!;
+          pending = openLater("thread");
+          if (failMount) throw new Error("mount failed");
+          return { dispose: vi.fn() };
+        },
+      },
+      {
+        namespace: "bookmarks",
+        locale: "en",
+        settings: {},
+        callBackend: vi.fn(),
+        openConversation: open,
+      },
+      vi.fn(),
+    );
+    if (!failMount) cleanup();
+    finish();
+    await expect(pending).rejects.toThrow();
+    await expect(openLater("thread")).rejects.toThrow();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+}
+
+for (const throwsOnDispose of [false, true]) {
+  test(`a rejected async mount retires its late controller (dispose throws: ${throwsOnDispose})`, async () => {
+    const container = document.createElement("div");
+    const error = vi.fn();
+    let finish!: (controller: { dispose: () => void }) => void;
+    const pending = new Promise<{ dispose: () => void }>((resolve) => {
+      finish = resolve;
+    });
+    const dispose = vi.fn(() => {
+      if (throwsOnDispose) throw new Error("broken cleanup");
+    });
+    let signal!: AbortSignal;
+    const cleanup = mountSurface(
+      container,
+      {
+        id: "broken-async",
+        slot: "page",
+        title: "Broken async",
+        mount: ((
+          _root: HTMLElement,
+          context: import("@/core/extensions/contracts").SurfaceContext,
+        ) => {
+          signal = context.signal;
+          return pending;
+        }) as unknown as import("@/core/extensions/contracts").PluginSurface["mount"],
+      },
+      {
+        namespace: "community.example",
+        locale: "en",
+        settings: {},
+        callBackend: vi.fn(),
+      },
+      error,
+    );
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(signal.aborted).toBe(true);
+    expect(container.shadowRoot?.textContent).toBe("");
+    finish({ dispose });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    cleanup();
+    cleanup();
+    expect(dispose).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+}

@@ -1,73 +1,50 @@
-/*
-  【文件职责】     固定全状态筛选、类型筛选与确定性 selection 恢复。
-  【架构位置】     view-model test
-  【主要导出】     无；Vitest cases
-  【依赖关系】     core/scheduled-tasks/view-model
-  【边界与注意】   task status 六种全部覆盖；筛选隐藏当前项时选择首个可见项。
-*/
 import { describe, expect, it } from "vitest";
-
-import {
-  filterScheduledTasks,
-  resolveScheduledTaskSelection,
-  type ScheduledTaskStatus,
-} from "@/core/scheduled-tasks/view-model";
-import type { ScheduledTask } from "@/core/scheduled-tasks/types";
-
-const STATUSES: ScheduledTaskStatus[] = [
-  "enabled",
-  "paused",
-  "running",
-  "completed",
-  "failed",
-  "cancelled",
-];
-const TASKS = STATUSES.map(
-  (status, index) =>
-    ({
-      id: `task-${status}`,
-      status,
-      schedule_type: index % 2 === 0 ? "cron" : "once",
-    }) as ScheduledTask,
-);
-
-describe("scheduled-task view model", () => {
-  it.each(STATUSES)("filters status %s", (status) => {
-    expect(
-      filterScheduledTasks(TASKS, { status, scheduleType: "all" }).map(
-        (task) => task.status,
-      ),
-    ).toEqual([status]);
+import { statusTabOf } from "@/core/scheduled-tasks/presentation";
+import { matchesScheduledTaskQuery } from "@/core/scheduled-tasks/search";
+import { availableActions } from "@/core/scheduled-tasks/actions";
+import { task } from "./fixtures";
+describe("current scheduler tabs and search", () => {
+  it.each([
+    ["enabled", "active"],
+    ["running", "active"],
+    ["paused", "paused"],
+    ["completed", "finished"],
+    ["failed", "finished"],
+    ["cancelled", "finished"],
+  ] as const)("maps %s to %s", (status, tab) =>
+    expect(statusTabOf(task({ status }))).toBe(tab),
+  );
+  it("searches the current React title and instructions contract", () => {
+    const value = task({
+      title: "Digest",
+      prompt: "Check release",
+      stop_condition: "Published",
+    });
+    expect(matchesScheduledTaskQuery(value, "CHECK")).toBe(true);
+    expect(matchesScheduledTaskQuery(value, "digest")).toBe(true);
+    expect(matchesScheduledTaskQuery(value, "none")).toBe(false);
   });
-
-  it("filters once/cron and all", () => {
-    expect(
-      filterScheduledTasks(TASKS, {
-        status: "all",
-        scheduleType: "cron",
-      }),
-    ).toHaveLength(3);
-    expect(
-      filterScheduledTasks(TASKS, {
-        status: "all",
-        scheduleType: "once",
-      }),
-    ).toHaveLength(3);
-    expect(
-      filterScheduledTasks(TASKS, {
-        status: "all",
-        scheduleType: "all",
-      }),
-    ).toHaveLength(6);
+  it("allows queued deletion and pause to cancel waiting occurrences", () => {
+    const actions = availableActions(task({ active_run_status: "queued" }), {
+      createBlocked: false,
+    });
+    expect(actions.pause.disabled).toBe(false);
+    expect(actions.delete.disabled).toBe(false);
+    expect(actions.edit.reason).toBe("queued");
+    expect(actions.runNow.reason).toBe("alreadyQueued");
   });
-
-  it("keeps a visible selection and falls back when filters hide/delete it", () => {
-    expect(resolveScheduledTaskSelection(TASKS, "task-running")).toBe(
-      "task-running",
-    );
-    expect(resolveScheduledTaskSelection(TASKS, "task-missing")).toBe(
-      "task-enabled",
-    );
-    expect(resolveScheduledTaskSelection([], "task-running")).toBeNull();
+  it("blocks deletion while starting or running", () => {
+    for (const active_run_status of ["launching", "running"] as const)
+      expect(
+        availableActions(task({ active_run_status }), { createBlocked: false })
+          .delete.reason,
+      ).toBe("running");
+  });
+  it("allows a paused task to run one trial while scheduler creation is off", () => {
+    const actions = availableActions(task({ status: "paused" }), {
+      createBlocked: true,
+    });
+    expect(actions.runNow.disabled).toBe(false);
+    expect(actions.duplicate.reason).toBe("createBlocked");
   });
 });

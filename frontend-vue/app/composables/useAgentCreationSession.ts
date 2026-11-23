@@ -3,7 +3,7 @@
   【架构位置】     L3 Vue lifecycle owner
   【主要导出】     useAgentCreationSession
   【依赖关系】     core/agents/creation-session · Gateway errors · Vue scope
-  【边界与注意】   idle/saving/verifying/created/error 互斥；验证重试不重新提交 setup_agent。
+  【边界与注意】   可见性读取有限重试；完成后不重新提交 setup_agent；账号切换取消旧 owner。
 */
 
 import {
@@ -14,28 +14,26 @@ import {
   type MaybeRefOrGetter,
 } from "vue";
 
-import { isGatewayResponseError } from "@/core/api/errors";
-import { classifySetupAgentResult } from "@/core/agents/creation-session";
+import { hasToolResult } from "@/core/threads/submit";
 import type { Agent } from "@/core/agents/types";
 import type { Message } from "@/core/types/message";
 
 export type AgentCreationStatus =
-  "idle" | "saving" | "verifying" | "created" | "error";
-
-type ErrorOwner = "save" | "verify";
+  "idle" | "saving" | "verifying" | "completed" | "created";
 
 export interface AgentCreationSessionOptions {
   agentName: MaybeRefOrGetter<string>;
+  ownerId?: MaybeRefOrGetter<string | null>;
   submitSave: (signal: AbortSignal) => Promise<boolean>;
   loadAgent: (name: string, signal: AbortSignal) => Promise<Agent>;
   retryDelaysMs?: readonly number[];
   onCreated?: (agent: Agent) => void | Promise<void>;
+  onSaveRequested?: () => void;
+  onSaveError?: (message: string) => void;
+  onVerificationUnavailable?: () => void;
   copy?: Partial<{
     saveNotAccepted: string;
-    loadFailed: string;
-    visibilityUnavailable: string;
     requestFailed: string;
-    missingToolResult: string;
     runFailed: string;
   }>;
 }
@@ -55,7 +53,6 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
   const status = ref<AgentCreationStatus>("idle");
   const agent = ref<Agent | null>(null);
   const error = ref("");
-  let errorOwner: ErrorOwner = "save";
   let generation = 0;
   let controller: AbortController | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -83,11 +80,10 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
     return { current: generation, signal: controller.signal };
   }
 
-  function fail(owner: ErrorOwner, detail: string) {
-    errorOwner = owner;
+  function failSave(detail: string) {
     error.value = detail;
     agent.value = null;
-    status.value = "error";
+    status.value = "idle";
   }
 
   function wait(delayMs: number, signal: AbortSignal) {
@@ -114,7 +110,6 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
     const name = toValue(options.agentName).trim();
     status.value = "verifying";
     error.value = "";
-    let lastNotFound: unknown = null;
 
     for (const delayMs of options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS) {
       try {
@@ -126,43 +121,20 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
         status.value = "created";
         await options.onCreated?.(loaded);
         return true;
-      } catch (cause) {
+      } catch {
         if (!isCurrent(operation.current, operation.signal)) return false;
-        if (isGatewayResponseError(cause) && cause.status === 404) {
-          lastNotFound = cause;
-          continue;
-        }
-        fail(
-          "verify",
-          errorMessage(
-            cause,
-            options.copy?.loadFailed ?? "Failed to load the created agent.",
-          ),
-        );
-        return false;
       }
     }
 
     if (isCurrent(operation.current, operation.signal)) {
-      fail(
-        "verify",
-        errorMessage(
-          lastNotFound,
-          options.copy?.visibilityUnavailable ??
-            "The created agent is not visible yet.",
-        ),
-      );
+      status.value = "completed";
+      options.onVerificationUnavailable?.();
     }
     return false;
   }
 
   async function save(): Promise<boolean> {
-    if (
-      disposed ||
-      status.value === "saving" ||
-      status.value === "verifying" ||
-      status.value === "created"
-    ) {
+    if (disposed || status.value !== "idle") {
       return false;
     }
     if (!toValue(options.agentName).trim()) return false;
@@ -174,39 +146,31 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
       const submitted = await options.submitSave(operation.signal);
       if (!isCurrent(operation.current, operation.signal)) return false;
       if (!submitted) {
-        fail(
-          "save",
+        failSave(
           options.copy?.saveNotAccepted ?? "The save request was not accepted.",
         );
+        options.onSaveError?.(error.value);
         return false;
       }
+      options.onSaveRequested?.();
       return true;
     } catch (cause) {
       if (!isCurrent(operation.current, operation.signal)) return false;
-      fail(
-        "save",
+      failSave(
         errorMessage(
           cause,
           options.copy?.requestFailed ?? "Failed to request agent creation.",
         ),
       );
+      options.onSaveError?.(error.value);
       return false;
     }
   }
 
   async function onRunFinished(messages: readonly Message[]) {
     if (status.value !== "saving" || !controller) return;
-    const result = classifySetupAgentResult(messages);
-    if (result.kind === "missing") {
-      fail(
-        "save",
-        options.copy?.missingToolResult ??
-          "The run finished without a setup_agent result.",
-      );
-      return;
-    }
-    if (result.kind === "error") {
-      fail("save", result.detail);
+    if (!hasToolResult([...messages], "setup_agent")) {
+      reset();
       return;
     }
     await verify({ current: generation, signal: controller.signal });
@@ -215,18 +179,13 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
   function onRunError(cause: unknown) {
     if (status.value !== "saving" && status.value !== "verifying") return;
     invalidate();
-    fail(
-      "save",
+    failSave(
       errorMessage(
         cause,
         options.copy?.runFailed ?? "The agent creation run failed.",
       ),
     );
-  }
-
-  async function retry() {
-    if (status.value !== "error") return false;
-    return errorOwner === "verify" ? verify() : save();
+    options.onSaveError?.(error.value);
   }
 
   function reset() {
@@ -234,11 +193,10 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
     status.value = "idle";
     agent.value = null;
     error.value = "";
-    errorOwner = "save";
   }
 
   watch(
-    () => toValue(options.agentName),
+    [() => toValue(options.agentName), () => toValue(options.ownerId)],
     () => reset(),
     { flush: "sync" },
   );
@@ -253,7 +211,6 @@ export function useAgentCreationSession(options: AgentCreationSessionOptions) {
     agent,
     error,
     save,
-    retry,
     reset,
     onRunFinished,
     onRunError,

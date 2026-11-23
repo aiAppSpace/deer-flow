@@ -1,12 +1,16 @@
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref } from "vue";
 
 import { useThreadHistory } from "@/composables/useThreadHistory";
 
 const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 vi.mock("@/core/api/fetcher", () => ({ fetch: fetchMock }));
+
+beforeEach(() => {
+  fetchMock.mockReset();
+});
 
 function pageFor(input: RequestInfo | URL) {
   const url = new URL(String(input), "http://localhost");
@@ -35,6 +39,143 @@ function pageFor(input: RequestInfo | URL) {
 }
 
 describe("useThreadHistory on-demand pagination", () => {
+  it("reports a failed page once, preserves the error and loaded rows, and retries the same cursor", async () => {
+    const onError = vi.fn();
+    fetchMock
+      .mockImplementationOnce(async (input: RequestInfo | URL) =>
+        pageFor(input),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ detail: "History storage unavailable." }),
+          {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      )
+      .mockImplementationOnce(async (input: RequestInfo | URL) =>
+        pageFor(input),
+      );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let history!: ReturnType<typeof useThreadHistory>;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          history = useThreadHistory(ref("thread-1"), { onError });
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    );
+
+    await vi.waitFor(() => expect(history.hasMore.value).toBe(true));
+    await history.loadMore();
+    await flushPromises();
+    expect(onError).toHaveBeenCalledExactlyOnceWith(history.error.value);
+    expect(history.error.value).toMatchObject({
+      message: "History storage unavailable.",
+      status: 503,
+      body: { detail: "History storage unavailable." },
+    });
+    expect(history.messages.value.map((message) => message.id)).toEqual([
+      "message-101",
+    ]);
+    expect(history.hasMore.value).toBe(true);
+    expect(history.loadingMore.value).toBe(false);
+    expect(history.settled.value).toBe(true);
+
+    await history.loadMore();
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(String(fetchMock.mock.calls[1]![0])).toContain("before_seq=101");
+    expect(fetchMock.mock.calls[2]![0]).toBe(fetchMock.mock.calls[1]![0]);
+    expect(history.messages.value.map((message) => message.id)).toEqual([
+      "message-100",
+      "message-101",
+    ]);
+    expect(history.error.value).toBeNull();
+    expect(onError).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+    queryClient.clear();
+  });
+
+  it("reports an initial failure and settles without fabricating history or a checkpoint fallback", async () => {
+    const onError = vi.fn();
+    fetchMock.mockRejectedValue(new Error("History transport interrupted."));
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let history!: ReturnType<typeof useThreadHistory>;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          history = useThreadHistory(ref("thread-1"), { onError });
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    );
+    await vi.waitFor(() => expect(history.settled.value).toBe(true));
+    expect(onError).toHaveBeenCalledExactlyOnceWith(history.error.value);
+    expect(history.error.value?.message).toBe("History transport interrupted.");
+    expect(history.messages.value).toEqual([]);
+    expect(history.hasMore.value).toBe(false);
+    expect(history.loading.value).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("/messages/page");
+    wrapper.unmount();
+    queryClient.clear();
+  });
+
+  it("does not notify for an abandoned thread's late failure", async () => {
+    const onError = vi.fn();
+    let rejectOldRequest!: (error: Error) => void;
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((_resolve, reject) => {
+            rejectOldRequest = reject;
+          }),
+      )
+      .mockImplementationOnce(async (input: RequestInfo | URL) =>
+        pageFor(input),
+      );
+    const threadId = ref("thread-old");
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let history!: ReturnType<typeof useThreadHistory>;
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          history = useThreadHistory(threadId, { onError });
+          return () => h("div");
+        },
+      }),
+      { global: { plugins: [[VueQueryPlugin, { queryClient }]] } },
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const oldSignal = fetchMock.mock.calls[0]![1].signal as AbortSignal;
+    threadId.value = "thread-new";
+    await vi.waitFor(() => expect(history.hasMore.value).toBe(true));
+    expect(oldSignal.aborted).toBe(true);
+    rejectOldRequest(new Error("Old thread history failed late."));
+    await flushPromises();
+    expect(onError).not.toHaveBeenCalled();
+    expect(history.error.value).toBeNull();
+    expect(history.messages.value.map((message) => message.id)).toEqual([
+      "message-101",
+    ]);
+    expect(String(fetchMock.mock.calls[1]![0])).toContain(
+      "thread-new/messages/page",
+    );
+    wrapper.unmount();
+    queryClient.clear();
+  });
+
   it("requests only the first page of a 101-page history until loadMore", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
       pageFor(input),

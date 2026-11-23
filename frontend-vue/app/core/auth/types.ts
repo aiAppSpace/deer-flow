@@ -5,9 +5,10 @@ import { z } from "zod";
 export const userSchema = z.object({
   id: z.string(),
   email: z.string().email(),
-  system_role: z.enum(["admin", "user"]),
+  system_role: z.string().min(1),
   needs_setup: z.boolean().optional().default(false),
   oauth_provider: z.string().nullable().optional().default(null),
+  permissions: z.array(z.string()).nullable().optional(),
 });
 
 export type User = Omit<z.infer<typeof userSchema>, "oauth_provider"> & {
