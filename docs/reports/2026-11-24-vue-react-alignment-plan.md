@@ -116,7 +116,7 @@
 | --- | --- | --- |
 | R1 | 运行请求的 `context`：React 带 `thread_id` 与 `locale`（后端据 `locale` 决定回复语言），Vue 主动去掉 `thread_id`、不带 `locale` | React `core/threads/hooks.ts:398`；Vue `app/core/threads/submit.ts:121`（`thread_id` 在 146 行被剔除） |
 | R2 | 查询失败重试：React 用默认规则（失败最多重试 3 次，含 HTTP 4xx/5xx），Vue 只在网络中断时重试 | React `components/query-client-provider.tsx:35`；Vue `app/plugins/vue-query.ts:22` |
-| R3 | 合并时记录的反向差异逐项复核：发送后强制滚到底（上游改为钉在顶部，即 F18）；回调页位置；Vue 仍识别已被上游去掉的分块写入工具名（即 B32）；服务端忽略 `Range` 时 Vue 只读前 1 MiB（`app/core/artifacts/loader.ts:89`），React 合并时删掉了本仓的 `response-body.ts`、改为整段读取——后端支持 `Range`（`backend/app/gateway/routers/artifacts.py:243`），两端请求与结果相同，属于用户看不见的内部差异，保留 Vue 现状；CodeMirror/Lezer 版本固定（只影响代码高亮颜色，按可见差异处理） | 见 `MERGE-DECISIONS.md`“留给第 3 步” |
+| R3 | 合并时记录的反向差异逐项复核：发送后强制滚到底（上游改为钉在顶部，即 F18）；回调页位置（已核：React 只是把 `/auth/callback` 放回 `(auth)` 路由组，Vue `app/pages/auth/callback.vue` 同样校验 `next`、成功 300 毫秒后跳转、失败跳 `sso_failed` 或带 `next` 的 `gateway_unavailable`，行为一致，关闭）；Vue 仍识别已被上游去掉的分块写入工具名（即 B32）；服务端忽略 `Range` 时 Vue 只读前 1 MiB（`app/core/artifacts/loader.ts:89`），React 合并时删掉了本仓的 `response-body.ts`、改为整段读取——后端支持 `Range`（`backend/app/gateway/routers/artifacts.py:243`），两端请求与结果相同，属于用户看不见的内部差异，保留 Vue 现状；CodeMirror/Lezer 版本：React 去掉了本仓的版本锁定，现装 `@codemirror/view` 6.39.13、`state` 6.5.4、`language` 6.12.1，Vue 是 6.43.9、6.7.1、6.12.4。判据：P5 跑 `code-editor.spec.ts` 时两端代码高亮看得出差别，就把 Vue 锁到 React 的版本，否则保持 | 见 `MERGE-DECISIONS.md`“留给第 3 步” |
 | R4 | **已裁决（11-24 用户）：保留 Vue 现状，作为有意保留的缺陷修复，登记为已知请求差异。** 创建运行的 `Idempotency-Key` 请求头：Vue 普通发送默认用用户消息 ID 作幂等键（`app/composables/useThreadStream.ts:887`），重新生成用新 UUID（`:1090`），由 `app/core/agent-deerflow/run-protocol.ts:133` 写进请求头；React 两种都不发（`core/threads/hooks.ts:3441` 的注释写明）。后端按这个键去重（`backend/app/gateway/routers/thread_runs.py`）。“请求头逐项一致”要求 Vue 跟随 React 不发；执行约定第 0.2.1 节又要求保留“重复创建运行”这类缺陷修复。用户选择保留防重复。落地：在跨端请求比对里把这一个请求头登记为已知差异（只此一项，不放宽其他请求头），并在 `BEHAVIOR_CONTRACTS.md` 写明原因 | Vue `useThreadStream.ts:887`、`:1090`；React `hooks.ts:3441` |
 | R5 | 登录页、安装向导页的 `GET /api/v1/auth/me`：React 在服务端取（`frontend/src/app/(auth)/layout.tsx:18`），Vue 在浏览器取（`app/middleware/auth.global.ts:43`）。后端收到的是同一个接口、同一套判定。11-23 已裁决接受这一架构差异，保持 `baseline/parity-auth-diff.json` 中的登记；按新判据维持该裁决。仍要复核一件事：`/setup` 上中间件和 `app/pages/setup.vue:53` 是否各发一次，重复就去掉 `setup.vue` 那次 | Vue `auth.global.ts:43`、`setup.vue:53` |
 
@@ -137,7 +137,7 @@
 
 | 阶段 | 内容 | 说明 |
 | --- | --- | --- |
-| P0 | 按判据调整 Vue 侧规则与测试：`frontend-vue/ARCHITECTURE.md` 对齐范围；`react-parity-scope.json` 与 `parity-scenario-coverage.json` 加入 Showcase 豁免；`home.search*` 改记豁免；跨端比对去掉 aria/Tab 顺序/焦点落点/像素档的计入；逐个处理只为读屏/键盘一致而存在的守卫；React 零消费者的 `conversation-reference-picker.tsx`、`reference-conversations-button.tsx` 登记进 `react-parity-scope.json` 的 `forbiddenUpstreamModules`；完成第 6.1 节身份对应核实 | 先改计划已完成（执行约定第 0.2 节），这里改代码 |
+| P0 | 按判据调整 Vue 侧规则与测试、核实身份对应、跑基线实测，逐项见第 7.1 节 | 先改计划已完成（执行约定第 0.2 节），这里改代码 |
 | P1 | 安全与可用性：B1–B3 | 改动小、影响所有用户，最先做 |
 | P2 | 请求一致性：R1–R5 | R1 同时解决 F21 的“按界面语言回复” |
 | P3 | 其余行为缺陷：B4–B33 与三条“需确认” | 每条有明确位置，可逐条修、逐条加 Vue 单测 |
@@ -145,7 +145,22 @@
 | P5 | 第三层运行时实测，修复实测出的差异，再测一轮 | 见第 6 节 |
 | P6 | 简化后的验收：按执行约定第 0.2.1 节的 R04–R12 处理表 | 只验证实际要用的部署方式 |
 
-每个阶段完成后：Vue `make verify`、React `pnpm test`、backend `make test`（改到后端契约时）全部通过才提交；推送前问用户。
+每个阶段完成后：Vue `make verify`、React `pnpm check` 与 `pnpm test`、backend `make test`（改到后端契约时）全部通过才提交；推送前问用户。
+
+### 7.1 P0 落地清单
+
+1. **开工前准备（11-24 已完成）：** 跨端实测启动时会对 React 执行 `next build`，原先因本仓自加的 React 测试有类型错误而起不来。已修 `frontend/tests/unit/components/workspace/artifacts/artifact-file-list.dom.test.tsx`（mock 补参数类型）和 `frontend/tests/unit/app/auth-page-lifetime.dom.test.tsx`（去掉多余断言），只改测试；React `pnpm check` 退出码 0。冒烟实测 `tests/e2e-parity/topology.spec.ts` 5 个用例全部通过（三端服务都能起来），日志 `logs/parity-smoke-topology.log`。
+2. **豁免数据：** `baseline/react-parity-scope.json` 加入 Showcase 豁免并改写它的 `$comment`（现写“showcase 在对齐范围内”）；`parity-scenario-coverage.json` 的 showcase 场景移入 exempt；`upstream-i18n-map.json` 的 5 个 `home.search*` 改记豁免；`forbiddenUpstreamModules` 登记 React 零消费者的 `conversation-reference-picker.tsx`、`reference-conversations-button.tsx`。
+3. **比对维度：** `tests/e2e-parity/support/diff-entry.ts:218-227` 每个场景比 13 个字段。只有 `requestsOnlyReact`、`requestsOnlyVue`、`requestBodies`、`requestFacts` 继续计入差异；`ariaOnlyReact`、`ariaOnlyVue`、`order`、`depth`（这两项由无障碍树算出）、`focus`、`tabbablesOnlyReact`、`tabbablesOnlyVue`、`tabOrder`、`geometry` 降为参考，不判失败。同步 `support/ledger.ts`、`baseline/parity-diff.json`（751 条）、`baseline/parity-auth-diff.json` 与 `tests/guards/parity-ledger-fields.test.ts`。R4 的 `Idempotency-Key` 登记为唯一已知请求头差异。
+4. **逐个判定的候选（按文件名初筛，须读内容再定保留、放宽或删除；判定结果写回本节）：**
+   - 跨端实测：`artifact-frame-keyboard`、`composer-keyboard-lifecycle`、`empty-timeline-keyboard`、`keyboard-browser-boundaries`、`keyboard-finite-transitions`、`keyboard-measurement`、`keyboard-order`、`keyboard-trap`、`skill-details-keyboard`、`triple-keyboard`、`triple-overlay-keyboard`、`disabled-control-focus`、`focus-capacity-regressions`、`thread-delete-focus`、`route-head-announcement`（读屏播报）、`icon-text-scaling`（高倍文字缩放）。
+   - Vue e2e：`artifacts-a11y-shape`、`chat-a11y-shape`、`scheduled-tasks-a11y-shape`、`thread-list-a11y-shape`、`ui-primitives-a11y`；`sidebar-ime-a11y` 里的输入法部分保留。
+   - 守卫：`toggle-variant-pressed`、`parity-ledger-fields`（随第 3 条改）、`upstream-citations`（上游行数）、`doc-facts` 剩余计数断言、`looping-animations`（减少动态效果）、`visual-baseline-platforms`（Linux 正式视觉，R07 已去掉）。
+   - 判定原则：只测读屏、Tab 顺序、焦点回原处、像素几何的删除或降为参考；同时测了输入框光标连续、对话框 Esc/回车、输入法、鼠标可点到的，保留那一部分。
+5. **身份对应核实：** 见第 6.1 节。
+6. **实测入口：** 第 6.1 节要求经 nginx 访问两端，但 `playwright.parity.config.ts` 目前直连两端预览（Vue 经 Nitro 转发 `/api`，React 直连 Gateway）。基线实测时对比两端请求头，若出现只因入口不同造成的差异，再决定是改配置走 nginx 还是登记为入口差异。
+7. **基线实测：** 完成第 1–6 条后，后台全量跑 `make -C frontend-vue e2e-parity`、`e2e-parity-auth`、`e2e-parity-session`，日志写进 `logs/`。以实测结果作为 P1–P4 的真实起点，新发现的差异按 F/B/R 编号补进本文。
+8. **CI：** GitHub Actions 自 2026-09-28 起没有任何运行，但 Actions 已启用、11 个工作流都是 active。原因待查，不挡本地对齐，P6 之前必须查清。
 
 ## 8. 本仓 React 本地修改（11-24 复核补入）
 

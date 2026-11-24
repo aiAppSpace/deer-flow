@@ -30,7 +30,7 @@ const archiveState = rs.hoisted(() => {
   };
 });
 const prepareDownload = rs.hoisted(() =>
-  rs.fn(async () => new Blob(["ok"])),
+  rs.fn(async (_url: string, _signal: AbortSignal) => new Blob(["ok"])),
 );
 
 rs.mock("@/core/auth/AuthProvider", () => ({
