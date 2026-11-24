@@ -1310,7 +1310,7 @@ it("observes new versus reused human provenance without claiming additional mess
         },
       ],
     });
-    expect(packets).toHaveLength(2);
+    expect(packets).toHaveLength(3);
     expect(packets[0]).toMatchObject({
       event: "human.allocate",
       values: { thread: "thread-1", raw: expect.any(String) },
@@ -1347,6 +1347,15 @@ it("observes new versus reused human provenance without claiming additional mess
     expect(packets[1]).toMatchObject({
       instance: packets[0]!.instance,
     });
+    expect(packets[2]).toMatchObject({
+      event: "run.bind",
+      instance: packets[0]!.instance,
+      values: {
+        thread: "thread-1",
+        assistant: "lead_agent",
+        sourceAction: "send:0",
+      },
+    });
     ctx.fake.settle("completed");
     await ctx.api.sendMessage("thread-1", { text: "Replay" }, undefined, {
       humanMessageId: "existing-human",
@@ -1354,10 +1363,12 @@ it("observes new versus reused human provenance without claiming additional mess
     expect(packets.map((packet) => packet.event)).toEqual([
       "human.allocate",
       "human.submission",
+      "run.bind",
       "human.reuse",
       "human.submission",
+      "run.bind",
     ]);
-    expect(packets[2]?.values).toEqual({
+    expect(packets[3]?.values).toEqual({
       raw: "existing-human",
       thread: "thread-1",
     });
@@ -1391,6 +1402,7 @@ it("a send rejected by the existing busy guard does not invent another human pro
     expect(packets.map((packet) => packet.event)).toEqual([
       "human.allocate",
       "human.submission",
+      "run.bind",
     ]);
     expect(ctx.fake.submissions).toHaveLength(1);
   } finally {
@@ -1441,6 +1453,7 @@ for (const observed of [false, true])
           expect(packets.map((packet) => packet.event)).toEqual([
             "human.reuse",
             "human.submission",
+            "run.bind",
           ]);
           expect(packets[1]!.instance).toBe(packets[0]!.instance);
           expect(packets[1]!.values).toEqual({
@@ -1553,7 +1566,8 @@ it.each([false, true])(
           },
         },
       });
-      expect(observedCalls).toBe(observed ? 2 : 0);
+      // allocate, submission and run.bind each attempt one throwing dispatch.
+      expect(observedCalls).toBe(observed ? 3 : 0);
     } finally {
       spy.mockRestore();
       random.mockRestore();
@@ -2011,11 +2025,15 @@ for (const kind of ["edit", "regenerate"] as const)
           action: "replay:0",
           values: { kind, thread: "thread-1" },
         });
+        // run.bind records the current point; its initiating action is
+        // values.sourceAction (run-observation.ts), so compare that instead.
         expect(
           capture.packets.every(
             (packet) =>
               packet.capture === "boundary-capture" &&
-              packet.action === "replay:0",
+              (packet.event === "run.bind"
+                ? packet.values.sourceAction
+                : packet.action) === "replay:0",
           ),
         ).toBe(true);
         expect(JSON.stringify(capture.packets)).not.toContain("private");

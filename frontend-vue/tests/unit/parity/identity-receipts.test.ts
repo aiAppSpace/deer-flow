@@ -87,7 +87,7 @@ describe("capture-local identity receipt integrity", () => {
     "invalid-packet",
     "overflow-reported",
   ] as const)
-    it(`rejects ${mode} even when both applications could make the same mistake`, () => {
+    it(`rejects ${mode} even when both applications could commit the same mistake`, () => {
       const ledger = createIdentityLedger(capture, origin);
       const rows = [
         receipt(0, "open"),

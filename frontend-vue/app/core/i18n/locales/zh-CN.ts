@@ -417,8 +417,7 @@ export const zhCN: Translations = {
     inputPolishCancel: "取消优化",
     voiceInputStartLabel: "语音输入",
     voiceInputStopLabel: "停止语音输入",
-    voiceInputStart:
-      "录音结束后，将音频发送到已配置的转写服务。",
+    voiceInputStart: "录音结束后，将音频发送到已配置的转写服务。",
     voiceInputStop: "停止语音输入",
     voiceInputListening: "正在录音… 结束后可检查文字或润色。",
     voiceInputUnsupported:

@@ -1487,8 +1487,13 @@ describe("composer submission and stale lifecycle", () => {
       event: string;
       values: Record<string, unknown>;
     }[] = [];
-    const receive = (event: Event) =>
-      packets.push((event as CustomEvent<(typeof packets)[number]>).detail);
+    // A standalone composer has no parent thread consumption handle, so its
+    // upload-limits query reports uploads.unowned; page ownership is checked
+    // by e2e-parity/identity-producers.spec.ts. Keep only the human producer.
+    const receive = (event: Event) => {
+      const packet = (event as CustomEvent<(typeof packets)[number]>).detail;
+      if (packet.producer.startsWith("human:")) packets.push(packet);
+    };
     Object.defineProperty(window, capability, {
       configurable: true,
       value: { version: 1, token: "composer-capture", action: "send:0" },

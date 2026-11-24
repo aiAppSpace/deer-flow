@@ -97,21 +97,42 @@ export function isSelectionToggle(tag: string): boolean {
 
 const hasPressed = (tag: string) => /\baria-pressed\b/.test(tag);
 
-/** 状态改变动作名称（例如连接后 Done、连接前 Close）不是选择开关。 */
-function hasNamedStateAction(tag: string): boolean {
-  const label =
-    /\baria-label=\{([^{}]+)\}/.exec(tag)?.[1] ??
-    /:aria-label="([^"]+)"/.exec(tag)?.[1];
-  if (!label) return false;
-  const branches = /^(.+?)\?\s*([^?:]+)\s*:\s*([^?:]+)$/s.exec(label.trim());
+/** 开标签之后、`</Button>` 之前的按钮内容；可访问名可能就写在这里。 */
+function buttonBody(source: string, tag: string): string {
+  const start = source.indexOf(tag);
+  if (start < 0) return "";
+  const from = start + tag.length;
+  const end = source.indexOf("</Button>", from);
+  return end < 0 ? "" : source.slice(from, end);
+}
+
+/**
+ * 状态改变动作名称（例如连接后 Done、连接前 Close）不是选择开关。
+ * 名称写在 `aria-label` 里，或写在按钮文字里（JSX `{c ? a : b}` / Vue
+ * `{{ c ? a : b }}`）都算，但条件必须与 variant 的条件相同、两支必须不同。
+ */
+function hasNamedStateAction(tag: string, body = ""): boolean {
   const variantCondition =
     /\bvariant=\{([^?{}]+)\?/.exec(tag)?.[1] ??
     /:variant="([^?"]+)\?/.exec(tag)?.[1];
   const normalize = (value: string | undefined) => value?.replace(/\s+/g, "");
-  return Boolean(
-    branches &&
-    normalize(branches[1]) === normalize(variantCondition) &&
-    branches[2]?.trim() !== branches[3]?.trim(),
+  const names = (expression: string | undefined) => {
+    if (!expression) return false;
+    const branches = /^(.+?)\?\s*([^?:]+)\s*:\s*([^?:]+)$/s.exec(
+      expression.trim(),
+    );
+    return Boolean(
+      branches &&
+      normalize(branches[1]) === normalize(variantCondition) &&
+      branches[2]?.trim() !== branches[3]?.trim(),
+    );
+  };
+  const label =
+    /\baria-label=\{([^{}]+)\}/.exec(tag)?.[1] ??
+    /:aria-label="([^"]+)"/.exec(tag)?.[1];
+  if (label) return names(label);
+  return [...body.matchAll(/\{\{?([^{}]+)\}\}?/g)].some((match) =>
+    names(match[1]),
   );
 }
 
@@ -120,7 +141,9 @@ function offenders(file: string, source: string): string[] {
   return buttonTags(source)
     .filter(
       (tag) =>
-        isSelectionToggle(tag) && !hasPressed(tag) && !hasNamedStateAction(tag),
+        isSelectionToggle(tag) &&
+        !hasPressed(tag) &&
+        !hasNamedStateAction(tag, buttonBody(source, tag)),
     )
     .map((tag) => {
       const variant = /\bvariant=(\{[^]*?\}|"[^"]*")/.exec(tag)![1]!;
@@ -175,6 +198,31 @@ describe("选中态必须念得出来", () => {
       offenders(
         "fixture.tsx",
         '<Button variant={selected ? "default" : "outline"} aria-label={selected ? daily : daily}>Daily</Button>',
+      ),
+    ).toHaveLength(1);
+
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={stage === "connected" ? "default" : "outline"} onClick={onDone}>{stage === "connected" ? text.done : t.common.close}</Button>',
+      ),
+    ).toEqual([]);
+    expect(
+      offenders(
+        "fixture.vue",
+        `<Button :variant="stage === 'connected' ? 'default' : 'outline'">{{ stage === 'connected' ? done : close }}</Button>`,
+      ),
+    ).toEqual([]);
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={selected ? "default" : "outline"}>{other ? done : close}</Button>',
+      ),
+    ).toHaveLength(1);
+    expect(
+      offenders(
+        "fixture.tsx",
+        '<Button variant={selected ? "default" : "outline"}>{selected ? daily : daily}</Button>',
       ),
     ).toHaveLength(1);
   });

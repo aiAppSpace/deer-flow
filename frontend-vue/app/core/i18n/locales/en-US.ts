@@ -1449,7 +1449,8 @@ export const enUS: Translations = {
       failedTitle: "Unable to connect",
     },
     scheduledUpdates: {
-      supported: "Scheduled task updates: supported; manage in Notification settings",
+      supported:
+        "Scheduled task updates: supported; manage in Notification settings",
       supportedAfterConnect:
         "Scheduled task updates: supported; connect to manage notifications",
       unsupported: "Scheduled task updates: not available for this app yet",
@@ -1725,7 +1726,8 @@ export const enUS: Translations = {
       lightDescription: "Bright palette with higher contrast for daytime.",
       darkDescription: "Dim palette that reduces glare for focus.",
       languageTitle: "Language",
-      languageDescription: "Choose the interface language and preferred language for replies.",
+      languageDescription:
+        "Choose the interface language and preferred language for replies.",
     },
     tools: {
       title: "Tools",

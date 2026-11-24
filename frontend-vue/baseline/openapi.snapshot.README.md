@@ -26,4 +26,4 @@ Gateway 在构造期加载 Python extensions，并在核心路由后挂载贡献
 
 OpenAPI 不描述 SSE 动态 payload、run 生命周期、工具输出或实时浏览器帧；这些仍由 JSON contracts、协议单测和真实 Gateway E2E 验证。调用 `openapi()` 也不证明 Gateway lifespan、身份权限或数据库迁移已经通过。
 
-当前受控核心快照：172 条路径 / 202 个 schema；其余 34 个 router 无条件挂载，条件/扩展 routers 按当前代码与受控 fixture 独立验证。
+当前受控核心快照：216 条路径 / 234 个 schema；其余 41 个 router 无条件挂载，条件/扩展 routers 按当前代码与受控 fixture 独立验证。

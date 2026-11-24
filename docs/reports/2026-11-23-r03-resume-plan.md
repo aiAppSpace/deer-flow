@@ -23,7 +23,7 @@
    - 扩展目录 1 个（`tests/unit/extensions/catalog.test.ts`）：上游打包的扩展从 6 个增加到 19 个。
    - 选中态守卫 1 个（`toggle-variant-pressed`）：见第 3 条。
 2. **全绿之前不推送。** `ceed64e7b` 等 Vue 门禁全绿后再推到 `origin/main-wc`，推送前仍要问用户。
-3. **上游 React 的渠道绑定对话框只靠颜色表示选中态**（`frontend/src/components/workspace/channels/channel-binding-code-dialog.tsx`）。按“React 真实缺陷可经证据修复”在 React 侧修，补上可读的选中标记，不记为例外。
+3. **渠道绑定对话框的按钮不是 React 缺陷，已改守卫。**（11-24 更正：原先判断它“只靠颜色表示选中态”，用户据此选了在 React 侧修。）`frontend/src/components/workspace/channels/channel-binding-code-dialog.tsx` 底部按钮是动作键，连接前文字为“关闭”、连接后为“完成”，可访问名随状态变化，守卫文件头本就写明这种情况不需要 `aria-pressed`。守卫只认 `aria-label` 分支，认不出写在按钮文字里的分支，所以误报。已扩展 `frontend-vue/tests/guards/toggle-variant-pressed.test.ts` 识别按钮文字里的同条件分支，并加正反夹具；React 代码未改。
 4. **同名文案保留上游说法，不回退。** 合并后为满足“同名词条两边同字”（零豁免门禁），Vue 有 19 条文案改成了上游说法。其中几条描述的是 Vue 还没有的行为，例如语音输入改为录音后转写、模型设置先选厂商、智能体保存确认、定时任务通知设置入口、回复语言偏好。这些登记为**行为待办**，在新清单里补 Vue 行为，不能为了让字对得上去改回旧文案。
 5. **合并带进来的新功能是待办，不是豁免。** 豁免只限 `frontend-vue/baseline/react-parity-scope.json` 里的内容和部署项（`/` 落地页内容、docs/blog 四条路由、整站静态模式），定义见 `frontend-vue/ARCHITECTURE.md` 的“与 React 的对齐范围”。分享页 `/share/[share_token]`、用量统计 `/workspace/usage`、工具审批、工作区搜索、语音录音转写等都是核心功能，必须进待办。“非核心”“没人用”都不构成豁免理由。
 6. **合并后的挂账是机械结果，不是结论。** 2 条路由进了 `pendingRoutes`，40 份新 React e2e 用例进了 `parity-scenario-coverage.json` 的 pending（`docs-search-mobile` 进 docs 豁免），459 个新词条进了 `upstream-i18n-map.json` 的 pending，3 份新契约进了 `gen-contract-constants.mjs` 的 `NOT_CONSUMED`。新清单要逐条判断并给出优先级。
