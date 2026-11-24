@@ -2,7 +2,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Code2Icon,
   CopyIcon,
-  DownloadIcon,
   EyeIcon,
   LoaderIcon,
   PackageIcon,
@@ -47,6 +46,7 @@ import { useArtifactContent } from "@/core/artifacts/hooks";
 import {
   getArtifactViewState,
   getTabularDelimiter,
+  parseWriteFileArtifact,
 } from "@/core/artifacts/preview";
 import { urlOfArtifact } from "@/core/artifacts/utils";
 import {
@@ -55,6 +55,7 @@ import {
 } from "@/core/artifacts/viewer";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { writeTextToClipboard } from "@/core/clipboard";
+import { useArtifactPreviewRenderer } from "@/core/extensions/artifact-previews";
 import { useI18n } from "@/core/i18n/hooks";
 import { findToolCallResult } from "@/core/messages/utils";
 import { installSkill, SkillRequestError } from "@/core/skills/api";
@@ -68,16 +69,19 @@ import {
 import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
+import { FileTypeIcon } from "../file-type-icon";
 import { useThread } from "../messages/context";
 import { Tooltip } from "../tooltip";
 
+import { ArtifactDownloadButton } from "./artifact-download-button";
 import {
-  ArtifactDownloadFallback,
   ArtifactFilePreview,
   ArtifactPreviewError,
   formatArtifactBytes,
 } from "./artifact-file-preview";
 import { useArtifacts } from "./context";
+import { PluginArtifactPreview } from "./plugin-artifact-preview";
+import { useArtifactSelection } from "./use-artifact-selection";
 
 const WRITE_FILE_PREVIEW_REFRESH_INTERVAL_MS = 3000;
 
@@ -107,13 +111,16 @@ export function ArtifactFileDetail({
   const isWriteFile = useMemo(() => {
     return filepathFromProps.startsWith("write-file:");
   }, [filepathFromProps]);
-  const filepath = useMemo(() => {
-    if (isWriteFile) {
-      const url = new URL(filepathFromProps);
-      return decodeURIComponent(url.pathname);
-    }
-    return filepathFromProps;
-  }, [filepathFromProps, isWriteFile]);
+  // `write-file:` URLs come from messages and from the panel's persisted
+  // selection, so parse them through the guarded helper instead of `new URL`
+  // + `decodeURIComponent` directly: a malformed value must degrade to the
+  // raw string, not throw during render.
+  const parsedWriteFile = useMemo(
+    () => (isWriteFile ? parseWriteFileArtifact(filepathFromProps) : undefined),
+    [filepathFromProps, isWriteFile],
+  );
+  const filepath = parsedWriteFile?.path ?? filepathFromProps;
+  const { match: pluginPreview } = useArtifactPreviewRenderer(filepath);
   // Keep these local because ChatBox replaces context artifacts with thread state.
   const [openedPresentedFilepaths, setOpenedPresentedFilepaths] = useState<
     string[]
@@ -182,15 +189,15 @@ export function ArtifactFileDetail({
   const isSupportPreview =
     language === "html" || language === "markdown" || isTabular;
   const toolResult = (() => {
-    if (!isWriteFile) {
-      return undefined;
-    }
-    const url = new URL(filepathFromProps);
-    const toolCallId = url.searchParams.get("tool_call_id");
+    const toolCallId = parsedWriteFile?.toolCallId;
     if (!toolCallId) {
       return undefined;
     }
-    return findToolCallResult(toolCallId, thread.messages);
+    return findToolCallResult(
+      toolCallId,
+      thread.messages,
+      parsedWriteFile?.messageId,
+    );
   })();
   const artifactViewState = getArtifactViewState({
     filepath: filepathFromProps,
@@ -269,15 +276,38 @@ export function ArtifactFileDetail({
   }, [content, filepath, isWriteFile, setDrafts, sha256, truncated]);
 
   const [viewMode, setViewMode] = useState<"code" | "preview">(
-    artifactViewState.initialViewMode,
+    isEditing ? "code" : artifactViewState.initialViewMode,
   );
   const [isInstalling, setIsInstalling] = useState(false);
   const isLoadingFullContent = fullContentRequested && isLoading;
   const effectiveViewMode =
     truncated && language === "html" ? "code" : viewMode;
+  const selection = useArtifactSelection({
+    filepath,
+    threadId,
+    ownerId: user?.id,
+    source: editorContent,
+    revision: activeDraft.baselineSha256,
+    enabled:
+      isCodeFile &&
+      !isWriteFile &&
+      !isSkillFile &&
+      !isMock &&
+      !isLoading &&
+      !error &&
+      !thread.isLoading &&
+      !isSaving &&
+      env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true",
+    editable:
+      canEdit &&
+      !thread.isLoading &&
+      !isSaving &&
+      !activeDraft.conflict &&
+      activeDraft.baselineSha256 === sha256,
+  });
   useEffect(() => {
-    setViewMode(artifactViewState.initialViewMode);
-  }, [artifactViewState.initialViewMode, filepathFromProps]);
+    setViewMode(isEditing ? "code" : artifactViewState.initialViewMode);
+  }, [artifactViewState.initialViewMode, filepathFromProps, isEditing]);
 
   const confirmDiscard = useCallback(() => {
     return !isDirty || window.confirm(t.artifactEditing.discardChanges);
@@ -325,24 +355,38 @@ export function ArtifactFileDetail({
       return;
     }
 
+    const submittedDraftContent = activeDraft.draftContent;
+    const submittedBaselineSha256 = activeDraft.baselineSha256;
     setIsSaving(true);
     try {
       const result = await updateArtifactContent({
         threadId,
         filepath,
-        content: activeDraft.draftContent,
-        expectedSha256: activeDraft.baselineSha256,
+        content: submittedDraftContent,
+        expectedSha256: submittedBaselineSha256,
       });
-      const savedContent = activeDraft.draftContent;
+      // A refetch started before or during the save can still return old bytes.
+      // Cancel both preview and full reads before publishing the saved revision.
+      await queryClient.cancelQueries({
+        queryKey: ["artifact", filepathFromProps, threadId, isMock],
+      });
       setDrafts((current) => ({
         ...current,
-        [filepath]: {
-          filepath,
-          baselineContent: savedContent,
-          baselineSha256: result.sha256,
-          draftContent: savedContent,
-          conflict: false,
-        },
+        [filepath]: (() => {
+          const currentDraft = current[filepath] ?? activeDraft;
+          const changedSinceSubmit =
+            currentDraft.draftContent !== submittedDraftContent ||
+            currentDraft.baselineSha256 !== submittedBaselineSha256;
+          return {
+            ...currentDraft,
+            baselineContent: submittedDraftContent,
+            baselineSha256: result.sha256,
+            draftContent: changedSinceSubmit
+              ? currentDraft.draftContent
+              : submittedDraftContent,
+            conflict: false,
+          };
+        })(),
       }));
       queryClient.setQueryData(
         ["artifact", filepathFromProps, threadId, isMock, fullContentRequested],
@@ -352,7 +396,7 @@ export function ArtifactFileDetail({
             | undefined,
         ) => ({
           ...current,
-          content: savedContent,
+          content: submittedDraftContent,
           sha256: result.sha256,
         }),
       );
@@ -429,15 +473,8 @@ export function ArtifactFileDetail({
       )}
     >
       <ArtifactHeader className="min-w-0 px-2 max-[361px]:grid max-[361px]:grid-cols-[minmax(0,1fr)] @max-[28rem]:flex-wrap @max-[28rem]:gap-y-2">
-        {/* The title column must be allowed to shrink. A flex item defaults to
-            min-width:auto, so without min-w-0 this column refuses to go below
-            its content width: a long artifact name (measured with a 59-char
-            file name at 1280px) pushes the whole action row past the panel's
-            overflow-hidden box — Edit/Open/Copy/Download/Close all end up
-            entirely off-screen, 199px beyond the clip edge, so the file cannot
-            be downloaded or the panel closed. The middle column already carries
-            min-w-0 and grows; it is the title that has to give. */}
-        <div className="flex max-w-full min-w-0 items-center gap-2 max-[361px]:w-full @max-[28rem]:grow @max-[28rem]:basis-0">
+        <div className="flex max-w-full min-w-0 items-center gap-1 max-[361px]:w-full @max-[28rem]:grow @max-[28rem]:basis-0">
+          <FileTypeIcon filename={filepath} compact />
           <ArtifactTitle className="max-w-full min-w-0">
             {isWriteFile ? (
               <div className="truncate px-2">{getFileName(filepath)}</div>
@@ -608,7 +645,12 @@ export function ArtifactFileDetail({
                 }
                 onClick={() => {
                   const w = window.open(
-                    resolveArtifactOpenURL({ filepath, threadId, isMock }),
+                    resolveArtifactOpenURL({
+                      filepath,
+                      threadId,
+                      isMock,
+                      hasPluginPreview: !!pluginPreview,
+                    }),
                     "_blank",
                     "noopener,noreferrer",
                   );
@@ -640,27 +682,11 @@ export function ArtifactFileDetail({
               />
             )}
             {!isEditing && !isWriteFile && (
-              <ArtifactAction
-                icon={DownloadIcon}
-                label={t.common.download}
-                tooltip={
-                  isTabular && isDirty
-                    ? t.artifactTable.savedVersion
-                    : t.common.download
-                }
-                onClick={() => {
-                  const w = window.open(
-                    urlOfArtifact({
-                      filepath,
-                      threadId,
-                      download: true,
-                      isMock,
-                    }),
-                    "_blank",
-                    "noopener,noreferrer",
-                  );
-                  if (w) w.opener = null;
-                }}
+              <ArtifactDownloadButton
+                filepath={filepath}
+                threadId={threadId}
+                isMock={isMock}
+                compact
               />
             )}
             <ArtifactAction
@@ -682,6 +708,7 @@ export function ArtifactFileDetail({
         </div>
       </ArtifactHeader>
       <ArtifactContent className="flex flex-col p-0 @max-[28rem]:max-h-dvh @max-[28rem]:min-h-auto @max-[28rem]:overflow-visible">
+        {selection.toolbar}
         {truncated && !(isTabular && effectiveViewMode === "preview") && (
           <div className="border-border bg-muted/40 flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-sm">
             <span className="text-muted-foreground">
@@ -726,9 +753,11 @@ export function ArtifactFileDetail({
                 content={editorContent}
                 language={language ?? "text"}
                 scrollKey={`${threadId}:${filepathFromProps}`}
+                artifact={{ filepath, threadId, isMock }}
                 url={url}
                 truncated={truncated}
                 active={effectiveViewMode === "preview" && !isLoading}
+                onTextSelection={selection.onTextSelection}
               />
             )}
           {isCodeFile &&
@@ -752,6 +781,7 @@ export function ArtifactFileDetail({
                   }));
                 }}
                 onSave={() => void handleSave()}
+                onSelectionChange={selection.onSourceSelection}
                 language={language}
               />
             )}
@@ -772,10 +802,11 @@ export function ArtifactFileDetail({
             />
           )}
           {!isCodeFile && !canPreviewInBrowser && (
-            <ArtifactDownloadFallback
+            <PluginArtifactPreview
               filepath={filepath}
               threadId={threadId}
               isMock={isMock}
+              isRunning={thread.isLoading}
             />
           )}
         </div>

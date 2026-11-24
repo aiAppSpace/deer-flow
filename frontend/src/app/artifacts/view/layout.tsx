@@ -1,7 +1,6 @@
 import "katex/dist/katex.min.css";
 import "streamdown/styles.css";
 
-import { QueryClientProvider } from "@/components/query-client-provider";
 // See workspace-content.tsx: the wrapper, not `sonner` directly.
 import { Toaster } from "@/components/ui/sonner";
 import { I18nProvider } from "@/core/i18n/context";
@@ -19,14 +18,11 @@ export const dynamic = "force-dynamic";
  * The auth guard lives in the page rather than here. A layout cannot read
  * `searchParams`, and this route carries its whole target in the query string
  * — guarding here would redirect to /login with nothing to come back to.
- * No AuthProvider either: nothing under this route reads `useAuth`.
+ * The page also owns the auth/query providers: installed preview contributions
+ * need the current viewer, while public showcase readers stay anonymous.
  *
- * The `Toaster` is not decoration: the citation panel rendered under this
- * route calls `toast.success(t.clipboard.copiedToClipboard)` after a copy
- * (citation-sources-panel.tsx:105). Without a mounted viewport that call is a
- * silent no-op — the user copies a source and gets no feedback at all. Both
- * other routes that render this panel already mount one (workspace-content.tsx,
- * showcase/[thread_id]/layout.tsx); this window was the only one missing it.
+ * The citation panel under this route reports copies through `toast`, so the
+ * window needs its own Toaster viewport.
  */
 export default async function ArtifactViewerLayout({
   children,
@@ -35,10 +31,8 @@ export default async function ArtifactViewerLayout({
 
   return (
     <I18nProvider initialLocale={locale}>
-      <QueryClientProvider>
-        {children}
-        <Toaster position="top-center" />
-      </QueryClientProvider>
+      {children}
+      <Toaster position="top-center" />
     </I18nProvider>
   );
 }

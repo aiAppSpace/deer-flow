@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Run pnpm directly when available, otherwise run it through Corepack."""
+"""Run the frontend's pinned pnpm version directly or through Corepack."""
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -16,6 +18,14 @@ ALLOWED_PROJECTS = ("frontend", "frontend-vue")
 COREPACK_NOTICE = "Using pnpm via Corepack."
 
 
+def find_corepack_command() -> list[str] | None:
+    corepack_names = ("corepack.cmd", "corepack") if os.name == "nt" else ("corepack", "corepack.cmd")
+    for name in corepack_names:
+        if corepack_path := shutil.which(name):
+            return [str(Path(corepack_path)), "pnpm"]
+    return None
+
+
 def find_pnpm_command() -> list[str] | None:
     """Return the preferred pnpm-compatible command for this machine."""
     pnpm_names = ("pnpm.cmd", "pnpm") if os.name == "nt" else ("pnpm", "pnpm.cmd")
@@ -23,11 +33,7 @@ def find_pnpm_command() -> list[str] | None:
         if pnpm_path := shutil.which(name):
             return [str(Path(pnpm_path))]
 
-    corepack_names = ("corepack.cmd", "corepack") if os.name == "nt" else ("corepack", "corepack.cmd")
-    for name in corepack_names:
-        if corepack_path := shutil.which(name):
-            return [str(Path(corepack_path)), "pnpm"]
-    return None
+    return find_corepack_command()
 
 
 def resolve_project_directory(project: str, repo_root: Path = REPO_ROOT) -> Path:
@@ -73,6 +79,42 @@ def run_pnpm(arguments: Sequence[str], project_dir: Path | None = None) -> int:
             file=sys.stderr,
         )
         return 127
+
+    if Path(command[0]).stem.lower() == "pnpm":
+        try:
+            package_manager = json.loads((project_dir / "package.json").read_text(encoding="utf-8"))["packageManager"]
+            if not isinstance(package_manager, str) or not package_manager.startswith("pnpm@"):
+                raise ValueError("packageManager must name a pinned pnpm version")
+            pinned_version = package_manager.removeprefix("pnpm@")
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            print(f"Error: Cannot read pinned pnpm version from {project_dir.name}/package.json: {exc}", file=sys.stderr)
+            return 127
+        try:
+            probe = subprocess.run(
+                [command[0], "--version"],
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                check=False,
+                shell=False,
+                cwd=project_dir,
+            )
+        except OSError as exc:
+            print(f"Error: Failed to check pnpm version via {command[0]}: {exc}", file=sys.stderr)
+            return 126
+        installed_version = probe.stdout.strip()
+        if probe.returncode == 0 and re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", installed_version):
+            if installed_version != pinned_version:
+                corepack_command = find_corepack_command()
+                if corepack_command is None:
+                    print(
+                        f"Error: pnpm {installed_version} is on PATH, but {project_dir.name}/package.json pins {pinned_version}. Install that version or make Corepack available.",
+                        file=sys.stderr,
+                    )
+                    return 127
+                command = corepack_command
+        else:
+            print("Warning: could not determine pnpm version; proceeding without pin check.", file=sys.stderr)
 
     if Path(command[0]).stem.lower() == "corepack":
         print(COREPACK_NOTICE, file=sys.stderr)

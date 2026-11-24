@@ -31,7 +31,6 @@ import os
 import posixpath
 import re
 import shlex
-import tempfile
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace as dc_replace
@@ -49,11 +48,11 @@ from deerflow.agents.middlewares.skill_usage import MAX_SKILL_SNAPSHOT_CHARS, SK
 from deerflow.agents.middlewares.tool_call_args import ToolCallOccurrence, pair_tool_call_results, rewrite_messages_tool_call_args
 from deerflow.agents.middlewares.tool_output_synopsis import render_tool_output_preview
 from deerflow.agents.middlewares.tool_result_meta import TOOL_META_KEY
-from deerflow.agents.middlewares.tool_transform_meta import append_tool_transform
+from deerflow.agents.middlewares.tool_transform_meta import append_tool_transform, tool_content_fingerprint
 from deerflow.community.ragflow.sources import budget_source_artifact
 from deerflow.config.summarization_config import DEFAULT_SKILL_FILE_READ_TOOL_NAMES
 from deerflow.config.tool_output_config import ToolOutputConfig
-from deerflow.constants import DEFAULT_SKILLS_CONTAINER_PATH
+from deerflow.constants import DEFAULT_SKILLS_CONTAINER_PATH, WRITE_ELISION_PLACEHOLDER_TEMPLATE
 from deerflow.sandbox.lease import run_sync_lifecycle_operation
 from deerflow.sandbox.sandbox_provider import get_sandbox_provider
 from deerflow.storage import BlobRef, BlobStoreError, get_blob_store_if_enabled
@@ -719,7 +718,7 @@ def _patch_tool_message(
     trigger = _effective_trigger(tool_name, config)
     citation_result = None
     if tool_name in {"knowledge_search", "task"} and trigger > 0 and len(text) > trigger:
-        citation_result = budget_source_artifact(text, msg.artifact, trigger, summary=(budgeted[0] if budgeted else text) if tool_name == "task" else "")
+        citation_result = budget_source_artifact(text, msg.artifact, trigger, summary=(budgeted.replacement if budgeted else text) if tool_name == "task" else "")
     if citation_result is not None:
         replacement, update["artifact"] = citation_result
         transform_kind = "truncated"
@@ -728,6 +727,11 @@ def _patch_tool_message(
         transform_kind = budgeted.transform_kind
     else:
         return msg
+    from deerflow.knowledge.sources import prune_sources
+
+    replacement, artifact = prune_sources(replacement, update.get("artifact", msg.artifact))
+    if artifact is not msg.artifact or "artifact" in update:
+        update["artifact"] = artifact
     update["content"] = [{"type": "text", "text": replacement}, *retained_blocks] if retained_blocks else replacement
     if getattr(msg, "response_metadata", None):
         update["response_metadata"] = dict(msg.response_metadata)
@@ -735,9 +739,15 @@ def _patch_tool_message(
     new_kwargs.pop(TOOL_OUTPUT_BLOB_KEY, None)
     if budgeted is not None and budgeted.blob_metadata is not None:
         new_kwargs[TOOL_OUTPUT_BLOB_KEY] = budgeted.blob_metadata
+    # The replacement can name a per-call file, so record what it replaced:
+    # identical outputs of repeated calls must still compare equal.
+    try:
+        source_sha256 = tool_content_fingerprint(msg.content)
+    except (TypeError, ValueError, RecursionError):
+        source_sha256 = None
     if citation_result is not None and budgeted is not None and budgeted.transform_kind == "externalized":
-        append_tool_transform(new_kwargs, "externalized", by="ToolOutputBudgetMiddleware")
-    append_tool_transform(new_kwargs, transform_kind, by="ToolOutputBudgetMiddleware")
+        append_tool_transform(new_kwargs, "externalized", by="ToolOutputBudgetMiddleware", source_sha256=source_sha256)
+    append_tool_transform(new_kwargs, transform_kind, by="ToolOutputBudgetMiddleware", source_sha256=source_sha256)
     update["additional_kwargs"] = new_kwargs
     return msg.model_copy(update=update)
 
@@ -925,12 +935,16 @@ def _write_restored_output(filepath: str, data: bytes) -> bool:
     tmp_path: str | None = None
     try:
         os.makedirs(directory, exist_ok=True)
-        fd, tmp_path = tempfile.mkstemp(prefix=f".{os.path.basename(filepath)}.", suffix=".tmp", dir=directory)
-        with os.fdopen(fd, "wb") as handle:
+        candidate_path = os.path.join(directory, f".tool-output-{uuid.uuid4().hex}.tmp")
+        # Match initial publication's creation permissions for mounted sandbox
+        # readers, while retaining the recovering Gateway's restrictive umask.
+        with open(candidate_path, "xb") as handle:
+            tmp_path = candidate_path
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp_path, filepath)
+        tmp_path = None
         return True
     except OSError:
         logger.warning("Failed to restore externalized tool output on this Gateway", exc_info=True)
@@ -1049,8 +1063,9 @@ _SUPERSEDING_READ_STATUSES = frozenset({"success", "partial_success"})
 # Deterministic for a given payload so repeated model calls keep the same
 # request prefix (prompt caching) instead of drifting. Framework-owned static
 # text plus a character count; no model-supplied value is interpolated (the
-# path stays visible in the call's own ``path`` argument).
-_ELIDED_WRITE_CONTENT_TEMPLATE = "[content elided: {chars} chars; this write_file call succeeded and the file was read or modified again afterwards, so the on-disk file is the current version; call read_file on its path to see it]"
+# path stays visible in the call's own ``path`` argument). The template is
+# shared with ``write_file``, which refuses to write it back out (#7319).
+_ELIDED_WRITE_CONTENT_TEMPLATE = WRITE_ELISION_PLACEHOLDER_TEMPLATE
 
 
 def elide_superseded_write_payloads(messages: list[Any], *, min_chars: int, keep_recent: int) -> list[Any] | None:

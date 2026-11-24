@@ -31,9 +31,9 @@ ENTRYPOINT = REPO_ROOT / "docker" / "dev-entrypoint.sh"
 def _topology_table() -> dict[str, str]:
     """`{服务名: 端口}`，从 AGENTS.md 的 Service Topology 表里读。"""
     text = AGENTS_MD.read_text(encoding="utf-8")
-    start = text.index("## Service Topology")
-    end = text.index("Nginx is the single public entry", start)
-    rows = re.findall(r"^\|\s+\*\*(.+?)\*\*\s+\|\s+`(\d+)`\s+\|", text[start:end], re.M)
+    start = text.index("## Service topology")
+    end = text.index("Nginx serves the frontend", start)
+    rows = re.findall(r"^\|\s*([A-Za-z][^|]*?)\s*\|\s*(\d+)\s*\|", text[start:end], re.M)
     return {name.strip(): port for name, port in rows}
 
 
@@ -42,7 +42,7 @@ def test_table_parses_into_every_documented_service():
     table = _topology_table()
     assert set(table) == {
         "Nginx",
-        "Gateway API",
+        "Gateway",
         "React frontend",
         "Vue frontend",
         "Provisioner",
@@ -65,7 +65,7 @@ def test_nginx_port_is_the_published_one_in_both_compose_files():
 
 
 def test_gateway_port_is_the_one_uvicorn_binds():
-    port = _topology_table()["Gateway API"]
+    port = _topology_table()["Gateway"]
     assert f"--port {port}" in ENTRYPOINT.read_text(encoding="utf-8")
 
 

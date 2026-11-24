@@ -196,7 +196,7 @@ def test_vue_dockerfile_and_dev_launcher_expose_the_vue_hmr_service() -> None:
     assert "FROM dependencies AS dev" in dockerfile
     assert 'services="redis frontend frontend-vue gateway nginx"' in docker_script
     assert 'service="frontend-vue"' in docker_script
-    assert "exec $COMPOSE_CMD up --build --watch --remove-orphans $services" in docker_script
+    assert "$COMPOSE_CMD up --build --watch --remove-orphans $services" in docker_script
     assert "stop_compose_watch" not in docker_script
     assert "WATCH_PID_FILE" not in docker_script
     assert "--frontend)" not in docker_script

@@ -45,6 +45,7 @@ from deerflow.agents.middlewares.tool_output_budget_middleware import (
     _tool_message_over_budget,
 )
 from deerflow.agents.middlewares.tool_output_synopsis import build_tool_output_synopsis
+from deerflow.agents.middlewares.tool_transform_meta import tool_content_fingerprint, tool_result_source_digest
 from deerflow.config.app_config import AppConfig
 from deerflow.config.sandbox_config import SandboxConfig
 from deerflow.config.tool_output_config import ToolOutputConfig
@@ -1041,6 +1042,16 @@ class TestWrapToolCallExternalize:
             assert len(files) == 1
             with open(os.path.join(storage_dir, files[0]), encoding="utf-8") as f:
                 assert f.read() == content
+
+    def test_identical_outputs_record_the_same_source_digest(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mw = ToolOutputBudgetMiddleware(config=ToolOutputConfig(externalize_min_chars=100))
+            content = "x" * 500
+            results = [mw.wrap_tool_call(_make_request(tool_call_id=call_id, outputs_path=tmpdir), lambda _, call_id=call_id: _tm(content, name="remote_executor", tool_call_id=call_id)) for call_id in ("tc-1", "tc-2")]
+
+            # Each call names its own file; the trail records what both replaced.
+            assert results[0].content != results[1].content
+            assert tool_result_source_digest(results[0]) == tool_result_source_digest(results[1]) == tool_content_fingerprint(content)
 
 
 class TestToolOutputBlobPersistence:
@@ -2440,6 +2451,9 @@ class TestSupersededWriteElision:
 
     @staticmethod
     def _middleware(**overrides) -> ToolOutputBudgetMiddleware:
+        # Elision remains available as an explicit opt-in; behavior-focused
+        # tests enable it so changing the safe default does not weaken them.
+        overrides.setdefault("elide_superseded_writes", True)
         return ToolOutputBudgetMiddleware(config=ToolOutputConfig(**overrides))
 
     @staticmethod
@@ -2708,6 +2722,20 @@ class TestSupersededWriteElision:
 
         assert forwarded is request
 
+    def test_default_config_keeps_model_history_append_only(self):
+        mw = ToolOutputBudgetMiddleware(config=ToolOutputConfig())
+        w1, r1 = _write("call-1", self.PATH, "x" * 5000)
+        rd, rr = _read("call-2", self.PATH)
+        w2, r2 = _write("call-3", self.OTHER, "tiny")
+
+        first_request, first_forwarded = self._forward(mw, [w1, r1])
+        later_request, later_forwarded = self._forward(mw, [w1, r1, rd, rr, w2, r2])
+
+        assert first_forwarded is first_request
+        assert later_forwarded is later_request
+        assert self._content(first_forwarded, 0) == "x" * 5000
+        assert self._content(later_forwarded, 0) == self._content(first_forwarded, 0)
+
     def test_middleware_disabled_passes_request_through(self):
         mw = self._middleware(enabled=False)
         w1, r1 = _write("call-1", self.PATH, "x" * 5000)
@@ -2720,7 +2748,7 @@ class TestSupersededWriteElision:
 
     def test_config_defaults(self):
         config = ToolOutputConfig()
-        assert config.elide_superseded_writes is True
+        assert config.elide_superseded_writes is False
         assert config.superseded_write_min_chars == 2000
         assert config.keep_recent_writes == 1
 
@@ -2743,7 +2771,7 @@ class TestSupersededWriteElision:
         with open(example_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         tool_output = data["tool_output"]
-        assert tool_output["elide_superseded_writes"] is True
+        assert tool_output["elide_superseded_writes"] is False
         assert tool_output["superseded_write_min_chars"] == 2000
         assert tool_output["keep_recent_writes"] == 1
         # New user-settable keys are a schema change: the outdated-config warning must fire.

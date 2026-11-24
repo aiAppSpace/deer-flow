@@ -82,6 +82,7 @@ function assertSupportedStreamModes(payload: Record<string, unknown>): void {
 export const DEERFLOW_DURABLE_STATUS: Record<string, RunOutcome | null> = {
   pending: null,
   running: null,
+  waiting_for_input: null,
   success: "completed",
   interrupted: "cancelled",
   error: "failed",

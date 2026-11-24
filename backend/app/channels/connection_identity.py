@@ -44,17 +44,29 @@ async def attach_connection_identity(
     return inbound
 
 
+def fallback_store_channel(channel_name: str, topic_id: str | None, repo: Any) -> str:
+    """Select the binding namespace for a topic without a connection.
+
+    Feishu deployments using connection identities keep unbound topics in a
+    separate namespace. Room bindings and legacy deployments use the channel name.
+    """
+    if channel_name == "feishu" and topic_id and repo is not None:
+        return "feishu-unbound"
+    return channel_name
+
+
 async def lookup_thread_id(msg: InboundMessage, *, repo: Any, store: Any) -> str | None:
     """Return the DeerFlow thread mapped to *msg*'s conversation/topic, if any.
 
     A message carrying a resolved connection is mapped in the connection repository
     and nowhere else (``ChannelManager._store_thread_id`` writes only there); every
-    other message is mapped in the JSON ``ChannelStore``. Adapters that gate on "is
-    this thread already ours?" must use this rather than reading the store directly,
-    or bound users' threads look unengaged.
+    other message is mapped in the global ``ChannelStore`` (the shared
+    ``channel_thread_bindings`` table, or the legacy JSON file on a memory database).
+    Adapters that gate on "is this thread already ours?" must use this rather than
+    reading the store directly, or bound users' threads look unengaged.
     """
     if msg.connection_id and repo is not None:
         return await repo.get_thread_id(msg.connection_id, msg.chat_id, msg.topic_id)
     if store is None:
         return None
-    return store.get_thread_id(msg.channel_name, msg.chat_id, topic_id=msg.topic_id)
+    return await store.get_thread_id(fallback_store_channel(msg.channel_name, msg.topic_id, repo), msg.chat_id, topic_id=msg.topic_id)

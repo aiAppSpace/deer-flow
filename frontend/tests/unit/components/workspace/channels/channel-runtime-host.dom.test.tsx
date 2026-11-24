@@ -28,6 +28,9 @@ rs.mock("@/core/channels/hooks", () => ({
   useConnectChannelProvider: rs.fn(),
 }));
 rs.mock("@/core/i18n/hooks", () => ({ useI18n: () => ({ t: enUS }) }));
+rs.mock("@/components/workspace/channels/channel-binding-code-dialog", () => ({
+  ChannelBindingCodeDialog: () => null,
+}));
 rs.mock("sonner", () => ({ toast: { success: rs.fn(), error: rs.fn() } }));
 rs.mock("@/core/channels/open-connect-url", () => ({
   closeConnectWindow: rs.fn(),
@@ -83,7 +86,9 @@ function provider(id: string): ChannelProvider {
     enabled: true,
     configured: false,
     connectable: true,
-    auth_mode: "binding_code",
+    // Binding-code providers open their own dialog; these cases cover the
+    // connect generation fence, which deep-link providers still go through.
+    auth_mode: "deep_link",
     connection_status: "not_connected",
     credential_fields: [
       { name: "token", label: "Token", type: "password", required: true },

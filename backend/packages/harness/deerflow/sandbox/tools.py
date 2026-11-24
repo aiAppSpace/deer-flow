@@ -1,6 +1,4 @@
 import asyncio
-import errno
-import hashlib
 import json
 import logging
 import ntpath
@@ -8,15 +6,15 @@ import os
 import posixpath
 import re
 import shlex
+import string
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
-from functools import lru_cache
-from html.parser import HTMLParser
+from functools import lru_cache, partial
 from pathlib import Path
-from urllib.parse import unquote
 
 from langchain.tools import tool
+from langchain_core.messages import ToolMessage
 
 from deerflow.agents.thread_state import ThreadDataState
 from deerflow.authz.sandbox_authz import (
@@ -27,13 +25,16 @@ from deerflow.authz.sandbox_authz import (
 )
 from deerflow.config import get_app_config
 from deerflow.config.paths import VIRTUAL_PATH_PREFIX
-from deerflow.constants import DEFAULT_SKILLS_CONTAINER_PATH
+from deerflow.constants import DEFAULT_SKILLS_CONTAINER_PATH, WRITE_ELISION_PLACEHOLDER_TEMPLATE
 from deerflow.runtime.secret_context import read_active_secrets
 from deerflow.runtime.user_context import resolve_runtime_user_id
-from deerflow.sandbox.env_policy import is_blocked_env_name
+from deerflow.sandbox.command_scope import command_owner
 from deerflow.sandbox.exceptions import (
+    SandboxAuthorizationError,
     SandboxError,
+    SandboxFileNotFoundError,
     SandboxNotFoundError,
+    SandboxPermissionError,
     SandboxRuntimeError,
 )
 from deerflow.sandbox.file_operation_lock import get_file_operation_lock
@@ -43,20 +44,24 @@ from deerflow.sandbox.lease import (
     sandbox_command_scope,
     sandbox_lease_owner,
 )
+from deerflow.sandbox.local.local_sandbox import LocalSandbox, escape_powershell_path
 from deerflow.sandbox.overwrite import unwrap_sandbox
-from deerflow.sandbox.path_patterns import build_output_mask_pattern, normalize_mask_tail, replace_output_path_matches
+from deerflow.sandbox.path_patterns import PATH_START_BOUNDARY, build_output_mask_pattern, normalize_mask_tail, replace_output_path_matches
+from deerflow.sandbox.prewarm import claim_sandbox_prewarm
 from deerflow.sandbox.read_file_contract import (
     READ_FILE_EMPTY,
     READ_FILE_INVALID_END_LINE,
     READ_FILE_INVALID_RANGE,
     READ_FILE_INVALID_START_LINE,
+    READ_FILE_NO_CONTENT_RESULTS,
+    READ_FILE_NUMBERED_MAX_LINES,
     READ_FILE_START_LINE_EXCEEDS,
     READ_FILE_TRUNCATION_PREFIX,
 )
-from deerflow.sandbox.sandbox import Sandbox
+from deerflow.sandbox.sandbox import CommandOutput, Sandbox
 from deerflow.sandbox.sandbox_provider import SandboxProvider, get_sandbox_provider
 from deerflow.sandbox.search import GrepMatch
-from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE, is_host_bash_allowed
+from deerflow.sandbox.security import LOCAL_HOST_BASH_DISABLED_MESSAGE
 from deerflow.tools.types import Runtime
 from deerflow.utils.file_io import await_drained
 from deerflow.utils.host_paths import windows_incompatible_segment
@@ -73,6 +78,29 @@ _SANDBOX_AUTHORIZATION_CHECKED: ContextVar[bool] = ContextVar(
 )
 
 _ABSOLUTE_PATH_PATTERN = re.compile(r"(?<![:\w])(?<!:/)/(?:[^\s\"'`;&|<>()]+)")
+# ``$NAME/...`` expands to a host path at runtime (``$HOME/.ssh/id_rsa``), but
+# the absolute-path regex skips a ``/`` that follows a word character, so the
+# bare-name form needs its own scan. Positional ``$1/etc/passwd`` slips the
+# same way, and ``bash -c`` gets no positionals, so it expands to ``/etc/passwd``.
+# ``${NAME}/``, ``~/`` and special parameters (``$@/``, ``$?/``) already surface
+# through the absolute-path regex because ``}``, ``~``, ``@`` and ``?`` are not
+# word chars. The remainder is captured in a lookahead so a skipped prefix does
+# not hide a later one (``$1/$2/etc/passwd``).
+# The one structural exemption is a ``$`` inside the single-quoted inline
+# program of an awk-family command (``awk '{print $NF/2}'``): bash expands
+# nothing there and awk reads ``$NAME`` as a field reference. See
+# ``_awk_program_field_spans`` for what keeps that exemption narrow.
+_SHELL_VARIABLE_PATH_PATTERN = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*|[0-9])/(?=([^\s\"'`;&|<>()]*))")
+# ``~name/`` expands to that user's home (``~root/.ssh/id_rsa``) and slips the
+# absolute-path regex for the same reason. Tilde expansion only applies at the
+# start of a word or after ``=``/``:``, so ``HEAD~1/`` stays out of scope.
+_NAMED_TILDE_PATH_PATTERN = re.compile(r"(?<![^\s=:;&|<>()\"'`])~[A-Za-z0-9._-]+/[^\s\"'`;&|<>()]*")
+# ``PWD`` written anywhere except as a ``$PWD`` expansion (``PWD=/``,
+# ``read PWD``, ``for PWD in``) may rebind it away from the workspace.
+_PWD_REBIND_PATTERN = re.compile(r"(?<!\$)\bPWD\b")
+# ``CDPATH`` makes a relative ``cd docs`` land outside the workspace without any
+# absolute path in the command.
+_CDPATH_PATTERN = re.compile(r"\bCDPATH\b")
 # A ``{...}`` block holding a single identifier-like placeholder (e.g. ``{id}``
 # in a REST template or ``{port}`` in an f-string). Bash brace expansion such as
 # ``{passwd,shadow}`` or ``{,.bak}`` does NOT match (commas/dots/empty inner).
@@ -100,38 +128,15 @@ _DEFAULT_GREP_MAX_RESULTS = 100
 _MAX_GREP_MAX_RESULTS = 500
 _DEFAULT_WRITE_FILE_ERROR_MAX_CHARS = 2000
 
-# Maximum bytes accepted in a single write_file call (issue #3189).
-# Oversized writes correlate with LLM streaming chunk-gap timeouts because the
-# tool-call JSON payload (which the model must emit as one continuous stream)
-# grows past the safe window. 80 KB ≈ 20K tokens, a comfortable headroom under
-# the factory-default 240s stream_chunk_timeout.
+# Maximum bytes accepted in a single non-append write_file call (issue #3189).
+# Oversized single-shot writes correlate with LLM streaming chunk-gap timeouts
+# because the tool-call JSON payload (which the model must emit as one
+# continuous stream) grows past the safe window. 80 KB ≈ 20K tokens, a
+# comfortable headroom under the factory-default 240s stream_chunk_timeout.
 # Deployments can override via env var DEERFLOW_WRITE_FILE_MAX_BYTES; set to
 # 0 (or negative) to disable the guard entirely.
 _WRITE_FILE_CONTENT_MAX_BYTES = 80 * 1024
 _WRITE_FILE_MAX_BYTES_ENV = "DEERFLOW_WRITE_FILE_MAX_BYTES"
-_ARTIFACT_CHUNK_CONTENT_MAX_BYTES = 10 * 1024
-_ARTIFACT_CHUNK_MAX_BYTES_ENV = "DEERFLOW_ARTIFACT_CHUNK_MAX_BYTES"
-_HTML_FILE_EXTENSIONS = (".html", ".htm")
-_HTML_RESOURCE_SRC_TAGS = {
-    "audio",
-    "embed",
-    "iframe",
-    "img",
-    "input",
-    "script",
-    "source",
-    "track",
-    "video",
-}
-_HTML_RESOURCE_LINK_RELS = {
-    "apple-touch-icon",
-    "icon",
-    "manifest",
-    "modulepreload",
-    "preload",
-    "stylesheet",
-}
-_CSS_URL_PATTERN = re.compile(r"""url\(\s*(['"]?)(.*?)\1\s*\)""", re.IGNORECASE)
 _LOCAL_BASH_CWD_COMMANDS = {"cd", "pushd"}
 _LOCAL_BASH_COMMAND_WRAPPERS = {"command", "builtin"}
 _LOCAL_BASH_COMMAND_PREFIX_KEYWORDS = {"!", "{", "case", "do", "elif", "else", "for", "if", "select", "then", "time", "until", "while"}
@@ -706,6 +711,12 @@ def _sanitize_error(error: Exception, runtime: Runtime | None = None) -> str:
     msg = f"{type(error).__name__}: {error}"
     if runtime is not None and is_local_sandbox(runtime):
         thread_data = get_thread_data(runtime)
+        # OSError renders filenames with repr(), escaping Windows backslashes.
+        if isinstance(error, OSError):
+            for filename in (error.filename, error.filename2):
+                if filename is not None:
+                    masked = mask_local_paths_in_output(os.fsdecode(filename), thread_data)
+                    msg = msg.replace(repr(filename), repr(masked))
         msg = mask_local_paths_in_output(msg, thread_data)
     return msg
 
@@ -1021,6 +1032,7 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
 
     Allowed virtual-path families:
       - ``/mnt/user-data/*``  — always allowed (read + write)
+      - ``/mnt/user-data``    — the bare root, allowed only when *read_only* is True
       - ``/mnt/skills/*``     — allowed only when *read_only* is True
       - ``/mnt/acp-workspace/*`` — allowed only when *read_only* is True
       - Custom mount paths (from config.yaml) — respects per-mount ``read_only`` flag
@@ -1055,8 +1067,10 @@ def validate_local_tool_path(path: str, thread_data: ThreadDataState | None, *, 
             raise PermissionError(f"Write access to ACP workspace is not allowed: {path}")
         return
 
-    # User-data paths
-    if path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
+    # User-data paths. The bare root passes for reads because the local
+    # provider maps it for parity with AIO; the resolver still rejects it,
+    # and only ls lists it, one allowed directory at a time.
+    if path.startswith(f"{VIRTUAL_PATH_PREFIX}/") or (read_only and path == VIRTUAL_PATH_PREFIX):
         return
 
     # Custom mount paths — respect read_only config
@@ -1108,6 +1122,29 @@ def _resolve_and_validate_user_data_path(path: str, thread_data: ThreadDataState
     return str(resolved)
 
 
+def _user_data_root_dirs(path: str, thread_data: ThreadDataState) -> dict[str, str] | None:
+    """Map virtual to host workspace/uploads/outputs when *path* is the user-data root.
+
+    The local provider maps the root so ``ls`` matches AIO, but its host
+    directory can hold more than the three allowed directories. Callers list
+    each of them instead of walking the root. Any other path returns None.
+    """
+    mappings = _thread_virtual_to_actual_mappings(thread_data)
+    user_data_root = mappings.pop(VIRTUAL_PATH_PREFIX, None)
+    if user_data_root is None or Path(replace_virtual_path(path, thread_data)).resolve() != Path(user_data_root).resolve():
+        return None
+    return mappings
+
+
+def _list_user_data_root(sandbox: Sandbox, user_data_dirs: dict[str, str]) -> list[str]:
+    """List each allowed directory and one level below it, matching ls depth 2."""
+    entries: list[str] = []
+    for virtual_dir, actual_dir in user_data_dirs.items():
+        entries.append(f"{virtual_dir}/")
+        entries.extend(sandbox.list_dir(actual_dir, max_depth=1))
+    return entries
+
+
 def _is_non_file_url_token(token: str) -> bool:
     """Return True for URL tokens that should not be interpreted as paths."""
     values = [token]
@@ -1153,6 +1190,380 @@ def _split_shell_tokens(command: str) -> list[str]:
 
 
 _SHELL_PATH_HARD_TERMINATORS = frozenset("\"'`;&|<>()")
+
+_AWK_COMMAND_NAMES = frozenset({"awk", "gawk", "mawk", "nawk"})
+# awk options whose value is the next word. ``-f`` is handled separately: it
+# means there is no inline program, so the first operand is an input file. Any
+# other option (gawk's ``--assign``, ``-e``, ...) may also consume the next
+# word, so it forfeits the exemption.
+_AWK_OPTIONS_WITH_VALUE = frozenset({"-F", "-v"})
+# Command words that can make a later ``awk`` word run something other than
+# awk, or re-read quoted text: definitions (``alias``, ``function``, ``name()``
+# handled in the walk), ``eval``, sourcing, ``hash -p``, ``enable -f`` (loads a
+# builtin under any name) and a ``PATH`` rebind.
+# Any of them anywhere in the command forfeits the exemption for the whole
+# command; the words are compared after basename reduction.
+_AWK_EXEMPTION_BLOCKING_COMMANDS = frozenset({".", "alias", "autoload", "enable", "eval", "function", "hash", "source"})
+# ``name[...]=`` at a command start is never an environment prefix for awk, but
+# zsh's ``functions[awk]=...`` / ``aliases[awk]=...`` define a function or alias.
+_SHELL_ARRAY_ASSIGNMENT_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\[")
+# awk keywords after which ``/`` opens a regex literal (``print /re/``), and the
+# keywords whose closing ``)`` is followed by a pattern (``if (x) /re/``) rather
+# than a divisor (``($2+$3)/2``).
+_AWK_REGEX_KEYWORDS = frozenset({"case", "delete", "do", "else", "exit", "getline", "in", "print", "printf", "return"})
+_AWK_CONDITION_KEYWORDS = frozenset({"for", "if", "while"})
+_AWK_WORD_CHARS = frozenset(string.ascii_letters + string.digits + "_")
+_SHELL_WORD_OPERATOR_CHARS = frozenset(";&|()<>\n\r")
+_SHELL_ARITHMETIC_CHARS = frozenset(string.ascii_letters + string.digits + "_ \t\r\n+-*/%<>=!&|^~?:,[]")
+_SHELL_ARITHMETIC_VARIABLE_PATTERN = re.compile(r"\$(?:\{#?[A-Za-z_][A-Za-z0-9_]*\}|\{[0-9]+\}|[A-Za-z_][A-Za-z0-9_]*|[0-9]+)")
+
+
+def _awk_word_before(program: str, position: int) -> str | None:
+    """The identifier, number or ``]`` that ends just before *position*, or None.
+
+    Scans backward over spaces and tabs only, so the token must sit on the same
+    line. Returns ``"]"`` or ``")"`` for a closing bracket, the word for an
+    identifier or number, and None for anything else (operators, punctuation,
+    start of line).
+    """
+    end = position
+    while end > 0 and program[end - 1] in " \t":
+        end -= 1
+    if end == 0:
+        return None
+    if program[end - 1] in "])":
+        return program[end - 1]
+    start = end
+    while start > 0 and program[start - 1] in _AWK_WORD_CHARS:
+        start -= 1
+    return program[start:end] or None
+
+
+def _awk_program_code_spans(program: str, offset: int) -> list[tuple[int, int]] | None:
+    """Spans of *program* (shifted by *offset*) that awk reads as code, not string text.
+
+    A ``$NAME/`` in awk code is a field reference; inside a string literal it
+    is text that ``system("...")`` or ``getline < "..."`` may hand to a shell,
+    so string literals are left out. Rather than lex awk fully, walk the
+    program once: a ``"`` toggles a string literal (``\\`` escapes inside),
+    ``#`` outside one starts a comment that runs to the end of the line, and
+    inside a literal ``/`` and ``#`` are plain text (``split($0, p, "/")``).
+    A ``/`` outside a literal must be division, which in awk follows an
+    identifier, number, ``]`` or a ``)`` that does not close an ``if``,
+    ``while`` or ``for`` condition, all on the same line. Any other ``/``
+    (``gsub(/"/, ...)``, ``if (x) /re/``, a ``/`` at the start of a line)
+    opens a regex literal whose ``"`` would desynchronise the tracker, so
+    return None and the caller grants no exemption.
+    """
+    spans: list[tuple[int, int]] = []
+    in_string = False
+    segment_start = 0
+    open_parens: list[int] = []
+    last_closed_opener: int | None = None
+    position = 0
+    while position < len(program):
+        char = program[position]
+        if in_string:
+            if char == "\\":
+                position += 1
+            elif char == '"':
+                in_string = False
+                segment_start = position + 1
+        elif char == '"':
+            spans.append((offset + segment_start, offset + position))
+            in_string = True
+        elif char == "#":
+            newline = program.find("\n", position)
+            position = len(program) if newline == -1 else newline
+            continue
+        elif char == "(":
+            open_parens.append(position)
+        elif char == ")":
+            last_closed_opener = open_parens.pop() if open_parens else None
+        elif char == "/":
+            word = _awk_word_before(program, position)
+            if word == ")":
+                if last_closed_opener is None or _awk_word_before(program, last_closed_opener) in _AWK_CONDITION_KEYWORDS:
+                    return None
+            elif word is None or word in _AWK_REGEX_KEYWORDS:
+                return None
+        position += 1
+    if not in_string:
+        spans.append((offset + segment_start, offset + len(program)))
+    return spans
+
+
+class _ShellWord:
+    """One word of a scanned shell command.
+
+    ``text`` is the word with quotes removed; ``single_quoted`` is the span of
+    the word's content in the original command when the whole word is exactly
+    one single-quoted string, else None. ``kind`` is ``"word"``, ``"op"`` (a
+    command separator, including ``(`` and ``)``) or ``"redir"``.
+    """
+
+    __slots__ = ("kind", "single_quoted", "text")
+
+    def __init__(self, kind: str, text: str, single_quoted: tuple[int, int] | None = None) -> None:
+        self.kind = kind
+        self.text = text
+        self.single_quoted = single_quoted
+
+
+def _shell_arithmetic_end(command: str, start: int) -> int | None:
+    """End of a simple ``$((...))``, without strings or command substitutions.
+
+    Only ordinary arithmetic and simple variable/length expansions qualify.
+    Unknown parameter operators, quoting and executable substitutions forfeit
+    the exemption instead of guessing where the expression ends.
+    """
+    position = start + 3
+    depth = 0
+    while position < len(command):
+        char = command[position]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            if depth == 0:
+                return position + 2 if command.startswith("))", position) else None
+            depth -= 1
+        elif char == "$":
+            variable = _SHELL_ARITHMETIC_VARIABLE_PATTERN.match(command, position)
+            if variable is None:
+                return None
+            position = variable.end()
+            continue
+        elif char not in _SHELL_ARITHMETIC_CHARS:
+            return None
+        position += 1
+    return None
+
+
+def _scan_shell_words(command: str, arithmetic_spans: list[tuple[int, int]] | None = None) -> list[list[_ShellWord]] | None:
+    """Split *command* into word lists, one per command context, bash-style.
+
+    The first list is the top-level command; every ``$(...)`` substitution adds
+    its own list, since quoting starts afresh inside it and its first word is
+    a command. Single quotes, double quotes with ``\\`` escapes, ``\\x``
+    escapes, ``#`` comments at the start of a word, ``2>``-style redirections
+    and the ``;``, ``&&``, ``||``, ``|``, ``|&``, ``&``, ``(``, ``)`` and
+    newline separators follow bash. Returns None, so that no exemption is
+    granted, for anything it does not model: a backslash-newline (bash splices
+    the lines before parsing, which can spell ``awk`` across lines), backticks,
+    ``$'...'`` strings, a heredoc, an unmatched ``)`` and unbalanced quotes.
+    Simple arithmetic expansions are opaque words; optionally collect their
+    content spans separately from command substitutions and shell comments.
+    """
+    if "\\\n" in command or "\\\r" in command:
+        return None
+    contexts: list[list[_ShellWord]] = []
+
+    def scan(position: int, nested: bool) -> int | None:
+        items: list[_ShellWord] = []
+        contexts.append(items)
+        text: list[str] = []
+        quoted_spans: list[tuple[int, int]] = []
+        in_word = False
+        plain_so_far = True  # no quotes or substitutions seen in this word yet
+        depth = 0
+        n = len(command)
+
+        def flush() -> None:
+            nonlocal text, quoted_spans, in_word, plain_so_far
+            if in_word:
+                joined = "".join(text)
+                span = quoted_spans[0] if len(quoted_spans) == 1 and quoted_spans[0][1] - quoted_spans[0][0] == len(joined) else None
+                items.append(_ShellWord("word", joined, span))
+            text, quoted_spans, in_word, plain_so_far = [], [], False, True
+
+        while position < n:
+            char = command[position]
+            if char in " \t":
+                flush()
+                position += 1
+            elif char == "#" and not in_word:
+                newline = command.find("\n", position)
+                position = n if newline == -1 else newline
+            elif char in _SHELL_WORD_OPERATOR_CHARS:
+                if char in "<>" and in_word and plain_so_far and "".join(text).isdigit():
+                    text, in_word = [], False  # ``2>``: the digits belong to the operator
+                flush()
+                if char == ")":
+                    if depth == 0:
+                        return position + 1 if nested else None
+                    depth -= 1
+                    items.append(_ShellWord("op", ")"))
+                    position += 1
+                    continue
+                if char == "(":
+                    depth += 1
+                end = position + 1
+                group = "&|" if char in "&|" else "<>&|" if char in "<>" else ""
+                while end < n and command[end] in group:
+                    end += 1
+                operator = command[position:end]
+                if operator.startswith("<<") and not operator.startswith("<<<"):
+                    return None  # heredoc bodies are re-read by the shell
+                items.append(_ShellWord("redir" if char in "<>" else "op", operator))
+                position = end
+            elif char == "`":
+                return None
+            elif char == "'":
+                end = command.find("'", position + 1)
+                if end == -1:
+                    return None
+                quoted_spans.append((position + 1, end))
+                text.append(command[position + 1 : end])
+                in_word, plain_so_far = True, False
+                position = end + 1
+            elif char == '"':
+                position += 1
+                while position < n and command[position] != '"':
+                    if command[position] == "\\":
+                        position += 2
+                    elif command[position] == "`":
+                        return None
+                    elif command.startswith("$((", position):
+                        after = _shell_arithmetic_end(command, position)
+                        if after is None:
+                            return None
+                        if arithmetic_spans is not None:
+                            arithmetic_spans.append((position + 3, after - 2))
+                        position = after
+                    elif command.startswith("$(", position):
+                        after = scan(position + 2, True)
+                        if after is None:
+                            return None
+                        position = after
+                    else:
+                        position += 1
+                if position >= n:
+                    return None
+                text.append("\x00")  # opaque: content is never a bare awk program
+                in_word, plain_so_far = True, False
+                position += 1
+            elif command.startswith("$'", position):
+                return None
+            elif command.startswith("$((", position):
+                after = _shell_arithmetic_end(command, position)
+                if after is None:
+                    return None
+                if arithmetic_spans is not None:
+                    arithmetic_spans.append((position + 3, after - 2))
+                text.append("\x00")
+                in_word, plain_so_far = True, False
+                position = after
+            elif command.startswith("$(", position):
+                after = scan(position + 2, True)
+                if after is None:
+                    return None
+                text.append("\x00")
+                in_word, plain_so_far = True, False
+                position = after
+            elif char == "\\":
+                if position + 1 >= n:
+                    return None
+                text.append(command[position + 1])
+                in_word, plain_so_far = True, False
+                position += 2
+            else:
+                text.append(char)
+                in_word = True
+                position += 1
+        flush()
+        if nested or depth:
+            return None
+        return position
+
+    if scan(0, False) is None:
+        return None
+    return contexts
+
+
+def _awk_inline_program_span(items: list[_ShellWord], index: int) -> tuple[tuple[int, int] | None, int]:
+    """Return the span of a wholly single-quoted awk program and the next index."""
+    while index < len(items):
+        item = items[index]
+        if item.kind == "op":
+            break
+        if item.kind == "redir" or item.text in _AWK_OPTIONS_WITH_VALUE:
+            index += 2
+            continue
+        if item.text == "--file" or item.text.startswith(("-f", "--file=")):
+            return None, index + 1
+        if item.text == "--":
+            index += 1
+            break
+        if not item.text.startswith("-") or item.text == "-":
+            break
+        if not item.text.startswith(("-F", "-v")):
+            return None, index + 1
+        index += 1
+    if index < len(items) and items[index].kind == "word" and items[index].single_quoted is not None:
+        return items[index].single_quoted, index + 1
+    return None, index + 1
+
+
+def _shell_commands_for_exemptions(command: str, arithmetic_spans: list[tuple[int, int]] | None = None) -> list[tuple[str, list[_ShellWord]]] | None:
+    """Command names and arguments, unless shell syntax can redefine/re-read them."""
+    contexts = _scan_shell_words(command, arithmetic_spans)
+    if contexts is None:
+        return None
+
+    commands: list[tuple[str, list[_ShellWord]]] = []
+    for items in contexts:
+        at_command_start = True
+        index = 0
+        while index < len(items):
+            item = items[index]
+            if item.text.startswith("PATH=") or (index + 1 < len(items) and items[index + 1].kind == "op" and items[index + 1].text.startswith("(")):
+                return None  # PATH rebind or ``name ()`` function definition
+            if at_command_start and item.kind == "word" and _SHELL_ARRAY_ASSIGNMENT_PATTERN.match(item.text):
+                return None  # zsh ``functions[awk]=...`` / ``aliases[awk]=...``
+            if item.kind == "op":
+                at_command_start = True
+                index += 1
+                continue
+            if item.kind == "redir":
+                index += 1 if item.text.endswith("&") and item.text not in ("&>", "&>>") else 2
+                continue
+            if not at_command_start:
+                index += 1
+                continue
+            if _is_shell_assignment(item.text):
+                index += 1
+                continue
+            name = item.text.rsplit("/", 1)[-1]
+            if name in _LOCAL_BASH_COMMAND_PREFIX_KEYWORDS or name in _LOCAL_BASH_COMMAND_END_KEYWORDS or name in _LOCAL_BASH_COMMAND_WRAPPERS:
+                index += 1
+                continue
+            if name in _AWK_EXEMPTION_BLOCKING_COMMANDS:
+                return None
+            at_command_start = False
+            argument_end = index + 1
+            while argument_end < len(items) and items[argument_end].kind != "op":
+                argument_end += 1
+            commands.append((name, items[index + 1 : argument_end]))
+            index += 1
+    return commands
+
+
+def _awk_program_field_spans(command: str) -> list[tuple[int, int]]:
+    """Spans where ``$NAME/`` is an awk field reference rather than a path.
+
+    Only wholly single-quoted awk-family inline programs qualify. The shared
+    shell scanner rejects definitions, re-reading commands and uncertain shell
+    syntax. Awk string literals and ambiguous regex syntax remain checked.
+    """
+    field_spans: list[tuple[int, int]] = []
+    for name, arguments in _shell_commands_for_exemptions(command) or []:
+        if name in _AWK_COMMAND_NAMES:
+            program, _ = _awk_inline_program_span(arguments, 0)
+            if program is None:
+                continue
+            start, end = program
+            field_spans.extend(_awk_program_code_spans(command[start:end], start) or [])
+    return field_spans
 
 
 def _absolute_path_token_occurrences(command: str, tokens: list[str]) -> list[tuple[int, int, str]]:
@@ -1321,6 +1732,8 @@ def _validate_local_bash_shell_tokens(command: str, allowed_paths: list[str], to
     """Conservatively reject relative path escapes missed by absolute-path scanning."""
     if re.search(r"\$\([^)]*\b(?:cd|pushd)\b", command):
         raise PermissionError(f"Unsafe working directory change in command substitution. Use paths under {VIRTUAL_PATH_PREFIX}")
+    if _CDPATH_PATTERN.search(command):
+        raise PermissionError(f"Unsafe working directory change via CDPATH. Use paths under {VIRTUAL_PATH_PREFIX}")
 
     for token in tokens:
         if _is_shell_command_separator(token) or _is_shell_redirection_operator(token):
@@ -1428,12 +1841,51 @@ def _is_non_path_literal_fragment(fragment: str) -> bool:
     return False
 
 
+def _expression_division_spans(command: str) -> list[tuple[int, int]]:
+    """Verified inline-code and shell-arithmetic spans for closer division.
+
+    A shell word ending in a closer can still construct a path, including a
+    numeric filename or a variable-prefixed glob. Only simple shell arithmetic
+    and wholly single-quoted Python/Node/Perl program arguments qualify. The
+    existing conservative awk lexer also excludes double-quoted strings and
+    ambiguous regex syntax. Python triple quotes, JavaScript comments, backticks
+    and Perl alternative quoting forfeit the exemption because their lexical
+    rules differ. Single-quoted ``sh/bash -c`` arguments are
+    scanned as shell source, so their paths never become program expressions.
+    """
+    spans: list[tuple[int, int]] = []
+    commands = _shell_commands_for_exemptions(command, spans)
+    if commands is None:
+        return []
+    for name, arguments in commands:
+        if len(arguments) < 2 or arguments[0].kind != "word" or arguments[1].single_quoted is None:
+            continue
+        option = arguments[0].text
+        python = re.fullmatch(r"python(?:3(?:\.[0-9]+)?)?", name) and option == "-c"
+        node = name in {"node", "nodejs"} and option in {"-e", "--eval"}
+        perl = name == "perl" and re.fullmatch(r"-[alnpw]*e", option)
+        shell = name in {"sh", "bash"} and option == "-c"
+        start, end = arguments[1].single_quoted
+        program = command[start:end]
+        if shell:
+            spans.extend((start + left, start + right) for left, right in _expression_division_spans(program))
+        elif python or node or perl:
+            if "`" in program or (python and '"""' in program) or (node and ("/*" in program or "//" in program)) or (perl and re.search(r"\b(?:q[qrxw]?|m|s|tr|y)\b", program)):
+                continue
+            spans.extend(_awk_program_code_spans(program, start) or [])
+    return spans
+
+
+def _is_expression_division_after_closer(command: str, start: int, spans: list[tuple[int, int]]) -> bool:
+    """A single-segment slash after a closer must belong to verified code."""
+    return start > 0 and command[start - 1] in ")]}" and _is_in_spans(start - 1, spans) and _is_in_spans(start, spans)
+
+
 def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState | None) -> None:
     """Validate absolute paths in local-sandbox bash commands.
 
-    This validation is only a best-effort guard for the explicit
-    ``sandbox.allow_host_bash: true`` opt-in. It is not a secure sandbox
-    boundary and must not be treated as isolation from the host filesystem.
+    This compatibility helper checks literal paths in trusted local commands.
+    Agent shell commands are handled by a separate sandbox provider.
 
     In local mode, commands must use virtual paths under /mnt/user-data for
     user data access. Skills paths under /mnt/skills, ACP workspace paths
@@ -1443,6 +1895,18 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
     A small allowlist of common system path prefixes is kept for executable
     and device references (e.g. /bin/sh, /dev/null). Quoted shell words are
     validated whole, so a space inside quotes is not treated as a new segment.
+    A shell variable used as a path prefix (``$HOME/...``, ``$1/...``) or a named
+    home (``~root/...``) is rejected like ``${HOME}/...`` and ``~/...``, since its
+    runtime value is unknown here, except inside the single-quoted inline
+    program of awk/gawk/mawk/nawk (outside awk string literals), where bash
+    expands nothing and ``$NF/2`` or ``($2+$3)/2`` is field arithmetic; that
+    exemption is withheld from any command that could redefine ``awk`` or
+    re-read quoted text (see ``_awk_program_field_spans``);
+    ``$PWD/...`` is checked like the relative path it is equivalent to.
+    Outside awk programs, a single-segment match directly after ``)``, ``]``
+    or ``}`` is exempt only in verified single-quoted interpreter code or
+    simple shell arithmetic. Shell path construction stays checked regardless
+    of whether the filename is numeric or follows a glob or substitution.
     A windows-incompatible segment still rejects a path that is not already
     stored on the host; an existing host file may be read or renamed.
     """
@@ -1461,9 +1925,25 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
     path_token_occurrences = _absolute_path_token_occurrences(command, tokens)
     url_spans = _non_file_url_spans(command)
 
+    # Inside the single-quoted program of an awk command a ``/`` after ``)``
+    # is division (``($2+$3)/2``); only awk string literals, which the spans
+    # leave out, can carry text to a shell. Only a single-segment match
+    # (``/2``, ``/n``, ``/NR``) is exempt, so anything shaped like ``/a/b``
+    # is still rejected should the scanner ever misjudge a span.
+    awk_field_spans: list[tuple[int, int]] | None = None
+    expression_spans: list[tuple[int, int]] | None = None
     for match in _ABSOLUTE_PATH_PATTERN.finditer(command):
         if _is_in_spans(match.start(), url_spans):
             continue
+        if "/" not in match.group()[1:]:
+            if awk_field_spans is None:
+                awk_field_spans = _awk_program_field_spans(command)
+            if _is_in_spans(match.start(), awk_field_spans):
+                continue
+            if expression_spans is None:
+                expression_spans = _expression_division_spans(command)
+            if _is_expression_division_after_closer(command, match.start(), expression_spans):
+                continue
         absolute_path = match.group()
         if _is_non_path_literal_fragment(absolute_path):
             continue
@@ -1475,12 +1955,41 @@ def validate_local_bash_command_paths(command: str, thread_data: ThreadDataState
 
         unsafe_paths.append(candidate)
 
+    # A variable's value is unknown here, so its path is never allowed. The one
+    # exception is ``$PWD``: ``$PWD/.venv/bin`` names the same file as the
+    # relative ``.venv/bin``, which this guard already accepts, unless the
+    # command rebinds ``PWD`` itself.
+    # The prose exemption used above does not apply: ``$HOME/文档`` is a real
+    # host directory.
+    pwd_is_workspace = not _PWD_REBIND_PATTERN.search(command)
+    for match in _SHELL_VARIABLE_PATH_PATTERN.finditer(command):
+        if _is_in_spans(match.start(), url_spans):
+            continue
+        if awk_field_spans is None:
+            awk_field_spans = _awk_program_field_spans(command)
+        if _is_in_spans(match.start(), awk_field_spans):
+            continue
+        name, remainder = match.group(1), match.group(2)
+        if name == "PWD" and pwd_is_workspace:
+            continue
+        # ``$1/1024`` and ``$1/$2`` are awk-style field arithmetic
+        # (``awk '{print $1/$2}'``), not paths: standard top-level host
+        # directories do not start with a digit.
+        if name.isdigit() and remainder.removeprefix("$")[:1].isdigit():
+            continue
+        unsafe_paths.append(match.group() + remainder)
+
+    for match in _NAMED_TILDE_PATH_PATTERN.finditer(command):
+        if _is_in_spans(match.start(), url_spans):
+            continue
+        unsafe_paths.append(match.group())
+
     if unsafe_paths:
         unsafe = ", ".join(sorted(dict.fromkeys(unsafe_paths)))
         raise PermissionError(f"Unsafe absolute paths in command: {unsafe}. Use paths under {VIRTUAL_PATH_PREFIX}. {_LOCAL_BASH_PATH_RECOVERY_GUIDANCE}")
 
 
-def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState | None) -> str:
+def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState | None, *, shell: str | None = None) -> str:
     """Replace /mnt/user-data virtual paths in a command string for local sandbox.
 
     Skills paths (/mnt/skills) and ACP workspace paths (/mnt/acp-workspace)
@@ -1493,6 +2002,7 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
     Args:
         command: The command string that may contain virtual paths.
         thread_data: The thread data containing actual paths.
+        shell: Local execution shell, auto-detected when omitted.
 
     Returns:
         The command with user-data virtual paths replaced.
@@ -1511,37 +2021,31 @@ def replace_virtual_paths_in_command(command: str, thread_data: ThreadDataState 
         # bare root still matches and the sibling is rewritten into the thread's
         # host directory — a real path outside the mount contract. Same defect as
         # #4035 (reverse patterns) and #4053 (masking patterns), mirrored into
-        # this direction.
+        # this direction. ``PATH_START_BOUNDARY`` is the left-hand counterpart:
+        # the root must start a path, so an artifact URL such as
+        # ``.../artifacts/mnt/user-data/outputs/x.html`` is not rewritten.
         #
         # The class mirrors ``LocalSandbox._content_pattern``'s rather than
         # ``_command_pattern``'s: a virtual root can legitimately be followed by
         # ``:`` (PATH-style concatenation) or ``,``, which the shell-oriented
         # class rejects — narrowing to it would stop translating paths that
         # translate today. ``$`` covers a command ending exactly at the root.
-        pattern = re.compile(rf"{re.escape(VIRTUAL_PATH_PREFIX)}(?=/|$|[^\w./-])(/[^\s\"';&|<>()]*)?")
+        #
+        # The tail ends at ``:`` (like ``path_patterns._PATH_TAIL``): the
+        # boundary above admits PATH-style concatenation, but a tail that ran
+        # through the ``:`` swallowed every later entry of the list, leaving
+        # those virtual paths unresolved in the command.
+        pattern = re.compile(rf"{PATH_START_BOUNDARY}{re.escape(VIRTUAL_PATH_PREFIX)}(?=/|$|[^\w./-])(/[^\s\"';&|<>():,]*)?")
 
         def replace_user_data_match(match: re.Match) -> str:
-            return replace_virtual_path(match.group(0), thread_data).replace("\\", "/")
+            resolved = replace_virtual_path(match.group(0), thread_data).replace("\\", "/")
+            if LocalSandbox._is_powershell(shell or LocalSandbox._get_shell()):
+                return escape_powershell_path(match, resolved)
+            return resolved
 
         result = pattern.sub(replace_user_data_match, result)
 
     return result
-
-
-def _apply_cwd_prefix(command: str, thread_data: ThreadDataState | None) -> str:
-    """Prepend 'cd <workspace> &&' so relative paths are anchored to the thread workspace.
-
-    Args:
-        command: The bash command to execute.
-        thread_data: The thread data containing the workspace path.
-
-    Returns:
-        The command prefixed with 'cd <workspace> &&' if workspace_path is available,
-        otherwise the original command unchanged.
-    """
-    if thread_data and (workspace := thread_data.get("workspace_path")):
-        return f"cd {shlex.quote(workspace)} && {command}"
-    return command
 
 
 def get_thread_data(runtime: Runtime | None) -> ThreadDataState | None:
@@ -1874,14 +2378,16 @@ async def ensure_sandbox_initialized_async(runtime: Runtime | None = None) -> Sa
     provider = get_sandbox_provider()
     user_id = resolve_runtime_user_id(runtime)
     owner_id = sandbox_lease_owner(runtime.context)
-    if owner_id is None:
-        sandbox_id = await provider.acquire_async(thread_id, user_id=user_id)
-    else:
-        sandbox_id = await get_sandbox_lease_manager(provider).acquire_async(
-            owner_id,
-            thread_id,
-            user_id=user_id,
-        )
+    sandbox_id = await claim_sandbox_prewarm(runtime, provider=provider)
+    if sandbox_id is None:
+        if owner_id is None:
+            sandbox_id = await provider.acquire_async(thread_id, user_id=user_id)
+        else:
+            sandbox_id = await get_sandbox_lease_manager(provider).acquire_async(
+                owner_id,
+                thread_id,
+                user_id=user_id,
+            )
 
     runtime.state["sandbox"] = {"sandbox_id": sandbox_id}
 
@@ -1896,23 +2402,31 @@ async def ensure_sandbox_initialized_async(runtime: Runtime | None = None) -> Sa
 
 
 async def _run_sync_tool_after_async_sandbox_init(
-    func: Callable[..., str] | None,
+    func: Callable[..., str | ToolMessage] | None,
     runtime: Runtime,
     *args: object,
-) -> str:
+    _error_result: Callable[[str, BaseException | None], str | ToolMessage] | None = None,
+) -> str | ToolMessage:
     """Initialize lazily via async provider, then run sync tool body off-thread."""
     try:
         async with sandbox_authorization_scope_async(runtime):
-            await ensure_sandbox_initialized_async(runtime)
+            sandbox = await ensure_sandbox_initialized_async(runtime)
 
             if func is None:
-                return "Error: Tool implementation not available"
+                text = "Error: Tool implementation not available"
+                return _error_result(text, None) if _error_result else text
 
-            return await run_sync_lifecycle_operation(func, runtime, *args)
+            owner = sandbox_lease_owner(runtime.context)
+            signal_cancel = None
+            if func is bash_tool.func and owner and getattr(sandbox, "supports_command_cancellation", False):
+                signal_cancel = partial(sandbox.request_command_cancel, owner)
+            return await run_sync_lifecycle_operation(func, runtime, *args, _on_cancel=signal_cancel)
     except SandboxError as e:
-        return f"Error: {e}"
+        text = f"Error: {e}"
+        return _error_result(text, e) if _error_result else text
     except Exception as e:
-        return f"Error: Unexpected error initializing sandbox: {_sanitize_error(e, runtime)}"
+        text = f"Error: Unexpected error initializing sandbox: {_sanitize_error(e, runtime)}"
+        return _error_result(text, e) if _error_result else text
 
 
 def _execute_bash_command(
@@ -1922,21 +2436,25 @@ def _execute_bash_command(
     runtime: Runtime,
     env: dict[str, str] | None,
     timeout: float | None = None,
+    cwd: str | None = None,
 ) -> str:
     """Route subagent bash calls through their isolated shell-session scope."""
-    scope_id = sandbox_command_scope(runtime.context)
-    scoped_execute = getattr(sandbox, "execute_command_in_scope", None)
-    if scope_id is not None and callable(scoped_execute):
-        return scoped_execute(
-            command,
-            env=env,
-            timeout=timeout,
-            scope_id=scope_id,
-        )
-    # Keep duck-typed custom providers and test doubles compatible: the scoped
-    # method is an additive Sandbox API, and ordinary/lead executions retain
-    # the original execute_command path.
-    return sandbox.execute_command(command, env=env, timeout=timeout)
+    with command_owner(sandbox, sandbox_lease_owner(runtime.context)):
+        if cwd is not None and isinstance(sandbox, LocalSandbox):
+            return sandbox.execute_command(command, env=env, timeout=timeout, cwd=cwd)
+        scope_id = sandbox_command_scope(runtime.context)
+        scoped_execute = getattr(sandbox, "execute_command_in_scope", None)
+        if scope_id is not None and callable(scoped_execute):
+            return scoped_execute(
+                command,
+                env=env,
+                timeout=timeout,
+                scope_id=scope_id,
+            )
+        # Keep duck-typed custom providers and test doubles compatible: the scoped
+        # method is an additive Sandbox API, and ordinary/lead executions retain
+        # the original execute_command path.
+        return sandbox.execute_command(command, env=env, timeout=timeout)
 
 
 def ensure_thread_directories_exist(runtime: Runtime | None) -> None:
@@ -2244,10 +2762,6 @@ USER_ID_ENV = "DEERFLOW_USER_ID"
 _USER_ID_MAX_LEN = 256
 
 
-def _is_windows() -> bool:
-    return os.name == "nt"
-
-
 def _channel_identity_prefix(runtime: Runtime) -> str | None:
     """Build the command prefix that sets or clears the channel-user-id env var.
 
@@ -2318,8 +2832,7 @@ def _user_identity_prefix(runtime: Runtime) -> str:
     is a convenience for skill scripts — exactly like
     ``DEERFLOW_CHANNEL_USER_ID`` — not a credential and not proof of who is
     acting. Any bash command can overwrite its own environment, and anything the
-    command sources or launches (a dependency, a sourced rc file on the
-    host-bash path) can silently re-export a different id before a skill's
+    command sources or launches (such as a dependency or shell startup file) can silently re-export a different id before a skill's
     scoping logic reads it; only the outer prefix on the *next* ``bash_tool``
     call re-asserts the true value. Skills that need user-scoped *authorization*
     must resolve the identity server-side via ``resolve_runtime_user_id`` rather
@@ -2331,55 +2844,10 @@ def _user_identity_prefix(runtime: Runtime) -> str:
     return f"unset {USER_ID_ENV}; "
 
 
-def _github_env_from_runtime(runtime: Runtime) -> dict[str, str] | None:
-    """Build a per-call env overlay carrying a GitHub App installation token.
-
-    The GitHub channel mints a short-lived installation token in the
-    ``ChannelManager`` (app layer) and threads it through ``run_context``
-    so it lands in ``runtime.context["github_token"]``. We expose it to
-    the agent's bash as both ``GH_TOKEN`` (what the ``gh`` CLI reads) and
-    ``GITHUB_TOKEN`` (the conventional name). Returning ``None`` when no
-    token is present keeps non-GitHub runs identical to before.
-
-    The value at ``runtime.context["github_token"]`` may be either:
-
-    * a ``str`` — the captured token, the simple shape used by tests and
-      by older code paths that don't need refresh; or
-    * a zero-arg sync callable returning ``str`` — a provider that re-mints
-      transparently when the underlying installation token's 1h TTL is
-      nearing expiry. The provider's cache logic lives app-side (see
-      ``app.gateway.github.app_auth.mint_installation_token`` for the
-      cache + leeway semantics); the harness just calls it.
-
-    The callable path is what lets long autonomous runs survive past the
-    60-minute installation-token life: every bash invocation re-asks the
-    provider, which returns the cached token until ~55 min, then mints a
-    fresh one. Without this, a coder agent doing a multi-hour refactor
-    would do most of the work and then 401 on the final ``git push``.
-
-    The token still crosses the harness/app boundary as opaque data — the
-    harness never imports the app-layer minting code, preserving the
-    dependency firewall enforced by ``tests/test_harness_boundary.py``.
-    """
-    context = runtime.context if runtime.context is not None else None
-    value = context.get("github_token") if context else None
-    if callable(value):
-        try:
-            token = value()
-        except Exception:
-            logger.warning("github_token provider raised; skipping env overlay", exc_info=True)
-            return None
-    else:
-        token = value
-    if not isinstance(token, str) or not token:
-        return None
-    return {"GH_TOKEN": token, "GITHUB_TOKEN": token}
-
-
 _LARK_CLI_COMMAND_RE = re.compile(r"(?<![A-Za-z0-9_.-])lark-cli(?![A-Za-z0-9_.-])")
 
 
-def _lark_cli_env_from_runtime(runtime: Runtime, command: str, *, sandbox_paths: bool) -> dict[str, str] | None:
+def _lark_cli_env_from_runtime(runtime: Runtime, command: str, *, sandbox_paths: bool, sandbox: Sandbox | None = None) -> dict[str, str] | None:
     """Expose Settings-page Lark auth to sandbox ``lark-cli`` commands.
 
     Settings authorizes ``lark-cli`` under DeerFlow's per-user integration
@@ -2395,30 +2863,22 @@ def _lark_cli_env_from_runtime(runtime: Runtime, command: str, *, sandbox_paths:
     """
     if not _LARK_CLI_COMMAND_RE.search(command):
         return None
-    try:
-        from deerflow.integrations.lark_cli import lark_cli_env_overlay, sandbox_lark_broker_active
+    from deerflow.integrations.lark_cli import lark_cli_env_overlay
 
-        broker = sandbox_paths and sandbox_lark_broker_active()
-        return lark_cli_env_overlay(resolve_runtime_user_id(runtime), sandbox_paths=sandbox_paths, broker=broker)
-    except Exception:
-        logger.warning("Could not build Lark CLI env overlay; running command without managed auth", exc_info=True)
-        return None
+    broker = getattr(sandbox, "lark_cli_broker", None) if sandbox_paths else False
+    if broker is None:
+        raise RuntimeError("Sandbox Lark broker mode is unverified; refusing to execute lark-cli")
+    return lark_cli_env_overlay(resolve_runtime_user_id(runtime), sandbox_paths=sandbox_paths, broker=broker)
 
 
 @tool("bash", parse_docstring=True)
-def bash_tool(runtime: Runtime, command: str, description: str = "") -> str:
-    """Execute a bash command in the configured execution environment.
+def bash_tool(runtime: Runtime, command: str, description: str = "") -> str | ToolMessage:
+    """Execute a bash command in the configured isolated sandbox.
 
 
     - Use `python` to run Python code.
     - Prefer a thread-local virtual environment in `/mnt/user-data/workspace/.venv`.
     - Use `python -m pip` (inside the virtual environment) to install Python packages.
-    - When running against the local host via host bash, inspect the current environment instead of
-      guessing. For OS detection, start with `uname -s`; on Darwin follow with `sw_vers`. On Linux,
-      start with `uname -a` and read host system files such as `/etc/os-release` only when the active
-      sandbox policy permits it.
-    - If local host bash rejects a path, do not repeat the rejected command. For environment questions,
-      retry with command-only probes; otherwise use allowed virtual paths or explain the restriction.
     - To start a long-lived process such as a web server, ALWAYS run it in the background with its
       output redirected, e.g. `your-command > /mnt/user-data/workspace/server.log 2>&1 &`, then check
       the log file or poll the port. A long-lived process run in the foreground blocks the turn until
@@ -2431,68 +2891,16 @@ def bash_tool(runtime: Runtime, command: str, description: str = "") -> str:
     redaction_env = None
     try:
         sandbox = ensure_sandbox_initialized(runtime)
-        # Request-scoped secrets resolved for the active skill (#3861), plus a
-        # short-lived GitHub App installation token threaded through by the
-        # GitHub channel. Both are injected as per-call env into the subprocess,
-        # never placed in the command string.
+        if isinstance(sandbox, LocalSandbox) or is_local_sandbox(runtime):
+            return f"Error: {LOCAL_HOST_BASH_DISABLED_MESSAGE}"
+        # Only the active skill's explicitly resolved secrets belong here.
         injected_env = read_active_secrets(getattr(runtime, "context", None)) or None
         identity_prefix = _channel_identity_prefix(runtime)
         user_prefix = _user_identity_prefix(runtime)
-        github_env = _github_env_from_runtime(runtime)
-        lark_cli_env = _lark_cli_env_from_runtime(runtime, command, sandbox_paths=not is_local_sandbox(runtime))
-        if github_env:
-            injected_env = {**(injected_env or {}), **github_env}
+        lark_cli_env = _lark_cli_env_from_runtime(runtime, command, sandbox_paths=True, sandbox=sandbox)
         if lark_cli_env:
             injected_env = {**(injected_env or {}), **lark_cli_env}
         redaction_env = injected_env
-        if is_local_sandbox(runtime):
-            # Match the credential-name policy used for inherited host env.
-            # Keep benign operator settings readable and redact effective
-            # credentials before execution, including any exception output.
-            redaction_env = {name: value for name, value in (getattr(sandbox, "environment", None) or {}).items() if is_blocked_env_name(name)}
-            redaction_env.update(injected_env or {})
-            if not is_host_bash_allowed():
-                return f"Error: {LOCAL_HOST_BASH_DISABLED_MESSAGE}"
-            ensure_thread_directories_exist(runtime)
-            thread_data = get_thread_data(runtime)
-            validate_local_bash_command_paths(command, thread_data)
-            command = replace_virtual_paths_in_command(command, thread_data)
-            command = _apply_cwd_prefix(command, thread_data)
-            # POSIX-only: the Windows local sandbox may execute via
-            # PowerShell/cmd.exe where `export` is not valid syntax, so the id
-            # is published through the subprocess environment instead —
-            # LocalSandbox layers `env` into the per-process environment, and
-            # unlike AioSandbox it has no persistent shell session that could
-            # carry a stale value forward. Deliberately kept out of
-            # `injected_env`, which doubles as the secret-redaction set: an
-            # identifier is not a secret and must stay readable in output.
-            local_env = injected_env
-            if not _is_windows():
-                command = user_prefix + (identity_prefix or "") + command
-            else:
-                windows_user_id = _resolved_user_id(runtime)
-                if windows_user_id is not None:
-                    local_env = {**(injected_env or {}), USER_ID_ENV: windows_user_id}
-            try:
-                from deerflow.config.app_config import get_app_config
-
-                sandbox_cfg = get_app_config().sandbox
-                max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
-                command_timeout = sandbox_cfg.bash_command_timeout if sandbox_cfg else None
-            except Exception:
-                max_chars = 20000
-                command_timeout = None
-            output = _execute_bash_command(
-                sandbox,
-                command,
-                runtime=runtime,
-                env=local_env,
-                timeout=command_timeout,
-            )
-            return _truncate_bash_output(
-                mask_secret_values(mask_local_paths_in_output(output, thread_data), redaction_env),
-                max_chars,
-            )
         ensure_thread_directories_exist(runtime)
         command = f"cd {VIRTUAL_PATH_PREFIX}/workspace; {command}"
         command = user_prefix + (identity_prefix or "") + command
@@ -2501,20 +2909,19 @@ def bash_tool(runtime: Runtime, command: str, description: str = "") -> str:
 
             sandbox_cfg = get_app_config().sandbox
             max_chars = sandbox_cfg.bash_output_max_chars if sandbox_cfg else 20000
+            command_timeout = sandbox_cfg.bash_command_timeout if sandbox_cfg else None
         except Exception:
             max_chars = 20000
-        return _truncate_bash_output(
-            mask_secret_values(
-                _execute_bash_command(
-                    sandbox,
-                    command,
-                    runtime=runtime,
-                    env=injected_env,
-                ),
-                injected_env,
-            ),
-            max_chars,
+            command_timeout = None
+        output = _execute_bash_command(
+            sandbox,
+            command,
+            runtime=runtime,
+            env=injected_env,
+            timeout=command_timeout,
         )
+        content = _truncate_bash_output(mask_secret_values(output, injected_env), max_chars)
+        return _bash_command_result(runtime, output, content)
     except SandboxError as e:
         return mask_secret_values(f"Error: {e}", redaction_env)
     except PermissionError as e:
@@ -2523,7 +2930,33 @@ def bash_tool(runtime: Runtime, command: str, description: str = "") -> str:
         return mask_secret_values(f"Error: Unexpected error executing command: {_sanitize_error(e, runtime)}", redaction_env)
 
 
-async def _bash_tool_async(runtime: Runtime, command: str, description: str = "") -> str:
+def _bash_command_result(runtime: Runtime, output: str, content: str) -> str | ToolMessage:
+    """Stamp provider execution state before stdout can be interpreted as an error."""
+    call_id = getattr(runtime, "tool_call_id", None)
+    if not isinstance(output, CommandOutput) or not isinstance(call_id, str) or not call_id:
+        # Legacy providers retain their existing error envelopes; direct Python
+        # callers without a tool-call ID retain their string return contract.
+        return content
+    status = "error" if output.exit_code != 0 else "success"
+    return ToolMessage(
+        content=content,
+        name="bash",
+        tool_call_id=call_id,
+        status=status,
+        additional_kwargs={
+            "deerflow_tool_meta": {
+                "status": status,
+                "exit_code": output.exit_code,
+                "error_type": "unknown" if status == "error" else None,
+                "recoverable_by_model": True,
+                "recommended_next_action": "try_alternative" if status == "error" else "continue",
+                "source": "tool_return",
+            }
+        },
+    )
+
+
+async def _bash_tool_async(runtime: Runtime, command: str, description: str = "") -> str | ToolMessage:
     return await _run_sync_tool_after_async_sandbox_init(bash_tool.func, runtime, command, description)
 
 
@@ -2548,6 +2981,7 @@ def ls_tool(runtime: Runtime, path: str, description: str = "") -> str:
         ensure_thread_directories_exist(runtime)
         requested_path = path
         thread_data = None
+        user_data_dirs = None
         if is_local_sandbox(runtime):
             thread_data = get_thread_data(runtime)
             validate_local_tool_path(path, thread_data, read_only=True)
@@ -2559,9 +2993,11 @@ def ls_tool(runtime: Runtime, path: str, description: str = "") -> str:
                 # from the sandbox mapping's user_id).
                 pass
             elif not _is_custom_mount_path(path):
-                path = _resolve_and_validate_user_data_path(path, thread_data)
+                user_data_dirs = _user_data_root_dirs(path, thread_data)
+                if user_data_dirs is None:
+                    path = _resolve_and_validate_user_data_path(path, thread_data)
             # Custom mount paths and skills/ACP paths are resolved by LocalSandbox._resolve_path()
-        children = sandbox.list_dir(path)
+        children = _list_user_data_root(sandbox, user_data_dirs) if user_data_dirs is not None else sandbox.list_dir(path)
         if not children:
             return "(empty)"
         output = "\n".join(children)
@@ -2585,8 +3021,9 @@ def ls_tool(runtime: Runtime, path: str, description: str = "") -> str:
         return f"Error: {e}"
     except FileNotFoundError:
         return f"Error: Directory not found: {requested_path}"
-    except PermissionError:
-        return f"Error: Permission denied: {requested_path}"
+    except PermissionError as e:
+        detail = _sanitize_error(e, runtime) if e.filename is not None else requested_path
+        return f"Error: Permission denied: {detail}"
     except Exception as e:
         return f"Error: Unexpected error listing directory: {_sanitize_error(e, runtime)}"
 
@@ -2650,8 +3087,9 @@ def glob_tool(
         return f"Error: Directory not found: {requested_path}"
     except NotADirectoryError:
         return f"Error: Path is not a directory: {requested_path}"
-    except PermissionError:
-        return f"Error: Permission denied: {requested_path}"
+    except PermissionError as e:
+        detail = _sanitize_error(e, runtime) if e.filename is not None else requested_path
+        return f"Error: Permission denied: {detail}"
     except Exception as e:
         return f"Error: Unexpected error searching paths: {_sanitize_error(e, runtime)}"
 
@@ -2693,7 +3131,8 @@ def grep_tool(
 
     Args:
         pattern: The string or regex pattern to search for.
-        path: The **absolute** file or root directory to search.
+        path: The **absolute** file or root directory to search. Naming a file
+            searches it at any size; a directory walk skips files over 1 MB.
         description: Optional short explanation of this search shown in the UI.
         glob: Optional glob filter for candidate files, for example `**/*.py`.
         literal: Whether to treat `pattern` as a plain string. Default is False.
@@ -2751,8 +3190,9 @@ def grep_tool(
         return f"Error: Path is not a directory: {requested_path}"
     except re.error as e:
         return f"Error: Invalid regex pattern: {e}"
-    except PermissionError:
-        return f"Error: Permission denied: {requested_path}"
+    except PermissionError as e:
+        detail = _sanitize_error(e, runtime) if e.filename is not None else requested_path
+        return f"Error: Permission denied: {detail}"
     except Exception as e:
         return f"Error: Unexpected error searching file contents: {_sanitize_error(e, runtime)}"
 
@@ -2820,6 +3260,40 @@ def _ranged_read_hits_a_line(runtime: Runtime | None, path: str, line: int) -> b
     return "\n" in _read_file_from_sandbox(runtime, path, start_line=line - 1, end_line=line)
 
 
+def _read_file_result(runtime: Runtime, content: str, *, status: str = "success", error_type: str | None = None) -> str | ToolMessage:
+    """Stamp execution state at the producer; file text is never a status signal."""
+    call_id = getattr(runtime, "tool_call_id", None)
+    if not isinstance(call_id, str) or not call_id:
+        # Keep direct Python callers that have no LangChain tool call compatible.
+        return content
+    return ToolMessage(
+        content=content,
+        name="read_file",
+        tool_call_id=call_id,
+        status="error" if status == "error" else "success",
+        additional_kwargs={
+            "deerflow_tool_meta": {
+                "status": status,
+                "error_type": error_type,
+                "recoverable_by_model": True,
+                "recommended_next_action": "try_alternative" if status == "error" else "continue",
+                "source": "tool_return",
+            }
+        },
+    )
+
+
+def _read_file_failure(runtime: Runtime, content: str, exc: BaseException | None = None) -> str | ToolMessage:
+    category = "unknown"
+    if isinstance(exc, (FileNotFoundError, SandboxFileNotFoundError)):
+        category = "not_found"
+    elif isinstance(exc, (PermissionError, SandboxPermissionError, SandboxAuthorizationError)):
+        category = "permission"
+    elif isinstance(exc, (TimeoutError, ConnectionError)):
+        category = "transient"
+    return _read_file_result(runtime, content, status="error", error_type=category)
+
+
 @tool("read_file", parse_docstring=True)
 def read_file_tool(
     runtime: Runtime,
@@ -2827,8 +3301,11 @@ def read_file_tool(
     description: str = "",
     start_line: int | None = None,
     end_line: int | None = None,
-) -> str:
+) -> str | ToolMessage:
     """Read the contents of a text file. Use this to examine source code, configuration files, logs, or any text-based file.
+
+    Ranges returning 1-40 lines from uploads or workspace files show source line labels when the labeled output fits the budget.
+    For edits or writes, copy only the text after the first ' | ' on each labeled line.
 
     Args:
         path: The **absolute** path to the file to read.
@@ -2836,18 +3313,19 @@ def read_file_tool(
         start_line: Optional starting line number (1-indexed, inclusive). Omit to start at the first line.
         end_line: Optional ending line number (1-indexed, inclusive). Omit to read through the last line.
     """
+    requested_path = path
     try:
         # Block access to disabled skill files
         if _is_disabled_skill_path(path, user_id=resolve_runtime_user_id(runtime)):
             skill_name = _extract_skill_name_from_skills_path(path) or "unknown"
-            return f"Error: Skill '{skill_name}' is disabled. Access to its files is blocked. Enable the skill in settings before using it."
+            return _read_file_result(runtime, f"Error: Skill '{skill_name}' is disabled. Access to its files is blocked. Enable the skill in settings before using it.", status="error", error_type="permission")
         if start_line is not None and start_line < 1:
-            return READ_FILE_INVALID_START_LINE
+            return _read_file_failure(runtime, READ_FILE_INVALID_START_LINE)
         effective_start = start_line or 1
         if end_line is not None and end_line < 1:
-            return READ_FILE_INVALID_END_LINE
+            return _read_file_failure(runtime, READ_FILE_INVALID_END_LINE)
         if end_line is not None and effective_start > end_line:
-            return READ_FILE_INVALID_RANGE
+            return _read_file_failure(runtime, READ_FILE_INVALID_RANGE)
 
         requested_path = path
         use_line_range = start_line is not None or end_line is not None
@@ -2861,9 +3339,9 @@ def read_file_tool(
                 # tell them apart so a continuation named by a truncation
                 # marker is not reported as beyond the file.
                 if _ranged_read_hits_a_line(runtime, path, start_line):
-                    return READ_FILE_EMPTY
-                return READ_FILE_START_LINE_EXCEEDS
-            return READ_FILE_EMPTY
+                    return _read_file_result(runtime, READ_FILE_EMPTY)
+                return _read_file_failure(runtime, READ_FILE_START_LINE_EXCEEDS)
+            return _read_file_result(runtime, READ_FILE_EMPTY)
         try:
             from deerflow.config.app_config import get_app_config
 
@@ -2872,23 +3350,45 @@ def read_file_tool(
         except Exception:
             max_chars = 50000
         # Line numbers in the marker are file line numbers, so a ranged read passes its offset along.
-        return _truncate_read_file_output(content, max_chars, line_offset=effective_start - 1, joined_lines=use_line_range, ends_at_eof=end_line is None)
+        output = _truncate_read_file_output(content, max_chars, line_offset=effective_start - 1, joined_lines=use_line_range, ends_at_eof=end_line is None)
+        call_id = getattr(runtime, "tool_call_id", None)
+        # Leave in-band provider failures and range markers recognizable to consumers.
+        if (
+            use_line_range
+            and isinstance(call_id, str)
+            and call_id
+            and requested_path.startswith((f"{VIRTUAL_PATH_PREFIX}/uploads/", f"{VIRTUAL_PATH_PREFIX}/workspace/"))
+            and output == content
+            and not content.startswith("Error:")
+            and content.strip() not in READ_FILE_NO_CONTENT_RESULTS
+        ):
+            # A provider's ranged result joins source lines, including a trailing empty line.
+            lines = content.split("\n")
+            if 1 <= len(lines) <= READ_FILE_NUMBERED_MAX_LINES and (end_line is None or len(lines) <= end_line - effective_start + 1):
+                rows = "\n".join(f"{number} | {line}" for number, line in enumerate(lines, start=effective_start))
+                # Write tools accept literal 'N | ' text. A verbatim write-back of
+                # this display can therefore persist the labels as file content.
+                numbered = "Source lines (for exact edits, copy the text after the first ' | '):\n" + rows
+                if max_chars == 0 or len(numbered) <= max_chars:
+                    output = numbered
+        return _read_file_result(runtime, output, status="partial_success" if max_chars != 0 and len(content) > max_chars else "success")
     except SandboxError as e:
-        return f"Error: {e}"
-    except FileNotFoundError:
-        return f"Error: File not found: {requested_path}"
-    except PermissionError:
-        return f"Error: Permission denied reading file: {requested_path}"
-    except IsADirectoryError:
-        return f"Error: Path is a directory, not a file: {requested_path}"
-    except UnicodeDecodeError:
-        return (
+        return _read_file_failure(runtime, f"Error: {e}", e)
+    except FileNotFoundError as e:
+        return _read_file_failure(runtime, f"Error: File not found: {requested_path}", e)
+    except PermissionError as e:
+        return _read_file_failure(runtime, f"Error: Permission denied reading file: {requested_path}", e)
+    except IsADirectoryError as e:
+        return _read_file_failure(runtime, f"Error: Path is a directory, not a file: {requested_path}", e)
+    except UnicodeDecodeError as e:
+        text = (
             f"Error: cannot read '{requested_path}' as text — it appears to be a binary file "
             "(e.g. .xlsx, .pdf, or an image). read_file only supports UTF-8 text. Use bash with a "
             "suitable library instead (pandas/openpyxl for spreadsheets), or view_image for images."
         )
+        return _read_file_failure(runtime, text, e)
     except Exception as e:
-        return f"Error: Unexpected error reading file: {_sanitize_error(e, runtime)}"
+        return _read_file_failure(runtime, f"Error: Unexpected error reading file: {_sanitize_error(e, runtime)}", e)
 
 
 async def _read_file_tool_async(
@@ -2897,15 +3397,30 @@ async def _read_file_tool_async(
     description: str = "",
     start_line: int | None = None,
     end_line: int | None = None,
-) -> str:
-    return await _run_sync_tool_after_async_sandbox_init(read_file_tool.func, runtime, path, description, start_line, end_line)
+) -> str | ToolMessage:
+    return await _run_sync_tool_after_async_sandbox_init(read_file_tool.func, runtime, path, description, start_line, end_line, _error_result=partial(_read_file_failure, runtime))
 
 
 read_file_tool.coroutine = _read_file_tool_async
 
 
+def _reject_elision_placeholder_content(content: str) -> str | None:
+    """Reject a complete framework placeholder, allowing surrounding whitespace."""
+    pattern = re.escape(WRITE_ELISION_PLACEHOLDER_TEMPLATE).replace(re.escape("{chars}"), r"[0-9]+")
+    if re.fullmatch(pattern, content.strip()) is None:
+        return None
+    return (
+        "Error: write_file content is the tool-output elision placeholder, which is "
+        "framework-generated history text rather than file content. Nothing was written. "
+        "The placeholder stands in for a write_file payload that the harness removed from "
+        "the model-bound request because a later read or write superseded it; the real "
+        "content is the file on disk. Call read_file on the target path and write the "
+        "actual content."
+    )
+
+
 def _effective_write_file_max_bytes() -> int:
-    """Return the active size cap for write_file calls.
+    """Return the active size cap for non-append write_file calls.
 
     Reads ``DEERFLOW_WRITE_FILE_MAX_BYTES`` at call time (not import time)
     so tests and runtime tweaks take effect without restart. Falls back to
@@ -2921,389 +3436,6 @@ def _effective_write_file_max_bytes() -> int:
         return _WRITE_FILE_CONTENT_MAX_BYTES
 
 
-def _effective_artifact_chunk_max_bytes() -> int:
-    """Return the active size cap for each artifact chunk."""
-    raw = os.environ.get(_ARTIFACT_CHUNK_MAX_BYTES_ENV)
-    if raw is None:
-        return _ARTIFACT_CHUNK_CONTENT_MAX_BYTES
-    try:
-        return int(raw)
-    except ValueError:
-        return _ARTIFACT_CHUNK_CONTENT_MAX_BYTES
-
-
-def _content_sha256(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def _is_html_file_path(path: str) -> bool:
-    return Path(path).suffix.lower() in _HTML_FILE_EXTENSIONS
-
-
-def _html_tag_count(content: str, tag: str, *, closing: bool = False) -> int:
-    slash = r"/\s*" if closing else ""
-    return len(re.findall(rf"<\s*{slash}{tag}\b[^>]*>", content, flags=re.IGNORECASE))
-
-
-def _find_html_integrity_error(path: str, content: str) -> str | None:
-    """Return an actionable error for HTML that is clearly a broken full page.
-
-    Chunked writes are allowed to contain an incomplete prefix. Once a payload
-    contains document-closing markers such as ``</body>``/``</html>`` (or closes
-    ``head``/``style``/``script``), it is no longer just a prefix; at that point
-    missing counterparts are strong evidence of a truncated tool-call payload.
-    """
-    if not _is_html_file_path(path):
-        return None
-
-    lowered = content.lower()
-    complete_document = "</body" in lowered or "</html" in lowered
-    closes_structural_region = any(f"</{tag}" in lowered for tag in ("head", "style", "script"))
-    if not complete_document and not closes_structural_region:
-        return None
-
-    for tag in ("style", "script"):
-        opens = _html_tag_count(content, tag)
-        closes = _html_tag_count(content, tag, closing=True)
-        if opens != closes:
-            return f"HTML appears truncated: found {opens} <{tag}> tag(s) but {closes} </{tag}> tag(s)."
-
-    if "</head" in lowered and _html_tag_count(content, "head") == 0:
-        return "HTML appears truncated: found </head> without a matching <head>."
-
-    if complete_document:
-        required_tags = ("html", "body")
-        for tag in required_tags:
-            if _html_tag_count(content, tag) == 0:
-                return f"HTML appears truncated: missing <{tag}> before the document closes."
-            if _html_tag_count(content, tag, closing=True) == 0:
-                return f"HTML appears truncated: missing </{tag}> before the document closes."
-
-        positions = {
-            "html_open": lowered.find("<html"),
-            "head_open": lowered.find("<head"),
-            "head_close": lowered.find("</head"),
-            "body_open": lowered.find("<body"),
-            "body_close": lowered.find("</body"),
-            "html_close": lowered.find("</html"),
-        }
-        if positions["head_open"] >= 0 or positions["head_close"] >= 0:
-            ordered = positions["html_open"] <= positions["head_open"] <= positions["head_close"] <= positions["body_open"] <= positions["body_close"] <= positions["html_close"]
-        else:
-            ordered = positions["html_open"] <= positions["body_open"] <= positions["body_close"] <= positions["html_close"]
-        if not ordered:
-            return "HTML appears truncated: <html>, <head>, and <body> tags are out of document order."
-
-    return None
-
-
-def _is_complete_html_document(path: str, content: str) -> bool:
-    if not _is_html_file_path(path):
-        return False
-    lowered = content.lower()
-    return "</body" in lowered or "</html" in lowered
-
-
-def _find_html_finalization_error(path: str, content: str) -> str | None:
-    """Return an error when a finalized HTML artifact is not a complete page."""
-    if not _is_html_file_path(path):
-        return None
-
-    integrity_error = _find_html_integrity_error(path, content)
-    if integrity_error is not None:
-        return integrity_error
-
-    lowered = content.lower()
-    for tag in ("html", "body"):
-        if _html_tag_count(content, tag) != 1:
-            return f"HTML finalization failed: expected exactly one <{tag}> tag."
-        if _html_tag_count(content, tag, closing=True) != 1:
-            return f"HTML finalization failed: expected exactly one </{tag}> tag."
-
-    if lowered.find("<html") > lowered.find("<body"):
-        return "HTML finalization failed: <html> must appear before <body>."
-    if lowered.find("<body") > lowered.find("</body"):
-        return "HTML finalization failed: <body> must appear before </body>."
-    if lowered.find("</body") > lowered.find("</html"):
-        return "HTML finalization failed: </body> must appear before </html>."
-
-    for tag in ("head", "style", "script"):
-        if _html_tag_count(content, tag) != _html_tag_count(content, tag, closing=True):
-            return f"HTML finalization failed: <{tag}> and </{tag}> tags are not paired."
-
-    if _html_tag_count(content, "head") > 1 or _html_tag_count(content, "head", closing=True) > 1:
-        return "HTML finalization failed: expected at most one <head>...</head> region."
-
-    head_open = lowered.find("<head")
-    head_close = lowered.find("</head")
-    body_open = lowered.find("<body")
-    if head_open >= 0:
-        if head_close < head_open:
-            return "HTML finalization failed: </head> appears before <head>."
-        if head_close > body_open:
-            return "HTML finalization failed: <head> must close before <body>."
-
-    return None
-
-
-class _HtmlResourceReferenceParser(HTMLParser):
-    """Collect local-resource-bearing references from HTML.
-
-    This intentionally ignores normal ``<a href>`` links: navigation targets can
-    be legitimate external/report links and are not required for the current page
-    to render. We only validate references that browsers fetch to render the
-    page itself.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.references: list[str] = []
-        self._style_depth = 0
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        tag = tag.lower()
-        attr_map = {name.lower(): value for name, value in attrs if value is not None}
-
-        if tag == "style":
-            self._style_depth += 1
-
-        style = attr_map.get("style")
-        if style:
-            self.references.extend(_extract_css_url_references(style))
-
-        src = attr_map.get("src")
-        if src and tag in _HTML_RESOURCE_SRC_TAGS:
-            self.references.append(src)
-
-        poster = attr_map.get("poster")
-        if poster and tag == "video":
-            self.references.append(poster)
-
-        srcset = attr_map.get("srcset")
-        if srcset and tag in {"img", "source"}:
-            self.references.extend(_extract_srcset_references(srcset))
-
-        href = attr_map.get("href")
-        if href and tag == "link":
-            rels = {rel.lower() for rel in (attr_map.get("rel") or "").split()}
-            if rels & _HTML_RESOURCE_LINK_RELS:
-                self.references.append(href)
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag.lower() == "style" and self._style_depth > 0:
-            self._style_depth -= 1
-
-    def handle_data(self, data: str) -> None:
-        if self._style_depth > 0:
-            self.references.extend(_extract_css_url_references(data))
-
-
-def _extract_css_url_references(css: str) -> list[str]:
-    return [match.group(2).strip() for match in _CSS_URL_PATTERN.finditer(css)]
-
-
-def _extract_srcset_references(srcset: str) -> list[str]:
-    references: list[str] = []
-    index = 0
-    length = len(srcset)
-    while index < length:
-        while index < length and (srcset[index].isspace() or srcset[index] == ","):
-            index += 1
-        start = index
-        while index < length:
-            if srcset[index].isspace():
-                break
-            if srcset[index] == "," and not srcset[start:index].lower().startswith("data:"):
-                break
-            index += 1
-        if index > start:
-            references.append(srcset[start:index])
-        while index < length and srcset[index] != ",":
-            index += 1
-    return references
-
-
-def _extract_html_resource_references(content: str) -> list[str]:
-    parser = _HtmlResourceReferenceParser()
-    parser.feed(content)
-    parser.close()
-    return parser.references
-
-
-def _is_external_or_inline_resource_reference(reference: str) -> bool:
-    value = reference.strip()
-    if not value or value.startswith("#") or value.startswith("//"):
-        return True
-    scheme_match = re.match(r"^([a-z][a-z0-9+.-]*):", value, flags=re.IGNORECASE)
-    if scheme_match is None:
-        return False
-    return scheme_match.group(1).lower() in {
-        "blob",
-        "cid",
-        "data",
-        "http",
-        "https",
-        "javascript",
-        "mailto",
-        "tel",
-    }
-
-
-def _strip_resource_reference_suffix(reference: str) -> str:
-    return reference.split("#", 1)[0].split("?", 1)[0].strip()
-
-
-def _format_resource_reference_errors(label: str, entries: list[str], *, limit: int = 5) -> str:
-    visible = entries[:limit]
-    suffix = f"; and {len(entries) - limit} more" if len(entries) > limit else ""
-    return f"{label}: {', '.join(visible)}{suffix}."
-
-
-def _resolve_html_local_resource_path(document_path: str, reference: str) -> tuple[str | None, str | None]:
-    if _is_external_or_inline_resource_reference(reference):
-        return None, None
-
-    resource_path = _strip_resource_reference_suffix(reference)
-    if not resource_path:
-        return None, None
-    resource_path = unquote(resource_path)
-
-    if resource_path.startswith("/"):
-        if resource_path == VIRTUAL_PATH_PREFIX or resource_path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
-            return posixpath.normpath(resource_path), None
-        return None, f"{reference} (root-relative paths are not served from artifact previews; use a relative file path, /mnt/user-data/... path, or external URL)"
-
-    normalized_document_path = posixpath.normpath(document_path.replace("\\", "/"))
-    document_dir = posixpath.dirname(normalized_document_path)
-    target_path = posixpath.normpath(posixpath.join(document_dir, resource_path))
-    if normalized_document_path == VIRTUAL_PATH_PREFIX or normalized_document_path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
-        if target_path != VIRTUAL_PATH_PREFIX and not target_path.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
-            return None, f"{reference} (relative path escapes {VIRTUAL_PATH_PREFIX})"
-    return target_path, None
-
-
-def _html_resource_exists(sandbox: Sandbox, path: str) -> bool:
-    normalized = path.replace("\\", "/")
-    if normalized != VIRTUAL_PATH_PREFIX and not normalized.startswith(f"{VIRTUAL_PATH_PREFIX}/"):
-        # Sandbox.download_file is guaranteed for thread user-data artifacts.
-        # Custom mounts may be writable/readable through sandbox-specific path
-        # mapping but not downloadable through the artifact API. Do not turn
-        # that capability boundary into a false "missing resource" failure.
-        return True
-    try:
-        sandbox.download_file(path)
-        return True
-    except OSError as exc:
-        return getattr(exc, "errno", None) == errno.EFBIG
-    except Exception:
-        return False
-
-
-def _find_html_resource_reference_error(sandbox: Sandbox, document_path: str, content: str) -> str | None:
-    if not _is_html_file_path(document_path):
-        return None
-
-    unsupported: list[str] = []
-    missing: list[str] = []
-    checked_paths: set[str] = set()
-
-    for reference in _extract_html_resource_references(content):
-        target_path, error = _resolve_html_local_resource_path(document_path, reference)
-        if error is not None:
-            unsupported.append(error)
-            continue
-        if target_path is None or target_path in checked_paths:
-            continue
-        checked_paths.add(target_path)
-        if not _html_resource_exists(sandbox, target_path):
-            missing.append(f"{reference} -> {target_path}")
-
-    if unsupported:
-        return _format_resource_reference_errors("HTML contains unsupported local resource reference(s)", unsupported)
-    if missing:
-        return _format_resource_reference_errors("HTML references missing local resource file(s)", missing) + " Create these files before saving the HTML artifact, or replace them with externally reachable URLs."
-    return None
-
-
-def _find_html_ready_to_write_error(sandbox: Sandbox, document_path: str, content: str) -> str | None:
-    """Validate a complete HTML payload before any write path saves it."""
-    html_error = _find_html_integrity_error(document_path, content)
-    if html_error is not None:
-        return html_error
-    if not _is_complete_html_document(document_path, content):
-        return None
-    return _find_html_resource_reference_error(sandbox, document_path, content)
-
-
-def _prepare_writable_sandbox_path(runtime: Runtime | None, path: str) -> tuple[Sandbox, str, str]:
-    """Initialize sandbox and resolve a writable path when local mode requires it."""
-    requested_path = path
-    sandbox = ensure_sandbox_initialized(runtime)
-    ensure_thread_directories_exist(runtime)
-    if is_local_sandbox(runtime):
-        thread_data = get_thread_data(runtime)
-        validate_local_tool_path(path, thread_data)
-        if not _is_custom_mount_path(path):
-            path = _resolve_and_validate_user_data_path(path, thread_data)
-        # Custom mount paths are resolved by LocalSandbox._resolve_path()
-    return sandbox, requested_path, path
-
-
-def _artifact_staging_paths(path: str) -> tuple[str, str]:
-    directory, basename = posixpath.split(path.replace("\\", "/"))
-    if not basename:
-        basename = "artifact"
-    prefix = f".{basename}.deerflow"
-    if directory:
-        return posixpath.join(directory, f"{prefix}.part"), posixpath.join(directory, f"{prefix}.meta.json")
-    return f"{prefix}.part", f"{prefix}.meta.json"
-
-
-def _new_artifact_meta(
-    *,
-    requested_path: str,
-    resolved_path: str,
-    total_chunks: int | None,
-    final_sha256: str | None,
-) -> dict[str, object]:
-    return {
-        "path": requested_path,
-        "resolved_path": resolved_path,
-        "next_chunk_index": 0,
-        "total_chunks": total_chunks,
-        "final_sha256": final_sha256,
-    }
-
-
-def _read_artifact_meta(sandbox: Sandbox, meta_path: str, path: str) -> dict[str, object] | str:
-    try:
-        raw = sandbox.read_file(meta_path)
-    except Exception:
-        return f"Error: No active artifact write session for {path}. Call begin_artifact_write first."
-    try:
-        meta = json.loads(raw)
-    except json.JSONDecodeError:
-        return f"Error: Artifact write metadata is corrupt for {path}. Restart with begin_artifact_write."
-    if not isinstance(meta, dict):
-        return f"Error: Artifact write metadata is corrupt for {path}. Restart with begin_artifact_write."
-    if meta.get("resolved_path") != path:
-        return f"Error: Artifact write metadata path mismatch for {path}. Restart with begin_artifact_write."
-    next_chunk_index = meta.get("next_chunk_index")
-    if not isinstance(next_chunk_index, int) or next_chunk_index < 0:
-        return f"Error: Artifact write metadata has an invalid next_chunk_index for {path}. Restart with begin_artifact_write."
-    total_chunks = meta.get("total_chunks")
-    if total_chunks is not None and (not isinstance(total_chunks, int) or total_chunks < 0):
-        return f"Error: Artifact write metadata has an invalid total_chunks value for {path}. Restart with begin_artifact_write."
-    final_sha256 = meta.get("final_sha256")
-    if final_sha256 is not None and not isinstance(final_sha256, str):
-        return f"Error: Artifact write metadata has an invalid final_sha256 value for {path}. Restart with begin_artifact_write."
-    return meta
-
-
-def _write_artifact_meta(sandbox: Sandbox, meta_path: str, meta: dict[str, object]) -> None:
-    sandbox.write_file(meta_path, json.dumps(meta, ensure_ascii=False, sort_keys=True))
-
-
 @tool("write_file", parse_docstring=True)
 def write_file_tool(
     runtime: Runtime,
@@ -3312,7 +3444,7 @@ def write_file_tool(
     description: str = "",
     append: bool = False,
 ) -> str:
-    """Write small text content to a file. By default this overwrites the target file; set append=True to add a small suffix to the end without replacing existing content.
+    """Write text content to a file. By default this overwrites the target file; set append=True to add content to the end without replacing existing content.
 
     READ-BEFORE-WRITE (issue #3857): if the target file already exists (including
     append=True), you must have read its CURRENT version with read_file first.
@@ -3321,12 +3453,10 @@ def write_file_tool(
     that fail this check are rejected with an error.
 
     SIZE POLICY (issue #3189):
-    A single write_file call must not exceed 80 KB of UTF-8 content.
-    Oversized writes correlate with LLM streaming chunk-gap
+    A single non-append write_file call must not exceed 80 KB of UTF-8 content.
+    Oversized single-shot writes correlate with LLM streaming chunk-gap
     timeouts because the tool-call JSON payload — which the model must emit as
-    one continuous stream — grows past the safe window. For long generated artifacts,
-    use begin_artifact_write -> append_artifact_chunk -> finalize_artifact_write.
-    For ordinary file edits,
+    one continuous stream — grows past the safe window. For larger documents,
     use ONE of these strategies (write_file rejects oversized payloads with an
     actionable error):
 
@@ -3334,21 +3464,21 @@ def write_file_tool(
          use `str_replace` to surgically update sections. This is the same
          pattern Claude Code's Write+Edit and OpenAI Codex's apply_patch use,
          and keeps each tool call's payload small.
-      2. SMALL APPEND ONLY: append=True is for short end-of-file edits after
-         reading the current file. Do not use write_file append=True as the
-         long-artifact generation protocol.
-
-    HTML INTEGRITY:
-    For .html/.htm files, write_file rejects payloads that already contain
-    document-closing markers (for example </body> or </html>) but are missing
-    the corresponding opening/closing structure. This prevents truncated
-    tool-call payloads from being saved as successful complete web pages. When
-    writing a generated HTML artifact, use the artifact write protocol so
-    finalize_artifact_write can validate the complete staged document before
-    the final target file is created.
+      2. APPEND-IN-CHUNKS (for new long-form content): split the document into
+         sections, each well under 80 KB. First call uses append=False to
+         create the file; subsequent calls use append=True. The 80 KB cap does
+         NOT apply to append=True calls.
 
     Operators can override the cap via env var `DEERFLOW_WRITE_FILE_MAX_BYTES`
     (0 disables the guard entirely). Raising it risks streaming timeouts.
+
+    PLACEHOLDER GUARD (issue #7319):
+    A call whose content is the tool-output budget middleware's elision
+    placeholder is rejected. That text is framework-owned history compression,
+    never file content: the model occasionally copies it out of its own elided
+    history and submits it as a write, which silently replaces a real
+    deliverable with a ~200-byte placeholder. Re-read the source and write the
+    actual content instead.
 
     Args:
         path: The **absolute** path to the file to write to.
@@ -3356,32 +3486,33 @@ def write_file_tool(
         description: Optional short explanation of this write shown in the UI.
         append: Whether to append content to the end of the file instead of overwriting it. Defaults to False.
     """
-    max_bytes = _effective_write_file_max_bytes()
-    if max_bytes > 0:
-        content_bytes = len(content.encode("utf-8"))
-        if content_bytes > max_bytes:
-            return (
-                f"Error: write_file content ({content_bytes} bytes) exceeds the "
-                f"{max_bytes}-byte single-call limit. Split the content into smaller "
-                "pieces. For long generated artifacts, use begin_artifact_write, "
-                "append_artifact_chunk, and finalize_artifact_write. For revisions "
-                "to an existing file, use str_replace after reading the current file. "
-                "See SIZE POLICY in the tool docstring or issue #3189 for the rationale."
-            )
-
+    placeholder_error = _reject_elision_placeholder_content(content)
+    if placeholder_error is not None:
+        return placeholder_error
+    if not append:
+        max_bytes = _effective_write_file_max_bytes()
+        if max_bytes > 0:
+            content_bytes = len(content.encode("utf-8"))
+            if content_bytes > max_bytes:
+                return (
+                    f"Error: write_file content ({content_bytes} bytes) exceeds the "
+                    f"{max_bytes}-byte single-call limit. Split the content into smaller "
+                    "pieces: either (a) write the first section now, then use `str_replace` "
+                    "for further edits, or (b) call write_file again with append=True "
+                    "carrying the next section. See SIZE POLICY in the tool docstring "
+                    "or issue #3189 for the rationale."
+                )
     try:
         requested_path = path
-        sandbox, requested_path, path = _prepare_writable_sandbox_path(runtime, path)
+        sandbox = ensure_sandbox_initialized(runtime)
+        ensure_thread_directories_exist(runtime)
+        if is_local_sandbox(runtime):
+            thread_data = get_thread_data(runtime)
+            validate_local_tool_path(path, thread_data)
+            if not _is_custom_mount_path(path):
+                path = _resolve_and_validate_user_data_path(path, thread_data)
+            # Custom mount paths are resolved by LocalSandbox._resolve_path()
         with get_file_operation_lock(sandbox, path):
-            html_content_for_check = content
-            if append and _is_html_file_path(path):
-                try:
-                    html_content_for_check = sandbox.read_file(path) + content
-                except Exception:
-                    html_content_for_check = content
-            html_error = _find_html_ready_to_write_error(sandbox, requested_path, html_content_for_check)
-            if html_error is not None:
-                return f"Error: {html_error} Rewrite the HTML from the beginning, append the missing earlier chunk, create missing local resources, or use externally reachable resource URLs before presenting the artifact."
             sandbox.write_file(path, content, append)
         return "OK"
     except SandboxError as e:
@@ -3409,238 +3540,13 @@ async def _write_file_tool_async(
     description: str = "",
     append: bool = False,
 ) -> str:
+    placeholder_error = _reject_elision_placeholder_content(content)
+    if placeholder_error is not None:
+        return placeholder_error
     return await _run_sync_tool_after_async_sandbox_init(write_file_tool.func, runtime, path, content, description, append)
 
 
 write_file_tool.coroutine = _write_file_tool_async
-
-
-@tool("begin_artifact_write", parse_docstring=True)
-def begin_artifact_write_tool(
-    runtime: Runtime,
-    description: str,
-    path: str,
-    total_chunks: int | None = None,
-    final_sha256: str | None = None,
-) -> str:
-    """Start a staged artifact write for a generated deliverable.
-
-    Use this for long generated artifacts such as HTML pages, reports, dashboards,
-    generated source files, or other deliverables that may require multiple chunks.
-    The final target file is not overwritten here. Chunks are collected in a hidden
-    staging file and become visible at the requested path only after
-    finalize_artifact_write validates the complete staged content.
-
-    Args:
-        description: Explain why you are creating this artifact in short words. ALWAYS PROVIDE THIS PARAMETER FIRST.
-        path: The **absolute** final artifact path to create. ALWAYS PROVIDE THIS PARAMETER SECOND.
-        total_chunks: Optional number of chunks you expect to append before finalization.
-        final_sha256: Optional SHA-256 hex digest of the final UTF-8 content.
-    """
-    if total_chunks is not None and total_chunks < 0:
-        return "Error: total_chunks must be zero or greater."
-
-    try:
-        sandbox, requested_path, path = _prepare_writable_sandbox_path(runtime, path)
-        part_path, meta_path = _artifact_staging_paths(path)
-        with get_file_operation_lock(sandbox, path):
-            sandbox.write_file(part_path, "")
-            _write_artifact_meta(
-                sandbox,
-                meta_path,
-                _new_artifact_meta(
-                    requested_path=requested_path,
-                    resolved_path=path,
-                    total_chunks=total_chunks,
-                    final_sha256=final_sha256,
-                ),
-            )
-        chunk_hint = f" Append exactly {total_chunks} chunk(s)." if total_chunks is not None else ""
-        return f"OK: artifact staging initialized for {requested_path}.{chunk_hint} Next chunk_index is 0."
-    except SandboxError as e:
-        return _format_write_file_error(path, e, runtime)
-    except PermissionError:
-        return f"Error: Permission denied writing artifact: {path}"
-    except IsADirectoryError:
-        return f"Error: Artifact path is a directory, not a file: {path}"
-    except OSError as e:
-        return _format_write_file_error(path, e, runtime)
-    except Exception as e:
-        return f"Error: Unexpected error starting artifact write: {_sanitize_error(e, runtime)}"
-
-
-async def _begin_artifact_write_tool_async(
-    runtime: Runtime,
-    description: str,
-    path: str,
-    total_chunks: int | None = None,
-    final_sha256: str | None = None,
-) -> str:
-    return await _run_sync_tool_after_async_sandbox_init(begin_artifact_write_tool.func, runtime, description, path, total_chunks, final_sha256)
-
-
-begin_artifact_write_tool.coroutine = _begin_artifact_write_tool_async
-
-
-@tool("append_artifact_chunk", parse_docstring=True)
-def append_artifact_chunk_tool(
-    runtime: Runtime,
-    description: str,
-    path: str,
-    chunk_index: int,
-    content: str,
-    chunk_sha256: str | None = None,
-) -> str:
-    """Append one ordered, small chunk to an active staged artifact write.
-
-    Each chunk is capped at 10 KB by default to keep the model's tool-call JSON
-    comfortably below streaming chunk-gap timeout thresholds. Chunks must be
-    appended in exact 0-based order; out-of-order appends are rejected.
-
-    Args:
-        description: Explain what this chunk contains in short words. ALWAYS PROVIDE THIS PARAMETER FIRST.
-        path: The **absolute** final artifact path from begin_artifact_write. ALWAYS PROVIDE THIS PARAMETER SECOND.
-        chunk_index: The expected 0-based chunk index returned by the previous call.
-        content: The chunk content to append.
-        chunk_sha256: Optional SHA-256 hex digest of this chunk's UTF-8 content.
-    """
-    if chunk_index < 0:
-        return "Error: chunk_index must be zero or greater."
-
-    max_bytes = _effective_artifact_chunk_max_bytes()
-    content_bytes = len(content.encode("utf-8"))
-    if max_bytes > 0 and content_bytes > max_bytes:
-        return f"Error: artifact chunk ({content_bytes} bytes) exceeds the {max_bytes}-byte single-chunk limit. Split this artifact into smaller chunks."
-
-    if chunk_sha256 is not None and chunk_sha256 != _content_sha256(content):
-        return "Error: artifact chunk SHA-256 mismatch. Re-send this chunk exactly."
-
-    try:
-        sandbox, requested_path, path = _prepare_writable_sandbox_path(runtime, path)
-        part_path, meta_path = _artifact_staging_paths(path)
-        with get_file_operation_lock(sandbox, path):
-            meta_or_error = _read_artifact_meta(sandbox, meta_path, path)
-            if isinstance(meta_or_error, str):
-                return meta_or_error
-            meta = meta_or_error
-            if meta.get("finalized") is True:
-                return f"Error: Artifact write session for {requested_path} is already finalized. Start a new session with begin_artifact_write."
-            next_chunk_index = meta["next_chunk_index"]
-            if chunk_index != next_chunk_index:
-                return f"Error: Expected chunk_index {next_chunk_index} for {requested_path}, got {chunk_index}. Re-send chunks in order."
-            total_chunks = meta.get("total_chunks")
-            if isinstance(total_chunks, int) and chunk_index >= total_chunks:
-                return f"Error: Received chunk_index {chunk_index}, but total_chunks is {total_chunks} for {requested_path}."
-            sandbox.write_file(part_path, content, append=True)
-            meta["next_chunk_index"] = chunk_index + 1
-            meta["bytes_written"] = int(meta.get("bytes_written", 0) or 0) + content_bytes
-            _write_artifact_meta(sandbox, meta_path, meta)
-        return f"OK: appended chunk {chunk_index} for {requested_path} ({content_bytes} bytes). Next chunk_index is {chunk_index + 1}."
-    except SandboxError as e:
-        return _format_write_file_error(path, e, runtime)
-    except PermissionError:
-        return f"Error: Permission denied writing artifact chunk: {path}"
-    except IsADirectoryError:
-        return f"Error: Artifact path is a directory, not a file: {path}"
-    except OSError as e:
-        return _format_write_file_error(path, e, runtime)
-    except Exception as e:
-        return f"Error: Unexpected error appending artifact chunk: {_sanitize_error(e, runtime)}"
-
-
-async def _append_artifact_chunk_tool_async(
-    runtime: Runtime,
-    description: str,
-    path: str,
-    chunk_index: int,
-    content: str,
-    chunk_sha256: str | None = None,
-) -> str:
-    return await _run_sync_tool_after_async_sandbox_init(append_artifact_chunk_tool.func, runtime, description, path, chunk_index, content, chunk_sha256)
-
-
-append_artifact_chunk_tool.coroutine = _append_artifact_chunk_tool_async
-
-
-@tool("finalize_artifact_write", parse_docstring=True)
-def finalize_artifact_write_tool(
-    runtime: Runtime,
-    description: str,
-    path: str,
-    expected_chunks: int | None = None,
-    final_sha256: str | None = None,
-) -> str:
-    """Validate a staged artifact and write the final target file.
-
-    This is the only successful completion point for long generated artifacts.
-    For HTML files, finalization requires a complete document structure before
-    the target path is written.
-
-    Args:
-        description: Explain why this artifact is ready in short words. ALWAYS PROVIDE THIS PARAMETER FIRST.
-        path: The **absolute** final artifact path from begin_artifact_write. ALWAYS PROVIDE THIS PARAMETER SECOND.
-        expected_chunks: Optional exact number of chunks that must have been appended.
-        final_sha256: Optional SHA-256 hex digest of the final UTF-8 content.
-    """
-    if expected_chunks is not None and expected_chunks < 0:
-        return "Error: expected_chunks must be zero or greater."
-
-    try:
-        sandbox, requested_path, path = _prepare_writable_sandbox_path(runtime, path)
-        part_path, meta_path = _artifact_staging_paths(path)
-        with get_file_operation_lock(sandbox, path):
-            meta_or_error = _read_artifact_meta(sandbox, meta_path, path)
-            if isinstance(meta_or_error, str):
-                return meta_or_error
-            meta = meta_or_error
-            chunk_count = meta["next_chunk_index"]
-            total_chunks = meta.get("total_chunks")
-            if expected_chunks is not None and chunk_count != expected_chunks:
-                return f"Error: Expected {expected_chunks} artifact chunk(s) for {requested_path}, but received {chunk_count}."
-            if isinstance(total_chunks, int) and chunk_count != total_chunks:
-                return f"Error: Artifact {requested_path} expected {total_chunks} chunk(s), but received {chunk_count}."
-            content = sandbox.read_file(part_path)
-            digest = _content_sha256(content)
-            expected_digest = final_sha256 if final_sha256 is not None else meta.get("final_sha256")
-            if isinstance(expected_digest, str) and expected_digest and digest != expected_digest:
-                return "Error: artifact final SHA-256 mismatch. Re-read the staged tail or restart the artifact write."
-            html_error = _find_html_finalization_error(path, content)
-            if html_error is not None:
-                return f"Error: {html_error} The final target file was not written."
-            resource_error = _find_html_resource_reference_error(sandbox, requested_path, content)
-            if resource_error is not None:
-                return f"Error: {resource_error} The final target file was not written."
-            sandbox.write_file(path, content)
-            meta["finalized"] = True
-            meta["final_bytes"] = len(content.encode("utf-8"))
-            meta["computed_sha256"] = digest
-            _write_artifact_meta(sandbox, meta_path, meta)
-        return f"OK: finalized artifact {requested_path} ({len(content.encode('utf-8'))} bytes, {chunk_count} chunk(s), sha256={digest})."
-    except SandboxError as e:
-        return _format_write_file_error(path, e, runtime)
-    except FileNotFoundError:
-        return f"Error: No staged artifact content found for {path}. Call begin_artifact_write first."
-    except PermissionError:
-        return f"Error: Permission denied finalizing artifact: {path}"
-    except IsADirectoryError:
-        return f"Error: Artifact path is a directory, not a file: {path}"
-    except OSError as e:
-        return _format_write_file_error(path, e, runtime)
-    except Exception as e:
-        return f"Error: Unexpected error finalizing artifact write: {_sanitize_error(e, runtime)}"
-
-
-async def _finalize_artifact_write_tool_async(
-    runtime: Runtime,
-    description: str,
-    path: str,
-    expected_chunks: int | None = None,
-    final_sha256: str | None = None,
-) -> str:
-    return await _run_sync_tool_after_async_sandbox_init(finalize_artifact_write_tool.func, runtime, description, path, expected_chunks, final_sha256)
-
-
-finalize_artifact_write_tool.coroutine = _finalize_artifact_write_tool_async
 
 
 def _to_crlf(text: str) -> str:
@@ -3709,9 +3615,6 @@ def str_replace_tool(
                 content = content.replace(old_str, new_str)
             else:
                 content = content.replace(old_str, new_str, 1)
-            html_error = _find_html_ready_to_write_error(sandbox, requested_path, content)
-            if html_error is not None:
-                return f"Error: {html_error} Rewrite the HTML from the beginning, create missing local resources, or use externally reachable resource URLs before presenting the artifact."
             sandbox.write_file(path, content)
         return "OK"
     except SandboxError as e:

@@ -59,7 +59,14 @@ const CONSUMED = [
  * 认得、但前端用不到的契约：键是文件名，值是**为什么用不到**。
  * 空表是正常状态；往里加一条就是在说「这份契约前端故意不跟」。
  */
-const NOT_CONSUMED = {};
+const NOT_CONSUMED = {
+  "knowledge_sources.v1.json":
+    "知识源选择的 wire schema；Vue 知识范围控件尚未按这份契约接线，对齐前先表态不消费。",
+  "thread_goal_contract.json":
+    "线程目标 /goal 协议；Vue 目标面板尚未迁到这份契约，对齐前先表态不消费。",
+  "ui_locales.v1.json":
+    "Gateway 暴露的 UI locale 清单；Vue 仍用本仓词典与 cookies，不读这份契约。",
+};
 
 /*
   读取由 CONSUMED 驱动，不是另写三行 readContract——否则那张表会与真正读了

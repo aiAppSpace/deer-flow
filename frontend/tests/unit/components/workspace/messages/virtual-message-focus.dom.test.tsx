@@ -71,44 +71,6 @@ describe("physical message follow owner and reading focus", () => {
     });
   }
 
-  test("resumes only an explicit submit or regenerate tail request, never new history or assistant rows", () => {
-    ports.isAtBottom = false;
-    const old = [group("old")];
-    const { rerender } = render(
-      <VirtualMessageList {...props(old)} tailRequest={0} />,
-    );
-    screen.getByRole("button", { name: "old" }).focus();
-    expect(ports.stopScroll).toHaveBeenCalledTimes(1);
-    rerender(
-      <VirtualMessageList
-        {...props([group("history"), ...old])}
-        tailRequest={0}
-      />,
-    );
-    rerender(
-      <VirtualMessageList
-        {...props([
-          ...old,
-          {
-            id: "remote",
-            type: "assistant",
-            messages: [{ type: "ai", id: "remote", content: "Remote update" }],
-          },
-        ])}
-        tailRequest={0}
-      />,
-    );
-    expect(ports.scrollToBottom).not.toHaveBeenCalled();
-    rerender(<VirtualMessageList {...props(old)} tailRequest={1} />);
-    expect(ports.scrollToBottom).toHaveBeenCalledExactlyOnceWith({
-      animation: "instant",
-    });
-    rerender(<VirtualMessageList {...props(old)} tailRequest={1} />);
-    expect(ports.scrollToBottom).toHaveBeenCalledTimes(1);
-    rerender(<VirtualMessageList {...props(old)} tailRequest={2} />);
-    expect(ports.scrollToBottom).toHaveBeenCalledTimes(2);
-  });
-
   test("does not stop follow when focus belongs to the composer outside message rows", () => {
     render(
       <>

@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 
+import type { ArtifactSelectionEdit } from "@/core/artifacts/selection";
 import type { ThreadConsumptionObservation } from "@/core/diagnostics/parity-observation";
 import {
   appendSidecarReference,
@@ -26,6 +27,9 @@ import type { ThreadStreamOptions } from "@/core/threads/hooks";
 export type SidecarReference = SidecarReferenceStateItem;
 
 type SidecarContextValue = {
+  artifactEdit: ArtifactSelectionEdit | null;
+  beginArtifactEdit: (edit: ArtifactSelectionEdit) => void;
+  clearArtifactEdit: (id?: string) => void;
   open: boolean;
   activeReferences: SidecarReference[];
   conversationQuotes: SidecarReference[];
@@ -68,6 +72,20 @@ export function SidecarProvider({
   isMock?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [artifactEdit, setArtifactEdit] =
+    useState<ArtifactSelectionEdit | null>(null);
+  const clearArtifactEdit = useCallback(
+    (id?: string) => {
+      if (id && artifactEdit?.id !== id) return;
+      setArtifactEdit(null);
+      setActiveReferences((references) =>
+        references.filter(
+          (reference) => reference.context !== artifactEdit?.context,
+        ),
+      );
+    },
+    [artifactEdit],
+  );
   const [activeReferences, setActiveReferences] = useState<SidecarReference[]>(
     [],
   );
@@ -109,6 +127,7 @@ export function SidecarProvider({
     setSidecarContext(context);
     updateSidecarThreadId(null);
     setConversationQuotes([]);
+    setArtifactEdit(null);
   }, [context, parentThreadId, updateSidecarThreadId]);
 
   const restoreSidecarThread = useCallback(
@@ -195,6 +214,14 @@ export function SidecarProvider({
     [createReference],
   );
 
+  const beginArtifactEdit = useCallback(
+    (edit: ArtifactSelectionEdit) => {
+      setArtifactEdit(edit);
+      openContext(edit.context);
+    },
+    [openContext],
+  );
+
   const clearConversationQuotes = useCallback((ids?: number[]) => {
     if (!ids) {
       setConversationQuotes([]);
@@ -233,6 +260,9 @@ export function SidecarProvider({
 
   const value = useMemo<SidecarContextValue>(
     () => ({
+      artifactEdit,
+      beginArtifactEdit,
+      clearArtifactEdit,
       open,
       activeReferences,
       conversationQuotes,
@@ -253,6 +283,9 @@ export function SidecarProvider({
       close,
     }),
     [
+      artifactEdit,
+      beginArtifactEdit,
+      clearArtifactEdit,
       activeReferences,
       addContextToConversation,
       clearActiveReferences,

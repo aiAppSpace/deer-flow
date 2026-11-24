@@ -1,6 +1,6 @@
 # 🦌 DeerFlow - 2.0
 
-[English](./README.md) | 中文 | [日本語](./README_ja.md) | [Français](./README_fr.md) | [Русский](./README_ru.md) | [Português](./README_pt.md)
+[English](./README.md) | 中文 | [日本語](./README_ja.md) | [Français](./README_fr.md) | [Русский](./README_ru.md) | [Português](./README_pt.md) | [한국어](./README_ko.md)
 
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](./backend/pyproject.toml)
 [![Node.js](https://img.shields.io/badge/Node.js-22%2B-339933?logo=node.js&logoColor=white)](./Makefile)
@@ -19,6 +19,7 @@ https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
 ## 官网
 
 想了解更多，或者直接看**真实演示**，可以访问[**官网**](https://deerflow.tech)。
+首页精选案例已配置为免登录白名单只读演示。
 
 ## 姐妹项目
 
@@ -34,6 +35,8 @@ https://github.com/user-attachments/assets/a8bcadc4-e040-4cf2-8fda-dd768b999c18
 
 ## InfoQuest
 
+InfoQuest 的 reader、网页搜索与图片搜索采用 30 秒 HTTP 连接/读取非活动超时。抓取配置中的 `timeout` 和 `navigation_timeout` 仍为独立的服务端参数，不控制本地 HTTP 超时。
+
 DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[InfoQuest（支持免费在线体验）](https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest)
 
 <a href="https://docs.byteplus.com/en/docs/InfoQuest/What_is_Info_Quest" target="_blank">
@@ -46,6 +49,7 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
 
 - [🦌 DeerFlow - 2.0](#-deerflow---20)
   - [官网](#官网)
+  - [姐妹项目](#姐妹项目)
   - [字节跳动火山引擎方舟 Coding Plan](#字节跳动火山引擎方舟-coding-plan)
   - [InfoQuest](#infoquest)
   - [目录](#目录)
@@ -71,6 +75,7 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
     - [Session Goals](#session-goals)
     - [手动上下文压缩](#手动上下文压缩)
     - [Sub-Agents](#sub-agents)
+    - [账号管理](#账号管理)
     - [Sandbox 与文件系统](#sandbox-与文件系统)
     - [Agentic Browser Control](#agentic-browser-control)
     - [Context Engineering](#context-engineering)
@@ -99,6 +104,25 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
 ```
 
 这条提示词是给 coding agent 用的。它会在需要时先 clone 仓库，优先选择 Docker，完成初始化，并在结束时告诉你下一条启动命令，以及还缺哪些配置需要你补充。
+
+### 通过 Web 注册共享模型
+
+管理员可在 **设置 → 模型 → 添加模型** 中选择厂商，仅填写 **API Key** 和
+**模型 ID**。后端预置 OpenAI、Anthropic、DeepSeek、百炼/通义千问、火山/豆包、
+Moonshot/Kimi、智谱/Z.AI、MiniMax 和阶跃星辰（StepFun）的端点、认证与适配器，地域和 Coding Plan
+使用明确区分的选项。模型 ID 不受内置枚举限制；内部名称自动生成且保持稳定。
+新模型默认启用，保存后自动刷新聊天及 Agent 的模型选择器，无需重启 Gateway。
+
+已有地址继续通过 **自定义 OpenAI-compatible** 查看、编辑和使用，也支持无认证
+接口。高级设置保留显示名称、上下文窗口、输出限制和视觉能力覆盖；未知模型不
+自动声明能力。编辑时 API Key 留空表示保留同一连接的密钥，切换厂商或地址须
+重新填写。清除预设模型密钥前应先停用模型。连接测试不保存草稿，并使用与聊天
+相同的协议及模型工厂；真实请求可能产生费用。
+
+YAML 同名模型优先，已有任务保留原配置快照。托管模型使用原有加密目录，必须
+备份整个 `$DEER_FLOW_HOME/managed-models/`，同时保存匹配的 `catalog.enc` 和
+`key`；丢失密钥应恢复备份，不要删除目录或重建密钥。
+详见[配置参考](backend/docs/CONFIGURATION.md#models-registered-through-the-web)。
 
 ## 快速开始
 
@@ -159,6 +183,13 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
        api_key: $OPPER_API_KEY
        base_url: https://api.opper.ai/v3/compat
 
+     - name: api-route-gpt-6.1-sol
+       display_name: GPT 6.1 Sol (API Route)
+       use: langchain_openai:ChatOpenAI
+       model: gpt-6.1-sol
+       api_key: $API_ROUTE_API_KEY
+       base_url: https://global.api-route.com/v1
+
      - name: gpt-5-responses
        display_name: GPT-5 (Responses API)
        use: langchain_openai:ChatOpenAI
@@ -181,6 +212,8 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
    ```
 
    OpenRouter 以及类似的 OpenAI 兼容网关，建议通过 `langchain_openai:ChatOpenAI` 配合 `base_url` 来配置。如果你更想用 provider 自己的环境变量名，也可以直接把 `api_key` 指向对应变量，例如 `api_key: $OPENROUTER_API_KEY`。
+
+   Setup Wizard 也支持 [API Route](https://www.api-route.com)，会将密钥保存为 `API_ROUTE_API_KEY`，并使用上面的 Chat Completions 端点。可用模型取决于密钥所属组别和权限；修改 `config.yaml` 中的模型前，请先查询需要认证的 `GET https://global.api-route.com/v1/models` 模型目录，并原样使用返回的模型 ID，不要添加上游 provider 前缀。
 
    如果要让 OpenAI 模型走 `/v1/responses`，继续使用 `langchain_openai:ChatOpenAI`，并设置 `use_responses_api: true` 和 `output_version: responses/v1`。
 
@@ -208,6 +241,7 @@ DeerFlow 新近集成了 BytePlus 自研的智能搜索与抓取工具集——[
    ```
 
    - Codex CLI 会读取 `~/.codex/auth.json`
+   - Codex 的 `bind_tools` 和直接调用支持 `tool_choice`：`auto`、`none`、`required` 或指定函数名称/对象。`any` 和 `True` 表示 `required`；`None` 和 `False` 保留服务端默认策略。单次调用可覆盖绑定策略。绑定时校验绑定策略；直接调用及覆盖参数在 HTTP 请求前校验。`required` 至少需要一个函数工具，指定函数必须存在于工具列表中。无工具时仍支持 `auto` 和 `none`。
    - Claude Code 支持 `CLAUDE_CODE_OAUTH_TOKEN`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_CREDENTIALS_PATH`，或 `~/.claude/.credentials.json`
    - ACP agent 条目与 model provider 是分开配置的——如果你配置了 `acp_agents.codex`，请把它指向一个 Codex ACP 适配器，例如 `npx -y @zed-industries/codex-acp`
    - MiniMax Code 原生支持 ACP，不需要额外适配器。先安装并登录，再把它配置成 ACP agent：
@@ -276,7 +310,7 @@ make docker-init    # 拉取 sandbox 镜像（首次运行或镜像更新时执�
 make docker-start   # 启动 Gateway + React/Vue 开发服务
 ```
 
-如果 `config.yaml` 使用的是 provisioner 模式（`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` 且配置了 `provisioner_url`），`make docker-start` 才会启动 `provisioner`。
+如果 `config.yaml` 使用的是 provisioner 模式（`sandbox.use: deerflow.community.aio_sandbox:AioSandboxProvider` 且配置了 `provisioner_url`），`make docker-start` 才会启动 `provisioner`。直接使用 Docker Compose 的用户可以在 dev 命令中加入 `--profile provisioner` 来启用相同模式；默认栈不需要 Kubernetes。
 
 - React：http://localhost:2026
 - Vue：http://vue.localhost:2026
@@ -397,8 +431,9 @@ DeerFlow 的内置自定义事件同时通过两种 LangGraph 流式接口提供
 ### 进阶配置
 #### Sandbox 模式
 
-DeerFlow 支持多种 sandbox 执行方式：
-- **本地执行**（直接在宿主机上运行 sandbox 代码）
+DeerFlow 支持多种沙箱模式。
+
+- **本地工作区**（通过工作区文件工具访问已配置的挂载）
 - **Docker 执行**（在隔离的 Docker 容器里运行 sandbox 代码）
 - **Docker + Kubernetes 执行**（通过 provisioner 服务在 Kubernetes Pod 中运行 sandbox 代码）
 
@@ -416,6 +451,10 @@ DeerFlow 支持可配置的 MCP Server 和 skills，用来扩展能力。
 
 DeerFlow 支持从即时通讯应用接收任务。只要配置完成，对应渠道会自动启动，而且都不需要公网 IP。
 
+渠道不支持发送附件时，原回复会直接说明。部分或全部上传失败时，只要平台仍允许回复，DeerFlow 会补一条汇总提示，列出未发出的文件；全部成功时不重复确认。文件继续保留在 DeerFlow 会话中，回复窗口过期只记录失败，不自动切换为主动通知。
+
+`channels/store.json` 含无效 UTF-8 字节时，采用与 JSON 格式损坏相同的恢复方式：SQL 迁移记录警告并跳过，保留原文件，让渠道可以继续启动；memory 后端的 JSON 存储记录警告并从空状态开始，在下次写入时替换该文件。
+
 DeerFlow 还可以在 workspace UI 里暴露用户自有的 IM 渠道连接。启用 `channel_connections` 后，已登录用户可以从侧边栏 / Settings > Channels 绑定 Telegram、Slack、Discord、Feishu/Lark、DingTalk、WeChat、WeCom、QQ 或 Buzz。它复用现有的 `channels.*` 出站传输，因此不需要公网 IP 或 provider 回调地址。入站 IM 消息会以所连接的 DeerFlow 用户身份运行。设置和安全注意事项参见 [IM Channel Connections](backend/docs/IM_CHANNEL_CONNECTIONS.md)。
 
 | 渠道 | 传输方式 | 上手难度 |
@@ -429,6 +468,8 @@ DeerFlow 还可以在 workspace UI 里暴露用户自有的 IM 渠道连接。�
 | QQ | WebSocket（仅文本私聊及群 @；每条来源消息最多回复 4 / 5 条） | 中等 |
 | Buzz | Nostr relay（WebSocket，NIP-42） | 中等 |
 
+飞书和钉钉在附件同步完成后，会将独立的临时沙箱归还资源池，不会中断仍在运行的任务。
+
 **`config.yaml` 中的配置示例：**
 
 ```yaml
@@ -441,8 +482,6 @@ channels:
   # 可选：所有移动端渠道共用的全局 session 默认值
   session:
     assistant_id: lead_agent  # 也可以填自定义 agent 名；渠道层会自动转换为 lead_agent + agent_name
-    config:
-      recursion_limit: 100
     context:
       thinking_enabled: true
       is_plan_mode: false
@@ -557,6 +596,11 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 2. 添加权限：`im:message`、`im:message.p2p_msg:readonly`、`im:resource`。
 3. 在 **事件订阅** 中订阅 `im.message.receive_v1`，连接方式选择 **长连接**。
 4. 复制 App ID 和 App Secret，在 `.env` 中设置 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`，并在 `config.yaml` 中启用该渠道。
+5. _（可选）_ 交互式澄清卡片：在 `channels.feishu` 下设置 `card_interaction_enabled: true`，让 agent 的选项式提问渲染为可点击的按钮卡片，并在问题前保留背景说明。随后在开发者后台打开 **回调配置**（与「事件订阅」是不同的标签页），订阅 `card.action.trigger` 并选择 **长连接**，最后发布新版本。点击按钮等同于输入该选项作答；只有触发该次提问的用户才能操作对应卡片。按钮答案会保存到对话历史中，后续澄清继续在同一会话内进行。
+
+如果 SDK 反复记录 `CERTIFICATE_VERIFY_FAILED`，参见 [Feishu / Lark TLS 故障排查](backend/docs/IM_CHANNEL_CONNECTIONS.md#feishu--lark-tls-troubleshooting)，检查 Gateway 的 CA 信任配置。
+
+定时任务的执行结果和生命周期通知也可以主动推送给已绑定的飞书/Lark 用户，无需用户先发送新消息。它们与企业微信共用通知发件箱和本地化摘要机制。应用必须具备向该用户发送消息的权限，参见[飞书定时任务通知](backend/docs/IM_CHANNEL_CONNECTIONS.md#feishu-scheduled-task-notifications)。
 
 **WeChat 配置**
 
@@ -590,10 +634,18 @@ DINGTALK_CLIENT_SECRET=your_client_secret
 | `/new` | 开启新对话 |
 | `/status` | 查看当前 thread 信息 |
 | `/models` | 列出可用模型 |
+| `/model [name\|default]` | 查看或固定当前会话使用的模型 |
 | `/memory` | 查看 memory |
+| `/agent list` | 列出你的自定义智能体 |
+| `/agent use <name>` | 用自定义智能体开启一个新对话 |
 | `/help` | 查看帮助 |
 
 > 没有命令前缀的消息会被当作普通聊天处理。DeerFlow 会自动创建 thread，并以对话方式回复。
+
+智能体选择是会话级的：`/agent use <name>` 会开启一个新对话，并将该自定义智能体固定到 thread 元数据中。已有对话不会在中途切换智能体；该选择在 Gateway 重启后仍然有效，在 Web UI 中打开 IM 创建的 thread 时，也会继续使用同一个自定义智能体。
+使用 `/agent use lead_agent` 可在新对话中回到默认智能体。
+
+模型选择是会话级的：`/model <name>` 将模型固定到**当前**会话——会按调用方可见的模型列表校验，选择写入 thread 元数据（Gateway 重启后仍有效），从下一条消息开始生效，无需新开对话。`/model` 查看当前生效模型及其来源，`/model default` 清除固定，`/models` 会报告当前固定的模型。
 
 #### 请求链路关联
 
@@ -678,6 +730,18 @@ DeerFlow 2.0 不再是一个需要你自己拼装的 framework。它是一个开
 
 ## 核心特性
 
+### Token 用量统计
+
+点击侧边栏的 **Token 用量**（`/workspace/usage`），查看近 7/30 天的用量、
+每日输入/输出 Token、各模型的缓存命中输入 Token，以及支持失败筛选和分页的
+运行记录。运行记录包含所有日期，不受图表所选周期限制。
+
+此功能需要 `runs:read` 权限和 SQLite 或 PostgreSQL 数据库，静态演示不提供统计。
+数据来自已持久化的服务商用量；运行过程中或服务商未返回用量时可能不完整，不能
+作为服务商账单。缓存命中 Token 已包含在输入 Token 中。每日分桶使用浏览器当前
+UTC 偏移，并按运行的创建日期归属。页面复用现有 `/api/console` 接口，保留服务端
+价格配置及可选的费用、币种字段。
+
 ### Skills 与 Tools
 
 Skills 是 DeerFlow 能做“几乎任何事”的关键。
@@ -704,6 +768,21 @@ DeerFlow 可连接租户级 RAGFlow，并通过 `knowledge_search` 按 embedding
 `context.agent_name`，确保 Gateway 的范围校验与运行时加载的是同一个智能体；主智能体聊天使用 `lead_agent`，两者都只有在共享配置启用 RAGFlow provider 时才会提交知识范围。
 
 本版不在工作区侧边栏增加独立的“知识库”入口，也不提供 DeerFlow 知识库管理页面；知识库和文件的创建、上传、解析与删除仍直接在 RAGFlow 中完成。
+
+运维还可独立安装 [WeKnora 只读扩展](examples/deerflow-extension-weknora/README.md)，
+对接 WeKnora v0.8.3，使用知识库/文档范围选择器和共享检索引用。
+需显式配置 DeerFlow 用户到 WeKnora 工作空间的凭据绑定；资源授权仍由 WeKnora 执行。
+安装与配置步骤见扩展目录中的英文指南。
+
+可选的[知识平台扩展](examples/deerflow-extension-knowledge-platform/README.md)
+提供连接策略、多层级空间、成员和显式资源共享。空间内管理调用仍需现有管理员与
+Provider 授权。默认关闭，不包含管理页面，也不改变聊天检索的全局权限。
+
+可选的[知识入库与处理扩展](examples/deerflow-extension-knowledge-management/README.md)
+通过 WeKnora 提供管理员授权的文件、网址和手工文本入库、处理状态查询、重新处理与取消。
+解析、索引及可选的 Wiki/图谱生成由上游负责。扩展默认关闭，需明确配置资源与操作授权，
+不包含管理页面。Provider 无关的 API 由离线契约测试覆盖；真实入库、GLM-5.3/BGE
+联调、浏览器引用回放及已知限制见[验收报告](examples/deerflow-extension-knowledge-management/VALIDATION.md)。
 
 Gateway 生成后续建议时，现在会先把普通字符串输出和 block/list 风格的富文本内容统一归一化，再去解析 JSON 数组响应，因此不同 provider 的内容包装方式不会再悄悄把建议吞掉。
 
@@ -769,22 +848,37 @@ Web UI 输入框支持浏览器侧语音听写。浏览器提供 Web Speech API 
 /goal finish the implementation and make all tests pass
 /goal              # 查看当前激活的 goal
 /goal clear        # 清除它
+/goal from-chat    # 仅 IM：根据当前对话生成 goal
 ```
 
-每次 Gateway 驱动的 run 结束后，DeerFlow 会用一个 non-thinking 的评估模型，把可见的对话内容（包括助手的工具调用和截短的工具结果）拿去和激活的 goal 比对。工具调用成功本身不代表 goal 已完成；如果助手不得不猜测缺失或含糊的信息，评估模型会报告 `needs_user_input`。评估模型必须返回一个带类型的 blocker（`missing_evidence`、`needs_user_input`、`run_failed`、`external_wait` 或 `goal_not_met_yet`），并附上可见证据。只有在最近一轮 assistant 回复已被持久化 checkpoint、blocker 是 `goal_not_met_yet`、评估期间 thread 没有变化、且无进展熔断器没有触发时，DeerFlow 才会注入一次 hidden continuation。安全上限默认是 8 次 hidden continuation；连续两次相同的无进展评估后就会停止。`/goal clear` 以及任何用户手动输入的新内容，优先级都高于排队中的 continuation。当 goal 被满足时，DeerFlow 会自动清除它，并发布更新后的 thread 状态。
+在受支持的 IM 渠道里，`/goal from-chat [提示]` 会从当前对话中归纳 goal，而不是把文字当成目标本身。它会保留对话中已经约定的约束和停止条件，展示保存后的目标，并只启动一次 run。命令后的可选提示用于补充约束，不需要重述完整目标。如果对话不足以形成清楚的目标，则不会保存或启动任何内容，回复会说明原因；如果助手还在等你回答，回复会先请你回复。
 
-Web UI 会在输入框上方展示当前激活的 goal。同样的命令在 TUI 和受支持的 IM 渠道里也可用。在 Web UI 和受支持的 IM 渠道里，设置 `/goal <完成条件>` 还会以该条件作为任务启动一次 run；状态查询和清除命令则只管理 goal 状态本身。
+每次 Gateway 驱动的 run 结束后，DeerFlow 会用一个 non-thinking 的评估模型，把可见的对话内容（包括助手的工具调用和截短的工具结果）拿去和激活的 goal 比对。工具调用成功本身不代表 goal 已完成；如果助手不得不猜测缺失或含糊的信息，评估模型会报告 `needs_user_input`。评估模型必须返回一个带类型的 blocker（`missing_evidence`、`needs_user_input`、`run_failed`、`external_wait` 或 `goal_not_met_yet`），并附上可见证据。只有在最近一轮 assistant 回复已被持久化 checkpoint、blocker 是 `goal_not_met_yet`、评估期间 thread 没有变化、且无进展熔断器没有触发时，DeerFlow 才会注入一次 hidden continuation。安全上限默认是 8 次 hidden continuation；连续两次相同的无进展评估后就会停止。`/goal clear` 以及任何用户手动输入的新内容，优先级都高于排队中的 continuation。当 goal 被满足时，DeerFlow 会自动清除它，并发布更新后的 thread 状态。同一个 checkpoint 会把这次达成记为 `goal_outcome`，保留到下一次修改 goal。
+
+重新生成此前的回答时，会沿用当前对话的 goal 和已用续跑预算，不会恢复已清除或已达成的旧 goal。重放历史 checkpoint 时会移除旧回答的达成记录，避免把它当作新回答已经达成的证明。
+
+Web UI 会在输入框上方展示当前激活的 goal，说明自动续跑为什么停下，并在 goal 达成后显示「目标已达成」提示；设置了 goal 时不能编辑最后一条消息。同样的命令在 TUI 和受支持的 IM 渠道里也可用。在 IM 里，`/goal` 还会说明 goal 是否在进行中、自动续跑为什么停下，或者 goal 已达成（保留到下一次修改 goal），并使用绑定账号在网页界面中选择的语言（未设置时用 `channel_connections.notification_locale`）。在 Web UI 和受支持的 IM 渠道里，设置 `/goal <完成条件>` 还会以该条件作为任务启动一次 run；状态查询和清除命令则只管理 goal 状态本身。
 
 ### 手动上下文压缩
 
 启用 `task_continuity.enabled` 后，可用 `history_search` 检索当前任务的活跃消息和
 已压缩历史。可选参数 `role` 接受 `user`、`assistant`、`tool`，在最多八条结果的
-截断前过滤；省略或 `null` 保持原有全角色搜索。使用 `history_read` 核对来源原文，
+截断前过滤；省略或 `null` 保持原有全角色搜索。
+搜索摘录会围绕最早可完整放入摘录的匹配项返回最多 600 个字符，并提供 `excerpt_start` /
+`excerpt_end`，表示原文中从零开始、左闭右开的 Unicode 字符范围。过长的匹配项会被跳过，
+继续查找后续可完整放入摘录的匹配项；若没有这样的可定位匹配项，则返回原文开头并设置 `excerpt_match=false`。
+将 `excerpt_start` 作为 `history_read` 的 `offset` 即可从该位置继续读取。
+使用 `history_read` 核对来源原文，
 历史用户消息不代表当前授权。详见[任务连续性说明（英文）](docs/task-continuity.md)。
 
 在 Web UI 输入框中使用 `/compact`，可以把当前 thread 的早期上下文压缩成摘要。完整聊天记录仍会保留在界面上，但后续模型调用会基于压缩摘要和最近消息继续。当前历史不足时不会压缩；thread 正在运行任务时会阻止压缩。
 
 ### Sub-Agents
+
+显式后台 `batch_task` 可用 `depends_on` 声明同批条目的前置关系，前置工作完成后即可继续，
+无需等待无关任务。用户已要求后续汇总或交付时，可用可选的 `continuation` 登记一次主 Agent 接续；
+启用 Goal 时仍由 Goal 负责续跑。执行、取消、授权和恢复范围见
+[批次依赖与完成接续说明](backend/docs/BATCH_CONTINUATION.md)。
 
 Sub-agent 是一种执行优化，而不是遇到复杂任务时的默认选择。
 
@@ -794,18 +888,22 @@ lead agent 只会在委派具有明确净收益时动态拉起 sub-agents，例�
 
 例如，彼此独立的只读研究可以在并行节省的时间明显高于重复检索和结果合并成本时并发执行；而会修改相同文件、依赖连续测试反馈的仓库重构则由 lead agent 直接完成。当 `max_concurrent_subagents` 为 `1` 时，提示词会关闭并行和多批次路由指导，仅在专业能力或上下文隔离具有明确收益时保留委派。
 
+### 账号管理
+
+管理员可以在**设置 → 用户**中停用和恢复账号（仅管理员可见该入口，普通用户不显示）。页面列出每个账号的邮箱、角色和状态，提供与 `PATCH /api/v1/admin/users/{id}` 相同的启用/停用操作；最后一个活跃管理员不允许被停用，网关返回的拒绝原因会原样展示。被停用的账号在所有认证入口都会被拒绝，其现有会话在下一次请求时终止，登录页会提示"账号已停用，请联系管理员"。持有密码者对停用账号发起密码登录时，仍会刻意返回"邮箱或密码错误"，避免向凭据持有者泄露账号状态。
+
 ### Sandbox 与文件系统
 
 上传文档的转换大纲和预览会校验原文件版本，包括修改时间戳。检测到原文件版本变化后，即使大小不变，也不会再使用旧转换结果。缺少原文件时间戳的旧归属记录同样会被拒绝；可在启用 `uploads.auto_convert_documents: true` 后重新上传原文件以恢复转换大纲。文件都会保留，未通过校验的转换 Markdown 会在 Agent 的历史文件列表中作为独立文件显示。Windows 上的 `st_ctime_ns` 可能表示创建时间，因此等长度覆盖后若恢复原 `mtime`，校验可能无法识别变化。时间戳校验是保守的元数据校验，不能保证文件内容完全一致。
 
 DeerFlow 不只是“会说它能做”，它是真的有一台自己的“电脑”。
 
-每个任务都运行在隔离的 Docker 容器里，里面有完整的文件系统，包括 skills、workspace、uploads、outputs。agent 可以读写和编辑文件，可以执行 bash 命令和代码，也可以查看图片。整个过程都在 sandbox 内完成，可审计、会隔离，不会在不同 session 之间互相污染。
+沙箱的运行方式取决于配置。本地工作区使用专用文件工具，Docker 模式在隔离的容器中运行，Kubernetes 模式通过 provisioner 服务在 Pod 中运行。Agent 可以在沙箱中访问 skills、workspace、uploads、outputs，读写和编辑文件，也可以查看图片。需要执行 Bash 命令或通过 Shell 运行代码时，请选择提供 Shell 的隔离沙箱。各模式的配置方式见[沙箱指南](docs/guide/sandbox.md#sandbox-mode)。
 
 这就是“带工具的聊天机器人”和“真正有执行环境的 agent”之间的差别。
 
 ```text
-# sandbox 容器内的路径
+# 沙箱中的虚拟路径
 /mnt/user-data/
 ├── uploads/          ← 你的文件
 ├── workspace/        ← agents 的工作目录
@@ -813,6 +911,12 @@ DeerFlow 不只是“会说它能做”，它是真的有一台自己的“电�
 ```
 
 ### Agentic Browser Control
+
+浏览器截图与 Browserless 网页截屏（captures）支持原子化完整内容发布。新创建的文件使用宿主机的常规文件权限（通常为 `0644`），覆盖已有文件时会保留已有权限，以便沙箱代码在权限允许时能够读取截图。
+
+Browserless 会通过空占位文件提前预留截屏文件名，以防并发截屏相互覆盖。如果发布失败会自动释放该占位符；若清理失败，Gateway 会记录带有路径的告警日志，并保留原始的发布错误或中断信息。
+
+浏览器依赖自动检测支持在工具配置项中以任意顺序指定 `name`、`group` 与 `use`，且兼容缩进或非缩进风格的 YAML 列表。
 
 读取页面和真正“使用”页面不是一回事。除了只读的 `web_fetch` 和 `web_capture` 工具外，DeerFlow 还提供一组可选的 agentic browser 工具，为每次对话保持一个实时浏览器会话，让 agent 真正操作页面——导航、读取可交互元素、点击、输入、提交表单，并在重度 JavaScript 站点上完成多步流程。
 
@@ -1118,7 +1222,7 @@ PoC 不会自动清理。验证完成后，请用网页侧边栏的删除操作�
 
 ### 部署默认值
 
-Docker 部署栈默认只把入口端口发布在 `127.0.0.1` 上，与上文所述的本地可信环境模型一致。若需要从其他机器访问，请在 `.env` 中设置 `BIND_HOST`（例如 `BIND_HOST=0.0.0.0`），并且必须在落实下方的安全措施之后再这样做。
+Docker 部署栈默认只把入口端口发布在 `127.0.0.1` 上，本地 `make dev` / `make start` 也把 nginx、Gateway 和前端绑定在回环地址上，与上文所述的本地可信环境模型一致。若需要从其他机器访问，请在 `.env` 中设置 `BIND_HOST`（例如 `BIND_HOST=0.0.0.0`），并且必须在落实下方的安全措施之后再这样做。本地运行时 `BIND_HOST` 只作用于 `2026` 端口上的 nginx，Gateway 和前端始终留在其后的回环地址上。
 
 **请在主机变为可访问之前完成首次初始化设置。** 全新实例尚未创建任何账号，因此对于任何非仅回环访问的部署，请在启动后立即通过 `/setup` 创建管理员账号。
 

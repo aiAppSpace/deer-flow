@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  fetchFeatures,
   DEFAULT_SCHEDULED_TASKS_FEATURE,
   DEFAULT_THREAD_ACTIVITY_FEATURE,
   fetchBrowserControlEnabled,
@@ -12,14 +13,19 @@ import {
   fetchThreadActivityFeature,
 } from "./api";
 
-/*
- * `enabled` so a public showcase page can opt out. `/showcase/<id>` renders the
- * same ChatPage, and `useThreadChat` already resolves `isMock` from that route
- * prefix -- but these queries were never gated on it, so an anonymous visitor
- * to a shared read-only conversation still triggered the workspace API calls.
- * Measured by the parity harness on 2026-09-09: four requests React made on
- * that screen that the Vue app made none of.
- */
+export function useRunInputsEnabled(enabled = true) {
+  const { data } = useQuery({
+    queryKey: ["features", "run_inputs"],
+    queryFn: async () => (await fetchFeatures()).run_inputs === true,
+    enabled,
+    retry: false,
+    staleTime: 60_000,
+  });
+  return enabled && data === true;
+}
+
+// `enabled` lets the public showcase route opt out: an anonymous visitor to a
+// shared read-only conversation must not trigger workspace API calls.
 export function useBrowserControlEnabled(options?: { enabled?: boolean }) {
   const { data, isPending } = useQuery({
     queryKey: ["features", "browser_control"],
@@ -117,6 +123,7 @@ export function useScheduledTasksFeature() {
     available: feature.available,
     running: feature.running,
     toolEnabled: feature.toolEnabled,
+    groupNotifications: feature.groupNotifications,
     minIntervalSeconds: feature.minIntervalSeconds,
     isLoading: isPending,
   };

@@ -23,15 +23,8 @@ COMPOSE_PROJECT="deer-flow-dev"
 # Kept as an array so "docker compose" stays two words under set -u / quoting.
 COMPOSE_BIN=(docker compose)
 
-# `--profile provisioner` 声明在这里**不会**启动 provisioner：真正启动的是下面
-# `up` 那条显式服务清单（实测——`--profile provisioner … up redis frontend
-# frontend-vue gateway nginx` 恰好只起这五个）。这个 flag 买的是**其余子命令**：
-# `build` / `down` / `restart` / `logs` 都不带服务清单，没有 profile 时 Compose 会
-# 静默跳过被 profile 标记的服务——于是 provisioner 模式的栈被 `docker.sh stop`
-# 拆到一半、它的镜像也不进 `build`。profile 挂在 docker-compose-dev.yaml 的服务上，
-# 是为了让裸 `docker compose up` 不启动它；那次事故记在该文件的注释里。
 _refresh_compose_cmd() {
-    COMPOSE_CMD="${COMPOSE_BIN[*]} -p ${COMPOSE_PROJECT} --profile provisioner -f ${COMPOSE_FILE}"
+    COMPOSE_CMD="${COMPOSE_BIN[*]} -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE}"
 }
 _refresh_compose_cmd
 
@@ -154,6 +147,13 @@ ensure_env_files() {
     ensure_from_example "$PROJECT_ROOT/frontend/.env" "$PROJECT_ROOT/frontend/.env.example" "frontend/.env"
 }
 
+# start runs Compose from docker/ without --env-file, so ${VAR} interpolation in
+# docker-compose-dev.yaml sees the shell only, never the checkout .env. Export
+# the .env values that interpolation consumes; a value already set in the shell
+# (even empty) wins, as it does for Compose. AUTH_TRUSTED_PROXIES and
+# DEER_FLOW_CREDENTIALS_KEY belong here because the Gateway's `environment:`
+# entries (defaulting to nginx and to empty) outrank the same keys loaded through
+# env_file and would replace the operator's values.
 load_proxy_env_from_dotenv() {
     local env_file="$PROJECT_ROOT/.env"
     local var
@@ -164,16 +164,16 @@ load_proxy_env_from_dotenv() {
         return
     fi
 
-    for var in HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy; do
+    for var in HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY http_proxy https_proxy all_proxy no_proxy AUTH_TRUSTED_PROXIES DEER_FLOW_CREDENTIALS_KEY; do
         if [ -z "${!var+x}" ]; then
             line="$(grep -E "^[[:space:]]*${var}=" "$env_file" | tail -n 1 || true)"
             if [ -n "$line" ]; then
                 value="${line#*=}"
+                value="${value%$'\r'}"
                 value="${value%\"}"
                 value="${value#\"}"
                 value="${value%\'}"
                 value="${value#\'}"
-                value="${value%$'\r'}"
                 export "${var}=${value}"
             fi
         fi
@@ -181,48 +181,7 @@ load_proxy_env_from_dotenv() {
 }
 
 detect_sandbox_mode() {
-    local config_file="$PROJECT_ROOT/config.yaml"
-    local sandbox_use=""
-    local provisioner_url=""
-
-    if [ ! -f "$config_file" ]; then
-        echo "local"
-        return
-    fi
-
-    sandbox_use=$(awk '
-        /^[[:space:]]*sandbox:[[:space:]]*$/ { in_sandbox=1; next }
-        in_sandbox && /^[^[:space:]#]/ { in_sandbox=0 }
-        in_sandbox && /^[[:space:]]*use:[[:space:]]*/ {
-            line=$0
-            sub(/^[[:space:]]*use:[[:space:]]*/, "", line)
-            print line
-            exit
-        }
-    ' "$config_file")
-
-    provisioner_url=$(awk '
-        /^[[:space:]]*sandbox:[[:space:]]*$/ { in_sandbox=1; next }
-        in_sandbox && /^[^[:space:]#]/ { in_sandbox=0 }
-        in_sandbox && /^[[:space:]]*provisioner_url:[[:space:]]*/ {
-            line=$0
-            sub(/^[[:space:]]*provisioner_url:[[:space:]]*/, "", line)
-            print line
-            exit
-        }
-    ' "$config_file")
-
-    if [[ "$sandbox_use" == *"deerflow.sandbox.local:LocalSandboxProvider"* ]]; then
-        echo "local"
-    elif [[ "$sandbox_use" == *"deerflow.community.aio_sandbox:AioSandboxProvider"* ]]; then
-        if [ -n "$provisioner_url" ]; then
-            echo "provisioner"
-        else
-            echo "aio"
-        fi
-    else
-        echo "local"
-    fi
+    bash "$SCRIPT_DIR/sandbox-mode.sh" "$PROJECT_ROOT/config.yaml"
 }
 
 # Cleanup function for Ctrl+C
@@ -336,6 +295,7 @@ start() {
     services="redis frontend frontend-vue gateway nginx"
     if [ "$sandbox_mode" = "provisioner" ]; then
         services="redis frontend frontend-vue gateway provisioner nginx"
+        COMPOSE_CMD="$COMPOSE_CMD --profile provisioner"
     fi
 
     # Only aio mode (AioSandboxProvider without provisioner_url) needs the host
@@ -425,7 +385,7 @@ start() {
     echo ""
 
     cd "$DOCKER_DIR"
-    exec $COMPOSE_CMD up --build --watch --remove-orphans $services
+    $COMPOSE_CMD up --build --watch --remove-orphans $services
 }
 
 # View Docker logs. The dev stack (make docker-start) is the default;
@@ -485,6 +445,14 @@ logs() {
 
     compose_preflight
 
+    # The provisioner is profile-gated in docker-compose-dev.yaml. Enable the
+    # profile for dev logs that need to include it; --prod uses a different file.
+    if [ "$is_prod" = 0 ]; then
+        if [ "$service" = "provisioner" ] || { [ -z "$service" ] && [ "$(detect_sandbox_mode)" = "provisioner" ]; }; then
+            COMPOSE_CMD="$COMPOSE_CMD --profile provisioner"
+        fi
+    fi
+
     # Append --env-file only after compose_preflight(): its Compose detection
     # may rebuild COMPOSE_CMD, which would drop anything appended before it.
     if [ "$is_prod" = 1 ] && [ -f "$PROJECT_ROOT/.env" ]; then
@@ -506,7 +474,8 @@ logs() {
 stop() {
     compose_preflight
     echo "Stopping Docker development services..."
-    cd "$DOCKER_DIR" && $COMPOSE_CMD down
+    # Include profile-gated services so a running provisioner is removed too.
+    cd "$DOCKER_DIR" && $COMPOSE_CMD --profile provisioner down
     echo "Cleaning up sandbox containers..."
     bash "$SCRIPT_DIR/cleanup-containers.sh" deer-flow-sandbox 2>/dev/null || true
     echo -e "${GREEN}✓ Docker services stopped${NC}"
@@ -514,7 +483,13 @@ stop() {
 
 # Restart Docker development environment
 restart() {
+    local sandbox_mode
+
     compose_preflight
+    sandbox_mode="$(detect_sandbox_mode)"
+    if [ "$sandbox_mode" = "provisioner" ]; then
+        COMPOSE_CMD="$COMPOSE_CMD --profile provisioner"
+    fi
     echo "========================================"
     echo "  Restarting DeerFlow Docker Services"
     echo "========================================"

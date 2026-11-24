@@ -2,6 +2,12 @@ const { appendFileSync, renameSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
 const { resolve } = require("node:path");
 
+// scripts/pnpm.py probes the version before running the pinned package manager.
+if (process.argv[2] === "--version") {
+  process.stdout.write("10.26.2\n");
+  process.exit(0);
+}
+
 if (process.argv.slice(2, 5).join(" ") === "exec next start") {
   // Model the old package-manager wrapper with an actual child listener so
   // its cleanup cannot pass merely because the fixture omitted the child.

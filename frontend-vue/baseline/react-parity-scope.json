@@ -18,8 +18,14 @@
   },
   "pendingRoutes": {
     "$comment": "React 有、Vue 还没做、但要做的路由。和 exemptRoutes 分成两份，是为了让新出现的上游路由无处可去：它落在两份清单之外会立刻让门禁变红，逼人显式选一边，而不是被顺手塞进豁免里。目标状态是空数组。",
-    "routes": [],
-    "$reasons": {}
+    "routes": [
+      "/share/[share_token]",
+      "/workspace/usage"
+    ],
+    "$reasons": {
+      "/share/[share_token]": "上游合并后新增的产品路由；Vue 尚未实现，列入待办而非内容站豁免。",
+      "/workspace/usage": "上游合并后新增的产品路由；Vue 尚未实现，列入待办而非内容站豁免。"
+    }
   },
   "contentExemptRoutes": {
     "$comment": "两边都有这条路由，但渲染内容双向不比对。/ 是营销落地页：Vue 保留自己的入口页，既不复刻 React 的 Header/Hero/CaseStudy/Skills/Sandbox/WhatsNew/Community/Footer，也不因为「React 没有这个 UI」被反向清理删掉。断言是每一条都必须同时存在于两边的路由集合里——只要有一边没了，这条豁免就已经过期。",
@@ -45,34 +51,6 @@
   "forbiddenUpstreamModules": {
     "$comment": "React 里零消费者的死代码。这不是豁免，是禁止移植：按「React 没有的 Vue 不许有」，把它们搬进 Vue 等于凭空新增一份差异。断言有两条——文件仍然存在，且在 frontend/src 里确实没有任何导入方。一旦 React 开始消费其中某个，断言变红，含义是 Vue 从此欠它一个实现，该把它移出本清单并进入正常的对齐工作。",
     "modules": [
-      {
-        "specifier": "@/components/ai-elements/canvas",
-        "path": "frontend/src/components/ai-elements/canvas.tsx"
-      },
-      {
-        "specifier": "@/components/ai-elements/connection",
-        "path": "frontend/src/components/ai-elements/connection.tsx"
-      },
-      {
-        "specifier": "@/components/ai-elements/controls",
-        "path": "frontend/src/components/ai-elements/controls.tsx"
-      },
-      {
-        "specifier": "@/components/ai-elements/edge",
-        "path": "frontend/src/components/ai-elements/edge.tsx"
-      },
-      {
-        "specifier": "@/components/ai-elements/node",
-        "path": "frontend/src/components/ai-elements/node.tsx"
-      },
-      {
-        "specifier": "@/components/ai-elements/panel",
-        "path": "frontend/src/components/ai-elements/panel.tsx"
-      },
-      {
-        "specifier": "@/components/ai-elements/toolbar",
-        "path": "frontend/src/components/ai-elements/toolbar.tsx"
-      },
       {
         "specifier": "@/components/ui/carousel",
         "path": "frontend/src/components/ui/carousel.tsx"

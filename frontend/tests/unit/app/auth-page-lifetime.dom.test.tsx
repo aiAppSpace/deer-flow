@@ -22,6 +22,7 @@ rs.mock("next-themes", () => ({
   useTheme: () => ({ theme: "light", resolvedTheme: "light" }),
 }));
 rs.mock("@/core/auth/AuthProvider", () => ({
+  ...(rs.requireActual("@/core/auth/AuthProvider") as object),
   useAuth: () => ({ user: mocks.user, isAuthenticated: mocks.user !== null }),
 }));
 rs.mock("@/components/ui/flickering-grid", () => ({

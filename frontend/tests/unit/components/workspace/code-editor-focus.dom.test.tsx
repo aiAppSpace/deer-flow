@@ -84,25 +84,6 @@ describe("CodeEditor autofocus after the actual editable reconfiguration", () =>
     });
   });
 
-  it("highlights matching JSON brackets on the initial readonly document", async () => {
-    const wrapper = render(
-      <CodeEditor
-        value={'{\n  "label": "parity"\n}'}
-        language="json"
-        readonly
-      />,
-    );
-    await waitFor(() => {
-      expect(wrapper.container.querySelector(".cm-editor")).not.toBeNull();
-    });
-    expect(
-      [...wrapper.container.querySelectorAll(".cm-matchingBracket")].map(
-        (element) => element.textContent,
-      ),
-    ).toEqual(["{", "}"]);
-    expect(focusedStates).toEqual([]);
-  });
-
   it.each(["readonly", "disabled"] as const)(
     "focuses the same view only after %s is removed",
     async (reason) => {

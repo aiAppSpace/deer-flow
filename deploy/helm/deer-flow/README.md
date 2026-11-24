@@ -59,6 +59,13 @@ pull secret (step 1) and reference it via `image.pullSecrets`.
 > `appVersion`; always set `image.tag` to the release that matches your chart
 > `--version` unless you have a reason to pin differently.
 
+`image.gatewayTag`, `image.frontendTag` and `image.provisionerTag` override
+`image.tag` for one image, e.g. a backend you rebuild on top of a release
+(`v2.2.0-custom.1`) while the frontend stays on the published `v2.2.0`.
+They must be strings: `--set image.gatewayTag=20261118` passes an integer and
+fails the render, so quote a numeric tag in YAML (`gatewayTag: "20261118"`) or
+use `--set-string image.gatewayTag=20261118`.
+
 ## 1. Build & push images (custom builds only)
 
 Skip this section if you're using the published chart above. To build the
@@ -119,6 +126,21 @@ secrets:
   # add channel tokens, search keys, etc. as needed
 ```
 
+`image.registry` prefixes the DeerFlow gateway, frontend, and provisioner
+images. In a cluster that pulls only from a mirror, set the full BusyBox
+repository for `init-home` and `init-extensions` in the same values file.
+
+```yaml
+gateway:
+  initContainers:
+    image:
+      repository: registry.example.com/mirror/busybox
+      tag: "1.36"
+```
+
+Set `nginx.image.repository`, `postgresql.image.repository`, and
+`redis.image.repository` separately for the corresponding bundled services.
+
 The default ingress annotations permit a 100 MiB local `.skill` archive plus
 multipart framing, stream request bodies without ingress buffering, and allow
 up to 600 seconds for a response, which the API requests that wait on a model
@@ -135,7 +157,7 @@ they resolve from the `secrets` map):
 
 ```yaml
 config: |
-  config_version: 57
+  config_version: 68
   models:
     - name: gpt-4
       use: langchain_openai:ChatOpenAI
@@ -242,7 +264,8 @@ curl http://localhost:2026/health/ready    # readiness: database, checkpointer, 
 Postgres or the Redis stream bridge is unreachable (`stream_bridge: unreachable`),
 so those pods leave the Service instead of accepting runs they cannot stream.
 The `provisioner` field reports the provisioner's own `/health` but never
-changes the status code: every gateway pod shares that one provisioner.
+changes the status code: every gateway pod reaches the same `provisioner`
+Service, whichever replica answers.
 
 Hit the Ingress host (map it in `/etc/hosts` for local clusters) to load the UI.
 
@@ -299,11 +322,20 @@ kubectl -n deer-flow exec deploy/deer-flow-provisioner -- curl -s localhost:8002
   PodDisruptionBudget (`minAvailable: 1`) is rendered immediately and blocks
   every voluntary eviction and node drain while only one Pod exists, so set
   `gateway.podDisruptionBudget.enabled: false` for that interim if you need
-  to drain nodes first. `gateway.replicas: 1` stays the
-  default because the following are still single-instance: **IM channels**
-  (every Pod would connect to every platform — Telegram polling conflicts and
-  Discord double-processes; keep 1 replica while channels are enabled), the
-  WeChat QR login, and browser tools. Before raising replicas, also set
+  to drain nodes first. **IM channels** run on several replicas through
+  `channels.leader_lease` in `config` (default `auto`, which turns on with the
+  multi-instance declaration): each platform connection is held by the one Pod
+  owning that provider's row in the `channel_leases` table, a crashed holder is
+  replaced within `lease_seconds + grace_seconds` plus one renewal interval
+  (50 s by default) and a Pod stopped cleanly hands its providers over on the
+  next heartbeat. The startup gate refuses `enabled: false` while channels are
+  enabled. Credentials saved (or a disconnect made) from the web UI on any Pod
+  reach the holding Pod within one renewal interval through the shared,
+  encrypted `channel_runtime_configs` table. A failover loses the IM replies in
+  flight on the old holder, though the runs themselves finish and their
+  threads stay readable in the web UI. `gateway.replicas: 1`
+  stays the default because the WeChat QR login and browser tools are still
+  single-instance. Before raising replicas, also set
   `persistence.home.accessMode: ReadWriteMany` on multi-node clusters (thread
   uploads, outputs, memory and `extensions_config.json` live on that volume)
   and `agent_storage.backend: db` so custom agents are visible on every Pod.
@@ -318,9 +350,43 @@ kubectl -n deer-flow exec deploy/deer-flow-provisioner -- curl -s localhost:8002
   override `config:` — a multi-instance gateway that leaves the index under
   the memory root logs a warning at startup. The index is rebuilt from the
   Markdown facts on every Pod start, so losing the emptyDir loses nothing.
-  A `PodDisruptionBudget` (`minAvailable: 1`) is rendered automatically for a
-  multi-instance gateway (same rule), and the rollout strategy is
-  surge-then-drain (`maxSurge: 1`, `maxUnavailable: 0`).
+  A `PodDisruptionBudget` (`minAvailable: 1`; an integer or a percentage
+  string such as `"50%"`, while `0` fails the render -- disable the budget
+  instead) is rendered automatically for a multi-instance gateway (same rule),
+  and the rollout strategy is surge-then-drain (`maxSurge: 1`,
+  `maxUnavailable: 0`). A single gateway whose ReadWriteOnce home PVC can't
+  attach on two nodes at once needs `gateway.strategy.type: Recreate`; the
+  chart then drops `rollingUpdate`, so the type alone is enough, also when
+  this chart is a dependency of yours. Switching an installed release from
+  the default to `Recreate` with Helm 4's server-side apply fails with
+  `spec.strategy.rollingUpdate: Forbidden` when the previous release's
+  manifest had no `strategy` (e.g. `gateway.strategy: null`): the API server
+  defaulted `rollingUpdate`, no field manager owns it, so the apply can't
+  remove it. Run that one upgrade with `--server-side=false`; its three-way
+  merge patch drops `rollingUpdate`, and later upgrades can use server-side
+  apply again. The sandbox
+  provisioner is not on the single-instance list: it scales independently
+  (next item).
+- **Provisioner replicas.** `provisioner.replicas` (default 1) scales the
+  sandbox provisioner. It keeps no state of its own between requests: the
+  sandbox Pods and Services it creates carry the labels
+  (`app=deer-flow-sandbox`, `sandbox-id`) that are its only registry; create,
+  discover, list and destroy all read them back from the API server; create
+  tolerates the `409 AlreadyExists` a concurrent creator on another replica
+  produces (several gateway Pods already run that race against one
+  provisioner) and destroy tolerates `404`; and NodePorts are allocated by the
+  API server, not the provisioner. The `provisioner` Service therefore spreads
+  the gateway's calls over any number of replicas without affinity. At 1
+  replica it is the last single point of failure in a multi-replica gateway
+  deployment: while its Pod restarts or its node drains no sandbox can be
+  created or discovered (running sandboxes are unaffected; the gateway talks
+  to them directly). A `PodDisruptionBudget` (`provisioner.podDisruptionBudget`,
+  `minAvailable: 1`) is rendered only while `provisioner.replicas > 1` -- on a
+  single replica it would block every node drain -- and the rollout strategy
+  is surge-then-drain (`maxSurge: 1`, `maxUnavailable: 0`), both mirroring
+  the gateway. There is no `multiInstance` switch for the provisioner because
+  nothing else in the chart renders differently per replica count; scaling it
+  with `kubectl scale` only leaves it without the budget.
 - **App secret.** `<release>-app` holds `BETTER_AUTH_SECRET`,
   `DEER_FLOW_INTERNAL_AUTH_TOKEN`, `AUTH_JWT_SECRET` (the session-cookie
   signing key) and `PROVISIONER_API_KEY` (the key the gateway presents to the
@@ -354,6 +420,27 @@ kubectl -n deer-flow exec deploy/deer-flow-provisioner -- curl -s localhost:8002
   JWT=$(kubectl -n deer-flow exec deploy/deer-flow-gateway -- cat /app/backend/.deer-flow/.jwt_secret)
   kubectl -n deer-flow patch secret deer-flow-app -p "{\"stringData\":{\"AUTH_JWT_SECRET\":\"$JWT\"}}"
   ```
+- **Credentials key.** The app Secret also holds `DEER_FLOW_CREDENTIALS_KEY`,
+  the Fernet key the gateway encrypts stored credentials with (per-connection
+  IM channel credentials, the bot credentials entered in the web UI, and
+  rotating MCP OAuth refresh tokens). The chart generates it once (32 random bytes,
+  urlsafe base64) and preserves it across upgrades via `lookup`; every gateway
+  Pod reads the same value. **Back it up**: deleting the Secret or the release
+  generates a new key, and credentials stored under the old one become
+  unreadable (they are treated as missing, never as an error). To rotate,
+  prepend a new key — `new,old` — and keep the old one listed until stored
+  values have been rewritten. An `existingAppSecret` should carry it; the env
+  entry is optional, so without it a single Pod falls back to an auto-generated
+  `.credentials_key` on the home volume, while a multi-instance gateway with
+  `channel_connections.enabled` or a `refresh_token` MCP OAuth server refuses
+  to start. If you add the key to an
+  `existingAppSecret` later, copy that file's value so stored credentials stay
+  readable:
+
+  ```bash
+  KEY=$(kubectl -n deer-flow exec deploy/deer-flow-gateway -- cat /app/backend/.deer-flow/.credentials_key)
+  kubectl -n deer-flow patch secret my-app-secret -p "{\"stringData\":{\"DEER_FLOW_CREDENTIALS_KEY\":\"$KEY\"}}"
+  ```
 - **Scheduled task recovery.** If a deployment explicitly enables
   `scheduler.multi_instance: true`, it must use shared Postgres,
   `run_ownership.heartbeat_enabled: true`, and `run_events.backend: db`.
@@ -371,11 +458,15 @@ kubectl -n deer-flow exec deploy/deer-flow-provisioner -- curl -s localhost:8002
   auto-generated into a Secret (key `redis-url`) and injected as
   `DEER_FLOW_STREAM_BRIDGE_REDIS_URL`; `config.yaml` sets `stream_bridge.type:
   redis` by default. No-auth by default (ClusterIP isolation, matching compose);
-  set `redis.auth.password` to enable AUTH. For a managed Redis, disable the
-  bundled instance and point at it via `redis.external`. The gateway readiness
-  probe pings this Redis on every check and reports the pod unready while it
-  is unreachable, since without the bridge no run can publish, stream or be
-  cancelled from a peer pod.
+  set `redis.auth.password` to enable AUTH. A user-managed
+  `redis.existingSecret` takes precedence over that value: the bundled server
+  reads `redis-password` from the same Secret that supplies the gateway's
+  `redis-url`, and stays unauthenticated when that key is absent or empty — so
+  keep the URL and the raw password in agreement. For a managed Redis, disable
+  the bundled instance and point at it via `redis.external`. The gateway
+  readiness probe pings this Redis on every check and reports the pod unready
+  while it is unreachable, since without the bridge no run can publish, stream
+  or be cancelled from a peer pod.
 - **Persistence.** A PVC (`<release>-home`) backs `/app/backend/.deer-flow`
   (sqlite DB, memory, custom agents, per-thread user-data). The gateway mounts
   it with `subPath: deer-flow` so the layout matches the provisioner's PVC
@@ -426,7 +517,8 @@ triggers a rolling restart.
 **Resource defaults.** Every workload ships with modest requests+limits in
 `values.yaml`; override per workload (`gateway.resources`, `frontend.resources`,
 `nginx.resources`, `provisioner.resources`, `postgresql.primary.resources`,
-`redis.primary.resources`).
+`redis.primary.resources`). The gateway's init containers have their own
+`gateway.initContainers.resources` and `gateway.initContainers.image`.
 
 ### Not yet enforced (deferred hardening)
 
@@ -468,7 +560,7 @@ but not file mode — so a PVC written by an earlier **root** run (e.g. a cluste
 that ran the gateway as root before enabling this hardening, or a backup restore
 of root-owned files) will keep files like `.jwt_secret` at `0600 root:root`. The
 non-root gateway (uid 1000) then can't read them and crashes on the first auth
-request with `RuntimeError: Failed to read JWT secret from .../​.jwt_secret`.
+request with `RuntimeError: Failed to read or persist the JWT secret at .../​.jwt_secret`.
 
 **Fresh installs are unaffected** — uid 1000 creates every file as `1000:1000`.
 

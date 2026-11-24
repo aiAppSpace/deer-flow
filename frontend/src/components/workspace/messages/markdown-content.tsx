@@ -235,9 +235,7 @@ function MarkdownImage({
   const imgStyle: CSSProperties = { maxWidth, ...style };
   const resolvedSrc =
     threadId && typeof src === "string"
-      ? resolveMessageImageURL(src, threadId, artifactPaths, {
-          fallbackToOutputs: true,
-        })
+      ? resolveMessageImageURL(src, threadId, artifactPaths)
       : src;
   const image = (
     <img

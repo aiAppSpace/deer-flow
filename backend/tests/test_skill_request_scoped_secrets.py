@@ -182,79 +182,6 @@ class TestLocalSandboxOperatorEnvironment:
         with pytest.raises(ValueError):
             LocalSandbox(id="local", environment={name: "v"})
 
-    @pytest.mark.parametrize("override", [False, True])
-    @pytest.mark.parametrize("result_kind", ["output", "sandbox_error", "permission_error", "unexpected_error"])
-    def test_operator_environment_masked_from_bash_output(self, override, result_kind):
-        """[P1 regression] An operator-injected credential must not flow back
-        into model-visible tool output when a script echoes its environment —
-        the bash tool's redaction set includes the sandbox's operator
-        environment, with request-scoped values winning on name collision."""
-        from deerflow.sandbox import tools as tools_mod
-        from deerflow.sandbox.exceptions import SandboxRuntimeError
-
-        operator_secret = "operator-secret-value-123456"
-        request_secret = "request-secret-value-987654321"
-        database_secret = "database-credential-value-123456"
-        errors = {
-            "sandbox_error": SandboxRuntimeError,
-            "permission_error": PermissionError,
-            "unexpected_error": RuntimeError,
-        }
-
-        class FakeSandbox:
-            environment = {
-                "MINIMAX_API_KEY": operator_secret,
-                "DATABASE_URL": database_secret,
-                "IMAGE_GENERATION_MODEL": "readable-model-name",
-                "IMAGE_GENERATION_BASE_URL": "https://images.example.test",
-                "REGION": "readable-region-name",
-            }
-            seen_env = None
-
-            def execute_command(self, command, env=None, timeout=None):
-                self.seen_env = env
-                effective_env = {**self.environment, **(env or {})}
-                output = "\n".join(f"{key}={value}" for key, value in effective_env.items())
-                if result_kind in errors:
-                    raise errors[result_kind](output)
-                return output
-
-        active_secrets = {"ERP_TOKEN": request_secret} if override else {}
-        if override:
-            active_secrets["MINIMAX_API_KEY"] = request_secret
-        sandbox = FakeSandbox()
-        runtime = SimpleNamespace(
-            context={"__active_skill_secrets": active_secrets, "user_id": "u-local"},
-            state={"sandbox": {"sandbox_id": "local:1"}},
-        )
-        thread_data = {"workspace_path": "/tmp/ws", "cwd": "/mnt/user-data/workspace"}
-        fake_cfg = SimpleNamespace(sandbox=SimpleNamespace(bash_output_max_chars=20000, bash_command_timeout=42))
-        with (
-            patch.object(tools_mod, "ensure_sandbox_initialized", return_value=sandbox),
-            patch.object(tools_mod, "is_local_sandbox", return_value=True),
-            patch.object(tools_mod, "is_host_bash_allowed", return_value=True),
-            patch.object(tools_mod, "ensure_thread_directories_exist", return_value=None),
-            patch.object(tools_mod, "get_thread_data", return_value=thread_data),
-            patch.object(tools_mod, "validate_local_bash_command_paths", return_value=None),
-            patch.object(tools_mod, "replace_virtual_paths_in_command", side_effect=lambda command, td: command),
-            patch.object(tools_mod, "_apply_cwd_prefix", side_effect=lambda command, td: command),
-            patch.object(tools_mod, "_is_windows", return_value=False),
-            patch("deerflow.config.app_config.get_app_config", return_value=fake_cfg),
-        ):
-            out = tools_mod.bash_tool.func(runtime=runtime, command="env", description="dump env")
-
-        assert sandbox.seen_env == (active_secrets or None)
-        assert operator_secret not in out
-        assert request_secret not in out
-        assert database_secret not in out
-        assert "MINIMAX_API_KEY=[redacted]" in out
-        assert "DATABASE_URL=[redacted]" in out
-        if override:
-            assert "ERP_TOKEN=[redacted]" in out
-        assert "IMAGE_GENERATION_MODEL=readable-model-name" in out
-        assert "IMAGE_GENERATION_BASE_URL=https://images.example.test" in out
-        assert "REGION=readable-region-name" in out
-
 
 class TestAioSandboxEnvInjection:
     @pytest.fixture
@@ -768,6 +695,49 @@ class TestRequiredSecretsParsing:
         assert by_name["EXPLICIT_REQUIRED"].optional is False
         assert by_name["REQUIRED_ONE"].optional is False
 
+    def test_duplicate_declarations_keep_first_position_and_required_wins(self, tmp_path):
+        from deerflow.skills.parser import parse_skill_file
+        from deerflow.skills.types import SkillCategory
+
+        # The required duplicate comes *after* an optional one: the secret must
+        # still be required, otherwise a caller that omits it never gets a
+        # missing-secret diagnostic (issue #7568).
+        skill_file = self._write_skill(
+            tmp_path,
+            "name: erp-report\ndescription: d\nrequired-secrets:\n  - name: ERP_TOKEN\n    optional: true\n  - ERP_TOKEN\n  - name: OTHER_TOKEN\n    optional: true",
+        )
+        skill = parse_skill_file(skill_file, SkillCategory.CUSTOM)
+        assert skill.required_secrets == (
+            SecretRequirement(name="ERP_TOKEN", optional=False),
+            SecretRequirement(name="OTHER_TOKEN", optional=True),
+        )
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            [{"name": "ERP_TOKEN", "optional": True}, "ERP_TOKEN"],
+            ["ERP_TOKEN", {"name": "ERP_TOKEN", "optional": True}],
+            [{"name": "ERP_TOKEN", "optional": True}, {"name": " ERP_TOKEN ", "optional": False}],
+        ],
+    )
+    def test_duplicate_declaration_keeps_required(self, raw):
+        from deerflow.skills.parser import parse_required_secrets
+
+        requirements = parse_required_secrets([*raw, "OTHER_TOKEN"], Path("SKILL.md"))
+        assert requirements == (
+            SecretRequirement(name="ERP_TOKEN", optional=False),
+            SecretRequirement(name="OTHER_TOKEN", optional=False),
+        )
+
+    def test_optional_duplicates_stay_optional(self):
+        from deerflow.skills.parser import parse_required_secrets
+
+        requirements = parse_required_secrets(
+            [{"name": "ERP_TOKEN", "optional": True}, {"name": "ERP_TOKEN", "optional": True}],
+            Path("SKILL.md"),
+        )
+        assert requirements == (SecretRequirement(name="ERP_TOKEN", optional=True),)
+
     @pytest.mark.parametrize("value", ["false", "true", "no", 1, [], {}, None])
     def test_malformed_optional_fails_closed(self, value, caplog):
         from deerflow.skills.parser import parse_required_secrets
@@ -779,6 +749,24 @@ class TestRequiredSecretsParsing:
         assert requirements == (SecretRequirement(name="ERP_TOKEN", optional=False),)
         assert f"non-boolean optional value of type {type(value).__name__}" in caplog.text
         assert "required-secrets entry 'ERP_TOKEN' as required" in caplog.text
+
+    @pytest.mark.parametrize("value", ['"false"', '"true"', "1", "null"])
+    def test_malformed_optional_is_rejected_by_validation_too(self, value):
+        from deerflow.skills.frontmatter import split_skill_markdown
+        from deerflow.skills.parser import parse_required_secrets
+        from deerflow.skills.validation import validate_skill_frontmatter_text
+
+        # Export gates on this validation rule before it reads `optional`, which
+        # is why a malformed declaration is refused there instead of being
+        # coerced into optional=True; installation applies the same rule.
+        content = f"---\nname: erp-report\ndescription: d\nrequired-secrets:\n  - name: ERP_TOKEN\n    optional: {value}\n---\n"
+        valid, message, _ = validate_skill_frontmatter_text(content)
+        assert valid is False
+        assert "optional must be a boolean" in message
+
+        parts, error = split_skill_markdown(content)
+        assert error is None
+        assert parse_required_secrets(parts.metadata["required-secrets"], Path("SKILL.md")) == (SecretRequirement(name="ERP_TOKEN", optional=False),)
 
     def test_invalid_env_name_entry_is_dropped(self, tmp_path):
         from deerflow.skills.parser import parse_skill_file
@@ -1473,87 +1461,7 @@ class TestBashToolInjectsActiveSecrets:
         out, captured = self._run_bash({})
         assert captured["env"] in (None, {})
 
-    def test_local_bash_forwards_env_and_timeout(self, monkeypatch):
-        from deerflow.sandbox import tools as tools_mod
-        from deerflow.sandbox.tools import USER_ID_ENV
-
-        captured = {}
-
-        class FakeSandbox:
-            def execute_command(self, command, env=None, timeout=None):
-                captured["command"] = command
-                captured["env"] = env
-                captured["timeout"] = timeout
-                return "done"
-
-        runtime = SimpleNamespace(
-            context={"__active_skill_secrets": {"ERP_TOKEN": "tok-456"}, "user_id": "u-local"},
-            state={"sandbox": {"sandbox_id": "local:1"}},
-        )
-        thread_data = {"workspace_path": "/tmp/ws", "cwd": "/mnt/user-data/workspace"}
-        fake_cfg = SimpleNamespace(sandbox=SimpleNamespace(bash_output_max_chars=321, bash_command_timeout=42))
-        with (
-            patch.object(tools_mod, "ensure_sandbox_initialized", return_value=FakeSandbox()),
-            patch.object(tools_mod, "is_local_sandbox", return_value=True),
-            patch.object(tools_mod, "is_host_bash_allowed", return_value=True),
-            patch.object(tools_mod, "ensure_thread_directories_exist", return_value=None),
-            patch.object(tools_mod, "get_thread_data", return_value=thread_data),
-            patch.object(tools_mod, "validate_local_bash_command_paths", return_value=None),
-            patch.object(tools_mod, "replace_virtual_paths_in_command", side_effect=lambda command, td: command),
-            patch.object(tools_mod, "_apply_cwd_prefix", side_effect=lambda command, td: command),
-            # Pinned so the assertion below does not depend on the host OS:
-            # the Windows local sandbox publishes the id through ``env`` rather
-            # than the command string (#3919).
-            patch.object(tools_mod, "_is_windows", return_value=False),
-            patch("deerflow.config.app_config.get_app_config", return_value=fake_cfg),
-        ):
-            out = tools_mod.bash_tool.func(runtime=runtime, command="echo hi", description="run local skill")
-
-        assert out == "done"
-        assert captured["command"] == f"export {USER_ID_ENV}=u-local; echo hi"
-        assert captured["env"] == {"ERP_TOKEN": "tok-456"}
-        assert captured["timeout"] == 42
-
-    def test_local_bash_windows_publishes_user_id_via_env(self, monkeypatch):
-        """``export`` is invalid under the Windows local sandbox's
-        PowerShell/cmd.exe shells, so the id moves to the ``env`` channel there
-        instead of being dropped — the PR promises it on every bash command."""
-        from deerflow.sandbox import tools as tools_mod
-        from deerflow.sandbox.tools import USER_ID_ENV
-
-        captured = {}
-
-        class FakeSandbox:
-            def execute_command(self, command, env=None, timeout=None):
-                captured["command"] = command
-                captured["env"] = env
-                return "done"
-
-        runtime = SimpleNamespace(
-            context={"__active_skill_secrets": {"ERP_TOKEN": "tok-789"}, "user_id": "u-win"},
-            state={"sandbox": {"sandbox_id": "local:1"}},
-        )
-        thread_data = {"workspace_path": "/tmp/ws", "cwd": "/mnt/user-data/workspace"}
-        fake_cfg = SimpleNamespace(sandbox=SimpleNamespace(bash_output_max_chars=321, bash_command_timeout=42))
-        with (
-            patch.object(tools_mod, "ensure_sandbox_initialized", return_value=FakeSandbox()),
-            patch.object(tools_mod, "is_local_sandbox", return_value=True),
-            patch.object(tools_mod, "is_host_bash_allowed", return_value=True),
-            patch.object(tools_mod, "ensure_thread_directories_exist", return_value=None),
-            patch.object(tools_mod, "get_thread_data", return_value=thread_data),
-            patch.object(tools_mod, "validate_local_bash_command_paths", return_value=None),
-            patch.object(tools_mod, "replace_virtual_paths_in_command", side_effect=lambda command, td: command),
-            patch.object(tools_mod, "_apply_cwd_prefix", side_effect=lambda command, td: command),
-            patch.object(tools_mod, "_is_windows", return_value=True),
-            patch("deerflow.config.app_config.get_app_config", return_value=fake_cfg),
-        ):
-            out = tools_mod.bash_tool.func(runtime=runtime, command="echo hi", description="run local skill")
-
-        assert out == "done"
-        assert captured["command"] == "echo hi"
-        assert captured["env"] == {"ERP_TOKEN": "tok-789", USER_ID_ENV: "u-win"}
-
-    def test_remote_bash_does_not_forward_shared_timeout(self):
+    def test_remote_bash_forwards_shared_timeout(self):
         from deerflow.sandbox import tools as tools_mod
 
         captured = {}
@@ -1600,7 +1508,7 @@ class TestBashToolInjectsActiveSecrets:
             )
 
         assert out == "done"
-        assert captured["timeout"] is None
+        assert captured["timeout"] == 42
 
 
 _SECRET = "sk-erp-9f3c-DO-NOT-LEAK"

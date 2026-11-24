@@ -7,8 +7,8 @@ import {
   screen,
 } from "@testing-library/react";
 
+import AuthCallbackPage from "@/app/(auth)/auth/callback/page";
 import SetupPage from "@/app/(auth)/setup/page";
-import AuthCallbackPage from "@/app/auth/callback/page";
 import { I18nProvider } from "@/core/i18n/context";
 
 const mocks = rs.hoisted(() => ({

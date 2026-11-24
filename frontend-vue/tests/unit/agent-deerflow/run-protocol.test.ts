@@ -331,7 +331,7 @@ describe("inspect：durable status 的冻结映射（08 §258）", () => {
     ).toMatchObject({ terminal: false });
   });
 
-  it("映射表覆盖 Gateway 的全部 6 个 status", () => {
+  it("映射表覆盖 Gateway 的全部 status", () => {
     expect(Object.keys(DEERFLOW_DURABLE_STATUS).sort()).toEqual([
       "error",
       "interrupted",
@@ -339,6 +339,7 @@ describe("inspect：durable status 的冻结映射（08 §258）", () => {
       "running",
       "success",
       "timeout",
+      "waiting_for_input",
     ]);
   });
 });

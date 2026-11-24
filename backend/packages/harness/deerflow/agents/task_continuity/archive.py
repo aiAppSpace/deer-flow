@@ -77,15 +77,19 @@ def records(messages, cap: int = 16000) -> list[dict]:
     return result
 
 
-def _tokens(text: str) -> list[str]:
-    words = re.findall(r"[^\W_]+", text.casefold())
-    tokens = []
-    for word in words:
+def _token_spans(folded: str):
+    """Preserve indexed token positions in casefolded text without changing tokenization."""
+    for match in re.finditer(r"[^\W_]+", folded):
+        word = match.group()
         if re.search(r"[\u3400-\u9fff]", word):
-            tokens.extend(word[i : i + 2] for i in range(max(1, len(word) - 1)))
+            for index in range(max(1, len(word) - 1)):
+                yield word[index : index + 2], match.start() + index, match.start() + min(index + 2, len(word))
         else:
-            tokens.append(word)
-    return list(dict.fromkeys(tokens))
+            yield word, match.start(), match.end()
+
+
+def _tokens(text: str) -> list[str]:
+    return list(dict.fromkeys(word for word, _, _ in _token_spans(text.casefold())))
 
 
 def terms(text: str) -> list[str]:
@@ -94,6 +98,39 @@ def terms(text: str) -> list[str]:
 
 def index_text(text: str) -> str:
     return " ".join(_tokens(text))
+
+
+def _search_excerpt(text: str, keywords: list[str], *, substring: bool) -> dict:
+    """Locate the first fitting casefolded keyword match in the readable source."""
+    folded = text.casefold()
+    if substring:
+        hits = [(position, position + len(term)) for term in keywords if (position := folded.find(term)) >= 0]
+    else:
+        keyword_set = set(keywords)
+        hits = [(left, right) for word, left, right in _token_spans(folded) if word in keyword_set]
+    start = 0
+    if hits:
+        positions = [index for index, char in enumerate(text) for _ in char.casefold()]
+        fitting_hits = []
+        for left, right in hits:
+            term = folded[left:right]
+            while left >= 0:
+                match_start, match_end = positions[left], positions[right - 1] + 1
+                if match_end - match_start <= 600:
+                    fitting_hits.append((match_start, match_end))
+                    break
+                if not substring:
+                    break
+                # A later occurrence can have a shorter original span even
+                # though it casefolds to the same term. Preserve overlaps.
+                left = folded.find(term, left + 1)
+                right = left + len(term)
+        hits = fitting_hits
+    if hits:
+        match_start, match_end = min(hits)
+        start = max(0, min(match_start - (600 - (match_end - match_start)) // 2, len(text) - 600))
+    end = min(len(text), start + 600)
+    return {"excerpt": text[start:end], "excerpt_start": start, "excerpt_end": end, "excerpt_match": bool(hits)}
 
 
 def reachable(state: dict, owner: str) -> list[str]:
@@ -113,6 +150,8 @@ def capture(state: dict, runtime, messages, config) -> dict:
         omitted = max(0, len(sources) - config.max_records_per_batch)
         sources = sources[-config.max_records_per_batch :]
         batch = digest([owner, sources])
+        batches = [*[previous for previous in old if previous != batch], batch][-config.max_batches :]
+        placeholders = ",".join("?" for _ in batches)
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with closing(sqlite3.connect(path, timeout=5)) as db, db:
             db.execute("PRAGMA max_page_count=32768")  # 128 MiB at SQLite's default page size.
@@ -124,14 +163,18 @@ def capture(state: dict, runtime, messages, config) -> dict:
             db.execute("BEGIN IMMEDIATE")
             exists = db.execute("SELECT 1 FROM batches WHERE id=?", (batch,)).fetchone()
             created = db.execute("SELECT COALESCE(MAX(created) + 1, 1) FROM batches").fetchone()[0]
-            expired = db.execute("SELECT id FROM batches WHERE id != ? ORDER BY created DESC LIMIT -1 OFFSET ?", (batch, config.max_batches - 1)).fetchall()
+            # Retain the batches referenced by the next checkpoint first. An
+            # earlier capture may have finished writing without publishing its checkpoint.
+            expired = db.execute(
+                f"SELECT id FROM batches WHERE id != ? ORDER BY (id IN ({placeholders})) DESC, created DESC LIMIT -1 OFFSET ?",
+                [batch, *batches, config.max_batches - 1],
+            ).fetchall()
             for (expired_id,) in expired:
                 db.execute("DELETE FROM sources WHERE batch=?", (expired_id,))
                 db.execute("DELETE FROM batches WHERE id=?", (expired_id,))
             if not exists:
                 db.execute("INSERT INTO batches VALUES (?, ?)", (batch, created))
                 db.executemany("INSERT INTO sources VALUES (?, ?, ?, ?)", [(batch, r["id"], json.dumps(r, ensure_ascii=False), index_text(r["text"])) for r in sources])
-        batches = [*[previous for previous in old if previous != batch], batch][-config.max_batches :]
         return {"scope": owner, "batches": batches, "omitted_records": omitted, "status": "available"}
     except (OSError, sqlite3.Error, ValueError):
         logger.warning("Task history capture unavailable; preserving ordinary compaction", exc_info=False)
@@ -152,7 +195,7 @@ async def acapture(*args) -> dict:
         raise
 
 
-def lookup(state: dict, runtime, *, query: str | None = None, source_id: str | None = None, role: str | None = None) -> dict:
+def lookup(state: dict, runtime, *, query: str | None = None, source_id: str | None = None, role: str | None = None, excerpts: bool = False, latest_first: bool = False) -> dict:
     path, owner = scope(runtime)
     batches = reachable(state, owner)
     active = records(state.get("messages", []), 64000)
@@ -162,6 +205,12 @@ def lookup(state: dict, runtime, *, query: str | None = None, source_id: str | N
     found = {}
     history = normalize_task_history(state.get("task_history"))
     status = "unavailable" if history.get("status") == "unavailable" else "available"
+    active_matches = []
+    for row in active:
+        if (source_id and row["id"] == source_id) or (query is not None and (role is None or row["role"] == role) and any(t in row["text"].casefold() for t in keywords)):
+            active_matches.append(row)
+    latest_active = {row["id"]: row for row in reversed(active_matches)} if latest_first else {}
+    archive_limit = max(0, 8 - len(latest_active))
     if batches:
         try:
             with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
@@ -169,21 +218,62 @@ def lookup(state: dict, runtime, *, query: str | None = None, source_id: str | N
                 present = db.execute(f"SELECT count(*) FROM batches WHERE id IN ({placeholders})", batches).fetchone()[0]
                 if present != len(batches) and status != "unavailable":
                     status = "partially_expired"
+                rows = ()
                 if source_id:
-                    rows = db.execute(f"SELECT payload FROM sources WHERE batch IN ({placeholders}) AND id=? LIMIT 1", [*batches, source_id])
-                else:
+                    rows = db.execute(f"SELECT payload FROM sources WHERE batch IN ({placeholders}) AND id=? ORDER BY rowid LIMIT 1", [*batches, source_id])
+                elif archive_limit:
                     match = " OR ".join('"' + term.replace('"', '""') + '"' for term in keywords)
                     role_filter = " AND json_extract(payload, '$.role') = ?" if role is not None else ""
                     parameters = [match, *batches, *([role] if role is not None else [])]
-                    rows = db.execute(f"SELECT payload FROM sources WHERE sources MATCH ? AND batch IN ({placeholders}){role_filter} ORDER BY rank LIMIT 8", parameters)
+                    order_by = "rank"
+                    if latest_first:
+                        # Recapture moves the checkpoint reference while keeping its stored row IDs.
+                        batch_positions = " ".join(f"WHEN ? THEN {position}" for position in range(len(batches)))
+                        order_by = f"CASE batch {batch_positions} END DESC, rowid DESC"
+                        parameters.extend(batches)
+                    # Sort the bounded archive before taking distinct sources.
+                    # A SQL row limit can hide distinct sources behind duplicates.
+                    rows = db.execute(f"SELECT payload FROM sources WHERE sources MATCH ? AND batch IN ({placeholders}){role_filter} ORDER BY {order_by}", parameters)
                 for (payload,) in rows:
                     row = json.loads(payload)
-                    found[row["id"]] = row
+                    if row["id"] in latest_active:
+                        continue
+                    # Repeated archives share one result slot in either order.
+                    found.setdefault(row["id"], row)
+                    if len(found) == archive_limit:
+                        break
+                if excerpts and query is not None and found:
+                    # A source may be archived at different lengths; select its first stored version, as history_read does.
+                    ids = list(found)
+                    id_placeholders = ",".join("?" for _ in ids)
+                    canonical = {}
+                    for (payload,) in db.execute(f"SELECT payload FROM sources WHERE batch IN ({placeholders}) AND id IN ({id_placeholders}) ORDER BY rowid", [*batches, *ids]):
+                        row = json.loads(payload)
+                        canonical.setdefault(row["id"], row)
+                    found.update(canonical)
         except (OSError, sqlite3.Error):
             status = "unavailable"
     elif history.get("scope") is not None and history["scope"] != owner:
         status = "scope_unavailable"
-    for row in active:
-        if (source_id and row["id"] == source_id) or (query is not None and (role is None or row["role"] == role) and any(t in row["text"].casefold() for t in keywords)):
-            found[row["id"]] = row
-    return {"results": list(found.values())[:8], "status": status}
+    archived_matches = list(found.values())
+    active_by_id = {row["id"]: row for row in active}
+    archived_matches = [active_by_id.get(row["id"], row) for row in archived_matches]
+    if latest_first:
+        results = [*latest_active.values(), *archived_matches][:8]
+    else:
+        archived_ids = set(found)
+        active_only_by_id = {}
+        for row in active_matches:
+            if row["id"] not in archived_ids:
+                active_only_by_id.setdefault(row["id"], row)
+        active_only = list(active_only_by_id.values())
+        results = archived_matches[: max(0, 8 - len(active_only))] + active_only[:8]
+    if excerpts and query is not None:
+        excerpts_result = []
+        for row in results:
+            # Active text takes precedence when reading by ID, even if only archived FTS matched the source.
+            row = dict(active_by_id.get(row["id"], row))
+            row.update(_search_excerpt(row.pop("text"), keywords, substring=row["id"] in active_by_id))
+            excerpts_result.append(row)
+        results = excerpts_result
+    return {"results": results, "status": status}

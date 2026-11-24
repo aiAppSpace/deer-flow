@@ -14,6 +14,8 @@ import { PromptInputProvider } from "@/components/ai-elements/prompt-input";
 import { InputBox } from "@/components/workspace/input-box";
 import {
   focusReferenceAt,
+  readReferenceEditor,
+  referenceCaret,
   referenceToken,
 } from "@/components/workspace/mentions/inline-references";
 import { ThreadContext } from "@/components/workspace/messages/context";
@@ -257,6 +259,100 @@ function enterMention(
   });
   return input;
 }
+
+function holdAnimationFrames() {
+  let nextId = 0;
+  const pending = new Map<number, FrameRequestCallback>();
+  rs.spyOn(globalThis, "requestAnimationFrame").mockImplementation(
+    (callback) => {
+      const id = ++nextId;
+      pending.set(id, callback);
+      return id;
+    },
+  );
+  rs.spyOn(globalThis, "cancelAnimationFrame").mockImplementation((id) => {
+    pending.delete(id);
+  });
+  return {
+    flush() {
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const callback of callbacks) callback(performance.now());
+    },
+  };
+}
+
+describe("mention selection focus", () => {
+  it("focuses the replacement editor at the canonical insertion caret before the next animation frame", () => {
+    const { container } = renderComposer("mention-focus-before-frame");
+    const input = enterMention(container, "Use @res carefully", 8);
+    act(() => input.focus());
+    holdAnimationFrames();
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const editor = container.querySelector<HTMLElement>(
+      '[contenteditable="true"]',
+    )!;
+    const token = referenceToken("skill", "research", "research");
+    expect({
+      focused: document.activeElement === editor,
+      caret: referenceCaret(editor),
+      text: readReferenceEditor(editor),
+    }).toEqual({
+      focused: true,
+      caret: "Use ".length + token.length + 1,
+      text: `Use ${token}  carefully`,
+    });
+  });
+
+  it("does not overwrite a user's subsequent caret move with a late mention callback", () => {
+    const { container } = renderComposer("mention-late-frame-caret");
+    const input = enterMention(container, "Use @res carefully", 8);
+    act(() => input.focus());
+    const frames = holdAnimationFrames();
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    const editor = container.querySelector<HTMLElement>(
+      '[contenteditable="true"]',
+    )!;
+    act(() => focusReferenceAt(editor, 1));
+    fireEvent.keyUp(editor, { key: "ArrowLeft" });
+    expect(referenceCaret(editor)).toBe(1);
+
+    act(() => frames.flush());
+
+    expect(document.activeElement).toBe(editor);
+    expect(referenceCaret(editor)).toBe(1);
+  });
+
+  it("keeps focus and the canonical caret when the last selected reference is toggled off", () => {
+    const token = referenceToken("skill", "research", "research");
+    saveDraft("last-reference-focus", `Start ${token} end`);
+    const { container } = renderComposer("last-reference-focus");
+    const editor = container.querySelector<HTMLElement>(
+      '[contenteditable="true"]',
+    )!;
+    act(() => focusReferenceAt(editor, 2));
+    const picker = screen.getByTestId("mention-button");
+    act(() => picker.focus());
+    holdAnimationFrames();
+    fireEvent.click(picker);
+    fireEvent.click(
+      screen.getByRole("option", { name: "research Research a topic" }),
+    );
+
+    // The composer intentionally retains its inline editor after the last
+    // reference; no textarea remount is required to preserve native undo.
+    expect(screen.queryByTestId("inline-skill-reference")).toBeNull();
+    expect(container.querySelector('[contenteditable="true"]')).toBe(editor);
+    expect({
+      focused: document.activeElement === editor,
+      caret: referenceCaret(editor),
+      text: readReferenceEditor(editor),
+    }).toEqual({ focused: true, caret: 2, text: "Start  end" });
+  });
+});
 
 describe("unified composer mentions", () => {
   it("repositions references within the native clipping region on font-only layout changes", async () => {
@@ -620,11 +716,29 @@ describe("unified composer mentions", () => {
     enterMention(container, "@");
     expect(screen.queryByRole("option", { name: "Writer brief" })).toBeNull();
   });
-  it("the attachment button opens the same picker", () => {
-    renderComposer();
+  it("the attachment button opens the file input directly", () => {
+    const { container } = renderComposer();
+    const fileInput =
+      container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const click = rs.spyOn(fileInput, "click");
     fireEvent.click(screen.getByTestId("add-attachments-button"));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("mention-picker")).toBeNull();
+  });
+  it("the mention button keeps the reference picker and its upload action", () => {
+    const { container } = renderComposer();
+    const fileInput =
+      container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const click = rs.spyOn(fileInput, "click");
+    fireEvent.click(screen.getByTestId("mention-button"));
+    expect(click).not.toHaveBeenCalled();
     expect(screen.getByTestId("mention-picker")).toBeTruthy();
+    expect(
+      screen.getByRole("option", { name: "research Research a topic" }),
+    ).toBeTruthy();
     expect(screen.getByRole("option", { name: "Upload a file" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("option", { name: "Upload a file" }));
+    expect(click).toHaveBeenCalledTimes(1);
   });
   it("does not select upload automatically for an unknown query", () => {
     const { container } = renderComposer();
@@ -1077,4 +1191,26 @@ it("reference highlight follows actual pointer movement without surrendering to 
   });
   expect(search.getAttribute("aria-activedescendant")).toBe(file.id);
   expect(file.getAttribute("aria-selected")).toBe("false");
+});
+
+it("keeps cancellation available while approvals lock new input", async () => {
+  const stop = rs.fn();
+  renderComposer("approval-stop", rs.fn(), rs.fn(), {
+    status: "streaming",
+    inputLocked: true,
+    onStop: stop,
+  });
+  // Composer lock uses readOnly + aria-disabled so the stop control stays
+  // reachable to keyboard users (textarea[disabled] would swallow focus).
+  const textbox = screen.getByRole<HTMLTextAreaElement>("textbox");
+  expect(textbox.disabled).toBe(false);
+  expect(textbox.readOnly).toBe(true);
+  expect(textbox.getAttribute("aria-disabled")).toBe("true");
+  // Streaming turns rename the submit control to Stop.
+  const submit = screen.getByRole<HTMLButtonElement>("button", {
+    name: "Stop",
+  });
+  expect(submit.disabled).toBe(false);
+  fireEvent.click(submit);
+  expect(stop).toHaveBeenCalledOnce();
 });

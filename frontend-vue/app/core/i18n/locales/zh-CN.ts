@@ -267,7 +267,7 @@ export const zhCN: Translations = {
   subagentBatches: {
     label: "批处理",
     title: "子智能体批处理",
-    description: "面向大量独立条目的持久化、可恢复执行。",
+    description: "在后台执行并保留进度的批量任务。",
     workerUnavailable:
       "批处理 worker 未运行。历史批次仍可查看和导出，当前为只读模式。",
     empty: "暂无子智能体批处理",
@@ -418,11 +418,11 @@ export const zhCN: Translations = {
     voiceInputStartLabel: "语音输入",
     voiceInputStopLabel: "停止语音输入",
     voiceInputStart:
-      "语音输入。DeerFlow 只接收转写文本，音频由浏览器或系统语音服务处理。",
+      "录音结束后，将音频发送到已配置的转写服务。",
     voiceInputStop: "停止语音输入",
-    voiceInputListening: "正在聆听... 点击停止语音输入。",
+    voiceInputListening: "正在录音… 结束后可检查文字或润色。",
     voiceInputUnsupported:
-      "当前浏览器不支持语音输入。建议使用 Chrome 或 Edge。",
+      "录音需要通过 HTTPS（或 localhost）访问，并使用支持麦克风录音的浏览器。",
     voiceInputPermissionDenied: "麦克风权限被拒绝。请允许麦克风访问后重试。",
     voiceInputMicrophoneUnavailable: "未检测到麦克风。请检查设备输入后重试。",
     voiceInputUnsupportedLanguage: "当前浏览器不支持该语言的语音输入。",
@@ -946,6 +946,8 @@ export const zhCN: Translations = {
         maxContinuations: "已达到继续处理的次数上限",
         noProgress: "连续多轮没有进展",
         tokenCapped: "已达到 token 预算",
+        loopCapped: "重复工具调用触发了安全停止",
+        recursionCapped: "运行达到了步数上限",
         evaluatorFailed: "未能检查目标，这次运行本身可能没问题",
         noDurableEndOfTurn: "未能检查目标：没有保存最终回复",
         threadChanged: "未能检查目标：检查期间对话发生了变化",
@@ -966,6 +968,8 @@ export const zhCN: Translations = {
     apiErrors: {
       generic: "出了点问题。",
       invalidRequest: "部分内容填写有误。",
+      invalidNotificationGroup:
+        "此飞书群当前不可用，请选择其他群或移除额外群通知。",
       invalidSchedule: "运行时间设置无效。",
       invalidScheduleType: "不支持这种运行方式。",
       invalidTimezone: "无法识别这个时区。",
@@ -1095,7 +1099,7 @@ export const zhCN: Translations = {
     saveCommandMessage:
       "请现在根据我们目前已经讨论的全部内容保存这个自定义智能体。这就是我明确的保存确认。如果仍有少量细节缺失，请根据上下文做出合理假设，生成一份简洁的英文初始 SOUL.md，并直接调用 setup_agent，不要再向我索要额外确认。",
     agentCreatedPendingRefresh:
-      "智能体已创建，但 DeerFlow 暂时还无法读取到它。请稍后刷新当前页面。",
+      "DeerFlow 未能确认智能体已保存，请重新尝试保存。",
     more: "更多操作",
     agentCreated: "智能体已创建！",
     startChatting: "开始对话",
@@ -1345,8 +1349,8 @@ export const zhCN: Translations = {
       failedTitle: "连接未完成",
     },
     scheduledUpdates: {
-      supported: "定时任务通知：会发送到这里",
-      supportedAfterConnect: "定时任务通知：连接后可发送到这里",
+      supported: "定时任务通知：已支持，可在通知设置中管理",
+      supportedAfterConnect: "定时任务通知：已支持，连接后可管理通知",
       unsupported: "定时任务通知：此应用暂不支持",
     },
   },
@@ -1610,7 +1614,7 @@ export const zhCN: Translations = {
       lightDescription: "更明亮的配色，适合日间使用。",
       darkDescription: "更暗的配色，减少眩光方便专注。",
       languageTitle: "语言",
-      languageDescription: "在不同语言之间切换。",
+      languageDescription: "选择界面语言及回复时优先使用的语言。",
     },
     tools: {
       title: "工具",
@@ -2020,8 +2024,8 @@ export const zhCN: Translations = {
       enable: "启用",
       disable: "停用",
       formDescription:
-        "接入 OpenAI 兼容接口。测试将发送简短的流式工具调用请求，可能产生模型调用费用。",
-      provider: "接口类型",
+        "选择厂商并填写 API Key 和模型 ID。测试将发送简短的流式工具调用请求，可能产生模型调用费用。",
+      provider: "模型厂商",
       providerOpenAICompatible: "OpenAI compatible",
       apiKey: "API Key",
       name: "唯一名称",

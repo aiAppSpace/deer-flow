@@ -590,7 +590,7 @@
                 "type": "null"
               }
             ],
-            "description": "Updated description",
+            "description": "Updated description; null resets it to empty",
             "title": "Description"
           },
           "display_name": {
@@ -760,6 +760,26 @@
           "agents"
         ],
         "title": "AgentsListResponse",
+        "type": "object"
+      },
+      "ApprovalResponseBody": {
+        "additionalProperties": false,
+        "properties": {
+          "responses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Responses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "responses"
+        ],
+        "title": "ApprovalResponseBody",
         "type": "object"
       },
       "ArtifactArchiveManifestResponse": {
@@ -1125,6 +1145,20 @@
         "title": "BrowserNavigateResponse",
         "type": "object"
       },
+      "CancelTask": {
+        "properties": {
+          "expected_revision": {
+            "minimum": 0.0,
+            "title": "Expected Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_revision"
+        ],
+        "title": "CancelTask",
+        "type": "object"
+      },
       "CapabilityInstallation": {
         "properties": {
           "adapter": {
@@ -1279,6 +1313,24 @@
           "new_password"
         ],
         "title": "ChangePasswordRequest",
+        "type": "object"
+      },
+      "ChannelConnectRequest": {
+        "properties": {
+          "group_name": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Name"
+          }
+        },
+        "title": "ChannelConnectRequest",
         "type": "object"
       },
       "ChannelConnectResponse": {
@@ -1488,6 +1540,11 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "proactive_group_notifications": {
+            "default": false,
+            "title": "Proactive Group Notifications",
+            "type": "boolean"
+          },
           "proactive_notifications": {
             "default": false,
             "title": "Proactive Notifications",
@@ -1593,6 +1650,45 @@
           "channels"
         ],
         "title": "ChannelStatusResponse",
+        "type": "object"
+      },
+      "Connection": {
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "server_key": {
+            "title": "Server Key",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_key",
+          "display_name",
+          "status"
+        ],
+        "title": "Connection",
+        "type": "object"
+      },
+      "Connections": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/Connection"
+            },
+            "title": "Connections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connections"
+        ],
+        "title": "Connections",
         "type": "object"
       },
       "ConsoleRunItem": {
@@ -2034,6 +2130,48 @@
           "max_references"
         ],
         "title": "ConversationReferencesFeature",
+        "type": "object"
+      },
+      "CreateWorkerTask": {
+        "properties": {
+          "assistant_id": {
+            "default": "lead_agent",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Assistant Id",
+            "type": "string"
+          },
+          "objective": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Objective",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "request_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "objective"
+        ],
+        "title": "CreateWorkerTask",
         "type": "object"
       },
       "CronPreviewOccurrence": {
@@ -2554,6 +2692,11 @@
           "mcp_tasks": {
             "$ref": "#/components/schemas/McpTasksFeature"
           },
+          "run_inputs": {
+            "default": false,
+            "title": "Run Inputs",
+            "type": "boolean"
+          },
           "scheduled_tasks": {
             "$ref": "#/components/schemas/ScheduledTasksFeature"
           },
@@ -2562,6 +2705,12 @@
           },
           "thread_activity": {
             "$ref": "#/components/schemas/ThreadActivityFeature"
+          },
+          "tool_approval": {
+            "$ref": "#/components/schemas/ToolApprovalFeature"
+          },
+          "voice_input": {
+            "$ref": "#/components/schemas/VoiceInputFeature"
           }
         },
         "required": [
@@ -2780,6 +2929,7 @@
                 "type": "null"
               }
             ],
+            "description": "Checkpoint timestamp",
             "title": "Created At"
           },
           "metadata": {
@@ -2805,6 +2955,14 @@
             ],
             "title": "Parent Checkpoint Id"
           },
+          "tasks": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tasks",
+            "type": "array"
+          },
           "values": {
             "additionalProperties": true,
             "title": "Values",
@@ -2815,6 +2973,110 @@
           "checkpoint_id"
         ],
         "title": "HistoryEntry",
+        "type": "object"
+      },
+      "ImNotificationPreferences": {
+        "additionalProperties": false,
+        "properties": {
+          "feishu": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu"
+          },
+          "human_input_requested": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Human Input Requested"
+          },
+          "qq": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qq"
+          },
+          "run_completed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Completed"
+          },
+          "run_failed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Failed"
+          },
+          "wechat": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wechat"
+          },
+          "wecom": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wecom"
+          }
+        },
+        "title": "ImNotificationPreferences",
+        "type": "object"
+      },
+      "ImportModelRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "connection": {
+            "$ref": "#/components/schemas/ModelConnection"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection",
+          "model"
+        ],
+        "title": "ImportModelRequest",
         "type": "object"
       },
       "InitializeAdminRequest": {
@@ -2954,10 +3216,10 @@
         "type": "object"
       },
       "KnowledgeBaseFeature": {
-        "description": "Availability of RAGFlow retrieval scope selection in chat.",
+        "description": "Availability of capability-driven retrieval scope selection in chat.",
         "properties": {
           "scope_selection_enabled": {
-            "description": "Whether chat may select a per-message RAGFlow retrieval scope",
+            "description": "Whether chat may select a per-message knowledge retrieval scope",
             "title": "Scope Selection Enabled",
             "type": "boolean"
           }
@@ -3794,9 +4056,16 @@
             "title": "Api Key"
           },
           "base_url": {
-            "maxLength": 2048,
-            "title": "Base Url",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
           },
           "context_window": {
             "anyOf": [
@@ -3840,15 +4109,25 @@
             "type": "string"
           },
           "name": {
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$",
+            "default": "",
+            "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9_.-]{0,99})?$",
             "title": "Name",
             "type": "string"
           },
           "provider": {
-            "const": "openai-compatible",
             "default": "openai-compatible",
             "title": "Provider",
             "type": "string"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasoningCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "revision": {
             "anyOf": [
@@ -3862,15 +4141,19 @@
             "title": "Revision"
           },
           "supports_vision": {
-            "default": false,
-            "title": "Supports Vision",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supports Vision"
           }
         },
         "required": [
-          "name",
-          "model",
-          "base_url"
+          "model"
         ],
         "title": "ManagedModel",
         "type": "object"
@@ -3928,6 +4211,17 @@
             "title": "Name",
             "type": "string"
           },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
           "skills": {
             "anyOf": [
               {
@@ -3946,6 +4240,17 @@
             "minLength": 1,
             "title": "System Prompt",
             "type": "string"
+          },
+          "thinking_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Enabled"
           },
           "timeout_seconds": {
             "default": 900,
@@ -4049,6 +4354,17 @@
             ],
             "title": "Model"
           },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
           "skills": {
             "anyOf": [
               {
@@ -4074,6 +4390,17 @@
               }
             ],
             "title": "System Prompt"
+          },
+          "thinking_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Enabled"
           },
           "timeout_seconds": {
             "anyOf": [
@@ -4365,6 +4692,12 @@
         "additionalProperties": true,
         "description": "Response model for MCP server configuration.",
         "properties": {
+          "agent_auth": {
+            "default": false,
+            "description": "Require an administrator-granted agent credential on this deployment HTTP server",
+            "title": "Agent Auth",
+            "type": "boolean"
+          },
           "args": {
             "description": "Arguments to pass to the command (for stdio type)",
             "items": {
@@ -4668,7 +5001,7 @@
         "properties": {
           "backend_config": {
             "additionalProperties": true,
-            "description": "Backend-private config (self-interpreted by the backend).",
+            "description": "Backend-private config (self-interpreted by the backend); credential values such as api_key are masked as ***.",
             "title": "Backend Config",
             "type": "object"
           },
@@ -4711,6 +5044,54 @@
           "backend_config"
         ],
         "title": "MemoryConfigResponse",
+        "type": "object"
+      },
+      "MemoryImportRequest": {
+        "description": "Replacement imports must explicitly supply the facts to restore.",
+        "properties": {
+          "facts": {
+            "description": "Facts to restore. An empty list explicitly clears the selected fact bucket.",
+            "items": {
+              "$ref": "#/components/schemas/Fact"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "history": {
+            "$ref": "#/components/schemas/HistoryContext"
+          },
+          "lastUpdated": {
+            "default": "",
+            "description": "Last update timestamp",
+            "title": "Lastupdated",
+            "type": "string"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Manifest revision",
+            "title": "Revision"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserContext"
+          },
+          "version": {
+            "default": "1.0",
+            "description": "Memory schema version",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "facts"
+        ],
+        "title": "MemoryImportRequest",
         "type": "object"
       },
       "MemoryResponse": {
@@ -4788,6 +5169,109 @@
         "title": "MessageResponse",
         "type": "object"
       },
+      "ModelConnection": {
+        "additionalProperties": false,
+        "description": "A transient connection draft; credentials never enter a browser query cache.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
+          },
+          "provider": {
+            "default": "openai",
+            "title": "Provider",
+            "type": "string"
+          },
+          "saved_model_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Model Name"
+          }
+        },
+        "title": "ModelConnection",
+        "type": "object"
+      },
+      "ModelControlRequest": {
+        "properties": {
+          "model_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "task",
+                  "turn",
+                  "conversation"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "text": {
+            "maxLength": 4000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ModelControlRequest",
+        "type": "object"
+      },
       "ModelResponse": {
         "description": "Response model for model information.",
         "properties": {
@@ -4824,6 +5308,18 @@
             "description": "Unique identifier for the model",
             "title": "Name",
             "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Managed provider display label; no endpoint or credentials",
+            "title": "Provider"
           },
           "reasoning": {
             "$ref": "#/components/schemas/ReasoningCapabilitiesResponse",
@@ -5349,6 +5845,17 @@
             ],
             "title": "Source Thread Id"
           },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "updated_at": {
             "title": "Updated At",
             "type": "string"
@@ -5397,6 +5904,103 @@
           "projects"
         ],
         "title": "ProjectListResponse",
+        "type": "object"
+      },
+      "ProjectMemoryFactResponse": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "source_thread_id": {
+            "title": "Source Thread Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "source_thread_id",
+          "created_at"
+        ],
+        "title": "ProjectMemoryFactResponse",
+        "type": "object"
+      },
+      "ProjectMemoryPatch": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ProjectMemoryPatch",
+        "type": "object"
+      },
+      "ProjectMemoryPromotion": {
+        "properties": {
+          "expected_instructions": {
+            "title": "Expected Instructions",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_instructions"
+        ],
+        "title": "ProjectMemoryPromotion",
+        "type": "object"
+      },
+      "ProjectMemoryPromotionResponse": {
+        "properties": {
+          "instructions": {
+            "title": "Instructions",
+            "type": "string"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/ProjectMemoryResponse"
+          }
+        },
+        "required": [
+          "instructions",
+          "memory"
+        ],
+        "title": "ProjectMemoryPromotionResponse",
+        "type": "object"
+      },
+      "ProjectMemoryResponse": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectMemoryFactResponse"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "max_facts": {
+            "default": 30,
+            "title": "Max Facts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "facts"
+        ],
+        "title": "ProjectMemoryResponse",
         "type": "object"
       },
       "ProjectPatchRequest": {
@@ -5596,6 +6200,76 @@
         "title": "PurgeResponse",
         "type": "object"
       },
+      "ReasoningCapabilities": {
+        "additionalProperties": false,
+        "description": "Declarative reasoning contract for one model (issue #5073).\n\nDeclared beside the legacy ``supports_thinking`` / ``supports_reasoning_effort``\nbooleans; when present, those booleans are derived from it. See\n``deerflow.models.reasoning`` for the normalized runtime view.",
+        "properties": {
+          "dialect": {
+            "default": "auto",
+            "description": "Payload dialect used to serialize thinking on/off; auto infers it from when_thinking_enabled",
+            "enum": [
+              "auto",
+              "openai_extra_body",
+              "anthropic",
+              "vllm_chat_template",
+              "ollama",
+              "none"
+            ],
+            "title": "Dialect",
+            "type": "string"
+          },
+          "effort": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasoningEffortCapabilities"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Effort control; omitted means the model exposes none"
+          },
+          "history": {
+            "anyOf": [
+              {
+                "enum": [
+                  "preserve",
+                  "clear"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether reasoning history must be preserved or cleared across turns",
+            "title": "History"
+          },
+          "on_disable_request": {
+            "default": "keep_enabled",
+            "description": "Required-thinking models only: silently keep thinking on when a caller asks for it to be off, or fail the request",
+            "enum": [
+              "keep_enabled",
+              "reject"
+            ],
+            "title": "On Disable Request",
+            "type": "string"
+          },
+          "thinking": {
+            "default": "unsupported",
+            "description": "Whether thinking can be toggled, is always on, or is unavailable",
+            "enum": [
+              "unsupported",
+              "optional",
+              "required"
+            ],
+            "title": "Thinking",
+            "type": "string"
+          }
+        },
+        "title": "ReasoningCapabilities",
+        "type": "object"
+      },
       "ReasoningCapabilitiesResponse": {
         "description": "Normalized reasoning contract (issue #5073), derived for legacy profiles.",
         "properties": {
@@ -5651,6 +6325,53 @@
           "source"
         ],
         "title": "ReasoningCapabilitiesResponse",
+        "type": "object"
+      },
+      "ReasoningEffortCapabilities": {
+        "additionalProperties": false,
+        "description": "Effort vocabulary one model accepts (issue #5073).\n\n``values`` is the provider's own vocabulary in display order. ``aliases``\nmap DeerFlow's generic values (``minimal``/``low``/``medium``/``high``) onto\nthat vocabulary so a UI preset or a per-agent default never reaches the\nprovider unmapped. ``path`` is where the value is serialized: the default\n``reasoning_effort`` constructor keyword, or a dotted path such as\n``extra_body.thinking.effort`` for providers that nest it.",
+        "properties": {
+          "aliases": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Generic DeerFlow value -> provider value",
+            "title": "Aliases",
+            "type": "object"
+          },
+          "default": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Effort used when the caller does not choose one",
+            "title": "Default"
+          },
+          "path": {
+            "default": "reasoning_effort",
+            "description": "Dotted model-settings path the value is written to",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+            "title": "Path",
+            "type": "string"
+          },
+          "values": {
+            "description": "Accepted effort values, in display order",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "ReasoningEffortCapabilities",
         "type": "object"
       },
       "ReasoningEffortCapabilitiesResponse": {
@@ -5885,11 +6606,11 @@
                 "type": "null"
               }
             ],
-            "description": "DeerFlow context overrides (model_name, thinking_enabled, etc.)",
+            "description": "DeerFlow context overrides (model_name, thinking_enabled, etc.). May include client capabilities under context.client.",
             "title": "Context"
           },
           "conversation_references": {
-            "description": "Explicit thread IDs or same-origin chat URLs readable only during this run (opt-in read_conversation tool); SDK clients may send the same list as context.conversation_references",
+            "description": "Explicit thread IDs or chat URLs on this DeerFlow host readable only during this run (opt-in read_conversation tool); SDK clients may send the same list as context.conversation_references",
             "items": {
               "maxLength": 2048,
               "minLength": 1,
@@ -6045,6 +6766,43 @@
           }
         },
         "title": "RunCreateRequest",
+        "type": "object"
+      },
+      "RunInputRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "additionalProperties": true,
+            "title": "Context",
+            "type": "object"
+          },
+          "mode": {
+            "enum": [
+              "queue",
+              "steer"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 96,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "text",
+          "mode"
+        ],
+        "title": "RunInputRequest",
         "type": "object"
       },
       "RunResponse": {
@@ -6249,6 +7007,17 @@
             ],
             "title": "Max Runs"
           },
+          "notification_group_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Group Connection Id"
+          },
           "prompt": {
             "minLength": 1,
             "title": "Prompt",
@@ -6418,6 +7187,17 @@
             ],
             "title": "Max Runs"
           },
+          "notification_group_connection_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Group Connection Id"
+          },
           "prompt": {
             "anyOf": [
               {
@@ -6513,6 +7293,11 @@
             "title": "Available",
             "type": "boolean"
           },
+          "group_notifications": {
+            "description": "Whether scheduled tasks support explicitly selected group notifications",
+            "title": "Group Notifications",
+            "type": "boolean"
+          },
           "min_interval_seconds": {
             "description": "Shortest interval and earliest one-time delay, in seconds",
             "title": "Min Interval Seconds",
@@ -6533,9 +7318,49 @@
           "available",
           "running",
           "tool_enabled",
-          "min_interval_seconds"
+          "min_interval_seconds",
+          "group_notifications"
         ],
         "title": "ScheduledTasksFeature",
+        "type": "object"
+      },
+      "ShareCreateRequest": {
+        "properties": {
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Id"
+          },
+          "expires_in_seconds": {
+            "default": 604800,
+            "maximum": 2592000.0,
+            "minimum": 3600.0,
+            "title": "Expires In Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "ShareCreateRequest",
+        "type": "object"
+      },
+      "ShareForkRequest": {
+        "properties": {
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id"
+        ],
+        "title": "ShareForkRequest",
         "type": "object"
       },
       "SkillCategory": {
@@ -6548,6 +7373,22 @@
         ],
         "title": "SkillCategory",
         "type": "string"
+      },
+      "SkillDiagnosticsResponse": {
+        "properties": {
+          "diagnostics": {
+            "items": {
+              "$ref": "#/components/schemas/SkillLoadDiagnostic"
+            },
+            "title": "Diagnostics",
+            "type": "array"
+          }
+        },
+        "required": [
+          "diagnostics"
+        ],
+        "title": "SkillDiagnosticsResponse",
+        "type": "object"
       },
       "SkillExportFile": {
         "properties": {
@@ -6802,6 +7643,65 @@
         "title": "SkillInstallResponse",
         "type": "object"
       },
+      "SkillLoadDiagnostic": {
+        "properties": {
+          "code": {
+            "const": "invalid_frontmatter",
+            "default": "invalid_frontmatter",
+            "title": "Code",
+            "type": "string"
+          },
+          "column": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "const": "quote_colon_value",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          },
+          "package": {
+            "title": "Package",
+            "type": "string"
+          },
+          "path": {
+            "const": "SKILL.md",
+            "default": "SKILL.md",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package"
+        ],
+        "title": "SkillLoadDiagnostic",
+        "type": "object"
+      },
       "SkillReloadResponse": {
         "description": "Response model for skill cache invalidation.",
         "properties": {
@@ -7025,6 +7925,17 @@
             "title": "Name",
             "type": "string"
           },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
           "skills": {
             "anyOf": [
               {
@@ -7058,6 +7969,17 @@
               }
             ],
             "title": "System Prompt"
+          },
+          "thinking_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Enabled"
           },
           "timeout_seconds": {
             "default": 900,
@@ -7195,6 +8117,19 @@
         },
         "title": "SuggestionsResponse",
         "type": "object"
+      },
+      "TaskStatus": {
+        "description": "Protocol-neutral lifecycle states for long-running MCP work.",
+        "enum": [
+          "submitted",
+          "working",
+          "input_required",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "TaskStatus",
+        "type": "string"
       },
       "ThreadActivityFeature": {
         "description": "Availability of the activity feed and per-user read markers.",
@@ -7683,6 +8618,26 @@
         "title": "ThreadFilesResponse",
         "type": "object"
       },
+      "ThreadGoalFromChatRequest": {
+        "description": "Request body for synthesizing a goal from the recent conversation.",
+        "properties": {
+          "guidance": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional user hint steering the synthesized objective",
+            "title": "Guidance"
+          }
+        },
+        "title": "ThreadGoalFromChatRequest",
+        "type": "object"
+      },
       "ThreadGoalRequest": {
         "description": "Request body for setting a thread-scoped goal.",
         "properties": {
@@ -7740,7 +8695,7 @@
                 "type": "null"
               }
             ],
-            "description": "Cursor for pagination",
+            "description": "Inclusive checkpoint ID cursor. The page starts with the cursor checkpoint if it still exists, followed by older checkpoints up to `limit` entries. If retention removed the cursor, the page starts with the first surviving older checkpoint, if any. When continuing, skip the first entry only if its `checkpoint_id` equals `before`.",
             "title": "Before"
           },
           "limit": {
@@ -7997,6 +8952,19 @@
             "description": "Filter by project; explicit null = unassigned threads; omit key for all",
             "title": "Project Id"
           },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Literal case-insensitive title substring",
+            "title": "Query"
+          },
           "status": {
             "anyOf": [
               {
@@ -8092,7 +9060,7 @@
         "type": "object"
       },
       "ThreadStateUpdateRequest": {
-        "description": "Request body for updating thread state (human-in-the-loop resume).",
+        "description": "Request body for updating thread state (checkpoint mutation, not a resume API).",
         "properties": {
           "as_node": {
             "anyOf": [
@@ -8250,6 +9218,69 @@
           }
         },
         "title": "TokenUsageResponse",
+        "type": "object"
+      },
+      "ToolApprovalFeature": {
+        "properties": {
+          "allowed_modes": {
+            "items": {
+              "enum": [
+                "ask",
+                "auto",
+                "full"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed Modes",
+            "type": "array"
+          },
+          "default_mode": {
+            "default": "ask",
+            "enum": [
+              "ask",
+              "auto",
+              "full"
+            ],
+            "title": "Default Mode",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "ToolApprovalFeature",
+        "type": "object"
+      },
+      "ToolGroupsResponse": {
+        "description": "Configured tool groups safe to present in Agent settings.",
+        "properties": {
+          "tool_groups": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tool Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tool_groups"
+        ],
+        "title": "ToolGroupsResponse",
+        "type": "object"
+      },
+      "TranscriptionResponse": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TranscriptionResponse",
         "type": "object"
       },
       "TrashDocumentResponse": {
@@ -8580,6 +9611,39 @@
         "title": "UploadedFileInfo",
         "type": "object"
       },
+      "UserAccountUpdate": {
+        "description": "Partial account update: role and/or enable-disable.\n\nOmitted fields are unchanged; each present field routes to its\nfield-scoped writer (update_system_role / set_disabled) so role,\ncredentials, and lifecycle state can never clobber one another.",
+        "properties": {
+          "disabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Suspend (true) or restore (false) the account; every authentication surface rejects a disabled account",
+            "title": "Disabled"
+          },
+          "system_role": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Built-in (admin/user) or a role configured in the authorization provider's roles mapping",
+            "title": "System Role"
+          }
+        },
+        "title": "UserAccountUpdate",
+        "type": "object"
+      },
       "UserContext": {
         "description": "Model for user context.",
         "properties": {
@@ -8635,6 +9699,11 @@
       "UserResponse": {
         "description": "Response model for user info endpoint.",
         "properties": {
+          "disabled": {
+            "default": false,
+            "title": "Disabled",
+            "type": "boolean"
+          },
           "email": {
             "title": "Email",
             "type": "string"
@@ -8689,23 +9758,6 @@
         "title": "UserResponse",
         "type": "object"
       },
-      "UserRoleUpdate": {
-        "description": "Assignment payload: a built-in or provider-configured role name.",
-        "properties": {
-          "system_role": {
-            "description": "Built-in (admin/user) or a role configured in the authorization provider's roles mapping",
-            "maxLength": 16,
-            "minLength": 1,
-            "title": "System Role",
-            "type": "string"
-          }
-        },
-        "required": [
-          "system_role"
-        ],
-        "title": "UserRoleUpdate",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -8744,6 +9796,27 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceInputFeature": {
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_audio_bytes": {
+            "default": 0,
+            "title": "Max Audio Bytes",
+            "type": "integer"
+          },
+          "max_duration_seconds": {
+            "default": 0,
+            "title": "Max Duration Seconds",
+            "type": "integer"
+          }
+        },
+        "title": "VoiceInputFeature",
         "type": "object"
       },
       "WechatQRLoginPollRequest": {
@@ -8827,6 +9900,95 @@
         ],
         "title": "WechatQRLoginResponse",
         "type": "object"
+      },
+      "WorkerInput": {
+        "properties": {
+          "content": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "request_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "content"
+        ],
+        "title": "WorkerInput",
+        "type": "object"
+      },
+      "WorkspaceSearchRequest": {
+        "properties": {
+          "archived": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "query": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Query",
+            "type": "string"
+          },
+          "types": {
+            "items": {
+              "enum": [
+                "thread",
+                "message"
+              ],
+              "type": "string"
+            },
+            "maxItems": 2,
+            "minItems": 1,
+            "title": "Types",
+            "type": "array"
+          }
+        },
+        "title": "WorkspaceSearchRequest",
+        "type": "object"
       }
     }
   },
@@ -8837,6 +9999,28 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/agent-tool-groups": {
+      "get": {
+        "description": "List configured tool-group names available for custom-agent allowlists.",
+        "operationId": "list_agent_tool_groups_api_agent_tool_groups_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolGroupsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Agent Tool Groups",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/api/agents": {
       "get": {
         "description": "List all custom agents available in the agents directory, including their soul content.",
@@ -9562,6 +10746,98 @@
         ]
       }
     },
+    "/api/channels/notification-preferences": {
+      "get": {
+        "operationId": "get_preferences_api_channels_notification_preferences_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-expected-user-id",
+            "required": true,
+            "schema": {
+              "title": "X-Expected-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImNotificationPreferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Preferences",
+        "tags": [
+          "channel-connections"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_preferences_api_channels_notification_preferences_patch",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-expected-user-id",
+            "required": true,
+            "schema": {
+              "title": "X-Expected-User-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImNotificationPreferences"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImNotificationPreferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Preferences",
+        "tags": [
+          "channel-connections"
+        ]
+      }
+    },
     "/api/channels/providers": {
       "get": {
         "operationId": "get_channel_providers_api_channels_providers_get",
@@ -9755,6 +11031,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChannelConnectRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -10029,6 +11322,435 @@
         "summary": "Token Usage Over Time",
         "tags": [
           "console"
+        ]
+      }
+    },
+    "/api/coordination/tasks": {
+      "post": {
+        "operationId": "create_worker_task_api_coordination_tasks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkerTask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Worker Task",
+        "tags": [
+          "coordination"
+        ]
+      }
+    },
+    "/api/coordination/tasks/{task_id}": {
+      "get": {
+        "operationId": "get_worker_task_api_coordination_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Worker Task",
+        "tags": [
+          "coordination"
+        ]
+      }
+    },
+    "/api/coordination/tasks/{task_id}/artifacts": {
+      "get": {
+        "operationId": "list_worker_artifacts_api_coordination_tasks__task_id__artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Worker Artifacts",
+        "tags": [
+          "coordination"
+        ]
+      }
+    },
+    "/api/coordination/tasks/{task_id}/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "download_worker_artifact_api_coordination_tasks__task_id__artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Worker Artifact",
+        "tags": [
+          "coordination"
+        ]
+      }
+    },
+    "/api/coordination/tasks/{task_id}/authorization": {
+      "delete": {
+        "operationId": "revoke_worker_task_api_coordination_tasks__task_id__authorization_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Worker Task",
+        "tags": [
+          "coordination"
+        ]
+      },
+      "put": {
+        "operationId": "authorize_worker_task_api_coordination_tasks__task_id__authorization_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize Worker Task",
+        "tags": [
+          "coordination"
+        ]
+      }
+    },
+    "/api/coordination/tasks/{task_id}/cancel": {
+      "post": {
+        "operationId": "cancel_worker_task_api_coordination_tasks__task_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelTask"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "description": "Cancellation is still in progress"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Worker Task",
+        "tags": [
+          "coordination"
+        ]
+      }
+    },
+    "/api/coordination/tasks/{task_id}/inputs": {
+      "get": {
+        "operationId": "list_worker_inputs_api_coordination_tasks__task_id__inputs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Worker Inputs",
+        "tags": [
+          "coordination"
+        ]
+      },
+      "post": {
+        "operationId": "add_worker_input_api_coordination_tasks__task_id__inputs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Worker Input",
+        "tags": [
+          "coordination"
         ]
       }
     },
@@ -10343,9 +12065,54 @@
         ]
       }
     },
+    "/api/knowledge/capabilities": {
+      "get": {
+        "operationId": "knowledge_capabilities_api_knowledge_capabilities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "agent_name",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "title": "Agent Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Knowledge Capabilities Api Knowledge Capabilities Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Knowledge Capabilities",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
     "/api/knowledge/retrieval-catalog/datasets": {
       "get": {
-        "description": "Return only datasets that the operator permits this agent to retrieve.",
         "operationId": "list_retrieval_catalog_datasets_api_knowledge_retrieval_catalog_datasets_get",
         "parameters": [
           {
@@ -10426,7 +12193,6 @@
     },
     "/api/knowledge/retrieval-catalog/datasets/{dataset_id}/documents": {
       "get": {
-        "description": "Return a normalized, read-only document page inside operator scope.",
         "operationId": "list_retrieval_catalog_documents_api_knowledge_retrieval_catalog_datasets__dataset_id__documents_get",
         "parameters": [
           {
@@ -10436,7 +12202,6 @@
             "schema": {
               "maxLength": 256,
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9_-]+$",
               "title": "Dataset Id",
               "type": "string"
             }
@@ -10568,6 +12333,104 @@
           }
         },
         "summary": "Save Model",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/managed-models/discover": {
+      "post": {
+        "operationId": "discover_models_api_managed_models_discover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelConnection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Discover Models",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/managed-models/import": {
+      "post": {
+        "description": "One bounded, retry-safe item. The UI sequences items and reports partial success.",
+        "operationId": "import_model_api_managed_models_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportModelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Model",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/managed-models/providers": {
+      "get": {
+        "operationId": "list_model_providers_api_managed_models_providers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Model Providers",
         "tags": [
           "models"
         ]
@@ -11048,6 +12911,116 @@
         ]
       }
     },
+    "/api/mcp/user-oauth": {
+      "get": {
+        "operationId": "list_connections_api_mcp_user_oauth_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Connections"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Connections",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/api/mcp/user-oauth/callback": {
+      "get": {
+        "operationId": "callback_api_mcp_user_oauth_callback_get",
+        "responses": {
+          "307": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Callback",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/api/mcp/user-oauth/{server_key}": {
+      "delete": {
+        "operationId": "disconnect_api_mcp_user_oauth__server_key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_key",
+            "required": true,
+            "schema": {
+              "title": "Server Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Disconnect",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
+    "/api/mcp/user-oauth/{server_key}/connect": {
+      "post": {
+        "operationId": "connect_api_mcp_user_oauth__server_key__connect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_key",
+            "required": true,
+            "schema": {
+              "title": "Server Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connect",
+        "tags": [
+          "mcp"
+        ]
+      }
+    },
     "/api/memory": {
       "delete": {
         "description": "Delete one selected agent's memory, or all saved memory for the current user when agent_name is omitted.",
@@ -11406,7 +13379,7 @@
     },
     "/api/memory/import": {
       "post": {
-        "description": "Import the default memory document, or replace only one selected agent's facts while preserving shared summaries.",
+        "description": "Import the default memory document, or replace only one selected agent's facts while preserving shared summaries. The request requires an explicit `facts` array. Omitting it returns HTTP 422, and an empty array clears the selected fact bucket.",
         "operationId": "import_memory_api_memory_import_post",
         "parameters": [
           {
@@ -11430,7 +13403,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/MemoryResponse"
+                "$ref": "#/components/schemas/MemoryImportRequest"
               }
             }
           },
@@ -11586,6 +13559,50 @@
         ]
       }
     },
+    "/api/models/resolve": {
+      "post": {
+        "description": "Read-only preview. Never starts a run or changes model defaults.",
+        "operationId": "resolve_model_selection_api_models_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Resolve Model Selection Api Models Resolve Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve a direct user model selection",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/api/models/{model_name}": {
       "get": {
         "description": "Retrieve detailed information about a specific AI model by its name.",
@@ -11643,6 +13660,35 @@
           }
         },
         "summary": "List Plugins",
+        "tags": [
+          "plugins"
+        ]
+      }
+    },
+    "/api/plugins/diagnostics": {
+      "get": {
+        "description": "Read a safe snapshot of this Gateway process's retained diagnostics.",
+        "operationId": "plugin_diagnostics_api_plugins_diagnostics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "title": "Response Plugin Diagnostics Api Plugins Diagnostics Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plugin Diagnostics",
         "tags": [
           "plugins"
         ]
@@ -12151,7 +14197,7 @@
         ]
       },
       "post": {
-        "description": "Shelf exactly one file (§17.2): 201 created, or 200 on a content dedup hit.\n\nActive projects only — the shelf insert locks the project row with\n``status='active'`` inside its transaction, so an archived/foreign/missing\nproject is the same 404 (§8.4, §11). The display name defaults to the\nmultipart filename; both go through the same validation (400 when empty,\nseparator-bearing, or over 255 UTF-8 bytes). Size reuses\n``uploads.max_file_size`` (413, mirroring the uploads router).",
+        "description": "Shelf exactly one file (§17.2): 201 created, or 200 on a content dedup hit.\n\nActive projects only — an archived/foreign/missing project is the same\n404 (§8.4, §11), rejected before the body is staged and re-checked by the\nshelf insert under the project row lock. The display name defaults to the\nmultipart filename; both go through the same validation (400 when empty,\nseparator-bearing, or over 255 UTF-8 bytes). Size reuses\n``uploads.max_file_size`` (413, mirroring the uploads router).",
         "operationId": "upload_project_document_api_projects__project_id__documents_post",
         "parameters": [
           {
@@ -12204,7 +14250,7 @@
     },
     "/api/projects/{project_id}/documents/from-thread": {
       "post": {
-        "description": "Copy one thread file (upload or output) into the shelf (§7.4).\n\nThe source is never moved — the shelf gets a project-owned snapshot with\nprovenance (``source_thread_id``/``source_kind``/``source_name``), so\ndeleting the thread cannot affect it. ``shelf_name`` defaults to the\nsource name and follows upload-name validation. The shelf insert locks\nthe project row with ``status='active'``, so an archived/foreign/missing\nproject is the same 404 as a source that fails confinement (§8.4, §11).\nResponse mirrors upload: 201 created, 200 on a content dedup hit (the\nexisting row keeps its own name and provenance, §10.9).",
+        "description": "Copy one thread file (upload or output) into the shelf (§7.4).\n\nThe source is never moved — the shelf gets a project-owned snapshot with\nprovenance (``source_thread_id``/``source_kind``/``source_name``), so\ndeleting the thread cannot affect it. ``shelf_name`` defaults to the\nsource name and follows upload-name validation. An archived/foreign/missing\nproject is the same 404 as a source that fails confinement (§8.4, §11),\nrejected before staging and re-checked by the shelf insert's row lock.\nResponse mirrors upload: 201 created, 200 on a content dedup hit (the\nexisting row keeps its own name and provenance, §10.9).",
         "operationId": "promote_thread_file_to_shelf_api_projects__project_id__documents_from_thread_post",
         "parameters": [
           {
@@ -12421,6 +14467,210 @@
         "summary": "Get Project Document Content",
         "tags": [
           "project-documents"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/memory": {
+      "get": {
+        "operationId": "get_project_memory_api_projects__project_id__memory_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMemoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Project Memory",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "patch_project_memory_api_projects__project_id__memory_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectMemoryPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMemoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Project Memory",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/memory/{fact_id}": {
+      "delete": {
+        "operationId": "delete_project_memory_api_projects__project_id__memory__fact_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMemoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Project Memory",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/projects/{project_id}/memory/{fact_id}/promote": {
+      "post": {
+        "operationId": "promote_project_memory_api_projects__project_id__memory__fact_id__promote_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectMemoryPromotion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectMemoryPromotionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Promote Project Memory",
+        "tags": [
+          "projects"
         ]
       }
     },
@@ -13281,6 +15531,440 @@
         ]
       }
     },
+    "/api/search": {
+      "post": {
+        "operationId": "search_workspace_api_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Workspace",
+        "tags": [
+          "search"
+        ]
+      }
+    },
+    "/api/shares/{share_token}": {
+      "get": {
+        "operationId": "read_share_api_shares__share_token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "share_token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Share Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Share",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/api/shares/{share_token}/artifacts/{path}": {
+      "get": {
+        "operationId": "read_share_artifact_api_shares__share_token__artifacts__path__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "share_token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Share Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "download",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Download",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Share Artifact",
+        "tags": [
+          "shares"
+        ]
+      },
+      "head": {
+        "operationId": "read_share_artifact_api_shares__share_token__artifacts__path__head",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "share_token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Share Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "download",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Download",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Share Artifact",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/api/shares/{share_token}/fork": {
+      "post": {
+        "operationId": "import_share_api_shares__share_token__fork_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "share_token",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "title": "Share Token",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareForkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Share",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/api/skill-mutations/operations": {
+      "get": {
+        "operationId": "list_operations_api_skill_mutations_operations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-f0-9]{32}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Operations",
+        "tags": [
+          "skill-mutations"
+        ]
+      }
+    },
+    "/api/skill-mutations/operations/{operation_id}": {
+      "get": {
+        "operationId": "get_operation_api_skill_mutations_operations__operation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{32}$",
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Operation",
+        "tags": [
+          "skill-mutations"
+        ]
+      }
+    },
+    "/api/skill-mutations/operations/{operation_id}/recover": {
+      "post": {
+        "operationId": "recover_operation_api_skill_mutations_operations__operation_id__recover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "operation_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-f0-9]{32}$",
+              "title": "Operation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recover Operation",
+        "tags": [
+          "skill-mutations"
+        ]
+      }
+    },
+    "/api/skill-mutations/owners/{owner_id}/recover": {
+      "post": {
+        "operationId": "recover_owner_api_skill_mutations_owners__owner_id__recover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_id",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Owner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recover Owner",
+        "tags": [
+          "skill-mutations"
+        ]
+      }
+    },
     "/api/skills": {
       "get": {
         "description": "Retrieve a list of all available skills from both public and custom directories. When authorization is enabled, only skills visible to the caller's role are returned.",
@@ -13642,6 +16326,27 @@
           }
         },
         "summary": "Rollback Custom Skill",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/api/skills/diagnostics/custom": {
+      "get": {
+        "operationId": "list_custom_skill_diagnostics_api_skills_diagnostics_custom_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDiagnosticsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Owned Custom Skill YAML Errors",
         "tags": [
           "skills"
         ]
@@ -14743,9 +17448,65 @@
         ]
       }
     },
+    "/api/threads/{thread_id}/goal/from-chat": {
+      "post": {
+        "description": "Synthesize a goal objective from the thread's recent conversation and save it.\n\nThe flow the #7050 first slice agreed on: a busy pre-check runs **before**\nthe synthesis LLM call (a busy thread must not spend a model call it could\nnot save under anyway), the LLM composes an objective preserving the agreed\nconstraints and stopping condition, and the save reuses ``PUT /goal``'s\nreservation path — its ``ConflictError`` stays the authoritative busy\nguard, because another run can start between the pre-check and the save.\n\nUnlike ``PUT /goal`` (which mints a missing checkpoint for ``/chats/new``\npages), from-chat synthesizes *from* an existing conversation: no\ncheckpoint or no visible context is a 422 ``no_context``, never a new\nthread. A conversation whose last turn is an unanswered human-input\nrequest (a clarification, a sandbox-network approval, an extension prompt)\nis a 422 ``pending_clarification``: the goal is not agreed yet, and\nsynthesizing anyway lets the model invent the missing decision. A pending\ntool approval is a 409 like the other goal mutations, and the save\nsuppresses subagent-batch continuations queued under the previous goal.\nThe save is a compare-and-swap against the checkpoint the synthesis read:\na goal or checkpoint write that landed during the model call rejects the\nstale objective with a 409 ``goal_changed`` instead of clobbering it.\nThe synthesis is read-only until the save; the caller starts the run through\nits own existing run path.",
+        "operationId": "synthesize_thread_goal_from_chat_api_threads__thread_id__goal_from_chat_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadGoalFromChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadGoalResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Synthesize Thread Goal From Chat",
+        "tags": [
+          "threads"
+        ]
+      }
+    },
     "/api/threads/{thread_id}/history": {
       "post": {
-        "description": "Get materialized graph state history for a thread.\n\nOnly the latest (first) checkpoint carries the ``messages`` key to\navoid duplicating the complete conversation across every entry.",
+        "description": "Get materialized graph state history for a thread.\n\nOnly the latest (first) checkpoint carries the ``messages`` key to\navoid duplicating the complete conversation across every entry. It also\ncarries the persisted ``todos`` list, an active ``goal`` and an achieved\n``goal_outcome``, because ``useStream`` rebuilds thread values from this\nhead after every run.",
         "operationId": "get_thread_history_api_threads__thread_id__history_post",
         "parameters": [
           {
@@ -14803,8 +17564,52 @@
         ]
       }
     },
+    "/api/threads/{thread_id}/inputs": {
+      "get": {
+        "operationId": "get_thread_inputs_api_threads__thread_id__inputs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Thread Inputs",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/api/threads/{thread_id}/mcp-tasks": {
       "get": {
+        "description": "List the durable MCP background tasks recorded for a thread.\n\nArgs:\n    thread_id: Thread whose tasks are listed.\n    request: Incoming request, used for auth and repository access.\n    limit: Maximum number of tasks to return (1-100).\n    status: Optional task status filter applied in SQL before the limit.\n    active_only: Restrict to submitted, working, and input_required tasks; intersects with status.\n\nReturns:\n    Tasks in repository order, each projected onto the list view.",
         "operationId": "list_mcp_tasks_api_threads__thread_id__mcp_tasks_get",
         "parameters": [
           {
@@ -14829,6 +17634,32 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Active Only",
+              "type": "boolean"
             }
           }
         ],
@@ -14867,6 +17698,7 @@
     },
     "/api/threads/{thread_id}/mcp-tasks/{task_id}": {
       "get": {
+        "description": "Return the full record for one MCP task owned by the thread.\n\nArgs:\n    thread_id: Thread that owns the task.\n    task_id: Identifier of the task to fetch.\n    request: Incoming request, used for auth and repository access.\n\nReturns:\n    The task projected onto the detail view.\n\nRaises:\n    HTTPException: 404 when the task does not exist for this thread.",
         "operationId": "get_mcp_task_api_threads__thread_id__mcp_tasks__task_id__get",
         "parameters": [
           {
@@ -14923,6 +17755,7 @@
     },
     "/api/threads/{thread_id}/mcp-tasks/{task_id}/cancel": {
       "post": {
+        "description": "Request cancellation of a running MCP task.\n\nArgs:\n    thread_id: Thread that owns the task.\n    task_id: Identifier of the task to cancel.\n    request: Incoming request, used for auth and repository access.\n\nReturns:\n    The task projected onto the detail view after the cancel request.\n\nRaises:\n    HTTPException: 503 when no cancellation worker is running, or 404 when\n        the task does not exist for this thread.",
         "operationId": "cancel_mcp_task_api_threads__thread_id__mcp_tasks__task_id__cancel_post",
         "parameters": [
           {
@@ -15071,6 +17904,89 @@
         "summary": "List Thread Messages",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/messages/around": {
+      "get": {
+        "operationId": "message_context_api_threads__thread_id__messages_around_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "maxLength": 512,
+              "minLength": 1,
+              "title": "Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seq"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Message Context",
+        "tags": [
+          "search"
         ]
       }
     },
@@ -16455,6 +19371,190 @@
         ]
       }
     },
+    "/api/threads/{thread_id}/runs/{run_id}/inputs": {
+      "post": {
+        "operationId": "create_run_input_api_threads__thread_id__runs__run_id__inputs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Run Input",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/runs/{run_id}/inputs/{input_id}": {
+      "delete": {
+        "operationId": "remove_run_input_api_threads__thread_id__runs__run_id__inputs__input_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "input_id",
+            "required": true,
+            "schema": {
+              "title": "Input Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Run Input",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/runs/{run_id}/inputs/{input_id}/retry": {
+      "post": {
+        "operationId": "retry_run_input_api_threads__thread_id__runs__run_id__inputs__input_id__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "input_id",
+            "required": true,
+            "schema": {
+              "title": "Input Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Run Input",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/api/threads/{thread_id}/runs/{run_id}/join": {
       "get": {
         "description": "Join an existing run's SSE stream.",
@@ -16749,6 +19849,77 @@
         ]
       }
     },
+    "/api/threads/{thread_id}/runs/{run_id}/tool-approvals/{request_id}": {
+      "post": {
+        "operationId": "submit_tool_approval_api_threads__thread_id__runs__run_id__tool_approvals__request_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalResponseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Tool Approval",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/api/threads/{thread_id}/runs/{run_id}/workspace-changes": {
       "get": {
         "description": "Return workspace/output file changes recorded for one run.",
@@ -16923,6 +20094,147 @@
         "summary": "List Thread Scheduled Tasks",
         "tags": [
           "scheduled-tasks"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/shares": {
+      "get": {
+        "operationId": "list_shares_api_threads__thread_id__shares_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Shares",
+        "tags": [
+          "shares"
+        ]
+      },
+      "post": {
+        "operationId": "create_share_api_threads__thread_id__shares_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Share",
+        "tags": [
+          "shares"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/shares/{share_id}": {
+      "delete": {
+        "operationId": "revoke_share_api_threads__thread_id__shares__share_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "share_id",
+            "required": true,
+            "schema": {
+              "title": "Share Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Share",
+        "tags": [
+          "shares"
         ]
       }
     },
@@ -17363,6 +20675,72 @@
         ]
       }
     },
+    "/api/threads/{thread_id}/subagent-batches/{batch_id}/items/{position}": {
+      "get": {
+        "operationId": "get_batch_item_api_threads__thread_id__subagent_batches__batch_id__items__position__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "position",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Position",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Batch Item Api Threads  Thread Id  Subagent Batches  Batch Id  Items  Position  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Batch Item",
+        "tags": [
+          "subagent-batches"
+        ]
+      }
+    },
     "/api/threads/{thread_id}/subagent-batches/{batch_id}/pause": {
       "post": {
         "operationId": "pause_batch_api_threads__thread_id__subagent_batches__batch_id__pause_post",
@@ -17636,6 +21014,92 @@
           }
         },
         "summary": "Thread Token Usage",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/tool-approvals": {
+      "get": {
+        "operationId": "get_tool_approvals_api_threads__thread_id__tool_approvals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Tool Approvals",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/threads/{thread_id}/tool-approvals/grants": {
+      "delete": {
+        "operationId": "revoke_tool_approval_grants_api_threads__thread_id__tool_approvals_grants_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-]{1,64}$",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Tool Approval Grants",
         "tags": [
           "runs"
         ]
@@ -18111,8 +21575,8 @@
     },
     "/api/v1/admin/users/{user_id}": {
       "patch": {
-        "description": "Assign a user's system role (admin-only).\n\nThe role must be a built-in (\"admin\"/\"user\") or declared in the\nauthorization provider's roles configuration — an unknown name would make\nthe user's principal fall through to ``default_role`` on every decision,\nwhich is never what an operator intended. Demoting the last remaining\nadmin is rejected so a deployment cannot lock itself out of management.",
-        "operationId": "update_user_role_api_v1_admin_users__user_id__patch",
+        "description": "Update a user's account: assign a role and/or enable/disable (admin-only).\n\nThe role must be a built-in (\"admin\"/\"user\") or declared in the\nauthorization provider's roles configuration — an unknown name would make\nthe user's principal fall through to ``default_role`` on every decision,\nwhich is never what an operator intended. Demoting the last remaining\nadmin, and disabling the last remaining ACTIVE admin, are both rejected\nso a deployment cannot lock itself out of management. Each present field\nroutes to its field-scoped, serialized writer; enforcement of the\ndisabled state happens at every authentication surface (password login,\nJWT sessions, PATs, OAuth provisioning), not here.",
+        "operationId": "update_user_account_api_v1_admin_users__user_id__patch",
         "parameters": [
           {
             "in": "path",
@@ -18129,7 +21593,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserRoleUpdate"
+                "$ref": "#/components/schemas/UserAccountUpdate"
               }
             }
           },
@@ -18157,7 +21621,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Update User Role",
+        "summary": "Update User Account",
         "tags": [
           "admin-users"
         ]
@@ -18778,6 +22242,27 @@
         "summary": "Setup Status",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/voice-input/transcribe": {
+      "post": {
+        "operationId": "transcribe_audio_api_voice_input_transcribe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Transcribe Composer Audio",
+        "tags": [
+          "voice-input"
         ]
       }
     },

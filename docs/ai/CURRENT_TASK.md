@@ -1,6 +1,6 @@
 # 当前任务入口（跨平台）
 
-最后更新：2026-11-24。**状态：已恢复执行，第 1 步“本地收口”完成到提交前，等待用户授权在 `main-wc` 上提交。** 顺序见 [R03 恢复方案](../reports/2026-11-23-r03-resume-plan.md) 第 0 节（先收口，再合上游，后对齐）。
+最后更新：2026-11-24。**状态：第 1 步已提交（`fa322b3b5`）；第 2 步“合并上游 main（`fc0d4bd7b`）”已提交，React 与 backend 全量测试通过；Vue `make verify` 仍有约 19 个单测未过，归入第 3 步对齐。** 接手先读合并交接与取舍记录：`/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-HANDOFF.md`。顺序见 [R03 恢复方案](../reports/2026-11-23-r03-resume-plan.md) 第 0 节（先收口，再合上游，后对齐）。
 
 ## 2026-11-24 进展
 

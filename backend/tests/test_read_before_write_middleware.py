@@ -153,22 +153,6 @@ class TestWriteGate:
         handler.assert_not_called()
         assert result.status == "error"
 
-    def test_finalize_artifact_without_read_blocked_for_existing_target(self):
-        mw = _middleware({self.PATH: "v1"})
-        request = _make_request("finalize_artifact_write", {"description": "d", "path": self.PATH, "expected_chunks": 2})
-        handler = MagicMock()
-        result = mw.wrap_tool_call(request, handler)
-        handler.assert_not_called()
-        assert result.status == "error"
-
-    def test_finalize_artifact_new_target_allowed(self):
-        mw = _middleware({})
-        request = _make_request("finalize_artifact_write", {"description": "d", "path": self.PATH, "expected_chunks": 2})
-        handler = MagicMock(return_value=ToolMessage(content="OK", tool_call_id="call-1", name="finalize_artifact_write"))
-        result = mw.wrap_tool_call(request, handler)
-        handler.assert_called_once()
-        assert result.status != "error"
-
     def test_str_replace_missing_file_passes_through(self):
         mw = _middleware({})
         request = _make_request("str_replace", {"description": "d", "path": self.PATH, "old_str": "a", "new_str": "b"})

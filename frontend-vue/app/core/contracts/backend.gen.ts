@@ -20,6 +20,7 @@ export const THREAD_ORIGIN_KINDS = [
   "im_channel",
   "mcp_notification",
   "schedule",
+  "subagent_batch",
 ] as const;
 
 /** `ToolMessage.additional_kwargs.subagent_status` 的合法取值。 */
@@ -37,6 +38,7 @@ export const SUBAGENT_STOP_REASON_VALUES = [
   "token_capped",
   "turn_capped",
   "loop_capped",
+  "model_length_capped",
 ] as const;
 export type BackendSubagentStopReason = (typeof SUBAGENT_STOP_REASON_VALUES)[number];
 
@@ -48,6 +50,7 @@ export const RESERVED_SLASH_SKILL_NAMES = [
   "goal",
   "help",
   "memory",
+  "model",
   "models",
   "new",
   "status",
@@ -90,6 +93,8 @@ export const SCHEDULED_GOAL_UNMET_REASON_CODES = [
   "max_continuations_reached",
   "no_progress_detected",
   "token_capped",
+  "loop_capped",
+  "recursion_capped",
   "evaluator_failed",
   "no_durable_end_of_turn",
   "thread_changed_after_evaluation",
@@ -154,6 +159,7 @@ export const SCHEDULED_TASK_UI_ERROR_CODES = [
   "invalid_goal",
   "goal_requires_fresh_thread",
   "invalid_stop_condition",
+  "invalid_notification_group",
   "invalid_max_runs",
   "end_at_in_past",
   "end_at_before_first_run",

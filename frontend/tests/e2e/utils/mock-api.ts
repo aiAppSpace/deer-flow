@@ -11,6 +11,8 @@ import path from "node:path";
 
 import type { Page, Route } from "@playwright/test";
 
+import type { GoalState, ThreadGoalOutcome } from "@/core/threads/types";
+
 import { threadIdFromRequest } from "./thread-request";
 
 // ---------------------------------------------------------------------------
@@ -29,6 +31,19 @@ export const THREAD_PINNED_METADATA_KEY = "deerflow_pinned";
 // constant; the mock must mirror the same metadata contract for project
 // membership.
 export const THREAD_PROJECT_METADATA_KEY = "deerflow_project_id";
+
+/**
+ * The keys the Gateway's POST /history head may carry, from the goal contract
+ * the backend router test also reads (`contracts/thread_goal_contract.json`).
+ */
+const HISTORY_HEAD_KEYS: readonly string[] = (
+  JSON.parse(
+    readFileSync(
+      path.resolve(process.cwd(), "../contracts/thread_goal_contract.json"),
+      "utf8",
+    ),
+  ) as { history_head_keys: string[] }
+).history_head_keys;
 
 const MOCK_AUTH_USER = {
   id: "default",
@@ -49,7 +64,12 @@ export type MockThread = {
   metadata?: Record<string, unknown>;
   messages?: unknown[];
   artifacts?: string[];
-  goal?: Record<string, unknown> | null;
+  goal?: GoalState | Record<string, unknown> | null;
+  /**
+   * The record of a met goal (`mockGoalOutcome`). Runs keep it, like the
+   * backend; PUT and DELETE /goal drop it.
+   */
+  goal_outcome?: ThreadGoalOutcome | null;
   /** Thread search `unread` (a server-originated run changed since it was opened); default false. */
   unread?: boolean;
 };
@@ -124,6 +144,10 @@ export type MockAPIOptions = {
   projectDocuments?: MockProjectDocument[];
   trashDocuments?: MockTrashDocument[];
   threadFileGroups?: MockThreadFileGroup[];
+  /** Accepted for upstream specs; created threads always start empty. */
+  createdThreadMessages?: [];
+  /** Accepted for upstream specs; requested thread IDs are always honored. */
+  honorRequestedThreadId?: boolean;
   agents?: MockAgent[];
   skills?: MockSkill[];
   scheduledTasks?: MockScheduledTask[];
@@ -146,11 +170,12 @@ export type MockAPIOptions = {
     browserControlEnabled?: boolean;
     mcpTasksEnabled?: boolean;
     knowledgeScopeSelectionEnabled?: boolean;
-    /** Emitted as `scheduled_tasks`; each flag defaults to true. */
+    /** Existing task flags default to true; optional group notifications default to false. */
     scheduledTasks?: {
       available?: boolean;
       running?: boolean;
       toolEnabled?: boolean;
+      groupNotifications?: boolean;
     };
     /** Emitted as `thread_activity`; unavailable unless enabled, so nothing polls by default. */
     threadActivity?: {
@@ -199,6 +224,13 @@ export type MockThreadActivityEntry = {
 export type MockAPIController = {
   /** Add or replace a thread in the thread search results. */
   upsertThread: (thread: MockThread) => void;
+  /** A thread as the mock now stores it, e.g. the goal a PUT /goal saved. */
+  getThread: (threadId: string) => MockThread | undefined;
+  /**
+   * While on, PUT and DELETE /goal return the Gateway's 409 for a thread
+   * with a run in flight.
+   */
+  setGoalWritesBusy: (busy: boolean) => void;
   /** Record run changes; the next activity poll after the seed returns them. */
   pushThreadActivity: (...entries: MockThreadActivityEntry[]) => void;
   /** Simulate a read on another device (raises `read_version`). */
@@ -261,6 +293,7 @@ export type MockScheduledTask = {
   origin_thread_id?: string | null;
   standing_notes?: string[] | null;
   stop_condition?: string | null;
+  notification_group_connection_id?: string | null;
   automatic_runs_used?: number;
   active_run_status?: "queued" | "launching" | "running" | null;
   created_at: string;
@@ -330,6 +363,7 @@ const CLEARABLE_TASK_FIELDS = [
   "max_runs",
   "end_at",
   "stop_condition",
+  "notification_group_connection_id",
 ] as const;
 
 /** PATCH/resume semantics: a present key replaces the value; `null` clears the clearable fields. */
@@ -399,7 +433,8 @@ function mockMessageRunId(message: unknown, fallback: string) {
   return fallback;
 }
 
-function visibleRunInputMessages(route: Route) {
+/** The visible messages a run stream request submits. */
+export function visibleRunInputMessages(route: Route) {
   try {
     const body = route.request().postDataJSON() as {
       input?: { messages?: unknown[] };
@@ -472,7 +507,8 @@ function mockStreamMessages(
   return [...submittedMessages, responseMessage].map(withMessageIdentity);
 }
 
-function runStreamThreadId(route: Route) {
+/** The thread a run stream request targets (path first, then the body). */
+export function runStreamThreadId(route: Route) {
   const pathThreadId = /\/threads\/([^/]+)\/runs\/stream/.exec(
     new URL(route.request().url()).pathname,
   )?.[1];
@@ -497,6 +533,56 @@ function runStreamThreadId(route: Route) {
   } catch {
     return MOCK_THREAD_ID;
   }
+}
+
+/** The backend's `is_active_goal`: only an active goal is projected or met. */
+function isActiveGoal(goal: MockThread["goal"]): goal is GoalState {
+  return goal?.status === "active";
+}
+
+/** An active goal as PUT /goal stores it; `overrides` sets counts or a check. */
+export function mockGoal(
+  objective: string,
+  overrides: Partial<GoalState> = {},
+): GoalState {
+  const now = new Date().toISOString();
+  return {
+    objective,
+    status: "active",
+    created_at: now,
+    updated_at: now,
+    continuation_count: 0,
+    max_continuations: 8,
+    no_progress_count: 0,
+    max_no_progress_continuations: 2,
+    ...overrides,
+  };
+}
+
+/**
+ * The record the backend writes when it clears a met goal
+ * (runtime/goal.py `build_goal_outcome`), anchored to `replyMessageId`.
+ */
+export function mockGoalOutcome(
+  goal: Pick<
+    GoalState,
+    "objective" | "created_at" | "continuation_count" | "max_continuations"
+  >,
+  replyMessageId: string | null,
+  overrides: Partial<ThreadGoalOutcome> = {},
+): ThreadGoalOutcome {
+  return {
+    status: "achieved",
+    objective: goal.objective,
+    goal_created_at: goal.created_at,
+    achieved_at: new Date().toISOString(),
+    continuation_count: goal.continuation_count,
+    max_continuations: goal.max_continuations,
+    reason: "The reply meets the goal.",
+    relied_on_assumption: false,
+    reply_message_id: replyMessageId,
+    ...overrides,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -590,6 +676,8 @@ export function mockLangGraphAPI(
       available: options?.features?.scheduledTasks?.available ?? true,
       running: options?.features?.scheduledTasks?.running ?? true,
       toolEnabled: options?.features?.scheduledTasks?.toolEnabled ?? true,
+      groupNotifications:
+        options?.features?.scheduledTasks?.groupNotifications ?? false,
     },
     threadActivity: {
       available: options?.features?.threadActivity?.available ?? false,
@@ -603,6 +691,7 @@ export function mockLangGraphAPI(
   let activitySeq = 100;
   let readVersion = 0;
   const readRequests: string[] = [];
+  let goalWritesBusy = false;
   const scheduledTaskEvents: Record<string, MockScheduledTaskEvent[]> = {
     ...(options?.scheduledTaskEvents ?? {}),
   };
@@ -643,6 +732,45 @@ export function mockLangGraphAPI(
     });
     return merged;
   });
+
+  // The materialized thread state. Like a checkpoint, it has no `goal` key
+  // before a goal is set or after a clear, and `goal_outcome` only once met.
+  const threadStateValues = (thread: MockThread): Record<string, unknown> => ({
+    title: thread.title ?? "Untitled",
+    messages: thread.messages ?? [
+      {
+        type: "human",
+        id: `msg-human-${thread.thread_id}`,
+        content: [{ type: "text", text: "Previous question" }],
+      },
+      {
+        type: "ai",
+        id: `msg-ai-${thread.thread_id}`,
+        content: `Response in thread ${thread.title ?? thread.thread_id}`,
+      },
+    ],
+    artifacts: thread.artifacts ?? [],
+    ...(thread.goal ? { goal: thread.goal } : {}),
+    ...(thread.goal_outcome ? { goal_outcome: thread.goal_outcome } : {}),
+  });
+
+  // The POST /history head: only the contract's `history_head_keys`, with
+  // `goal` only while active and `goal_outcome` only when achieved (threads.py
+  // get_thread_history). `artifacts` is mock-only: the real head lacks it,
+  // but the artifact specs preload their artifacts through it.
+  const historyHeadValues = (thread: MockThread) => {
+    const state = threadStateValues(thread);
+    const projected = HISTORY_HEAD_KEYS.filter(
+      (key) =>
+        key in state &&
+        (key !== "goal" || isActiveGoal(thread.goal)) &&
+        (key !== "goal_outcome" || thread.goal_outcome?.status === "achieved"),
+    );
+    return {
+      ...Object.fromEntries(projected.map((key) => [key, state[key]])),
+      artifacts: state.artifacts,
+    };
+  };
 
   const threadSearchResult = (thread: MockThread) => ({
     thread_id: thread.thread_id,
@@ -1918,9 +2046,27 @@ export function mockLangGraphAPI(
       });
     }
 
+    if (
+      goalWritesBusy &&
+      (route.request().method() === "PUT" ||
+        route.request().method() === "DELETE")
+    ) {
+      const action = route.request().method() === "PUT" ? "Set" : "Clear";
+      return route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          detail: `Thread has a run in flight. ${action} the goal after the run finishes.`,
+        }),
+      });
+    }
+
+    // Every goal write also drops the met record (runtime/goal.py
+    // write_thread_goal), so an older "Goal met" cannot come back.
     if (route.request().method() === "DELETE") {
       if (matchingThread) {
         matchingThread.goal = null;
+        matchingThread.goal_outcome = null;
       }
       return route.fulfill({
         status: 200,
@@ -1933,22 +2079,13 @@ export function mockLangGraphAPI(
       const payload = route.request().postDataJSON() as {
         objective?: string;
       };
-      const goal = {
-        objective: payload.objective ?? "",
-        status: "active",
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        continuation_count: 0,
-        max_continuations: 8,
-        no_progress_count: 0,
-        max_no_progress_continuations: 2,
-      };
+      const goal = mockGoal(payload.objective ?? "");
       matchingThread ??= {
         thread_id: threadId,
         title: "New Chat",
         updated_at: new Date().toISOString(),
       };
-      upsertThread({ ...matchingThread, goal });
+      upsertThread({ ...matchingThread, goal, goal_outcome: null });
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -2056,23 +2193,7 @@ export function mockLangGraphAPI(
         contentType: "application/json",
         body: JSON.stringify([
           {
-            values: {
-              title: matchingThread.title ?? "Untitled",
-              goal: matchingThread.goal ?? null,
-              messages: matchingThread.messages ?? [
-                {
-                  type: "human",
-                  id: `msg-human-${matchingThread.thread_id}`,
-                  content: [{ type: "text", text: "Previous question" }],
-                },
-                {
-                  type: "ai",
-                  id: `msg-ai-${matchingThread.thread_id}`,
-                  content: `Response in thread ${matchingThread.title ?? matchingThread.thread_id}`,
-                },
-              ],
-              artifacts: matchingThread.artifacts ?? [],
-            },
+            values: historyHeadValues(matchingThread),
             next: [],
             metadata: {},
             created_at: "2025-01-01T00:00:00Z",
@@ -2103,25 +2224,9 @@ export function mockLangGraphAPI(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          values: {
-            title: matchingThread?.title ?? "Untitled",
-            goal: matchingThread?.goal ?? null,
-            messages: matchingThread
-              ? (matchingThread.messages ?? [
-                  {
-                    type: "human",
-                    id: `msg-human-${matchingThread.thread_id}`,
-                    content: [{ type: "text", text: "Previous question" }],
-                  },
-                  {
-                    type: "ai",
-                    id: `msg-ai-${matchingThread.thread_id}`,
-                    content: `Response in thread ${matchingThread.title ?? matchingThread.thread_id}`,
-                  },
-                ])
-              : [],
-            artifacts: matchingThread?.artifacts ?? [],
-          },
+          values: matchingThread
+            ? threadStateValues(matchingThread)
+            : { title: "Untitled", messages: [], artifacts: [] },
           next: [],
           metadata: {},
           created_at: "2025-01-01T00:00:00Z",
@@ -2233,7 +2338,12 @@ export function mockLangGraphAPI(
       );
       const fallbackGoal = threads.find((thread) => thread.goal)?.goal ?? null;
       const goal = existingThread?.goal ?? fallbackGoal;
-      return handleRunStream(route, { goal });
+      const goalOutcome = existingThread?.goal_outcome ?? null;
+      // Values frames carry every set channel and no key for an unset one.
+      return handleRunStream(route, {
+        ...(goal ? { goal } : {}),
+        ...(goalOutcome ? { goal_outcome: goalOutcome } : {}),
+      });
     });
 
   void page.route("**/api/langgraph/runs/stream", handleMockRunStream);
@@ -2243,15 +2353,18 @@ export function mockLangGraphAPI(
   );
 
   // Models list — model picker dropdown
-  // Empty default catalog; feature-specific scenarios register their own later route.
-  void page.route("**/api/subagents", (route) => {
-    if (route.request().method() !== "GET") return route.fallback();
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ subagents: [] }),
-    });
-  });
+  // Agent settings also read these catalogs. Keep ordinary UI specs independent
+  // of any real Gateway listening locally; catalog-specific specs override them.
+  void page.route("**/api/subagents", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { subagents: [] } })
+      : route.fallback(),
+  );
+  void page.route("**/api/agent-tool-groups", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({ json: { tool_groups: [] } })
+      : route.fallback(),
+  );
 
   void page.route("**/api/models", (route) => {
     if (route.request().method() === "GET") {
@@ -2262,6 +2375,24 @@ export function mockLangGraphAPI(
           models: [],
           token_usage: { enabled: false },
         }),
+      });
+    }
+    return route.fallback();
+  });
+
+  // General UI specs do not choose a model. Model-control specs can override
+  // this preview just as they override the empty model list above.
+  void page.route("**/api/models/resolve", (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        json: {
+          status: "none",
+          scope: null,
+          query: "",
+          model_name: null,
+          candidates: [],
+          task_offset: 0,
+        },
       });
     }
     return route.fallback();
@@ -2287,6 +2418,7 @@ export function mockLangGraphAPI(
             available: featureFlags.scheduledTasks.available,
             running: featureFlags.scheduledTasks.running,
             tool_enabled: featureFlags.scheduledTasks.toolEnabled,
+            group_notifications: featureFlags.scheduledTasks.groupNotifications,
             min_interval_seconds: 60,
           },
           thread_activity: {
@@ -2297,6 +2429,24 @@ export function mockLangGraphAPI(
     }
     return route.fallback();
   });
+
+  void page.route("**/api/knowledge/capabilities?*", (route) =>
+    route.fulfill({
+      json: {
+        operations: featureFlags.knowledgeScopeSelectionEnabled
+          ? [
+              "search",
+              "sources",
+              "catalog",
+              "documents",
+              "dataset_filter",
+              "document_filter",
+            ]
+          : ["search"],
+        scope_selection_enabled: featureFlags.knowledgeScopeSelectionEnabled,
+      },
+    }),
+  );
 
   void page.route("**/api/mcp/config", (route) =>
     route.fulfill({ json: { mcp_servers: {} } }),
@@ -2597,6 +2747,11 @@ export function mockLangGraphAPI(
 
   return {
     upsertThread,
+    getThread: (threadId) =>
+      threads.find((thread) => thread.thread_id === threadId),
+    setGoalWritesBusy: (busy) => {
+      goalWritesBusy = busy;
+    },
     pushThreadActivity: (...entries) => {
       for (const entry of entries) {
         activitySeq += 1;

@@ -1,15 +1,117 @@
+import type { Message } from "@langchain/langgraph-sdk";
 import { describe, expect, it } from "@rstest/core";
 import { createElement, type ImgHTMLAttributes } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { KnowledgeSourcesProvider } from "@/components/workspace/citations/knowledge-source";
 import { MarkdownContent } from "@/components/workspace/messages/markdown-content";
-import { clientTranslations } from "@/core/i18n/client-translations";
+import { createMarkdownLinkComponent } from "@/components/workspace/messages/markdown-link";
+import { readKnowledgeSources } from "@/core/citations/sources";
 import { I18nContext } from "@/core/i18n/context";
+import { enUS } from "@/core/i18n/locales/en-US";
+
+describe("shared knowledge citations through the Markdown pipeline", () => {
+  const id = "a".repeat(32);
+  const reference = `#knowledge-source-${id}`;
+  const source = {
+    id,
+    provider: "lightrag",
+    title: "Retrieved guide",
+    excerpt: "Real evidence",
+  };
+  const sources = readKnowledgeSources([
+    {
+      type: "tool",
+      content: `${reference}\nReal evidence`,
+      artifact: { knowledge_sources_version: 1, knowledge_sources: [source] },
+    },
+  ]);
+
+  it("keeps native RAGFlow snapshots readable through the same pipeline", () => {
+    const nativeId = `${id}-1`;
+    const message = {
+      type: "tool",
+      name: "knowledge_search",
+      content: "retrieved",
+      tool_call_id: "call",
+      artifact: {
+        knowledge_sources: {
+          version: 1,
+          sources: [
+            {
+              id: nativeId,
+              provider: "ragflow",
+              document_name: "Manual.pdf",
+              dataset_name: "Engineering",
+              text: "Limit: 42.",
+              truncated: false,
+              pages: [3],
+            },
+          ],
+        },
+      },
+    } as unknown as Message;
+    const html = renderToStaticMarkup(
+      createElement(
+        I18nContext.Provider,
+        {
+          value: { locale: "en-US", setLocale: () => undefined, t: enUS },
+        },
+        // Required children prop for the provider's createElement-based SSR.
+        // eslint-disable-next-line react/no-children-prop
+        createElement(KnowledgeSourcesProvider, {
+          messages: [message],
+          children: createElement(MarkdownContent, {
+            content: `[citation:Manual](#knowledge-${nativeId})`,
+            isLoading: false,
+          }),
+        }),
+      ),
+    );
+    expect(html).toContain("<button");
+    expect(html).toContain("Manual.pdf");
+    expect(html).not.toContain("unavailable");
+  });
+
+  it.each([reference, `#user-content-knowledge-source-${id}`])(
+    "resolves evidence after sanitization for %s",
+    (href) => {
+      const html = renderMarkdown(`[citation:Label](${href})`, false, {
+        a: createMarkdownLinkComponent(undefined, sources),
+      });
+      expect(html).toContain("<button");
+      expect(html).toContain(source.title);
+      expect(html).not.toContain("unavailable");
+      expect(html).not.toContain("href=");
+    },
+  );
+
+  it.each([reference, "#knowledge-source-invalid"])(
+    "keeps missing or malformed evidence inert for %s",
+    (href) => {
+      const html = renderMarkdown(`[citation:**Label**](${href})`, false);
+      expect(html).toContain("Label");
+      expect(html).not.toContain("<button");
+      expect(html).not.toContain("href=");
+      expect(html).not.toContain("unavailable");
+    },
+  );
+
+  it("retains sanitizer protection on unrelated anchors and unsafe URLs", () => {
+    const html = renderMarkdown(
+      "[Section](#section) [citation:Unsafe](javascript:alert%281%29)",
+      false,
+    );
+    expect(html).toContain('href="#user-content-section"');
+    expect(html).not.toContain('href="javascript:');
+  });
+});
 
 function renderMarkdown(
   content: string,
   isLoading: boolean,
-  options: Partial<Parameters<typeof MarkdownContent>[0]> = {},
+  components?: Parameters<typeof MarkdownContent>[0]["components"],
+  props: Partial<Parameters<typeof MarkdownContent>[0]> = {},
 ) {
   // Streamdown now gets its control labels from the dictionary, so this
   // renders under the app's provider like any other product component.
@@ -17,13 +119,14 @@ function renderMarkdown(
     createElement(
       I18nContext.Provider,
       {
-        value: {
-          locale: "en-US" as const,
-          setLocale: () => undefined,
-          t: clientTranslations["en-US"],
-        },
+        value: { locale: "en-US", setLocale: () => undefined, t: enUS },
       },
-      createElement(MarkdownContent, { content, isLoading, ...options }),
+      createElement(MarkdownContent, {
+        content,
+        isLoading,
+        components,
+        ...props,
+      }),
     ),
   );
 }
@@ -72,12 +175,10 @@ describe("MarkdownContent streaming code blocks", () => {
       "[Docs](https://example.com)\n\n![Chart](chart.png)",
       true,
       {
-        components: {
-          a: ({ children, href }) =>
-            createElement("a", { "data-custom-link": true, href }, children),
-          img: (props: ImgHTMLAttributes<HTMLImageElement>) =>
-            createElement("img", { ...props, "data-custom-image": true }),
-        },
+        a: ({ children, href }) =>
+          createElement("a", { "data-custom-link": true, href }, children),
+        img: (props: ImgHTMLAttributes<HTMLImageElement>) =>
+          createElement("img", { ...props, "data-custom-image": true }),
       },
     );
 
@@ -90,10 +191,8 @@ describe("MarkdownContent streaming code blocks", () => {
       ["```html", "<main />", "```"].join("\n"),
       true,
       {
-        components: {
-          code: ({ children }) =>
-            createElement("code", { "data-custom-code": true }, children),
-        },
+        code: ({ children }) =>
+          createElement("code", { "data-custom-code": true }, children),
       },
     );
 
@@ -129,10 +228,15 @@ describe("MarkdownContent streaming animation", () => {
 
 describe("MarkdownContent images", () => {
   it("resolves relative message images against thread artifacts", () => {
-    const html = renderMarkdown("![二次元美女](anime-beauty.jpg)", false, {
-      threadId: "thread-1",
-      artifactPaths: [],
-    });
+    const html = renderMarkdown(
+      "![二次元美女](anime-beauty.jpg)",
+      false,
+      undefined,
+      {
+        threadId: "thread-1",
+        artifactPaths: ["/mnt/user-data/outputs/anime-beauty.jpg"],
+      },
+    );
 
     expect(html).toContain(
       'href="/api/threads/thread-1/artifacts/mnt/user-data/outputs/anime-beauty.jpg"',

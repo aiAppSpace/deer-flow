@@ -37,13 +37,7 @@ const groups = (count: number): MessageGroup[] =>
     messages: [{ id: `human-${index}`, type: "human", content: "History" }],
   }));
 const scrollWrites = rs.fn();
-function Host({
-  count,
-  tailRequest = 0,
-}: {
-  count: number;
-  tailRequest?: number;
-}) {
+function Host({ count }: { count: number }) {
   const [, updateFollowContext] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const attach = useCallback((element: HTMLDivElement | null) => {
@@ -70,7 +64,6 @@ function Host({
       <VirtualMessageList
         groups={groups(count)}
         isLoading={false}
-        tailRequest={tailRequest}
         renderGroup={(group) => (
           <button onClick={() => setExpanded((value) => !value)}>
             {group.id}: {expanded ? "Opened" : "Details"}
@@ -157,18 +150,14 @@ describe("static transcript has no virtual scroll writer", () => {
     expect(scrollWrites).not.toHaveBeenCalled();
   });
 
-  test("a static rerender never restores following without an explicit tail request", () => {
-    const host = render(<Host count={3} tailRequest={0} />);
+  test("a static rerender never restores following", () => {
+    const host = render(<Host count={3} />);
     const viewport = ports.scrollRef.current!;
     viewport.scrollTop = 270;
     scrollWrites.mockClear();
-    host.rerender(<Host count={4} tailRequest={0} />);
+    host.rerender(<Host count={4} />);
     expect(viewport.scrollTop).toBe(270);
     expect(scrollWrites).not.toHaveBeenCalled();
     expect(ports.scrollToBottom).not.toHaveBeenCalled();
-    host.rerender(<Host count={4} tailRequest={1} />);
-    expect(ports.scrollToBottom).toHaveBeenCalledExactlyOnceWith({
-      animation: "instant",
-    });
   });
 });

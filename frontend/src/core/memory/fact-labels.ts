@@ -1,17 +1,12 @@
+import { truncateToCodePoints } from "@/core/utils/text";
+
 import type { MemoryFact } from "./types";
 
 // Shorten a fact for places that show it inline: the delete confirmation, and
 // the accessible names of the per-row action buttons.
 export function truncateFactPreview(content: string, maxLength = 140) {
   const normalized = content.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-  const ellipsis = "...";
-  if (maxLength <= ellipsis.length) {
-    return normalized.slice(0, maxLength);
-  }
-  return `${normalized.slice(0, maxLength - ellipsis.length)}${ellipsis}`;
+  return truncateToCodePoints(normalized, maxLength, "...");
 }
 
 // Name the row each icon button acts on. A page of facts otherwise carries

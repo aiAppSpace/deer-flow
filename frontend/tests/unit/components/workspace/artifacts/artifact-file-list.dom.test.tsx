@@ -29,6 +29,9 @@ const archiveState = rs.hoisted(() => {
     toastError: rs.fn(),
   };
 });
+const prepareDownload = rs.hoisted(() =>
+  rs.fn(async () => new Blob(["ok"])),
+);
 
 rs.mock("@/core/auth/AuthProvider", () => ({
   useAuth: () => ({ user: null }),
@@ -41,6 +44,10 @@ rs.mock("@/core/artifacts/api", () => ({
   downloadArtifactArchive: archiveState.download,
   getArtifactArchiveManifest: archiveState.manifest,
   MAX_ARTIFACT_ARCHIVE_FILES: 50,
+}));
+rs.mock("@/core/artifacts/download", () => ({
+  prepareArtifactDownload: prepareDownload,
+  MAX_BUFFERED_DOWNLOAD_BYTES: 64 * 1024 * 1024,
 }));
 rs.mock("sonner", () => ({
   toast: { error: archiveState.toastError, success: rs.fn() },
@@ -104,6 +111,15 @@ afterEach(() => {
 });
 
 describe("ArtifactFileList archive download", () => {
+  it("keeps preview and download actions separate", () => {
+    renderList();
+    fireEvent.click(screen.getByRole("button", { name: "report.md Markdown" }));
+    expect(artifactState.select).toHaveBeenCalledWith(files[0]);
+    expect(artifactState.setOpen).toHaveBeenCalledWith(true);
+    expect(
+      screen.getByRole("button", { name: "Download report.md" }),
+    ).toBeTruthy();
+  });
   it("offers a branch-local run accepted by the manifest ownership check", async () => {
     archiveState.manifest.mockResolvedValue({ fileCount: 2 });
     renderList({ runId: "branch-run", threadId: "branch-thread" });
@@ -348,19 +364,32 @@ describe("ArtifactFileList download href", () => {
     );
   }
 
-  it("routes a mock thread through the /mock/api handler", () => {
+  afterEach(() => {
+    prepareDownload.mockClear();
+  });
+
+  it("routes a mock thread through the /mock/api handler", async () => {
     renderWithThread(true);
-    expect(screen.getByRole("link", { name: /Download/ })).toHaveProperty(
-      "pathname",
+    fireEvent.click(screen.getByRole("button", { name: /Download/ }));
+    await waitFor(() => {
+      expect(prepareDownload).toHaveBeenCalled();
+    });
+    const url = String(prepareDownload.mock.calls[0]?.[0] ?? "");
+    expect(url).toContain(
       "/mock/api/threads/demo-thread/artifacts/mnt/user-data/outputs/summary.txt",
     );
   });
 
-  it("keeps the plain API route for a real thread", () => {
+  it("keeps the plain API route for a real thread", async () => {
     renderWithThread(false);
-    expect(screen.getByRole("link", { name: /Download/ })).toHaveProperty(
-      "pathname",
+    fireEvent.click(screen.getByRole("button", { name: /Download/ }));
+    await waitFor(() => {
+      expect(prepareDownload).toHaveBeenCalled();
+    });
+    const url = String(prepareDownload.mock.calls[0]?.[0] ?? "");
+    expect(url).toContain(
       "/api/threads/demo-thread/artifacts/mnt/user-data/outputs/summary.txt",
     );
+    expect(url).not.toContain("/mock/api/");
   });
 });

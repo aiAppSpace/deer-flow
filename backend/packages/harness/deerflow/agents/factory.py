@@ -44,17 +44,23 @@ logger = logging.getLogger(__name__)
 # TodoMiddleware prompts (minimal SDK version)
 # ---------------------------------------------------------------------------
 
-_TODO_SYSTEM_PROMPT = """
+_TODO_SYSTEM_PROMPT = (
+    """
 <todo_list_system>
 You have access to the `write_todos` tool to help you manage and track complex multi-step objectives.
 
 **CRITICAL RULES:**
-- Mark todos as completed IMMEDIATELY after finishing each step - do NOT batch completions
-- Keep EXACTLY ONE task as `in_progress` at any time (unless tasks can run in parallel)
-- Update the todo list in REAL-TIME as you work - this gives users visibility into your progress
+- Update todos at meaningful milestones and group related changes when practical
+- Mark `completed` only after a task is fully finished and verified
+- Use `in_progress` only while actively working; use `blocked` or `waiting` when work cannot continue in this run
 - DO NOT use this tool for simple tasks (< 3 steps) - just complete them directly
-</todo_list_system>
+
 """
+    "Task states: `pending` (not started), `in_progress` (active), `blocked` (blocked by a dependency or error), "
+    "`waiting` (waiting for the user or an external resource), and `completed` (fully finished and verified). "
+    "Keep `completed` truthful; blocked or waiting tasks may remain when the run ends.\n"
+    "</todo_list_system>\n"
+)
 
 _TODO_TOOL_DESCRIPTION = "Use this tool to create and manage a structured task list for complex work sessions.  Only use for complex tasks (3+ steps)."
 
@@ -213,7 +219,7 @@ def _assemble_from_features(
 ) -> tuple[list[AgentMiddleware], list[BaseTool]]:
     """Build an ordered middleware chain + extra tools from *feat*.
 
-    Middleware order matches ``make_lead_agent`` (14 middlewares):
+    Middleware order matches ``make_lead_agent`` (18 middlewares):
 
       0-2. Sandbox infrastructure (ThreadData → Uploads → Sandbox)
       3.   DanglingToolCallMiddleware (always)
@@ -228,7 +234,9 @@ def _assemble_from_features(
       10.  ViewImageMiddleware (vision feature)
       11.  SubagentLimitMiddleware (subagent feature)
       12.  LoopDetectionMiddleware (loop_detection feature)
-      13.  ClarificationMiddleware (always last)
+      13.  TokenBudgetMiddleware (token_budget feature)
+      13a. ModelContentCompatibilityMiddleware (always)
+      14.  ClarificationMiddleware (always last)
 
     Two-phase ordering:
       1. Built-in chain — fixed sequential append.
@@ -434,6 +442,19 @@ def _assemble_from_features(
 
             # ``enabled`` defaults to False for config.yaml; ``token_budget=True`` is the opt-in.
             chain.append(TokenBudgetMiddleware.from_config(TokenBudgetConfig(enabled=True)))
+
+    # --- [13a] ModelContentCompatibility (always) ---
+    # Read-time sanitizer: rewrites URL-sourced file/image blocks in list-form
+    # message content into text placeholders in the request view only, so
+    # threads poisoned before the conversion-layer fix heal on the next model
+    # call. Placement contract: after every built-in content transform so it
+    # sees the near-final request, and before the custom/extension injection
+    # point (_insert_extra) and the terminal tail — in the lead chain it is
+    # followed by configured extensions, terminal-response and finish-reason
+    # middlewares, and the always-last ClarificationMiddleware.
+    from deerflow.agents.middlewares.model_content_compatibility_middleware import ModelContentCompatibilityMiddleware
+
+    chain.append(ModelContentCompatibilityMiddleware())
 
     # --- [14] Clarification (always last among built-ins) ---
     chain.append(ClarificationMiddleware())

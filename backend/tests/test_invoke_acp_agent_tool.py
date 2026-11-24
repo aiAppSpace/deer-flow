@@ -2,23 +2,39 @@
 
 import asyncio
 import contextlib
+import logging
+import os
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from deerflow.config.acp_config import ACPAgentConfig
+from deerflow.config.app_config import AppConfig
 from deerflow.config.extensions_config import ExtensionsConfig, McpServerConfig, reset_extensions_config, set_extensions_config
 from deerflow.tools.builtins.invoke_acp_agent_tool import (
+    _agent_path,
     _build_acp_mcp_servers,
     _build_mcp_servers,
     _build_permission_response,
     _format_invocation_error,
     _get_work_dir,
+    _resolve_agent_command,
     build_invoke_acp_agent_tool,
 )
 from deerflow.tools.tools import get_available_tools
+
+
+class _LiveAgentProcess:
+    """Process double for an agent that stays alive for the whole ACP exchange."""
+
+    stderr = None
+    returncode = None
+
+    async def wait(self) -> int:
+        await asyncio.Event().wait()
 
 
 def test_build_mcp_servers_filters_disabled_and_maps_transports():
@@ -27,6 +43,13 @@ def test_build_mcp_servers_filters_disabled_and_maps_transports():
         mcp_servers={
             "stdio": McpServerConfig(enabled=True, type="stdio", command="npx", args=["srv"]),
             "http": McpServerConfig(enabled=True, type="http", url="https://example.com/mcp"),
+            "browser": McpServerConfig.model_validate(
+                {
+                    "type": "http",
+                    "url": "https://browser.example.com/mcp",
+                    "user_oauth": {"issuer": "https://id.example.com", "client_id": "deerflow", "redirect_uri": "https://app.example.com/api/mcp/user-oauth/callback"},
+                }
+            ),
             "disabled": McpServerConfig(enabled=False, type="stdio", command="echo"),
         },
         skills={},
@@ -53,6 +76,13 @@ def test_build_acp_mcp_servers_formats_list_payload():
         mcp_servers={
             "stdio": McpServerConfig(enabled=True, type="stdio", command="npx", args=["srv"], env={"FOO": "bar"}),
             "http": McpServerConfig(enabled=True, type="http", url="https://example.com/mcp", headers={"Authorization": "Bearer token"}),
+            "browser": McpServerConfig.model_validate(
+                {
+                    "type": "http",
+                    "url": "https://browser.example.com/mcp",
+                    "user_oauth": {"issuer": "https://id.example.com", "client_id": "deerflow", "redirect_uri": "https://app.example.com/api/mcp/user-oauth/callback"},
+                }
+            ),
             "disabled": McpServerConfig(enabled=False, type="stdio", command="echo"),
         },
         skills={},
@@ -129,6 +159,47 @@ def test_missing_mcode_command_returns_install_and_login_guidance():
     assert "npm install --global @minimax-ai/code" in result
     assert "mcode login" in result
     assert "restart DeerFlow" in result
+
+
+@pytest.mark.parametrize("agent", ["pi", "pi_coding"])
+def test_missing_pi_command_returns_adapter_install_guidance(agent):
+    result = _format_invocation_error(agent, "pi-acp", FileNotFoundError())
+
+    assert "npm install --global pi-acp" in result
+    assert "npx -y pi-acp" in result
+    assert "Gateway PATH" in result
+
+
+def test_missing_npx_for_pi_returns_node_install_guidance():
+    result = _format_invocation_error("pi", "npx", FileNotFoundError())
+
+    assert "Command 'npx' was not found" in result
+    assert "Install Node.js" in result
+    assert "npm" in result
+    assert "Gateway PATH" in result
+    assert "container" in result
+    assert "npm install --global pi-acp" not in result
+
+
+@pytest.mark.anyio
+async def test_pi_invocation_reports_missing_npx(monkeypatch, tmp_path):
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    empty_bin = tmp_path / "empty-bin"
+    empty_bin.mkdir()
+    monkeypatch.setenv("PATH", str(empty_bin))
+    tool = build_invoke_acp_agent_tool({"pi": ACPAgentConfig(command="npx", args=["-y", "pi-acp"], description="Pi coding agent")})
+
+    result = await tool.coroutine(agent="pi", prompt="Inspect the repository")
+
+    assert "Command 'npx' was not found" in result
+    assert "Install Node.js" in result
+    assert "npm install --global pi-acp" not in result
 
 
 @pytest.mark.anyio
@@ -251,7 +322,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
             captured["spawn"] = {"cmd": cmd, "args": list(args), "cwd": cwd}
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _LiveAgentProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -292,7 +363,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
     tool = build_invoke_acp_agent_tool(
         {
             "codex": ACPAgentConfig(
-                command="codex-acp",
+                command=sys.executable,
                 args=["--json"],
                 description="Codex CLI",
                 model="gpt-5-codex",
@@ -310,7 +381,7 @@ async def test_invoke_acp_agent_uses_fixed_acp_workspace(monkeypatch, tmp_path):
         sys.modules.pop("acp.schema", None)
 
     assert result == "ACP result"
-    assert captured["spawn"] == {"cmd": "codex-acp", "args": ["--json"], "cwd": expected_cwd}
+    assert captured["spawn"] == {"cmd": sys.executable, "args": ["--json"], "cwd": expected_cwd}
     assert captured["new_session"] == {
         "cwd": expected_cwd,
         "mcp_servers": [
@@ -376,7 +447,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
             captured["cwd"] = cwd
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _LiveAgentProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -410,7 +481,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
     thread_id = "thread-xyz-789"
     expected_cwd = str(tmp_path / "threads" / thread_id / "acp-workspace")
 
-    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command="codex-acp", description="Codex CLI")})
+    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command=sys.executable, description="Codex CLI")})
 
     try:
         await tool.coroutine(
@@ -427,7 +498,7 @@ async def test_invoke_acp_agent_uses_per_thread_workspace_when_thread_id_in_conf
 
 @pytest.mark.anyio
 async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
-    """env map in ACPAgentConfig is passed to spawn_agent_process; $VAR values are resolved."""
+    """env map in ACPAgentConfig reaches spawn_agent_process exactly as AppConfig resolved it."""
     from deerflow.config import paths as paths_module
 
     monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
@@ -435,7 +506,8 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
         "deerflow.config.extensions_config.ExtensionsConfig.from_file",
         classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
     )
-    monkeypatch.setenv("TEST_OPENAI_KEY", "sk-from-env")
+    # A resolved secret that itself starts with $ must not be resolved again.
+    monkeypatch.setenv("TEST_OPENAI_KEY", "$2b$12$from-env")
 
     captured: dict[str, object] = {}
 
@@ -468,7 +540,7 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
             captured["env"] = env
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _LiveAgentProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -502,9 +574,9 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
     tool = build_invoke_acp_agent_tool(
         {
             "codex": ACPAgentConfig(
-                command="codex-acp",
+                command=sys.executable,
                 description="Codex CLI",
-                env={"OPENAI_API_KEY": "$TEST_OPENAI_KEY", "FOO": "bar"},
+                env=AppConfig.resolve_env_variables({"OPENAI_API_KEY": "$TEST_OPENAI_KEY", "FOO": "bar"}),
             )
         }
     )
@@ -515,7 +587,7 @@ async def test_invoke_acp_agent_passes_env_to_spawn(monkeypatch, tmp_path):
         sys.modules.pop("acp", None)
         sys.modules.pop("acp.schema", None)
 
-    assert captured["env"] == {"OPENAI_API_KEY": "sk-from-env", "FOO": "bar"}
+    assert captured["env"] == {"OPENAI_API_KEY": "$2b$12$from-env", "FOO": "bar"}
 
 
 @pytest.mark.anyio
@@ -561,7 +633,7 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
             captured["spawn"] = {"cmd": cmd, "args": list(args), "env": env, "cwd": cwd}
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _LiveAgentProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -592,7 +664,7 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
         ),
     )
 
-    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command="codex-acp", description="Codex CLI")})
+    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command=sys.executable, description="Codex CLI")})
     caplog.set_level("WARNING")
 
     try:
@@ -603,7 +675,8 @@ async def test_invoke_acp_agent_skips_invalid_mcp_servers(monkeypatch, tmp_path,
 
     assert captured["new_session"]["mcp_servers"] == []
     assert "continuing without MCP servers" in caplog.text
-    assert "missing command" in caplog.text
+    assert "ValueError" in caplog.text
+    assert "missing command" not in caplog.text
 
 
 @pytest.mark.anyio
@@ -648,7 +721,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
             captured["env"] = env
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _LiveAgentProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -679,7 +752,7 @@ async def test_invoke_acp_agent_passes_none_env_when_not_configured(monkeypatch,
         ),
     )
 
-    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command="codex-acp", description="Codex CLI")})
+    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command=sys.executable, description="Codex CLI")})
 
     try:
         await tool.coroutine(agent="codex", prompt="Do something")
@@ -761,7 +834,7 @@ def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(mo
             captured["cwd"] = cwd
 
         async def __aenter__(self):
-            return DummyConn(), object()
+            return DummyConn(), _LiveAgentProcess()
 
         async def __aexit__(self, exc_type, exc, tb):
             return False
@@ -793,7 +866,7 @@ def test_get_available_tools_sync_invoke_acp_agent_preserves_thread_workspace(mo
         skill_evolution=SimpleNamespace(enabled=False),
         sandbox=SimpleNamespace(),
         get_model_config=lambda name: None,
-        acp_agents={"codex": ACPAgentConfig(command="codex-acp", description="Codex CLI")},
+        acp_agents={"codex": ACPAgentConfig(command=sys.executable, description="Codex CLI")},
     )
     tools = get_available_tools(include_mcp=False, subagent_enabled=False, app_config=explicit_config)
     tool = next(tool for tool in tools if tool.name == "invoke_acp_agent")
@@ -980,15 +1053,543 @@ async def test_invoke_acp_agent_cancellation_closes_subprocess(acp_subprocess_to
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("phase", ["initialize", "new_session", "prompt"])
-async def test_invoke_acp_agent_preserves_sdk_timeout_errors(acp_subprocess_tool, monkeypatch, phase):
+async def test_invoke_acp_agent_preserves_sdk_timeout_errors(acp_subprocess_tool, monkeypatch, phase, caplog):
     from acp.client.connection import ClientSideConnection
 
     async def raise_sdk_timeout(self, *args, **kwargs):
-        raise TimeoutError("SDK transport timed out")
+        raise TimeoutError("Private timeout details from provider")
 
     monkeypatch.setattr(ClientSideConnection, phase, raise_sdk_timeout)
     tool = acp_subprocess_tool.build_tool(timeout_seconds=60)
     result = await asyncio.wait_for(tool.coroutine(agent="test", prompt="do work"), timeout=15)
     assert result == "Error invoking ACP agent 'test': SDK transport timed out"
+    assert "Private timeout details from provider" not in caplog.text
     assert "timeout_seconds" not in result
     assert acp_subprocess_tool.captured["proc"].returncode is not None
+
+
+_STDERR_ACP_AGENT_SCRIPT = """\
+import asyncio
+import os
+import sys
+import time
+
+import acp
+from acp.schema import InitializeResponse, NewSessionResponse, PromptResponse
+
+# argv: <phase to stop in, or ""> <stderr bytes to write per phase> <"exit" or "hang">
+
+
+class _TestAgent:
+    def on_connect(self, conn):
+        self._conn = conn
+
+    def _enter_phase(self, phase):
+        line = f"{phase}: " + "x" * 200 + "\\n"
+        for _ in range(int(sys.argv[2]) // len(line) + 1):
+            sys.stderr.write(line)
+        if phase == sys.argv[1] and sys.argv[3] == "exit":
+            sys.stderr.write(f"fatal: cannot {phase} without credentials\\n")
+            sys.stderr.flush()
+            os._exit(3)
+        if phase == sys.argv[1]:
+            sys.stderr.write(f"stalled: waiting for {phase} login\\n")
+            sys.stderr.flush()
+            time.sleep(3600)
+        sys.stderr.flush()
+
+    async def initialize(self, protocol_version, client_capabilities=None, client_info=None, **kwargs):
+        self._enter_phase("initialize")
+        return InitializeResponse(protocol_version=protocol_version)
+
+    async def new_session(self, cwd, additional_directories=None, mcp_servers=None, **kwargs):
+        self._enter_phase("new_session")
+        return NewSessionResponse(session_id="test-session")
+
+    async def prompt(self, session_id, prompt, **kwargs):
+        self._enter_phase("prompt")
+        await self._conn.session_update(session_id=session_id, update=acp.update_agent_message_text("done"))
+        return PromptResponse(stop_reason="end_turn")
+
+
+asyncio.run(acp.run_agent(_TestAgent()))
+"""
+
+
+@pytest.fixture
+def acp_stderr_tool(monkeypatch, tmp_path):
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    script_path = tmp_path / "stderr_acp_agent.py"
+    script_path.write_text(_STDERR_ACP_AGENT_SCRIPT, encoding="utf-8")
+
+    def build_tool(stop_phase="", stderr_bytes=0, stop="exit", timeout_seconds=60, extra_args=()):
+        return build_invoke_acp_agent_tool(
+            {
+                "test": ACPAgentConfig(
+                    command=sys.executable,
+                    args=[str(script_path), stop_phase, str(stderr_bytes), stop, *extra_args],
+                    description="Test ACP agent",
+                    timeout_seconds=timeout_seconds,
+                )
+            }
+        )
+
+    return build_tool
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("phase", ["initialize", "new_session", "prompt"])
+async def test_invoke_acp_agent_reports_an_agent_that_exits_mid_invocation(acp_stderr_tool, caplog, phase):
+    tool = acp_stderr_tool(stop_phase=phase, stderr_bytes=40 * 1024)
+    start = time.monotonic()
+    with caplog.at_level(logging.ERROR, logger="deerflow.tools.builtins.invoke_acp_agent_tool"):
+        # The tool's own 60s budget must not be what ends the call.
+        result = await asyncio.wait_for(tool.coroutine(agent="test", prompt="do work"), timeout=30)
+    assert time.monotonic() - start < 15
+    assert result.startswith("Error: ACP agent 'test' exited with code 3 before completing the ACP invocation.")
+    assert "timeout_seconds" not in result
+    assert "exited with code 3" in caplog.text
+    assert f"fatal: cannot {phase} without credentials" not in caplog.text
+    assert "credentials" not in result
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_logs_timeout_without_forwarding_stderr(acp_stderr_tool, caplog):
+    tool = acp_stderr_tool(stop_phase="prompt", stderr_bytes=40 * 1024, stop="hang", timeout_seconds=3)
+    with caplog.at_level(logging.ERROR, logger="deerflow.tools.builtins.invoke_acp_agent_tool"):
+        result = await asyncio.wait_for(tool.coroutine(agent="test", prompt="do work"), timeout=30)
+    assert "timed out after 3 seconds" in result
+    assert "timed out after 3 seconds" in caplog.text
+    assert "stalled: waiting for prompt login" not in caplog.text
+    assert "login" not in result
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_drains_verbose_stderr(acp_stderr_tool, caplog):
+    # Exercise both the real subprocess pipe and the operator-facing success logs.
+    tool = acp_stderr_tool(stderr_bytes=1024 * 1024, timeout_seconds=20, extra_args=["private-launch-argument"])
+    with caplog.at_level(logging.DEBUG, logger="deerflow.tools.builtins.invoke_acp_agent_tool"):
+        result = await asyncio.wait_for(tool.coroutine(agent="test", prompt="private-test-prompt"), timeout=40)
+    assert result == "done"
+    assert "returned 4 characters" in caplog.text
+    assert "returned done" not in caplog.text
+    assert "private-test-prompt" not in caplog.text
+    assert "private-launch-argument" not in caplog.text
+
+
+def _write_launcher_shim(directory: Path, name: str, command: str) -> Path:
+    """Write an executable launcher shim for ``name`` under ``directory``."""
+    directory.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        shim = directory / f"{name}.cmd"
+        shim.write_text(f"@echo off\n{command}\n", encoding="utf-8")
+    else:
+        shim = directory / name
+        shim.write_text(f"#!/bin/sh\nexec {command}\n", encoding="utf-8")
+        shim.chmod(0o755)
+    return shim
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_spawns_the_path_resolved_command(monkeypatch, tmp_path):
+    """A bare configured command reaches the ACP SDK as its PATH-resolved path.
+
+    Windows resolves npm-installed launchers through ``PATHEXT`` (``npx`` ->
+    ``npx.cmd``) and ``asyncio.create_subprocess_exec`` does not, so the
+    resolved path must be handed to the SDK instead of the bare name.
+    """
+    import acp as acp_module
+
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    script_path = tmp_path / "test_acp_agent.py"
+    script_path.write_text(_ACP_AGENT_SCRIPT, encoding="utf-8")
+    phase_path = tmp_path / "phase.txt"
+
+    shim_name = "deerflow-acp-probe"
+    shim = _write_launcher_shim(tmp_path / "bin", shim_name, f'"{sys.executable}" "{script_path}" "" 0 "{phase_path}"')
+    monkeypatch.setenv("PATH", str(shim.parent))
+
+    captured: dict[str, object] = {}
+    real_spawn_agent_process = acp_module.spawn_agent_process
+
+    @contextlib.asynccontextmanager
+    async def _spying_spawn_agent_process(client, cmd, *args, env=None, cwd=None):
+        captured["cmd"] = cmd
+        async with real_spawn_agent_process(client, cmd, *args, env=env, cwd=cwd) as (conn, proc):
+            yield conn, proc
+
+    monkeypatch.setattr(acp_module, "spawn_agent_process", _spying_spawn_agent_process)
+
+    tool = build_invoke_acp_agent_tool({"probe": ACPAgentConfig(command=shim_name, description="Probe", timeout_seconds=30)})
+    result = await asyncio.wait_for(tool.coroutine(agent="probe", prompt="do work"), timeout=20)
+
+    # Windows PATHEXT matching reports the shim with its extension case
+    # normalized, so compare paths rather than raw strings.
+    assert Path(captured["cmd"]) == shim
+    assert result == "(no response)"
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_spawns_an_absolute_command_without_an_extension(monkeypatch, tmp_path):
+    """An absolute command has to reach its ``PATHEXT`` shim before the spawn.
+
+    npm installs ``mcode``, ``mcode.cmd``, and ``mcode.ps1`` side by side; a
+    configured absolute path without the extension would spawn the shell
+    script and fail with ``WinError 193``. The resolver has to pick the
+    ``.cmd`` shim the same way it does for a bare name.
+    """
+    import acp as acp_module
+
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    script_path = tmp_path / "test_acp_agent.py"
+    script_path.write_text(_ACP_AGENT_SCRIPT, encoding="utf-8")
+    phase_path = tmp_path / "phase.txt"
+
+    shim_name = "deerflow-acp-probe"
+    shim = _write_launcher_shim(tmp_path / "npm", shim_name, f'"{sys.executable}" "{script_path}" "" 0 "{phase_path}"')
+    if sys.platform == "win32":
+        # npm also drops an extensionless shell script next to the .cmd shim.
+        (shim.parent / shim_name).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+
+    captured: dict[str, object] = {}
+    real_spawn_agent_process = acp_module.spawn_agent_process
+
+    @contextlib.asynccontextmanager
+    async def _spying_spawn_agent_process(client, cmd, *args, env=None, cwd=None):
+        captured["cmd"] = cmd
+        async with real_spawn_agent_process(client, cmd, *args, env=env, cwd=cwd) as (conn, proc):
+            yield conn, proc
+
+    monkeypatch.setattr(acp_module, "spawn_agent_process", _spying_spawn_agent_process)
+
+    configured = str(shim.parent / shim_name)
+    tool = build_invoke_acp_agent_tool({"probe": ACPAgentConfig(command=configured, description="Probe", timeout_seconds=30)})
+    result = await asyncio.wait_for(tool.coroutine(agent="probe", prompt="do work"), timeout=20)
+
+    assert Path(captured["cmd"]) == shim
+    assert result == "(no response)"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "installed",
+    [False, pytest.param(True, marks=pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0, reason="requires POSIX permission bits and an unprivileged account"))],
+    ids=["missing", "not-executable"],
+)
+async def test_invoke_acp_agent_reports_guidance_for_an_unresolvable_command(monkeypatch, tmp_path, installed):
+    """A launcher lookup failure gives remediation before reaching the process transport."""
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+
+    def unexpected_spawn(*args, **kwargs):
+        pytest.fail("An unresolved launcher reached the process transport")
+
+    monkeypatch.setattr("acp.spawn_agent_process", unexpected_spawn)
+    command = "deerflow-missing-acp-agent"
+    if installed:
+        launcher = tmp_path / "agent"
+        launcher.touch()
+        launcher.chmod(0o644)
+        command = str(launcher)
+    tool = build_invoke_acp_agent_tool({"probe": ACPAgentConfig(command=command, description="Probe", timeout_seconds=30)})
+    result = await asyncio.wait_for(tool.coroutine(agent="probe", prompt="do work"), timeout=20)
+
+    if installed:
+        assert "execute permission" in result
+        assert "not found" not in result
+    else:
+        assert "Command 'deerflow-missing-acp-agent' was not found on PATH" in result
+    assert "acp_agents.probe.command" in result
+
+
+def test_agent_path_reads_the_configured_override_case_insensitively():
+    """The env the SDK will apply decides which PATH resolves the launcher."""
+    assert _agent_path(None) is None
+    assert _agent_path({}) is None
+    assert _agent_path({"FOO": "bar"}) is None
+    assert _agent_path({"PATH": "/agent-bin"}) == "/agent-bin"
+    assert _agent_path({"Path": "/agent-bin"}) == "/agent-bin"
+
+
+def test_resolve_agent_command_anchors_relative_launchers_in_gateway_directory(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    launcher = _write_launcher_shim(tmp_path / "bin", "agent", "echo")
+    assert Path(_resolve_agent_command(os.path.join("bin", "agent"))) == launcher
+    assert Path(_resolve_agent_command("agent", "bin")) == launcher
+
+
+def test_resolve_agent_command_resolves_absolute_paths_through_the_lookup(monkeypatch, tmp_path):
+    """An absolute command keeps its directory but still goes through the lookup."""
+    seen: list[tuple[str, str | None]] = []
+
+    def _which(command, path=None):
+        seen.append((command, path))
+        return command + ".CMD"
+
+    monkeypatch.setattr("deerflow.tools.builtins.invoke_acp_agent_tool.shutil.which", _which)
+
+    absolute = str(tmp_path / "npm" / "mcode")
+    assert _resolve_agent_command(absolute, str(tmp_path / "agent-bin")) == absolute + ".CMD"
+    assert seen == [(absolute, str(tmp_path / "agent-bin"))]
+
+
+def test_resolve_agent_command_keeps_an_absolute_lookup_result_as_returned(monkeypatch, tmp_path):
+    """An already-absolute lookup result must not be lexically rewritten.
+
+    ``os.path.abspath`` collapses a ``..`` that the kernel resolves after a
+    symlink, which changes the file the spawn runs; the anchoring exists for
+    relative ``PATH`` results only.
+    """
+    literal = str(tmp_path / "current" / ".." / "shared" / "agent")
+    monkeypatch.setattr(
+        "deerflow.tools.builtins.invoke_acp_agent_tool.shutil.which",
+        lambda command, path=None: command,
+    )
+
+    assert _resolve_agent_command(literal) == literal
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PATHEXT sibling resolution is Windows-only")
+def test_resolve_agent_command_resolves_a_windows_path_without_an_extension(tmp_path):
+    """npm's extensionless sh script and its ``.cmd`` shim sit side by side.
+
+    ``asyncio.create_subprocess_exec`` does not probe ``PATHEXT``, so spawning
+    the configured path runs the shell script and fails with ``WinError 193``;
+    the lookup has to pick the ``.cmd`` shim instead.
+    """
+    npm_bin = tmp_path / "npm"
+    npm_bin.mkdir()
+    extensionless = npm_bin / "mcode"
+    extensionless.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (npm_bin / "mcode.cmd").write_text("@echo off\r\necho ran\r\n", encoding="ascii")
+
+    resolved = _resolve_agent_command(str(extensionless))
+
+    assert Path(resolved) == npm_bin / "mcode.CMD"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX has no PATHEXT indirection to resolve")
+def test_resolve_agent_command_keeps_an_absolute_posix_command(tmp_path):
+    """On POSIX the absolute command itself is the executable; resolution keeps it."""
+    tool = tmp_path / "bin" / "mcode"
+    tool.parent.mkdir()
+    tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    tool.chmod(0o755)
+
+    assert _resolve_agent_command(str(tool)) == str(tool)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlink-plus-parent-segment resolution is POSIX-specific")
+def test_resolve_agent_command_keeps_a_posix_symlink_that_precedes_a_parent_segment(tmp_path):
+    """An absolute command is returned as configured, not lexically rewritten.
+
+    With ``current -> releases/v1``, ``current/../shared/agent`` resolves to
+    ``releases/shared/agent`` for the kernel, while a lexical ``abspath``
+    would collapse it to the nonexistent ``shared/agent`` beside the symlink
+    or to a different file that happens to live there.
+    """
+    release = tmp_path / "releases" / "v1"
+    release.mkdir(parents=True)
+    tool = tmp_path / "releases" / "shared" / "agent"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    tool.chmod(0o755)
+    current = tmp_path / "current"
+    current.symlink_to(release, target_is_directory=True)
+
+    configured = str(current / ".." / "shared" / "agent")
+
+    assert _resolve_agent_command(configured) == configured
+
+
+def test_resolve_agent_command_hands_the_effective_path_to_the_lookup(monkeypatch, tmp_path):
+    """The agent's own PATH, not the Gateway's, is what the lookup consults."""
+    seen: list[str | None] = []
+
+    def _which(command, path=None):
+        seen.append(path)
+        return str(tmp_path / (path or "gateway-bin") / command)
+
+    monkeypatch.setattr("deerflow.tools.builtins.invoke_acp_agent_tool.shutil.which", _which)
+
+    assert _resolve_agent_command("npx", str(tmp_path / "agent-bin")) == str(tmp_path / "agent-bin" / "npx")
+    assert _resolve_agent_command("npx") == str(tmp_path / "gateway-bin" / "npx")
+    assert seen == [str(tmp_path / "agent-bin"), None]
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_reports_the_configured_command_when_spawn_fails(monkeypatch, tmp_path):
+    """A command PATH resolves can still fail to launch.
+
+    The remediation text has to stay anchored to the configured command, so the
+    ``codex-acp`` hint below survives the resolution.
+    """
+    import acp as acp_module
+
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    shim_dir = tmp_path / "bin"
+    _write_launcher_shim(shim_dir, "codex-acp", "echo")
+    _write_launcher_shim(shim_dir, "codex", "echo")
+    monkeypatch.setenv("PATH", str(shim_dir))
+
+    def _raise_missing(*args, **kwargs):
+        raise FileNotFoundError(2, "No such file or directory")
+
+    monkeypatch.setattr(acp_module, "spawn_agent_process", _raise_missing)
+
+    tool = build_invoke_acp_agent_tool({"codex": ACPAgentConfig(command="codex-acp", description="Codex CLI", timeout_seconds=30)})
+    result = await asyncio.wait_for(tool.coroutine(agent="codex", prompt="do work"), timeout=20)
+
+    assert "Command 'codex-acp' was not found on PATH" in result
+    assert "does not speak ACP directly" in result
+
+
+def _write_marking_shim(directory: Path, name: str, marker: Path, command: str) -> Path:
+    """Write a launcher shim for ``name`` that records that this copy ran."""
+    directory.mkdir(parents=True, exist_ok=True)
+    body = f'\necho ran > "{marker}"\n{command}\n'
+    if sys.platform == "win32":
+        shim = directory / f"{name}.cmd"
+        shim.write_text(f"@echo off{body}", encoding="utf-8")
+    else:
+        shim = directory / name
+        shim.write_text(f"#!/bin/sh{body}", encoding="utf-8")
+        shim.chmod(0o755)
+    return shim
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_resolves_against_the_agent_configured_path(monkeypatch, tmp_path):
+    """The agent's ``env.PATH`` wins when both PATHs hold the same launcher name.
+
+    The ACP SDK merges ``acp_agents.<name>.env`` over the inherited environment
+    at spawn time, so resolving the bare name against the Gateway's ``PATH``
+    would launch a different same-named launcher than the agent was configured
+    for.
+    """
+    import acp as acp_module
+
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    script_path = tmp_path / "test_acp_agent.py"
+    script_path.write_text(_ACP_AGENT_SCRIPT, encoding="utf-8")
+    phase_path = tmp_path / "phase.txt"
+    shim_name = "deerflow-acp-probe"
+    launch = f'"{sys.executable}" "{script_path}" "" 0 "{phase_path}"'
+
+    gateway_marker = tmp_path / "gateway-ran.txt"
+    agent_marker = tmp_path / "agent-ran.txt"
+    _write_marking_shim(tmp_path / "gateway-bin", shim_name, gateway_marker, launch)
+    agent_shim = _write_marking_shim(tmp_path / "agent-bin", shim_name, agent_marker, launch)
+    monkeypatch.setenv("PATH", str(tmp_path / "gateway-bin"))
+
+    captured: dict[str, object] = {}
+    real_spawn_agent_process = acp_module.spawn_agent_process
+
+    @contextlib.asynccontextmanager
+    async def _spying_spawn_agent_process(client, cmd, *args, env=None, cwd=None):
+        captured["cmd"] = cmd
+        async with real_spawn_agent_process(client, cmd, *args, env=env, cwd=cwd) as (conn, proc):
+            yield conn, proc
+
+    monkeypatch.setattr(acp_module, "spawn_agent_process", _spying_spawn_agent_process)
+
+    tool = build_invoke_acp_agent_tool(
+        {
+            "probe": ACPAgentConfig(
+                command=shim_name,
+                env={"PATH": str(tmp_path / "agent-bin")},
+                description="Probe",
+                timeout_seconds=30,
+            )
+        }
+    )
+    result = await asyncio.wait_for(tool.coroutine(agent="probe", prompt="do work"), timeout=20)
+
+    assert Path(captured["cmd"]) == agent_shim
+    assert agent_marker.read_text(encoding="utf-8").strip() == "ran"
+    assert not gateway_marker.exists()
+    assert result == "(no response)"
+
+
+@pytest.mark.anyio
+async def test_invoke_acp_agent_spawns_an_absolute_path_for_a_relative_path_entry(monkeypatch, tmp_path):
+    """A relative PATH entry must not be re-interpreted inside the ACP workspace.
+
+    ``shutil.which`` yields a result relative to the Gateway's cwd when a
+    relative directory is on ``PATH``, but the SDK spawns with ``cwd`` set to
+    the per-thread ACP workspace, where that relative path does not exist.
+    """
+    import acp as acp_module
+
+    from deerflow.config import paths as paths_module
+
+    monkeypatch.setattr(paths_module, "get_paths", lambda: paths_module.Paths(base_dir=tmp_path))
+    monkeypatch.setattr(
+        "deerflow.config.extensions_config.ExtensionsConfig.from_file",
+        classmethod(lambda cls: ExtensionsConfig(mcp_servers={}, skills={})),
+    )
+    script_path = tmp_path / "test_acp_agent.py"
+    script_path.write_text(_ACP_AGENT_SCRIPT, encoding="utf-8")
+    phase_path = tmp_path / "phase.txt"
+
+    # Pin the process cwd so the relative PATH entry below points at a shim
+    # beside the ACP workspace rather than inside it.
+    monkeypatch.chdir(tmp_path)
+    shim_name = "deerflow-acp-probe"
+    shim = _write_launcher_shim(tmp_path / "bin", shim_name, f'"{sys.executable}" "{script_path}" "" 0 "{phase_path}"')
+    monkeypatch.setenv("PATH", "bin")
+
+    captured: dict[str, object] = {}
+    real_spawn_agent_process = acp_module.spawn_agent_process
+
+    @contextlib.asynccontextmanager
+    async def _spying_spawn_agent_process(client, cmd, *args, env=None, cwd=None):
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        async with real_spawn_agent_process(client, cmd, *args, env=env, cwd=cwd) as (conn, proc):
+            yield conn, proc
+
+    monkeypatch.setattr(acp_module, "spawn_agent_process", _spying_spawn_agent_process)
+
+    tool = build_invoke_acp_agent_tool({"probe": ACPAgentConfig(command=shim_name, description="Probe", timeout_seconds=30)})
+    result = await asyncio.wait_for(tool.coroutine(agent="probe", prompt="do work"), timeout=20)
+
+    assert os.path.isabs(captured["cmd"])
+    assert Path(captured["cmd"]) == shim
+    assert Path(captured["cwd"]) != shim.parent
+    assert result == "(no response)"

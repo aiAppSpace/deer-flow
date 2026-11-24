@@ -85,7 +85,7 @@ async def navigate_browser(thread_id: ThreadId, body: BrowserNavigateRequest, re
     if thread_store is None or not await _browser_thread_owned_by(thread_store, thread_id, user_id):
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
-    if not _browser_tools_enabled():
+    if not await asyncio.to_thread(_browser_tools_enabled):
         raise HTTPException(status_code=404, detail="Browser automation is not enabled")
 
     try:
@@ -133,8 +133,15 @@ async def _authenticate_ws(websocket: WebSocket):
         if not isinstance(payload, TokenError):
             provider = get_local_provider()
             user = await provider.get_user(payload.sub)
-            if user is not None and user.token_version == payload.ver:
-                return user
+            if user is not None:
+                # Same post-lookup verdicts as every other JWT surface —
+                # including account suspension: WebSockets bypass
+                # AuthMiddleware, so a disabled user's still-valid cookie
+                # must not open a streaming/browser session.
+                from app.gateway.deps import validate_resolved_session_user
+
+                if validate_resolved_session_user(user, payload) is None:
+                    return user
     if is_auth_disabled():
         return get_auth_disabled_user()
     return None
@@ -253,7 +260,7 @@ async def browser_stream(websocket: WebSocket, thread_id: ThreadId) -> None:
         await websocket.close(code=4404)
         return
 
-    if not _browser_tools_enabled():
+    if not await asyncio.to_thread(_browser_tools_enabled):
         await websocket.close(code=4404)
         return
 
@@ -303,7 +310,7 @@ async def browser_stream(websocket: WebSocket, thread_id: ThreadId) -> None:
     # the user's real Chrome when configured.
     from deerflow.config import get_app_config
 
-    tool_cfg = get_app_config().get_tool_config("browser_navigate")
+    tool_cfg = (await asyncio.to_thread(get_app_config)).get_tool_config("browser_navigate")
     extra = (tool_cfg.model_extra or {}) if tool_cfg is not None else {}
 
     def _cfg_int(key: str, default: int) -> int:

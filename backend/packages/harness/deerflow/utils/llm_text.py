@@ -11,12 +11,27 @@ _THINK_OPEN_PREFIX_RE = re.compile(r"<think(?=[\s>]|/>|$)", re.IGNORECASE)
 _THINK_CLOSE_PREFIX_RE = re.compile(r"</think", re.IGNORECASE)
 
 
+def _find_tag_end(text: str, start: int) -> int:
+    """Find the closing delimiter outside single- or double-quoted attributes."""
+    quote = ""
+    for index in range(start, len(text)):
+        char = text[index]
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in {"'", '"'}:
+            quote = char
+        elif char == ">":
+            return index
+    return -1
+
+
 def _find_think_open(text: str, start: int) -> tuple[int, int] | None:
     """Find the next complete opening tag without retrying its suffix at each prefix."""
     match = _THINK_OPEN_PREFIX_RE.search(text, start)
     if match is None:
         return None
-    end = text.find(">", match.end())
+    end = _find_tag_end(text, match.end())
     if end < 0:
         return None
     return match.start(), end + 1
@@ -99,7 +114,7 @@ def strip_leading_think_blocks(text: str) -> str:
         opening = _THINK_OPEN_PREFIX_RE.match(text, start)
         if opening is None:
             break
-        end = text.find(">", opening.end())
+        end = _find_tag_end(text, opening.end())
         if end >= 0 and _is_self_closing_think_tag(text, start, end + 1):
             start = end + 1
             continue
@@ -130,7 +145,7 @@ def extract_response_text(content: object) -> str:
         for block in content:
             if isinstance(block, str):
                 parts.append(block)
-            elif isinstance(block, dict) and block.get("type") in {"text", "output_text"}:
+            elif isinstance(block, dict) and block.get("type") in ("text", "output_text"):
                 text = block.get("text")
                 if isinstance(text, str):
                     parts.append(text)
@@ -138,3 +153,107 @@ def extract_response_text(content: object) -> str:
     if content is None:
         return ""
     return str(content)
+
+
+def _json_payload_start(text: str) -> int:
+    """Index of the first ``{``/``[`` outside a reasoning block, or -1.
+
+    A JSON example inside a reasoning block must not become the payload, so the
+    scan steps over whole think blocks. An unclosed block before the payload is
+    a truncated response: there is no structured answer to find.
+    """
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "<":
+            opening = _THINK_OPEN_PREFIX_RE.match(text, index)
+            if opening is not None:
+                end = _find_tag_end(text, opening.end())
+                if end >= 0:
+                    if _is_self_closing_think_tag(text, index, end + 1):
+                        index = end + 1
+                        continue
+                    closing = _find_think_close(text, end + 1)
+                    if closing is not None:
+                        index = closing[1]
+                        continue
+                    return -1
+        if char in "{[":
+            return index
+        index += 1
+    return -1
+
+
+def strip_think_blocks_outside_json_strings(text: str) -> str:
+    """Strip reasoning around a JSON response but keep tags inside string values.
+
+    Structured parsers used to run :func:`strip_think_blocks` over the whole
+    response before ``json.loads``. That deleted a literal ``<think>`` inside a
+    JSON string value; an unclosed one cut the document mid-string and failed
+    parsing. Tags inside string values are data and are preserved verbatim.
+
+    Everything outside the payload keeps :func:`strip_think_blocks` semantics:
+    the prose before it is stripped (so a JSON example inside a reasoning block
+    is never mistaken for the answer), a block between the payload's own tokens
+    is removed, and an unclosed block truncates the remainder as a truncated
+    model response. After the top-level payload closes, trailing prose goes
+    through the same strip/truncate rules.
+    """
+    start = _json_payload_start(text)
+    if start < 0:
+        return strip_think_blocks(text)
+
+    out = [strip_think_blocks(text[:start])]
+    quote = ""
+    depth = 0
+    index = start
+    while index < len(text):
+        char = text[index]
+        if quote:
+            out.append(char)
+            if char == "\\" and index + 1 < len(text):
+                out.append(text[index + 1])
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+            index += 1
+            continue
+        if char == '"':
+            quote = char
+            out.append(char)
+            index += 1
+            continue
+        if char in "{[":
+            depth += 1
+            out.append(char)
+            index += 1
+            continue
+        if char in "}]":
+            depth -= 1
+            out.append(char)
+            index += 1
+            if depth <= 0:
+                # The top-level payload is closed: trailing prose is not JSON,
+                # so it keeps the old strip (and truncate) behavior.
+                out.append(strip_think_blocks(text[index:]))
+                break
+            continue
+        if char == "<":
+            opening = _THINK_OPEN_PREFIX_RE.match(text, index)
+            if opening is not None:
+                end = _find_tag_end(text, opening.end())
+                if end >= 0:
+                    if _is_self_closing_think_tag(text, index, end + 1):
+                        index = end + 1
+                        continue
+                    closing = _find_think_close(text, end + 1)
+                    if closing is not None:
+                        index = closing[1]
+                        continue
+                    # Unclosed outside a string: truncated mid-thought, so the
+                    # remainder cannot hold a payload either.
+                    return "".join(out).strip()
+        out.append(char)
+        index += 1
+    return "".join(out).strip()

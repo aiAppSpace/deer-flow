@@ -10,6 +10,7 @@ import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { Input } from "@/components/ui/input";
 import { getCsrfHeaders } from "@/core/api/fetcher";
 import { useAuth } from "@/core/auth/AuthProvider";
+import { isValidEmail } from "@/core/auth/email";
 import { loadRememberLoginPreference } from "@/core/auth/remember-login";
 import {
   fetchSetupStatus,
@@ -88,8 +89,20 @@ export default function SetupPage() {
     const current = () => generation === pageGeneration.current;
     setError("");
 
+    // `noValidate` + JS check: the browser's `type="email"` rule would reject
+    // addresses the backend accepts, e.g. a non-ASCII local part (#7488).
+    const address = email.trim();
+    if (!isValidEmail(address)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
     if (newPassword !== confirmPassword) {
       setError(t.setup.passwordMismatch);
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
 
@@ -100,7 +113,7 @@ export default function SetupPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          email,
+          email: address,
           password: newPassword,
           remember_me: rememberMe,
         }),
@@ -135,12 +148,24 @@ export default function SetupPage() {
     const current = () => generation === pageGeneration.current;
     setError("");
 
+    // The address field also carries the account's existing email here, so
+    // the same permissive check applies (#7488).
+    const address = email.trim();
+    if (!isValidEmail(address)) {
+      setError("Please enter a valid email address");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setError(t.setup.passwordMismatch);
       return;
     }
     if (newPassword.length < 8) {
       setError(t.setup.passwordTooShort);
+      return;
+    }
+
+    if (!currentPassword) {
+      setError("Please enter your current password");
       return;
     }
 
@@ -156,7 +181,7 @@ export default function SetupPage() {
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword,
-          new_email: email || undefined,
+          new_email: address,
           remember_me: rememberMe,
         }),
       });
@@ -245,7 +270,7 @@ export default function SetupPage() {
               {t.setup.createAdminSubtitle}
             </p>
           </div>
-          <form onSubmit={handleInitAdmin} className="space-y-2">
+          <form onSubmit={handleInitAdmin} noValidate className="space-y-2">
             <div className="flex flex-col space-y-1">
               <label htmlFor="email" className="text-sm font-medium">
                 {t.login.email}
@@ -329,7 +354,7 @@ export default function SetupPage() {
             {t.setup.completeAdminSubtitle}
           </p>
         </div>
-        <form onSubmit={handleChangePassword} className="space-y-4">
+        <form onSubmit={handleChangePassword} noValidate className="space-y-4">
           <Input
             type="email"
             placeholder={t.setup.emailPlaceholder}

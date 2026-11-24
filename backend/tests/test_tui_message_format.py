@@ -11,7 +11,6 @@ from deerflow.tui.message_format import (
 def test_summarize_known_tool_titles():
     assert summarize_tool_title("read_file") == "Read"
     assert summarize_tool_title("write_file") == "Write"
-    assert summarize_tool_title("finalize_artifact_write") == "Finalize Artifact"
     assert summarize_tool_title("bash") == "Bash"
 
 
@@ -21,7 +20,6 @@ def test_summarize_unknown_tool_falls_back_to_humanized_name():
 
 def test_format_tool_detail_extracts_salient_arg():
     assert format_tool_detail("read_file", {"path": "src/app.py"}) == "src/app.py"
-    assert format_tool_detail("append_artifact_chunk", {"path": "src/report.html"}) == "src/report.html"
     assert format_tool_detail("bash", {"command": "ls -la"}) == "ls -la"
     assert format_tool_detail("web_search", {"query": "deerflow tui"}) == "deerflow tui"
 

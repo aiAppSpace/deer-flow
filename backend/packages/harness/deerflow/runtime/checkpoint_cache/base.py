@@ -20,7 +20,19 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-CACHE_FORMAT_VERSION = 1
+# v2: delta-history composition now keeps the inner saver's canonical
+# ``writes_sort_key`` order instead of re-sorting by ``task_id``. Entries
+# cached under v1 may hold mis-ordered histories yet still pass
+# ``valid_history_entry`` (a shape-only check), so upgraded readers skip
+# them by using a new default prefix.
+CACHE_FORMAT_VERSION = 2
+
+
+def valid_history_entry(entry: Any, *, channel: str | None = None) -> bool:
+    """Check replay records; seed and write values belong to the channel schema."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("writes"), list):
+        return False
+    return all(isinstance(write, (tuple, list)) and len(write) == 3 and isinstance(write[0], str) and isinstance(write[1], str) and (channel is None or write[1] == channel) for write in entry["writes"])
 
 
 def make_history_key(
@@ -51,6 +63,7 @@ class CheckpointCacheStats:
     misses: int = 0
     evictions: int = 0
     entries: int = 0
+    write_serialization_failures: int = 0
 
     def as_dict(self) -> dict[str, int]:
         return {
@@ -58,6 +71,7 @@ class CheckpointCacheStats:
             "misses": self.misses,
             "evictions": self.evictions,
             "entries": self.entries,
+            "write_serialization_failures": self.write_serialization_failures,
         }
 
 

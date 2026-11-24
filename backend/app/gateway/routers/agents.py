@@ -6,10 +6,11 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.gateway.authz import require_permission
+from app.gateway.deps import get_config
 from app.gateway.persistent_writes import run_drained_write
 from deerflow.agents.memory.manager import get_memory_manager
 from deerflow.config.agents_api_config import get_agents_api_config
@@ -22,10 +23,11 @@ from deerflow.config.agents_config import (
     load_agent_soul,
     preserve_non_managed_fields,
 )
-from deerflow.config.app_config import get_app_config
+from deerflow.config.app_config import AppConfig, get_app_config
 from deerflow.config.paths import get_paths
 from deerflow.knowledge_scope import KnowledgeScope, canonicalize_knowledge_scope
 from deerflow.persistence.agents import AgentDeleteOutcome, AgentExistsError, get_agent_store
+from deerflow.persistence.agents.file import FileAgentStore
 from deerflow.runtime.user_context import get_effective_user_id
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,12 @@ class AgentsListResponse(BaseModel):
     agents: list[AgentResponse]
 
 
+class ToolGroupsResponse(BaseModel):
+    """Configured tool groups safe to present in Agent settings."""
+
+    tool_groups: list[str]
+
+
 class AgentCreateRequest(BaseModel):
     """Request body for creating a custom agent."""
 
@@ -88,7 +96,7 @@ class AgentUpdateRequest(BaseModel):
     """Request body for updating a custom agent."""
 
     display_name: AgentDisplayName | None = Field(default=None, description="Updated display name; null clears it")
-    description: str | None = Field(default=None, description="Updated description")
+    description: str | None = Field(default=None, description="Updated description; null resets it to empty")
     model: str | None = Field(default=None, description="Updated model override")
     tool_groups: list[str] | None = Field(default=None, description="Updated tool group whitelist")
     mcp_plugins: list[str] | None = Field(default=None, description="MCP installation selection (None=all, []=none)")
@@ -166,6 +174,8 @@ def _validate_model_exists(model: str | None) -> None:
     Best-effort: if the app config cannot be loaded (e.g. no ``config.yaml`` on
     disk in a bare/test deployment), skip the check rather than failing the
     write — the runtime still falls back to the default for an unknown model.
+    It reads the live config, so async routes call it through
+    ``asyncio.to_thread``.
     """
     if not model:
         return
@@ -266,6 +276,11 @@ def _build_agent_config(body: AgentCreateRequest, normalized_name: str, *, memor
     return config_data
 
 
+def _configured_tool_group_names(config: AppConfig) -> list[str]:
+    """Project configured group names without exposing tool definitions."""
+    return list(dict.fromkeys(group.name for group in config.tool_groups))
+
+
 async def _persist_new_agent(body: AgentCreateRequest, normalized_name: str, user_id: str, *, memory_enabled: bool = True) -> AgentResponse:
     """Atomically create and reload one user-scoped agent."""
     config_data = _build_agent_config(body, normalized_name, memory_enabled=memory_enabled)
@@ -308,7 +323,23 @@ async def list_agents(request: Request) -> AgentsListResponse:
         return await asyncio.to_thread(_list)
     except Exception as e:
         logger.error(f"Failed to list agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to list agents: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list agents")
+
+
+@router.get(
+    "/agent-tool-groups",
+    response_model=ToolGroupsResponse,
+    summary="List Agent Tool Groups",
+    description="List configured tool-group names available for custom-agent allowlists.",
+)
+@require_permission("agents", "read")
+async def list_agent_tool_groups(
+    request: Request,
+    config: AppConfig = Depends(get_config),
+) -> ToolGroupsResponse:
+    """Return names only; tool implementations and configuration stay private."""
+    _require_agents_api_enabled()
+    return ToolGroupsResponse(tool_groups=_configured_tool_group_names(config))
 
 
 @router.get(
@@ -357,7 +388,7 @@ async def import_agent_package(body: AgentPackage, request: Request, name: str |
     _require_agents_api_enabled()
     target_name = name or body.agent.name
     _validate_agent_name(target_name)
-    _validate_model_exists(body.agent.model)
+    await asyncio.to_thread(_validate_model_exists, body.agent.model)
     normalized_name = _normalize_agent_name(target_name)
     user_id = get_effective_user_id()
 
@@ -461,7 +492,7 @@ async def get_agent(name: str, request: Request) -> AgentResponse:
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
     except Exception as e:
         logger.error(f"Failed to get agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get agent: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get agent")
 
 
 @router.post(
@@ -487,7 +518,7 @@ async def create_agent_endpoint(body: AgentCreateRequest, request: Request) -> A
     """
     _require_agents_api_enabled()
     _validate_agent_name(body.name)
-    _validate_model_exists(body.model)
+    await asyncio.to_thread(_validate_model_exists, body.model)
     normalized_name = _normalize_agent_name(body.name)
     user_id = get_effective_user_id()
 
@@ -497,7 +528,7 @@ async def create_agent_endpoint(body: AgentCreateRequest, request: Request) -> A
         raise HTTPException(status_code=409, detail=f"Agent '{normalized_name}' already exists")
     except Exception as e:
         logger.error(f"Failed to create agent '{body.name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to create agent: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create agent")
 
 
 @router.put(
@@ -530,17 +561,23 @@ async def update_agent(name: str, body: AgentUpdateRequest, request: Request) ->
         agent_cfg = await asyncio.to_thread(load_agent_config, name, user_id=user_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Agent '{name}' not found")
+    except Exception as e:
+        logger.error(f"Failed to update agent '{name}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update agent")
 
     def _is_legacy_only_layout() -> bool:
+        # The DB importer retains legacy source files for rollback. They say
+        # nothing about the ownership of the active SQL definition.
+        if not isinstance(get_agent_store(), FileAgentStore):
+            return False
         # Require config.yaml, not bare directory existence — a per-user agent
         # directory can exist containing only memory.json (written the first
         # time this user chats with a legacy shared agent, before this route
         # is ever called). Bare .exists() would miss that case and let this
         # fall through to a silent fork of a brand-new config.yaml/SOUL.md
         # into the memory-only directory instead of blocking (mirrors
-        # resolve_agent_dir's guard, see #3390). The db backend has no legacy
-        # shared layout, so this file-only guard is a no-op there. The .exists()
-        # probes are filesystem IO, so they run off the event loop.
+        # resolve_agent_dir's guard, see #3390). Store resolution and the
+        # filesystem probes both run off the event loop.
         paths = get_paths()
         agent_dir = paths.user_agent_dir(user_id, name)
         legacy_dir = paths.agent_dir(name)
@@ -553,7 +590,7 @@ async def update_agent(name: str, body: AgentUpdateRequest, request: Request) ->
         )
 
     if "model" in body.model_fields_set:
-        _validate_model_exists(body.model)
+        await asyncio.to_thread(_validate_model_exists, body.model)
 
     try:
         # Update config if any config fields changed
@@ -566,7 +603,9 @@ async def update_agent(name: str, body: AgentUpdateRequest, request: Request) ->
         if config_changed:
             updated = {
                 "name": agent_cfg.name,
-                "description": body.description if "description" in fields_set else agent_cfg.description,
+                # Explicit null resets to the AgentConfig default; storing None
+                # would make every later load of this agent fail validation.
+                "description": (body.description or "") if "description" in fields_set else agent_cfg.description,
             }
             if "display_name" in fields_set:
                 updated["display_name"] = body.display_name or None
@@ -607,7 +646,7 @@ async def update_agent(name: str, body: AgentUpdateRequest, request: Request) ->
             # ``github:`` binding — which would otherwise leave the next
             # webhook delivery unable to find the agent in the registry and
             # silently no-op.
-            for key, value in preserve_non_managed_fields(agent_cfg).items():
+            for key, value in preserve_non_managed_fields(agent_cfg, new_tool_groups=new_tool_groups).items():
                 updated.setdefault(key, value)
 
         # Persist config (when changed) and/or soul (when provided) off the
@@ -632,7 +671,7 @@ async def update_agent(name: str, body: AgentUpdateRequest, request: Request) ->
         raise
     except Exception as e:
         logger.error(f"Failed to update agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update agent: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update agent")
 
 
 class UserProfileResponse(BaseModel):
@@ -681,7 +720,7 @@ async def get_user_profile(request: Request) -> UserProfileResponse:
         return UserProfileResponse(content=raw or None)
     except Exception as e:
         logger.error(f"Failed to read user profile: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to read user profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to read user profile")
 
 
 @router.put(
@@ -712,7 +751,10 @@ async def update_user_profile(body: UserProfileUpdateRequest, request: Request) 
     def _write_profile() -> Path:
         user_md_path = get_paths().user_md_file(user_id)
         user_md_path.parent.mkdir(parents=True, exist_ok=True)
-        user_md_path.write_text(body.content, encoding="utf-8")
+        # newline="" stores the submitted text verbatim; a default text write
+        # would turn its LF into CRLF on Windows, so the bytes on disk no longer
+        # matched the content this endpoint accepts and returns.
+        user_md_path.write_text(body.content, encoding="utf-8", newline="")
         return user_md_path
 
     try:
@@ -721,7 +763,7 @@ async def update_user_profile(body: UserProfileUpdateRequest, request: Request) 
         return UserProfileResponse(content=body.content or None)
     except Exception as e:
         logger.error(f"Failed to update user profile: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to update user profile: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update user profile")
 
 
 @router.delete(
@@ -752,7 +794,7 @@ async def delete_agent(name: str, request: Request) -> None:
         outcome = await run_drained_write("Delete agent", _delete_agent_with_memory_cancel, (), name, user_id)
     except Exception as e:
         logger.error(f"Failed to delete agent '{name}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to delete agent: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete agent")
 
     if outcome == "legacy":
         raise HTTPException(

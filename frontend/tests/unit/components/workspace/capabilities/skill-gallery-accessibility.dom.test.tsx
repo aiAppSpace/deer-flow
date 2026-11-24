@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, rs } from "@rstest/core";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 
 import { SkillGallery } from "@/components/workspace/capabilities/skill-gallery";
 import { I18nProvider } from "@/core/i18n/context";
 
 rs.mock("@/core/settings/user-preferences", () => ({
   useSyncLocalePreference: rs.fn(),
+}));
+// Admin gallery mounts SkillDiagnostics, which needs a real QueryClient.
+rs.mock("@/components/workspace/capabilities/skill-diagnostics", () => ({
+  SkillDiagnostics: () => null,
 }));
 
 const skillRead = rs.hoisted(() => ({ error: null as Error | null }));
@@ -59,15 +65,22 @@ beforeEach(() => {
   skillRead.error = null;
 });
 
+function gallery(node: ReactNode = <SkillGallery />) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={client}>
+      <I18nProvider initialLocale="en-US">{node}</I18nProvider>
+    </QueryClientProvider>
+  );
+}
+
 describe("SkillGallery accessible names", () => {
   // A column of identical unnamed switches tells a screen reader nothing about
   // which skill it is toggling (WCAG 4.1.2).
   it("names each switch after its skill", () => {
-    render(
-      <I18nProvider initialLocale="en-US">
-        <SkillGallery />
-      </I18nProvider>,
-    );
+    render(gallery());
     const names = screen
       .getAllByRole("switch")
       .map((node) => node.getAttribute("aria-label"));
@@ -79,31 +92,19 @@ describe("SkillGallery accessible names", () => {
   // An unnamed tab list is announced as a bare "tab list", which says nothing
   // about what it filters.
   it("names the public/custom tab list", () => {
-    render(
-      <I18nProvider initialLocale="en-US">
-        <SkillGallery />
-      </I18nProvider>,
-    );
+    render(gallery());
     expect(screen.getByRole("tablist").getAttribute("aria-label")).toBe(
       "Skills",
     );
   });
   it("announces a failed catalog load", () => {
     skillRead.error = new Error("Catalog unavailable");
-    render(
-      <I18nProvider initialLocale="en-US">
-        <SkillGallery />
-      </I18nProvider>,
-    );
+    render(gallery());
     expect(screen.getByRole("alert").textContent).toBe("Catalog unavailable");
   });
 
   it("keeps the archive carrier out of keyboard and accessible navigation", () => {
-    const { container } = render(
-      <I18nProvider initialLocale="en-US">
-        <SkillGallery />
-      </I18nProvider>,
-    );
+    const { container } = render(gallery());
     const input = container.querySelector('input[type="file"]');
     expect(input?.getAttribute("aria-hidden")).toBe("true");
     expect(input?.getAttribute("tabindex")).toBe("-1");

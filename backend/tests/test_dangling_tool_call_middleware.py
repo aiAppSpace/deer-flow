@@ -702,11 +702,10 @@ class TestBuildPatchedMessagesPatching:
         assert patched[1].status == "error"
         assert "write_file failed before execution" in patched[1].content
         assert "no file was written" in patched[1].content
-        assert "very large file chunk in a single tool call" in patched[1].content
-        assert "Do not retry the same large payload" in patched[1].content
-        assert "begin_artifact_write" in patched[1].content
-        assert "append_artifact_chunk" in patched[1].content
-        assert "finalize_artifact_write" in patched[1].content
+        assert "very large Markdown file in a single tool call" in patched[1].content
+        assert "Do not retry the same large `write_file` payload" in patched[1].content
+        assert "split the file into smaller sections" in patched[1].content
+        assert "normal assistant text" in patched[1].content
         assert "Failed to parse tool arguments" in patched[1].content
         assert 'bad {"json"}' not in patched[1].content
 

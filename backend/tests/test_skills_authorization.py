@@ -13,6 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from deerflow.authz.enforcement import filter_resources_by_authorization
 from deerflow.authz.principal import build_principal_from_context
 from deerflow.authz.rbac import RbacAuthorizationProvider
@@ -537,7 +539,7 @@ def test_client_ensure_agent_filters_skills_by_authorization(monkeypatch):
     monkeypatch.setattr("deerflow.client.create_chat_model", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.create_agent", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.build_middlewares", _capture_build_middlewares)
-    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None: []))  # noqa: ARG005
+    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None, groups=None: []))  # noqa: ARG005
     monkeypatch.setattr("deerflow.client.get_enabled_skills_for_config", lambda app_config, **kw: [])
     monkeypatch.setattr(
         "deerflow.client.build_skill_search_setup",
@@ -590,7 +592,7 @@ def test_client_ensure_agent_noop_when_authorization_disabled(monkeypatch):
     monkeypatch.setattr("deerflow.client.create_chat_model", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.create_agent", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.build_middlewares", _capture_build_middlewares)
-    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None: []))  # noqa: ARG005
+    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None, groups=None: []))  # noqa: ARG005
     monkeypatch.setattr("deerflow.client.get_enabled_skills_for_config", lambda app_config, **kw: [])
     monkeypatch.setattr(
         "deerflow.client.build_skill_search_setup",
@@ -756,6 +758,23 @@ def _middleware_for(tmp_path, monkeypatch, skills, **kwargs):
     return SkillActivationMiddleware(slash_source_owner_token="test-token", **kwargs)
 
 
+def test_activation_middleware_requires_shared_slash_source_token():
+    """SkillActivationMiddleware's run-context publications are token-bound so
+    caller-forged context cannot impersonate a slash activation."""
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+
+    with pytest.raises(TypeError, match="slash_source_owner_token"):
+        SkillActivationMiddleware()
+
+
+@pytest.mark.parametrize("invalid_token", [None, "", 7])
+def test_activation_middleware_rejects_invalid_slash_source_tokens(invalid_token):
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+
+    with pytest.raises(ValueError, match="non-empty string"):
+        SkillActivationMiddleware(slash_source_owner_token=invalid_token)
+
+
 def test_activation_enforces_action_scoped_activate_decision(tmp_path, monkeypatch):
     """A skill visible in the Layer 1 set but denied by authorize(activate)
     must not slash-activate, while an allowed one still does (review repro)."""
@@ -865,7 +884,7 @@ def test_client_wires_skill_authorization_into_middleware(monkeypatch):
     monkeypatch.setattr("deerflow.client.create_chat_model", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.create_agent", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.build_middlewares", _capture_build_middlewares)
-    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None: []))  # noqa: ARG005
+    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None, groups=None: []))  # noqa: ARG005
     monkeypatch.setattr("deerflow.client.get_enabled_skills_for_config", lambda app_config, **kw: [])
     monkeypatch.setattr(
         "deerflow.client.build_skill_search_setup",
@@ -950,7 +969,7 @@ def test_client_filter_candidates_reuse_catalog_loader(monkeypatch):
     monkeypatch.setattr("deerflow.client.create_chat_model", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.create_agent", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.build_middlewares", lambda *a, **kw: [])
-    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None: []))  # noqa: ARG005
+    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None, groups=None: []))  # noqa: ARG005
     monkeypatch.setattr(
         "deerflow.client.build_skill_search_setup",
         lambda skills, *, enabled, container_base_path, skill_authorization=None: SimpleNamespace(describe_skill_tool=None, skill_names=frozenset()),
@@ -1059,8 +1078,11 @@ def test_subagent_executor_resolves_skill_authorization_for_chain(monkeypatch):
     )
 
     executor = SubagentExecutor.__new__(SubagentExecutor)
-    executor.config = SimpleNamespace(name="sub", skills=None, max_turns=25)
+    executor.input_gate = None
+    executor.config = SimpleNamespace(name="sub", skills=None, max_turns=25, tools=None, disallowed_tools=["task"])
     executor.model_name = "m"
+    executor.thinking_enabled = False
+    executor.reasoning_effort = None
     executor.app_config = app_config
     executor._resolved_app_config = app_config
     executor._available_skill_names = None
@@ -1129,7 +1151,7 @@ def test_client_skill_surface_uses_one_effective_user(monkeypatch):
     monkeypatch.setattr("deerflow.client.create_chat_model", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.create_agent", lambda **kw: object())
     monkeypatch.setattr("deerflow.client.build_middlewares", lambda *a, **kw: [])
-    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None: []))  # noqa: ARG005
+    monkeypatch.setattr("deerflow.client.DeerFlowClient._get_tools", staticmethod(lambda *, model_name, subagent_enabled, mcp_plugins=None, groups=None: []))  # noqa: ARG005
     monkeypatch.setattr(
         "deerflow.client.build_skill_search_setup",
         lambda skills, *, enabled, container_base_path, skill_authorization=None: SimpleNamespace(describe_skill_tool=None, skill_names=frozenset()),
@@ -1337,7 +1359,7 @@ def test_lead_runtime_chain_forwards_skill_authorization_to_stamp_gate():
     ToolErrorHandlingMiddleware so the skill-read stamp gate runs with the same
     provider instance the activation middleware uses — and the effective user
     id, so the stamp gate canonicalizes read paths against the same
-    user-scoped registry the activation/policy middlewares resolve (a global
+    user-scoped registry the activation middleware resolves (a global
     registry would fall back to path-derived names for per-user custom
     skills, producing a wrong authorization target)."""
     from deerflow.agents.middlewares.tool_error_handling_middleware import ToolErrorHandlingMiddleware, build_lead_runtime_middlewares
@@ -1423,8 +1445,11 @@ def test_subagent_executor_shares_one_skill_authorization_instance(monkeypatch):
     monkeypatch.setattr(executor_module, "create_chat_model", lambda **kw: object())
 
     executor = SubagentExecutor.__new__(SubagentExecutor)
-    executor.config = SimpleNamespace(name="sub", skills=None, max_turns=25)
+    executor.input_gate = None
+    executor.config = SimpleNamespace(name="sub", skills=None, max_turns=25, tools=None, disallowed_tools=["task"])
     executor.model_name = "m"
+    executor.thinking_enabled = False
+    executor.reasoning_effort = None
     executor.app_config = app_config
     executor._resolved_app_config = app_config
     executor._available_skill_names = None
@@ -1493,81 +1518,6 @@ def test_in_context_secret_sources_reauthorize_persisted_entries(tmp_path, monke
     provider.denied_activate = {"demo-skill"}
     sources = middleware._in_context_secret_sources(request, registry)
     assert sources == []
-
-
-def test_tool_policy_reauthorizes_persisted_entries(monkeypatch, tmp_path):
-    """[P1 regression] allow-read-then-deny-next-run for allowed-tools: the
-    persisted entry no longer applies its declaration once skill:activate is
-    denied; an allowed skill keeps applying (partial deny does not poison)."""
-    from deerflow.agents.middlewares.skill_tool_policy_middleware import SkillToolPolicyMiddleware
-
-    provider = _ActionAwareProvider(denied_activate=set())
-    resolved = _resolved_skill_authorization(provider, fail_closed=True)
-
-    skills = {}
-    for name, allowed_tools in (("demo-skill", ("bash",)), ("ok-skill", ("web_search",))):
-        skill_dir = tmp_path / name
-        skill_dir.mkdir(exist_ok=True)
-        skill_file = skill_dir / "SKILL.md"
-        skill_file.write_text("# x", encoding="utf-8")
-        from deerflow.skills.types import Skill as SkillObject
-        from deerflow.skills.types import SkillCategory
-
-        skills[name] = SkillObject(
-            name=name,
-            description="d",
-            license=None,
-            skill_dir=skill_dir,
-            skill_file=skill_file,
-            relative_path=Path(name),
-            category=SkillCategory.CUSTOM,
-            enabled=True,
-            allowed_tools=allowed_tools,
-        )
-
-    container_root = "/mnt/skills"
-    registry_entries = list(skills.values())
-
-    def _registry_path(skill):
-        return posixpath_normpath(skill.get_container_file_path(container_root))
-
-    paths = [_registry_path(skills["demo-skill"]), _registry_path(skills["ok-skill"])]
-
-    monkeypatch.setattr(
-        SkillToolPolicyMiddleware,
-        "_storage",
-        lambda self: SimpleNamespace(
-            load_skills=lambda *, enabled_only: registry_entries,
-            get_container_root=lambda: container_root,
-        ),
-    )
-
-    middleware = SkillToolPolicyMiddleware(
-        available_skills={"demo-skill", "ok-skill"},
-        slash_source_owner_token="test-token",
-        skill_authorization=resolved,
-    )
-    # Both allowed: the union of both declarations applies.
-    provider.denied_activate = set()
-    allowed = middleware._allowed_names_for_paths(tuple(paths))
-    assert "bash" in allowed and "web_search" in allowed
-
-    # Deny-next-run for demo-skill only: its declaration stops applying, the
-    # still-allowed skill's declaration keeps applying.
-    provider.denied_activate = {"demo-skill"}
-    allowed = middleware._allowed_names_for_paths(tuple(paths))
-    assert "bash" not in allowed
-    assert "web_search" in allowed
-
-    # All denied: no active reference survives -> fail closed to builtins.
-    provider.denied_activate = {"demo-skill", "ok-skill"}
-    allowed = middleware._allowed_names_for_paths(tuple(paths))
-    from deerflow.skills.tool_policy import ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES
-
-    assert allowed == set(ALWAYS_AVAILABLE_BUILTIN_TOOL_NAMES)
-
-
-# ── Async provider API on async execution paths (review round 5) ──────
 
 
 def test_async_activation_path_uses_aauthorize(tmp_path, monkeypatch):
@@ -1675,80 +1625,6 @@ def test_describe_async_uses_aauthorize():
     assert sorted(provider.async_calls) == ["demo-skill", "other-skill"]
 
 
-def test_async_tool_policy_uses_aauthorize(monkeypatch, tmp_path):
-    """SkillToolPolicyMiddleware's async hooks re-authorize persisted entries
-    with aauthorize() — the loop-affine provider's decision is respected."""
-    import asyncio
-
-    from deerflow.agents.middlewares.skill_tool_policy_middleware import SkillToolPolicyMiddleware
-    from deerflow.skills.types import Skill as SkillObject
-    from deerflow.skills.types import SkillCategory
-
-    # aauthorize ALLOWS demo-skill: with correct wiring the skill's
-    # declaration applies ("bash" kept). If the async hook wrongly fell back to
-    # the sync API, the provider error would fail-closed and drop "bash".
-    provider = _AsyncOnlyProvider()
-    resolved = _resolved_skill_authorization(provider, fail_closed=True)
-
-    skill_dir = tmp_path / "demo-skill"
-    skill_dir.mkdir(exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("# x", encoding="utf-8")
-    skill = SkillObject(
-        name="demo-skill",
-        description="d",
-        license=None,
-        skill_dir=skill_dir,
-        skill_file=skill_dir / "SKILL.md",
-        relative_path=Path("demo-skill"),
-        category=SkillCategory.CUSTOM,
-        enabled=True,
-        allowed_tools=("bash",),
-    )
-    container_root = "/mnt/skills"
-    skill_path = posixpath_normpath(skill.get_container_file_path(container_root))
-
-    monkeypatch.setattr(
-        SkillToolPolicyMiddleware,
-        "_storage",
-        lambda self: SimpleNamespace(
-            load_skills=lambda *, enabled_only: [skill],
-            get_container_root=lambda: container_root,
-        ),
-    )
-
-    middleware = SkillToolPolicyMiddleware(
-        available_skills={"demo-skill"},
-        slash_source_owner_token="test-token",
-        skill_authorization=resolved,
-    )
-    request = SimpleNamespace(state={"skill_context": [{"name": "demo-skill", "path": skill_path}]})
-
-    async def _run():
-        return await middleware._collect_activation_decisions(["demo-skill"])
-
-    decisions = asyncio.run(_run())
-    assert decisions == {"demo-skill": True}
-
-    # End to end through the async hook: the aauthorize-granted entry applies.
-    class _ToolsRequest(SimpleNamespace):
-        def override(self, **kwargs):
-            updates = dict(self.__dict__)
-            updates.update(kwargs)
-            return _ToolsRequest(**updates)
-
-    async def _identity(prepared):
-        return prepared
-
-    tools_request = _ToolsRequest(state=request.state, tools=[SimpleNamespace(name="bash"), SimpleNamespace(name="read_file")], runtime=None)
-    filtered = asyncio.run(middleware.awrap_model_call(tools_request, _identity))
-
-    kept = [getattr(t, "name", None) for t in filtered.tools]
-    assert kept == ["bash", "read_file"]
-
-
-# ── Canonical skill names: Skill.name != directory name ───────────────
-#
-# Bundled skills may declare a name that differs from their directory
 # (``skills/public/vercel-deploy-claimable/SKILL.md`` declares ``name:
 # vercel-deploy``). Layer 1, slash activation, and describe_skill authorize
 # the declared ``Skill.name``; every runtime gate that starts from a path
@@ -1859,83 +1735,6 @@ def test_async_stamp_path_authorizes_declared_name(tmp_path, monkeypatch):
     assert provider.async_calls == ["vercel-deploy"]
     assert SKILL_CONTEXT_ENTRY_KEY in stamped.additional_kwargs
     assert SKILL_CONTEXT_DENIED_KEY not in stamped.additional_kwargs
-
-
-def test_async_slash_to_tool_policy_uses_declared_name(tmp_path, monkeypatch):
-    """[P2 regression] Composed async slash activation → tool-policy with
-    Skill.name != directory name: the decision maps are keyed by the declared
-    name resolved from the registry, the loop-affine provider answers every
-    check through aauthorize() (a map miss would fall back to the sync API and
-    fail closed, dropping the skill's tools), and the allowed skill keeps its
-    declared allowed-tools."""
-    import asyncio
-
-    from langchain_core.messages import HumanMessage
-
-    from deerflow.agents.middlewares import skill_activation_middleware as activation_module
-    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
-    from deerflow.agents.middlewares.skill_tool_policy_middleware import SkillToolPolicyMiddleware
-
-    skill = _mismatched_skill(tmp_path)
-    storage = SimpleNamespace(
-        load_skills=lambda *, enabled_only: [skill],
-        get_container_root=lambda: "/mnt/skills",
-        get_skills_root_path=lambda: tmp_path,
-    )
-    monkeypatch.setattr(activation_module, "get_or_new_skill_storage", lambda **kw: storage)
-    _patch_registry_storage(monkeypatch, SkillToolPolicyMiddleware, [skill])
-
-    provider = _AsyncOnlyProvider()
-    resolved = _resolved_skill_authorization(provider, fail_closed=True)
-    token = "test-token"
-    activation = SkillActivationMiddleware(
-        available_skills={"vercel-deploy"},
-        skill_authorization=resolved,
-        slash_source_owner_token=token,
-    )
-    policy = SkillToolPolicyMiddleware(
-        available_skills={"vercel-deploy"},
-        slash_source_owner_token=token,
-        skill_authorization=resolved,
-    )
-
-    class _Request(SimpleNamespace):
-        def override(self, **kwargs):
-            updates = dict(self.__dict__)
-            updates.update(kwargs)
-            return _Request(**updates)
-
-    run_context: dict = {}
-
-    async def _identity(prepared):
-        return prepared
-
-    # Turn 1: the user slash-activates /vercel-deploy. The activation
-    # middleware resolves the skill by its declared name and records the
-    # canonical container path on the run context.
-    activation_request = _Request(
-        messages=[HumanMessage(content="/vercel-deploy deploy it")],
-        state={},
-        runtime=SimpleNamespace(context=run_context),
-    )
-    prepared = asyncio.run(activation.awrap_model_call(activation_request, _identity))
-    assert any(is_slash_activation_reminder(m) for m in prepared.messages)
-
-    # Turn 2 (tool loop): the tool-policy middleware picks the slash source up
-    # from the shared run context and re-authorizes before applying the
-    # skill's allowed-tools declaration.
-    policy_request = _Request(
-        messages=[],
-        state={},
-        tools=[SimpleNamespace(name="bash"), SimpleNamespace(name="read_file")],
-        runtime=SimpleNamespace(context=run_context),
-    )
-    filtered = asyncio.run(policy.awrap_model_call(policy_request, _identity))
-
-    assert provider.async_calls == ["vercel-deploy", "vercel-deploy"]
-    assert "vercel-deploy-claimable" not in provider.async_calls
-    kept = [getattr(t, "name", None) for t in filtered.tools]
-    assert kept == ["bash", "read_file"]
 
 
 def test_async_secret_binding_canonicalizes_persisted_entry_paths(tmp_path, monkeypatch):
@@ -2185,91 +1984,6 @@ def test_async_secret_binding_resolves_entries_against_prepass_snapshot(tmp_path
 
     assert provider.async_calls == ["entry-skill"]
     assert run_context.get(ACTIVE_SECRETS_CONTEXT_KEY) == {"ENTRY_KEY": "entry-value"}, "the entry must resolve against the prepass snapshot (allowed name), not a fresh load (denied name)"
-
-
-def test_async_policy_preserves_prepass_registry_failure(monkeypatch, tmp_path):
-    """[P2 regression] A transient prepass registry failure must be preserved:
-    the worker-side filter must not retry storage — a successful retry would
-    resolve skills missing from the (empty) decision map and fall back to the
-    synchronous provider API from the thread, turning a loop-affine provider's
-    denial into a fail-open allow (fail_closed=false keeps the denied skill's
-    allowed-tools) or falsely denying permitted skills (fail_closed=true)."""
-    import asyncio
-
-    from deerflow.agents.middlewares.skill_tool_policy_middleware import SkillToolPolicyMiddleware
-    from deerflow.skills.types import Skill as SkillObject
-    from deerflow.skills.types import SkillCategory
-
-    skill_dir = tmp_path / "demo-skill"
-    skill_dir.mkdir(exist_ok=True)
-    (skill_dir / "SKILL.md").write_text("# x", encoding="utf-8")
-    skill = SkillObject(
-        name="demo-skill",
-        description="d",
-        license=None,
-        skill_dir=skill_dir,
-        skill_file=skill_dir / "SKILL.md",
-        relative_path=Path("demo-skill"),
-        category=SkillCategory.CUSTOM,
-        enabled=True,
-        allowed_tools=("bash",),
-    )
-    container_root = "/mnt/skills"
-    skill_path = posixpath_normpath(skill.get_container_file_path(container_root))
-
-    load_calls = {"count": 0}
-
-    def _flaky_load(*, enabled_only):
-        load_calls["count"] += 1
-        if load_calls["count"] == 1:
-            raise RuntimeError("transient registry failure")
-        return [skill]
-
-    monkeypatch.setattr(
-        SkillToolPolicyMiddleware,
-        "_storage",
-        lambda self: SimpleNamespace(
-            load_skills=_flaky_load,
-            get_container_root=lambda: container_root,
-        ),
-    )
-
-    # fail_closed=False is the dangerous direction: an accidental sync-API
-    # fallback raises inside skill_activation_allowed and fail-opens into an
-    # allow, retaining the aauthorize-denied skill's tools.
-    provider = _AsyncOnlyProvider(denied_activate={"demo-skill"})
-    resolved = _resolved_skill_authorization(provider, fail_closed=False)
-    middleware = SkillToolPolicyMiddleware(
-        available_skills={"demo-skill"},
-        slash_source_owner_token="test-token",
-        skill_authorization=resolved,
-    )
-
-    class _Request(SimpleNamespace):
-        def override(self, **kwargs):
-            updates = dict(self.__dict__)
-            updates.update(kwargs)
-            return _Request(**updates)
-
-    request = _Request(
-        state={"skill_context": [{"name": "demo-skill", "path": skill_path}]},
-        tools=[SimpleNamespace(name="bash"), SimpleNamespace(name="read_file")],
-        runtime=None,
-    )
-
-    async def _identity(prepared):
-        return prepared
-
-    filtered = asyncio.run(middleware.awrap_model_call(request, _identity))
-
-    kept = [getattr(t, "name", None) for t in filtered.tools]
-    # The prepass failure is preserved: exactly one storage attempt (no
-    # worker-side retry), no provider call at all, and the policy fails
-    # closed to framework-safe builtins — not the denied skill's "bash".
-    assert load_calls["count"] == 1
-    assert provider.async_calls == []
-    assert "bash" not in kept
-    assert "read_file" in kept
 
 
 def test_async_model_call_without_skill_refs_skips_registry_scan(tmp_path, monkeypatch):
@@ -2868,6 +2582,97 @@ def test_lead_chain_wires_durable_render_filter():
     assert middlewares.index(activations[0]) < middlewares.index(durables[0]), "activation must wrap outside durable so the per-step decisions are published before the renderer reads them"
 
 
+def test_lead_chain_prefers_injected_skill_storage_over_user_scoped_storage():
+    """Embedding hosts can supply request-scoped storage; it must win over the
+    user-scoped default even when a user_id is present."""
+    from deerflow.agents.lead_agent.agent import build_middlewares
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+
+    injected = SimpleNamespace(get_container_root=lambda: "/mnt/skills")
+    middlewares = build_middlewares(
+        {"configurable": {}},
+        app_config=_make_app_config(),
+        model_name="gpt-4",
+        user_id="user-123",
+        skill_storage=injected,
+    )
+
+    activation = next(m for m in middlewares if isinstance(m, SkillActivationMiddleware))
+    assert activation._storage() is injected
+
+
+def test_tool_error_handling_prefers_injected_skill_storage():
+    """Skill-read canonicalization must use the same request-scoped tree."""
+    from deerflow.agents.middlewares.tool_error_handling_middleware import ToolErrorHandlingMiddleware
+
+    injected = SimpleNamespace(get_container_root=lambda: "/mnt/skills")
+    middleware = ToolErrorHandlingMiddleware(
+        app_config=_make_app_config(),
+        user_id="user-123",
+        skill_storage=injected,
+    )
+
+    assert middleware._storage() is injected
+
+
+def test_subagent_chain_accepts_injected_skill_storage():
+    """Direct subagent-chain builders can keep the same request-scoped tree."""
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+    from deerflow.agents.middlewares.tool_error_handling_middleware import build_subagent_runtime_middlewares
+
+    injected = SimpleNamespace(get_container_root=lambda: "/mnt/skills")
+    middlewares = build_subagent_runtime_middlewares(
+        app_config=_make_app_config(),
+        user_id="user-456",
+        skill_storage=injected,
+    )
+
+    activation = next(m for m in middlewares if isinstance(m, SkillActivationMiddleware))
+    assert activation._storage() is injected
+
+
+def test_skills_prompt_section_uses_injected_skill_storage():
+    """Prompt-side skill discovery must read the same request-scoped tree."""
+    from deerflow.agents.lead_agent.prompt import get_skills_prompt_section
+
+    calls: list[bool] = []
+
+    def _load_skills(*, enabled_only: bool):
+        calls.append(enabled_only)
+        return []
+
+    storage = SimpleNamespace(load_skills=_load_skills, get_container_root=lambda: "/mnt/skills")
+
+    section = get_skills_prompt_section(
+        app_config=_make_app_config(),
+        user_id="user-123",
+        skill_storage=storage,
+    )
+
+    assert section == ""
+    assert calls == [False, True]
+
+
+def test_prompt_renders_paths_from_the_injected_skill_storage(tmp_path, monkeypatch):
+    from deerflow.agents.lead_agent.prompt import get_skills_prompt_section
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+    from deerflow.config.extensions_config import ExtensionsConfig
+    from deerflow.skills.storage.local_skill_storage import LocalSkillStorage
+
+    monkeypatch.setattr(ExtensionsConfig, "from_file", lambda: ExtensionsConfig())
+    skill_dir = tmp_path / "public" / "request-only"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: request-only\ndescription: Request-only skill\n---\n\nSkill body.\n", encoding="utf-8")
+    app_config = _make_app_config()
+    storage = LocalSkillStorage(host_path=str(tmp_path), container_path="/mnt/request-skills")
+    section = get_skills_prompt_section(app_config=app_config, skill_storage=storage)
+    activation = SkillActivationMiddleware(app_config=app_config, skill_storage=storage, slash_source_owner_token="test")
+    resolved = activation._resolve_activation("/request-only")
+
+    assert resolved.activation is not None
+    assert resolved.activation.container_file_path in section
+
+
 def test_subagent_chain_wires_durable_render_filter():
     """Same wiring contract for the subagent builder's DurableContextMiddleware."""
     from deerflow.agents.middlewares.durable_context_middleware import DurableContextMiddleware
@@ -3072,6 +2877,69 @@ def test_slash_dominance_anchors_on_path_across_midrun_rename(tmp_path, monkeypa
 
     # Only the renamed (activation-era) declaration binds — no union of eras.
     assert run_context.get(ACTIVE_SECRETS_CONTEXT_KEY) == {"NEW_KEY": "new-value"}
+
+
+def test_async_batch_miss_never_calls_synchronous_provider():
+    """[construction hardening] A name missing from an async batch resolves
+    per the provider-error policy WITHOUT consulting the synchronous
+    authorize() — the wrong API from a worker thread. Under the old dict
+    contract the miss silently took that path; with a loop-affine provider
+    and fail_closed=false it flipped denials into allows."""
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+    from deerflow.authz.activation_decisions import ActivationDecisions
+
+    provider = _ActionAwareProvider(denied_activate=set())
+    resolved = _resolved_skill_authorization(provider, fail_closed=False)
+    middleware = SkillActivationMiddleware(
+        available_skills={"demo-skill"},
+        skill_authorization=resolved,
+        slash_source_owner_token="test-token",
+    )
+    empty_batch = ActivationDecisions({}, fail_closed=False)
+
+    # Miss under fail-open allows — and the sync API is never consulted
+    # (the old fallback would have recorded a sync call).
+    assert middleware._activation_allowed("uncovered", activation_decisions=empty_batch) is True
+    assert middleware._activation_allowed("demo-skill", activation_decisions=empty_batch) is True
+    assert provider.sync_calls == []
+    assert provider.async_calls == []
+
+
+def test_async_batch_miss_fails_closed_under_default_policy():
+    """The production default (fail_closed=True) denies a miss — loudly, and
+    still without touching the synchronous provider."""
+
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+    from deerflow.authz.activation_decisions import ActivationDecisions
+
+    provider = _ActionAwareProvider(denied_activate=set())
+    resolved = _resolved_skill_authorization(provider, fail_closed=True)
+    middleware = SkillActivationMiddleware(
+        available_skills={"demo-skill"},
+        skill_authorization=resolved,
+        slash_source_owner_token="test-token",
+    )
+    empty_batch = ActivationDecisions({}, fail_closed=True)
+
+    assert middleware._activation_allowed("uncovered", activation_decisions=empty_batch) is False
+    assert provider.sync_calls == []
+
+
+def test_sync_chain_none_still_uses_synchronous_api():
+    """``None`` remains the sync-chain signal: the synchronous authorize() is
+    the correct API there and stays in use."""
+    provider = _ActionAwareProvider(denied_activate=set())
+    resolved = _resolved_skill_authorization(provider, fail_closed=True)
+    from deerflow.agents.middlewares.skill_activation_middleware import SkillActivationMiddleware
+
+    middleware = SkillActivationMiddleware(
+        available_skills={"demo-skill"},
+        skill_authorization=resolved,
+        slash_source_owner_token="test-token",
+    )
+
+    assert middleware._activation_allowed("demo-skill", activation_decisions=None) is True
+    assert provider.sync_calls == ["demo-skill"]
 
 
 def posixpath_normpath(path: str) -> str:

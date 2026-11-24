@@ -36,7 +36,10 @@ def has_visible_content(message: AIMessage) -> bool:
     for block in content:
         if isinstance(block, str) and block.strip():
             return True
-        if not isinstance(block, dict) or block.get("type") not in {"text", "output_text"}:
+        # Probe by equality, not set membership: `type: []` / `type: {}` are
+        # legal JSON from a provider, and hashing an unhashable value would
+        # raise TypeError out of the middleware chain instead of skipping.
+        if not isinstance(block, dict) or block.get("type") not in ("text", "output_text"):
             continue
         text = block.get("text")
         if isinstance(text, str) and text.strip():
@@ -51,6 +54,22 @@ def append_visible_text(message: AIMessage, text: str) -> Any:
     if isinstance(message.content, str) and message.content.strip():
         return f"{message.content}\n\n{text}"
     return text
+
+
+def is_empty_stop_response(response: Any) -> bool:
+    """Return whether a model call completed without any content.
+
+    ``LLMErrorHandlingMiddleware`` turns such a response into
+    ``EmptyModelResponseError`` and retries the call by running the inner
+    model wrappers again. A wrapper that took queued hints out for this call
+    puts them back on this response, as it does when the call raises.
+    """
+    message = last_ai_message(response)
+    if message is None:
+        return True
+    if has_visible_content(message) or has_tool_call_intent(message):
+        return False
+    return finish_reason(message) in (None, "", "stop", "end_turn")
 
 
 def finish_reason(message: AIMessage) -> str | None:

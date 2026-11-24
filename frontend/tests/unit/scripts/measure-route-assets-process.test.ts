@@ -89,7 +89,10 @@ function launch(mode: string) {
     resolve(source, "../scripts/pnpm.py"),
     join(root, "scripts/pnpm.py"),
   );
-  writeFileSync(join(frontend, "package.json"), '{"type":"module"}\n');
+  writeFileSync(
+    join(frontend, "package.json"),
+    '{"type":"module","packageManager":"pnpm@10.26.2"}\n',
+  );
   writeFileSync(
     join(frontend, "node_modules/next/package.json"),
     '{"type":"commonjs"}\n',

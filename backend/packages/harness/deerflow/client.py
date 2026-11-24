@@ -26,6 +26,7 @@ import uuid
 from collections.abc import Generator, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MethodType
 from typing import Any, Literal
 
 from langchain.agents import create_agent
@@ -33,7 +34,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from deerflow.agents.lead_agent.agent import _authorize_model_name, build_middlewares
+from deerflow.agents.lead_agent.agent import _authorize_model_name, _resolve_model_name, build_middlewares
 from deerflow.agents.lead_agent.prompt import apply_prompt_template, get_enabled_skills_for_config, has_bash_tool
 from deerflow.agents.middlewares.tool_declarations import layer_one_outcome, narrow_declared_tools, verify_declared_tool_view
 from deerflow.agents.thread_state import get_thread_state_schema, normalize_middleware_state_schemas
@@ -53,6 +54,7 @@ from deerflow.config.extensions_config import (
 )
 from deerflow.config.paths import get_paths
 from deerflow.config.subagent_runtime_config import SubagentRuntimeConfig
+from deerflow.mcp.lifecycle import LIFECYCLE_KEY, plan_mcp_lifecycle
 from deerflow.mcp_scope import THREAD_INCARNATION_CONTEXT_KEY
 from deerflow.models import create_chat_model
 from deerflow.models.reasoning import reasoning_capabilities_payload, resolve_reasoning_contract
@@ -81,6 +83,7 @@ from deerflow.uploads.manager import (
     get_uploads_dir,
     list_files_in_dir,
     normalize_filename,
+    publish_upload_copy,
     upload_artifact_url,
     upload_virtual_path,
 )
@@ -356,8 +359,10 @@ class DeerFlowClient:
                 self._loaded_agent_config = agent_config
         memory_enabled = getattr(agent_config, "memory_enabled", True) is not False
         mcp_plugins = getattr(agent_config, "mcp_plugins", None)
+        tool_groups = getattr(agent_config, "tool_groups", None)
         # Delegation reads this run's metadata, including when the graph is cached.
         config.setdefault("metadata", {})["mcp_plugins"] = mcp_plugins
+        config["metadata"]["tool_groups"] = tool_groups
 
         authorization_identity = None
         if self._app_config.authorization.enabled:
@@ -384,6 +389,7 @@ class DeerFlowClient:
             self._agent_name,
             memory_enabled,
             frozenset(mcp_plugins) if mcp_plugins is not None else None,
+            frozenset(tool_groups) if tool_groups is not None else None,
             frozenset(self._available_skills) if self._available_skills is not None else None,
             self._checkpoint_channel_mode,
             self._checkpoint_snapshot_frequency,
@@ -396,6 +402,12 @@ class DeerFlowClient:
 
         thinking_enabled = cfg.get("thinking_enabled", True)
         model_name = cfg.get("model_name")
+        if model_name is None:
+            model_name = getattr(agent_config, "model", None)
+            if model_name is not None:
+                model_name = _resolve_model_name(model_name, app_config=self._app_config)
+        agent_model_settings = getattr(agent_config, "model_settings", None)
+        agent_model_overrides = agent_model_settings.model_dump(exclude_none=True) if agent_model_settings else None
         # Phase 3: enforce model:use authorization on the embedded/library path
         # too, mirroring the Gateway runtime path in ``_make_lead_agent`` so the
         # role-scoped model policy cannot be bypassed by constructing the agent
@@ -464,7 +476,7 @@ class DeerFlowClient:
         )
         max_total_subagents = effective_total_subagents_per_run(cfg.get("max_total_subagents"), self._app_config)
 
-        tools = self._get_tools(model_name=model_name, subagent_enabled=subagent_enabled, mcp_plugins=mcp_plugins)
+        tools = self._get_tools(model_name=model_name, subagent_enabled=subagent_enabled, mcp_plugins=mcp_plugins, groups=tool_groups)
 
         # Add framework-provided tools before authorization so Layer 1 sees
         # every capability that can become model-visible.
@@ -540,7 +552,7 @@ class DeerFlowClient:
             # callbacks at the graph invocation root so a single embedded run
             # produces one trace with correct session_id / user_id propagation.
             # Attaching them again on the model would emit duplicate spans.
-            "model": create_chat_model(name=model_name, thinking_enabled=thinking_enabled, attach_tracing=False),
+            "model": create_chat_model(name=model_name, thinking_enabled=thinking_enabled, attach_tracing=False, model_overrides=agent_model_overrides),
             "tools": final_tools,
             "middleware": bound_middlewares,
             "system_prompt": apply_prompt_template(
@@ -574,11 +586,11 @@ class DeerFlowClient:
         logger.info("Agent created: agent_name=%s, model=%s, thinking=%s", self._agent_name, model_name, thinking_enabled)
 
     @staticmethod
-    def _get_tools(*, model_name: str | None, subagent_enabled: bool, mcp_plugins: list[str] | None = None):
+    def _get_tools(*, model_name: str | None, subagent_enabled: bool, mcp_plugins: list[str] | None = None, groups: list[str] | None = None):
         """Lazy import to avoid circular dependency at module level."""
         from deerflow.tools import get_available_tools
 
-        return get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, mcp_plugins=mcp_plugins)
+        return get_available_tools(model_name=model_name, subagent_enabled=subagent_enabled, mcp_plugins=mcp_plugins, groups=groups)
 
     @staticmethod
     def _serialize_tool_calls(tool_calls) -> list[dict]:
@@ -868,6 +880,19 @@ class DeerFlowClient:
         A caller that opened its own scope with ``request_trace_context`` keeps
         that id; otherwise the turn gets a fresh one.
         """
+        yield from self._stream_with_trace(message, thread_id=thread_id, emit_values=True, overrides=kwargs)
+
+    # Keep the built-in implementation identifiable when the public method is replaced.
+    _default_stream = stream
+
+    def _stream_with_trace(
+        self,
+        message: str,
+        *,
+        thread_id: str | None,
+        emit_values: bool,
+        overrides: dict[str, Any],
+    ) -> Generator[StreamEvent, None, None]:
         # Resolve the id once, without mutating the caller's context.
         trace_id = get_current_trace_id() or generate_trace_id()
 
@@ -880,7 +905,7 @@ class DeerFlowClient:
         # Per-step set/reset keeps LangGraph node execution and its log
         # records inside the binding while returning control to the caller
         # with the ContextVar restored.
-        inner = self._stream_turn(message, thread_id=thread_id, **kwargs)
+        inner = self._stream_turn(message, emit_values, thread_id=thread_id, **overrides)
         _EXHAUSTED = object()
         try:
             while True:
@@ -911,6 +936,8 @@ class DeerFlowClient:
     def _stream_turn(
         self,
         message: str,
+        emit_values: bool,
+        /,
         *,
         thread_id: str | None = None,
         **kwargs,
@@ -935,15 +962,15 @@ class DeerFlowClient:
         ``chat()`` already does this for you.
 
         Tool calls and tool results are still emitted once per logical
-        message.  ``values`` events continue to carry full state snapshots
-        after each graph node finishes. On resumed threads, historical messages
-        remain in those snapshots, but are not emitted again as per-message
-        events or counted in this turn's usage. AI text already delivered via
-        the ``messages`` stream is **not** re-synthesized from the snapshot to
-        avoid duplicate deliveries. When a later node replaces a delivered AI
-        message under the same id and appends to its text (a guard's stop
-        notice), only the appended text is emitted, as one more delta for that
-        id; new ``additional_kwargs`` arrive as a metadata-only follow-up.
+        message. When ``emit_values`` is enabled, ``values`` events carry full
+        state snapshots after each graph node finishes. On resumed threads,
+        historical messages remain in those snapshots, but are not emitted again
+        as per-message events or counted in this turn's usage. AI text already
+        delivered via the ``messages`` stream is **not** re-synthesized from the
+        snapshot to avoid duplicate deliveries. When a later node appends text
+        to an already-delivered AI message under the same id (a guard's stop
+        notice), only that text is emitted as a new delta for the same id.
+        New ``additional_kwargs`` arrive as a metadata-only follow-up.
 
         Why not reuse Gateway's ``run_agent``?
         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -979,6 +1006,7 @@ class DeerFlowClient:
 
         Args:
             message: User message text.
+            emit_values: Serialize and emit full state snapshots for stream consumers.
             thread_id: Thread ID for conversation context. Auto-generated if None.
             **kwargs: Override client defaults (model_name, thinking_enabled,
                 plan_mode, subagent_enabled, recursion_limit). Trusted embedded
@@ -1086,39 +1114,41 @@ class DeerFlowClient:
         # arguments only parse once the message is complete, so their
         # tool_calls event is emitted from the values snapshot instead.
         pending_tool_call_ids: set[str] = set()
-        # The same message id carries identical cumulative ``usage_metadata``
-        # in both the final ``messages`` chunk and the values snapshot —
-        # count it only on whichever arrives first.
+        # Chunks carry additive usage; complete messages carry the total.
+        # Reconcile that total once, without counting the streamed part again.
+        streamed_usage_by_id: dict[str, dict[str, int]] = {}
         counted_usage_ids: set[str] = set()
         sent_additional_kwargs_by_id: dict[str, dict[str, Any]] = {}
         cumulative_usage: dict[str, int] = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
 
-        def _account_usage(msg_id: str | None, usage: Any) -> dict | None:
-            """Add *usage* to cumulative totals if this id has not been counted.
+        def _account_usage(msg_id: str | None, usage: Any, *, is_chunk: bool = False) -> dict | None:
+            """Accumulate chunk deltas or reconcile a complete message once.
 
             ``usage`` is a ``langchain_core.messages.UsageMetadata`` TypedDict
             or ``None``; typed as ``Any`` because TypedDicts are not
             structurally assignable to plain ``dict`` under strict type
-            checking.  Returns the normalized usage dict (for attaching
+            checking.  Returns the newly accounted usage (for attaching
             to an event) when we accepted it, otherwise ``None``.
             """
             if not usage:
                 return None
             if msg_id and msg_id in counted_usage_ids:
                 return None
+            delta = {key: usage.get(key, 0) or 0 for key in cumulative_usage}
             if msg_id:
-                counted_usage_ids.add(msg_id)
-            input_tokens = usage.get("input_tokens", 0) or 0
-            output_tokens = usage.get("output_tokens", 0) or 0
-            total_tokens = usage.get("total_tokens", 0) or 0
-            cumulative_usage["input_tokens"] += input_tokens
-            cumulative_usage["output_tokens"] += output_tokens
-            cumulative_usage["total_tokens"] += total_tokens
-            return {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "total_tokens": total_tokens,
-            }
+                if is_chunk:
+                    streamed = streamed_usage_by_id.setdefault(msg_id, {})
+                    for key, value in delta.items():
+                        streamed[key] = streamed.get(key, 0) + value
+                else:
+                    counted_usage_ids.add(msg_id)
+                    streamed = streamed_usage_by_id.pop(msg_id, {})
+                    # State rewrites may lower totals; do not retract streamed usage.
+                    # Signed provider corrections remain valid in the chunk path.
+                    delta = {key: max(value - streamed.get(key, 0), 0) for key, value in delta.items()}
+            for key, value in delta.items():
+                cumulative_usage[key] += value
+            return delta
 
         def _unsent_additional_kwargs(msg_id: str | None, additional_kwargs: dict[str, Any] | None) -> dict[str, Any] | None:
             if not additional_kwargs:
@@ -1165,7 +1195,7 @@ class DeerFlowClient:
                 if isinstance(msg_chunk, AIMessage):
                     text = self._extract_text(msg_chunk.content)
                     additional_kwargs = self._serialize_additional_kwargs(msg_chunk)
-                    counted_usage = _account_usage(msg_id, msg_chunk.usage_metadata)
+                    counted_usage = _account_usage(msg_id, msg_chunk.usage_metadata, is_chunk=isinstance(msg_chunk, AIMessageChunk))
                     sent_additional_kwargs = False
 
                     if text:
@@ -1235,13 +1265,19 @@ class DeerFlowClient:
                 if msg_id:
                     seen_messages[msg_id] = msg
 
-                # Already streamed via ``messages`` mode; only (defensively)
-                # capture usage here and skip re-synthesizing the event.
+                # Already streamed via ``messages`` mode; emit only text added
+                # before this first snapshot, plus unsent tool calls/metadata.
                 if msg_id and msg_id in streamed_ids:
                     if isinstance(msg, AIMessage):
                         _account_usage(msg_id, getattr(msg, "usage_metadata", None))
                         additional_kwargs = self._serialize_additional_kwargs(msg)
                         additional_kwargs_delta = _unsent_additional_kwargs(msg_id, additional_kwargs)
+                        text = self._extract_text(msg.content)
+                        sent_text = sent_text_by_id.get(msg_id, "")
+                        if len(text) > len(sent_text) and text.startswith(sent_text):
+                            sent_text_by_id[msg_id] = text
+                            yield self._ai_text_event(msg_id, text[len(sent_text) :], None, additional_kwargs_delta)
+                            additional_kwargs_delta = None
                         if msg_id in pending_tool_call_ids and msg.tool_calls:
                             pending_tool_call_ids.discard(msg_id)
                             yield self._ai_tool_calls_event(msg_id, msg.tool_calls, additional_kwargs_delta)
@@ -1288,25 +1324,24 @@ class DeerFlowClient:
                 elif isinstance(msg, ToolMessage):
                     yield self._tool_message_event(msg)
 
-            # Emit a values event for each state snapshot
-            yield StreamEvent(
-                type="values",
-                data={
-                    "title": chunk.get("title"),
-                    "summary_text": chunk.get("summary_text"),
-                    "messages": [self._serialize_message(m) for m in messages],
-                    "artifacts": chunk.get("artifacts", []),
-                },
-            )
+            if emit_values:
+                yield StreamEvent(
+                    type="values",
+                    data={
+                        "title": chunk.get("title"),
+                        "summary_text": chunk.get("summary_text"),
+                        "messages": [self._serialize_message(m) for m in messages],
+                        "artifacts": chunk.get("artifacts", []),
+                    },
+                )
 
         yield StreamEvent(type="end", data={"usage": cumulative_usage})
 
     def chat(self, message: str, *, thread_id: str | None = None, **kwargs) -> str:
         """Send a message and return the final text response.
 
-        Convenience wrapper around :meth:`stream` that accumulates delta
-        ``messages-tuple`` events per ``id`` and returns the text of the
-        **last** AI message to complete.  Intermediate AI messages (e.g.
+        Accumulates ``messages-tuple`` deltas per ``id`` and returns the text of
+        the **last** AI message to complete. Intermediate AI messages (e.g.
         planner drafts) are discarded — only the final id's accumulated
         text is returned.  Use :meth:`stream` directly if you need every
         delta as it arrives.
@@ -1320,8 +1355,15 @@ class DeerFlowClient:
             The accumulated text of the last AI message, or empty string
             if no AI text was produced.
         """
+        stream = self.stream
+        # Callable wrappers can forward method attributes, including __class__.
+        if type(stream) is MethodType and stream.__self__ is self and stream.__func__ is DeerFlowClient._default_stream:
+            events = self._stream_with_trace(message, thread_id=thread_id, emit_values=False, overrides=kwargs)
+        else:
+            events = stream(message, thread_id=thread_id, **kwargs)
+
         answer = _AIMessageAccumulator()
-        for event in self.stream(message, thread_id=thread_id, **kwargs):
+        for event in events:
             answer.observe(event)
         return answer.answer()
 
@@ -1380,6 +1422,26 @@ class DeerFlowClient:
             ]
         }
 
+    def _memory_scope_kwargs(self, manager) -> dict[str, str]:
+        """Scope a memory management call to this client's named agent.
+
+        A named client's graph stores and reads its memory in that agent's
+        bucket: ``MemoryMiddleware`` and the memory tools both pass
+        ``agent_name``. A management call that omits it targets the user's
+        default bucket instead, so a fact written through the client is never
+        injected back into the same client's conversations.
+
+        A backend that accepts ``agent_name`` but ignores it would report
+        success while editing the user's default bucket, so a named client
+        refuses the call there instead of silently touching that data. The
+        Gateway answers the same request with 501.
+        """
+        if self._agent_name is None:
+            return {}
+        if getattr(manager, "supports_agent_scoped_management", False) is not True:
+            raise NotImplementedError(f"agent-scoped memory management not supported by memory backend {type(manager).__name__}")
+        return {"agent_name": self._agent_name}
+
     def get_memory(self) -> dict:
         """Get current memory data.
 
@@ -1388,19 +1450,22 @@ class DeerFlowClient:
         """
         from deerflow.agents.memory import get_memory_manager
 
-        return get_memory_manager().get_memory(user_id=get_effective_user_id())
+        manager = get_memory_manager()
+        return manager.get_memory(user_id=get_effective_user_id(), **self._memory_scope_kwargs(manager))
 
     def export_memory(self) -> dict:
         """Export current memory data for backup or transfer."""
         from deerflow.agents.memory import get_memory_manager
 
-        return get_memory_manager().get_memory(user_id=get_effective_user_id())
+        manager = get_memory_manager()
+        return manager.get_memory(user_id=get_effective_user_id(), **self._memory_scope_kwargs(manager))
 
     def import_memory(self, memory_data: dict) -> dict:
         """Import and persist full memory data."""
         from deerflow.agents.memory import get_memory_manager
 
-        return get_memory_manager().import_memory(memory_data, user_id=get_effective_user_id())
+        manager = get_memory_manager()
+        return manager.import_memory(memory_data, user_id=get_effective_user_id(), **self._memory_scope_kwargs(manager))
 
     def get_model(self, name: str) -> dict | None:
         """Get a specific model's configuration by name.
@@ -1455,23 +1520,58 @@ class DeerFlowClient:
         Raises:
             ValueError: If the resulting config would not load; nothing is written.
             OSError: If the config file cannot be written.
+            RuntimeError: If the configuration was saved but local MCP reconciliation or
+                teardown failed. The configuration may already have changed on disk, so
+                callers must not assume the write failed and blindly retry.
         """
+        from deerflow.mcp.cache import (
+            fail_mcp_reconciliation,
+            finish_mcp_reconciliation,
+            prepare_mcp_reconciliation,
+        )
+
         config_path = ExtensionsConfig.resolve_config_path()
         if config_path is None:
             raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
 
+        pending = None
+        committed_failure = None
+        reloaded = None
         with extensions_config_write_lock, extensions_config_file_lock(config_path):
             # The singleton is process-local, so re-read the shared file under
             # the cross-process lock before merging the replacement MCP map.
             # Read it raw so sibling keys keep their $VAR placeholders.
-            config_data = read_raw_extensions_config(config_path)
-            config_data["mcpServers"] = mcp_servers
+            previous_raw = read_raw_extensions_config(config_path)
+            config_data = copy.deepcopy(previous_raw)
+            config_data["mcpServers"] = copy.deepcopy(mcp_servers)
+            config_data[LIFECYCLE_KEY] = plan_mcp_lifecycle(previous_raw, config_data)
 
-            validate_raw_extensions_config(config_data)
+            candidate = validate_raw_extensions_config(config_data)
             self._atomic_write_json(config_path, config_data)
-            reloaded = reload_extensions_config()
+            try:
+                reloaded = reload_extensions_config()
+                pending = prepare_mcp_reconciliation(candidate, config_path=config_path)
+            except Exception as exc:
+                # The file is already committed, so detach local state under the
+                # cache condition here and finish teardown after the locks are
+                # released; never report the write as a clean success.
+                committed_failure = (fail_mcp_reconciliation(exc), exc)
 
-        self.reset_agent()
+        try:
+            if committed_failure is not None:
+                failed_pending, _failure = committed_failure
+                finish_mcp_reconciliation(failed_pending)
+            else:
+                finish_mcp_reconciliation(pending)
+        finally:
+            # The config file is already committed, so an agent built from the
+            # previous MCP tool set must not survive this call even when local
+            # reconciliation or teardown raised.
+            self.reset_agent()
+
+        if committed_failure is not None:
+            _failed_pending, failure = committed_failure
+            raise RuntimeError("MCP configuration was saved, but local cache reconciliation failed; retry or restart DeerFlow before relying on the changed server.") from failure
         return {"mcp_servers": {name: server.model_dump() for name, server in reloaded.mcp_servers.items()}}
 
     # ------------------------------------------------------------------
@@ -1529,10 +1629,11 @@ class DeerFlowClient:
             if config_path is None:
                 raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
 
+            from deerflow.skills.mutations.guard import managed_global_state_write
             from deerflow.skills.projection import skill_projection_mutation
 
             removal_names = (name,) if not enabled else ()
-            with skill_projection_mutation(storage, "public", remove_names=removal_names):
+            with managed_global_state_write(storage, name), skill_projection_mutation(storage, "public", remove_names=removal_names):
                 with extensions_config_write_lock, extensions_config_file_lock(config_path):
                     # The projection lock is cross-process, but the singleton
                     # cache is not. Reload raw from disk under the config lock.
@@ -1545,10 +1646,12 @@ class DeerFlowClient:
                 storage.set_skill_enabled_state(name, enabled)
             else:
                 # Fallback for non-user-scoped storage (unlikely in practice)
+                from deerflow.skills.mutations.guard import managed_global_state_write
+
                 config_path = ExtensionsConfig.resolve_config_path()
                 if config_path is None:
                     raise FileNotFoundError("Cannot locate extensions_config.json. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH or ensure it exists in the project root.")
-                with extensions_config_write_lock, extensions_config_file_lock(config_path):
+                with managed_global_state_write(storage, name), extensions_config_write_lock, extensions_config_file_lock(config_path):
                     self._write_skill_enabled_state(config_path, name, enabled)
 
         # Invalidate the prompt cache for this caller (and for all users if
@@ -1619,12 +1722,15 @@ class DeerFlowClient:
 
         manager = get_memory_manager()
         user_id = get_effective_user_id()
+        # Resolved before the fallback below: an unsupported agent scope must
+        # not be mistaken for "no reload concept" and retried as a user-wide read.
+        scope_kwargs = self._memory_scope_kwargs(manager)
         try:
-            return manager.reload_memory(user_id=user_id)
+            return manager.reload_memory(user_id=user_id, **scope_kwargs)
         except NotImplementedError:
             pass  # no reload concept; fall back to current memory below
         try:
-            return manager.get_memory(user_id=user_id)
+            return manager.get_memory(user_id=user_id, **scope_kwargs)
         except NotImplementedError:
             raise NotImplementedError(f"reload_memory not supported by memory backend {type(manager).__name__}: implements neither reload_memory nor get_memory") from None
 
@@ -1632,14 +1738,15 @@ class DeerFlowClient:
         """Clear all persisted memory data."""
         from deerflow.agents.memory import get_memory_manager
 
-        return get_memory_manager().clear_memory(user_id=get_effective_user_id())
+        manager = get_memory_manager()
+        return manager.clear_memory(user_id=get_effective_user_id(), **self._memory_scope_kwargs(manager))
 
     def create_memory_fact(self, content: str, category: str = "context", confidence: float = 0.5) -> dict:
         """Create a single fact manually."""
         from deerflow.agents.memory import get_memory_manager
 
         manager = get_memory_manager()
-        memory_data, fact_id = manager.create_fact(content=content, category=category, confidence=confidence, user_id=get_effective_user_id())
+        memory_data, fact_id = manager.create_fact(content=content, category=category, confidence=confidence, user_id=get_effective_user_id(), **self._memory_scope_kwargs(manager))
         if fact_id is None:
             raise ValueError("Fact was not stored because the configured memory.max_facts capacity policy evicted it")
         return memory_data
@@ -1649,7 +1756,7 @@ class DeerFlowClient:
         from deerflow.agents.memory import get_memory_manager
 
         manager = get_memory_manager()
-        return manager.delete_fact(fact_id, user_id=get_effective_user_id())
+        return manager.delete_fact(fact_id, user_id=get_effective_user_id(), **self._memory_scope_kwargs(manager))
 
     def update_memory_fact(
         self,
@@ -1668,6 +1775,7 @@ class DeerFlowClient:
             category=category,
             confidence=confidence,
             user_id=get_effective_user_id(),
+            **self._memory_scope_kwargs(manager),
         )
 
     def get_memory_config(self) -> dict:
@@ -1729,6 +1837,7 @@ class DeerFlowClient:
         """
         validate_thread_id(thread_id)
         from deerflow.uploads.companions import invalidate_overwritten_upload, register_companion
+        from deerflow.utils.atomic_write import cleanup_failed_atomic_write
         from deerflow.utils.file_conversion import CONVERTIBLE_EXTENSIONS, convert_file_to_markdown
 
         # Validate all files upfront to avoid partial uploads.
@@ -1741,12 +1850,15 @@ class DeerFlowClient:
                 raise FileNotFoundError(f"File not found: {f}")
             if not p.is_file():
                 raise ValueError(f"Path is not a file: {f}")
-            dest_name = claim_unique_filename(normalize_filename(p.name), seen_names)
-            resolved_files.append((p, dest_name))
+            claim_seed = normalize_filename(p.name)
+            dest_name = claim_unique_filename(claim_seed, seen_names)
+            resolved_files.append((p, dest_name, claim_seed))
             if not has_convertible_file and p.suffix.lower() in CONVERTIBLE_EXTENSIONS:
                 has_convertible_file = True
 
         uploads_dir = ensure_uploads_dir(thread_id)
+        with os.scandir(uploads_dir) as entries:
+            existing_names = {entry.name for entry in entries if entry.is_file(follow_symlinks=False)}
         uploaded_files: list[dict] = []
         skipped_files: list[str] = []
 
@@ -1766,51 +1878,72 @@ class DeerFlowClient:
         def _convert_in_thread(path: Path, output_path: Path | None = None):
             return asyncio.run(convert_file_to_markdown(path, output_path=output_path))
 
+        conversion_sources = None
         try:
-            for src_path, dest_name in resolved_files:
+            for src_path, dest_name, claim_seed in resolved_files:
                 try:
-                    dest = copy_upload_file_no_symlink(uploads_dir, dest_name, src_path)
+                    conversion_source = None
+                    if src_path.suffix.lower() in CONVERTIBLE_EXTENSIONS:
+                        if conversion_sources is None:
+                            conversion_sources = tempfile.TemporaryDirectory(prefix="deerflow-upload-source-", ignore_cleanup_errors=True)
+                        conversion_source = Path(conversion_sources.name) / dest_name
+                    if dest_name in existing_names:
+                        if conversion_source is not None:
+                            dest = copy_upload_file_no_symlink(uploads_dir, dest_name, src_path, snapshot_path=conversion_source)
+                        else:
+                            dest = copy_upload_file_no_symlink(uploads_dir, dest_name, src_path)
+                    else:
+                        dest = publish_upload_copy(uploads_dir, dest_name, src_path, claim_seed=claim_seed, seen_names=seen_names, snapshot_path=conversion_source)
+                        dest_name = dest.name
                 except UnsafeUploadPathError:
+                    if conversion_source is not None:
+                        # Skipping one unsafe file must survive a failed discard,
+                        # or a locked temp turns the skip into a batch failure.
+                        cleanup_failed_atomic_write(conversion_source)
                     logger.warning("Skipping upload with unsafe destination: %s", dest_name)
                     skipped_files.append(dest_name)
                     continue
                 invalidate_overwritten_upload(dest)
+                # Same-name collisions land under the next free ``_N`` suffix;
+                # report the name the bytes actually landed under, never the
+                # requested one (issue #3750).
+                resolved_name = dest.name
 
                 info: dict[str, Any] = {
-                    "filename": dest_name,
+                    "filename": resolved_name,
                     "size": dest.stat().st_size,
                     "path": str(dest),
-                    "virtual_path": upload_virtual_path(dest_name),
-                    "artifact_url": upload_artifact_url(thread_id, dest_name),
+                    "virtual_path": upload_virtual_path(resolved_name),
+                    "artifact_url": upload_artifact_url(thread_id, resolved_name),
                 }
-                if dest_name != src_path.name:
+                if resolved_name != src_path.name:
                     info["original_filename"] = src_path.name
 
                 if src_path.suffix.lower() in CONVERTIBLE_EXTENSIONS:
                     # Reserve companion .md name before convert so two stems
                     # that collapse to the same .md (or a prior .md upload)
                     # cannot silently overwrite each other.
-                    provisional_md_name = Path(dest_name).with_suffix(".md").name
+                    provisional_md_name = Path(resolved_name).with_suffix(".md").name
                     unique_md_name = claim_unique_filename(provisional_md_name, seen_names)
                     try:
-                        # Convert the caller's own file, not the copy that just
-                        # landed in the sandbox-writable uploads dir: a sandbox
-                        # that swaps that name for a symlink would otherwise have
-                        # a host file converted into this thread's uploads. Write
-                        # the result outside uploads too, then publish it without
-                        # following a symlink at the companion name.
+                        # Convert the same private capture used to publish the
+                        # original. Neither an external source edit nor a sandbox
+                        # replacing the uploaded path can change these input bytes.
                         with tempfile.TemporaryDirectory() as md_dir:
                             md_output = Path(md_dir) / unique_md_name
                             if conversion_pool is not None:
-                                converted = conversion_pool.submit(_convert_in_thread, src_path, md_output).result()
+                                converted = conversion_pool.submit(_convert_in_thread, conversion_source, md_output).result()
                             else:
-                                converted = asyncio.run(convert_file_to_markdown(src_path, output_path=md_output))
+                                converted = asyncio.run(convert_file_to_markdown(conversion_source, output_path=md_output))
                             md_path = None
                             if converted is not None:
                                 # copy, not write_bytes: the companion keeps the
                                 # converter's permissions, so a sandbox running as
                                 # another uid can still read it.
-                                md_path = copy_upload_file_no_symlink(uploads_dir, unique_md_name, converted)
+                                # Existing Markdown may be user-authored or owned
+                                # by another document from an earlier upload call.
+                                md_path = publish_upload_copy(uploads_dir, unique_md_name, converted, claim_seed=provisional_md_name, seen_names=seen_names)
+                                unique_md_name = md_path.name
                     except UnsafeUploadPathError:
                         logger.warning("Skipping markdown companion with unsafe destination: %s", unique_md_name)
                         md_path = None
@@ -1834,10 +1967,18 @@ class DeerFlowClient:
                         # against a name this request never filled.
                         seen_names.discard(unique_md_name)
 
+                if conversion_source is not None:
+                    # The upload already succeeded; a capture we cannot discard
+                    # must not replace that result or drop the later files.
+                    cleanup_failed_atomic_write(conversion_source)
                 uploaded_files.append(info)
         finally:
             if conversion_pool is not None:
                 conversion_pool.shutdown(wait=True)
+            if conversion_sources is not None:
+                # ignore_cleanup_errors keeps a locked capture from turning a
+                # decided batch outcome into a cleanup error.
+                conversion_sources.cleanup()
 
         message = f"Successfully uploaded {len(uploaded_files)} file(s)"
         if skipped_files:

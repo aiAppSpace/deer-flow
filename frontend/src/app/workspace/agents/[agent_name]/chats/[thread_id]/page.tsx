@@ -3,10 +3,10 @@
 import { BotIcon, PlusSquare } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AgentWelcome } from "@/components/workspace/agent-welcome";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import { BrowserTrigger } from "@/components/workspace/browser-view";
@@ -24,11 +24,10 @@ import {
   type InputBoxHandle,
 } from "@/components/workspace/input-box";
 import { KnowledgeScopeSelector } from "@/components/workspace/knowledge-scope-selector";
-import {
-  MessageList,
-  MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
-} from "@/components/workspace/messages";
+import { MESSAGE_LIST_DEFAULT_PADDING_BOTTOM } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import { HumanInputCard } from "@/components/workspace/messages/human-input-card";
+import { SearchableMessageList as MessageList } from "@/components/workspace/search-message-window";
 import {
   SidecarProvider,
   SidecarTrigger,
@@ -36,12 +35,14 @@ import {
 import { ThreadArchiveStatus } from "@/components/workspace/thread-archive-status";
 import { ThreadBackgroundTasks } from "@/components/workspace/thread-background-tasks";
 import { ThreadExtensionActions } from "@/components/workspace/thread-extension-actions";
+import { ThreadRunInputs } from "@/components/workspace/thread-run-inputs";
 import { ThreadSubagentBatches } from "@/components/workspace/thread-subagent-batches";
 import { ThreadTitle } from "@/components/workspace/thread-title";
 import { TodoList } from "@/components/workspace/todo-list";
 import { TokenUsageIndicator } from "@/components/workspace/token-usage-indicator";
 import { Tooltip } from "@/components/workspace/tooltip";
 import { useActiveGoal } from "@/components/workspace/use-active-goal";
+import { WorkspaceSidebarTrigger } from "@/components/workspace/workspace-sidebar-trigger";
 import { useAgent } from "@/core/agents";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { hasPermission, PERMISSIONS } from "@/core/auth/permissions";
@@ -63,11 +64,15 @@ import {
   type HumanInputResponse,
 } from "@/core/messages/human-input";
 import { isHiddenFromUIMessage } from "@/core/messages/utils";
+import { modelTaskInput } from "@/core/models/control";
 import { useModels } from "@/core/models/hooks";
+import { useModelControl } from "@/core/models/use-model-control";
+import { notificationBody } from "@/core/notification/body";
 import { useNotification } from "@/core/notification/hooks";
 import { useThreadScheduledTaskEvents } from "@/core/scheduled-tasks/events";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
-import { resolveThreadContext } from "@/core/settings/store";
+import { resolveThreadContext, selectThreadModel } from "@/core/settings/store";
+import { createThread } from "@/core/threads/api";
 import {
   useThreadMetadata,
   useThreadStream,
@@ -82,7 +87,7 @@ import { env } from "@/env";
 import { cn } from "@/lib/utils";
 
 export default function AgentChatPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useAuth();
   const canStopStreaming = hasPermission(user, PERMISSIONS.RUNS_CANCEL);
   const canCreateRuns = hasPermission(user, PERMISSIONS.RUNS_CREATE);
@@ -118,8 +123,12 @@ export default function AgentChatPage() {
   // the thread. `isWelcomeMode` controls only the centered welcome layout, so
   // it can flip immediately on submit without triggering eager history loads.
   const [isWelcomeMode, setIsWelcomeMode] = useState(isNewThread);
-  const [tailRequest, setTailRequest] = useState(0);
   const [settings, setSettings] = useThreadSettings(threadId);
+  const modelControl = useModelControl(
+    `${user?.id ?? "anonymous"}:${agent_name}:${threadId}`,
+    locale,
+  );
+  const prepareModelControl = modelControl.prepare;
   const [localSettings, setLocalSettings] = useLocalSettings();
   const { enabled: browserControlEnabled } = useBrowserControlEnabled();
   const { scopeSelectionEnabled } = useKnowledgeBaseEnabled();
@@ -201,12 +210,21 @@ export default function AgentChatPage() {
     thread,
     pendingUsageMessages,
     sendMessage,
+    sendInput,
+    runInputs,
+    canSendInput,
+    activeRunId,
+    activeRunStartedAt,
     regenerateMessage,
     editAndRegenerateMessage,
     isUploading,
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    approvalRequests,
+    hasPendingApproval,
+    submitHitlApproval,
+    waitingForInputRunIds,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     displayThreadId: threadId,
@@ -215,7 +233,6 @@ export default function AgentChatPage() {
     isMock,
     onSend: () => {
       setIsWelcomeMode(false);
-      setTailRequest((request) => request + 1);
     },
     onStart: (createdThreadId) => {
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
@@ -232,20 +249,17 @@ export default function AgentChatPage() {
       // it is open: it has been read.
       markThreadRead();
       if (document.hidden || !document.hasFocus()) {
-        let body = "Conversation finished";
         const lastMessage = state.messages[state.messages.length - 1];
-        if (lastMessage) {
-          const textContent = textOfMessage(lastMessage);
-          if (textContent) {
-            body =
-              textContent.length > 200
-                ? textContent.substring(0, 200) + "..."
-                : textContent;
-          }
-        }
-        showNotification(state.title, { body });
+        showNotification(state.title, {
+          body: notificationBody(
+            lastMessage ? textOfMessage(lastMessage) : null,
+          ),
+        });
       }
     },
+    restInterrupts: threadMetadata.data?.interrupts,
+    restInterruptsLoading: threadMetadata.isLoading,
+    restInterruptsError: threadMetadata.isError,
   });
 
   const hasThreadMessages = thread.messages.length > 0;
@@ -276,8 +290,59 @@ export default function AgentChatPage() {
     threadMetadata.isLoading,
   ]);
 
+  const submissionEpochRef = useRef(0);
+  useEffect(
+    () => () => {
+      submissionEpochRef.current += 1;
+    },
+    [agent_name, threadId, user?.id],
+  );
+
   const handleSubmit = useCallback(
-    (message: PromptInputMessage, options?: InputBoxSubmitOptions) => {
+    async (message: PromptInputMessage, options?: InputBoxSubmitOptions) => {
+      const submissionEpoch = submissionEpochRef.current;
+      const choice = await prepareModelControl(message.text);
+      if (submissionEpochRef.current !== submissionEpoch)
+        throw new Error("thread-submission-stale");
+      const modelInput = modelTaskInput(message.text, choice);
+      const runContext: Record<string, unknown> = { agent_name };
+      if (
+        choice?.scope === "conversation" &&
+        !modelInput.text &&
+        message.files.length === 0 &&
+        isNewThread
+      ) {
+        await createThread(threadId);
+        if (submissionEpochRef.current !== submissionEpoch)
+          throw new Error("thread-submission-stale");
+      }
+      if (choice?.model_name) {
+        if (choice.scope === "task") {
+          if (settings.context.mode !== "ultra") {
+            toast.error(
+              locale.startsWith("zh")
+                ? "当前未启用子任务，请先启用 Ultra 模式。"
+                : "Subtasks are disabled. Enable Ultra mode first.",
+            );
+            throw new Error("subtasks-disabled");
+          }
+          runContext.subagent_model_name = choice.model_name;
+        } else {
+          runContext.model_name = choice.model_name;
+          runContext.model_selection_requested = choice.model_name;
+        }
+        if (choice.scope === "conversation")
+          try {
+            selectThreadModel(threadId, choice.model_name);
+          } catch (error) {
+            toast.error(
+              locale.startsWith("zh")
+                ? "无法在浏览器保存本对话的默认模型，请检查存储权限。"
+                : "Unable to save this conversation's default model. Check browser storage permissions.",
+            );
+            throw error;
+          }
+      }
       const scopedOptions = currentKnowledgeScopeSnapshot
         ? {
             ...options,
@@ -287,18 +352,81 @@ export default function AgentChatPage() {
             },
           }
         : options;
+      if (
+        choice?.scope === "turn" &&
+        !modelInput.text &&
+        message.files.length === 0
+      ) {
+        toast.info(
+          locale.startsWith("zh")
+            ? "请补充这次需要处理的任务。"
+            : "Please include the task to run with this model.",
+        );
+        throw new Error("model-task-missing");
+      }
+      if (
+        choice?.scope === "conversation" &&
+        !modelInput.text &&
+        message.files.length === 0
+      ) {
+        if (isNewThread) {
+          history.replaceState(
+            null,
+            "",
+            `/workspace/agents/${agent_name}/chats/${threadId}`,
+          );
+          setThreadId(threadId);
+          setIsNewThread(false);
+        }
+        options?.onSent?.();
+        toast.success(
+          locale.startsWith("zh")
+            ? "已设置本对话的默认模型。"
+            : "Conversation default model saved.",
+        );
+        return;
+      }
+      const executionOptions = {
+        ...scopedOptions,
+        onSent: () => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("message");
+          url.searchParams.delete("message_seq");
+          history.replaceState(
+            null,
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+          );
+          scopedOptions?.onSent?.();
+        },
+        additionalKwargs: {
+          ...scopedOptions?.additionalKwargs,
+          ...modelInput.additionalKwargs,
+        },
+      };
       const sendPromise = sendMessage(
         threadId,
-        message,
-        { agent_name },
-        scopedOptions,
+        { ...message, text: modelInput.text },
+        runContext,
+        executionOptions,
       );
       if (message.files.length > 0) {
         return sendPromise;
       }
       void sendPromise;
     },
-    [currentKnowledgeScopeSnapshot, sendMessage, threadId, agent_name],
+    [
+      currentKnowledgeScopeSnapshot,
+      sendMessage,
+      threadId,
+      agent_name,
+      prepareModelControl,
+      settings.context.mode,
+      locale,
+      isNewThread,
+      setThreadId,
+      setIsNewThread,
+    ],
   );
 
   const handleSubmitHumanInput = useCallback(
@@ -327,6 +455,13 @@ export default function AgentChatPage() {
       return sent;
     },
     [agent_name, currentKnowledgeScopeSnapshot, sendMessage, threadId],
+  );
+  const handleSubmitApproval = useCallback(
+    (
+      request: (typeof approvalRequests)[number],
+      responses: Parameters<typeof submitHitlApproval>[2],
+    ) => submitHitlApproval(threadId, request, responses),
+    [submitHitlApproval, threadId],
   );
 
   const handleStop = useCallback(async () => {
@@ -359,9 +494,11 @@ export default function AgentChatPage() {
     (agent.tool_groups == null || agent.tool_groups.includes("browser"));
   const browserEnabled =
     !isNewThread && !isMock && browserControlEnabled && agentBrowserEnabled;
-  const { activeGoal, hasGoal, setLocalGoal } = useActiveGoal(
+  const { activeGoal, hasGoal, goalOutcome, setLocalGoal } = useActiveGoal(
     threadId,
     thread.values.goal,
+    thread.values.goal_outcome,
+    thread.messages,
   );
   const hasOpenHumanInputCard = useMemo(
     () =>
@@ -371,6 +508,15 @@ export default function AgentChatPage() {
       ),
     [thread.messages],
   );
+  // A goal blocks edit-and-rerun server-side; show the pencil locked.
+  const editBase =
+    !isNewThread &&
+    !isMock &&
+    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
+    !isUploading &&
+    !thread.isLoading &&
+    !hasOpenHumanInputCard &&
+    !hasPendingApproval;
 
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>
@@ -391,7 +537,7 @@ export default function AgentChatPage() {
                     : "bg-background/80 z-30 shadow-xs backdrop-blur",
                 )}
               >
-                <SidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
+                <WorkspaceSidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
                 {/* Agent badge */}
                 <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-md border px-2 py-1">
                   <BotIcon className="text-primary h-3.5 w-3.5" />
@@ -477,6 +623,8 @@ export default function AgentChatPage() {
                 )}
               >
                 <MessageList
+                  activeRunId={activeRunId}
+                  activeRunStartedAt={activeRunStartedAt}
                   archiveDownloadsEnabled={
                     isNewThread || isMock || threadMetadata.data != null
                   }
@@ -485,7 +633,6 @@ export default function AgentChatPage() {
                     !isWelcomeMode && "pt-10 @max-3xl/chat-pane:pt-0",
                   )}
                   testId="main-message-list"
-                  tailRequest={tailRequest}
                   threadId={threadId}
                   thread={thread}
                   scheduledTaskEvents={scheduledTaskEvents.data}
@@ -495,23 +642,29 @@ export default function AgentChatPage() {
                   loadMoreHistory={loadMoreHistory}
                   isHistoryLoading={isHistoryLoading}
                   tokenUsageInlineMode={tokenUsageInlineMode}
+                  approvalRequests={approvalRequests}
+                  approvalMetadataLoading={
+                    hasPendingApproval && approvalRequests.length === 0
+                  }
+                  approvalMetadataError={
+                    hasPendingApproval &&
+                    approvalRequests.length === 0 &&
+                    threadMetadata.isError
+                  }
+                  onReloadApprovalMetadata={() => threadMetadata.refetch()}
+                  waitingForInputRunIds={waitingForInputRunIds}
+                  onSubmitApproval={handleSubmitApproval}
                   canRegenerate={
                     !isNewThread &&
                     !isMock &&
                     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
                     !isUploading &&
-                    !thread.isLoading
+                    !thread.isLoading &&
+                    !hasPendingApproval
                   }
                   onRegenerateMessage={handleRegenerate}
-                  canEdit={
-                    !isNewThread &&
-                    !isMock &&
-                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
-                    !isUploading &&
-                    !thread.isLoading &&
-                    !hasGoal &&
-                    !hasOpenHumanInputCard
-                  }
+                  canEdit={editBase && !hasGoal}
+                  editLockedByGoal={editBase && hasGoal}
                   onEditAndRegenerateMessage={handleEditAndRegenerate}
                   onSubmitHumanInput={
                     isMock || env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
@@ -539,7 +692,7 @@ export default function AgentChatPage() {
                       : "max-w-(--container-width-md)",
                   )}
                 >
-                  {(hasGoal || hasTodos) && (
+                  {(hasGoal || goalOutcome !== null || hasTodos) && (
                     <div
                       className={cn(
                         "right-0 left-0 z-0",
@@ -552,7 +705,18 @@ export default function AgentChatPage() {
                           isWelcomeMode ? "absolute" : "relative",
                         )}
                       >
-                        {activeGoal && <GoalStatus goal={activeGoal} />}
+                        <GoalStatus
+                          goal={activeGoal}
+                          outcome={goalOutcome}
+                          isRunning={thread.isLoading}
+                          hasOpenHumanInputCard={hasOpenHumanInputCard}
+                          hasPendingApproval={hasPendingApproval}
+                          approvalMetadataError={
+                            hasPendingApproval &&
+                            approvalRequests.length === 0 &&
+                            threadMetadata.isError
+                          }
+                        />
                         {hasTodos && (
                           <TodoList
                             className="bg-background/5"
@@ -564,6 +728,21 @@ export default function AgentChatPage() {
                     </div>
                   )}
 
+                  {modelControl.request && (
+                    <div className="mb-3" data-testid="model-selection-card">
+                      <HumanInputCard
+                        request={modelControl.request}
+                        onSubmit={(response) => modelControl.choose(response)}
+                      />
+                    </div>
+                  )}
+                  <ThreadRunInputs
+                    inputs={runInputs}
+                    threadId={isNewThread || isMock ? undefined : threadId}
+                    isRunning={thread.isLoading}
+                    canCreate={canCreateRuns}
+                    canCancel={canStopStreaming}
+                  />
                   <InputBox
                     ref={composer}
                     className={cn(
@@ -588,7 +767,11 @@ export default function AgentChatPage() {
                       selectorVisible && knowledgeScope ? (
                         <KnowledgeScopeSelector
                           agentName={agent_name}
-                          disabled={thread.isLoading || isUploading}
+                          disabled={
+                            thread.isLoading ||
+                            isUploading ||
+                            hasPendingApproval
+                          }
                           selection={knowledgeScope}
                           unavailableReason={
                             agentKnowledgeEnabled
@@ -618,9 +801,12 @@ export default function AgentChatPage() {
                     disabled={
                       env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
                       isUploading ||
+                      modelControl.busy ||
                       (selectorVisible && agent === null) ||
-                      (!isNewThread && isHistoryLoading)
+                      (!isNewThread && isHistoryLoading) ||
+                      hasPendingApproval
                     }
+                    inputLocked={hasPendingApproval}
                     onContextChange={(context, options) => {
                       if (options?.automatic)
                         resolveThreadContext(threadId, context);
@@ -628,6 +814,7 @@ export default function AgentChatPage() {
                     }}
                     onGoalChange={setLocalGoal}
                     onSubmit={handleSubmit}
+                    onBusySubmit={canSendInput ? sendInput : undefined}
                     onStop={handleStop}
                     canStopStreaming={canStopStreaming}
                     canCreateRuns={canCreateRuns}

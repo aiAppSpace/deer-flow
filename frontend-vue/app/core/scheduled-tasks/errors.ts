@@ -15,6 +15,7 @@ export const SCHEDULED_TASK_ERROR_KEYS: Readonly<
   Record<string, ApiErrorKey | null>
 > = {
   invalid_request: "invalidRequest",
+  invalid_notification_group: "invalidNotificationGroup",
   invalid_schedule: "invalidSchedule",
   invalid_schedule_type: "invalidScheduleType",
   invalid_timezone: "invalidTimezone",

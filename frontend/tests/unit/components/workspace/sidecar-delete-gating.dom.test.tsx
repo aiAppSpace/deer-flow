@@ -53,6 +53,14 @@ rs.mock("@/core/threads/hooks", () => {
   return {
     useThreadStream: () => stream,
     useDeleteThread: () => deletion,
+    // SidecarPanel reads metadata for the live sidecar thread title; this
+    // suite only cares about delete-button permission gating.
+    useThreadMetadata: () => ({
+      data: { values: { title: "Sidecar" } },
+      isLoading: false,
+      isFetching: false,
+      error: null,
+    }),
   };
 });
 

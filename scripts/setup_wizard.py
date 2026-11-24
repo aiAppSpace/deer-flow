@@ -7,6 +7,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -19,12 +20,13 @@ def _is_interactive() -> bool:
 
 
 def main() -> int:
+    # Unsupported status symbols must not abort setup after writing config.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")
+
     try:
         if not _is_interactive():
-            print(
-                "Non-interactive environment detected.\n"
-                "Please edit config.yaml and .env directly, or run 'make setup' in a terminal."
-            )
+            print("Non-interactive environment detected.\nPlease edit config.yaml and .env directly, or run 'make setup' in a terminal.")
             return 1
 
         from wizard.ui import (
@@ -98,7 +100,6 @@ def main() -> int:
             web_fetch_tool_name=fetch_provider.tool_name if fetch_provider else "web_fetch",
             web_fetch_extra_config=fetch_provider.extra_config if fetch_provider else None,
             sandbox_use=execution.sandbox_use,
-            allow_host_bash=execution.allow_host_bash,
             include_bash_tool=execution.include_bash_tool,
             include_write_tools=execution.include_write_tools,
             channel_connection_providers=channels.enabled_providers,
@@ -109,6 +110,7 @@ def main() -> int:
             env_example = project_root / ".env.example"
             if env_example.exists():
                 import shutil
+
                 shutil.copyfile(env_example, env_path)
 
         env_pairs: dict[str, str] = {}
@@ -127,6 +129,7 @@ def main() -> int:
         frontend_env_example = project_root / "frontend" / ".env.example"
         if not frontend_env.exists() and frontend_env_example.exists():
             import shutil
+
             shutil.copyfile(frontend_env_example, frontend_env)
             print_success("frontend/.env created from example")
 
@@ -143,10 +146,7 @@ def main() -> int:
         sandbox_label = "Local sandbox" if execution.sandbox_use.endswith("LocalSandboxProvider") else "Container sandbox"
         print(f"  {green('✓')} Execution:  {sandbox_label}")
         if execution.include_bash_tool:
-            bash_label = "enabled"
-            if execution.allow_host_bash:
-                bash_label += " (host bash)"
-            print(f"  {green('✓')} Bash:       {bash_label}")
+            print(f"  {green('✓')} Bash:       enabled")
         else:
             print(f"  {'—':>3} Bash:       disabled")
         if execution.include_write_tools:
@@ -171,4 +171,17 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Parsed here rather than inside main(): the wizard tests call main()
+    # in-process, whose argv must not reach argparse. It also keeps --help from
+    # entering the prompts, which on an existing config.yaml leads to the
+    # "reconfigure?" question and rewrites the operator's configuration.
+    parser = argparse.ArgumentParser(
+        prog="python scripts/setup_wizard.py",
+        description=(
+            "DeerFlow interactive setup wizard (make setup): prompts for the LLM "
+            "provider, web search/fetch and sandbox settings, then writes "
+            "config.yaml and .env. Takes no arguments."
+        ),
+    )
+    parser.parse_args()
     sys.exit(main())

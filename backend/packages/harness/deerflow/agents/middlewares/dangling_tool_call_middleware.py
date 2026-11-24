@@ -39,6 +39,28 @@ _UNKNOWN_TOOL_NAME = "unknown_tool"
 _EMPTY_TOOL_NAME_ERROR = "Tool call could not be executed because its name was missing or empty."
 _SYNTHETIC_TOOL_CALL_ID_PREFIX = "deerflow_synthetic_tool_call_"
 
+# Middleware producers spell an absent provider ID differently: "" is the canonical
+# spelling, but ``str(tool_call.get("id", ""))`` yields "None" once the key is present
+# with a null value, and the artifact/deferred/knowledge middlewares fall back to
+# "missing_tool_call_id". They all answer the same call, so pairing treats them alike.
+_ABSENT_TOOL_CALL_ID_SPELLINGS = frozenset({"None", "missing_tool_call_id"})
+
+
+def _canonical_tool_call_id(tool_call_id: object) -> object:
+    """Return one value for every spelling middleware uses for "this call had no ID"."""
+    return "" if _absent_tool_call_id(tool_call_id) else tool_call_id
+
+
+def _absent_tool_call_id(tool_call_id: object) -> bool:
+    """Whether an ID is missing in any spelling: null, blank, or a producer sentinel."""
+    if not _valid_tool_call_id(tool_call_id):
+        return True
+    return isinstance(tool_call_id, str) and tool_call_id in _ABSENT_TOOL_CALL_ID_SPELLINGS
+
+
+def _same_tool_call_id(left: object, right: object) -> bool:
+    return _canonical_tool_call_id(left) == _canonical_tool_call_id(right)
+
 
 def _valid_tool_name(name: object) -> bool:
     return isinstance(name, str) and bool(name.strip())
@@ -93,12 +115,12 @@ def _relabel_tool_call_ids(tool_calls: list, msg_index: int, source: str) -> tup
 
 
 def _turn_malformed_result_count(messages: list, start: int) -> int:
-    """Count the malformed results issued by the turn opened at ``start``."""
+    """Count the unpaired results issued by the turn opened at ``start``."""
     count = 0
     for msg in messages[start + 1 :]:
         if getattr(msg, "type", None) == "ai":
             break
-        if isinstance(msg, ToolMessage) and not _valid_tool_call_id(msg.tool_call_id):
+        if isinstance(msg, ToolMessage) and _absent_tool_call_id(msg.tool_call_id):
             count += 1
     return count
 
@@ -123,7 +145,7 @@ def _claim_synthetic_id(open_calls: list[dict], result: ToolMessage, positional:
     Returning ``None`` leaves the result malformed for the orphan pass to drop, which is
     what an unattributable result gets today — better than inventing a pairing.
     """
-    candidates = [position for position, entry in enumerate(open_calls) if entry["original"] == result.tool_call_id and _names_can_pair(entry["name"], result.name)]
+    candidates = [position for position, entry in enumerate(open_calls) if _same_tool_call_id(entry["original"], result.tool_call_id) and _names_can_pair(entry["name"], result.name)]
     if not candidates or (len(candidates) > 1 and not positional):
         return None
     return open_calls.pop(candidates[0])["synthetic"]
@@ -143,7 +165,7 @@ def _parse_json_object(value: object) -> dict | None:
         return None
     try:
         parsed = json.loads(value)
-    except ValueError:
+    except (ValueError, RecursionError):
         return None
     return parsed if isinstance(parsed, dict) else None
 
@@ -153,7 +175,7 @@ def _normalize_tool_arguments(arguments: object) -> str:
     if isinstance(arguments, dict):
         try:
             return json.dumps(arguments, ensure_ascii=False, allow_nan=False)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, RecursionError):
             return "{}"
     return arguments if _parse_json_object(arguments) is not None else "{}"
 
@@ -250,19 +272,19 @@ class DanglingToolCallMiddleware(AgentMiddleware[AgentState]):
             name = tool_call.get("name")
             error = tool_call.get("error")
             error_text = error[:_MAX_RECOVERY_ERROR_DETAIL_LEN] if isinstance(error, str) and error else ""
-            # Workaround for issue #2894: malformed file-writing calls can carry huge Markdown
+            # Workaround for issue #2894: malformed write_file calls can carry huge Markdown
             # payloads in invalid tool-call args. Keep recovery guidance actionable without
             # echoing large or malformed content back to the model.
-            if name in {"write_file", "append_artifact_chunk"}:
+            if name == "write_file":
                 details = f" Parser error: {error_text}" if error_text else ""
                 return (
-                    f"[{name} failed before execution: the tool-call arguments were not valid JSON, "
+                    "[write_file failed before execution: the tool-call arguments were not valid JSON, "
                     "so no file was written. This often happens when the model tries to write a very "
-                    "large file chunk in a single tool call, especially when `content` contains "
+                    "large Markdown file in a single tool call, especially when `content` contains "
                     "unescaped quotes, inline JSON, backslashes, or code fences. Do not retry the same "
-                    "large payload for this artifact. If a file write is still needed, start or restart "
-                    "with begin_artifact_write, send smaller ordered append_artifact_chunk calls, then "
-                    f"finish with finalize_artifact_write.{details}]"
+                    "large `write_file` payload for this artifact; provide the report/content directly "
+                    "as normal assistant text in your next response. If a file write is still needed "
+                    f"later, split the file into smaller sections instead of one large payload.{details}]"
                 )
             if error_text:
                 return f"[Tool call could not be executed because its arguments were invalid: {error_text}]"
@@ -415,8 +437,9 @@ class DanglingToolCallMiddleware(AgentMiddleware[AgentState]):
                 continue
 
             # Re-point an already-paired result at its call's new id so the pairing
-            # below keeps it instead of dropping it as an orphan.
-            if not isinstance(msg, ToolMessage) or _valid_tool_call_id(msg.tool_call_id):
+            # below keeps it instead of dropping it as an orphan. Results carrying a
+            # producer sentinel are still unpaired — the sentinel is not the call's id.
+            if not isinstance(msg, ToolMessage) or not _absent_tool_call_id(msg.tool_call_id):
                 continue
             synthetic = _claim_synthetic_id(open_calls, msg, positional)
             if synthetic is not None:

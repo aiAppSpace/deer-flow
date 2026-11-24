@@ -33,14 +33,6 @@ set -e
 REPO_ROOT="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd -P)"
 cd "$REPO_ROOT"
 
-# ── Load .env ────────────────────────────────────────────────────────────────
-
-if [ -f "$REPO_ROOT/.env" ]; then
-    set -a
-    source "$REPO_ROOT/.env"
-    set +a
-fi
-
 _pick_python() {
     local candidate
     for candidate in python3 python py; do
@@ -59,6 +51,23 @@ _pick_python() {
     done
     return 1
 }
+
+# ── Load .env ────────────────────────────────────────────────────────────────
+
+# .env is data, not a script: sourcing it turned `$$` into this shell's PID, ran
+# backticks and `$(...)`, and ran the second word of an unquoted value with a
+# space as a command. dotenv_exports.py parses it like python-dotenv, keeping the
+# launcher's `$NAME` / `${NAME:-default}` / leading `~` expansion and its
+# precedence over inherited variables, and prints shell-quoted exports.
+if [ -f "$REPO_ROOT/.env" ]; then
+    if ! DOTENV_PYTHON="$(_pick_python)"; then
+        echo "✗ Python 3 is required to read .env." >&2
+        exit 1
+    fi
+    DOTENV_EXPORTS="$("$DOTENV_PYTHON" "$REPO_ROOT/scripts/dotenv_exports.py" "$REPO_ROOT/.env")" || exit 1
+    eval "$DOTENV_EXPORTS"
+    unset DOTENV_PYTHON DOTENV_EXPORTS
+fi
 
 # ── Argument parsing ─────────────────────────────────────────────────────────
 
@@ -274,6 +283,9 @@ stop_all() {
     _kill_repo_processes "nuxt dev"
     _kill_repo_processes "nuxt preview"
     _kill_repo_processes "frontend-vue/.output/server/index.mjs"
+    # -s quit finds the master through the config's pid directive. A BIND_HOST
+    # copy rendered by nginx-local-conf.sh keeps the same one, and the tracked
+    # config also works for --stop, which skips rendering.
     nginx -c "$REPO_ROOT/docker/nginx/nginx.local.conf" -p "$REPO_ROOT" -s quit 2>/dev/null || true
     sleep 1
     _kill_repo_nginx
@@ -297,6 +309,18 @@ if [ "$ACTION" != "stop" ] && ! $DEV_MODE && $SKIP_FRONTEND_BUILD; then
         echo "  Run 'make start' once (full build), or: cd frontend && pnpm run build"
         exit 1
     fi
+fi
+
+# Resolve the nginx config before any stop_all too: an invalid BIND_HOST must
+# not tear down a running stack. Gateway and frontend always bind loopback;
+# nginx is the only entry point, as in the Docker stack.
+if [ "$ACTION" != "stop" ]; then
+    GATEWAY_STARTUP_TIMEOUT="${DEER_FLOW_GATEWAY_STARTUP_TIMEOUT-30}"
+    if [[ ! "$GATEWAY_STARTUP_TIMEOUT" =~ ^[0-9]+$ ]] || ! [ "$GATEWAY_STARTUP_TIMEOUT" -gt 0 ] 2>/dev/null; then
+        echo "✗ DEER_FLOW_GATEWAY_STARTUP_TIMEOUT must be a positive integer (seconds)." >&2
+        exit 1
+    fi
+    NGINX_CONF="$(bash "$REPO_ROOT/scripts/nginx-local-conf.sh")" || exit 1
 fi
 
 # ── Action routing ───────────────────────────────────────────────────────────
@@ -336,7 +360,7 @@ export DEERFLOW_PNPM_PYTHON DEERFLOW_PNPM_RUNNER
 # Frontend commands. The default deliberately remains React.
 if $DEV_MODE; then
     # Pin the host port explicitly; root PORT belongs to Docker ingress, not Next.js.
-    REACT_FRONTEND_CMD='env PORT=3200 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev'
+    REACT_FRONTEND_CMD='env PORT=3200 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev --hostname 127.0.0.1'
     VUE_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt dev --port 3100'
     if $SKIP_FRONTEND_BUILD; then
         echo "  Note: --skip-frontend-build is ignored in dev mode (neither next dev nor nuxt dev builds)."
@@ -344,10 +368,10 @@ if $DEV_MODE; then
 elif $SKIP_FRONTEND_BUILD; then
     # 复用已有构建。React 侧的 .next/BUILD_ID 前置检查在上面；
     # Vue 侧同理跳过 `nuxt build`，直接 preview 现成的 .output。
-    REACT_FRONTEND_CMD="env PORT=3200 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start"
+    REACT_FRONTEND_CMD="env PORT=3200 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run start --hostname 127.0.0.1"
     VUE_FRONTEND_CMD='PORT=3100 HOST=127.0.0.1 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt preview'
 else
-    REACT_FRONTEND_CMD="env PORT=3200 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview"
+    REACT_FRONTEND_CMD="env PORT=3200 BETTER_AUTH_SECRET=$($DEERFLOW_PNPM_PYTHON -c 'import secrets; print(secrets.token_hex(16))') \"\$DEERFLOW_PNPM_PYTHON\" \"\$DEERFLOW_PNPM_RUNNER\" run preview --hostname 127.0.0.1"
     VUE_FRONTEND_CMD='"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt build && PORT=3100 HOST=127.0.0.1 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt preview'
 fi
 
@@ -391,6 +415,7 @@ fi
 
 if ! { \
         [ -n "$DEER_FLOW_CONFIG_PATH" ] && [ -f "$DEER_FLOW_CONFIG_PATH" ] || \
+        [ -f "$DEER_FLOW_PROJECT_ROOT/config.yaml" ] || \
         [ -f backend/config.yaml ] || \
         [ -f config.yaml ]; \
     }; then
@@ -507,6 +532,10 @@ run_service() {
         local logfile="logs/$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr ' ' '-').log"
         echo "✗ $name failed to start."
         [ -f "$logfile" ] && tail -20 "$logfile"
+        if [ "$name" = "Gateway" ]; then
+            echo "  Check logs/gateway.log for startup errors. If Gateway is still initializing,"
+            echo "  increase DEER_FLOW_GATEWAY_STARTUP_TIMEOUT (seconds; current: $GATEWAY_STARTUP_TIMEOUT)."
+        fi
         cleanup 1
     }
     echo "✓ $name started on localhost:$port"
@@ -519,8 +548,8 @@ mkdir -p temp/client_body_temp temp/proxy_temp temp/fastcgi_temp temp/uwsgi_temp
 
 # 1. Gateway API
 run_service "Gateway" \
-    "cd backend && PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001 $GATEWAY_EXTRA_FLAGS > ../logs/gateway.log 2>&1" \
-    8001 30
+    "cd backend && PYTHONPATH=. uv run --no-sync uvicorn app.gateway.app:app --host 127.0.0.1 --port 8001 $GATEWAY_EXTRA_FLAGS > ../logs/gateway.log 2>&1" \
+    8001 "$GATEWAY_STARTUP_TIMEOUT"
 
 # 2. Explicit frontend selection.
 # 超时 120 → 300 是上游 #4899：冷启动的 next build 在慢机器上会超过两分钟。
@@ -540,7 +569,7 @@ fi
 # both framework dev ports directly and must not pretend to provide dual ingress.
 if [ "$FRONTEND_MODE" = "react" ]; then
     run_service "Nginx" \
-        "nginx -g 'daemon off;' -c '$REPO_ROOT/docker/nginx/nginx.local.conf' -p '$REPO_ROOT' > logs/nginx.log 2>&1" \
+        "nginx -g 'daemon off;' -c '$NGINX_CONF' -p '$REPO_ROOT' > logs/nginx.log 2>&1" \
         2026 10
 fi
 
@@ -557,6 +586,10 @@ elif [ "$FRONTEND_MODE" = "dual" ]; then
     echo "  🌐 React http://localhost:3200 · Vue http://localhost:3100"
 else
     echo "  🌐 http://localhost:2026"
+    if [ "${BIND_HOST:-127.0.0.1}" != "127.0.0.1" ]; then
+        echo "  ⚠ Nginx also accepts connections on BIND_HOST=$BIND_HOST."
+        echo "    Complete first-run setup at /setup before other machines can reach it."
+    fi
 fi
 echo ""
 if [ "$FRONTEND_MODE" = "react" ]; then

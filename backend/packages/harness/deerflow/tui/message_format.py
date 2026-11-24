@@ -15,9 +15,6 @@ from typing import Any
 _TOOL_TITLES: dict[str, str] = {
     "read_file": "Read",
     "write_file": "Write",
-    "begin_artifact_write": "Begin Artifact",
-    "append_artifact_chunk": "Append Artifact",
-    "finalize_artifact_write": "Finalize Artifact",
     "edit_file": "Edit",
     "str_replace": "Edit",
     "bash": "Bash",
@@ -36,9 +33,6 @@ _TOOL_TITLES: dict[str, str] = {
 _DETAIL_KEYS: dict[str, tuple[str, ...]] = {
     "read_file": ("path", "file_path", "filename"),
     "write_file": ("path", "file_path", "filename"),
-    "begin_artifact_write": ("path", "file_path", "filename"),
-    "append_artifact_chunk": ("path", "file_path", "filename"),
-    "finalize_artifact_write": ("path", "file_path", "filename"),
     "edit_file": ("path", "file_path", "filename"),
     "bash": ("command", "cmd"),
     "shell": ("command", "cmd"),

@@ -36,15 +36,11 @@ If parallelism is needed, use bash background processes or handle steps sequenti
 <file_editing_workflow>
 When revising an existing file, prefer `str_replace` over `write_file` —
 it sends only the diff and avoids re-emitting the whole file (mirrors
-Claude Code's Edit and Codex's apply_patch). For long generated artifacts,
-do not use `write_file` append loops. Use `begin_artifact_write`, then
-ordered `append_artifact_chunk` calls, then `finalize_artifact_write`.
-Present or report the artifact only after finalization succeeds. This keeps
-each model-emitted tool payload small and avoids mid-stream chunk-gap
-timeouts on oversized single-shot writes.
-For HTML artifacts, create or download every local image, stylesheet, script,
-font, and CSS `url(...)` resource before finalization, or use externally
-reachable URLs.
+Claude Code's Edit and Codex's apply_patch). When writing long new
+content from scratch, split it into sections: the first `write_file`
+call creates the file, then use `write_file` with append=True to extend
+it section by section. This keeps each tool call small and avoids
+mid-stream chunk-gap timeouts on oversized single-shot writes.
 (See issue #3189.)
 </file_editing_workflow>
 

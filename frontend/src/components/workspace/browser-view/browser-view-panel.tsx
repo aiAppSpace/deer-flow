@@ -59,18 +59,8 @@ export function BrowserViewPanel({
     },
     [],
   );
-  // The stream gives up after a fixed reconnect budget. Drop out of live mode
-  // when it does, so the toggle stops claiming "…" and one click re-arms it.
-  const handleReconnectExhausted = useCallback(() => {
-    setLive(false);
-  }, []);
-  const { status, frameUrl, liveUrl, sendInput } = useBrowserStream(
-    threadId,
-    live,
-    streamSeedUrl,
-    handleNavRejected,
-    handleReconnectExhausted,
-  );
+  const { status, closedReason, frameUrl, liveUrl, sendInput } =
+    useBrowserStream(threadId, live, streamSeedUrl, handleNavRejected);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<HTMLImageElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -248,6 +238,12 @@ export function BrowserViewPanel({
     }
   };
 
+  const liveFailureMessage =
+    live && closedReason
+      ? closedReason === "handshake_timeout"
+        ? t.browserStream.handshakeTimeout
+        : t.browserStream.connectionFailed
+      : null;
   const liveActive = live && status === "open";
   const liveConnecting = live && status === "connecting";
   const displayUrl = live
@@ -337,6 +333,8 @@ export function BrowserViewPanel({
           key: event.key,
           metaKey: event.metaKey,
           ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
         });
         if (!input) {
           return;
@@ -443,7 +441,11 @@ export function BrowserViewPanel({
           title={live ? t.browser.stopLiveControl : t.browser.takeLiveControl}
         >
           <RadioIcon className="size-3.5" />
-          {live && status !== "open" ? "…" : t.browser.live}
+          {live && status !== "open"
+            ? status === "closed"
+              ? t.browserStream.disconnected
+              : t.browserStream.connecting
+            : t.browser.live}
         </Button>
         {/* The close button had no accessible name at all: XIcon is
             aria-hidden and there was neither an aria-label nor a title, so a
@@ -462,6 +464,14 @@ export function BrowserViewPanel({
         </Button>
       </header>
       <main className="relative flex min-h-0 grow flex-col overflow-hidden bg-neutral-950">
+        {liveFailureMessage && (
+          <p
+            role="status"
+            className="bg-background shrink-0 border-b px-3 py-2 text-xs"
+          >
+            {liveFailureMessage}
+          </p>
+        )}
         <div
           ref={stageRef}
           className="relative min-h-0 grow bg-neutral-900"
@@ -482,11 +492,19 @@ export function BrowserViewPanel({
             <ConversationEmptyState
               className="absolute inset-0 m-auto h-fit"
               icon={<MonitorIcon />}
-              title={live ? t.browser.connectingFrame : t.browser.noFrame}
+              title={
+                liveFailureMessage
+                  ? t.browserStream.disconnected
+                  : live
+                    ? t.browser.connectingFrame
+                    : t.browser.noFrame
+              }
               description={
-                live
-                  ? t.browser.connectingFrameDescription
-                  : t.browser.noFrameDescription
+                liveFailureMessage
+                  ? ""
+                  : live
+                    ? t.browser.connectingFrameDescription
+                    : t.browser.noFrameDescription
               }
             />
           )}

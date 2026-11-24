@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import tempfile
 from collections.abc import AsyncGenerator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
@@ -28,8 +29,11 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from fastapi import FastAPI, HTTPException, Request
 from langgraph.types import Checkpointer
 
+from app.gateway.auth.errors import AuthErrorCode
 from deerflow.community.browser_automation.session import browser_multi_worker_error
 from deerflow.config.app_config import AppConfig, get_app_config
+from deerflow.config.channel_leader_lease_config import CHANNEL_LEADER_LEASE_FIELD, ChannelLeaderLeaseConfig, ChannelLeaderLeaseConfigError, channel_leader_lease_from_app_config
+from deerflow.config.credentials_key import CREDENTIALS_KEY_ENV_VAR, CREDENTIALS_KEY_FILENAME, GENERATE_KEY_COMMAND, CredentialsKeyError, parse_credentials_keys
 from deerflow.config.deployment_config import multi_instance_declaration
 from deerflow.persistence.feedback import FeedbackRepository
 from deerflow.runtime import ORPHAN_RECOVERY_STOP_REASON, STARTUP_ORPHAN_RECOVERY_ERROR, RunContext, RunManager, StreamBridge
@@ -48,6 +52,30 @@ logger = logging.getLogger(__name__)
 # them together if their sum must stay within the server's graceful-shutdown
 # timeout.
 _RUN_DRAIN_TIMEOUT_SECONDS = 5.0
+
+# Upper bound (seconds) a delegated-restore call may wait for the AgentRuns
+# host to be installed during Gateway startup. Startup normally signals within
+# its first seconds; the bound only fails a stuck startup instead of leaving
+# unattended recovery hanging, and per-record failures keep manual recovery.
+_EXTENSION_RESTORE_READY_TIMEOUT_SECONDS = 60.0
+
+
+async def _agent_runs_host_after_install(app, installed: asyncio.Event):
+    """Resolve the AgentRuns host once startup has installed it.
+
+    Extension services start before the run-admission stack (thread store, run
+    manager, AgentRuns host) exists, and unattended restoration can run during
+    that window, so wait for the explicit installation signal instead of
+    failing the whole recovery scan.
+    """
+    try:
+        await asyncio.wait_for(installed.wait(), _EXTENSION_RESTORE_READY_TIMEOUT_SECONDS)
+    except TimeoutError:
+        pass
+    host = getattr(app.state, "agent_runs_host", None)
+    if host is None:
+        raise RuntimeError("Agent run host unavailable")
+    return host
 
 
 def _browser_tools_enabled_in_config(config: AppConfig) -> bool:
@@ -158,6 +186,17 @@ def _enforce_postgres_for_multi_worker(config: AppConfig) -> None:
     7. ``sandbox.ownership.type`` must not be an explicit ``memory``: an
        in-process ownership store cannot see peers, so reconciliation would
        adopt and idle-destroy another instance's live containers (#4206).
+    8. ``channels.leader_lease.enabled`` must not be ``false`` while an IM
+       channel other than GitHub is enabled: every instance would open the
+       platform connection with the same bot credentials (Telegram rejects
+       the second poller with 409, Discord answers every message twice).
+       ``auto`` (the default) and ``true`` hand each provider's connection to
+       the one instance holding its ``channel_leases`` row.
+
+    On a single instance only one lease rule applies: an explicit
+    ``channels.leader_lease.enabled: true`` needs a SQL database for its lease
+    table, so ``database.backend: memory`` is refused while a channel the lease
+    arbitrates is enabled.
 
     This gate runs once at startup before any persistence engine is
     initialised so the error message is clear and the process exits
@@ -178,8 +217,20 @@ def _enforce_postgres_for_multi_worker(config: AppConfig) -> None:
     if multi_instance_requested and (run_ownership is None or not run_ownership.heartbeat_enabled):
         raise SystemExit("scheduler.multi_instance=true requires run_ownership.heartbeat_enabled=true so peer runs retain a valid lease. Set scheduler.multi_instance=false or enable run ownership heartbeats.")
 
+    # A malformed channels.leader_lease block is refused on every topology:
+    # ChannelService would otherwise raise the same error later in the
+    # lifespan, after the persistence engine is already up.
+    leader_lease = _channel_leader_lease(config)
+
     signal = _multi_process_signal(config)
     if signal is None:
+        if leader_lease.enabled is True and backend not in ("sqlite", "postgres"):
+            providers = _enabled_channel_transport_providers(config)
+            if providers:
+                raise SystemExit(
+                    f"{CHANNEL_LEADER_LEASE_FIELD}.enabled=true needs the shared application database for its lease table, but database.backend is '{backend}' "
+                    f"while IM channels {', '.join(providers)} are enabled. Set database.backend to sqlite or postgres, or set {CHANNEL_LEADER_LEASE_FIELD}.enabled to auto."
+                )
         return
     reason, rollback = signal
 
@@ -226,6 +277,107 @@ def _enforce_postgres_for_multi_worker(config: AppConfig) -> None:
             "using (#4206). Set sandbox.ownership.type='redis', or omit the section so it is inferred from the redis stream bridge."
         )
 
+    if leader_lease.explicitly_disabled:
+        providers = _enabled_channel_transport_providers(config)
+        if providers:
+            raise SystemExit(
+                f"{reason} cannot run with {CHANNEL_LEADER_LEASE_FIELD}.enabled=false while IM channels {', '.join(providers)} are enabled: "
+                "every instance would open the platform connection with the same bot credentials (Telegram rejects the second poller "
+                "with 409 Conflict, Discord answers every message twice, and per-process channel state diverges). "
+                f"Set {CHANNEL_LEADER_LEASE_FIELD}.enabled to auto (the default) or true so one instance holds each provider's connection; "
+                f"alternatively {rollback[0].lower()}{rollback[1:]}, or disable those channels (channels.<provider>.enabled=false and channel_connections.<provider>.enabled=false)."
+            )
+
+
+def multi_process_deployment(config: AppConfig) -> bool:
+    """Whether this process must assume peer Gateway processes (the gate's multi-process signal).
+
+    ``channels.leader_lease: auto`` follows exactly this signal, so the lease
+    turns on wherever the gate enforced the multi-process prerequisites.
+    """
+    return _multi_process_signal(config) is not None
+
+
+def _channel_leader_lease(config: AppConfig) -> ChannelLeaderLeaseConfig:
+    """Parse ``channels.leader_lease``; a malformed block exits with the dotted path in the message."""
+    try:
+        return channel_leader_lease_from_app_config(config)
+    except ChannelLeaderLeaseConfigError as exc:
+        raise SystemExit(str(exc)) from None
+
+
+def _enabled_channel_transport_providers(config: AppConfig) -> list[str]:
+    """Non-GitHub IM providers whose platform connection this deployment may open.
+
+    Imported lazily: ``app.channels.service`` pulls in every channel module and
+    the gate runs before the lifespan has any reason to load them.
+    """
+    from app.channels.service import enabled_transport_providers
+
+    return enabled_transport_providers(config)
+
+
+def credentials_key_consumers(config: AppConfig) -> list[str]:
+    """Return the enabled features that store data under ``DEER_FLOW_CREDENTIALS_KEY``.
+
+    Each entry is the setting that enabled the feature, as refusal text spells
+    it. The Gateway loads the key at startup only when this list is non-empty,
+    and the multi-instance gate below refuses a missing key only for these
+    features, so a deployment that stores no credentials keeps booting without
+    one. Personal MCP OAuth connections are saved at runtime, so they cannot be
+    listed here; their store loads the key on first use.
+    """
+    consumers: list[str] = []
+    connections = getattr(config, "channel_connections", None)
+    if connections is not None and getattr(connections, "enabled", False):
+        # ChannelConnectionRepository encrypts per-connection credentials, and
+        # the runtime config store the bot credentials entered in the web UI.
+        consumers.append("channel_connections.enabled=true")
+    extensions = getattr(config, "extensions", None)
+    if extensions is not None:
+        # deerflow.mcp.oauth_store keeps rotating refresh tokens in the database.
+        for name, server in extensions.get_enabled_mcp_servers().items():
+            if server.uses_browser_oauth:
+                consumers.append(f"mcpServers.{name}.user_oauth.enabled=true")
+            oauth = server.oauth
+            if oauth is not None and oauth.enabled and oauth.grant_type == "refresh_token":
+                consumers.append(f"mcpServers.{name}.oauth.enabled=true")
+    return consumers
+
+
+def _enforce_credentials_key(config: AppConfig) -> None:
+    """Refuse a malformed credentials key, or a missing one where instances cannot share the generated file.
+
+    A set ``DEER_FLOW_CREDENTIALS_KEY`` must parse (any topology): starting with
+    a key that cannot decrypt anything would silently hide stored credentials.
+    Without it each instance generates ``{base_dir}/.credentials_key``. Workers
+    of one process tree share that file and converge on one key through its
+    exclusive create, so only the explicit multi-instance declaration -- Pods or
+    hosts that need not share a runtime home -- requires the variable, and only
+    when a feature from :func:`credentials_key_consumers` is enabled.
+    """
+    raw = os.environ.get(CREDENTIALS_KEY_ENV_VAR, "")
+    if raw.strip():
+        try:
+            parse_credentials_keys(raw)
+        except CredentialsKeyError as exc:
+            raise SystemExit(str(exc)) from None
+        return
+    declaration = multi_instance_declaration(config)
+    if declaration is None:
+        return
+    consumers = credentials_key_consumers(config)
+    if not consumers:
+        return
+    enabled = ", ".join(consumers)
+    disabled = ", ".join(consumer.removesuffix("=true") + "=false" for consumer in consumers)
+    raise SystemExit(
+        f"{declaration.knob} with {enabled} requires {CREDENTIALS_KEY_ENV_VAR}: without it every instance generates its own "
+        f"{{base_dir}}/{CREDENTIALS_KEY_FILENAME}, and credentials one instance stores cannot be decrypted on its peers. "
+        f"Generate one key with {GENERATE_KEY_COMMAND} and set the same value on every instance (the Helm chart and "
+        f"scripts/deploy.sh generate and inject it automatically), {declaration.rollback}, or set {disabled}."
+    )
+
 
 def _validate_agent_storage(config: AppConfig) -> None:
     """Fail fast on an agent-storage backend the database cannot support.
@@ -256,6 +408,27 @@ def _validate_agent_storage(config: AppConfig) -> None:
             "custom agents and managed subagents are stored per-node on local disk and are not visible "
             "across workers/nodes. Set agent_storage.backend='db' to share them.",
             signal[0],
+        )
+
+
+def _probe_managed_subagent_file_storage() -> None:
+    """Warn early if this volume cannot support create-only publication."""
+    from deerflow.config.paths import get_paths
+
+    root = get_paths().managed_subagents_dir
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        # A private directory keeps probe names out of the JSON catalog and
+        # lets independent Gateway workers probe without touching each other.
+        with tempfile.TemporaryDirectory(prefix=".hardlink-probe-", dir=root) as scratch:
+            source = Path(scratch) / "source"
+            source.touch()
+            os.link(source, Path(scratch) / "linked")
+    except OSError as exc:
+        logger.warning(
+            "Managed subagent hard-link probe failed for %s: %s. Managed subagent creation may fail on this volume. Use a volume with working hard links or set agent_storage.backend='db' with SQLite/Postgres.",
+            root,
+            exc,
         )
 
 
@@ -373,6 +546,45 @@ async def _drain_inflight_runs(run_manager: RunManager) -> None:
         logger.exception("Failed to drain in-flight runs during shutdown")
 
 
+async def _retry_recovered_run_stream_end(
+    bridge: StreamBridge,
+    run_id: str,
+    *,
+    retry_delay: float,
+    cleanup_delay: float,
+    stream_was_present: bool | None = None,
+) -> None:
+    await asyncio.sleep(max(0.0, retry_delay))
+    if stream_was_present is True:
+        stream_exists = getattr(bridge, "stream_exists", None)
+        if callable(stream_exists):
+            try:
+                if not await stream_exists(run_id):
+                    cleanup_expired_producer = getattr(bridge, "cleanup_expired_producer", None)
+                    if callable(cleanup_expired_producer):
+                        try:
+                            await cleanup_expired_producer(run_id)
+                        except Exception:
+                            logger.warning(
+                                "Failed to clean expired stream producer marker after retry for %s",
+                                run_id,
+                                exc_info=True,
+                            )
+                    logger.debug(
+                        "Skipping recovered stream end retry for %s: stream expired during retry delay",
+                        run_id,
+                    )
+                    return
+            except Exception:
+                logger.debug(
+                    "Failed to recheck recovered stream existence for %s",
+                    run_id,
+                    exc_info=True,
+                )
+    await bridge.publish_end(run_id)
+    await bridge.cleanup(run_id, delay=cleanup_delay)
+
+
 async def _publish_recovered_run_stream_end(
     bridge: StreamBridge,
     recovered_runs: list[RunRecord],
@@ -382,15 +594,65 @@ async def _publish_recovered_run_stream_end(
 ) -> list[tuple[str, asyncio.Task[None]]]:
     """Terminate retained streams for runs recovered as orphaned."""
     cleanup_tasks: list[tuple[str, asyncio.Task[None]]] = []
+
+    def schedule_retry(record: RunRecord, *, stream_was_present: bool | None = None) -> bool:
+        retry_delay = getattr(
+            bridge,
+            "producer_lease_retry_delay_seconds",
+            None,
+        )
+        if not isinstance(retry_delay, (int, float)) or isinstance(retry_delay, bool) or retry_delay < 0:
+            return False
+        task = asyncio.create_task(
+            _retry_recovered_run_stream_end(
+                bridge,
+                record.run_id,
+                retry_delay=float(retry_delay),
+                cleanup_delay=cleanup_delay,
+                stream_was_present=stream_was_present,
+            )
+        )
+        task.add_done_callback(
+            lambda task, run_id=record.run_id: _log_recovered_stream_cleanup_result(
+                task,
+                run_id,
+            )
+        )
+        cleanup_tasks.append((record.run_id, task))
+        if on_cleanup_scheduled is not None:
+            on_cleanup_scheduled(record.run_id, task)
+        return True
+
     for record in recovered_runs:
         stream_exists = getattr(bridge, "stream_exists", None)
+        stream_was_present: bool | None = None
         if stream_exists is not None:
             try:
-                if not await stream_exists(record.run_id):
+                stream_was_present = bool(await stream_exists(record.run_id))
+                if not stream_was_present:
                     logger.debug("Skipping recovered stream end for %s: stream already expired", record.run_id)
+                    cleanup_expired_producer = getattr(
+                        bridge,
+                        "cleanup_expired_producer",
+                        None,
+                    )
+                    if callable(cleanup_expired_producer):
+                        try:
+                            cleaned = bool(await cleanup_expired_producer(record.run_id))
+                        except Exception:
+                            logger.warning(
+                                "Failed to clean expired stream producer marker for %s",
+                                record.run_id,
+                                exc_info=True,
+                            )
+                            cleaned = False
+                        if not cleaned:
+                            schedule_retry(record, stream_was_present=False)
                     continue
             except Exception:
                 logger.debug("Failed to check recovered stream existence for %s", record.run_id, exc_info=True)
+                schedule_retry(record, stream_was_present=stream_was_present)
+                continue
         try:
             await bridge.publish_end(record.run_id)
         except Exception:
@@ -399,6 +661,7 @@ async def _publish_recovered_run_stream_end(
                 record.run_id,
                 exc_info=True,
             )
+            schedule_retry(record, stream_was_present=stream_was_present)
             continue
         task = asyncio.create_task(bridge.cleanup(record.run_id, delay=cleanup_delay))
         task.add_done_callback(lambda task, run_id=record.run_id: _log_recovered_stream_cleanup_result(task, run_id))
@@ -599,11 +862,20 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
     # SQLite write-locks cannot support concurrent multi-process access.
     # ------------------------------------------------------------------
     _enforce_postgres_for_multi_worker(startup_config)
+    # Reject a malformed DEER_FLOW_CREDENTIALS_KEY, or a missing one where
+    # declared instances store credentials but cannot share the generated file.
+    _enforce_credentials_key(startup_config)
     # Reject agent_storage.backend='db' on a non-durable database, and warn on
     # node-divergent file storage under multi-worker Postgres.
     _validate_agent_storage(startup_config)
+    if getattr(getattr(startup_config, "agent_storage", None), "backend", None) == "file":
+        await asyncio.to_thread(_probe_managed_subagent_file_storage)
     # Warn when login lockouts stay per-process under several Gateway processes.
     _validate_login_throttle_storage(startup_config)
+    # IM chat-to-thread bindings need no companion warning: ``resolve_channel_store``
+    # keeps them in the shared ``channel_thread_bindings`` table for every
+    # sqlite/postgres database, and the gate above already refuses a memory
+    # database -- the only JSON-file case -- under any multi-process signal.
     # Warn when a declared multi-instance deployment shares DeerMem's SQLite
     # retrieval index across instances through the memory volume.
     _validate_memory_retrieval_index(startup_config)
@@ -659,6 +931,11 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         await init_engine_from_config(config.database)
 
         app.state.checkpointer = await stack.enter_async_context(make_checkpointer(config))
+        # The peer is closed before the parent saver, including partial
+        # startup failure. Its own shutdown fences and drains isolated tasks.
+        from deerflow.subagents.checkpoints import subagent_checkpoint_runtime
+
+        await stack.enter_async_context(subagent_checkpoint_runtime(config, app.state.checkpointer))
         app.state.store = await stack.enter_async_context(make_store(config))
 
         # Record the checkpointer/Store backend and the provisioner endpoint
@@ -675,6 +952,9 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
 
         # Initialize repositories — one get_session_factory() call for all.
         sf = get_session_factory()
+        from deerflow.approvals.store import ApprovalStore
+
+        app.state.approval_store = ApprovalStore(sf)
 
         # The login throttle store is resolved once per process from the startup
         # snapshot and the engine above (auth.local.throttle_storage is
@@ -697,6 +977,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         else:
             from deerflow.runtime.runs.store.memory import MemoryRunStore
 
+            app.state.coordination_workers = None
             app.state.run_store = MemoryRunStore()
             app.state.feedback_repo = None
             # Memory backend has no durable PAT store, so Bearer credentials
@@ -708,6 +989,18 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         run_events_config = getattr(config, "run_events", None)
         app.state.run_events_config = run_events_config
         app.state.run_event_store = make_run_event_store(run_events_config)
+        if sf is not None:
+            from deerflow.persistence.run.producer import validate_producer_fencing
+
+            # An activated database also forbids a memory/JSONL downgrade.
+            await validate_producer_fencing(
+                sf,
+                mode=getattr(run_events_config, "producer_fencing", "off"),
+                cutover_id=getattr(run_events_config, "producer_cutover_id", None),
+            )
+        from deerflow.runtime.events.terminal import RecoveryTerminalPublisher
+
+        app.state.recovery_terminal_publisher = RecoveryTerminalPublisher(app.state.run_event_store, app.state.run_store)
 
         from deerflow.extensions.run_evidence import StoreRunEvidenceReader, StoreRunEvidenceReaderFactory
 
@@ -731,6 +1024,14 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         from deerflow.extensions.gateway import start_services, stop_services
 
         extensions = getattr(app.state, "extensions", EMPTY_EXTENSIONS)
+        from deerflow.extensions.host_capabilities import HostCapabilities
+
+        host_capabilities = HostCapabilities(config, app.state.run_store, app.state.run_event_store)
+        app.state.skill_mutation_host = host_capabilities
+        # Own partial startup and cancellation before acquiring any locks or
+        # worker resources. LIFO shutdown stops plugins before host recovery.
+        stack.push_async_callback(host_capabilities.close)
+        await host_capabilities.start()
         attempted_services: list[tuple[str, Any]] = []
 
         async def stop_extension_services() -> None:
@@ -746,13 +1047,22 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
         # Register cleanup before starting: start() can partially acquire
         # resources and then fail or be cancelled.
         stack.push_async_callback(stop_extension_services)
+
+        agent_runs_host_installed = asyncio.Event()
+
+        async def restore_agent_runs_authority(*, user_id: str, grant: dict, validator=None, plugin_namespace: str | None = None):
+            host = await _agent_runs_host_after_install(app, agent_runs_host_installed)
+            return await host.restore_delegated_authority(user_id=user_id, grant=grant, validator=validator, plugin_namespace=plugin_namespace)
+
         record_runtime_diagnostics(
             await start_services(
                 extensions,
                 config,
                 sf,
                 run_evidence_reader=app.state.run_evidence_reader,
+                host_capabilities=host_capabilities.bindings,
                 attempted_services=attempted_services,
+                agent_runs_restore=restore_agent_runs_authority,
             )
         )
 
@@ -775,10 +1085,12 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             app.state.scheduled_task_repo = ScheduledTaskRepository(
                 sf,
                 run_repository=app.state.run_store,
+                recovery_terminal_publisher=app.state.recovery_terminal_publisher,
             )
             app.state.scheduled_task_run_repo = ScheduledTaskRunRepository(
                 sf,
                 run_repository=app.state.run_store,
+                recovery_terminal_publisher=app.state.recovery_terminal_publisher,
             )
             app.state.scheduled_task_event_repo = ScheduledTaskEventRepository(sf)
             # Per-user unread state and the activity feed's read clock.
@@ -821,6 +1133,7 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
             store=app.state.run_store,
             run_ownership_config=run_ownership_config,
             event_store=app.state.run_event_store,
+            recovery_terminal_publisher=app.state.recovery_terminal_publisher,
             on_orphans_recovered=terminalize_recovered_runs,
         )
         # Startup recovery: mark inflight runs whose lease has expired as error.
@@ -847,6 +1160,16 @@ async def langgraph_runtime(app: FastAPI, startup_config: AppConfig) -> AsyncGen
 
         app.state.agent_runs_host = GatewayAgentRunsHost(app, load_user=SQLiteUserRepository(sf).get_user_by_id if sf is not None else None)
         stack.callback(app.state.agent_runs_host.close)
+        if sf is not None:
+            from app.gateway.coordination_workers import CoordinationWorkers
+            from deerflow.persistence.channel_connections.sql import ChannelConnectionRepository
+            from deerflow.persistence.coordination.workers import CoordinationWorkerRepository
+
+            app.state.coordination_workers = CoordinationWorkers(CoordinationWorkerRepository(sf), app.state.agent_runs_host, ChannelConnectionRepository(sf))
+            stack.push_async_callback(app.state.coordination_workers.close)
+        # Extension unattended recovery waits on this before restoring grants;
+        # past it, the whole run-admission stack above is ready.
+        agent_runs_host_installed.set()
 
         # Start the lease heartbeat if enabled (multi-worker deployments).
         await app.state.run_manager.start_heartbeat()
@@ -995,6 +1318,67 @@ def get_subagent_batch_service(request: Request):
     return val
 
 
+def _run_admission_hook(*, checkpointer: Any):
+    """Prune metadata leaves inside the run's durable admission fence."""
+
+    async def handle(record: Any, config: dict[str, Any]) -> None:
+        try:
+            from app.gateway.checkpoint_retention import enforce_completed_run_retention
+
+            await enforce_completed_run_retention(
+                checkpointer=checkpointer,
+                thread_id=record.thread_id,
+                protect_checkpoint_ids=_selected_checkpoint_ids(config),
+            )
+        except Exception:
+            logger.warning(
+                "Checkpoint retention failed for thread %s before run %s (non-fatal)",
+                record.thread_id,
+                record.run_id,
+                exc_info=True,
+            )
+
+    return handle
+
+
+def _selected_checkpoint_ids(config: dict[str, Any]) -> frozenset[str]:
+    """Collect checkpoint selectors already validated for an admitted run."""
+    configurable = config.get("configurable", {})
+    selected: set[str] = set()
+    checkpoint_id = configurable.get("checkpoint_id")
+    if isinstance(checkpoint_id, str) and checkpoint_id:
+        selected.add(checkpoint_id)
+    checkpoint_map = configurable.get("checkpoint_map")
+    if isinstance(checkpoint_map, dict):
+        selected.update(value for value in checkpoint_map.values() if isinstance(value, str) and value)
+    return frozenset(selected)
+
+
+def _run_completion_hook(*, scheduled_task_service: Any | None, batch_continuations: Any | None = None):
+    """Notify the scheduler after ordinary run finalization."""
+
+    async def handle(record: Any) -> None:
+        # Scheduler persistence is best-effort: a store outage must not skip the
+        # batch cancellation below, or claimed follow-ups of hard-stopped runs
+        # stay in `dispatching` forever (#7969).
+        try:
+            if scheduled_task_service is not None:
+                await scheduled_task_service.handle_run_completion(record)
+        except Exception:
+            logger.warning("Scheduled task completion hook failed for run %s (non-fatal)", record.run_id, exc_info=True)
+        if batch_continuations is not None:
+            await batch_continuations.source_finished(record)
+
+    return handle
+
+
+def get_agent_runs(request: Request):
+    """Return the host-bound AgentRuns capability for *request*, or ``None``."""
+    host = getattr(request.app.state, "agent_runs_host", None)
+    # Internal/channel and PAT runs deliberately receive no retained delegation.
+    return host.bind(request) if host is not None else None
+
+
 def get_run_context(request: Request) -> RunContext:
     """Build a :class:`RunContext` from ``app.state`` singletons.
 
@@ -1004,13 +1388,17 @@ def get_run_context(request: Request) -> RunContext:
     ``event_store`` / ``run_events_config`` pair stays frozen to the snapshot
     captured in :func:`langgraph_runtime` so callers never see a store bound to
     one backend paired with a config pointing at another.
+
+    Loading ``app_config`` stats and hashes ``config.yaml`` (and reparses it
+    after an edit), so async callers build the context with
+    ``asyncio.to_thread``.
     """
-    host = getattr(request.app.state, "agent_runs_host", None)
-    # Internal/channel and PAT runs deliberately receive no retained delegation.
-    agent_runs = host.bind(request) if host is not None else None
+    agent_runs = get_agent_runs(request)
+    checkpointer = get_checkpointer(request)
+    scheduled_task_service = getattr(request.app.state, "scheduled_task_service", None)
     return RunContext(
         agent_runs=agent_runs,
-        checkpointer=get_checkpointer(request),
+        checkpointer=checkpointer,
         store=get_store(request),
         event_store=get_run_event_store(request),
         run_events_config=getattr(request.app.state, "run_events_config", None),
@@ -1018,9 +1406,14 @@ def get_run_context(request: Request) -> RunContext:
         checkpoint_snapshot_frequency=getattr(request.app.state, "checkpoint_snapshot_frequency", None),
         thread_store=get_thread_store(request),
         mcp_task_repo=getattr(request.app.state, "mcp_task_repo", None),
+        approval_store=getattr(request.app.state, "approval_store", None),
         app_config=get_config(),
         extensions=getattr(request.app.state, "extensions", None),
-        on_run_completed=getattr(request.app.state, "scheduled_task_service", None).handle_run_completion if getattr(request.app.state, "scheduled_task_service", None) is not None else None,
+        on_run_admitted=_run_admission_hook(checkpointer=checkpointer),
+        on_run_completed=_run_completion_hook(
+            scheduled_task_service=scheduled_task_service,
+            batch_continuations=getattr(request.app.state, "batch_continuations", None),
+        ),
     )
 
 
@@ -1122,14 +1515,36 @@ async def get_current_user_from_request(request: Request):
             detail=AuthErrorResponse(code=AuthErrorCode.USER_NOT_FOUND, message="User not found").model_dump(),
         )
 
-    # Token version mismatch → password was changed, token is stale
-    if user.token_version != payload.ver:
+    # Operator-disabled account (#3462 gap 3) and stale token versions are
+    # both verdicts of the shared post-lookup validator: the password and
+    # PAT paths reject at their own surfaces; OAuth provisioning rejects at
+    # resolve time.
+    error = validate_resolved_session_user(user, payload)
+    if error is not None:
         raise HTTPException(
             status_code=401,
-            detail=AuthErrorResponse(code=AuthErrorCode.TOKEN_INVALID, message="Token revoked (password changed)").model_dump(),
+            detail=AuthErrorResponse(code=error, message="Account disabled" if error is AuthErrorCode.ACCOUNT_DISABLED else "Token revoked (password changed)").model_dump(),
         )
 
     return user
+
+
+def validate_resolved_session_user(user, payload) -> AuthErrorCode | None:
+    """Shared post-lookup session validation for EVERY JWT authenticator.
+
+    The Gateway's HTTP dependency, the WebSocket authenticator (browser
+    streaming bypasses AuthMiddleware), and the standalone LangGraph
+    ``authenticate`` callback all resolve cookie → JWT → user; this helper
+    is the one place the post-lookup verdicts live so a lifecycle change
+    (token_version bump, account suspension) lands everywhere at once.
+    Returns the failure code, or ``None`` when the session is valid —
+    callers map it to their own exception surface.
+    """
+    if user.token_version != payload.ver:
+        return AuthErrorCode.TOKEN_INVALID
+    if getattr(user, "disabled", False):
+        return AuthErrorCode.ACCOUNT_DISABLED
+    return None
 
 
 async def is_admin_user(request: Request) -> bool:
@@ -1160,13 +1575,24 @@ async def is_admin_user(request: Request) -> bool:
     return getattr(user, "system_role", None) == "admin"
 
 
-async def require_admin_user(request: Request, *, detail: str) -> None:
+async def require_admin_user(request: Request, *, detail: str, pat_scope: str | None = None) -> None:
     """Require the authenticated caller to be an admin user.
 
     ``detail`` is the route-specific 403 message. The shared predicate keeps
     read-side redaction and write authorization on the same admin definition.
-    """
 
+    ``pat_scope`` names the one opt-in exception to "PATs never carry admin
+    capability": a route that passes it also admits a PAT whose owner is an
+    admin *and* which holds that scope. Only routes that pass it are affected;
+    ``is_admin_user`` stays False for every PAT.
+    """
+    from app.gateway.auth_disabled import AUTH_SOURCE_PAT
+
+    if pat_scope is not None and getattr(request.state, "auth_source", None) == AUTH_SOURCE_PAT:
+        user = getattr(request.state, "user", None)
+        if pat_scope in getattr(request.state, "pat_scopes", frozenset()) and getattr(user, "system_role", None) == "admin":
+            return
+        raise HTTPException(status_code=403, detail=detail)
     if not await is_admin_user(request):
         raise HTTPException(status_code=403, detail=detail)
 

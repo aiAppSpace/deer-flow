@@ -63,33 +63,33 @@ def run_make(project: Path, *args: str, fail_group: str = "", parallel: bool = T
         "EXPECT_PARALLEL": "1" if parallel else "0",
         "FAIL_GROUP": fail_group,
     }
-    # GNU make exports command-line variables as well as its recursive flags.
-    # The outer suite may use TEST_JOBS=2; this fixture tests its own defaults
-    # and opts into overrides only through the explicit arguments above.
-    for option in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "TEST_JOBS", "SPLITS", "GROUP", "DURATIONS_FILE"):
-        env.pop(option, None)
+    # Make exports command-line variables to pytest. This copied project must
+    # exercise its own defaults, not the outer test runner's shard/job settings.
+    for name in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL", "MAKEOVERRIDES", "TEST_JOBS", "SPLITS", "GROUP", "DURATIONS_FILE"):
+        env.pop(name, None)
     return subprocess.run([MAKE, *args], cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", check=False, timeout=30)
 
 
 @pytest.mark.parametrize("fail_group", ["", "1"])
-def test_make_test_runs_all_four_shards_and_reports_any_failure(test_project: Path, fail_group: str) -> None:
+def test_make_test_runs_all_six_shards_and_reports_any_failure(test_project: Path, fail_group: str, monkeypatch) -> None:
+    monkeypatch.setenv("TEST_JOBS", "2")
     result = run_make(test_project, "test", fail_group=fail_group)
 
     assert (result.returncode == 0) == (not fail_group), result.stdout + result.stderr
-    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4"}
-    for group in range(1, 5):
+    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4", "5", "6"}
+    for group in range(1, 7):
         args = json.loads((test_project / f"{group}.started").read_text(encoding="utf-8"))
         assert args[:3] == ["run", "pytest", "-m"]
-        assert args[args.index("-m") + 1] == "not live"
+        assert args[args.index("-m") + 1] == "not live and not bundled_extension and not benchmark"
         assert "--ignore=tests/blocking_io" in args
-        assert args[args.index("--splits") + 1] == "4"
+        assert args[args.index("--splits") + 1] == "6"
         assert args[args.index("--group") + 1] == str(group)
         assert args[args.index("--splitting-algorithm") + 1] == "least_duration"
         assert "--store-durations" not in args
 
 
 def test_ci_can_still_run_one_shard(test_project: Path) -> None:
-    result = run_make(test_project, "test-shard", "SPLITS=4", "GROUP=2", parallel=False)
+    result = run_make(test_project, "test-shard", "SPLITS=6", "GROUP=2", parallel=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert {path.stem for path in test_project.glob("*.finished")} == {"2"}
@@ -99,7 +99,7 @@ def test_make_test_can_limit_concurrency(test_project: Path) -> None:
     result = run_make(test_project, "test", "TEST_JOBS=1", parallel=False)
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4"}
+    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4", "5", "6"}
 
 
 def test_make_fixture_does_not_inherit_parent_scheduler_options(test_project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -112,7 +112,7 @@ def test_make_fixture_does_not_inherit_parent_scheduler_options(test_project: Pa
     result = run_make(test_project, "test")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4"}
+    assert {path.stem for path in test_project.glob("*.finished")} == {"1", "2", "3", "4", "5", "6"}
 
 
 def test_make_test_reports_missing_durations(test_project: Path) -> None:

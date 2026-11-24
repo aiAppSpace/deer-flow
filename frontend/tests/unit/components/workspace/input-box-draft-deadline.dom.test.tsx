@@ -39,7 +39,8 @@ const key = (threadId = "thread-a") =>
   buildComposerDraftKey({ userId: "user-a", threadId });
 const stored = (threadId = "thread-a") =>
   readComposerDraft(window.sessionStorage, key(threadId));
-let resolveFeatures: (value: Response) => void;
+let resolveFeatures: (() => void) | undefined;
+let featuresPayload: Record<string, unknown> | null = null;
 const clients: QueryClient[] = [];
 
 function composer() {
@@ -80,27 +81,35 @@ function type(text: string) {
 }
 async function completeFeatures(enabled: boolean) {
   await act(async () => {
-    resolveFeatures(
-      new Response(
-        JSON.stringify({
-          agents_api: { enabled: false },
-          conversation_references: { enabled, max_references: 3 },
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    featuresPayload = {
+      agents_api: { enabled: false },
+      conversation_references: { enabled, max_references: 3 },
+    };
+    resolveFeatures?.();
   });
   await advance(0);
 }
 
 beforeEach(() => {
   rs.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  const features = new Promise<Response>((resolve) => {
+  featuresPayload = null;
+  const featuresReady = new Promise<void>((resolve) => {
     resolveFeatures = resolve;
   });
-  rs.stubGlobal("fetch", (input: unknown) => {
-    if (String(input).endsWith("/api/features")) return features;
-    throw new Error(`Unexpected request: ${String(input)}`);
+  // Several feature hooks share /api/features; each caller needs its own
+  // Response body (a single Response can only be json()-ed once).
+  rs.stubGlobal("fetch", async (input: unknown) => {
+    const url = String(input);
+    if (url.includes("/api/features")) {
+      await featuresReady;
+      return new Response(JSON.stringify(featuresPayload), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response("{}", {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   });
 });
 afterEach(() => {

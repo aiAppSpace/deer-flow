@@ -17,6 +17,7 @@ import {
   NotebookPenIcon,
   SearchIcon,
   SquareTerminalIcon,
+  ShieldCheckIcon,
   WrenchIcon,
 } from "lucide-react";
 import { memo, useEffect, useMemo, useState } from "react";
@@ -35,6 +36,8 @@ import {
   resolveArtifactURL,
 } from "@/core/artifacts/utils";
 import { useI18n } from "@/core/i18n/hooks";
+import { isErrorToolMessage } from "@/core/messages/tool-error";
+import { indexToolResults } from "@/core/messages/tool-result";
 import { formatTokenCount } from "@/core/messages/usage";
 import type { TokenDebugStep } from "@/core/messages/usage-model";
 import {
@@ -53,7 +56,11 @@ import { FlipDisplay } from "../flip-display";
 import { Tooltip } from "../tooltip";
 
 import { MarkdownContent } from "./markdown-content";
-import { isSafeHref, UnsafeLink } from "./markdown-link";
+import {
+  createMarkdownLinkComponent,
+  isSafeHref,
+  UnsafeLink,
+} from "./markdown-link";
 import { MessageReasoning } from "./message-reasoning";
 import { ToolCallDetails } from "./tool-call-details";
 
@@ -67,6 +74,7 @@ interface MessageGroupProps {
   showTokenDebugSummaries?: boolean;
   threadId?: string;
   toolArtifacts?: ArtifactEntry[];
+  awaitingApproval?: boolean;
 }
 
 function MessageGroupComponent({
@@ -79,8 +87,13 @@ function MessageGroupComponent({
   showTokenDebugSummaries = false,
   threadId,
   toolArtifacts,
+  awaitingApproval = false,
 }: MessageGroupProps) {
   const { t } = useI18n();
+  const markdownComponents = useMemo(
+    () => ({ a: createMarkdownLinkComponent(threadId) }),
+    [threadId],
+  );
   const [showAbove, setShowAbove] = useState(
     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true",
   );
@@ -138,49 +151,6 @@ function MessageGroupComponent({
     const filteredSteps = steps.filter((step) => step.type === "toolCall");
     return filteredSteps[filteredSteps.length - 1];
   }, [steps]);
-  const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
-    useArtifacts();
-  const lastToolPath = lastToolCallStep?.args.path;
-  const finalizedArtifactPath =
-    lastToolCallStep?.name === "finalize_artifact_write" &&
-    typeof lastToolPath === "string" &&
-    isSuccessfulToolResult(
-      lastToolCallStep.resultMessage
-        ? extractTextFromMessage(lastToolCallStep.resultMessage)
-        : lastToolCallStep.result,
-    )
-      ? lastToolPath
-      : null;
-  const pendingArtifactUrl =
-    isLoading &&
-    lastToolCallStep &&
-    (lastToolCallStep.name === "write_file" ||
-      lastToolCallStep.name === "str_replace") &&
-    typeof lastToolPath === "string" &&
-    !lastToolCallStep.resultMessage
-      ? buildWriteFileArtifactURL({
-          filepath: lastToolPath,
-          messageId: lastToolCallStep.messageId,
-          toolCallId: lastToolCallStep.id,
-        })
-      : null;
-  const autoOpenArtifactUrl =
-    autoOpen && autoSelect
-      ? (finalizedArtifactPath ?? pendingArtifactUrl)
-      : null;
-
-  // Own the pending selection above FlipDisplay: its exiting child keeps old
-  // props until the animation ends and cannot retire a superseded tool timer.
-  useEffect(() => {
-    if (!autoOpenArtifactUrl || selectedArtifact === autoOpenArtifactUrl) {
-      return;
-    }
-    const timeout = window.setTimeout(() => {
-      select(autoOpenArtifactUrl, true);
-      setOpen(true);
-    }, 100);
-    return () => window.clearTimeout(timeout);
-  }, [autoOpenArtifactUrl, select, selectedArtifact, setOpen]);
   const aboveLastToolCallSteps = useMemo(() => {
     if (lastToolCallStep) {
       const index = stepIndexByStep.get(lastToolCallStep) ?? -1;
@@ -317,7 +287,10 @@ function MessageGroupComponent({
     );
   };
 
-  const renderToolCall = (step: CoTToolCallStep) => {
+  const renderToolCall = (
+    step: CoTToolCallStep,
+    options?: { isLast?: boolean },
+  ) => {
     const debugStep =
       showTokenDebugSummaries && step.messageId
         ? debugStepByMessageId.get(step.messageId)
@@ -325,9 +298,11 @@ function MessageGroupComponent({
 
     return (
       <ToolCall
-        key={step.id}
+        key={step.occurrenceId}
         {...step}
         threadId={threadId}
+        isLast={options?.isLast}
+        isLoading={isLoading}
         deferBrowserPreview={deferBrowserPreviews}
         showDetails={showTokenDebugSummaries}
         tokenDebugStep={
@@ -341,7 +316,13 @@ function MessageGroupComponent({
     <ChainOfThoughtStep
       key={step.id}
       icon={MessageSquareTextIcon}
-      label={<MarkdownContent content={step.content} isLoading={isLoading} />}
+      label={
+        <MarkdownContent
+          content={step.content}
+          isLoading={isLoading}
+          components={markdownComponents}
+        />
+      }
     ></ChainOfThoughtStep>
   );
 
@@ -362,6 +343,7 @@ function MessageGroupComponent({
             <MarkdownContent
               content={step.reasoning ?? ""}
               isLoading={isLoading}
+              components={markdownComponents}
             />
           }
         ></ChainOfThoughtStep>,
@@ -436,8 +418,8 @@ function MessageGroupComponent({
                 lastToolCallStep.messageId,
                 stepIndexByStep.get(lastToolCallStep) ?? -1,
               )}
-              <FlipDisplay uniqueKey={lastToolCallStep.id ?? ""}>
-                {renderToolCall(lastToolCallStep)}
+              <FlipDisplay uniqueKey={lastToolCallStep.occurrenceId}>
+                {renderToolCall(lastToolCallStep, { isLast: true })}
               </FlipDisplay>
               {afterLastToolCallAssistantTextSteps
                 .filter((step) => !belowLastReasoningSteps.has(step))
@@ -517,6 +499,7 @@ function MessageGroupComponent({
                       <MarkdownContent
                         content={lastReasoningStep.reasoning ?? ""}
                         isLoading={isLoading}
+                        components={markdownComponents}
                       />
                     }
                   ></ChainOfThoughtStep>
@@ -536,10 +519,24 @@ function MessageGroupComponent({
 
   return (
     <>
+      {awaitingApproval ? (
+        <p
+          className="text-muted-foreground flex items-center gap-1.5 text-sm"
+          data-testid="awaiting-approval"
+          role="status"
+        >
+          <ShieldCheckIcon className="size-4" />
+          {t.humanInput.approval.waiting}
+        </p>
+      ) : null}
       {processingPanel}
       {clarificationTextSteps.map((step) => (
         <div key={step.id} className="w-full">
-          <MarkdownContent content={step.content} isLoading={isLoading} />
+          <MarkdownContent
+            content={step.content}
+            isLoading={isLoading}
+            components={markdownComponents}
+          />
         </div>
       ))}
     </>
@@ -563,6 +560,7 @@ function areMessageGroupPropsEqual(
     previous.className === next.className &&
     previous.durationSeconds === next.durationSeconds &&
     Boolean(previous.isLoading) === Boolean(next.isLoading) &&
+    Boolean(previous.awaitingApproval) === Boolean(next.awaitingApproval) &&
     Boolean(previous.deferBrowserPreviews) ===
       Boolean(next.deferBrowserPreviews) &&
     Boolean(previous.showTokenDebugSummaries) ===
@@ -622,12 +620,6 @@ function shouldInlineThinkingToken({
   }
 
   return formatDebugToken(debugStep, t);
-}
-
-function isSuccessfulToolResult(
-  result?: string | Record<string, unknown>,
-): boolean {
-  return typeof result === "string" && result.trimStart().startsWith("OK");
 }
 
 function DebugStepLabel({
@@ -700,17 +692,24 @@ export function scheduleToolLabel(
   args: Record<string, unknown> | null | undefined,
   result: string | Record<string, unknown> | undefined,
   t: ReturnType<typeof useI18n>["t"],
+  failed = false,
 ): string | null {
   if (name !== "schedule_task" && name !== "stop_scheduled_task") {
     return null;
   }
-  // Both tools always return a JSON object, so text that does not parse is a
-  // tool-level failure (for example rejected arguments), never a success.
+  if (failed) return t.toolCalls.scheduleTaskFailed;
+  if (result == null || (typeof result === "string" && !result.trim())) {
+    return name === "stop_scheduled_task"
+      ? t.toolCalls.stopScheduledTaskPending
+      : t.toolCalls.scheduleTaskPending;
+  }
+  // Both tools return an object; a missing or invalid response cannot confirm
+  // that the requested operation succeeded.
   if (
-    (typeof result === "string" && result.trim() !== "") ||
-    (typeof result === "object" &&
-      result !== null &&
-      ("error" in result || "code" in result))
+    typeof result !== "object" ||
+    Array.isArray(result) ||
+    "error" in result ||
+    "code" in result
   ) {
     return t.toolCalls.scheduleTaskFailed;
   }
@@ -756,6 +755,8 @@ function ToolCall({
   name,
   args,
   result,
+  isLast = false,
+  isLoading = false,
   deferBrowserPreview = false,
   tokenDebugStep,
   showDetails = false,
@@ -769,6 +770,8 @@ function ToolCall({
   name: string;
   args: Record<string, unknown>;
   result?: string | Record<string, unknown>;
+  isLast?: boolean;
+  isLoading?: boolean;
   deferBrowserPreview?: boolean;
   tokenDebugStep?: TokenDebugStep;
   showDetails?: boolean;
@@ -779,35 +782,34 @@ function ToolCall({
 }) {
   const { t } = useI18n();
   const kind = getToolCallKind(name);
-  const { setOpen, select } = useArtifacts();
+  const { setOpen, autoOpen, autoSelect, selectedArtifact, select } =
+    useArtifacts();
   const browserViewPanel = useMaybeBrowserView();
   const tokenLabel = tokenDebugStep
     ? formatDebugToken(tokenDebugStep, t)
     : null;
-  const resolveLabel = (fallback: React.ReactNode) =>
-    tokenDebugStep ? (
+  const failed = resultMessage ? isErrorToolMessage(resultMessage) : false;
+  const schedulerTool =
+    kind === "schedule_task" || kind === "stop_scheduled_task";
+  const resolveLabel = (fallback: React.ReactNode) => {
+    const label = tokenDebugStep ? (
       <DebugStepLabel label={tokenDebugStep.label} token={tokenLabel} />
     ) : (
       fallback
     );
+    if (!failed || (schedulerTool && !tokenDebugStep)) return label;
+    return (
+      <>
+        {label}
+        <span className="text-destructive ml-2 text-xs" role="status">
+          {t.toolCalls.failed}
+        </span>
+      </>
+    );
+  };
   const writeFilePath =
     (kind === "write_file" || kind === "str_replace") &&
     typeof args.path === "string"
-      ? args.path
-      : undefined;
-  const artifactWritePath =
-    (name === "begin_artifact_write" ||
-      name === "append_artifact_chunk" ||
-      name === "finalize_artifact_write") &&
-    typeof args.path === "string"
-      ? args.path
-      : undefined;
-  const finalizedArtifactPath =
-    name === "finalize_artifact_write" &&
-    typeof args.path === "string" &&
-    isSuccessfulToolResult(
-      resultMessage ? extractTextFromMessage(resultMessage) : result,
-    )
       ? args.path
       : undefined;
   const writeFileArtifactUrl = writeFilePath
@@ -817,7 +819,29 @@ function ToolCall({
         toolCallId: id,
       })
     : null;
-  const fileArtifactUrl = finalizedArtifactPath ?? writeFileArtifactUrl;
+  const autoOpenArtifactUrl =
+    isLoading &&
+    isLast &&
+    autoOpen &&
+    autoSelect &&
+    writeFileArtifactUrl &&
+    !result
+      ? writeFileArtifactUrl
+      : null;
+
+  useEffect(() => {
+    if (!autoOpenArtifactUrl || selectedArtifact === autoOpenArtifactUrl) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      select(autoOpenArtifactUrl, true);
+      setOpen(true);
+    }, 100);
+
+    return () => window.clearTimeout(timeout);
+  }, [autoOpenArtifactUrl, select, selectedArtifact, setOpen]);
+
   if (kind === "browser") {
     const shot = browserView?.screenshot;
     const previewUrl =
@@ -870,18 +894,34 @@ function ToolCall({
     if (typeof args.query === "string") {
       label = t.toolCalls.searchOnWebFor(args.query);
     }
+    const results = Array.isArray(result)
+      ? result
+      : typeof result === "object" && result !== null
+        ? result.results
+        : undefined;
+    const sources = Array.isArray(results)
+      ? results.filter(
+          (item: unknown): item is { title: string; url: string } =>
+            typeof item === "object" &&
+            item !== null &&
+            "title" in item &&
+            typeof item.title === "string" &&
+            "url" in item &&
+            typeof item.url === "string",
+        )
+      : [];
     return (
       <ChainOfThoughtStep
         key={id}
         label={resolveLabel(label)}
         icon={SearchIcon}
       >
-        {Array.isArray(result) && (
+        {sources.length > 0 && (
           <ChainOfThoughtSearchResults>
             {/* Tool args and results are model- or provider-controlled, so
                 every tool link passes the same scheme allowlist as markdown
                 links and degrades to the same UnsafeLink marker. */}
-            {result.map((item) => (
+            {sources.map((item) => (
               <ChainOfThoughtSearchResult key={item.url}>
                 {isSafeHref(item.url) ? (
                   <a href={item.url} target="_blank" rel="noopener noreferrer">
@@ -1032,13 +1072,7 @@ function ToolCall({
         )}
       </ChainOfThoughtStep>
     );
-  } else if (
-    kind === "write_file" ||
-    kind === "str_replace" ||
-    name === "begin_artifact_write" ||
-    name === "append_artifact_chunk" ||
-    name === "finalize_artifact_write"
-  ) {
+  } else if (kind === "write_file" || kind === "str_replace") {
     let description: string | undefined = (args as { description: string })
       ?.description;
     if (!description) {
@@ -1048,20 +1082,20 @@ function ToolCall({
     return (
       <ChainOfThoughtStep
         key={id}
-        className={fileArtifactUrl ? "cursor-pointer" : undefined}
+        className={writeFileArtifactUrl ? "cursor-pointer" : undefined}
         label={resolveLabel(description)}
         icon={NotebookPenIcon}
         onClick={() => {
-          if (!fileArtifactUrl) {
+          if (!writeFileArtifactUrl) {
             return;
           }
-          select(fileArtifactUrl);
+          select(writeFileArtifactUrl);
           setOpen(true);
         }}
       >
-        {(writeFilePath ?? artifactWritePath) && (
+        {writeFilePath && (
           <ChainOfThoughtSearchResult className="cursor-pointer">
-            {writeFilePath ?? artifactWritePath}
+            {writeFilePath}
           </ChainOfThoughtSearchResult>
         )}
       </ChainOfThoughtStep>
@@ -1116,7 +1150,7 @@ function ToolCall({
     return (
       <ChainOfThoughtStep
         key={id}
-        label={resolveLabel(scheduleToolLabel(name, args, result, t))}
+        label={resolveLabel(scheduleToolLabel(name, args, result, t, failed))}
         icon={stop ? CalendarX2Icon : CalendarClockIcon}
         className={stop ? "text-sky-700 dark:text-sky-400" : undefined}
         data-testid={stop ? "scheduled-stop-step" : undefined}
@@ -1191,6 +1225,7 @@ interface CoTReasoningStep extends GenericCoTStep<"reasoning"> {
 }
 
 interface CoTToolCallStep extends GenericCoTStep<"toolCall"> {
+  occurrenceId: string;
   name: string;
   args: Record<string, unknown>;
   result?: string;
@@ -1216,31 +1251,32 @@ function indexToolCallData(messages: Message[]) {
   const toolCallResults = new Map<string, string>();
   const browserViews = new Map<string, BrowserViewMeta>();
   const resultMessages = new Map<string, Extract<Message, { type: "tool" }>>();
-
-  for (const message of messages) {
-    if (message.type !== "tool" || !message.tool_call_id) {
-      continue;
-    }
-
-    const toolCallId = message.tool_call_id;
-    if (!resultMessages.has(toolCallId))
-      resultMessages.set(toolCallId, message);
-    if (!toolCallResults.has(toolCallId)) {
-      const result = extractTextFromMessage(message);
-      if (result) {
-        toolCallResults.set(toolCallId, result);
-        resultMessages.set(toolCallId, message);
+  for (const [ownerIndex, results] of indexToolResults(messages)) {
+    for (const message of results) {
+      if (message.type !== "tool" || !message.tool_call_id) {
+        continue;
       }
-    }
 
-    if (!browserViews.has(toolCallId)) {
-      const browserView = (
-        message.additional_kwargs as
-          | { browser_view?: BrowserViewMeta }
-          | undefined
-      )?.browser_view;
-      if (browserView && typeof browserView.screenshot === "string") {
-        browserViews.set(toolCallId, browserView);
+      const toolCallId = `${ownerIndex}:${message.tool_call_id}`;
+      if (!resultMessages.has(toolCallId))
+        resultMessages.set(toolCallId, message);
+      if (!toolCallResults.has(toolCallId)) {
+        const result = extractTextFromMessage(message);
+        if (result) {
+          toolCallResults.set(toolCallId, result);
+          resultMessages.set(toolCallId, message);
+        }
+      }
+
+      if (!browserViews.has(toolCallId)) {
+        const browserView = (
+          message.additional_kwargs as
+            | { browser_view?: BrowserViewMeta }
+            | undefined
+        )?.browser_view;
+        if (browserView && typeof browserView.screenshot === "string") {
+          browserViews.set(toolCallId, browserView);
+        }
       }
     }
   }
@@ -1297,6 +1333,10 @@ function convertToSteps(
         }
         const step: CoTToolCallStep = {
           id: tool_call.id,
+          occurrenceId: JSON.stringify([
+            message.id ?? `ai-${messageIndex}`,
+            tool_call.id,
+          ]),
           messageId: message.id,
           type: "toolCall",
           name: tool_call.name,
@@ -1306,8 +1346,9 @@ function convertToSteps(
         };
         const toolCallId = tool_call.id;
         if (toolCallId) {
-          const toolCallResult = toolCallResults.get(toolCallId);
-          step.resultMessage = resultMessages.get(toolCallId);
+          const occurrence = `${messageIndex}:${toolCallId}`;
+          const toolCallResult = toolCallResults.get(occurrence);
+          step.resultMessage = resultMessages.get(occurrence);
           // Generic details preserve received text; specialized tools retain their parsing.
           if (toolCallResult && getToolCallKind(tool_call.name) !== "generic") {
             try {
@@ -1317,7 +1358,7 @@ function convertToSteps(
               step.result = toolCallResult;
             }
           }
-          step.browserView = browserViews.get(toolCallId);
+          step.browserView = browserViews.get(occurrence);
           const artifacts = artifactsByToolCallId.get(toolCallId);
           if (artifacts) {
             step.artifacts = artifacts;

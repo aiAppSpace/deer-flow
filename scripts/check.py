@@ -88,7 +88,14 @@ def parse_node_major(version_text: str) -> int | None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        prog="python scripts/check.py",
+        description=(
+            "DeerFlow dependency check (make check): probes the host tools the "
+            "local development setup needs and prints install hints for the "
+            "missing ones."
+        ),
+    )
     parser.add_argument("--frontend", choices=("react", "vue", "dual"), default="react")
     args = parser.parse_args(argv or [])
     configure_stdio()

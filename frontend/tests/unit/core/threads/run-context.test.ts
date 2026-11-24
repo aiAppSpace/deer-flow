@@ -10,26 +10,67 @@ const settings = {
 } as unknown as LocalSettings["context"];
 
 describe("buildRunContext", () => {
+  it("uses the current UI locale instead of stale saved or caller context", () => {
+    const stale = { ...settings, locale: "en-US" };
+    const context = buildRunContext({
+      settings: stale,
+      threadId: "t-1",
+      locale: "zh-CN",
+      extraContext: { locale: "en-US" },
+    });
+    expect(context.locale).toBe("zh-CN");
+    expect(stale.locale).toBe("en-US");
+    expect(
+      buildRunContext({ settings: stale, threadId: "t-1", locale: "en-US" })
+        .locale,
+    ).toBe("en-US");
+  });
+
+  it("applies a one-turn model without mutating saved context", () => {
+    const before = { ...settings };
+    const current = buildRunContext({
+      settings,
+      threadId: "t-1",
+      extraContext: { model_name: "child-choice" },
+    });
+    expect(current.model_name).toBe("child-choice");
+    expect(settings).toEqual(before);
+    expect(buildRunContext({ settings, threadId: "t-1" }).model_name).toBe(
+      "gemma4",
+    );
+  });
+  it("passes child-only selection separately from the parent model", () => {
+    const context = buildRunContext({
+      settings,
+      threadId: "t-1",
+      extraContext: { subagent_model_name: "child-choice" },
+    });
+    expect(context.model_name).toBe("gemma4");
+    expect(context.subagent_model_name).toBe("child-choice");
+  });
   it("sends attached references as a plain string[] under context.conversation_references", () => {
     const context = buildRunContext({
       settings,
+      threadId: "t-1",
       extraContext: { agent_name: "writer" },
       conversationReferences: ["source-a", "source-b"],
     });
     expect(context.conversation_references).toEqual(["source-a", "source-b"]);
     expect(context.agent_name).toBe("writer");
-    expect(context).not.toHaveProperty("thread_id");
+    expect(context.thread_id).toBe("t-1");
     expect(context.is_plan_mode).toBe(true);
   });
 
   it("omits the key when nothing is attached, including on the replay path", () => {
-    expect("conversation_references" in buildRunContext({ settings })).toBe(
-      false,
-    );
+    expect(
+      "conversation_references" in
+        buildRunContext({ settings, threadId: "t-1" }),
+    ).toBe(false);
     expect(
       "conversation_references" in
         buildRunContext({
           settings,
+          threadId: "t-1",
           conversationReferences: [],
         }),
     ).toBe(false);
@@ -41,11 +82,13 @@ describe("buildRunContext", () => {
       conversation_references: ["stale-source"],
     } as unknown as LocalSettings["context"];
     expect(
-      "conversation_references" in buildRunContext({ settings: stale }),
+      "conversation_references" in
+        buildRunContext({ settings: stale, threadId: "t-1" }),
     ).toBe(false);
     expect(
       buildRunContext({
         settings: stale,
+        threadId: "t-1",
         conversationReferences: ["source-a"],
       }).conversation_references,
     ).toEqual(["source-a"]);
@@ -55,6 +98,7 @@ describe("buildRunContext", () => {
     const references = ["source-a"];
     const context = buildRunContext({
       settings,
+      threadId: "t-1",
       conversationReferences: references,
     });
     references.push("source-b");
@@ -87,37 +131,24 @@ describe("buildRunContext client_timezone", () => {
 
   it("sends the browser's zone for the scheduled-task default", () => {
     mockResolvedTimeZone("Asia/Shanghai");
-    expect(buildRunContext({ settings }).client_timezone).toBe("Asia/Shanghai");
+    expect(buildRunContext({ settings, threadId: "t-1" }).client_timezone).toBe(
+      "Asia/Shanghai",
+    );
   });
 
   it("omits the key when the browser cannot tell", () => {
     mockResolvedTimeZone(() => {
       throw new RangeError("unsupported");
     });
-    expect("client_timezone" in buildRunContext({ settings })).toBe(false);
+    expect(
+      "client_timezone" in buildRunContext({ settings, threadId: "t-1" }),
+    ).toBe(false);
   });
 
   it("omits the key for an empty zone", () => {
     mockResolvedTimeZone("");
-    expect("client_timezone" in buildRunContext({ settings })).toBe(false);
+    expect(
+      "client_timezone" in buildRunContext({ settings, threadId: "t-1" }),
+    ).toBe(false);
   });
-});
-
-it("does not send server-owned thread identity from persisted or extra context", () => {
-  const stale = {
-    ...settings,
-    thread_id: "stale-thread",
-  } as unknown as LocalSettings["context"];
-  const extraContext = Object.freeze({
-    thread_id: "wrong-thread",
-    agent_name: "writer",
-  });
-  const result = buildRunContext({
-    settings: Object.freeze(stale),
-    extraContext,
-  });
-  expect(result).not.toHaveProperty("thread_id");
-  expect(result.agent_name).toBe("writer");
-  expect(stale).toHaveProperty("thread_id", "stale-thread");
-  expect(extraContext.thread_id).toBe("wrong-thread");
 });

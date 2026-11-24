@@ -40,7 +40,8 @@ The standard lead-agent builders (including custom-agent bootstrap) and
   remain model reports.
 - `history_search`: keyword search over the current messages and compacted source
   batches reachable from the current checkpoint. English words and Chinese
-  character bigrams are supported. Returns up to eight 600-character excerpts.
+  character bigrams are supported. Returns up to eight excerpts of at most 600 characters.
+  Repeated archives of one source share one result slot, preserving FTS ranking.
   The optional `role="user"`, `"assistant"`, or `"tool"` filters by message author
   type; omission or `null` preserves search across all roles. These values map to
   internal `human`, `ai`, and `tool` roles; returned role values stay unchanged.
@@ -52,7 +53,57 @@ The standard lead-agent builders (including custom-agent bootstrap) and
 - `history_read`: read the exact source ID in 4,000-character pages. Results mark
   truncation and provide `next_offset` while more stored text remains.
 
-An active skill's tool policy and runtime authorization still apply. The model
+### Search order
+
+Use `history_search(query="replicas", role="user", order="latest")` to look for a
+recent correction or decision. This orders active matches from newest to oldest
+in the current message list, then fills the remaining slots from reachable
+batches in reverse checkpoint order and from newest to oldest within each batch.
+Recapturing a batch makes it newest when the updated checkpoint is saved.
+With `order="relevance"` (the default), archived matches use the existing full-text
+rank and active matches use message-list order. Both orders apply the role
+filter and deduplicate source IDs before returning up to eight results.
+
+### Matching excerpts and character offsets
+
+Each search result includes `excerpt`, `excerpt_start`, `excerpt_end`, and
+`excerpt_match`. Offsets are zero-based, half-open Unicode character positions in
+the original source readable through `history_read`, satisfying
+`source_text[excerpt_start:excerpt_end] == excerpt`. No ellipsis or separate
+opening summary is added. Python character counting includes individual combining
+characters; it does not count UTF-8 bytes, UTF-16 code units, or grapheme clusters.
+
+For example, if `Needle` appears after 5000 characters with enough surrounding
+context, searching for `needle` returns `excerpt_start=4703` and
+`excerpt_end=5303`. Call `history_read(source_id=result.id, offset=4703)` to read
+from that excerpt onward. The excerpt is centered on the earliest locatable
+matching occurrence that fits where possible and shifts at source boundaries,
+up to 600 characters. Multiple
+terms retain OR matching: choose the earliest source position, preferring the
+shorter term when starts tie. The excerpt need not cover all terms, and result
+ranking is unchanged. Repeated terms do not increase the result count.
+
+Queries still tokenize only the first 500 characters and use the first 32 terms.
+Active sources retain casefolded substring matching; archived sources retain FTS
+token matching. Location shares the English-word and Chinese-bigram tokenizer.
+Length-changing casefolds such as `Straße` map back to original positions; the
+combining dot produced by folding `İ` follows the existing tokenization rules.
+FTS normalization may not map exactly to indexed terms, such as `cafe` matching
+`café`. Skip occurrences whose original span exceeds 600 characters and continue
+searching for a fitting occurrence, including overlapping active matches. Only
+if no complete matching occurrence can be located within a 600-character excerpt,
+return the source opening with
+`excerpt_match=false` rather than claiming the excerpt contains the keyword.
+
+Offsets apply only to the source readable in the same state. The active version
+of an ID takes precedence over its archive. If a source was archived repeatedly
+with different caps, choose the first stored version, as `history_read` does.
+Fall back explicitly if the shorter version lacks the query term. `truncated`
+still describes source truncation, not excerpt clipping; `next_offset` is computed
+against that source. Search again after compaction, retention expiry, or state
+changes; old offsets are not snapshots independent of the source lifecycle.
+
+The agent's tool configuration and runtime authorization still apply. The model
 may need more than one keyword search. Search is lexical; paraphrases are not
 reliably matched. Notes and retrieved text are historical data, never new
 instructions or proof that a reported action actually succeeded. Task notes are
@@ -102,16 +153,18 @@ creation clears the parent archive references and status; inherited note citatio
 may consequently be unavailable and need fresh verification in the branch.
 
 Retention is bounded by the configured batch/record/text limits and a 32,768-page
-SQLite ceiling (128 MiB for the default page size). The oldest physical batches
-expire as new ones are captured, even if an older checkpoint still refers to
-them. Read/search report `partially_expired` or `unavailable`; missing sources must
-be re-verified. `omitted_records` describes the latest capture's record limit,
-and each shortened source carries `truncated: true`.
-Eviction happens before replacement insertion in one write transaction.
-Competing captures serialize retention decisions; if insertion still exceeds
-capacity, rollback preserves the previous batches. Duplicate capture protects
-the current batch even when the configured retention limit is reduced.
-Storage failure preserves
+SQLite ceiling (128 MiB for the default page size). Each capture keeps its own
+batch and gives priority to the most recent references from the input
+checkpoint. Any remaining slots keep other stored batches in insertion order,
+newest first. A recapture moves its reference to the end of the next checkpoint
+without duplicating sources. If that checkpoint is never saved, later captures
+still use the last saved order. Older checkpoints may return
+`partially_expired` or `unavailable`; missing sources must be re-verified.
+`omitted_records` describes the latest capture's record limit, and each shortened
+source carries `truncated: true`.
+Eviction and replacement insertion share one write transaction. Competing
+captures serialize retention decisions, and a failed insertion rolls back
+evictions. Storage failure preserves
 ordinary compaction and marks history unavailable; it does not undo a successful
 summary. Async writes are offloaded and drained before cancellation returns.
 History tools preserve `unavailable` after a capture failure, even when older

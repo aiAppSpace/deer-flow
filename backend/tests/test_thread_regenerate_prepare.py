@@ -1307,6 +1307,37 @@ def test_prepare_edit_regenerate_payload_rejects_active_goal():
     assert exc.value.detail == "Cannot edit while a goal is active"
 
 
+@pytest.mark.parametrize(
+    "latest_values",
+    [
+        # Clearing a met goal leaves only its record.
+        {"goal_outcome": {"status": "achieved", "objective": "finish", "reply_message_id": "ai-1"}},
+        # POST /state stores an unbuilt goal the history head does not show as active.
+        {"goal": {"objective": "finish"}},
+    ],
+    ids=["met-goal-record", "goal-without-status"],
+)
+def test_prepare_edit_regenerate_payload_allows_editing_without_an_active_goal(latest_values):
+    from app.gateway.routers.thread_runs import _prepare_edit_regenerate_payload
+
+    human = HumanMessage(id="human-1", content="question")
+    ai = AIMessage(id="ai-1", content="answer v1")
+    latest = _checkpoint("ckpt-ai", [human, ai])
+    latest.checkpoint["channel_values"].update(latest_values)
+    event_store, run_manager = _answer_run_fixtures()
+
+    response = asyncio.run(
+        _prepare_edit_regenerate_payload(
+            "thread-1",
+            "human-1",
+            "updated question",
+            _request(FakeCheckpointer([latest, _checkpoint("ckpt-human", [human]), _checkpoint("ckpt-base", [])]), event_store, run_manager=run_manager),
+        )
+    )
+
+    assert response.checkpoint["checkpoint_id"] == "ckpt-base"
+
+
 def test_prepare_edit_regenerate_payload_requires_successful_source_run():
     from app.gateway.routers.thread_runs import _prepare_edit_regenerate_payload
 
@@ -1684,6 +1715,62 @@ def test_prepare_regenerate_payload_reports_recent_checkpoint_scan_limit():
     assert exc.value.status_code == 409
     assert exc.value.detail == "Could not locate target user message in recent checkpoint history (limit=200)"
     assert checkpointer.alist_limits == [400]
+
+
+# Message ids come from checkpoint state, and run input keeps a client's id
+# verbatim, so a thread owner controls them. A newline in one must not start a
+# second line in the Gateway log.
+_FORGED_LOG_LINE = "\n2026-01-01 00:00:00 INFO app.gateway.auth: forged line\r"
+
+
+def test_prepare_regenerate_run_event_scan_warning_strips_newlines_from_message_id(caplog):
+    from app.gateway.routers.thread_runs import REGENERATE_HISTORY_SCAN_LIMIT, _prepare_regenerate_payload
+
+    ai_id = f"ai-1{_FORGED_LOG_LINE}"
+    human = HumanMessage(id="human-1", content="question")
+    ai = AIMessage(id=ai_id, content="answer")
+    checkpointer = FakeCheckpointer([_checkpoint("ckpt-ai", [human, ai])])
+    unrelated_events = [{"run_id": "run-other", "event_type": "llm.ai.response", "category": "message", "content": {"id": "ai-other", "type": "ai", "content": "other"}}] * REGENERATE_HISTORY_SCAN_LIMIT
+
+    with caplog.at_level("WARNING", logger="app.gateway.routers.thread_runs"), pytest.raises(HTTPException) as exc:
+        asyncio.run(_prepare_regenerate_payload("thread-1", ai_id, _request(checkpointer, FakeEventStore(unrelated_events))))
+
+    assert exc.value.status_code == 409
+    [record] = [r for r in caplog.records if r.getMessage().startswith("Could not find source run for regenerate message")]
+    logged = record.getMessage()
+    assert "\n" not in logged and "\r" not in logged
+    assert "ai-12026-01-01 00:00:00 INFO app.gateway.auth: forged line in recent run events" in logged
+
+
+def test_prepare_regenerate_checkpoint_scan_warning_strips_newlines_from_human_message_id(caplog):
+    from app.gateway.routers.thread_runs import _prepare_regenerate_payload
+
+    human_id = f"human-1{_FORGED_LOG_LINE}"
+    human = HumanMessage(id=human_id, content="question")
+    ai = AIMessage(id="ai-1", content="answer")
+    latest = _checkpoint("ckpt-latest", [human, ai])
+    history_without_human = [_checkpoint(f"ckpt-{index}", []) for index in range(201)]
+    checkpointer = FakeCheckpointer(history_without_human, latest=latest)
+    event_store = FakeEventStore(
+        [
+            {
+                "run_id": "run-old",
+                "event_type": "llm.ai.response",
+                "category": "message",
+                "content": {"id": "ai-1", "type": "ai", "content": "answer"},
+                "metadata": {"caller": "lead_agent"},
+            }
+        ]
+    )
+
+    with caplog.at_level("WARNING", logger="app.gateway.routers.thread_runs"), pytest.raises(HTTPException) as exc:
+        asyncio.run(_prepare_regenerate_payload("thread-1", "ai-1", _request(checkpointer, event_store)))
+
+    assert exc.value.status_code == 409
+    [record] = [r for r in caplog.records if r.getMessage().startswith("Could not locate target user message")]
+    logged = record.getMessage()
+    assert "\n" not in logged and "\r" not in logged
+    assert "human-12026-01-01 00:00:00 INFO app.gateway.auth: forged line in recent checkpoint history" in logged
 
 
 def test_find_base_checkpoint_ignores_duration_only_checkpoints() -> None:

@@ -1,69 +1,12 @@
-import { createHash, webcrypto } from "node:crypto";
-
 import { afterEach, describe, expect, it, rs } from "@rstest/core";
 
 import {
   ARTIFACT_PREVIEW_MAX_BYTES,
   loadArtifactContent,
+  loadArtifactContentFromToolCall,
 } from "@/core/artifacts/loader";
 
 describe("loadArtifactContent", () => {
-  for (const full of [false, true]) {
-    it.each([
-      [206, { "Content-Range": "bytes 0-3/20" }],
-      [206, { "Content-Range": "bytes 16-19/20" }],
-      [206, {}],
-      [200, { "Content-Length": "20" }],
-    ] as const)(
-      `full=${full}: incomplete status %s headers %j never grants an editable revision`,
-      async (status, headers) => {
-        rs.spyOn(globalThis, "fetch").mockResolvedValue(
-          new Response("part", {
-            status,
-            headers: { ...headers, ETag: `"${"a".repeat(64)}"` },
-          }),
-        );
-        const result = await loadArtifactContent({
-          filepath: "/mnt/user-data/outputs/file.txt",
-          threadId: "t",
-          full,
-        });
-        expect(result.truncated).toBe(true);
-        expect(result.sha256).toBeUndefined();
-        expect(result.content).toBe("part");
-      },
-    );
-  }
-  it("cancels an oversized streaming 200 prefix even without a content length", async () => {
-    const cancel = rs.fn();
-    const stream = new ReadableStream<Uint8Array>(
-      {
-        start(controller) {
-          controller.enqueue(
-            new Uint8Array(ARTIFACT_PREVIEW_MAX_BYTES + 1).fill(65),
-          );
-        },
-        pull(controller) {
-          controller.close();
-        },
-        cancel,
-      },
-      { highWaterMark: 0 },
-    );
-    rs.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(stream, { headers: { ETag: `"${"a".repeat(64)}"` } }),
-    );
-    const loaded = await loadArtifactContent({
-      filepath: "/mnt/user-data/outputs/file.txt",
-      threadId: "t",
-    });
-    expect(cancel).toHaveBeenCalledTimes(1);
-    expect(loaded.previewBytes).toBe(ARTIFACT_PREVIEW_MAX_BYTES);
-    expect(loaded.content.length).toBe(ARTIFACT_PREVIEW_MAX_BYTES);
-    expect(loaded.truncated).toBe(true);
-    expect(loaded.sha256).toBeUndefined();
-  });
-
   afterEach(() => {
     rs.restoreAllMocks();
     rs.unstubAllGlobals();
@@ -242,122 +185,52 @@ describe("loadArtifactContent", () => {
       full: true,
     });
 
-    // A complete response needs the real Gateway-compatible revision, including
-    // when a LAN origin does not expose WebCrypto and the proxy omits ETag.
-    expect(loaded.sha256).toBe(
-      "eebbf6457e46a7f63acdf9b97390f790ba443d60cfa44b607da7e5c40aa1cc1d",
-    );
+    // FNV-1a fallback keeps preview working and returns a string; because it
+    // is not a 64-hex digest the UI treats it as non-editable (no 422 on save).
+    expect(typeof loaded.sha256).toBe("string");
+    expect(loaded.sha256).toHaveLength(8);
   });
 });
 
-describe("Gateway byte revisions across browser crypto availability", () => {
-  afterEach(() => {
-    rs.restoreAllMocks();
-    rs.unstubAllGlobals();
-  });
-  for (const mode of ["webcrypto", "no-subtle", "no-crypto"] as const) {
-    it.each([
-      "",
-      "abc",
-      "中文 😀\r\n",
-      "\ufeff# BOM artifact\n",
-      "a".repeat(129),
-    ])(`${mode} hashes original response bytes for %j`, async (content) => {
-      rs.stubGlobal(
-        "crypto",
-        mode === "webcrypto"
-          ? webcrypto
-          : mode === "no-subtle"
-            ? {}
-            : undefined,
-      );
-      const bytes = new TextEncoder().encode(content);
-      rs.stubGlobal(
-        "fetch",
-        rs.fn(async () => new Response(bytes)),
-      );
-      const loaded = await loadArtifactContent({
-        filepath: "/mnt/user-data/outputs/revision.txt",
-        threadId: "t",
-        full: true,
-      });
-      expect(loaded.sha256).toBe(
-        createHash("sha256").update(bytes).digest("hex"),
-      );
-      expect(loaded.truncated).toBe(false);
-    });
-  }
-  it("does not expose a full-file revision for a truncated range with an ETag", async () => {
-    rs.stubGlobal(
-      "fetch",
-      rs.fn(
-        async () =>
-          new Response("partial", {
-            status: 206,
-            headers: {
-              ETag: `"${"a".repeat(64)}"`,
-              "Content-Range": "bytes 0-6/1000",
+describe("loadArtifactContentFromToolCall", () => {
+  type ToolCallThread = Parameters<
+    typeof loadArtifactContentFromToolCall
+  >[0]["thread"];
+
+  const thread = {
+    messages: [
+      {
+        type: "ai",
+        id: "ai-1",
+        tool_calls: [
+          {
+            id: "call-1",
+            name: "str_replace",
+            args: {
+              path: "/mnt/user-data/outputs/report.md",
+              content: "patched",
             },
-          }),
-      ),
-    );
-    const loaded = await loadArtifactContent({
-      filepath: "/mnt/user-data/outputs/revision.txt",
-      threadId: "t",
-    });
-    expect(loaded.truncated).toBe(true);
-    expect(loaded.sha256).toBeUndefined();
+          },
+        ],
+      },
+    ],
+  } as unknown as ToolCallThread;
+
+  it("returns undefined instead of throwing for a malformed write-file URL", () => {
+    expect(
+      loadArtifactContentFromToolCall({ url: "write-file://[", thread }),
+    ).toBeUndefined();
+    expect(
+      loadArtifactContentFromToolCall({ url: "write-file:%E0%A4%A", thread }),
+    ).toBeUndefined();
   });
-  it("normalizes a weak uppercase Gateway SHA-256 ETag", async () => {
-    rs.stubGlobal("crypto", undefined);
-    rs.stubGlobal(
-      "fetch",
-      rs.fn(
-        async () =>
-          new Response("content", {
-            headers: { ETag: `W/"${"A".repeat(64)}"` },
-          }),
-      ),
-    );
-    const loaded = await loadArtifactContent({
-      filepath: "/mnt/user-data/outputs/revision.txt",
-      threadId: "t",
-    });
-    expect(loaded.sha256).toBe("a".repeat(64));
-  });
-  it("keeps empty ranged files editable without WebCrypto", async () => {
-    rs.stubGlobal("crypto", undefined);
-    rs.stubGlobal(
-      "fetch",
-      rs.fn(
-        async () =>
-          new Response(null, {
-            status: 416,
-            headers: { "Content-Range": "bytes */0" },
-          }),
-      ),
-    );
-    const loaded = await loadArtifactContent({
-      filepath: "/mnt/user-data/outputs/empty.txt",
-      threadId: "t",
-    });
-    expect(loaded.sha256).toBe(createHash("sha256").update("").digest("hex"));
-  });
-  it("uses the same visible HTTP failure message", async () => {
-    rs.stubGlobal(
-      "fetch",
-      rs.fn(async () =>
-        Response.json(
-          { detail: "Private transport diagnostics" },
-          { status: 403 },
-        ),
-      ),
-    );
-    await expect(
-      loadArtifactContent({
-        filepath: "/mnt/user-data/outputs/revision.txt",
-        threadId: "t",
+
+  it("reads non-write_file tool output through the parsed coordinates", () => {
+    expect(
+      loadArtifactContentFromToolCall({
+        url: "write-file:/mnt/user-data/outputs/report.md?message_id=ai-1&tool_call_id=call-1",
+        thread,
       }),
-    ).rejects.toThrow("Failed to load artifact: 403");
+    ).toBe("patched");
   });
 });

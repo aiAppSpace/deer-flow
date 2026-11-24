@@ -57,13 +57,13 @@ import { ConversationExtensionActions } from "@/components/workspace/conversatio
 import { getAPIClient } from "@/core/api";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { hasPermission, PERMISSIONS } from "@/core/auth/permissions";
-import { writeTextToClipboard } from "@/core/clipboard";
 import { useI18n } from "@/core/i18n/hooks";
 import { useProjects } from "@/core/projects";
 import { useLocalSettings } from "@/core/settings";
 import { isStaticWebsiteOnly } from "@/core/static-mode";
 import { exportThread, type ThreadExportFormat } from "@/core/threads/export";
 import {
+  fetchThreadExportMessages,
   useInfiniteThreads,
   useMoveThreadToProject,
   usePinThread,
@@ -94,6 +94,7 @@ import {
 } from "./thread-channel-source";
 import { useThreadDeleteDialog } from "./thread-delete-dialog";
 import { VirtualThreadList } from "./thread-list-virtualizer";
+import { ThreadShareDialog } from "./thread-share-dialog";
 import { useThreadArchiveAction } from "./use-thread-archive-action";
 
 /**
@@ -173,6 +174,8 @@ export function ThreadSidebarItem({
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const [renameValue, setRenameValue] = useState("");
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const handleRenameSubmit = useCallback(() => {
     if (renameValue.trim()) {
@@ -220,44 +223,28 @@ export function ThreadSidebarItem({
     );
   }, [t.chats.pinChatFailed, thread, updatePinnedThread]);
 
-  const handleShare = useCallback(async () => {
-    // Always use Vercel URL for sharing so others can access
-    const VERCEL_URL = "https://deer-flow-v2.vercel.app";
-    const isLocalhost =
-      window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1";
-    // On localhost: use Vercel URL; On production: use current origin
-    const baseUrl = isLocalhost ? VERCEL_URL : window.location.origin;
-    const shareUrl = `${baseUrl}${pathOfThread(thread)}`;
-    try {
-      const didCopy = await writeTextToClipboard(shareUrl);
-      if (!didCopy) {
-        toast.error(t.clipboard.failedToCopyToClipboard);
-        return;
-      }
-
-      toast.success(t.clipboard.linkCopied);
-    } catch {
-      toast.error(t.clipboard.failedToCopyToClipboard);
-    }
-  }, [t, thread]);
-
   const handleExport = useCallback(
     async (format: ThreadExportFormat) => {
+      setExporting(true);
       try {
-        const apiClient = getAPIClient();
-        const state = await apiClient.threads.getState<AgentThreadState>(
-          thread.thread_id,
-        );
-        const messages = state.values?.messages ?? [];
+        const messages = isStaticWebsiteOnly()
+          ? ((
+              await getAPIClient().threads.getState<AgentThreadState>(
+                thread.thread_id,
+              )
+            ).values?.messages ?? [])
+          : await fetchThreadExportMessages(thread.thread_id);
         if (messages.length === 0) {
           toast.error(t.conversation.noMessages);
           return;
         }
         exportThread(thread, messages, format);
         toast.success(t.common.exportSuccess);
-      } catch {
+      } catch (error) {
+        console.error(error);
         toast.error(t.common.exportFailed);
+      } finally {
+        setExporting(false);
       }
     },
     [t, thread],
@@ -367,12 +354,19 @@ export function ThreadSidebarItem({
               <Pencil className="text-muted-foreground" />
               <span>{t.common.rename}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void handleShare()}>
+            <DropdownMenuItem
+              disabled={
+                isStaticWebsiteOnly() ||
+                !hasPermission(user, PERMISSIONS.THREADS_WRITE) ||
+                !hasPermission(user, PERMISSIONS.RUNS_READ)
+              }
+              onSelect={() => setShareOpen(true)}
+            >
               <Share2 className="text-muted-foreground" />
               <span>{t.common.share}</span>
             </DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger disabled={exporting}>
                 <Download className="text-muted-foreground" />
                 <span>{t.common.export}</span>
               </DropdownMenuSubTrigger>
@@ -416,6 +410,11 @@ export function ThreadSidebarItem({
         </DropdownMenu>
       )}
 
+      <ThreadShareDialog
+        threadId={thread.thread_id}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent

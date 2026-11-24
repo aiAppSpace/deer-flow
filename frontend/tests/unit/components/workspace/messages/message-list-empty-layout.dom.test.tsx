@@ -18,6 +18,7 @@ rs.mock("@/components/ai-elements/conversation", () => ({
   ConversationContent: (props: ComponentProps<"div">) => (
     <div {...props} data-testid="content-boundary" />
   ),
+  ConversationScrollButton: () => null,
 }));
 rs.mock("@/components/workspace/messages/virtual-message-list", () => ({
   VirtualMessageList: ({

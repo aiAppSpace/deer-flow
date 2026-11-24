@@ -300,7 +300,7 @@ export const enUS: Translations = {
   subagentBatches: {
     label: "Batches",
     title: "Subagent batches",
-    description: "Durable, restart-safe work for many independent items.",
+    description: "Background batch work with saved progress.",
     workerUnavailable:
       "The batch worker is not running. Historical batches remain available in read-only mode.",
     empty: "No subagent batches yet",
@@ -460,11 +460,11 @@ export const enUS: Translations = {
     voiceInputStartLabel: "Dictate with voice",
     voiceInputStopLabel: "Stop voice input",
     voiceInputStart:
-      "Dictate with voice. DeerFlow receives only transcribed text; audio is handled by your browser or system speech service.",
+      "Record audio and send it to the configured transcription service.",
     voiceInputStop: "Stop voice input",
-    voiceInputListening: "Listening... Click to stop voice input.",
+    voiceInputListening: "Recording… Finish to review or polish your text.",
     voiceInputUnsupported:
-      "Voice input is not supported in this browser. Try Chrome or Edge.",
+      "Recording requires HTTPS (or localhost) and a browser that supports microphone recording.",
     voiceInputPermissionDenied:
       "Microphone access was denied. Allow microphone access and try again.",
     voiceInputMicrophoneUnavailable:
@@ -1012,6 +1012,8 @@ export const enUS: Translations = {
         maxContinuations: "Continuation limit reached",
         noProgress: "No progress between turns",
         tokenCapped: "Token budget reached",
+        loopCapped: "Repeated tool calls reached the safety limit",
+        recursionCapped: "The run reached its step limit",
         evaluatorFailed: "Couldn't check the goal; the run itself may be fine",
         noDurableEndOfTurn: "Couldn't check the goal: no final reply was saved",
         threadChanged:
@@ -1033,6 +1035,8 @@ export const enUS: Translations = {
     apiErrors: {
       generic: "Something went wrong.",
       invalidRequest: "Some fields are invalid.",
+      invalidNotificationGroup:
+        "This Feishu group is no longer available. Select another group or remove the additional notification.",
       invalidSchedule: "This schedule isn't valid.",
       invalidScheduleType: "This kind of schedule isn't supported.",
       invalidTimezone: "Unknown timezone.",
@@ -1179,7 +1183,7 @@ export const enUS: Translations = {
     saveCommandMessage:
       "Please save this custom agent now based on everything we have discussed so far. Treat this as my explicit confirmation to save. If some details are still missing, make reasonable assumptions, generate a concise first SOUL.md in English, and call setup_agent immediately without asking me for more confirmation.",
     agentCreatedPendingRefresh:
-      "The agent was created, but DeerFlow could not load it yet. Please refresh this page in a moment.",
+      "DeerFlow could not confirm the saved agent. Please try saving it again.",
     more: "More actions",
     agentCreated: "Agent created!",
     startChatting: "Start chatting",
@@ -1445,9 +1449,9 @@ export const enUS: Translations = {
       failedTitle: "Unable to connect",
     },
     scheduledUpdates: {
-      supported: "Scheduled task updates: sent here",
+      supported: "Scheduled task updates: supported; manage in Notification settings",
       supportedAfterConnect:
-        "Scheduled task updates: available after you connect",
+        "Scheduled task updates: supported; connect to manage notifications",
       unsupported: "Scheduled task updates: not available for this app yet",
     },
   },
@@ -1721,7 +1725,7 @@ export const enUS: Translations = {
       lightDescription: "Bright palette with higher contrast for daytime.",
       darkDescription: "Dim palette that reduces glare for focus.",
       languageTitle: "Language",
-      languageDescription: "Switch between languages.",
+      languageDescription: "Choose the interface language and preferred language for replies.",
     },
     tools: {
       title: "Tools",
@@ -2161,7 +2165,7 @@ export const enUS: Translations = {
       enable: "Enable",
       disable: "Disable",
       formDescription:
-        "Connect an OpenAI-compatible endpoint. Testing sends a short streaming tool-call request and may incur provider charges.",
+        "Choose a provider and enter its API key and model ID. Testing sends a short streaming tool-call request and may incur provider charges.",
       provider: "Provider",
       providerOpenAICompatible: "OpenAI compatible",
       apiKey: "API Key",

@@ -92,14 +92,16 @@ it("serialization failure produces neither a notification nor a native call", as
   expect(observer).not.toHaveBeenCalled();
   expect(nativeFetch).not.toHaveBeenCalled();
 });
-it("CSRF decode failure produces neither a notification nor a native call", async () => {
+it("CSRF decode failure falls back to the raw cookie and still sends", async () => {
+  // fetcher.readCsrfCookie catches URIError so a truncated percent-escape
+  // cannot break every API call on a shared host cookie jar.
   document.cookie = "csrf_token=%E0%A4%A; path=/";
   const observer = rs.fn();
-  await expect(send(documentPayload(), observer)).rejects.toBeInstanceOf(
-    URIError,
-  );
-  expect(observer).not.toHaveBeenCalled();
-  expect(nativeFetch).not.toHaveBeenCalled();
+  await send(documentPayload(), observer);
+  expect(observer).toHaveBeenCalledOnce();
+  expect(nativeFetch).toHaveBeenCalledOnce();
+  const headers = new Headers(nativeFetch.mock.calls[0]?.[1]?.headers);
+  expect(headers.get("x-csrf-token")).toBe("%E0%A4%A");
 });
 it("serializes exactly once and retains URL-before-body evaluation", async () => {
   const order: string[] = [];

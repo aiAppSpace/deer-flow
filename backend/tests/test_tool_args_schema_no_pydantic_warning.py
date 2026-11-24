@@ -15,17 +15,14 @@ from __future__ import annotations
 
 import inspect
 import warnings
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 from langchain.tools import ToolRuntime
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
 from deerflow.sandbox.tools import (
-    append_artifact_chunk_tool,
     bash_tool,
-    begin_artifact_write_tool,
-    finalize_artifact_write_tool,
     glob_tool,
     grep_tool,
     ls_tool,
@@ -62,9 +59,6 @@ _TOOL_CASES = [
     (read_file_tool, {"description": "read", "path": "/tmp/x"}),
     (write_file_tool, {"description": "write", "path": "/tmp/x", "content": "hi"}),
     (str_replace_tool, {"description": "replace", "path": "/tmp/x", "old_str": "a", "new_str": "b"}),
-    (begin_artifact_write_tool, {"description": "begin", "path": "/tmp/x"}),
-    (append_artifact_chunk_tool, {"description": "chunk", "path": "/tmp/x", "chunk_index": 0, "content": "hi"}),
-    (finalize_artifact_write_tool, {"description": "finalize", "path": "/tmp/x"}),
     (list_uploaded_files, {"include_outline": False, "max_results": 20}),
     (present_file_tool, {"filepaths": ["/tmp/x"], "tool_call_id": "call-1"}),
     (view_image_tool, {"image_path": "/tmp/img.png", "tool_call_id": "call-1"}),
@@ -228,16 +222,18 @@ async def test_sandbox_tool_sync_async_signatures_and_forwarding_stay_aligned(
     run_sync_tool = AsyncMock(return_value="forwarded")
     monkeypatch.setattr("deerflow.sandbox.tools._run_sync_tool_after_async_sandbox_init", run_sync_tool)
     runtime = object()
+    # read_file supplies a private callback to format sandbox initialization errors.
+    forwarded_kwargs = {"_error_result": ANY} if tool_obj is read_file_tool else {}
 
     assert await tool_obj.coroutine(runtime=runtime, **call_args) == "forwarded"
-    run_sync_tool.assert_awaited_once_with(tool_obj.func, runtime, *forwarded_args)
+    run_sync_tool.assert_awaited_once_with(tool_obj.func, runtime, *forwarded_args, **forwarded_kwargs)
 
     run_sync_tool.reset_mock()
     call_args_without_description = {key: value for key, value in call_args.items() if key != "description"}
     forwarded_without_description = tuple("" if value == "description" else value for value in forwarded_args)
 
     assert await tool_obj.coroutine(runtime=runtime, **call_args_without_description) == "forwarded"
-    run_sync_tool.assert_awaited_once_with(tool_obj.func, runtime, *forwarded_without_description)
+    run_sync_tool.assert_awaited_once_with(tool_obj.func, runtime, *forwarded_without_description, **forwarded_kwargs)
 
 
 def test_task_tool_description_is_optional_but_discoverable() -> None:
@@ -245,11 +241,12 @@ def test_task_tool_description_is_optional_but_discoverable() -> None:
     parameters = convert_to_openai_tool(task_tool)["function"]["parameters"]
 
     assert parameters["required"] == ["prompt", "subagent_type"]
-    assert list(parameters["properties"]) == ["prompt", "subagent_type", "acceptance_criteria", "description", "context_mode"]
+    assert list(parameters["properties"]) == ["prompt", "subagent_type", "acceptance_criteria", "description", "context_mode", "model_name"]
     assert parameters["properties"]["description"]["description"]
 
     validated = task_tool.tool_call_schema.model_validate({"prompt": "go", "subagent_type": "general-purpose"})
     assert validated.description == ""
+    assert validated.model_name is None
 
 
 def test_list_uploaded_files_model_schema_excludes_injected_runtime() -> None:

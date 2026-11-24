@@ -51,7 +51,7 @@ rs.mock("@/components/workspace/sidecar/context", () => ({
   useMaybeSidecar: () => undefined,
 }));
 rs.mock("@/components/workspace/messages/context", () => ({
-  useThread: () => ({ thread: { values: {} } }),
+  useThread: () => ({ thread: { values: {}, messages: [] } }),
 }));
 rs.mock("@/core/i18n/hooks", () => ({
   useI18n: () => ({ t: { common: { more: "More" } } }),

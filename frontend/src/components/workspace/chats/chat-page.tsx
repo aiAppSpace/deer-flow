@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ArtifactTrigger } from "@/components/workspace/artifacts";
 import { BrowserTrigger } from "@/components/workspace/browser-view";
 import { ContextUsageBadge } from "@/components/workspace/context-usage-badge";
@@ -20,11 +19,10 @@ import {
   type InputBoxHandle,
 } from "@/components/workspace/input-box";
 import { KnowledgeScopeSelector } from "@/components/workspace/knowledge-scope-selector";
-import {
-  MessageList,
-  MESSAGE_LIST_DEFAULT_PADDING_BOTTOM,
-} from "@/components/workspace/messages";
+import { MESSAGE_LIST_DEFAULT_PADDING_BOTTOM } from "@/components/workspace/messages";
 import { ThreadContext } from "@/components/workspace/messages/context";
+import { HumanInputCard } from "@/components/workspace/messages/human-input-card";
+import { SearchableMessageList as MessageList } from "@/components/workspace/search-message-window";
 import {
   SidecarProvider,
   SidecarTrigger,
@@ -32,6 +30,7 @@ import {
 import { ThreadArchiveStatus } from "@/components/workspace/thread-archive-status";
 import { ThreadBackgroundTasks } from "@/components/workspace/thread-background-tasks";
 import { ThreadExtensionActions } from "@/components/workspace/thread-extension-actions";
+import { ThreadRunInputs } from "@/components/workspace/thread-run-inputs";
 import { ThreadScheduledTasksButton } from "@/components/workspace/thread-scheduled-tasks-button";
 import { ThreadSubagentBatches } from "@/components/workspace/thread-subagent-batches";
 import { ThreadTitle } from "@/components/workspace/thread-title";
@@ -39,6 +38,7 @@ import { TodoList } from "@/components/workspace/todo-list";
 import { TokenUsageIndicator } from "@/components/workspace/token-usage-indicator";
 import { useActiveGoal } from "@/components/workspace/use-active-goal";
 import { Welcome } from "@/components/workspace/welcome";
+import { WorkspaceSidebarTrigger } from "@/components/workspace/workspace-sidebar-trigger";
 import { useAuth } from "@/core/auth/AuthProvider";
 import { hasPermission, PERMISSIONS } from "@/core/auth/permissions";
 import {
@@ -59,13 +59,16 @@ import {
   type HumanInputResponse,
 } from "@/core/messages/human-input";
 import { isHiddenFromUIMessage } from "@/core/messages/utils";
+import { modelTaskInput } from "@/core/models/control";
 import { useModels } from "@/core/models/hooks";
+import { useModelControl } from "@/core/models/use-model-control";
+import { notificationBody } from "@/core/notification/body";
 import { useNotification } from "@/core/notification/hooks";
 import { useProject } from "@/core/projects";
 import { useThreadScheduledTaskEvents } from "@/core/scheduled-tasks/events";
 import { useScheduleToolResultRefresh } from "@/core/scheduled-tasks/hooks";
 import { useLocalSettings, useThreadSettings } from "@/core/settings";
-import { resolveThreadContext } from "@/core/settings/store";
+import { resolveThreadContext, selectThreadModel } from "@/core/settings/store";
 import { createThread } from "@/core/threads/api";
 import {
   useBranchThread,
@@ -88,7 +91,7 @@ import { useMarkOpenThreadRead } from "./use-mark-open-thread-read";
 import { useThreadChat } from "./use-thread-chat";
 
 export default function ChatPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { user } = useAuth();
   const canStopStreaming = hasPermission(user, PERMISSIONS.RUNS_CANCEL);
   const canCreateRuns = hasPermission(user, PERMISSIONS.RUNS_CREATE);
@@ -129,9 +132,15 @@ export default function ChatPage() {
   // the moment the user submits so the UI animates immediately, even though
   // `isNewThread` stays true until the backend actually creates the thread.
   const [isWelcomeMode, setIsWelcomeMode] = useState(isNewThread);
-  const [tailRequest, setTailRequest] = useState(0);
   const queryClient = useQueryClient();
   const [settings, setSettings] = useThreadSettings(threadId);
+  const modelControl = useModelControl(
+    `${user?.id ?? "anonymous"}:${threadId}`,
+    locale,
+  );
+  const prepareModelControl = modelControl.prepare;
+  const [modelChoiceSummary, setModelChoiceSummary] = useState("");
+  useEffect(() => setModelChoiceSummary(""), [threadId, user?.id]);
   const [localSettings, setLocalSettings] = useLocalSettings();
   // `browserEnabled` below already requires `!isMock`; don't fetch what a
   // showcase page can never use.
@@ -139,6 +148,19 @@ export default function ChatPage() {
     enabled: !isMock,
   });
   const { tokenUsageEnabled } = useModels();
+  const threadTokenUsage = useThreadTokenUsage(
+    isNewThread || isMock ? undefined : threadId,
+    { enabled: !isMock },
+  );
+  const threadMetadata = useThreadMetadata(threadId, {
+    enabled: !isNewThread && !isMock,
+    isMock,
+  });
+  // A saved thread that exists on the server is being read while open:
+  // clears its unread dot (sidebar and chats list) on every device.
+  const markThreadRead = useMarkOpenThreadRead(threadId, {
+    enabled: !isNewThread && !isMock && threadMetadata.data != null,
+  });
   // Lifecycle lines of schedules created in this chat ("Paused by agent",
   // "Finished"); they stay after the task is deleted.
   const scheduledTaskEvents = useThreadScheduledTaskEvents(threadId, {
@@ -202,12 +224,21 @@ export default function ChatPage() {
     thread,
     pendingUsageMessages,
     sendMessage,
+    sendInput,
+    runInputs,
+    canSendInput,
+    activeRunId,
+    activeRunStartedAt,
     regenerateMessage,
     editAndRegenerateMessage,
     isUploading,
     isHistoryLoading,
     hasMoreHistory,
     loadMoreHistory,
+    approvalRequests,
+    hasPendingApproval,
+    submitHitlApproval,
+    waitingForInputRunIds,
   } = useThreadStream({
     threadId: isNewThread ? undefined : threadId,
     displayThreadId: threadId,
@@ -218,7 +249,6 @@ export default function ChatPage() {
     // thread id and assumes the thread exists on the backend (issue #2746).
     onSend: () => {
       setIsWelcomeMode(false);
-      setTailRequest((request) => request + 1);
     },
     onStart: (createdThreadId) => {
       // ! Important: Never use next.js router for navigation in this case, otherwise it will cause the thread to re-mount and lose all states. Use native history API instead.
@@ -231,59 +261,23 @@ export default function ChatPage() {
       // it is open: it has been read.
       markThreadRead();
       if (document.hidden || !document.hasFocus()) {
-        let body = "Conversation finished";
         const lastMessage = state.messages.at(-1);
-        if (lastMessage) {
-          const textContent = textOfMessage(lastMessage);
-          if (textContent) {
-            body =
-              textContent.length > 200
-                ? textContent.substring(0, 200) + "..."
-                : textContent;
-          }
-        }
-        showNotification(state.title, { body });
+        showNotification(state.title, {
+          body: notificationBody(
+            lastMessage ? textOfMessage(lastMessage) : null,
+          ),
+        });
       }
     },
+    restInterrupts: threadMetadata.data?.interrupts,
+    restInterruptsLoading: threadMetadata.isLoading,
+    restInterruptsError: threadMetadata.isError,
   });
 
   const hasThreadMessages = thread.messages.length > 0;
   // A schedule_task result refreshes the header button and cards at once.
   useScheduleToolResultRefresh(isMock ? null : threadId, thread.messages);
 
-  /*
-    这两个查询**要等这一轮 run 结束再取**，所以声明在 `useThreadStream` 之后
-    —— `thread.isLoading` 是 SDK 维护的「有一轮 run 正在流」。
-
-    为什么：新建会话那条路上，`onStart` 一把 `isNewThread` 翻假就把它们挂上并立刻取，
-    而 `onFinish` 又会把同一批 key 失效一次。同一个逻辑事件被两个独立机制各触发一次取数
-    ——**不是竞态，是重复**。竞态只决定 React Query 有没有恰好去重：实测 invalidate 落在
-    第一次 fetch 之后 +7ms 时被去重（一轮），+16ms 时真的重取（两轮），
-    于是同一个构建连取 20 次会出现两个不同的请求多重集。
-
-    去掉哪一次：**`onStart` 那一次**。它取的是一轮**正在跑的** run 的历史与用量，随即被
-    `onFinish` 覆盖——对照实测两个终态的 `aria` **逐字相同**，也就是说那一轮取数
-    **没有任何可观察效果**。留下的是 `onFinish` 之后那一次，携带的才是终值。
-
-    失败路径不用手搓标志去数：`thread.isLoading` 由 SDK 在**流结束**时翻假，
-    报错、用户 stop、运行完成三条路都走同一个翻转；运行中刷新页面是全新一次挂载，
-    本来就没有 run 在流。查询被禁用期间 React Query 继续显示已缓存的值，
-    与此前「两次 fetch 之间」显示的东西一样，所以没有可见退化。
-  */
-  const runInFlight = thread.isLoading;
-  const threadTokenUsage = useThreadTokenUsage(
-    isNewThread || isMock ? undefined : threadId,
-    { enabled: !isMock && !runInFlight },
-  );
-  const threadMetadata = useThreadMetadata(threadId, {
-    enabled: !isNewThread && !isMock && !runInFlight,
-    isMock,
-  });
-  // A saved thread that exists on the server is being read while open:
-  // clears its unread dot (sidebar and chats list) on every device.
-  const markThreadRead = useMarkOpenThreadRead(threadId, {
-    enabled: !isNewThread && !isMock && threadMetadata.data != null,
-  });
   const backendTokenUsage = threadTokenUsageToTokenUsage(threadTokenUsage.data);
   const contextUsage = selectContextUsage(threadTokenUsage.data);
 
@@ -367,6 +361,28 @@ export default function ChatPage() {
   const handleSubmit = useCallback(
     async (message: PromptInputMessage, options?: InputBoxSubmitOptions) => {
       const submissionEpoch = submissionEpochRef.current;
+      setModelChoiceSummary("");
+      const choice = await prepareModelControl(message.text);
+      const modelInput = modelTaskInput(message.text, choice);
+      if (submissionEpochRef.current !== submissionEpoch)
+        throw new Error("thread-submission-stale");
+      const runModelContext: Record<string, unknown> = {};
+      if (choice?.model_name) {
+        if (choice.scope === "task") {
+          if (settings.context.mode !== "ultra") {
+            toast.error(
+              locale.startsWith("zh")
+                ? "当前未启用子任务，请先启用 Ultra 模式。"
+                : "Subtasks are disabled. Enable Ultra mode first.",
+            );
+            throw new Error("subtasks-disabled");
+          }
+          runModelContext.subagent_model_name = choice.model_name;
+        } else {
+          runModelContext.model_name = choice.model_name;
+          runModelContext.model_selection_requested = choice.model_name;
+        }
+      }
       await ensureProjectThread();
       // Conversation switched (or the page unmounted) while the project
       // pre-create was pending: drop the submission. Reject silently — the
@@ -375,6 +391,45 @@ export default function ChatPage() {
       if (submissionEpochRef.current !== submissionEpoch) {
         throw new Error("thread-submission-stale");
       }
+      if (
+        choice?.scope === "conversation" &&
+        !modelInput.text &&
+        message.files.length === 0 &&
+        isNewThread &&
+        !projectParam
+      ) {
+        await createThread(threadId);
+        if (submissionEpochRef.current !== submissionEpoch)
+          throw new Error("thread-submission-stale");
+      }
+      if (choice?.model_name) {
+        if (choice.scope === "conversation")
+          try {
+            selectThreadModel(threadId, choice.model_name);
+          } catch (error) {
+            toast.error(
+              locale.startsWith("zh")
+                ? "无法在浏览器保存本对话的默认模型，请检查存储权限。"
+                : "Unable to save this conversation's default model. Check browser storage permissions.",
+            );
+            throw error;
+          }
+        const label =
+          choice.candidates.find((item) => item.name === choice.model_name)
+            ?.label ?? choice.model_name;
+        const scopeLabel = locale.startsWith("zh")
+          ? ({
+              task: "本次子任务",
+              turn: "仅本次主任务",
+              conversation: "本对话默认模型",
+            } as const)
+          : ({
+              task: "This subtask",
+              turn: "This turn only",
+              conversation: "Conversation default",
+            } as const);
+        setModelChoiceSummary(`${scopeLabel[choice.scope!]} · ${label}`);
+      } else setModelChoiceSummary("");
       const scopedOptions = currentKnowledgeScopeSnapshot
         ? {
             ...options,
@@ -384,18 +439,78 @@ export default function ChatPage() {
             },
           }
         : options;
+      if (
+        choice?.scope === "turn" &&
+        !modelInput.text &&
+        message.files.length === 0
+      ) {
+        toast.info(
+          locale.startsWith("zh")
+            ? "请补充这次需要处理的任务。"
+            : "Please include the task to run with this model.",
+        );
+        throw new Error("model-task-missing");
+      }
+      if (
+        choice?.scope === "conversation" &&
+        !modelInput.text &&
+        message.files.length === 0
+      ) {
+        if (isNewThread) {
+          history.replaceState(null, "", `/workspace/chats/${threadId}`);
+          setThreadId(threadId);
+          setIsNewThread(false);
+        }
+        options?.onSent?.();
+        toast.success(
+          locale.startsWith("zh")
+            ? "已设置本对话的默认模型。"
+            : "Conversation default model saved.",
+        );
+        return;
+      }
+      const executionOptions = {
+        ...scopedOptions,
+        onSent: () => {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("message");
+          url.searchParams.delete("message_seq");
+          history.replaceState(
+            null,
+            "",
+            `${url.pathname}${url.search}${url.hash}`,
+          );
+          scopedOptions?.onSent?.();
+        },
+        additionalKwargs: {
+          ...scopedOptions?.additionalKwargs,
+          ...modelInput.additionalKwargs,
+        },
+      };
       const sendPromise = sendMessage(
         threadId,
-        message,
-        undefined,
-        scopedOptions,
+        { ...message, text: modelInput.text },
+        runModelContext,
+        executionOptions,
       );
       if (message.files.length > 0) {
         return sendPromise;
       }
       void sendPromise;
     },
-    [currentKnowledgeScopeSnapshot, sendMessage, threadId, ensureProjectThread],
+    [
+      currentKnowledgeScopeSnapshot,
+      sendMessage,
+      threadId,
+      ensureProjectThread,
+      prepareModelControl,
+      settings.context.mode,
+      locale,
+      isNewThread,
+      projectParam,
+      setThreadId,
+      setIsNewThread,
+    ],
   );
   const handleSubmitHumanInput = useCallback(
     async (request: HumanInputRequest, response: HumanInputResponse) => {
@@ -423,6 +538,13 @@ export default function ChatPage() {
       return sent;
     },
     [currentKnowledgeScopeSnapshot, sendMessage, threadId],
+  );
+  const handleSubmitApproval = useCallback(
+    (
+      request: (typeof approvalRequests)[number],
+      responses: Parameters<typeof submitHitlApproval>[2],
+    ) => submitHitlApproval(threadId, request, responses),
+    [submitHitlApproval, threadId],
   );
   const handleStop = useCallback(async () => {
     await thread.stop();
@@ -476,9 +598,11 @@ export default function ChatPage() {
     : "off";
   const hasTodos = (thread.values.todos?.length ?? 0) > 0;
   const browserEnabled = !isNewThread && !isMock && browserControlEnabled;
-  const { activeGoal, hasGoal, setLocalGoal } = useActiveGoal(
+  const { activeGoal, hasGoal, goalOutcome, setLocalGoal } = useActiveGoal(
     threadId,
     thread.values.goal,
+    thread.values.goal_outcome,
+    thread.messages,
   );
   const hasOpenHumanInputCard = useMemo(
     () =>
@@ -496,6 +620,16 @@ export default function ChatPage() {
     !isNewThread && !isMock && threadMetadata.data
       ? projectIdOfThread(threadMetadata.data)
       : null;
+  // A goal blocks edit-and-rerun server-side; show the pencil locked.
+  const editBase =
+    !isNewThread &&
+    !isMock &&
+    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
+    !isUploading &&
+    !thread.isLoading &&
+    !branchThread.isPending &&
+    !hasOpenHumanInputCard &&
+    !hasPendingApproval;
 
   return (
     <ThreadContext.Provider value={{ thread, isMock }}>
@@ -536,7 +670,7 @@ export default function ChatPage() {
                 )}
               >
                 {!isMock && (
-                  <SidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
+                  <WorkspaceSidebarTrigger className="max-[361px]:size-[36px] max-[361px]:p-0 md:hidden max-[361px]:[&_svg]:size-[16px]" />
                 )}
                 <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
                   <ThreadTitle
@@ -601,6 +735,8 @@ export default function ChatPage() {
                 )}
               >
                 <MessageList
+                  activeRunId={activeRunId}
+                  activeRunStartedAt={activeRunStartedAt}
                   archiveDownloadsEnabled={
                     isNewThread || isMock || threadMetadata.data != null
                   }
@@ -609,7 +745,6 @@ export default function ChatPage() {
                     !isWelcomeMode && "pt-10 @max-3xl/chat-pane:pt-0",
                   )}
                   testId="main-message-list"
-                  tailRequest={tailRequest}
                   threadId={threadId}
                   thread={thread}
                   scheduledTaskEvents={scheduledTaskEvents.data}
@@ -619,24 +754,29 @@ export default function ChatPage() {
                   loadMoreHistory={loadMoreHistory}
                   isHistoryLoading={isHistoryLoading}
                   tokenUsageInlineMode={tokenUsageInlineMode}
+                  approvalRequests={approvalRequests}
+                  approvalMetadataLoading={
+                    hasPendingApproval && approvalRequests.length === 0
+                  }
+                  approvalMetadataError={
+                    hasPendingApproval &&
+                    approvalRequests.length === 0 &&
+                    threadMetadata.isError
+                  }
+                  onReloadApprovalMetadata={() => threadMetadata.refetch()}
+                  waitingForInputRunIds={waitingForInputRunIds}
+                  onSubmitApproval={handleSubmitApproval}
                   canRegenerate={
                     !isNewThread &&
                     !isMock &&
                     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
                     !isUploading &&
-                    !thread.isLoading
+                    !thread.isLoading &&
+                    !hasPendingApproval
                   }
                   onRegenerateMessage={handleRegenerate}
-                  canEdit={
-                    !isNewThread &&
-                    !isMock &&
-                    env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
-                    !isUploading &&
-                    !thread.isLoading &&
-                    !branchThread.isPending &&
-                    !hasGoal &&
-                    !hasOpenHumanInputCard
-                  }
+                  canEdit={editBase && !hasGoal}
+                  editLockedByGoal={editBase && hasGoal}
                   onEditAndRegenerateMessage={handleEditAndRegenerate}
                   onSubmitHumanInput={
                     isMock || env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true"
@@ -649,7 +789,8 @@ export default function ChatPage() {
                     env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY !== "true" &&
                     !isUploading &&
                     !thread.isLoading &&
-                    !branchThread.isPending
+                    !branchThread.isPending &&
+                    !hasPendingApproval
                   }
                   onBranchTurn={handleBranchTurn}
                 />
@@ -672,7 +813,7 @@ export default function ChatPage() {
                       : "max-w-(--container-width-md)",
                   )}
                 >
-                  {(hasGoal || hasTodos) && (
+                  {(hasGoal || goalOutcome !== null || hasTodos) && (
                     <div
                       className={cn(
                         "right-0 left-0 z-0",
@@ -685,7 +826,18 @@ export default function ChatPage() {
                           isWelcomeMode ? "absolute" : "relative",
                         )}
                       >
-                        {activeGoal && <GoalStatus goal={activeGoal} />}
+                        <GoalStatus
+                          goal={activeGoal}
+                          outcome={goalOutcome}
+                          isRunning={thread.isLoading}
+                          hasOpenHumanInputCard={hasOpenHumanInputCard}
+                          hasPendingApproval={hasPendingApproval}
+                          approvalMetadataError={
+                            hasPendingApproval &&
+                            approvalRequests.length === 0 &&
+                            threadMetadata.isError
+                          }
+                        />
                         {hasTodos && (
                           <TodoList
                             className="bg-background/5"
@@ -696,71 +848,104 @@ export default function ChatPage() {
                       </div>
                     </div>
                   )}
+                  {modelControl.request && (
+                    <div className="mb-3" data-testid="model-selection-card">
+                      <HumanInputCard
+                        request={modelControl.request}
+                        onSubmit={(response) => modelControl.choose(response)}
+                      />
+                    </div>
+                  )}
+                  {modelChoiceSummary && (
+                    <p
+                      className="text-muted-foreground mb-2 text-sm"
+                      data-testid="model-selection-applied"
+                    >
+                      {modelChoiceSummary}
+                    </p>
+                  )}
                   {mountedRef.current ? (
-                    <InputBox
-                      ref={composer}
-                      className={cn(
-                        "bg-background/5 w-full",
-                        isWelcomeMode &&
-                          "-translate-y-2 max-[361px]:translate-y-0 sm:-translate-y-4",
-                      )}
-                      isWelcomeMode={isWelcomeMode}
-                      threadId={threadId}
-                      consumptionObservation={consumptionObservation}
-                      projectId={projectParam ?? affiliatedProjectId}
-                      draftThreadId={isNewThread ? "new" : threadId}
-                      knowledgeScopeControl={
-                        selectorVisible && knowledgeScope ? (
-                          <KnowledgeScopeSelector
-                            agentName="lead_agent"
-                            disabled={thread.isLoading || isUploading}
-                            selection={knowledgeScope}
-                            onChange={setKnowledgeScope}
-                          />
-                        ) : undefined
-                      }
-                      autoFocus={isWelcomeMode}
-                      status={
-                        thread.error
-                          ? "error"
-                          : thread.isLoading
-                            ? "streaming"
-                            : "ready"
-                      }
-                      context={settings.context}
-                      extraHeader={
-                        isWelcomeMode &&
-                        !hasGoal &&
-                        !hasTodos && <Welcome mode={settings.context.mode} />
-                      }
-                      disabled={
-                        isMock ||
-                        env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
-                        isUploading ||
-                        (!isNewThread && isHistoryLoading)
-                      }
-                      onContextChange={(context, options) => {
-                        if (options?.automatic)
-                          resolveThreadContext(threadId, context);
-                        else setSettings("context", context);
-                      }}
-                      onGoalChange={setLocalGoal}
-                      onPrepareThread={ensureProjectThread}
-                      onReferenceFileAttached={() => {
-                        if (!isNewThread) return;
-                        history.replaceState(
-                          null,
-                          "",
-                          `/workspace/chats/${threadId}`,
-                        );
-                        setThreadId(threadId);
-                        setIsNewThread(false);
-                      }}
-                      onSubmit={handleSubmit}
-                      onStop={handleStop}
-                      canStopStreaming={canStopStreaming}
-                      canCreateRuns={canCreateRuns}
-                    />
+                    <div className="w-full">
+                      <ThreadRunInputs
+                        inputs={runInputs}
+                        threadId={isNewThread || isMock ? undefined : threadId}
+                        isRunning={thread.isLoading}
+                        canCreate={canCreateRuns}
+                        canCancel={canStopStreaming}
+                      />
+                      <InputBox
+                        ref={composer}
+                        className={cn(
+                          "bg-background/5 w-full",
+                          isWelcomeMode &&
+                            "-translate-y-2 max-[361px]:translate-y-0 sm:-translate-y-4",
+                        )}
+                        isWelcomeMode={isWelcomeMode}
+                        threadId={threadId}
+                        consumptionObservation={consumptionObservation}
+                        projectId={projectParam ?? affiliatedProjectId}
+                        draftThreadId={isNewThread ? "new" : threadId}
+                        knowledgeScopeControl={
+                          selectorVisible && knowledgeScope ? (
+                            <KnowledgeScopeSelector
+                              agentName="lead_agent"
+                              disabled={
+                                thread.isLoading ||
+                                isUploading ||
+                                hasPendingApproval
+                              }
+                              selection={knowledgeScope}
+                              onChange={setKnowledgeScope}
+                            />
+                          ) : undefined
+                        }
+                        autoFocus={isWelcomeMode}
+                        status={
+                          thread.error
+                            ? "error"
+                            : thread.isLoading
+                              ? "streaming"
+                              : "ready"
+                        }
+                        context={settings.context}
+                        extraHeader={
+                          isWelcomeMode &&
+                          !hasGoal &&
+                          !hasTodos && <Welcome mode={settings.context.mode} />
+                        }
+                        disabled={
+                          isMock ||
+                          env.NEXT_PUBLIC_STATIC_WEBSITE_ONLY === "true" ||
+                          isUploading ||
+                          modelControl.busy ||
+                          (!isNewThread && isHistoryLoading) ||
+                          hasPendingApproval
+                        }
+                        inputLocked={hasPendingApproval}
+                        onContextChange={(context, options) => {
+                          if (options?.automatic)
+                            resolveThreadContext(threadId, context);
+                          else setSettings("context", context);
+                        }}
+                        onGoalChange={setLocalGoal}
+                        onPrepareThread={ensureProjectThread}
+                        onReferenceFileAttached={() => {
+                          if (!isNewThread) return;
+                          history.replaceState(
+                            null,
+                            "",
+                            `/workspace/chats/${threadId}`,
+                          );
+                          setThreadId(threadId);
+                          setIsNewThread(false);
+                        }}
+                        onSubmit={handleSubmit}
+                        onBusySubmit={canSendInput ? sendInput : undefined}
+                        onStop={handleStop}
+                        canStopStreaming={canStopStreaming}
+                        canCreateRuns={canCreateRuns}
+                      />
+                    </div>
                   ) : (
                     <div
                       aria-hidden="true"

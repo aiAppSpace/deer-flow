@@ -9,6 +9,8 @@ export type GoalReasonKey =
   | "maxContinuations"
   | "noProgress"
   | "tokenCapped"
+  | "loopCapped"
+  | "recursionCapped"
   | "evaluatorFailed"
   | "noDurableEndOfTurn"
   | "threadChanged"
@@ -27,6 +29,8 @@ const REASON_KEYS: Record<string, GoalReasonKey> = {
   max_continuations_reached: "maxContinuations",
   no_progress_detected: "noProgress",
   token_capped: "tokenCapped",
+  loop_capped: "loopCapped",
+  recursion_capped: "recursionCapped",
   evaluator_failed: "evaluatorFailed",
   no_durable_end_of_turn: "noDurableEndOfTurn",
   thread_changed_after_evaluation: "threadChanged",
@@ -50,7 +54,11 @@ export const CHECK_FAILURE_CODES: readonly string[] = [
   "thread_changed_before_continuation",
 ];
 
-function reasonKeyOf(code: string): GoalReasonKey | null {
+/**
+ * The label key of a host reason code, with or without the `blocked:`
+ * prefix; null for a code this build does not know.
+ */
+export function goalReasonKeyOf(code: string): GoalReasonKey | null {
   return REASON_KEYS[code.replace(/^blocked:/, "")] ?? null;
 }
 
@@ -66,9 +74,13 @@ export function describeGoalOutcome(
   if (run.status === "unmet") {
     const code = run.error ?? null;
     if (code && CHECK_FAILURE_CODES.includes(code)) {
-      return { kind: "unchecked", code, reasonKey: reasonKeyOf(code) };
+      return { kind: "unchecked", code, reasonKey: goalReasonKeyOf(code) };
     }
-    return { kind: "unmet", code, reasonKey: code ? reasonKeyOf(code) : null };
+    return {
+      kind: "unmet",
+      code,
+      reasonKey: code ? goalReasonKeyOf(code) : null,
+    };
   }
   if (run.status === "success" && run.goal_verdict?.satisfied === true) {
     return {
@@ -111,7 +123,7 @@ export function describeTaskLastError(
   if (lastError === AUTO_PAUSE_LAST_ERROR) {
     return { kind: "autoPause" };
   }
-  const reasonKey = reasonKeyOf(lastError);
+  const reasonKey = goalReasonKeyOf(lastError);
   return reasonKey ? { kind: "goalUnmet", reasonKey } : null;
 }
 
@@ -207,7 +219,7 @@ export function describeTaskOutcome(
       );
       return {
         kind: "autoPaused",
-        latestReasonKey: latest?.error ? reasonKeyOf(latest.error) : null,
+        latestReasonKey: latest?.error ? goalReasonKeyOf(latest.error) : null,
         latestThreadId: latest?.thread_id ?? null,
         latestSummary: latest?.summary ?? null,
       };

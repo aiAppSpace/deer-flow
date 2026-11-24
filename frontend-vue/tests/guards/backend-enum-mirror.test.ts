@@ -185,7 +185,9 @@ describe.skipIf(schemas === null)("后端枚举的镜像", () => {
       .filter(([, outcome]) => outcome === null)
       .map(([status]) => status)
       .sort();
-    expect(nonTerminal).toEqual(["pending", "running"]);
+    expect(nonTerminal).toEqual(
+      ["pending", "running", "waiting_for_input"].sort(),
+    );
 
     const outcomes = Object.values(DEERFLOW_DURABLE_STATUS).filter(
       (outcome) => outcome !== null,

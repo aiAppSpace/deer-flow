@@ -51,11 +51,6 @@ const ZERO_CONSUMER_CLAIMS = [
     why: "本仓 ChatComposer 有意不照抄这个 prop（它在上游是死接口）。上游一旦真用起来，本仓要重新看这个信号该不该往外传。",
   },
   {
-    symbol: "ConversationScrollButton",
-    definedIn: ["components/ai-elements/conversation.tsx"],
-    why: "交接曾把它写成「React 会多出一颗滚动按钮」，实测两个应用都没有。上游一旦渲染它，本仓 MessageList 就真的少一颗按钮了。",
-  },
-  {
     symbol: "PromptInputCommand",
     definedIn: ["components/ai-elements/prompt-input.tsx"],
     why: "wave 39 的 cmdk 空 label 缺陷两边同改时，这是上游第三个 `<Command>` 调用点、当时没有消费者。它一旦被用起来，那处修法要跟着扩到这里。",

@@ -42,7 +42,19 @@ esac
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-ENV_FILE="$REPO_ROOT/.env"
+ENV_FILE="${DEER_FLOW_COMPOSE_ENV_FILE:-$REPO_ROOT/.env}"
+# Docker Compose's interpolation file and service env_file must select the same
+# host file. Relative selectors are rooted at this checkout, not docker/.
+if command -v cygpath >/dev/null 2>&1; then
+    ENV_FILE="$(cygpath -au -- "$ENV_FILE")"
+elif [[ "$ENV_FILE" != /* ]]; then
+    ENV_FILE="$REPO_ROOT/$ENV_FILE"
+fi
+if [ -n "${DEER_FLOW_COMPOSE_ENV_FILE:-}" ] && [ "$CMD" != "down" ] && { [ ! -f "$ENV_FILE" ] || [ ! -r "$ENV_FILE" ]; }; then
+    echo "DEER_FLOW_COMPOSE_ENV_FILE must name a readable file: $ENV_FILE" >&2
+    exit 1
+fi
+export DEER_FLOW_COMPOSE_ENV_FILE="$ENV_FILE"
 DOCKER_DIR="$REPO_ROOT/docker"
 COMPOSE_ENV_FILE_ARGS=()
 if [ -f "$ENV_FILE" ]; then
@@ -298,6 +310,53 @@ elif [ "$CMD" != "down" ] && [ -z "$DEER_FLOW_INTERNAL_AUTH_TOKEN" ]; then
     fi
 fi
 
+# ── DEER_FLOW_CREDENTIALS_KEY ────────────────────────────────────────────────
+# At-rest Fernet key the Gateway encrypts stored credentials with. Losing it
+# makes those credentials unreadable, so back the file up. It is persisted
+# under the name the Gateway itself generates in its runtime home (the
+# $DEER_FLOW_HOME bind mount), so a key either side created first is the one
+# both keep. noclobber turns the redirection into an exclusive (O_EXCL)
+# create: when a concurrent run wins, its key is read back instead of ours.
+
+_credentials_key_file="$DEER_FLOW_HOME/.credentials_key"
+if [ "$CMD" != "down" ] && [ -z "$DEER_FLOW_CREDENTIALS_KEY" ] && dotenv_provides_secret DEER_FLOW_CREDENTIALS_KEY; then
+    echo -e "${GREEN}✓ DEER_FLOW_CREDENTIALS_KEY loaded from $ENV_FILE${NC}"
+elif [ "$CMD" != "down" ] && [ -z "$DEER_FLOW_CREDENTIALS_KEY" ]; then
+    _generated_credentials_key=""
+    if [ ! -f "$_credentials_key_file" ]; then
+        # urlsafe base64 of 32 random bytes, the Fernet key format.
+        if command -v python3 > /dev/null 2>&1 && \
+            _generated_credentials_key="$(python3 -c 'import sys; sys.version_info >= (3, 6) or sys.exit(1); import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 2>/dev/null)"; then
+            true
+        elif command -v python > /dev/null 2>&1 && \
+            _generated_credentials_key="$(python -c 'import sys; sys.version_info >= (3, 6) or sys.exit(1); import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 2>/dev/null)"; then
+            true
+        elif command -v openssl > /dev/null 2>&1 && \
+            _generated_credentials_key="$(openssl rand -base64 32 | tr '+/' '-_')"; then
+            true
+        else
+            echo -e "${RED}✗ Cannot generate DEER_FLOW_CREDENTIALS_KEY: python3, python, and openssl are all unavailable.${NC}" >&2
+            echo -e "${RED}  Set DEER_FLOW_CREDENTIALS_KEY manually before running make up.${NC}" >&2
+            exit 1
+        fi
+        if ! ( umask 077; set -o noclobber; printf '%s\n' "$_generated_credentials_key" > "$_credentials_key_file" ) 2>/dev/null; then
+            _generated_credentials_key=""
+        fi
+    fi
+    if [ -n "$_generated_credentials_key" ]; then
+        export DEER_FLOW_CREDENTIALS_KEY="$_generated_credentials_key"
+        echo -e "${GREEN}✓ DEER_FLOW_CREDENTIALS_KEY generated → $_credentials_key_file (back it up)${NC}"
+    else
+        if [ ! -r "$_credentials_key_file" ]; then
+            fail_home_permission "$_credentials_key_file" readable
+        fi
+        export DEER_FLOW_CREDENTIALS_KEY
+        DEER_FLOW_CREDENTIALS_KEY="$(cat "$_credentials_key_file")"
+        echo -e "${GREEN}✓ DEER_FLOW_CREDENTIALS_KEY loaded from $_credentials_key_file${NC}"
+    fi
+    unset _generated_credentials_key
+fi
+
 # ── UV_EXTRAS auto-detection ─────────────────────────────────────────────────
 # The production Dockerfile accepts UV_EXTRAS as a single build-arg token and
 # adds the --extra prefix itself. Convert the detector's uv flag string
@@ -339,36 +398,7 @@ fi
 # ── detect_sandbox_mode ───────────────────────────────────────────────────────
 
 detect_sandbox_mode() {
-    local sandbox_use=""
-    local provisioner_url=""
-
-    [ -f "$DEER_FLOW_CONFIG_PATH" ] || { echo "local"; return; }
-
-    sandbox_use=$(awk '
-        /^[[:space:]]*sandbox:[[:space:]]*$/ { in_sandbox=1; next }
-        in_sandbox && /^[^[:space:]#]/ { in_sandbox=0 }
-        in_sandbox && /^[[:space:]]*use:[[:space:]]*/ {
-            line=$0; sub(/^[[:space:]]*use:[[:space:]]*/, "", line); print line; exit
-        }
-    ' "$DEER_FLOW_CONFIG_PATH")
-
-    provisioner_url=$(awk '
-        /^[[:space:]]*sandbox:[[:space:]]*$/ { in_sandbox=1; next }
-        in_sandbox && /^[^[:space:]#]/ { in_sandbox=0 }
-        in_sandbox && /^[[:space:]]*provisioner_url:[[:space:]]*/ {
-            line=$0; sub(/^[[:space:]]*provisioner_url:[[:space:]]*/, "", line); print line; exit
-        }
-    ' "$DEER_FLOW_CONFIG_PATH")
-
-    if [[ "$sandbox_use" == *"deerflow.community.aio_sandbox:AioSandboxProvider"* ]]; then
-        if [ -n "$provisioner_url" ]; then
-            echo "provisioner"
-        else
-            echo "aio"
-        fi
-    else
-        echo "local"
-    fi
+    bash "$REPO_ROOT/scripts/sandbox-mode.sh" "$DEER_FLOW_CONFIG_PATH"
 }
 
 # ── down ──────────────────────────────────────────────────────────────────────
@@ -515,7 +545,7 @@ echo "  API:            /api/langgraph/* → Gateway"
 echo ""
 if [ "$RESOLVED_BIND_HOST" = "127.0.0.1" ] || [ "$RESOLVED_BIND_HOST" = "::1" ] || [ "$RESOLVED_BIND_HOST" = "localhost" ]; then
     echo "  🔒 Bound to ${RESOLVED_BIND_HOST} — reachable from this machine only."
-    echo "     To expose it, set BIND_HOST in .env, put TLS/auth in front, and"
+    echo "     To expose it, set BIND_HOST in the selected dotenv file, put TLS/auth in front, and"
     echo "     create the admin account before the host becomes reachable."
 else
     echo "  ⚠️  Bound to ${RESOLVED_BIND_HOST} — reachable from the network."

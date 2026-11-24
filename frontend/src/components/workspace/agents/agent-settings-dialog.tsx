@@ -83,7 +83,11 @@ export function AgentSettingsDialog({
   onOpenChange,
 }: AgentSettingsDialogProps) {
   const { t } = useI18n();
-  const { models } = useModels();
+  const {
+    models,
+    isFetching: modelsFetching,
+    refetch: refetchModels,
+  } = useModels();
   const { scopeSelectionEnabled } = useKnowledgeBaseEnabled();
   const [knowledgeSelection, setKnowledgeSelection] =
     useState<KnowledgeScopeSelection>(() =>
@@ -92,19 +96,41 @@ export function AgentSettingsDialog({
   const [knowledgeChanged, setKnowledgeChanged] = useState(false);
   const { subagents } = useSubagents();
   const subagentDescriptionId = useId();
+  const modelStatusId = useId();
+  const thinkingHintId = useId();
+  const effortHintId = useId();
   const updateAgent = useUpdateAgent();
   // Keep the opening snapshot even if a background refetch updates agent props.
   const [initialSelections] = useState(() => ({
     plugins: agent.mcp_plugins ?? null,
     skills: agent.skills ?? null,
+    toolGroups: agent.tool_groups ?? null,
+    model: agent.model ?? DEFAULT_MODEL_VALUE,
+    thinking: thinkingEnabledToSelection(agent.thinking_enabled),
+    reasoningEffort: agent.reasoning_effort ?? INHERIT_VALUE,
   }));
   const [plugins, setPlugins] = useState<string[] | null>(
     agent.mcp_plugins ?? null,
   );
   const [skills, setSkills] = useState<string[] | null>(agent.skills ?? null);
+  const [toolGroups, setToolGroups] = useState<string[] | null>(
+    agent.tool_groups ?? null,
+  );
+  const toolGroupsChanged = !sameSelection(
+    toolGroups,
+    initialSelections.toolGroups,
+  );
+  const knowledgeAllowed =
+    toolGroups === null || toolGroups.includes("knowledge");
+  const clearKnowledgeDefault = toolGroupsChanged && !knowledgeAllowed;
+  // Catalog reads authorize against saved groups, never the dialog's draft.
+  const knowledgeAccessNeedsSave =
+    knowledgeAllowed &&
+    agent.tool_groups != null &&
+    !agent.tool_groups.includes("knowledge");
   const [displayName, setDisplayName] = useState(agent.display_name ?? "");
 
-  const [model, setModel] = useState(agent.model ?? DEFAULT_MODEL_VALUE);
+  const [model, setModel] = useState(initialSelections.model);
   const [temperature, setTemperature] = useState(
     agent.model_settings?.temperature != null
       ? String(agent.model_settings.temperature)
@@ -115,11 +141,9 @@ export function AgentSettingsDialog({
       ? String(agent.model_settings.max_tokens)
       : "",
   );
-  const [thinking, setThinking] = useState(
-    thinkingEnabledToSelection(agent.thinking_enabled),
-  );
+  const [thinking, setThinking] = useState(initialSelections.thinking);
   const [reasoningEffort, setReasoningEffort] = useState(
-    agent.reasoning_effort ?? INHERIT_VALUE,
+    initialSelections.reasoningEffort,
   );
   const [subagentAccess, setSubagentAccess] = useState<SubagentAccessSelection>(
     allowedSubagentsToSelection(agent.allowed_subagents),
@@ -130,15 +154,18 @@ export function AgentSettingsDialog({
 
   // The resolved profile gates which controls are meaningful: thinking and
   // reasoning-effort only apply when the selected model advertises support.
-  const unknownCurrentModel =
-    agent.model !== null && !models.some((m) => m.name === agent.model);
-
   // When the agent inherits the global default model, fall back to the
   // effective default (models[0]) so the controls are not hidden for it.
   const selectedModel = useMemo(
     () => resolveEffectiveModel(models, model),
     [models, model],
   );
+  const modelChanged = model !== initialSelections.model;
+  // Missing catalog data does not prove a model lacks reasoning support.
+  // Normalize dependent settings only after an intentional, known model switch.
+  const modelKnown = selectedModel !== undefined;
+  const modelSwitchUnresolved = modelChanged && !modelKnown;
+  const normalizeReasoning = modelChanged && modelKnown;
   const supportsThinking = modelSupportsThinking(selectedModel);
   const thinkingRequired = isThinkingRequired(selectedModel);
   // Per-agent defaults keep the generic low/medium/high schema; offer only the
@@ -152,10 +179,20 @@ export function AgentSettingsDialog({
     [selectedModel],
   );
   const supportsReasoningEffort = reasoningEffortOptions.length > 0;
-  // A required-thinking model cannot be switched off: a stale "off" default
-  // collapses to "inherit" so the save never asks for the impossible.
+  const thinkingUnsupported =
+    modelKnown &&
+    thinking !== INHERIT_VALUE &&
+    (!supportsThinking || (thinkingRequired && thinking === "off"));
+  const effortUnsupported =
+    modelKnown &&
+    reasoningEffort !== INHERIT_VALUE &&
+    !reasoningEffortOptions.includes(reasoningEffort as ReasoningEffort);
+  // Preview normalization only for a deliberate model switch. Otherwise show
+  // the saved value, including an incompatible one, so Inherit is actionable.
   const effectiveThinking =
-    thinkingRequired && thinking === "off" ? INHERIT_VALUE : thinking;
+    normalizeReasoning && thinkingUnsupported ? INHERIT_VALUE : thinking;
+  const effectiveEffort =
+    normalizeReasoning && effortUnsupported ? INHERIT_VALUE : reasoningEffort;
   const selectableSubagents = useMemo(
     () =>
       Array.from(
@@ -175,6 +212,7 @@ export function AgentSettingsDialog({
   }, [selectableSubagents, selectedSubagents]);
 
   async function handleSave() {
+    if (modelSwitchUnresolved) return;
     if ([...displayName.trim()].length > 100) {
       toast.error(t.agents.settingsDisplayNameTooLong);
       return;
@@ -197,9 +235,9 @@ export function AgentSettingsDialog({
         name: agent.name,
         request: {
           display_name: displayName.trim() || null,
-          ...(knowledgeChanged && {
+          ...((knowledgeChanged || clearKnowledgeDefault) && {
             knowledge_scope:
-              knowledgeSelection.mode === "all"
+              clearKnowledgeDefault || knowledgeSelection.mode === "all"
                 ? null
                 : buildKnowledgeScopeSnapshot(knowledgeSelection),
           }),
@@ -207,16 +245,32 @@ export function AgentSettingsDialog({
             mcp_plugins: plugins,
           }),
           ...(!sameSelection(skills, initialSelections.skills) && { skills }),
-          model: model === DEFAULT_MODEL_VALUE ? null : model,
+          ...(toolGroupsChanged && {
+            tool_groups: toolGroups,
+          }),
+          ...(modelChanged && {
+            model: model === DEFAULT_MODEL_VALUE ? null : model,
+          }),
           model_settings: parsedSettings.modelSettings,
-          thinking_enabled: supportsThinking
-            ? selectionToThinkingEnabled(effectiveThinking)
-            : null,
-          reasoning_effort:
-            supportsReasoningEffort &&
-            reasoningEffortOptions.includes(reasoningEffort as ReasoningEffort)
-              ? (reasoningEffort as ReasoningEffort)
-              : null,
+          ...((thinking !== initialSelections.thinking ||
+            normalizeReasoning) && {
+            thinking_enabled:
+              modelKnown && !supportsThinking
+                ? null
+                : selectionToThinkingEnabled(effectiveThinking),
+          }),
+          ...((reasoningEffort !== initialSelections.reasoningEffort ||
+            normalizeReasoning) && {
+            reasoning_effort:
+              reasoningEffort === INHERIT_VALUE ||
+              (modelKnown &&
+                (!supportsReasoningEffort ||
+                  !reasoningEffortOptions.includes(
+                    reasoningEffort as ReasoningEffort,
+                  )))
+                ? null
+                : (reasoningEffort as ReasoningEffort),
+          }),
           allowed_subagents: selectionToAllowedSubagents(
             subagentAccess,
             selectedSubagents,
@@ -244,8 +298,10 @@ export function AgentSettingsDialog({
           <AgentCapabilitySelection
             plugins={plugins}
             skills={skills}
+            toolGroups={toolGroups}
             onPluginsChange={setPlugins}
             onSkillsChange={setSkills}
+            onToolGroupsChange={setToolGroups}
           />
           {(scopeSelectionEnabled || agent.knowledge_scope) && (
             <div className="space-y-1.5 rounded-md border p-3">
@@ -264,16 +320,22 @@ export function AgentSettingsDialog({
                 unavailableReason={
                   !scopeSelectionEnabled
                     ? t.knowledge.scope.loadFailed
-                    : agent.tool_groups != null &&
-                        !agent.tool_groups.includes("knowledge")
+                    : !knowledgeAllowed
                       ? t.knowledge.scope.agentUnavailable
-                      : undefined
+                      : knowledgeAccessNeedsSave
+                        ? t.agents.settingsKnowledgeSaveToolAccess
+                        : undefined
                 }
                 onChange={(selection) => {
                   setKnowledgeSelection(selection);
                   setKnowledgeChanged(true);
                 }}
               />
+              {scopeSelectionEnabled && knowledgeAccessNeedsSave && (
+                <p className="text-muted-foreground text-xs">
+                  {t.agents.settingsKnowledgeSaveToolAccess}
+                </p>
+              )}
               {knowledgeSelection.mode === "selected" && (
                 <p className="text-muted-foreground text-xs [overflow-wrap:anywhere]">
                   {knowledgeSelection.datasets
@@ -319,14 +381,8 @@ export function AgentSettingsDialog({
           </div>
           {/* Default model */}
           <div className="space-y-1.5">
-            {/*
-              Every control in this dialog needs an accessible name. The label
-              text was a bare <span>: no <label htmlFor>, no aria-label — so the
-              model select and both number inputs were announced as unnamed
-              (WCAG 3.3.2 / 4.1.2). Point each control at its own label with
-              aria-labelledby; the temperature hint becomes a description
-              instead of leaking into the name.
-            */}
+            {/* The visible labels are plain spans, so the number inputs below
+                point at them with aria-labelledby to get an accessible name. */}
             <span
               id="agent-settings-model-label"
               className="text-sm font-medium"
@@ -336,7 +392,10 @@ export function AgentSettingsDialog({
             <Select value={model} onValueChange={setModel}>
               <SelectTrigger
                 className="w-full"
-                aria-labelledby="agent-settings-model-label"
+                aria-label={t.agents.settingsModel}
+                aria-describedby={
+                  modelSwitchUnresolved ? modelStatusId : undefined
+                }
               >
                 <SelectValue />
               </SelectTrigger>
@@ -344,19 +403,12 @@ export function AgentSettingsDialog({
                 <SelectItem value={DEFAULT_MODEL_VALUE}>
                   {t.agents.settingsModelDefault}
                 </SelectItem>
-                {/*
-                  An agent can be pinned to a model the gateway no longer
-                  serves (renamed, removed, or provider disabled). Radix renders
-                  nothing for a value with no matching item, so the select went
-                  *blank* — the dialog did not say which model the agent is on,
-                  and saving silently rewrote it. Keep the current value as a
-                  disabled option instead.
-                */}
-                {unknownCurrentModel ? (
-                  <SelectItem value={agent.model!} disabled>
-                    {agent.model} · {t.agents.settingsModelUnavailable}
-                  </SelectItem>
-                ) : null}
+                {initialSelections.model !== DEFAULT_MODEL_VALUE &&
+                  !models.some((m) => m.name === initialSelections.model) && (
+                    <SelectItem value={initialSelections.model}>
+                      {initialSelections.model}
+                    </SelectItem>
+                  )}
                 {models.map((m) => (
                   <SelectItem key={m.name} value={m.name}>
                     {m.display_name || m.name}
@@ -364,6 +416,28 @@ export function AgentSettingsDialog({
                 ))}
               </SelectContent>
             </Select>
+            {modelSwitchUnresolved && (
+              <div className="space-y-1.5">
+                <p
+                  id={modelStatusId}
+                  role="status"
+                  className="text-muted-foreground text-xs"
+                >
+                  {t.agents.settingsModelSwitchNeedsCatalog}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={modelsFetching}
+                  onClick={() => void refetchModels()}
+                >
+                  {modelsFetching
+                    ? t.workspace.modelLoadRetrying
+                    : t.workspace.modelLoadRetry}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Temperature */}
@@ -413,8 +487,8 @@ export function AgentSettingsDialog({
             />
           </div>
 
-          {/* Thinking mode (only when the selected model supports it) */}
-          {supportsThinking && (
+          {/* Keep incompatible saved values visible and explicitly clearable. */}
+          {(supportsThinking || thinkingUnsupported) && (
             <div className="space-y-1.5">
               <span
                 id="agent-settings-thinking-label"
@@ -428,7 +502,12 @@ export function AgentSettingsDialog({
               >
                 <SelectTrigger
                   className="w-full"
-                  aria-labelledby="agent-settings-thinking-label"
+                  aria-label={t.agents.settingsThinking}
+                  aria-describedby={
+                    thinkingUnsupported && !normalizeReasoning
+                      ? thinkingHintId
+                      : undefined
+                  }
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -436,21 +515,41 @@ export function AgentSettingsDialog({
                   <SelectItem value={INHERIT_VALUE}>
                     {t.agents.settingsInherit}
                   </SelectItem>
-                  <SelectItem value="on">
-                    {t.agents.settingsThinkingOn}
-                  </SelectItem>
-                  {!thinkingRequired && (
+                  {supportsThinking && (
+                    <SelectItem value="on">
+                      {t.agents.settingsThinkingOn}
+                    </SelectItem>
+                  )}
+                  {supportsThinking && !thinkingRequired && (
                     <SelectItem value="off">
                       {t.agents.settingsThinkingOff}
                     </SelectItem>
                   )}
+                  {thinkingUnsupported && (
+                    <SelectItem value={thinking} disabled>
+                      {thinking === "off"
+                        ? t.agents.settingsThinkingOff
+                        : t.agents.settingsThinkingOn}{" "}
+                      ({t.agents.settingsReasoningUnsupported})
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
+              {thinkingUnsupported && !normalizeReasoning && (
+                <p
+                  id={thinkingHintId}
+                  role="alert"
+                  className="text-muted-foreground text-xs"
+                >
+                  {thinkingRequired
+                    ? t.agents.settingsThinkingRequiredHint
+                    : t.agents.settingsReasoningUnsupportedHint}
+                </p>
+              )}
             </div>
           )}
 
-          {/* Reasoning effort (only when supported) */}
-          {supportsReasoningEffort && (
+          {(supportsReasoningEffort || effortUnsupported) && (
             <div className="space-y-1.5">
               <span
                 id="agent-settings-reasoning-label"
@@ -459,12 +558,17 @@ export function AgentSettingsDialog({
                 {t.agents.settingsReasoningEffort}
               </span>
               <Select
-                value={reasoningEffort}
+                value={effectiveEffort}
                 onValueChange={setReasoningEffort}
               >
                 <SelectTrigger
                   className="w-full"
-                  aria-labelledby="agent-settings-reasoning-label"
+                  aria-label={t.agents.settingsReasoningEffort}
+                  aria-describedby={
+                    effortUnsupported && !normalizeReasoning
+                      ? effortHintId
+                      : undefined
+                  }
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -472,6 +576,12 @@ export function AgentSettingsDialog({
                   <SelectItem value={INHERIT_VALUE}>
                     {t.agents.settingsInherit}
                   </SelectItem>
+                  {effortUnsupported && (
+                    <SelectItem value={reasoningEffort} disabled>
+                      {reasoningEffort} ({t.agents.settingsReasoningUnsupported}
+                      )
+                    </SelectItem>
+                  )}
                   {reasoningEffortOptions.map((effort) => (
                     <SelectItem key={effort} value={effort}>
                       {effort}
@@ -479,6 +589,11 @@ export function AgentSettingsDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {effortUnsupported && !normalizeReasoning && (
+                <p id={effortHintId} className="text-muted-foreground text-xs">
+                  {t.agents.settingsReasoningUnsupportedHint}
+                </p>
+              )}
             </div>
           )}
 
@@ -609,7 +724,10 @@ export function AgentSettingsDialog({
           >
             {t.common.cancel}
           </Button>
-          <Button onClick={handleSave} disabled={updateAgent.isPending}>
+          <Button
+            onClick={handleSave}
+            disabled={updateAgent.isPending || modelSwitchUnresolved}
+          >
             {updateAgent.isPending ? t.common.loading : t.common.save}
           </Button>
         </DialogFooter>

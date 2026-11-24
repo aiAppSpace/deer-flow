@@ -10,7 +10,6 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -33,6 +32,9 @@ import type { ChannelProvider } from "@/core/channels/types";
 import { useI18n } from "@/core/i18n/hooks";
 import { cn } from "@/lib/utils";
 
+import { useWorkspaceSidebarExpanded } from "../workspace-sidebar-frame";
+
+import { ChannelBindingCodeDialog } from "./channel-binding-code-dialog";
 import { ChannelProviderIcon } from "./channel-provider-icon";
 import { ChannelRuntimeConfigDialog } from "./channel-runtime-config-dialog";
 import { ChannelScheduledUpdates } from "./channel-scheduled-updates";
@@ -73,6 +75,21 @@ function setRuntimeConfigProvider(
   runtimeConfigListeners.forEach((listener) => listener());
 }
 
+let bindingCodeProvider: ChannelProvider | null = null;
+
+function setBindingCodeProvider(provider: ChannelProvider | null) {
+  bindingCodeProvider = provider;
+  runtimeConfigListeners.forEach((listener) => listener());
+}
+
+function useBindingCodeProvider() {
+  return useSyncExternalStore(
+    subscribeRuntimeConfig,
+    () => bindingCodeProvider,
+    () => null,
+  );
+}
+
 function useRuntimeConfigProvider() {
   return useSyncExternalStore(
     subscribeRuntimeConfig,
@@ -83,16 +100,28 @@ function useRuntimeConfigProvider() {
 
 export function WorkspaceChannelRuntimeConfigHost() {
   const provider = useRuntimeConfigProvider();
+  const bindingProvider = useBindingCodeProvider();
   const { t } = useI18n();
   const connectMutation = useConnectChannelProvider();
   const configureMutation = useConfigureChannelProvider();
 
-  useEffect(() => () => setRuntimeConfigProvider(null), []);
+  useEffect(
+    () => () => {
+      setRuntimeConfigProvider(null);
+      setBindingCodeProvider(null);
+    },
+    [],
+  );
 
   const startConnect = (
     nextProvider: ChannelProvider,
     preparedWindow?: Window | null,
   ) => {
+    if (nextProvider.auth_mode === "binding_code") {
+      closeConnectWindow(preparedWindow ?? null);
+      setBindingCodeProvider(nextProvider);
+      return;
+    }
     const generation = runtimeConfigGeneration;
     const connectWindow =
       preparedWindow !== undefined
@@ -124,53 +153,64 @@ export function WorkspaceChannelRuntimeConfigHost() {
   };
 
   return (
-    <ChannelRuntimeConfigDialog
-      onConfigured={() => {
-        setRuntimeConfigProvider(null);
-      }}
-      provider={provider}
-      initialStep={runtimeConfigInitialStep}
-      open={provider !== null}
-      submitting={configureMutation.isPending}
-      onOpenChange={(open) => {
-        if (!open) {
+    <>
+      <ChannelRuntimeConfigDialog
+        onConfigured={() => {
           setRuntimeConfigProvider(null);
-        }
-      }}
-      onSubmit={(provider, values) => {
-        const generation = runtimeConfigGeneration;
-        const connectWindow =
-          provider.auth_mode === "deep_link" ? prepareConnectWindow() : null;
-        return configureMutation
-          .mutateAsync({ provider: provider.provider, values })
-          .then((updated) => {
-            if (generation !== runtimeConfigGeneration) {
-              closeConnectWindow(connectWindow);
-              return;
-            }
-            if (updated.provider === "wechat") return updated;
+        }}
+        provider={provider}
+        initialStep={runtimeConfigInitialStep}
+        open={provider !== null}
+        submitting={configureMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) {
             setRuntimeConfigProvider(null);
-            if (providerCanConnect(updated)) {
-              startConnect(updated, connectWindow);
-              return;
-            }
-            closeConnectWindow(connectWindow);
-            toast.success(t.channels.connected);
-          })
-          .catch((error) => {
-            closeConnectWindow(connectWindow);
-            if (generation !== runtimeConfigGeneration) return;
-            toast.error(
-              error instanceof Error ? error.message : t.channels.unavailable,
-            );
-          });
-      }}
-    />
+          }
+        }}
+        onSubmit={(provider, values) => {
+          const generation = runtimeConfigGeneration;
+          const connectWindow =
+            provider.auth_mode === "deep_link" ? prepareConnectWindow() : null;
+          return configureMutation
+            .mutateAsync({ provider: provider.provider, values })
+            .then((updated) => {
+              if (generation !== runtimeConfigGeneration) {
+                closeConnectWindow(connectWindow);
+                return;
+              }
+              if (updated.provider === "wechat") return updated;
+              setRuntimeConfigProvider(null);
+              if (providerCanConnect(updated)) {
+                startConnect(updated, connectWindow);
+                return;
+              }
+              closeConnectWindow(connectWindow);
+              toast.success(t.channels.connected);
+            })
+            .catch((error) => {
+              closeConnectWindow(connectWindow);
+              if (generation !== runtimeConfigGeneration) return;
+              toast.error(
+                error instanceof Error ? error.message : t.channels.unavailable,
+              );
+            });
+        }}
+      />
+      <ChannelBindingCodeDialog
+        provider={bindingProvider}
+        open={bindingProvider !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBindingCodeProvider(null);
+          }
+        }}
+      />
+    </>
   );
 }
 
 export function WorkspaceChannelsList() {
-  const { open: isSidebarOpen } = useSidebar();
+  const isSidebarOpen = useWorkspaceSidebarExpanded();
   const { t } = useI18n();
   const { enabled, providers, isLoading, error } = useChannelProviders();
   const connectMutation = useConnectChannelProvider();
@@ -186,6 +226,12 @@ export function WorkspaceChannelsList() {
         provider,
         provider.configured ? "binding" : "setup",
       );
+      return;
+    }
+    // The command stays in a dialog with copy and expiry, not a passing toast.
+    if (provider.auth_mode === "binding_code") {
+      closeConnectWindow(preparedWindow ?? null);
+      setBindingCodeProvider(provider);
       return;
     }
     const connectWindow =

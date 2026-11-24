@@ -41,6 +41,7 @@ import posixpath
 import threading
 import weakref
 from collections.abc import Awaitable, Callable
+from concurrent.futures import Future, InvalidStateError
 from typing import Any, override
 
 from langchain.agents.middleware import AgentMiddleware
@@ -67,7 +68,7 @@ READ_MARK_KEY = "deerflow_read_mark"
 WRITE_BLOCK_KEY = "deerflow_write_block"
 
 _READ_TOOLS = frozenset({"read_file"})
-_GATED_WRITE_TOOLS = frozenset({"write_file", "str_replace", "finalize_artifact_write"})
+_GATED_WRITE_TOOLS = frozenset({"write_file", "str_replace"})
 # Payload arguments per gated tool — the bulk of a write call. Everything else
 # (path, description, flags) stays visible after a block.
 _PAYLOAD_FIELDS: dict[str, tuple[str, ...]] = {
@@ -85,20 +86,81 @@ _UNINSPECTABLE_CONTENT_PREFIX = "Error:"
 
 _BLOCK_MESSAGE = "Error: {tool_name} blocked — {path} already exists ({line_desc}) and you have not read its current version. Any write invalidates earlier reads, so re-read before every modification. {read_hint}"
 
+
 # Per-(scope, path) locks serializing gate check + tool execution. Same
 # WeakValueDictionary pattern as sandbox/file_operation_lock.py, but a
 # separate namespace: the tool-internal file lock only guards the mutation,
 # while this one also spans the authorization that precedes it.
-_GATE_LOCKS: weakref.WeakValueDictionary[tuple[str, str], threading.Lock] = weakref.WeakValueDictionary()
+class _GateLock:
+    """Cross-thread gate whose async waiters never occupy executor workers."""
+
+    def __init__(self) -> None:
+        self._condition = threading.Condition(threading.Lock())
+        self._locked = False
+        self._waiters: set[Future[None]] = set()
+
+    def acquire(self) -> bool:
+        with self._condition:
+            self._condition.wait_for(lambda: not self._locked)
+            self._locked = True
+        return True
+
+    async def acquire_async(self) -> None:
+        while True:
+            with self._condition:
+                if not self._locked:
+                    self._locked = True
+                    return
+                waiter: Future[None] = Future()
+                self._waiters.add(waiter)
+            try:
+                # Each caller owns its signal, so cancellation cannot cancel
+                # another loop's waiter or leave an eventual lock acquisition.
+                await asyncio.wrap_future(waiter)
+            finally:
+                with self._condition:
+                    self._waiters.discard(waiter)
+
+    def release(self) -> None:
+        with self._condition:
+            if not self._locked:
+                raise RuntimeError("release unlocked gate")
+            self._locked = False
+            waiters = tuple(self._waiters)
+            self._waiters.clear()
+            self._condition.notify_all()
+        # Future callbacks can schedule work on other event loops. Notify after
+        # releasing the state lock, and tolerate a concurrent waiter cancellation.
+        # Wake everyone: a caller cancelled before re-acquiring must not leave
+        # the remaining waiters asleep on an unlocked gate.
+        for waiter in waiters:
+            try:
+                waiter.set_result(None)
+            except InvalidStateError:
+                if not waiter.cancelled():
+                    raise
+
+    def locked(self) -> bool:
+        with self._condition:
+            return self._locked
+
+    def __enter__(self) -> bool:
+        return self.acquire()
+
+    def __exit__(self, *_exc: object) -> None:
+        self.release()
+
+
+_GATE_LOCKS: weakref.WeakValueDictionary[tuple[str, str], _GateLock] = weakref.WeakValueDictionary()
 _GATE_LOCKS_GUARD = threading.Lock()
 
 
-def _get_gate_lock(scope: str, norm_path: str) -> threading.Lock:
+def _get_gate_lock(scope: str, norm_path: str) -> _GateLock:
     key = (scope, norm_path)
     with _GATE_LOCKS_GUARD:
         lock = _GATE_LOCKS.get(key)
         if lock is None:
-            lock = threading.Lock()
+            lock = _GateLock()
             _GATE_LOCKS[key] = lock
         return lock
 
@@ -139,15 +201,9 @@ async def _await_off_thread(task: asyncio.Task[Any]) -> Any:
             raise first_cancel
 
 
-async def _acquire_gate_lock(lock: threading.Lock) -> None:
-    """Acquire off-loop safely; threading.Lock permits cross-thread release."""
-    acquire_task = asyncio.create_task(asyncio.to_thread(lock.acquire))
-    try:
-        await _await_off_thread(acquire_task)
-    except asyncio.CancelledError:
-        if acquire_task.done() and not acquire_task.cancelled() and acquire_task.exception() is None:
-            lock.release()
-        raise
+async def _acquire_gate_lock(lock: _GateLock) -> None:
+    """Wait without reserving the executor needed by the current gate holder."""
+    await lock.acquire_async()
 
 
 class ReadBeforeWriteMiddleware(AgentMiddleware):
@@ -258,11 +314,11 @@ class ReadBeforeWriteMiddleware(AgentMiddleware):
             name=tool_name,
             status="error",
         )
-        return stamp_exception_meta(message, f"{exc.__class__.__name__}: {detail}")
+        return stamp_exception_meta(message, exc)
 
     # -- locking ---------------------------------------------------------
 
-    def _lock_for(self, request: ToolCallRequest, path: str) -> threading.Lock:
+    def _lock_for(self, request: ToolCallRequest, path: str) -> _GateLock:
         return _get_gate_lock(self._lock_scope(request), _normalize_mark_path(path))
 
     @staticmethod
@@ -294,7 +350,7 @@ class ReadBeforeWriteMiddleware(AgentMiddleware):
         try:
             current = self._content_reader(request.runtime, path)
         except FileNotFoundError:
-            # write_file/finalize_artifact_write create the file; str_replace surfaces its own error.
+            # write_file creates the file; str_replace surfaces its own error.
             return None
         except SandboxAuthorizationError:
             raise

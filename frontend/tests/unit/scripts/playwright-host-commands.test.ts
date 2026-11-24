@@ -158,13 +158,16 @@ describe("actual Playwright host command configuration", () => {
           resolve(frontend, "../scripts/pnpm.py"),
           join(root, "scripts/pnpm.py"),
         );
-        writeFileSync(join(root, "frontend/package.json"), "{}\n");
+        writeFileSync(
+          join(root, "frontend/package.json"),
+          '{"packageManager":"pnpm@10.26.2"}\n',
+        );
         symlinkSync(python.stdout.trim(), join(root, "bin/python3"));
         const log = join(root, "calls.jsonl");
         const executable = join(root, "bin", manager);
         writeFileSync(
           executable,
-          `#!${process.execPath}\nconst fs = require('node:fs');\nfs.appendFileSync(process.env.COMMAND_FIXTURE_LOG, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), port: process.env.PORT }) + '\\n');\nprocess.exit(Number(process.env.COMMAND_FIXTURE_EXIT || 0));\n`,
+          `#!${process.execPath}\nif (process.argv[2] === '--version') { console.log('10.26.2'); process.exit(0); }\nconst fs = require('node:fs');\nfs.appendFileSync(process.env.COMMAND_FIXTURE_LOG, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), port: process.env.PORT }) + '\\n');\nprocess.exit(Number(process.env.COMMAND_FIXTURE_EXIT || 0));\n`,
         );
         chmodSync(executable, 0o755);
         const server = frontendServer(loadConfig(file, process.platform));

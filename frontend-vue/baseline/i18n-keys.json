@@ -1,7 +1,7 @@
 {
   "$comment": "词典 key 基线。由 `make i18n-refresh` 生成。趁词典还是上游原样时取（06 §M1 1d）——此后 key 新增/删除或 unused 集漂移，`make i18n-check` 立刻报出来。",
   "source": "app/core/i18n/locales/en-US.ts",
-  "total": 1825,
+  "total": 1828,
   "keys": [
     "agents.agentCreated",
     "agents.agentCreatedPendingRefresh",
@@ -842,6 +842,7 @@
     "scheduledTasks.apiErrors.invalidContextMode",
     "scheduledTasks.apiErrors.invalidGoal",
     "scheduledTasks.apiErrors.invalidMaxRuns",
+    "scheduledTasks.apiErrors.invalidNotificationGroup",
     "scheduledTasks.apiErrors.invalidRequest",
     "scheduledTasks.apiErrors.invalidSchedule",
     "scheduledTasks.apiErrors.invalidScheduleType",
@@ -1009,12 +1010,14 @@
     "scheduledTasks.goal.reasons.evaluatorFailed",
     "scheduledTasks.goal.reasons.externalWait",
     "scheduledTasks.goal.reasons.goalNotMetYet",
+    "scheduledTasks.goal.reasons.loopCapped",
     "scheduledTasks.goal.reasons.maxContinuations",
     "scheduledTasks.goal.reasons.missingEvidence",
     "scheduledTasks.goal.reasons.needsUserInput",
     "scheduledTasks.goal.reasons.noDurableEndOfTurn",
     "scheduledTasks.goal.reasons.noProgress",
     "scheduledTasks.goal.reasons.noVerdict",
+    "scheduledTasks.goal.reasons.recursionCapped",
     "scheduledTasks.goal.reasons.runFailed",
     "scheduledTasks.goal.reasons.threadChanged",
     "scheduledTasks.goal.reasons.tokenCapped",
@@ -1829,7 +1832,7 @@
     "workspaceChanges.truncatedUnavailable",
     "workspaceChanges.viewChanges"
   ],
-  "unusedTotal": 64,
+  "unusedTotal": 65,
   "unusedKeys": [
     "capabilities.availablePlugins",
     "capabilities.directory.guideHint",
@@ -1860,6 +1863,7 @@
     "scheduledTasks.apiErrors.invalidAssistant",
     "scheduledTasks.apiErrors.invalidContextMode",
     "scheduledTasks.apiErrors.invalidGoal",
+    "scheduledTasks.apiErrors.invalidNotificationGroup",
     "scheduledTasks.apiErrors.invalidSchedule",
     "scheduledTasks.apiErrors.invalidScheduleType",
     "scheduledTasks.apiErrors.invalidStopCondition",

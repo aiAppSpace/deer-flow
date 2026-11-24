@@ -4,20 +4,36 @@ import { fetch } from "@/core/api/fetcher";
 
 import type { AgentThreadState } from "../threads";
 
-import { buildWriteFileDraftContent } from "./preview";
-import { readArtifactPreviewBody } from "./response-body";
+import { buildWriteFileDraftContent, parseWriteFileArtifact } from "./preview";
 import { urlOfArtifact } from "./utils";
 
-async function sha256OfBytes(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+function fnv1aHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+async function sha256OfText(content: string): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
-  // Gateway revisions describe the original bytes, including a UTF-8 BOM.
-  // Non-secure origins use the same SHA-256 algorithm, loaded only on demand.
-  const digest = subtle
-    ? new Uint8Array(await subtle.digest("SHA-256", bytes))
-    : (await import("@noble/hashes/sha2.js")).sha256(bytes);
-  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join(
-    "",
+  if (!subtle) {
+    // crypto.subtle is only exposed in secure contexts (HTTPS or localhost).
+    // On a non-secure origin such as http://<lan-ip>:<port> it is undefined, so
+    // hashing would throw and break artifact preview + inline editing
+    // (issue #4864). The Gateway returns the real SHA-256 via the ETag header,
+    // so this fallback is only a last-resort fingerprint used for draft
+    // reconciliation when that header is absent.
+    return fnv1aHash(content);
+  }
+  const digest = await subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(content),
   );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 export const ARTIFACT_PREVIEW_MAX_BYTES = 1024 * 1024;
@@ -36,11 +52,13 @@ export async function loadArtifactContent({
   threadId,
   isMock,
   full = false,
+  signal,
 }: {
   filepath: string;
   threadId: string;
   isMock?: boolean;
   full?: boolean;
+  signal?: AbortSignal;
 }) {
   let enhancedFilepath = filepath;
   if (filepath.endsWith(".skill")) {
@@ -49,6 +67,7 @@ export async function loadArtifactContent({
   const url = urlOfArtifact({ filepath: enhancedFilepath, threadId, isMock });
   const response = await fetch(url, {
     cache: "no-store",
+    signal,
     headers: full
       ? undefined
       : { Range: `bytes=0-${ARTIFACT_PREVIEW_MAX_BYTES - 1}` },
@@ -69,41 +88,33 @@ export async function loadArtifactContent({
     throw new Error(`Failed to load artifact: ${response.status}`);
   }
 
-  const body = full
-    ? { bytes: new Uint8Array(await response.arrayBuffer()), truncated: false }
-    : await readArtifactPreviewBody(response, ARTIFACT_PREVIEW_MAX_BYTES);
-  const bytes = body.bytes;
-  const contentLengthHeader = response.headers.get("Content-Length");
-  const contentLength =
-    contentLengthHeader === null ? undefined : Number(contentLengthHeader);
-  const totalBytes =
-    contentRange?.total ??
-    (contentLength !== undefined && Number.isFinite(contentLength)
-      ? contentLength
-      : undefined);
-  // Asking for full content cannot turn a partial server response into a
-  // complete editable revision. The received bytes are the authority.
+  const bytes = await response.arrayBuffer();
   const truncated =
-    body.truncated ||
-    (response.status === 206 &&
-      (contentRange?.end === undefined ||
-        contentRange.total > contentRange.end + 1)) ||
-    (totalBytes !== undefined && totalBytes > bytes.byteLength);
+    !full &&
+    response.status === 206 &&
+    (contentRange?.end === undefined ||
+      contentRange.total > contentRange.end + 1);
   // Streaming decode intentionally holds an incomplete trailing UTF-8 code
   // point instead of fabricating U+FFFD at the range boundary.
   const content = new TextDecoder().decode(bytes, { stream: truncated });
   const etag = response.headers.get("etag");
-  const sha256 = truncated
-    ? undefined
-    : (etag?.match(/^(?:W\/)?"([0-9a-fA-F]{64})"$/)?.[1]?.toLowerCase() ??
-      (await sha256OfBytes(bytes)));
+  const sha256 =
+    etag?.match(/^(?:W\/)?"([0-9a-fA-F]{64})"$/)?.[1]?.toLowerCase() ??
+    (!truncated ? await sha256OfText(content) : undefined);
+  const contentLengthHeader = response.headers.get("Content-Length");
+  const contentLength =
+    contentLengthHeader === null ? undefined : Number(contentLengthHeader);
   return {
     content,
     url,
     sha256,
     truncated,
     previewBytes: bytes.byteLength,
-    totalBytes,
+    totalBytes:
+      contentRange?.total ??
+      (contentLength !== undefined && Number.isFinite(contentLength)
+        ? contentLength
+        : undefined),
   };
 }
 
@@ -114,6 +125,11 @@ export function loadArtifactContentFromToolCall({
   url: string;
   thread: BaseStream<AgentThreadState>;
 }) {
+  const target = parseWriteFileArtifact(urlString);
+  if (!target) {
+    return undefined;
+  }
+
   const draftContent = buildWriteFileDraftContent({
     filepath: urlString,
     messages: thread.messages,
@@ -122,9 +138,7 @@ export function loadArtifactContentFromToolCall({
     return draftContent;
   }
 
-  const url = new URL(urlString);
-  const toolCallId = url.searchParams.get("tool_call_id");
-  const messageId = url.searchParams.get("message_id");
+  const { messageId, toolCallId } = target;
   if (messageId && toolCallId) {
     const message = thread.messages.find((message) => message.id === messageId);
     if (message?.type === "ai" && message.tool_calls) {

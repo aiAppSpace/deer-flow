@@ -19,13 +19,6 @@ def _managed(name: str, *, enabled: bool = True) -> ManagedSubagentDefinition:
     )
 
 
-def _sandbox_tool_names() -> set[str]:
-    """Names of the tools the sandbox module actually defines."""
-    from deerflow.sandbox import tools as sandbox_tools
-
-    return {name for name in (getattr(getattr(sandbox_tools, attr), "name", None) for attr in dir(sandbox_tools)) if isinstance(name, str)}
-
-
 def test_enabled_managed_definitions_join_runtime_catalog(monkeypatch):
     monkeypatch.setattr(registry, "_managed_definitions", lambda **_: [_managed("planner"), _managed("disabled", enabled=False)])
     config = SubagentsAppConfig()
@@ -51,24 +44,7 @@ def test_default_lead_catalog_preserves_builtin_defaults(monkeypatch):
 
     bash = registry.get_subagent_config("bash", app_config=config)
     assert bash is not None
-    # Fork delta over upstream's five: the staged-artifact write tools, so a long
-    # generated document never has to go through one oversized write_file call.
-    # Their implementation and size guard live in deerflow/sandbox/tools.py and are
-    # pinned by test_write_file_tool_size_guard.py.
-    assert bash.tools == [
-        "bash",
-        "ls",
-        "read_file",
-        "write_file",
-        "str_replace",
-        "begin_artifact_write",
-        "append_artifact_chunk",
-        "finalize_artifact_write",
-    ]
-    # Self-proving: every name in the catalog resolves to a tool that actually
-    # exists, so renaming one in sandbox/tools.py cannot silently leave the bash
-    # subagent pointing at a tool the runtime can no longer hand it.
-    assert set(bash.tools) <= _sandbox_tool_names()
+    assert bash.tools == ["bash", "ls", "read_file", "write_file", "str_replace"]
     assert set(bash.disallowed_tools or []) == {"task", "ask_clarification", "present_files"}
     assert bash.model == "inherit"
     assert bash.max_turns == 60

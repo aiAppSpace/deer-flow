@@ -7,6 +7,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { toast } from "sonner";
 
 import { PromptInputProvider } from "@/components/ai-elements/prompt-input";
 import { InputBox } from "@/components/workspace/input-box";
@@ -14,9 +15,14 @@ import { ThreadContext } from "@/components/workspace/messages/context";
 import { AuthProvider } from "@/core/auth/AuthProvider";
 import { DEFAULT_LOCALE } from "@/core/i18n";
 import { I18nProvider } from "@/core/i18n/context";
+import { enUS } from "@/core/i18n/locales/en-US";
 import { stageProjectAttachment } from "@/core/projects/composer-attach";
 import type { AttachProjectDocumentResult } from "@/core/projects/types";
 import { DEFAULT_LOCAL_SETTINGS } from "@/core/settings/local";
+import {
+  buildComposerDraftKey,
+  readComposerDraft,
+} from "@/core/threads/composer-draft";
 import { useThreadStream } from "@/core/threads/hooks";
 import type { UploadResponse } from "@/core/uploads/api";
 
@@ -132,9 +138,11 @@ function renderChat() {
 }
 
 let uploadAttempts = 0;
+let firstUploadResponse: () => Response;
 
 beforeEach(() => {
   uploadAttempts = 0;
+  firstUploadResponse = () => json({ detail: "disk full" }, 500);
   mocks.submit.mockClear();
   // happy-dom's File is not a Node Blob, so the composer's preview URL needs
   // a stand-in.
@@ -145,7 +153,7 @@ beforeEach(() => {
     if (/\/api\/threads\/[^/]+\/uploads$/.test(url)) {
       uploadAttempts += 1;
       return uploadAttempts === 1
-        ? json({ detail: "disk full" }, 500)
+        ? firstUploadResponse()
         : json(UPLOAD_RESPONSE);
     }
     if (/\/runs(\?|$)/.test(url)) {
@@ -162,7 +170,7 @@ afterEach(() => {
   window.sessionStorage.clear();
 });
 
-it("retries a failed upload with the staged project attachment still attached", async () => {
+async function expectUploadRetryPreservesDraftAndAttachments() {
   stageProjectAttachment("thread-1", ATTACHMENT);
   const { container } = renderChat();
   await screen.findByTestId("project-attachment-chip");
@@ -174,7 +182,7 @@ it("retries a failed upload with the staged project attachment still attached", 
       files: [new File(["notes"], "notes.txt", { type: "text/plain" })],
     },
   });
-  await screen.findByText("notes.txt");
+  await screen.findByTitle("notes.txt");
 
   fireEvent.submit(container.querySelector("form")!);
   await waitFor(() => expect(uploadAttempts).toBe(1));
@@ -185,6 +193,10 @@ it("retries a failed upload with the staged project attachment still attached", 
   );
 
   expect(mocks.submit).not.toHaveBeenCalled();
+  expect(screen.getByRole<HTMLTextAreaElement>("textbox").value).toBe(
+    "summarize it",
+  );
+  expect(screen.getByTitle("notes.txt")).toBeTruthy();
   expect(screen.getByTestId("project-attachment-chip")).toBeTruthy();
 
   fireEvent.submit(container.querySelector("form")!);
@@ -202,4 +214,186 @@ it("retries a failed upload with the staged project attachment still attached", 
     ATTACHMENT.virtual_path,
     "/mnt/user-data/uploads/notes.txt",
   ]);
+}
+
+it.each(["HTTP error", "unsuccessful HTTP 200"])(
+  "retries an upload after %s with the draft and staged project attachment still attached",
+  async (failure) => {
+    if (failure === "unsuccessful HTTP 200") {
+      firstUploadResponse = () =>
+        json({
+          success: false,
+          files: [],
+          message: "Successfully uploaded 0 file(s); skipped 1 unsafe file(s)",
+          skipped_files: ["notes.txt"],
+        });
+    }
+    await expectUploadRetryPreservesDraftAndAttachments();
+  },
+);
+
+it("retries a failed file independently, retains successful files and only sends after explicit submit", async () => {
+  const baseFetch = globalThis.fetch;
+  const attempts: string[] = [];
+  rs.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+    if (!String(input).endsWith("/uploads"))
+      return baseFetch(input as RequestInfo, init);
+    const file = (init!.body as FormData).get("files") as File;
+    attempts.push(file.name);
+    if (
+      file.name === "retry.txt" &&
+      attempts.filter((name) => name === file.name).length === 1
+    )
+      return json({}, 500);
+    return json({
+      ...UPLOAD_RESPONSE,
+      files: [
+        {
+          ...UPLOAD_RESPONSE.files[0],
+          filename: file.name,
+          virtual_path: `/mnt/user-data/uploads/${file.name}`,
+        },
+      ],
+    });
+  });
+  const { container } = renderChat();
+  fireEvent.change(screen.getByRole("textbox"), {
+    target: { value: "review both" },
+  });
+  fireEvent.change(document.querySelector('input[type="file"]')!, {
+    target: {
+      files: [new File(["a"], "success.txt"), new File(["b"], "retry.txt")],
+    },
+  });
+  await screen.findByTitle("retry.txt");
+  fireEvent.submit(container.querySelector("form")!);
+  const retry = await screen.findByRole("button", {
+    name: "Retry upload: retry.txt",
+  });
+  expect(mocks.submit).not.toHaveBeenCalled();
+  fireEvent.click(retry);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("button", { name: "Retry upload: retry.txt" }),
+    ).toBeNull(),
+  );
+  expect(mocks.submit).not.toHaveBeenCalled();
+  fireEvent.submit(container.querySelector("form")!);
+  await waitFor(() => expect(mocks.submit).toHaveBeenCalledTimes(1));
+  expect(attempts).toEqual(["success.txt", "retry.txt", "retry.txt"]);
+});
+
+it("cancels a single upload without submitting or losing the draft", async () => {
+  const baseFetch = globalThis.fetch;
+  let uploadSignal: AbortSignal | undefined;
+  rs.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+    if (!String(input).endsWith("/uploads"))
+      return baseFetch(input as RequestInfo, init);
+    uploadSignal = init!.signal!;
+    return new Promise<Response>((_, reject) =>
+      uploadSignal!.addEventListener(
+        "abort",
+        () => reject(new DOMException("Aborted", "AbortError")),
+        { once: true },
+      ),
+    );
+  });
+  const { container } = renderChat();
+  fireEvent.change(screen.getByRole("textbox"), {
+    target: { value: "keep this draft" },
+  });
+  fireEvent.change(document.querySelector('input[type="file"]')!, {
+    target: { files: [new File(["a"], "cancel.txt")] },
+  });
+  await screen.findByTitle("cancel.txt");
+  fireEvent.submit(container.querySelector("form")!);
+  await waitFor(() => expect(uploadSignal).toBeTruthy());
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Cancel upload: cancel.txt" }),
+  );
+  await screen.findByRole("button", { name: "Retry upload: cancel.txt" });
+  expect(uploadSignal!.aborted).toBe(true);
+  expect(mocks.submit).not.toHaveBeenCalled();
+  expect(screen.getByRole<HTMLTextAreaElement>("textbox").value).toBe(
+    "keep this draft",
+  );
+});
+
+it("keeps the draft through a failed upload and a busy /goal, then runs the goal's objective once", async () => {
+  // A /goal the Gateway refuses with 409 never reaches sendMessage, so like
+  // a failed upload it must leave the composer and its stored draft alone.
+  const goalStatuses: number[] = [];
+  const baseFetch = globalThis.fetch;
+  rs.stubGlobal("fetch", async (input: unknown, init?: RequestInit) => {
+    if (String(input).endsWith("/api/threads/thread-1/goal")) {
+      const status = goalStatuses.length === 0 ? 409 : 200;
+      goalStatuses.push(status);
+      return status === 409
+        ? json({ detail: "Thread has a run in flight." }, 409)
+        : json({ goal: { objective: "finish all tests", status: "active" } });
+    }
+    return baseFetch(input as RequestInfo, init);
+  });
+  const error = rs.spyOn(toast, "error");
+  const draftKey = buildComposerDraftKey({
+    userId: "user-1",
+    threadId: "thread-1",
+  });
+  const storedDraft = () =>
+    readComposerDraft(window.sessionStorage, draftKey)?.text;
+  const textbox = () => screen.getByRole<HTMLTextAreaElement>("textbox");
+  const { container } = renderChat();
+  const submit = () => fireEvent.submit(container.querySelector("form")!);
+
+  fireEvent.change(textbox(), { target: { value: "summarize it" } });
+  fireEvent.change(document.querySelector('input[type="file"]')!, {
+    target: {
+      files: [new File(["notes"], "notes.txt", { type: "text/plain" })],
+    },
+  });
+  await screen.findByTitle("notes.txt");
+  await waitFor(() => expect(storedDraft()).toBe("summarize it"));
+  submit();
+  await waitFor(() => expect(uploadAttempts).toBe(1));
+  await waitFor(() => expect(textbox().disabled).toBe(false));
+  expect(textbox().value).toBe("summarize it");
+  expect(storedDraft()).toBe("summarize it");
+
+  fireEvent.click(
+    screen.getByRole("button", { name: "Remove attachment: notes.txt" }),
+  );
+  fireEvent.change(textbox(), {
+    target: { value: "/goal finish all tests" },
+  });
+  await waitFor(() => expect(storedDraft()).toBe("/goal finish all tests"));
+  submit();
+  await waitFor(() =>
+    expect(error).toHaveBeenCalledWith(enUS.inputBox.goalBar.busy),
+  );
+  // Let PromptInput settle the rejected submit before reading the composer.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(textbox().value).toBe("/goal finish all tests");
+  expect(storedDraft()).toBe("/goal finish all tests");
+  expect(mocks.submit).not.toHaveBeenCalled();
+
+  submit();
+  await waitFor(() => expect(mocks.submit).toHaveBeenCalledTimes(1));
+  expect(goalStatuses).toEqual([409, 200]);
+  expect(uploadAttempts).toBe(1);
+  const [input] = mocks.submit.mock.calls[0] as unknown as [
+    {
+      messages: Array<{
+        content: unknown;
+        additional_kwargs?: { files?: unknown };
+      }>;
+    },
+  ];
+  const sent = input.messages.at(-1);
+  expect(JSON.stringify(sent?.content)).toContain("finish all tests");
+  expect(JSON.stringify(sent?.content)).not.toContain("/goal");
+  expect(sent?.additional_kwargs?.files).toBeUndefined();
+  await waitFor(() => expect(textbox().value).toBe(""));
+  // Past the draft-save delay: nothing writes the sent text back.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  expect(storedDraft()).toBeUndefined();
 });

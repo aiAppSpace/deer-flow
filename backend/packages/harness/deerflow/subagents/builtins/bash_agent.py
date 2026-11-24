@@ -43,16 +43,7 @@ You have access to the sandbox environment:
 - Prefer relative paths from the workspace, such as `hello.txt`, `../uploads/input.csv`, and `../outputs/result.md`, when composing commands or helper scripts
 </working_directory>
 """,
-    tools=[
-        "bash",
-        "ls",
-        "read_file",
-        "write_file",
-        "str_replace",
-        "begin_artifact_write",
-        "append_artifact_chunk",
-        "finalize_artifact_write",
-    ],  # Sandbox tools only
+    tools=["bash", "ls", "read_file", "write_file", "str_replace"],  # Sandbox tools only
     disallowed_tools=["task", "ask_clarification", "present_files"],
     model="inherit",
     max_turns=60,

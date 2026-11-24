@@ -1,4 +1,8 @@
-"""Read-through delta-history cache wrapper for any BaseCheckpointSaver.
+"""Read-through delta-history cache wrapper for a canonical BaseCheckpointSaver.
+
+The inner saver must return each checkpoint's ``pending_writes`` in the
+same order used by its delta history walk. The supported memory, SQLite,
+and PostgreSQL savers use ``writes_sort_key(task_path, task_id, idx)``.
 
 Correctness argument (spec §3): a checkpoint's delta history is a pure
 function of its sealed ancestor chain — the LangGraph contract excludes the
@@ -25,7 +29,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver, CheckpointTuple, PendingWrite
 
-from deerflow.runtime.checkpoint_cache.base import make_history_key
+from deerflow.runtime.checkpoint_cache.base import make_history_key, valid_history_entry
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +50,14 @@ def _checkpoint_ref(tup: CheckpointTuple) -> tuple[str, str, str]:
 
 
 def _channel_writes(tup: CheckpointTuple, channel: str) -> list[PendingWrite]:
-    """Writes for one channel, oldest→newest (tuple storage order)."""
+    """Writes for one channel in the inner saver's canonical delta order.
+
+    ``InMemorySaver`` sorts stored writes with ``writes_sort_key``. SQLite's
+    ``load_pending_writes`` and PostgreSQL's ``_load_writes`` apply the same
+    key to writes returned by the database. Filtering preserves the delta
+    walk's replay order. Sorting by ``task_id`` alone can reorder parallel
+    writes whose task paths sort differently and change the reducer's result.
+    """
     return [w for w in (tup.pending_writes or []) if w[1] == channel]
 
 
@@ -59,6 +70,11 @@ class CachedHistorySaver(BaseCheckpointSaver):
         self._key_prefix = key_prefix
         self._compose_hits = 0
         self._full_walks = 0
+
+    @property
+    def source_saver(self) -> BaseCheckpointSaver:
+        """Return the saver that owns the authoritative checkpoint rows."""
+        return self._inner
 
     def __getattr__(self, name: str) -> Any:
         # Safety net for saver-specific extras (e.g. AsyncSqliteSaver.setup).
@@ -106,7 +122,7 @@ class CachedHistorySaver(BaseCheckpointSaver):
         missing: list[str] = []
         for ch in channels:
             entry = hits.get(keys[ch])
-            if entry is None:
+            if not valid_history_entry(entry, channel=ch):
                 missing.append(ch)
             else:
                 found[ch] = entry
@@ -152,7 +168,7 @@ class CachedHistorySaver(BaseCheckpointSaver):
         key = self._key(parent, channel)
         hits = await self._cache.aget_many([key])
         parent_history = hits.get(key)
-        if parent_history is None:
+        if not valid_history_entry(parent_history, channel=channel):
             if depth > 0:
                 parent_history = await self._aresolve(parent, channel, depth - 1)
             else:
@@ -196,7 +212,7 @@ class CachedHistorySaver(BaseCheckpointSaver):
         missing: list[str] = []
         for ch in channels:
             entry = hits.get(keys[ch])
-            if entry is None:
+            if not valid_history_entry(entry, channel=ch):
                 missing.append(ch)
             else:
                 found[ch] = entry
@@ -227,7 +243,7 @@ class CachedHistorySaver(BaseCheckpointSaver):
 
         key = self._key(parent, channel)
         parent_history = self._cache.get_many([key]).get(key)
-        if parent_history is None:
+        if not valid_history_entry(parent_history, channel=channel):
             if depth > 0:
                 parent_history = self._resolve_sync(parent, channel, depth - 1)
             else:
@@ -314,6 +330,16 @@ class CachedHistorySaver(BaseCheckpointSaver):
         delete = getattr(self._cache, "adelete_thread", None)
         if delete is not None:
             await delete(self._key_prefix, thread_id)
+
+    async def ainvalidate_history_cache(self, thread_id: str) -> None:
+        """Drop cached delta histories after an external chain mutation.
+
+        Storage-level retention deliberately operates on ``_inner`` because the
+        wrapper has no row-deletion API.  Keeping invalidation on the wrapper
+        preserves its lifecycle contract without exposing cache internals to
+        the Gateway.
+        """
+        await self._apurge_thread(thread_id)
 
     async def acopy_thread(self, source_thread_id: str, target_thread_id: str) -> None:
         await self._inner.acopy_thread(source_thread_id, target_thread_id)

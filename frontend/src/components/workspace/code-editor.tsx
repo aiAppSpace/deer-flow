@@ -27,6 +27,7 @@ export function CodeEditor({
   onSave,
   settings,
   language,
+  onSelectionChange,
 }: {
   className?: string;
   placeholder?: string;
@@ -38,6 +39,13 @@ export function CodeEditor({
   onSave?: () => void;
   settings?: unknown;
   language?: string;
+  onSelectionChange?: (
+    selection: {
+      from: number;
+      to: number;
+      rect: { left: number; bottom: number };
+    } | null,
+  ) => void;
 }) {
   const {
     thread: { isLoading },
@@ -108,7 +116,12 @@ export function CodeEditor({
         />
       ) : (
         <CodeMirror
-          editable={readonly !== true && disabled !== true}
+          // Keep the source focusable for keyboard selection. readOnly below
+          // still prevents edits until the user explicitly enters edit mode.
+          editable={
+            disabled !== true &&
+            (readonly !== true || onSelectionChange !== undefined)
+          }
           readOnly={readonly === true || disabled === true}
           placeholder={placeholder}
           className={cn(
@@ -126,8 +139,25 @@ export function CodeEditor({
               (settings as { lineNumbers?: boolean })?.lineNumbers ?? false,
           }}
           autoFocus={autoFocus}
-          onUpdate={handleUpdate}
           onChange={onChange}
+          onUpdate={(update) => {
+            handleUpdate(update);
+            if (
+              !onSelectionChange ||
+              (!update.selectionSet && !update.docChanged)
+            )
+              return;
+            const range = update.state.selection.main;
+            const rect = update.view.coordsAtPos(range.to);
+            onSelectionChange(
+              !update.docChanged &&
+                !range.empty &&
+                update.state.selection.ranges.length === 1 &&
+                rect
+                ? { from: range.from, to: range.to, rect }
+                : null,
+            );
+          }}
           value={value}
         />
       )}

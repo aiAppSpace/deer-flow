@@ -58,6 +58,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8011)
     parser.add_argument("--fixture", default=str(_BACKEND / "tests" / "fixtures" / "replay" / "write_read_file.ultra.json"))
     parser.add_argument("--cors", default="http://localhost:3000")
+    parser.add_argument("--workspace-search", action="store_true", help="Enable the packaged workspace search provider for full-stack search tests")
     args = parser.parse_args()
 
     home = Path(tempfile.mkdtemp(prefix="replay-gw-"))
@@ -102,6 +103,10 @@ channels:
 
         config_yaml = configure_settings_memory_backend(config_yaml, settings_memory_backend)
     cfg.write_text(config_yaml, encoding="utf-8")
+    if args.workspace_search:
+        sys.path.insert(0, str(_BACKEND.parent / "examples/deerflow-extension-workspace-search"))
+        with cfg.open("a", encoding="utf-8") as stream:
+            stream.write("\nplugins:\n  - name: workspace-search\n    use: deerflow_workspace_search:install\n    table_prefix: extension_workspace_search_\n    required: true\n")
 
     extensions_path = prepare_hermetic_extras(home)
     if settings_fixture_enabled:

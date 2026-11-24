@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.gateway.auth.models import User
-from app.gateway.auth.repositories.base import LastAdminRemainsError, UserNotFoundError, UserRepository
+from app.gateway.auth.repositories.base import LastActiveAdminError, LastAdminRemainsError, UserNotFoundError, UserRepository
 from deerflow.persistence.user.model import OAUTH_IDENTITY_INDEX_NAME, UserRow
 
 # ``email`` is ``mapped_column(unique=True, index=True)``, which SQLAlchemy
@@ -161,6 +161,7 @@ class SQLiteUserRepository(UserRepository):
             oauth_id=row.oauth_id,
             needs_setup=row.needs_setup,
             token_version=row.token_version,
+            disabled=row.disabled,
         )
 
     @staticmethod
@@ -175,6 +176,7 @@ class SQLiteUserRepository(UserRepository):
             oauth_id=user.oauth_id,
             needs_setup=user.needs_setup,
             token_version=user.token_version,
+            disabled=user.disabled,
         )
 
     # ── CRUD ──────────────────────────────────────────────────────────
@@ -314,11 +316,33 @@ class SQLiteUserRepository(UserRepository):
             row = await session.get(UserRow, user_id)
             if row is None:
                 raise UserNotFoundError(f"User {user_id} no longer exists")
-            if row.system_role == "admin" and system_role != "admin":
-                admin_count = await session.scalar(select(func.count()).select_from(UserRow).where(UserRow.system_role == "admin"))
-                if admin_count is None or admin_count <= 1:
+            if row.system_role == "admin" and not row.disabled and system_role != "admin":
+                # Count ACTIVE admins only: a disabled admin cannot
+                # authenticate, so counting them would let "disable B, then
+                # demote self" (or a combined role+disable request) strand
+                # the deployment with zero usable management credentials.
+                # Demoting an already disabled admin removes no active admin.
+                active_admins = await session.scalar(select(func.count()).select_from(UserRow).where(UserRow.system_role == "admin", UserRow.disabled.is_(False)))
+                if active_admins is None or active_admins <= 1:
                     raise LastAdminRemainsError("cannot demote the last remaining admin")
             row.system_role = system_role
+            await session.commit()
+            return self._row_to_user(row)
+
+    async def set_disabled(self, user_id: str, disabled: bool) -> User:
+        """Serialized single-column account enable/disable (see base contract)."""
+        async with self._sf() as session:
+            # Same serialization idiom as update_system_role: the
+            # active-admin count and the column write share one transaction.
+            await self._serialize_account_role_mutation(session)
+            row = await session.get(UserRow, user_id)
+            if row is None:
+                raise UserNotFoundError(f"User {user_id} no longer exists")
+            if disabled and not row.disabled and row.system_role == "admin":
+                active_admins = await session.scalar(select(func.count()).select_from(UserRow).where(UserRow.system_role == "admin", UserRow.disabled.is_(False)))
+                if active_admins is None or active_admins <= 1:
+                    raise LastActiveAdminError("cannot disable the last remaining active admin")
+            row.disabled = disabled
             await session.commit()
             return self._row_to_user(row)
 
@@ -375,11 +399,23 @@ class SQLiteUserRepository(UserRepository):
             # Role changes go through update_system_role, which likewise
             # never touches credentials.
             user.system_role = row.system_role
+            # disabled is account-lifecycle state: only set_disabled writes
+            # it (same field-scoping as the role column).
+            user.disabled = row.disabled
             row.oauth_provider = user.oauth_provider
             row.oauth_id = user.oauth_id
             row.needs_setup = user.needs_setup
             row.token_version = user.token_version
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError as exc:
+                # The caller's email pre-check cannot see an insert or update
+                # of the same address that commits before this one. Report the
+                # lost race the way create_user does; any other violation
+                # propagates unchanged.
+                if _is_email_violation(exc):
+                    raise ValueError(f"Email already registered: {user.email}") from exc
+                raise
         return user
 
     async def count_users(self) -> int:

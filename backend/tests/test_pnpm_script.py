@@ -78,6 +78,85 @@ def test_runner_prefers_direct_pnpm_and_forwards_arguments(tmp_path: Path):
     assert "via Corepack" not in result.stderr
 
 
+@pytest.mark.parametrize("direct_version", ["11.25.0", "10.26.2-rc.1"])
+def test_runner_uses_corepack_when_direct_pnpm_conflicts_with_package_manager(tmp_path: Path, direct_version: str):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    direct = _write_fake_command(bin_dir, "pnpm", "direct")
+    if os.name == "nt":
+        direct.write_text(
+            f'@echo off\r\nif "%1"=="--version" (echo {direct_version} & exit /b 0)\r\necho direct^|%CD%^|%*\r\n',
+            encoding="utf-8",
+        )
+    else:
+        direct.write_text(
+            f'#!/bin/sh\nif [ "$1" = "--version" ]; then echo {direct_version}; exit 0; fi\nprintf "direct|%s|%s\\n" "$PWD" "$*"\n',
+            encoding="utf-8",
+        )
+    _write_fake_command(bin_dir, "corepack", "corepack")
+
+    result = _run_pnpm(bin_dir, "install", "--frozen-lockfile")
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == f"corepack|{FRONTEND_DIR}|pnpm install --frozen-lockfile"
+    assert "via Corepack" in result.stderr
+
+
+def test_runner_rejects_mismatched_pnpm_without_corepack(tmp_path: Path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    direct = _write_fake_command(bin_dir, "pnpm", "direct")
+    if os.name == "nt":
+        direct.write_text("@echo off\r\necho 11.25.0\r\n", encoding="utf-8")
+    else:
+        direct.write_text("#!/bin/sh\necho 11.25.0\n", encoding="utf-8")
+
+    result = _run_pnpm(bin_dir, "install")
+
+    assert result.returncode == 127
+    assert "pnpm 11.25.0 is on PATH" in result.stderr
+    assert "pins 10.26.2" in result.stderr
+
+
+@pytest.mark.parametrize("package_content", [None, "{", "{}"])
+def test_runner_reports_unreadable_or_unpinned_package_manifest(tmp_path: Path, monkeypatch, capsys, package_content: str | None):
+    project_dir = tmp_path / "frontend"
+    project_dir.mkdir()
+    if package_content is not None:
+        (project_dir / "package.json").write_text(package_content, encoding="utf-8")
+    run_pnpm = PNPM_MODULE["run_pnpm"]
+    monkeypatch.setitem(run_pnpm.__globals__, "find_pnpm_command", lambda: ["pnpm"])
+
+    assert run_pnpm(["install"], project_dir) != 0
+    assert "frontend/package.json" in capsys.readouterr().err
+
+
+def test_runner_warns_when_direct_pnpm_version_is_unparseable(tmp_path: Path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_fake_command(bin_dir, "pnpm", "direct")
+
+    result = _run_pnpm(bin_dir, "install")
+
+    assert result.returncode == 0
+    assert "could not determine pnpm version" in result.stderr.lower()
+
+
+def test_version_probe_does_not_read_stdin(monkeypatch):
+    run_pnpm = PNPM_MODULE["run_pnpm"]
+    calls = []
+
+    def fake_run(*args, **kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(returncode=0, stdout="10.26.2\n")
+
+    monkeypatch.setitem(run_pnpm.__globals__, "find_pnpm_command", lambda: ["pnpm"])
+    monkeypatch.setitem(run_pnpm.__globals__, "subprocess", SimpleNamespace(run=fake_run, DEVNULL=-3))
+
+    assert run_pnpm(["install"]) == 0
+    assert calls[0]["stdin"] == -3
+
+
 def test_runner_prefers_cmd_shim_on_windows(monkeypatch):
     paths = {
         "pnpm": r"C:\tools\pnpm.exe",
@@ -292,9 +371,9 @@ def test_official_entrypoints_route_pnpm_through_shared_runner():
     assert 'DEERFLOW_PNPM_RUNNER="$REPO_ROOT/scripts/pnpm.py"' in serve_script
     # Keep React/Vue separate and pin the local React port explicitly, retaining
     # upstream #5053's Windows rule that Next does not read PORT from .env.
-    assert 'REACT_FRONTEND_CMD=\'env PORT=3200 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev\'' in serve_script
+    assert 'REACT_FRONTEND_CMD=\'env PORT=3200 "$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" run dev --hostname 127.0.0.1\'' in serve_script
     assert 'VUE_FRONTEND_CMD=\'"$DEERFLOW_PNPM_PYTHON" "$DEERFLOW_PNPM_RUNNER" --dir frontend-vue exec nuxt dev --port 3100\'' in serve_script
-    assert '"\\$DEERFLOW_PNPM_RUNNER\\" run preview"' in serve_script
+    assert '"\\$DEERFLOW_PNPM_RUNNER\\" run preview --hostname 127.0.0.1"' in serve_script
     assert 'Path(__file__).resolve().with_name("pnpm.py")' in doctor_script
     assert 'project_root / "scripts" / "pnpm.py"' in support_bundle_script
 

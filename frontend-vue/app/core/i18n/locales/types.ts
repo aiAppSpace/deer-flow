@@ -815,6 +815,8 @@ export interface Translations {
         maxContinuations: string;
         noProgress: string;
         tokenCapped: string;
+        loopCapped: string;
+        recursionCapped: string;
         evaluatorFailed: string;
         noDurableEndOfTurn: string;
         threadChanged: string;
@@ -835,6 +837,7 @@ export interface Translations {
     apiErrors: {
       generic: string;
       invalidRequest: string;
+      invalidNotificationGroup: string;
       invalidSchedule: string;
       invalidScheduleType: string;
       invalidTimezone: string;
