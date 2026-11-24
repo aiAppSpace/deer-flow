@@ -117,7 +117,7 @@
 | R1 | 运行请求的 `context`：React 带 `thread_id` 与 `locale`（后端据 `locale` 决定回复语言），Vue 主动去掉 `thread_id`、不带 `locale` | React `core/threads/hooks.ts:398`；Vue `app/core/threads/submit.ts:121`（`thread_id` 在 146 行被剔除） |
 | R2 | 查询失败重试：React 用默认规则（失败最多重试 3 次，含 HTTP 4xx/5xx），Vue 只在网络中断时重试 | React `components/query-client-provider.tsx:35`；Vue `app/plugins/vue-query.ts:22` |
 | R3 | 合并时记录的反向差异逐项复核：发送后强制滚到底（上游改为钉在顶部，即 F18）；回调页位置；Vue 仍识别已被上游去掉的分块写入工具名（即 B32）；服务端忽略 `Range` 时 Vue 只读前 1 MiB（`app/core/artifacts/loader.ts:89`），React 合并时删掉了本仓的 `response-body.ts`、改为整段读取——后端支持 `Range`（`backend/app/gateway/routers/artifacts.py:243`），两端请求与结果相同，属于用户看不见的内部差异，保留 Vue 现状；CodeMirror/Lezer 版本固定（只影响代码高亮颜色，按可见差异处理） | 见 `MERGE-DECISIONS.md`“留给第 3 步” |
-| R4 | **待用户裁决。** 创建运行的 `Idempotency-Key` 请求头：Vue 普通发送默认用用户消息 ID 作幂等键（`app/composables/useThreadStream.ts:887`），重新生成用新 UUID（`:1090`），由 `app/core/agent-deerflow/run-protocol.ts:133` 写进请求头；React 两种都不发（`core/threads/hooks.ts:3441` 的注释写明）。后端按这个键去重（`backend/app/gateway/routers/thread_runs.py`）。“请求头逐项一致”要求 Vue 跟随 React 不发；执行约定第 0.2.1 节又要求保留“重复创建运行”这类缺陷修复。两者冲突，由用户决定 | Vue `useThreadStream.ts:887`、`:1090`；React `hooks.ts:3441` |
+| R4 | **已裁决（11-24 用户）：保留 Vue 现状，作为有意保留的缺陷修复，登记为已知请求差异。** 创建运行的 `Idempotency-Key` 请求头：Vue 普通发送默认用用户消息 ID 作幂等键（`app/composables/useThreadStream.ts:887`），重新生成用新 UUID（`:1090`），由 `app/core/agent-deerflow/run-protocol.ts:133` 写进请求头；React 两种都不发（`core/threads/hooks.ts:3441` 的注释写明）。后端按这个键去重（`backend/app/gateway/routers/thread_runs.py`）。“请求头逐项一致”要求 Vue 跟随 React 不发；执行约定第 0.2.1 节又要求保留“重复创建运行”这类缺陷修复。用户选择保留防重复。落地：在跨端请求比对里把这一个请求头登记为已知差异（只此一项，不放宽其他请求头），并在 `BEHAVIOR_CONTRACTS.md` 写明原因 | Vue `useThreadStream.ts:887`、`:1090`；React `hooks.ts:3441` |
 | R5 | 登录页、安装向导页的 `GET /api/v1/auth/me`：React 在服务端取（`frontend/src/app/(auth)/layout.tsx:18`），Vue 在浏览器取（`app/middleware/auth.global.ts:43`）。后端收到的是同一个接口、同一套判定。11-23 已裁决接受这一架构差异，保持 `baseline/parity-auth-diff.json` 中的登记；按新判据维持该裁决。仍要复核一件事：`/setup` 上中间件和 `app/pages/setup.vue:53` 是否各发一次，重复就去掉 `setup.vue` 那次 | Vue `auth.global.ts:43`、`setup.vue:53` |
 
 ## 6. 第三层：运行时实测（待执行）
@@ -130,7 +130,7 @@
 
 ## 6.1 第三层之前要先做的核实
 
-- **身份对应是否够用：** 执行约定第 0.2.1 节第 2 条要求保留身份对应、去掉穷举证明，并核实现有对应链路能否支撑请求档比对。本次静态审查没有做这一项，P0 必须先做：用一个含随机 ID 的场景（新建对话发送、编辑重发）跑一次请求档比对，确认两端的用户消息 ID、运行 ID 都能对应上；幂等键只有 Vue 发，按 R4 的裁决处理。
+- **身份对应是否够用：** 执行约定第 0.2.1 节第 2 条要求保留身份对应、去掉穷举证明，并核实现有对应链路能否支撑请求档比对。本次静态审查没有做这一项，P0 必须先做：用一个含随机 ID 的场景（新建对话发送、编辑重发）跑一次请求档比对，确认两端的用户消息 ID、运行 ID 都能对应上；幂等键只有 Vue 发，按 R4 登记为已知差异。
 - **入口：** 跨端实测经由 nginx 入口访问两端（生产即如此），不经 Vue 独立开发时的 Nitro 代理，避免把开发代理的请求头差异混进结果。
 
 ## 7. 执行顺序
@@ -139,7 +139,7 @@
 | --- | --- | --- |
 | P0 | 按判据调整 Vue 侧规则与测试：`frontend-vue/ARCHITECTURE.md` 对齐范围；`react-parity-scope.json` 与 `parity-scenario-coverage.json` 加入 Showcase 豁免；`home.search*` 改记豁免；跨端比对去掉 aria/Tab 顺序/焦点落点/像素档的计入；逐个处理只为读屏/键盘一致而存在的守卫；React 零消费者的 `conversation-reference-picker.tsx`、`reference-conversations-button.tsx` 登记进 `react-parity-scope.json` 的 `forbiddenUpstreamModules`；完成第 6.1 节身份对应核实 | 先改计划已完成（执行约定第 0.2 节），这里改代码 |
 | P1 | 安全与可用性：B1–B3 | 改动小、影响所有用户，最先做 |
-| P2 | 请求一致性：R1–R5（R4 先等用户裁决） | R1 同时解决 F21 的“按界面语言回复” |
+| P2 | 请求一致性：R1–R5 | R1 同时解决 F21 的“按界面语言回复” |
 | P3 | 其余行为缺陷：B4–B33 与三条“需确认” | 每条有明确位置，可逐条修、逐条加 Vue 单测 |
 | P4 | 功能缺口：F1–F23 | 工作量最大。建议顺序：F18（消息列表与流，日常使用最频繁）→ F1、F2（对话流程）→ F23（扩展宿主契约，F8、F17 的前提）→ F3、F5（分享、搜索）→ F10、F11（模型、用户管理）→ 其余。每项同时补齐第 2 节列出的 auth / 真实后端用例，以及第 9 节对应的契约消费 |
 | P5 | 第三层运行时实测，修复实测出的差异，再测一轮 | 见第 6 节 |
