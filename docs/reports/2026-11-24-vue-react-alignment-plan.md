@@ -1,6 +1,6 @@
 # Vue 对齐 React：新基线审查结论与对齐计划（2026-11-24）
 
-本文是第 3 步的产出，取代此前所有待对齐清单与对照台账（已删除，原文在 Git 历史里）。审查以代码为准：每条结论都来自对两端当前源码的直接比对，文件和行号写在条目里。React 是参照，只改 Vue（判据与范围见 [执行约定](2026-11-23-r03-resume-plan.md) 第 0.1、0.2 节）。
+本文是第 3 步的产出，取代此前所有待对齐清单、挂账文档和交接（已删除，原文在 Git 历史里；其中仍然有效的裁决已并入本文）。`frontend-vue/baseline/parity-diff.json` 等对照基线数据仍在，按 P0 处理。审查以代码为准：每条结论都来自对两端当前源码的直接比对，文件和行号写在条目里。React 是参照，只改 Vue（判据与范围见 [执行约定](2026-11-23-r03-resume-plan.md) 第 0.1、0.2 节）。
 
 ## 1. 审查范围与方法
 
@@ -102,6 +102,7 @@
 | B30 | 编辑消息时不判断输入法组合态：中文输入法选字时按 Esc 或 Ctrl+Enter 会取消或提交编辑（11-24 复核补入） | `49adb0ede` | `app/composables/useMessageTurnActions.ts:113` |
 | B31 | 从预设切到自定义 cron 时，只在原始表达式为空才按当前预设生成，会留下过期表达式（11-24 复核补入） | `338f8819a` | `ScheduledTaskScheduleInput.vue:204` |
 | B32 | Vue 仍按本仓已撤销的分块写入工具（`begin_artifact_write` / `append_artifact_chunk` / `finalize_artifact_write`）自动打开产物、展示工具步骤；合并上游时后端与 React 已删除这组工具，改用 `write_file` 的 `append` 分段写入（Vue 已支持）。删除这条死分支及其单测和 e2e 断言（11-24 文档清理时补入） | `ceed64e7b` | `app/composables/useChatPanels.ts:276`、`ProcessingToolStep.vue:67-69` |
+| B33 | 工作区变更里 `symlink_created` 状态：React 有意按“已修改”显示（`frontend/src/core/workspace-changes/summary.ts:46` 的注释、`workspace-change-panel.tsx:221` 的 `statusLabel`），Vue 显示 Vue 独有的“新增符号链接”。11-23 已裁决 Vue 跟随 React：映射到 `modified`、排序名次不变，删除 `workspaceChanges.symlinkCreated` 并同步词典、`i18n-keys.json` 与单测（11-24 复核补入） | 11-23 裁决 | `app/core/workspace-changes/presentation.ts:16` |
 
 **实现时还需确认（代码读不出确定结论）：**
 
@@ -115,7 +116,9 @@
 | --- | --- | --- |
 | R1 | 运行请求的 `context`：React 带 `thread_id` 与 `locale`（后端据 `locale` 决定回复语言），Vue 主动去掉 `thread_id`、不带 `locale` | React `core/threads/hooks.ts:398`；Vue `app/core/threads/submit.ts:121`（`thread_id` 在 146 行被剔除） |
 | R2 | 查询失败重试：React 用默认规则（失败最多重试 3 次，含 HTTP 4xx/5xx），Vue 只在网络中断时重试 | React `components/query-client-provider.tsx:35`；Vue `app/plugins/vue-query.ts:22` |
-| R3 | 合并时记录的反向差异逐项复核：发送后强制滚到底（上游改为钉在顶部，即 F18）；回调页位置；Vue 仍识别已被上游去掉的分块写入工具名（`useChatPanels.ts`、`ProcessingToolStep.vue`，清理）；CodeMirror/Lezer 版本固定（只影响代码高亮颜色，按可见差异处理） | 见 `MERGE-DECISIONS.md`“留给第 3 步” |
+| R3 | 合并时记录的反向差异逐项复核：发送后强制滚到底（上游改为钉在顶部，即 F18）；回调页位置；Vue 仍识别已被上游去掉的分块写入工具名（即 B32）；服务端忽略 `Range` 时 Vue 只读前 1 MiB（`app/core/artifacts/loader.ts:89`），React 合并时删掉了本仓的 `response-body.ts`、改为整段读取——后端支持 `Range`（`backend/app/gateway/routers/artifacts.py:243`），两端请求与结果相同，属于用户看不见的内部差异，保留 Vue 现状；CodeMirror/Lezer 版本固定（只影响代码高亮颜色，按可见差异处理） | 见 `MERGE-DECISIONS.md`“留给第 3 步” |
+| R4 | **待用户裁决。** 创建运行的 `Idempotency-Key` 请求头：Vue 普通发送默认用用户消息 ID 作幂等键（`app/composables/useThreadStream.ts:887`），重新生成用新 UUID（`:1090`），由 `app/core/agent-deerflow/run-protocol.ts:133` 写进请求头；React 两种都不发（`core/threads/hooks.ts:3441` 的注释写明）。后端按这个键去重（`backend/app/gateway/routers/thread_runs.py`）。“请求头逐项一致”要求 Vue 跟随 React 不发；执行约定第 0.2.1 节又要求保留“重复创建运行”这类缺陷修复。两者冲突，由用户决定 | Vue `useThreadStream.ts:887`、`:1090`；React `hooks.ts:3441` |
+| R5 | 登录页、安装向导页的 `GET /api/v1/auth/me`：React 在服务端取（`frontend/src/app/(auth)/layout.tsx:18`），Vue 在浏览器取（`app/middleware/auth.global.ts:43`）。后端收到的是同一个接口、同一套判定。11-23 已裁决接受这一架构差异，保持 `baseline/parity-auth-diff.json` 中的登记；按新判据维持该裁决。仍要复核一件事：`/setup` 上中间件和 `app/pages/setup.vue:53` 是否各发一次，重复就去掉 `setup.vue` 那次 | Vue `auth.global.ts:43`、`setup.vue:53` |
 
 ## 6. 第三层：运行时实测（待执行）
 
@@ -127,17 +130,17 @@
 
 ## 6.1 第三层之前要先做的核实
 
-- **身份对应是否够用：** 执行约定第 0.2.1 节第 2 条要求保留身份对应、去掉穷举证明，并核实现有对应链路能否支撑请求档比对。本次静态审查没有做这一项，P0 必须先做：用一个含随机 ID 的场景（新建对话发送、编辑重发）跑一次请求档比对，确认两端的用户消息 ID、幂等键、运行 ID 都能对应上。
+- **身份对应是否够用：** 执行约定第 0.2.1 节第 2 条要求保留身份对应、去掉穷举证明，并核实现有对应链路能否支撑请求档比对。本次静态审查没有做这一项，P0 必须先做：用一个含随机 ID 的场景（新建对话发送、编辑重发）跑一次请求档比对，确认两端的用户消息 ID、运行 ID 都能对应上；幂等键只有 Vue 发，按 R4 的裁决处理。
 - **入口：** 跨端实测经由 nginx 入口访问两端（生产即如此），不经 Vue 独立开发时的 Nitro 代理，避免把开发代理的请求头差异混进结果。
 
 ## 7. 执行顺序
 
 | 阶段 | 内容 | 说明 |
 | --- | --- | --- |
-| P0 | 按判据调整 Vue 侧规则与测试：`frontend-vue/ARCHITECTURE.md` 对齐范围；`react-parity-scope.json` 与 `parity-scenario-coverage.json` 加入 Showcase 豁免；`home.search*` 改记豁免；跨端比对去掉 aria/Tab 顺序/焦点落点/像素档的计入；逐个处理只为读屏/键盘一致而存在的守卫；完成第 6.1 节身份对应核实 | 先改计划已完成（执行约定第 0.2 节），这里改代码 |
+| P0 | 按判据调整 Vue 侧规则与测试：`frontend-vue/ARCHITECTURE.md` 对齐范围；`react-parity-scope.json` 与 `parity-scenario-coverage.json` 加入 Showcase 豁免；`home.search*` 改记豁免；跨端比对去掉 aria/Tab 顺序/焦点落点/像素档的计入；逐个处理只为读屏/键盘一致而存在的守卫；React 零消费者的 `conversation-reference-picker.tsx`、`reference-conversations-button.tsx` 登记进 `react-parity-scope.json` 的 `forbiddenUpstreamModules`；完成第 6.1 节身份对应核实 | 先改计划已完成（执行约定第 0.2 节），这里改代码 |
 | P1 | 安全与可用性：B1–B3 | 改动小、影响所有用户，最先做 |
-| P2 | 请求一致性：R1–R3 | R1 同时解决 F21 的“按界面语言回复” |
-| P3 | 其余行为缺陷：B4–B32 与三条“需确认” | 每条有明确位置，可逐条修、逐条加 Vue 单测 |
+| P2 | 请求一致性：R1–R5（R4 先等用户裁决） | R1 同时解决 F21 的“按界面语言回复” |
+| P3 | 其余行为缺陷：B4–B33 与三条“需确认” | 每条有明确位置，可逐条修、逐条加 Vue 单测 |
 | P4 | 功能缺口：F1–F23 | 工作量最大。建议顺序：F18（消息列表与流，日常使用最频繁）→ F1、F2（对话流程）→ F23（扩展宿主契约，F8、F17 的前提）→ F3、F5（分享、搜索）→ F10、F11（模型、用户管理）→ 其余。每项同时补齐第 2 节列出的 auth / 真实后端用例，以及第 9 节对应的契约消费 |
 | P5 | 第三层运行时实测，修复实测出的差异，再测一轮 | 见第 6 节 |
 | P6 | 简化后的验收：按执行约定第 0.2.1 节的 R04–R12 处理表 | 只验证实际要用的部署方式 |

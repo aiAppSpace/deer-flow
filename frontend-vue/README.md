@@ -190,7 +190,8 @@ impossible orderings and never assign a causal request ID. Cross-kind source
 claims share one collision check. Only generated `facts[index].id` leaves are
 projected, with all replacements applied together; existing literal IDs remain
 literal. Pre-aborted, multiple-source, account-changing or generally ambiguous
-HTTP domains remain unresolved until their stronger evidence is implemented.
+HTTP domains remain unresolved; the exhaustive proofs that would resolve them
+were dropped on 2026-11-24.
 
 Ordinary send observation records the selected human ID, exact appended message
 position and the effective submission-key branch on one local observer. Vue reads
