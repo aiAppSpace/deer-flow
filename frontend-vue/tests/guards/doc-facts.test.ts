@@ -57,6 +57,7 @@ const VERIFY_STEPS: Record<string, string[]> = {
   i18n: ["i18n-check", "i18n-source-check"],
   生成类型: ["gen-api-types-check"],
   契约常量: ["gen-contract-constants-check"],
+  扩展说明: ["gen-extension-documentation-check"],
   静态独立性: ["standalone-check"],
   build: ["build"],
 };
@@ -65,18 +66,18 @@ const VERIFY_STEPS: Record<string, string[]> = {
 const VERIFY_PROSE: [string, string][] = [
   [
     "ARCHITECTURE.md",
-    "lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build",
+    "lint、格式、类型、单测、i18n、生成类型、契约常量、扩展说明、静态独立性、build",
   ],
   [
     "README_zh.md",
-    "lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build",
+    "lint、格式、类型、单测、i18n、生成类型、契约常量、扩展说明、静态独立性、build",
   ],
   [
     "README.md",
-    "lint, format, types, unit, i18n, generated types, contracts, static independence, build",
+    "lint, format, types, unit, i18n, generated types, contracts, extension docs, static independence, build",
   ],
   ["Makefile", "lint + format + types + unit + i18n + generated types"],
-  ["Makefile", "+ contracts + static independence + build"],
+  ["Makefile", "+ contracts + extension docs + static independence + build"],
 ];
 
 describe("make verify 的步骤表", () => {

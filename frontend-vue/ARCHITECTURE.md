@@ -869,7 +869,7 @@ Docker 安装层和独立工程副本都必须携带它；不得直接修改已�
 
 ```bash
 cd frontend-vue
-make verify          # lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build
+make verify          # lint、格式、类型、单测、i18n、生成类型、契约常量、扩展说明、静态独立性、build
 make asset-budget    # 构建产物总量天花板（**不是**用户下载量，见下）
 make e2e-mock        # 不需要后端进程的全部套件
 make e2e-backend     # 需要真实 Gateway 的全部套件

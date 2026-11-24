@@ -7,7 +7,7 @@
 	proxy-security audit docker-build container-smoke \
 	upstream-drift upstream-accept dom-parity icon-parity parity-accept parity-auth-accept \
 	i18n-check i18n-diff i18n-unused i18n-source-check i18n-refresh \
-	export-openapi export-openapi-check gen-api-types gen-api-types-check gen-contract-constants gen-contract-constants-check \
+	export-openapi export-openapi-check gen-api-types gen-api-types-check gen-contract-constants gen-contract-constants-check gen-extension-documentation gen-extension-documentation-check \
 	consumer-check standalone-check standalone-sim coverage
 
 PYTHON ?= python3
@@ -41,7 +41,7 @@ help:
 	@echo "frontend-vue commands:"
 	@echo "  make dev / build / preview     Nuxt lifecycle (dev port $(DEV_PORT))"
 	@echo "  make verify                    lint + format + types + unit + i18n + generated types"
-	@echo "                                 + contracts + static independence + build"
+	@echo "                                 + contracts + extension docs + static independence + build"
 	@echo ""
 	@echo "  E2E 套件（一个套件 = 一种后端拓扑，名字说的是测什么）:"
 	@echo "  make e2e                       product contracts on a mocked Gateway (default gate)"
@@ -79,6 +79,7 @@ help:
 	@echo "  make typecheck-core            standalone tsc for packages/agent-core"
 	@echo "  make gen-api-types             regenerate app/core/api/types.gen.ts from the snapshot"
 	@echo "  make gen-contract-constants    regenerate backend contract constants from contracts/*.json"
+	@echo "  make gen-extension-documentation  regenerate extension catalog copy from examples/"
 	@echo "  make consumer-check            clean-install packages/agent-core into a temp consumer"
 	@echo "  make standalone-check          P0 gate: no cross-app reference to ../frontend"
 	@echo "  make standalone-sim            isolated install/build/test without React"
@@ -163,6 +164,13 @@ gen-contract-constants:
 gen-contract-constants-check:
 	node scripts/gen-contract-constants.mjs --check
 
+# 扩展目录的中英文说明来自各扩展包自带的 deerflow-extension.json（examples/）。
+gen-extension-documentation:
+	node scripts/gen-extension-documentation.mjs
+
+gen-extension-documentation-check:
+	node scripts/gen-extension-documentation.mjs --check
+
 # 08 §54 的可移植性验收。打真包 → 临时目录 clean install → typecheck → 跑一次最小
 # session。**不进 verify**：它要联网装 typescript/esbuild，而 verify 必须能离线跑。
 # 里程碑收口与改动 packages/agent-core/package.json 时必须跑一次。
@@ -217,7 +225,7 @@ i18n-refresh:
 
 # gen-contract-constants-check 是上游同步 L1：后端 contracts/*.json 变了就红。
 # 它是三层同步方案里唯一阻断的一层——那是上游变更能直接让 Vue 功能损坏的路径。
-verify: lint format-check typecheck typecheck-tests typecheck-core test i18n-check i18n-source-check gen-api-types-check gen-contract-constants-check standalone-check build
+verify: lint format-check typecheck typecheck-tests typecheck-core test i18n-check i18n-source-check gen-api-types-check gen-contract-constants-check gen-extension-documentation-check standalone-check build
 
 # The build dependency makes the gate inspect the current checkout rather than stale .output.
 asset-budget: build

@@ -17,6 +17,7 @@ import {
   VideoIcon,
 } from "lucide-vue-next";
 
+import { bundledCopy } from "@/core/extensions/documentation";
 import type { Translations } from "./types";
 
 export const zhCN: Translations = {
@@ -2258,32 +2259,43 @@ export const zhCN: Translations = {
       "此条目来自仓库扩展目录；实际安装和启用状态请由部署管理员确认。",
     installationGuide: "查看安装说明",
     catalog: {
-      agentTeams: {
-        title: "Agent 团队",
-        description: "让完整 Custom Agent 通过 @成员、共享记录与任务交接协作。",
+      officePreview: bundledCopy("deerflow-extension-office-preview", "zh-CN"),
+      workspaceSearch: {
+        title: "会话全文搜索",
+        description: "检索历史消息正文，并跳转到命中的对话轮次。",
       },
-      bookmarks: {
-        title: "会话书签",
-        description: "收藏有用的回答，在独立页面查找与整理自己的书签。",
-      },
-      context: {
-        title: "上下文裁剪",
-        description: "按需缩短旧的只读工具结果，保留近期消息与原生摘要。",
-      },
-      classify: {
-        title: "文本分类",
-        description: "按给定类别为文本列表打标签，使用部署方配置的分类服务。",
-      },
-      screening: {
-        title: "内容风险提示",
-        description:
-          "检查获取的外部内容，为可疑工具结果添加提示，不阻断工具执行。",
-      },
-      example: {
-        title: "扩展开发示例",
-        description:
-          "演示中间件、任务生命周期、模型观察器、服务和 HTTP 路由的扩展方式。",
-      },
+      agentTeams: bundledCopy("deerflow-extension-agent-teams", "zh-CN"),
+      bookmarks: bundledCopy("deerflow-extension-bookmarks", "zh-CN"),
+      context: bundledCopy("deerflow-extension-jev-context", "zh-CN"),
+      classify: bundledCopy("deerflow-extension-jev-classify", "zh-CN"),
+      screening: bundledCopy("deerflow-extension-jev-screening", "zh-CN"),
+      workflows: bundledCopy("deerflow-extension-workflows", "zh-CN"),
+      reportSections: bundledCopy(
+        "deerflow-extension-report-sections",
+        "zh-CN",
+      ),
+      retrieval: bundledCopy("deerflow-extension-retrieval", "zh-CN"),
+      knowledge: bundledCopy("deerflow-extension-knowledge", "zh-CN"),
+      knowledgeManagement: bundledCopy(
+        "deerflow-extension-knowledge-management",
+        "zh-CN",
+      ),
+      knowledgePlatform: bundledCopy(
+        "deerflow-extension-knowledge-platform",
+        "zh-CN",
+      ),
+      knowledgeCenter: bundledCopy(
+        "deerflow-extension-knowledge-center",
+        "zh-CN",
+      ),
+      skillEvolution: bundledCopy(
+        "deerflow-extension-skill-evolution",
+        "zh-CN",
+      ),
+      lightrag: bundledCopy("deerflow-extension-lightrag", "zh-CN"),
+      runPostmortem: bundledCopy("deerflow-extension-run-postmortem", "zh-CN"),
+      weknora: bundledCopy("deerflow-extension-weknora", "zh-CN"),
+      example: bundledCopy("deerflow-extension-example", "zh-CN"),
     },
     pageUnavailable: "扩展页面不可用",
     pageUnavailableHint: "此页面未注册，或插件已停用、未能加载。",

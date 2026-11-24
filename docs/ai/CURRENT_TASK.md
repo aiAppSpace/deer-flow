@@ -1,6 +1,6 @@
 # 当前任务入口（跨平台）
 
-最后更新：2026-11-24。**状态：第 1 步已提交（`fa322b3b5`）；第 2 步“合并上游 main（`fc0d4bd7b`）”已提交，React 与 backend 全量测试通过；Vue `make verify` 仍有 19 个单测未过。下一步是第 3 步，开始前必须先读 [R03 恢复方案第 0.1 节“第 3 步执行约定”](../reports/2026-11-23-r03-resume-plan.md#01-第-3-步执行约定2026-11-24-用户确认)：先让 Vue 门禁全绿、全绿前不推送、豁免范围、同名文案不回退等用户已确认的约定都在那里。** 合并交接与取舍记录：`/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-HANDOFF.md`、同目录 `MERGE-DECISIONS.md`。总顺序见同一方案第 0 节（先收口，再合上游，后对齐）。
+最后更新：2026-11-24。**状态：第 1 步已提交（`fa322b3b5`）；第 2 步“合并上游 main（`fc0d4bd7b`）”已提交，React 与 backend 全量测试通过；上游基线固定为 `fa20a53fa`。Vue `make verify` 已全绿（11-24）。下一步是第 3 步正式做新的待对齐清单，开始前必须先读 [R03 恢复方案第 0.1 节“第 3 步执行约定”](../reports/2026-11-23-r03-resume-plan.md#01-第-3-步执行约定2026-11-24-用户确认)：先让 Vue 门禁全绿、全绿前不推送、豁免范围、同名文案不回退等用户已确认的约定都在那里。** 合并交接与取舍记录：`/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-HANDOFF.md`、同目录 `MERGE-DECISIONS.md`。总顺序见同一方案第 0 节（先收口，再合上游，后对齐）。
 
 ## 2026-11-24 进展
 

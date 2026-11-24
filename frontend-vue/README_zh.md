@@ -76,7 +76,7 @@ make dev       # http://localhost:3100
 先运行与改动最相关的最小门禁，常规模块改动最终运行 `make verify`：
 
 ```bash
-make verify             # lint、格式、类型、单测、i18n、生成类型、契约常量、静态独立性、build
+make verify             # lint、格式、类型、单测、i18n、生成类型、契约常量、扩展说明、静态独立性、build
 make asset-budget       # 构建产物总量天花板（**不是**用户下载量）
 make e2e-mock           # 不需要后端进程的全部套件
 make e2e-backend        # 需要真实 Gateway 的全部套件

@@ -97,6 +97,9 @@ const ROOT_MAKE_TARGETS = [
   "dev-dual",
   "docker-start",
   "stop",
+  // Extension packages' own usage steps, copied into the catalog's
+  // bundled-documentation.json, tell operators to run this root target.
+  "extension-install",
 ];
 
 const TEXT_EXTENSIONS = new Set([

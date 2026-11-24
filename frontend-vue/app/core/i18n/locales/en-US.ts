@@ -17,6 +17,7 @@ import {
   VideoIcon,
 } from "lucide-vue-next";
 
+import { bundledCopy } from "@/core/extensions/documentation";
 import type { Translations } from "./types";
 
 export const enUS: Translations = {
@@ -2405,36 +2406,44 @@ export const enUS: Translations = {
       "This entry comes from the repository extension catalog. Ask your deployment administrator to confirm its installation and activation status.",
     installationGuide: "Installation guide",
     catalog: {
-      agentTeams: {
-        title: "Agent teams",
+      officePreview: bundledCopy("deerflow-extension-office-preview", "en-US"),
+      workspaceSearch: {
+        title: "Conversation search",
         description:
-          "Let full Custom Agents collaborate through @mentions, shared records and task handoffs.",
+          "Search historical message text and jump to the matching conversation turn.",
       },
-      bookmarks: {
-        title: "Bookmarks",
-        description:
-          "Save useful answers and find and organize your own bookmarks on a dedicated page.",
-      },
-      context: {
-        title: "Context pruning",
-        description:
-          "Shorten older read-only tool results while preserving recent messages and native summaries.",
-      },
-      classify: {
-        title: "Text classification",
-        description:
-          "Label a list of texts with supplied categories using the deployment-configured classification service.",
-      },
-      screening: {
-        title: "Content risk warnings",
-        description:
-          "Screen fetched content and add advisory warnings to suspicious tool results without blocking tools.",
-      },
-      example: {
-        title: "Extension development example",
-        description:
-          "Explore middleware, task lifecycle, model observers, services and HTTP route contributions.",
-      },
+      agentTeams: bundledCopy("deerflow-extension-agent-teams", "en-US"),
+      bookmarks: bundledCopy("deerflow-extension-bookmarks", "en-US"),
+      context: bundledCopy("deerflow-extension-jev-context", "en-US"),
+      classify: bundledCopy("deerflow-extension-jev-classify", "en-US"),
+      screening: bundledCopy("deerflow-extension-jev-screening", "en-US"),
+      workflows: bundledCopy("deerflow-extension-workflows", "en-US"),
+      reportSections: bundledCopy(
+        "deerflow-extension-report-sections",
+        "en-US",
+      ),
+      retrieval: bundledCopy("deerflow-extension-retrieval", "en-US"),
+      knowledge: bundledCopy("deerflow-extension-knowledge", "en-US"),
+      knowledgeManagement: bundledCopy(
+        "deerflow-extension-knowledge-management",
+        "en-US",
+      ),
+      knowledgePlatform: bundledCopy(
+        "deerflow-extension-knowledge-platform",
+        "en-US",
+      ),
+      knowledgeCenter: bundledCopy(
+        "deerflow-extension-knowledge-center",
+        "en-US",
+      ),
+      skillEvolution: bundledCopy(
+        "deerflow-extension-skill-evolution",
+        "en-US",
+      ),
+      lightrag: bundledCopy("deerflow-extension-lightrag", "en-US"),
+      runPostmortem: bundledCopy("deerflow-extension-run-postmortem", "en-US"),
+      weknora: bundledCopy("deerflow-extension-weknora", "en-US"),
+      example: bundledCopy("deerflow-extension-example", "en-US"),
     },
     pageUnavailable: "Extension page unavailable",
     pageUnavailableHint:

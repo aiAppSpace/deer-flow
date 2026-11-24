@@ -130,7 +130,7 @@ Start with the smallest relevant gate and finish with `make verify` for normal
 module changes:
 
 ```bash
-make verify             # lint, format, types, unit, i18n, generated types, contracts, static independence, build
+make verify             # lint, format, types, unit, i18n, generated types, contracts, extension docs, static independence, build
 make asset-budget       # build-output ceiling across every chunk (not what users download)
 make e2e-mock           # every suite that needs no backend process
 make e2e-backend        # every suite that needs a real Gateway

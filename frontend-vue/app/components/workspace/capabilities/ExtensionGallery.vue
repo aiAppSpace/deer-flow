@@ -14,7 +14,7 @@ const route = useRoute();
 const router = useRouter();
 const source = useFrontendExtensions();
 const entries = computed(() =>
-  extensionDirectory(source.data.value ?? [], $i18n.t.value.extensions.catalog),
+  extensionDirectory(source.data.value ?? [], $i18n.t.value.extensions),
 );
 const selected = computed(() =>
   typeof route.query.extension === "string" ? route.query.extension : undefined,

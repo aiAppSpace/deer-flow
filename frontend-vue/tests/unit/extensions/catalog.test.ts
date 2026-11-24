@@ -27,7 +27,7 @@ test("catalog covers every bundled extension package even without runtime regist
   expect(extensionCatalog.map((entry) => entry.package).sort()).toEqual(
     packages.sort(),
   );
-  const entries = extensionDirectory([], enUS.extensions.catalog);
+  const entries = extensionDirectory([], enUS.extensions);
   expect(entries).toHaveLength(packages.length);
   expect(entries.every((entry) => entry.loaded === undefined)).toBe(true);
 });
@@ -58,8 +58,8 @@ test("team catalog metadata stays localized and merges only its runtime registra
     settings: { enabled: true },
   };
   for (const [copy, title] of [
-    [enUS.extensions.catalog, "Agent teams"],
-    [zhCN.extensions.catalog, "Agent 团队"],
+    [enUS.extensions, "Agent teams"],
+    [zhCN.extensions, "Agent 团队"],
   ] as const) {
     const catalogOnly = extensionDirectory([], copy).find(
       (entry) => entry.package === "deerflow-extension-agent-teams",
@@ -82,7 +82,7 @@ test("team catalog metadata stays localized and merges only its runtime registra
 });
 
 test("merges by namespace without duplicating catalog entries or guessing backend-only status", () => {
-  const entries = extensionDirectory([contribution], enUS.extensions.catalog);
+  const entries = extensionDirectory([contribution], enUS.extensions);
   expect(entries).toHaveLength(extensionCatalog.length);
   expect(
     entries.find((entry) => entry.id === contribution.namespace)?.loaded
@@ -101,7 +101,7 @@ test("preserves custom deployment extensions and module failures", () => {
     namespace: "company.custom",
     error: "module failed",
   };
-  const entries = extensionDirectory([failed], enUS.extensions.catalog);
+  const entries = extensionDirectory([failed], enUS.extensions);
   expect(entries).toHaveLength(extensionCatalog.length + 1);
   expect(entries.find((entry) => entry.id === failed.namespace)?.loaded).toBe(
     failed,

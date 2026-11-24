@@ -5,7 +5,19 @@ import type { LoadedContribution } from "./registry";
 // Discovery metadata only: catalog entries never enter the runtime module loader.
 export const extensionCatalog = [
   {
+    key: "officePreview",
+    package: "deerflow-extension-office-preview",
+    namespace: "office-preview",
+    icon: "file-text",
+  },
+  {
+    key: "workspaceSearch",
+    package: "deerflow-extension-workspace-search",
+    namespace: null,
+  },
+  {
     key: "agentTeams",
+    icon: "users",
     package: "deerflow-extension-agent-teams",
     namespace: "community.agent-teams",
   },
@@ -30,6 +42,53 @@ export const extensionCatalog = [
     package: "deerflow-extension-jev-screening",
     namespace: null,
   },
+  {
+    key: "workflows",
+    package: "deerflow-extension-workflows",
+    namespace: "community.workflows",
+  },
+  {
+    key: "reportSections",
+    package: "deerflow-extension-report-sections",
+    namespace: "community.report-sections",
+  },
+  {
+    key: "retrieval",
+    package: "deerflow-extension-retrieval",
+    namespace: "example.retrieval",
+  },
+  {
+    key: "knowledge",
+    package: "deerflow-extension-knowledge",
+    namespace: null,
+  },
+  {
+    key: "knowledgeManagement",
+    package: "deerflow-extension-knowledge-management",
+    namespace: "knowledge-management",
+  },
+  {
+    key: "knowledgePlatform",
+    package: "deerflow-extension-knowledge-platform",
+    namespace: "knowledge-platform",
+  },
+  {
+    key: "knowledgeCenter",
+    package: "deerflow-extension-knowledge-center",
+    namespace: "knowledge-center",
+  },
+  {
+    key: "skillEvolution",
+    package: "deerflow-extension-skill-evolution",
+    namespace: null,
+  },
+  {
+    key: "runPostmortem",
+    package: "deerflow-extension-run-postmortem",
+    namespace: "community.run-postmortem",
+  },
+  { key: "lightrag", package: "deerflow-extension-lightrag", namespace: null },
+  { key: "weknora", package: "deerflow-extension-weknora", namespace: null },
   { key: "example", package: "deerflow-extension-example", namespace: null },
 ] as const;
 
@@ -41,15 +100,17 @@ export interface ExtensionCatalogEntry {
   guide?: string;
   icon?: string;
   loaded?: LoadedContribution;
+  gettingStarted?: { title: string; description: string }[];
+  requirements?: string[];
 }
 
 export function extensionDirectory(
   loaded: LoadedContribution[],
-  copy: Translations["extensions"]["catalog"],
+  extensions: Pick<Translations["extensions"], "catalog">,
 ): ExtensionCatalogEntry[] {
   const entries: ExtensionCatalogEntry[] = extensionCatalog.map((item) => ({
     id: item.namespace ?? `catalog/${item.key}`,
-    ...copy[item.key],
+    ...extensions.catalog[item.key],
     package: item.package,
     guide: `https://github.com/bytedance/deer-flow/tree/main/examples/${item.package}#readme`,
     icon: "icon" in item ? item.icon : undefined,

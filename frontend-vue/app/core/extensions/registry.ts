@@ -6,6 +6,7 @@ import {
   FileJsonIcon,
   FileTextIcon,
   PuzzleIcon,
+  UsersIcon,
 } from "lucide-vue-next";
 
 import { fetch } from "@/core/api/fetcher";
@@ -17,6 +18,7 @@ import type { FrontendContribution, FrontendExtension } from "./contracts";
 export function extensionIcon(name?: string): Component {
   const icons: Record<string, Component> = {
     bell: BellIcon,
+    users: UsersIcon,
     bookmark: BookmarkIcon,
     download: DownloadIcon,
     "file-json": FileJsonIcon,

@@ -1936,13 +1936,31 @@ export interface Translations {
     catalogHint: string;
     installationGuide: string;
     catalog: Record<
+      | "officePreview"
+      | "workspaceSearch"
+      | "workflows"
+      | "reportSections"
       | "agentTeams"
       | "bookmarks"
       | "context"
       | "classify"
       | "screening"
+      | "retrieval"
+      | "knowledge"
+      | "knowledgeManagement"
+      | "knowledgePlatform"
+      | "knowledgeCenter"
+      | "skillEvolution"
+      | "runPostmortem"
+      | "weknora"
+      | "lightrag"
       | "example",
-      { title: string; description: string }
+      {
+        title: string;
+        description: string;
+        gettingStarted?: { title: string; description: string }[];
+        requirements?: string[];
+      }
     >;
     pageUnavailable: string;
     pageUnavailableHint: string;
