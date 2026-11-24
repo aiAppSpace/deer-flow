@@ -2165,6 +2165,16 @@
             "minLength": 1,
             "title": "Request Id",
             "type": "string"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkerRunSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -9921,6 +9931,47 @@
           "content"
         ],
         "title": "WorkerInput",
+        "type": "object"
+      },
+      "WorkerRunSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "is_plan_mode": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Plan Mode"
+          },
+          "recursion_limit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recursion Limit"
+          },
+          "thinking_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thinking Enabled"
+          }
+        },
+        "title": "WorkerRunSettings",
         "type": "object"
       },
       "WorkspaceSearchRequest": {

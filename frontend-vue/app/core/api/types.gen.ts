@@ -5500,6 +5500,7 @@ export interface components {
             project_id?: string | null;
             /** Request Id */
             request_id: string;
+            run?: components["schemas"]["WorkerRunSettings"] | null;
         };
         /** CronPreviewOccurrence */
         CronPreviewOccurrence: {
@@ -9262,6 +9263,15 @@ export interface components {
             content: string;
             /** Request Id */
             request_id: string;
+        };
+        /** WorkerRunSettings */
+        WorkerRunSettings: {
+            /** Is Plan Mode */
+            is_plan_mode?: boolean | null;
+            /** Recursion Limit */
+            recursion_limit?: number | null;
+            /** Thinking Enabled */
+            thinking_enabled?: boolean | null;
         };
         /** WorkspaceSearchRequest */
         WorkspaceSearchRequest: {

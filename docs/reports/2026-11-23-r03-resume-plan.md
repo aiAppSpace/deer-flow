@@ -15,7 +15,7 @@
 
 ### 0.1 第 3 步执行约定（2026-11-24 用户确认）
 
-第 2 步已提交为合并 `ceed64e7b`（父提交 `fa322b3b5` + `fc0d4bd7b`）。React `pnpm test` 与 backend `make test` 全量通过。合并取舍记录在外接盘 `/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-DECISIONS.md`，其中“留给第 3 步”一节是本节的输入。
+第 2 步已提交为合并 `ceed64e7b`（父提交 `fa322b3b5` + `fc0d4bd7b`）。React `pnpm test` 与 backend `make test` 全量通过。同日又合入上游当天新增的 6 个提交（只涉及 backend 和文档），**第 3 步的上游基线固定为 `fa20a53fa`**；本地 `main` 已快进到同一提交。之后的上游新提交留到第 3 步完成后再合。合并取舍记录在外接盘 `/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-DECISIONS.md`，其中“留给第 3 步”一节是本节的输入。
 
 1. **先让 Vue 门禁全绿，再做新清单。** `make -C frontend-vue verify` 合并后还剩 19 个单测失败：
    - 身份观测 12 个（`tests/unit/threads/thread-stream.dom.test.ts` 10 个、`tests/unit/composer/composer-workflow.dom.test.ts` 2 个）：事件数量和顺序与预期不符。Vue 源码在这次合并中没有冲突，**先查清原因再改**，这一类最可能藏着真问题。
