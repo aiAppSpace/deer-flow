@@ -363,8 +363,8 @@ describe("persisted message surfaces", () => {
     /*
       三态各钉一次，**指示器与文字分开取**（`li … span` 会先命中指示器）。
       类串照抄上游 `ai-elements/queue.tsx` 的 QueueItemIndicator / QueueItemContent
-      加 `todo-list.tsx:88/95` 那两句调用点补色——本仓这一屏**至今没有对照锚点**
-      （见 vue-parity-open-accounts.md 第十三轮那节），所以判据只能落在这里。
+      加 `todo-list.tsx:88/95` 那两句调用点补色——本仓这一屏**至今没有对照锚点**，
+      所以判据只能落在这里。
       原来这一条取的是第一个 span、只查一个 `line-through`：第十三轮把完成态那颗
       lucide `Check`（写死 `text-emerald-600`，上游全仓没用过这个色）换成上游的
       CSS 圆点之后，那把尺子当场指到了圆点身上。

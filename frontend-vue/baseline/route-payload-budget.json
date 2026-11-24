@@ -1,5 +1,5 @@
 {
-  "$comment": "真实初始导航的去重 JS 下载预算，raw/Brotli 取本次生产产物文件字节；不是网络 wire bytes。2026-10-25 按默认构建的双语言实测局部更新；历史 Linux 基线见 docs/reports/2026-10-09-vue-dependency-audit.md。",
+  "$comment": "真实初始导航的去重 JS 下载预算，raw/Brotli 取本次生产产物文件字节；不是网络 wire bytes。2026-10-25 按默认构建的双语言实测局部更新。",
   "$readers": [
     "tests/e2e/route-payload.spec.ts",
     "tests/guards/baseline-keys-consumed.test.ts"
@@ -49,5 +49,5 @@
     "sequenceDiagram"
   ],
   "$criticalPathComment": "关键路径禁入的重量级渲染器，用**库本体**特征串识别，不是包名——包名会以动态 import 引用的形式出现在同步 chunk 里，按包名判会全是误报。三个标记都已核对：KaTeX parse error 只在 katex 本体，getSingletonHighlighter 只在 shiki 本体，sequenceDiagram 只在 mermaid 本体。检查覆盖 critical ∪ prefetch：投机下载同样是用户付的流量。",
-  "$measured": "2026-10-25 Darwin Chromium，默认 Nuxt/Rolldown 优化，源快照 4f135fbafc7693fc073acc4fcd069ba9bdd0ee1bffadcc015820f7f5f821d5ee。双语言逐字段最大值：首页22文件/387249 raw/127167 Brotli；登录31/541710/171748；工作区117/1577326/462471。登录raw/Brotli及工作区raw按实测加约5%取整；首页、请求数、工作区Brotli、零prefetch与重量级renderer断言保持。默认优化比关闭avoidRedundantChunkLoads少15/16/60个请求，首页/工作区压缩载荷更低，登录压缩载荷增加8994字节；保留默认构建与维护简单的业务边界。完整12例中的4次旧阈值失败和对照记录在docs/reports/evidence/resume-2026-10-25/r11-asset-budget/。本次测量不替代后续原生Linux及完整最终验收。"
+  "$measured": "2026-10-25 Darwin Chromium，默认 Nuxt/Rolldown 优化，源快照 4f135fbafc7693fc073acc4fcd069ba9bdd0ee1bffadcc015820f7f5f821d5ee。双语言逐字段最大值：首页22文件/387249 raw/127167 Brotli；登录31/541710/171748；工作区117/1577326/462471。登录raw/Brotli及工作区raw按实测加约5%取整；首页、请求数、工作区Brotli、零prefetch与重量级renderer断言保持。默认优化比关闭avoidRedundantChunkLoads少15/16/60个请求，首页/工作区压缩载荷更低，登录压缩载荷增加8994字节；保留默认构建与维护简单的业务边界。完整12例中的4次旧阈值失败和对照记录在外接盘/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-10-25/r11-asset-budget/。"
 }

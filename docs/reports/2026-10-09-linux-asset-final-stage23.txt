@@ -1,7 +1,0 @@
-vendor-vue           10 chunks  raw   167.5 KiB  gzip    63.1 KiB  max    83.4 KiB
-vendor-markdown      13 chunks  raw   859.1 KiB  gzip   261.9 KiB  max   252.5 KiB
-vendor-codemirror    11 chunks  raw   542.7 KiB  gzip   195.0 KiB  max   195.1 KiB
-vendor-i18n           3 chunks  raw   166.4 KiB  gzip    58.9 KiB  max    83.9 KiB
-vendor-ui            35 chunks  raw   753.5 KiB  gzip   234.5 KiB  max   213.4 KiB
-all-client-js       680 chunks  raw 15586.8 KiB  gzip  3708.2 KiB  max   761.6 KiB / 224.7 KiB gzip
-Build-output budget passed. 面向用户的首屏预算见 make e2e（route-payload.spec.ts）。

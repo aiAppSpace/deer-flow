@@ -1,14 +1,14 @@
 # DeerFlow 项目关系与边界
 
-核对日期：2026-11-03。此表基于本仓Git remote、workspace/package配置、源码指导和用户确认；不是扫描整台机器所得的“所有相关仓库”。新关系必须给出实际依赖、接口调用或用户明确指定的证据，不按名称/目录邻近推断。
+核对日期：2026-11-24。此表基于本仓Git remote、workspace/package配置、源码指导和用户确认；不是扫描整台机器所得的“所有相关仓库”。新关系必须给出实际依赖、接口调用或用户明确指定的证据，不按名称/目录邻近推断。
 
 ## 已确认的仓库关系
 
 | 对象 | 关系 | 证据 / 操作边界 |
 | --- | --- | --- |
-| `https://github.com/bytedance/deer-flow.git` | 开源上游，local remote名upstream | 本次git remote get-url核验；用户维护main周期性同步。不自行fetch/pull/merge，先按本次任务授权和现场判断 |
+| `https://github.com/bytedance/deer-flow.git` | 开源上游，local remote名upstream | 本次git remote get-url核验；用户维护main周期性同步。不自行fetch/pull/merge；当前冻结的基线见执行约定第0.1节 |
 | `https://github.com/aiAppSpace/deer-flow.git` | 当前fork，local remote名origin | 本次remote核验；main-wc为本地定制分支。提交状态/领先数量看实时Git，remote URL不是远端最新内容证明 |
-| 原工作区与隔离候选 | 同一项目的两份不同工作现场 | 当前停点与候选归档见CURRENT_TASK；候选不是第二个业务项目或独立发布源，禁止整树覆盖 |
+| `../deer-flow-candidates/r03-v5` | 已合入本仓的旧隔离候选，不再使用 | 2026-11-24 已有界合入 `main-wc`；它不是第二个业务项目或发布源，不在其中修改或验证 |
 
 ## 仓内模块及其真实耦合
 

@@ -35,8 +35,6 @@ import type { Page } from "@playwright/test";
 
   **判据：一次运行是一个样本。** 判「修好了」要同一棵树连着量到稳定；
   判「飘」两次不一致就够。**飘和修好在单次读数上长得一模一样。**
-  逐行出现模式与后续判词记在
-  docs/plans/vue-parity-open-accounts.md 第三十七轮条目。
 
   **必须排除无限循环的动画**：子任务卡片底下那层 `.ambilight` 是自动播放、
   无限循环的装饰动画（见 sampleGeometry 里 `anim=` 那段注释），

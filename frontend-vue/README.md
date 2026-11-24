@@ -175,9 +175,11 @@ request facts share one projection, so multiplicity and header/body/response
 pairing remain visible. A registry or binding error preserves literal facts and
 adds observation errors, with atomic literal rollback. Initial-query and ordinary
 first-send native tests exercise these bounded increments. They do not prove
-arbitrary concurrent, retired or retried HTTP ownership. The aggregate capture
-remains literal until Memory, replay, the remaining submission branches and the
-complete ownership matrix are implemented and verified.
+arbitrary concurrent, retired or retried HTTP ownership, and an exhaustive
+ownership matrix is no longer a goal. The aggregate capture remains literal until
+the identity check in section 6.1 of the
+[alignment plan](../docs/reports/2026-11-24-vue-react-alignment-plan.md) confirms
+these increments can pair both apps' generated IDs for request comparison.
 
 The bounded Memory admission checks one independently stable account and one
 published file receipt, including complete generated/literal fact slots,
@@ -260,9 +262,8 @@ renderer and the existing artifact/editor owners keep their responsibilities.
 An unknown advisory, changed installed version/path/severity or stale entry fails.
 The current accepted entries document specific unreachable development/build
 calls with no published compatible fix; they do not exempt a package wholesale.
-React and Vue use the same patched Mermaid and KaTeX versions. The current
-findings and source evidence are recorded in
-[the dependency audit](../docs/reports/2026-10-09-vue-dependency-audit.md).
+React and Vue use the same patched Mermaid and KaTeX versions. Each accepted
+entry records its source evidence in `baseline/audit-triage.json`.
 
 Mermaid diagrams export as SVG, PNG or their original MMD source. SVG/PNG exports
 preserve HTML line breaks, entities and Unicode labels, with the same 5x PNG scale
@@ -778,7 +779,7 @@ without invoking an accessor and retains the real response/attempt phases.
 Mounted tests cover public message selection with observation off/on: Vue adopts
 the response list or its nullish fallback, while React regenerate retains the
 caller's list. The observation never changes those product branches. This finite
-source record is not replay request admission or whole-plan browser acceptance.
+source record is not replay request admission.
 
 The pure replay attempt source reader validates the complete replay event domain
 against independently declared old-turn roles. It preserves source presence,
@@ -808,8 +809,9 @@ Only the run's input human ID, metadata edit ID and generated key header receive
 exact identity decisions. The prepare/run pair remains checked even for React
 regenerate with no generated slots. Any inconsistent decision rolls all three
 comparison views back to literal values. Additional old source-message kinds,
-new run/Content-Location, general concurrency and active-SSE proof remain open;
-this bounded support is not whole-plan or aggregate capture acceptance.
+general concurrency and active-SSE proofs are no longer pursued (exhaustive
+identity proofs were dropped on 2026-11-24); this bounded support is not
+aggregate capture acceptance.
 
 The pure run-source reader consumes already admitted ordinary/replay submissions
 and their exact public Request rows. A successful response location must name the
@@ -833,8 +835,9 @@ location, copies response/headers, and preserves authority/trailing-slash spelli
 status and later stream failure. Missing or inconsistent entities/decisions revert
 the complete batch to literal views. Join/cancel/inspect/cursors remain literal;
 this source and response proof does not establish handle adoption or active SSE
-consumer causality, and aggregate/whole-plan acceptance remains open.
+consumer causality. Whether aggregate capture needs more is decided by the
+identity check in section 6.1 of the alignment plan.
 
-Run 接管观察使用默认关闭的真实 input/handle 对象关联。`tests/unit/parity/run-observation.dom.test.ts` 与 `tests/unit/agent-deerflow/run-observation.dom.test.ts` 验证来源、退休和真实协议/session/runner；React 有真实 RunsClient 对应测试。新增事件本身不构成消费者准入，独立 reader 和实际 active SSE off/on 仍需单独验收。
+Run 接管观察使用默认关闭的真实 input/handle 对象关联。`tests/unit/parity/run-observation.dom.test.ts` 与 `tests/unit/agent-deerflow/run-observation.dom.test.ts` 验证来源、退休和真实协议/session/runner；React 有真实 RunsClient 对应测试。新增事件本身不构成消费者准入；活动 SSE 的穷举验证已于 2026-11-24 取消。
 
 `IdentityExpectations.runObservation` 独立声明 SDK/adapter 接管检查。registry 在一次构建内使用完整已验证事件域，按原 submission observer 校验 run 的 bind/call/received/delivered 和退休边界；有 phase 却缺声明、缺 run source 或有多余/未归属 phase 时整体拒绝，三视图不部分转换。这个结果只证明已观察的 callback/runner delivery，不授权 join/cancel/cursor，也不等于流已结束。

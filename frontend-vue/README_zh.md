@@ -98,7 +98,7 @@ Dialog 的原生单选组在 Tab 绕回边界时保持当前选项。
 `make audit` 将每条公告与 `baseline/audit-triage.json` 精确匹配。新增公告、安装版本、
 依赖路径、评级变化或过期条目均失败。当前接受的具体条目只涵盖源码证明不可达且暂无兼容修复
 的开发/构建调用，不按包名整体豁免。React 与 Vue 使用相同的已修复 Mermaid、KaTeX 版本。
-当前发现及源码依据见[依赖审计](../docs/reports/2026-10-09-vue-dependency-audit.md)。
+每条接受条目的源码依据记在 `baseline/audit-triage.json` 里。
 
 `make coverage` **不在** `verify` 里，也没有阈值。两个理由：覆盖率下限买到的是凑数的
 测试；而且这个数字只看得见单测进程里执行过的代码——`app/layouts/`、`server/routes/`
