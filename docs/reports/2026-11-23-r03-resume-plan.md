@@ -15,7 +15,7 @@
 
 ### 0.1 第 3 步执行约定（2026-11-24 用户确认）
 
-第 2 步已提交为合并 `ceed64e7b`（父提交 `fa322b3b5` + `fc0d4bd7b`）。React `pnpm test` 与 backend `make test` 全量通过。同日又合入上游当天新增的 6 个提交（只涉及 backend 和文档），**第 3 步的上游基线固定为 `fa20a53fa`**；本地 `main` 已快进到同一提交。之后的上游新提交留到第 3 步完成后再合。合并取舍记录在外接盘 `/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-DECISIONS.md`，其中“留给第 3 步”一节是本节的输入。
+第 2 步已提交为合并 `ceed64e7b`（父提交 `fa322b3b5` + `fc0d4bd7b`）。React `pnpm test` 与 backend `make test` 全量通过。同日又先后合入上游当天新增的 7 个提交（只涉及 backend 和文档）。11:23 用户要求最后抓取一次后冻结：**第 3 步的上游基线冻结为 `624a64a15`**（2026-11-24 11:21），本地 `main` 已快进到同一提交。冻结期间不再抓取或合并上游，之后的新提交留到第 3 步完成后再合。合并取舍记录在外接盘 `/Volumes/edisk/deer-flow/docs/reports/evidence/resume-2026-11-24/MERGE-DECISIONS.md`，其中“留给第 3 步”一节是本节的输入。
 
 1. **先让 Vue 门禁全绿，再做新清单。**（**11-24 已达成**：`make -C frontend-vue verify` 全部通过，571 个文件 5986 个用例。身份观测 12 个是候选新增 `run.bind`、`uploads.unowned` 事件后旧断言未更新，无产品缺陷；扩展目录已按 React 移植 19 个条目和扩展包自带的中英文说明，由 `scripts/gen-extension-documentation.mjs` 从 `examples/` 生成，产物与 React 的 `bundled-documentation.json` 逐字节一致。扩展详情页、运行时扩展上报的说明仍是第 3 步待办。）合并后原有 19 个单测失败：
    - 身份观测 12 个（`tests/unit/threads/thread-stream.dom.test.ts` 10 个、`tests/unit/composer/composer-workflow.dom.test.ts` 2 个）：事件数量和顺序与预期不符。Vue 源码在这次合并中没有冲突，**先查清原因再改**，这一类最可能藏着真问题。

@@ -556,6 +556,13 @@ class TestRegistryAvailableNames:
 
 
 class TestRegistryListSubagentsWithCustom:
+    @pytest.fixture(autouse=True)
+    def _without_real_config(self, monkeypatch, tmp_path):
+        # list_subagents() reaches get_app_config() through the managed subagent
+        # store; an uncached load of a real config.yaml re-applies its subagents
+        # block and drops the custom agents these tests load.
+        monkeypatch.setenv("DEER_FLOW_CONFIG_PATH", str(tmp_path / "missing-config.yaml"))
+
     def teardown_method(self):
         _reset_subagents_config()
 
