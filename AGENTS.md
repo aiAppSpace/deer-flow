@@ -100,6 +100,9 @@ make check-agent-guidance                          # size budget of these guides
   `scripts/bump_version.sh <ver>` updates them and `backend/uv.lock`, and
   `scripts/verify_versions.sh <ver>` checks the result. Tag CI blocks publishing
   on drift. See [RELEASING.md](RELEASING.md).
+- **Survive interrupted sessions**: record progress and user decisions in
+  `docs/ai/CURRENT_TASK.md` as each step lands; log long commands to `logs/`,
+  not `/tmp`.
 
 ## What belongs in an `AGENTS.md`
 
