@@ -55,7 +55,9 @@ host pnpm 从仓库根目录调用 `python3 scripts/pnpm.py --dir frontend …` 
 | backend | `cd backend && make lint && make test && make test-blocking-io`；详见 `backend/AGENTS.md` |
 | 整站 | `make dev`、`make dev-vue`；端口见根 AGENTS 的服务拓扑 |
 
-跨端对比测试的端口写在 `frontend-vue/playwright.parity*.config.ts` 里，可用环境变量覆盖。全量测试耗时长，放后台跑并等结果，免得会话一中断任务就终止。
+跨端对比测试的端口写在 `frontend-vue/playwright.parity*.config.ts` 里，可用环境变量覆盖。全量测试耗时长，放后台跑并等结果，免得会话一中断任务就终止；日志写进仓库的 `logs/`。有的平台会在会话结束时回收用 `nohup … &` 自行拉起的进程，所以起跑后要确认进程还在、日志在增长，没有退出码就不算跑过。
+
+`make -C frontend-vue verify` 最后一步会构建 Vue；三个跨端套件会构建两端，而且共用 Nuxt/Next 构建目录。它们之间不能并行，跨端全量用 `make -C frontend-vue e2e-cross-app` 串行跑。单文件冒烟的命令见对齐计划第 7.1 节第 1、6 条。
 
 ## 6. 结果怎么记
 
