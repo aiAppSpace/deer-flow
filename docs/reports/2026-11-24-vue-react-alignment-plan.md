@@ -25,7 +25,7 @@
 | e2e 用例 | 40 份 React 用例 Vue 未覆盖（`parity-scenario-coverage.json` 的 pending），全部属于第 3 节的功能缺口 |
 | 未引用 key | Vue 词典里有、界面没用的 65 个 key，交叉 React 用法后无新增缺口（真正被 React 使用的 6 个，分属豁免、已列缺口或 React 死代码） |
 | `tests/e2e` 以外的 React 用例 | 审查范围内新增 3 份，Vue 覆盖率门禁不统计。`e2e-auth/workspace-login-return` 对应 B18，Vue 在 `tests/e2e-auth/` 补；`e2e-real-backend/workspace-search` 对应 F5，Vue 在 `tests/e2e-real/` 补；`e2e-real-backend/project-trash` 在 Vue 已有 `tests/e2e-real/project-trash.spec.ts`，对读两份断言、补上缺的即可 |
-| React `src` 以外的改动 | 依赖：渲染相关库无升级（仅新增 popover 组件库、zod 4），无界面影响；新增 16 个插件图标 Vue 已全有；演示数据只涉及已豁免的 Showcase |
+| React `src` 以外的改动 | 依赖：渲染相关库无升级（仅新增 popover 组件库、zod 4），无界面影响；新增 16 个插件图标 Vue 已全有；演示数据只涉及 Showcase，由现有 showcase 场景的跨端比对兜住 |
 | Vue 调用的接口 | 97 个调用在冻结基线的后端里都存在（10 个初看缺失的均为导入路径误识别、WebSocket 或 URL 前缀） |
 
 ## 3. 功能缺口：Vue 没有或只有雏形（来自 51 个有缺口信号的提交）
@@ -127,7 +127,7 @@
 
 静态核对覆盖不到的差异，必须在浏览器里把两端跑起来比：请求时机与次数、看得见的界面差异、交互结果。执行前先完成第 7 节 P0，否则比对结果会混入已不要求的维度（读屏、Tab 顺序、焦点落点、像素几何）。
 
-- 覆盖：现有 90 个已覆盖场景去掉 Showcase 的 14 个后剩 76 个，加上第 3 节新增功能的对照场景；三种布局 × 两种语言 × 两种主题。
+- 覆盖：现有 90 个已覆盖场景（含 14 个 Showcase 场景），加上第 3 节新增功能的对照场景；三种布局 × 两种语言 × 两种主题。
 - 只计入：请求档全部差异；其余档按第 0.2 节，只计用户看得出的差异。
 - 10-09 之前 40 个功能提交的细节一致性、上面三条“需确认”，都以这一轮实测为准。
 
@@ -156,15 +156,7 @@
 
 下面每条做完就跑它写的验证，通过后本地提交一次。单测命令统一为 `python3 scripts/pnpm.py --dir frontend-vue exec vitest run <路径>`，在仓库根目录执行；每条最后都跑一次 `make -C frontend-vue verify`。
 
-2. **Showcase 豁免（11-24 用户裁决）。** 豁免的是回放页本身的界面；14 个 showcase 场景同时是 7 份跨端用例的测试载体，用来测产物面板、Mermaid 导出与全屏、工具产物登记、输入框能力，这些都是普通对话里也有的功能，所以场景保留、退出对照取样，不删除。
-   - `baseline/react-parity-scope.json`：把 `/showcase/[thread_id]` 加进 `contentExemptRoutes.routes`。不能放 `exemptRoutes`：那里断言“React 路由集减去 Vue 路由集”恰好等于 `exemptRoutes ∪ pendingRoutes`，而这条路由两端都有。同时改写两处说明：静态部署模式那一块的 `$comment` 末尾“两边都有，因此在对齐范围内”，改为“两边都有，2026-11-24 起按用户裁决内容双向不比对，见 contentExemptRoutes”；`contentExemptRoutes.$comment` 补上 Showcase 及裁决日期。
-   - `tests/e2e-parity/support/scenarios.ts`：`ParityScenario` 类型（第 374 行）加可选字段 `fixtureOnly?: true`，给 `showcase-public-thread` 和由 `DEMO_THREAD_IDS` 生成的 13 个 `showcase-<id>` 场景标上。
-   - 跳过 `fixtureOnly` 的地方：`tests/e2e-parity/diff.spec.ts` 的取样循环（第 89、122 行）；`tests/parity/state-coverage.test.ts` 的两处 `PARITY_SCENARIOS.flatMap`（第 16、22 行）；`tests/parity/scenario-coverage.test.ts:54` 的“covered 就是目录本身”（比较对象改为非 `fixtureOnly` 场景的 id）；`tests/guards/route-sampling-coverage.test.ts` 的 `sampledPaths()`（第 64 行）。
-   - `baseline/parity-scenario-coverage.json`：14 个 id 从 `covered` 移到 `exempt`，每条写 `route: "/showcase/[thread_id]"` 和裁决说明。
-   - `baseline/parity-route-sampling.json`：`exempt` 加 `/showcase/[thread_id]`，理由写“2026-11-24 用户裁决豁免，见 react-parity-scope.json 的 contentExemptRoutes”。
-   - `baseline/parity-diff.json`：删掉 70 条 `showcase-*` 条目。
-   - 不动：借用这些场景的 7 份用例（`artifact-panel-capacity`、`showcase-interactions`、`composer-capability-lifetime`、`triple-panel-capacity`、`mermaid-image-export`、`mermaid-fullscreen-owner`、`tool-artifact-registry`）照常按 id 取场景；Vue 自己的 `tests/e2e/showcase.spec.ts` 保留，回放页仍要能用，只是不再与 React 对照。
-   - 验证：单测 `tests/parity tests/guards/route-sampling-coverage.test.ts`。
+2. **Showcase 不豁免，本条无需操作（11-25 用户撤销 11-24 的豁免，见执行约定第 0.2.1 节）。** `/showcase/[thread_id]` 和 14 个 showcase 场景照常留在跨端比对里：它们同时是 7 份跨端用例（`artifact-panel-capacity`、`showcase-interactions`、`composer-capability-lifetime`、`triple-panel-capacity`、`mermaid-image-export`、`mermaid-fullscreen-owner`、`tool-artifact-registry`）的测试载体。`react-parity-scope.json`、`parity-scenario-coverage.json`、`parity-route-sampling.json`、`scenarios.ts` 都不改；`parity-diff.json` 里的 70 条 `showcase-*` 条目随第 4 条一起改成只留请求字段。保留编号，是为了不打乱其他条目对“第 N 条”的引用。
 3. **词典豁免与禁止移植。**
    - `baseline/upstream-i18n-map.json` 新增 `exempt` 桶，结构与 `pending` 相同（`keys` 和 `$reasons`），把 5 个 `home.search*` 从 `pending` 移入，理由写“docs 内容站（已豁免路由）专用”；文件 `$comment` 里的“三桶”改为四桶并说明 `exempt` 只收已豁免路由专用的词条。
    - `tests/unit/i18n/upstream-key-coverage.test.ts`：第 160–171 行的“恰好划分”把 `exempt` 计入；加一条断言 `exempt` 与 `pending` 不重叠。
@@ -237,7 +229,7 @@ React 参照 = 上游 + 本仓保留的 React 修改。后者与上游相比差 
 
 - **改判：** B2 不是安全问题，Vue 早已只放行 http/https，真实差异是放行范围和降级显示，移到 P3；R5 的请求位置是 `login.vue:180`、`setup.vue:53`，中间件不经过这两页，不存在重复。
 - **补入：** R6（产物打开与下载的预检请求）、B34（过时的项目记忆提示）、B35（压缩提示多出后端原因）。
-- **P0 重写：** 第 7.1 节第 2–11 条按门禁的实际断言写明改哪些文件、怎么验证。原写法有三处照做会报红或漏项：Showcase 只能进 `contentExemptRoutes`，且 14 个场景是 7 份用例的载体；`upstream-i18n-map.json` 没有豁免桶；候选清单漏了 16 份 reflow 用例、`reduced-motion`、像素视觉用例。
+- **P0 重写：** 第 7.1 节第 2–11 条按门禁的实际断言写明改哪些文件、怎么验证。原写法有三处照做会报红或漏项：Showcase 豁免的放法不对，且 14 个场景是 7 份用例的载体（用户随后于 11-25 撤销了 Showcase 豁免，第 2 条改为无需操作）；`upstream-i18n-map.json` 没有豁免桶；候选清单漏了 16 份 reflow 用例、`reduced-motion`、像素视觉用例。
 - **用户裁决：** 请求头比对口径与台账棘轮，记在执行约定第 0.2.2 节。
 - **核实无误：** 基线 `624a64a15`；范围内改动 React 产品代码的提交 210 个；引用的 86 个提交号都能解析且标题吻合；B1、B3、R1、R2、R4 及抽查的 20 条 B、17 条 F 与代码一致；路由、词典（React 独有 441 个 key 等于 439 条待办加 2 条别名）、用例覆盖三项比对无遗漏。
 

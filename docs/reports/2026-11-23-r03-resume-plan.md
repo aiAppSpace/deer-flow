@@ -17,7 +17,7 @@
 2. **推送前先问用户。** 合并提交已推到 `origin/main-wc`；之后的提交同样要用户同意才推。
 3. **渠道绑定对话框的按钮不是 React 缺陷。** `frontend/src/components/workspace/channels/channel-binding-code-dialog.tsx` 底部按钮是动作键，连接前文字为“关闭”、连接后为“完成”，可访问名随状态变化，不需要 `aria-pressed`。守卫原先只认 `aria-label` 分支，所以误报；已扩展 `frontend-vue/tests/guards/toggle-variant-pressed.test.ts` 识别按钮文字里的同条件分支。React 代码未改。
 4. **同名文案保留上游说法，不回退。** 合并后为满足“同名词条两边同字”，Vue 有 19 条文案改成了上游说法，其中几条描述的是 Vue 还没有的行为（语音录音后转写、模型设置先选厂商、智能体保存确认、定时任务通知设置入口、回复语言偏好）。这些是**行为待办**，对齐计划第 10 节逐条对到了 F 项；要补的是 Vue 行为，不能改回旧文案。
-5. **合并带进来的新功能是待办，不是豁免。** 豁免只限 `frontend-vue/baseline/react-parity-scope.json` 里的内容和部署项（`/` 落地页内容、docs/blog 四条路由、整站静态模式，以及第 0.2.1 节新增的 Showcase），定义见 `frontend-vue/ARCHITECTURE.md` 的“与 React 的对齐范围”。分享页、用量统计、工具审批、工作区搜索、语音录音转写等都是核心功能。“非核心”“没人用”都不构成豁免理由，Showcase 是用户逐项确认的例外。
+5. **合并带进来的新功能是待办，不是豁免。** 豁免只限 `frontend-vue/baseline/react-parity-scope.json` 里的内容和部署项（`/` 落地页内容、docs/blog 四条路由、整站静态模式），定义见 `frontend-vue/ARCHITECTURE.md` 的“与 React 的对齐范围”。分享页、用量统计、工具审批、工作区搜索、语音录音转写等都是核心功能。“非核心”“没人用”都不构成豁免理由。Showcase 公开回放页曾在 11-24 列为豁免，11-25 用户撤销，仍在对齐范围内（见第 0.2.1 节）。
 6. **合并后的挂账是机械结果，不是结论。** 新路由进了 `pendingRoutes`，新 React e2e 用例进了 `parity-scenario-coverage.json` 的 pending，新词条进了 `upstream-i18n-map.json` 的 pending，新契约进了 `gen-contract-constants.mjs` 的 `NOT_CONSUMED`。对齐计划已逐条判断；挂账随对应 F/B 项完成而清除。
 
 ### 0.2 对齐判据：以正常用户的正常使用为准（2026-11-24 用户确认）
@@ -46,7 +46,7 @@
 
 **使用面：全部保留。** 电脑、手机、平板三种布局都要对齐；中文和英文都要；浅色和深色都要。
 
-**新增豁免：Showcase 公开回放页**（`/showcase/[thread_id]` 及其演示对话）。用户不用，与落地页、docs/blog、整站静态模式同等豁免。落地时更新 `frontend-vue/baseline/react-parity-scope.json` 与 `parity-scenario-coverage.json`（showcase 场景移入 exempt），并改写该 JSON 里“showcase 在对齐范围内”的说明。
+**Showcase 公开回放页不豁免（2026-11-25 用户撤销 11-24 的豁免）。** `/showcase/[thread_id]` 及其演示对话继续和 React 对齐、继续进跨端比对。原因：14 个 showcase 场景同时是多份跨端用例的测试载体，用来测产物面板、Mermaid 导出与全屏、工具产物登记、输入框能力这些普通对话里也有的功能，豁免会丢掉这部分覆盖。`frontend-vue/baseline/react-parity-scope.json` 现有说明（“两边都有，因此在对齐范围内”）与此一致，不用改。
 
 **去掉（不再作为对齐要求或验收义务）：**
 
