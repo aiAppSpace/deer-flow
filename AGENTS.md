@@ -104,6 +104,12 @@ make check-agent-guidance                          # size budget of these guides
   `docs/ai/CURRENT_TASK.md` as each step lands; log long commands to `logs/`,
   not `/tmp`.
 
+## Collaboration
+
+Coding agents may use subagents for exploration, search and parallel checks.
+The main agent still owns key conclusions, plan edits, handoff notes and commit
+messages: verify subagent claims against the repo before writing them down.
+
 ## What belongs in an `AGENTS.md`
 
 An agent reads these files on every task, so each line costs attention. A guide

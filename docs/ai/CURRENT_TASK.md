@@ -16,7 +16,8 @@
 - **11-24 晚独立审核与修订：** 计划经独立审核后修订（审核记录在计划第 11 节）：B2 改判为显示差异并移到 P3，R5 改正请求位置、确认不重复；补入 B34、B35、R6；P0 重写为第 7.1 节第 2–11 条，每条写明改哪些文件、怎么验证。审核时 React `pnpm check`、Vue `make verify`、跨端冒烟 `topology.spec.ts` 均退出码 0。
 - **11-24 晚用户裁决（已写进执行约定第 0.2.2 节）：** 请求头除浏览器自动附加的以外全部比对，值随机的只比有没有；对照台账 `parity-diff.json`、`parity-auth-diff.json` 改为只记请求档的已知差异棘轮，每行对应一个 F/B/R 编号，R4、R5 的行永久保留。本轮只修计划与文档，不改代码；获准每完成一块、门禁通过就本地提交，推送前先问。
 - **11-25 用户裁决：** 撤销 11-24 的 Showcase 豁免，`/showcase/[thread_id]` 和 14 个 showcase 场景继续进跨端比对；计划第 7.1 节第 2 条改为无需操作，执行约定、`docs/ai/README.md`、`frontend-vue/ARCHITECTURE.md` 已同步。
-- **交接状态（11-25）：** 计划修订已推送，`origin/main-wc` 与本地一致（`0daee02ee` 之后只有交接文档更新），工作区干净；代码层面 P0 还没开始。用户可能换到 Codex 等其他代理继续，接手提示词在 [NEW_SESSION_PROMPT.md](NEW_SESSION_PROMPT.md)。
+- **交接状态（11-25）：** 计划与交接文档已推送；代码层面 P0 还没开始。接手提示词在 [NEW_SESSION_PROMPT.md](NEW_SESSION_PROMPT.md)。
+- **11-25 用户裁决：** 允许使用子代理（探索、搜索、并行核查）；主代理核对后再写入计划、交接与提交说明。已写进根 AGENTS.md「Collaboration」、NEW_SESSION_PROMPT 与 Cursor 规则。
 - **下一步：** 按对齐计划第 7.1 节执行 P0，从第 3 条开始（第 1 条已完成，第 2 条无需操作），用户说开始后再动手。
 
 ## 历史材料
